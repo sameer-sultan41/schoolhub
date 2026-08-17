@@ -1,0 +1,72 @@
+# API Architecture
+
+> **Agent Context**
+> **Summary:** Compares REST, GraphQL, and hybrid approaches and selects **versioned REST with OpenAPI** for the platform API. Defines the cross-cutting API conventions every module doc's §16 relies on: auth, versioning, envelope, errors, pagination, filtering, rate limiting, idempotency, webhooks, uploads, background jobs.
+> **Co-load with:** `auth-and-rbac.md` · `multi-tenancy.md` · the module doc whose endpoints you are building
+
+## 1. Style Comparison
+
+| Criterion | REST | GraphQL | Hybrid REST+GraphQL |
+| --------- | ---- | ------- | ------------------- |
+| Scalability | Excellent; straightforward HTTP caching & CDN | Requires persisted queries + complexity limits to stay safe | Both, at double the surface area |
+| Maintainability | One resource model, mature DRF tooling | Schema + resolvers + N+1 discipline (dataloaders) | Two stacks to maintain and secure |
+| Frontend needs | Dashboard screens map 1:1 to resources; TanStack Query handles caching | Wins when clients need arbitrary nested shapes | — |
+| Mobile readiness | Fully sufficient; stable versioned contracts | Also fine | — |
+| Reporting | Server-shaped report endpoints are safer for heavy aggregation | Ad-hoc nested queries risk unbounded cost | — |
+| Security | Per-endpoint RBAC is simple to audit | Field-level authz is easy to get wrong in multi-tenant systems | Doubled audit surface |
+| Caching | HTTP + Redis per endpoint | Client-side normalized caches only | — |
+| Real-time | SSE/WebSocket side-channel (same for both) | Subscriptions add server complexity | — |
+| 3rd-party integrations | Webhooks + REST is the industry default | Rarely expected by integrators | — |
+| Developer experience | OpenAPI → generated TS types/clients | Strong typing too, but higher setup cost | — |
+
+**Decision (recommendation): versioned REST + OpenAPI 3.1.** The clients are known and few (dashboard, tenant websites, future mobile), screens map cleanly to resources, and per-endpoint RBAC auditing matters more in a multi-tenant school system than ad-hoc query flexibility. GraphQL is explicitly deferred; the layered backend (views → services → ORM) keeps the door open to adding a GraphQL read gateway later without rework.
+
+## 2. Conventions
+
+### 2.1 Base URL & Versioning
+- `https://api.<platform-domain>/api/v1/...` — URI-versioned. Breaking changes → `v2`; additive changes never bump the version.
+- Tenant resolution is **never** part of the path — it comes from the authenticated context (see [`multi-tenancy.md`](multi-tenancy.md)).
+
+### 2.2 Authentication & Authorization
+- `Authorization: Bearer <JWT access token>` (15 min) + rotating refresh token (30 days, revocable). Refresh in an HttpOnly cookie for web, secure storage for future mobile.
+- Every request resolves `(user, tenant, roles, permissions)`; endpoint guards check `module.resource.action` permission keys per [`auth-and-rbac.md`](auth-and-rbac.md).
+- Service-to-service calls (website renderer → API) use scoped machine tokens with read-only public-content permissions.
+
+### 2.3 Response Envelope & Errors
+```json
+// success
+{ "data": { ... }, "meta": { "pagination": { ... } } }
+// error (RFC 9457 problem-details style)
+{ "error": { "code": "validation_error", "message": "…", "details": [{ "field": "email", "issue": "…" }], "request_id": "…" } }
+```
+- Status codes: 200/201/204 success; 400 validation; 401 unauthenticated; 403 permission/tenant denial; 404 not-found **and** cross-tenant access (never reveal existence); 409 conflict; 422 domain-rule violation; 429 rate-limited; 5xx server.
+- Every response carries `X-Request-ID` for log correlation.
+
+### 2.4 Pagination, Filtering, Sorting
+- Cursor pagination default (`?cursor=…&page_size=25`, max 100); offset pagination allowed only on small admin lists.
+- Filtering: `?field=value`, `?field__gte=…`, `?search=` for text; each endpoint whitelists its filterable fields (documented in the module's §16).
+- Sorting: `?ordering=-created_at,name`, whitelisted per endpoint.
+
+### 2.5 Rate Limiting & Idempotency
+- Redis token-bucket per user and per tenant (defaults: 60 r/min user, 600 r/min tenant; auth endpoints stricter). `429` + `Retry-After`.
+- Mutating endpoints with money or external side effects (fee payments, notification sends, admissions submissions) accept an `Idempotency-Key` header; the key + response are stored 24 h and replayed on retry.
+
+### 2.6 Webhooks
+- Outbound webhooks per tenant for events (e.g. `student.enrolled`, `fee.paid`, `result.published`): HMAC-SHA256 signature header, at-least-once delivery, exponential-backoff retries (max 8), dead-letter list visible to tenant admins.
+
+### 2.7 Background Jobs
+- Long operations (bulk imports, report generation, notification blasts, AI batch jobs) return `202 Accepted` + a `job` resource: `GET /api/v1/jobs/{id}` → `queued | running | succeeded | failed` with progress and result link. Executed by Celery (see [`tech-stack.md`](tech-stack.md)).
+
+### 2.8 File Uploads
+- Two-step: `POST /api/v1/files` → presigned S3 URL + file record (`pending`); client uploads directly to storage; confirmation webhook/poll flips it to `ready`. Server-side validation of type/size/AV-scan per [`../06-security/security.md`](../06-security/security.md). Files are tenant-scoped and served via short-lived signed URLs.
+
+### 2.9 API Documentation
+- OpenAPI 3.1 generated from code (drf-spectacular), published per environment; TypeScript client types generated in CI into the frontend monorepo.
+
+## 3. Real-time (initial scope)
+- In-app notification badge + live dashboards use SSE (`GET /api/v1/events/stream`); WebSockets deferred until a feature (e.g. live transport tracking, §21) requires bidirectional traffic.
+
+## 4. Endpoint Naming Rules (used by every module doc §16)
+- Plural kebab-case resources: `/api/v1/fee-invoices`, `/api/v1/students/{id}/guardians`.
+- Sub-resources max one level deep; deeper relations get top-level resources with filters.
+- Non-CRUD domain actions are explicit verbs on the resource: `POST /api/v1/students/{id}:promote`, `POST /api/v1/results/{id}:publish` (colon-action style), always permission-guarded and audited.
