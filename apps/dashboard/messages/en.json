@@ -1,0 +1,71 @@
+{
+  "app": {
+    "name": "SchoolHub",
+    "tagline": "School management, one place"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "students": "Students",
+    "staff": "Staff",
+    "attendance": "Attendance",
+    "academics": "Academics",
+    "fees": "Fees & Finance",
+    "admissions": "Admissions",
+    "communication": "Communication",
+    "website": "Website",
+    "settings": "Settings",
+    "signOut": "Sign out",
+    "skipToContent": "Skip to main content",
+    "primary": "Primary navigation"
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Use the account your school issued you.",
+      "identifier": "Email, phone, or username",
+      "identifierHint": "Students sign in with the username printed on their ID card.",
+      "password": "Password",
+      "submit": "Sign in",
+      "submitting": "Signing in",
+      "forgotPassword": "Forgot your password?",
+      "genericError": "We could not sign you in. Check your details and try again."
+    },
+    "session": {
+      "expiredTitle": "Your session expired",
+      "expiredBody": "Sign in again to continue.",
+      "impersonating": "You are viewing this account as support staff. Every action is audited."
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back, {name}",
+    "summary": "Today at a glance",
+    "cards": {
+      "students": "Enrolled students",
+      "attendanceToday": "Attendance today",
+      "feesOutstanding": "Outstanding fees",
+      "openAdmissions": "Open admission enquiries"
+    },
+    "empty": "Nothing to show yet."
+  },
+  "common": {
+    "loading": "Loading",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "save": "Save",
+    "next": "Next",
+    "previous": "Previous",
+    "noResults": "No records found.",
+    "requiredField": "This field is required."
+  },
+  "errors": {
+    "validation_error": "Please correct the highlighted fields.",
+    "permission_denied": "You do not have permission to do that.",
+    "not_found": "We could not find what you were looking for.",
+    "conflict": "That change conflicts with the current data. Reload and try again.",
+    "rate_limited": "Too many requests. Wait a moment and try again.",
+    "network_error": "We could not reach the server. Check your connection.",
+    "server_error": "Something went wrong on our side. The team has been notified.",
+    "requestId": "Reference: {requestId}"
+  }
+}

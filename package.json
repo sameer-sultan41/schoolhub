@@ -1,0 +1,30 @@
+{
+  "name": "schoolhub-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SchoolHub frontend monorepo — admin dashboard + multi-tenant public website renderer",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "test:coverage": "turbo run test:coverage",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean",
+    "format": "prettier --write \"**/*.{ts,tsx,mjs,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,mjs,json,md,css}\""
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "eslint": "^10.8.1",
+    "prettier": "^3.4.2",
+    "turbo": "^2.10.10",
+    "typescript": "^7.0.2"
+  }
+}

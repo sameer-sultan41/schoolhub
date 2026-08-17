@@ -1,0 +1,30 @@
+{
+  "name": "@schoolhub/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared lint configuration for the SchoolHub frontend monorepo",
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint.base.mjs"
+  },
+  "files": ["eslint.base.mjs"],
+  "scripts": {
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "echo \"@schoolhub/config has no TypeScript source\"",
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch --passWithNoTests",
+    "test:coverage": "jest --coverage --passWithNoTests",
+    "clean": "rm -rf .turbo"
+  },
+  "dependencies": {
+    "@eslint/js": "^10.0.0",
+    "typescript-eslint": "^8.46.0"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0"
+  },
+  "peerDependencies": {
+    "eslint": "^10.8.1"
+  }
+}

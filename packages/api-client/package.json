@@ -1,0 +1,33 @@
+{
+  "name": "@schoolhub/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed fetch client for the SchoolHub REST API — regenerated from the published OpenAPI spec",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "clean": "rm -rf .turbo coverage *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@schoolhub/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@schoolhub/config": "workspace:*",
+    "@swc/core": "^1.10.1",
+    "@swc/jest": "^0.2.37",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.2.0",
+    "eslint": "^10.8.1",
+    "jest": "^30.2.0",
+    "typescript": "^7.0.2"
+  }
+}
