@@ -1,0 +1,67 @@
+[project]
+name = "schoolhub-api"
+version = "0.1.0"
+description = "SchoolHub — AI-powered multi-tenant School Management SaaS backend"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "Django>=6.1,<6.2",
+    "djangorestframework>=3.18",
+    "djangorestframework-simplejwt>=5.5",
+    "drf-spectacular>=0.30",
+    "psycopg[binary]>=3.3",
+    "django-environ>=0.14",
+    "django-cors-headers>=4.9",
+    "django-filter>=26.1",
+    "celery[redis]>=5.6",
+    "redis>=8.1",
+    "argon2-cffi>=25.1",
+    "gunicorn>=26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.16",
+    "mypy>=2.3",
+    "django-stubs>=6.1",
+    "coverage>=7.15",
+    "factory-boy>=3.3",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["config", "core", "apps"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "DJ", "S", "C4", "RET", "SIM"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]
+"*/tests/*" = ["S105", "S106"]
+"config/settings/*" = ["F403", "F405"]
+
+[tool.coverage.run]
+source = ["core", "apps"]
+omit = ["*/migrations/*", "*/tests/*", "config/*"]
+
+[tool.coverage.report]
+# Floor per schoolhub-srd/docs/07-quality/testing-strategy.md; ratcheted upward over time.
+fail_under = 80
+show_missing = true
+
+[tool.mypy]
+python_version = "3.14"
+plugins = ["mypy_django_plugin.main"]
+ignore_missing_imports = true
+exclude = ["migrations"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.dev"
