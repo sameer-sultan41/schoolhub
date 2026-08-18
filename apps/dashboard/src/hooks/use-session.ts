@@ -11,7 +11,7 @@ import { queryKeys } from "@/lib/query-client";
  *
  * On a cold load there is no access token in memory, so this first exchanges the HttpOnly
  * refresh cookie for one. Returns `null` (not an error) when the session is over — the
- * middleware has already routed anonymous visitors to /login.
+ * proxy has already routed anonymous visitors to /login.
  */
 export function useSession() {
   const query = useQuery<AuthenticatedUser | null>({

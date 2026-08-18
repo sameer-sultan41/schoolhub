@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 /**
  * Liveness probe for the platform's uptime checks and container health checks.
- * Exempt from the auth middleware; deliberately exposes nothing tenant-specific.
+ * Exempt from the auth proxy; deliberately exposes nothing tenant-specific.
  */
 export const dynamic = "force-dynamic";
 

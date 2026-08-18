@@ -49,20 +49,20 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 | Concern | Where |
 | ------- | ----- |
-| Host → tenant classification (edge) | `src/middleware.ts` + `src/lib/host.ts` (pure, tested) |
+| Host → tenant classification (edge) | `src/proxy.ts` + `src/lib/host.ts` (pure, tested) |
 | Authoritative tenant lookup, cached | `src/lib/tenant.ts` |
 | Read-only transport (machine token) | `src/lib/api.ts` — has **no** write method by design |
 | Public content reads | `src/lib/content.ts` — every export is a read |
 | Page rendering (sections → components) | `src/app/render-page.tsx`, `src/app/[...slug]/page.tsx`, `src/app/page.tsx` |
 | Theme registry + token contract | `src/themes/index.ts`, `src/themes/default/` |
 | Publish invalidation webhook (HMAC) | `src/app/api/revalidate/route.ts` |
-| Unknown host landing | `src/app/_platform/page.tsx` (middleware rewrites here) |
+| Unknown host landing | `src/app/_platform/page.tsx` (the proxy rewrites here) |
 
 ### The rules those files encode
 
 - Adding a write helper to `src/lib/api.ts` or `src/lib/content.ts` is a **security
   regression**, not a feature. Browser → public API is the only write path.
-- The middleware **deletes** inbound `x-schoolhub-*` headers before setting its own; without
+- The proxy **deletes** inbound `x-schoolhub-*` headers before setting its own; without
   that, a client could hand us a header and read another school's site.
 - Cache tags are always `tenant:<id>…`, and the revalidate webhook only accepts tags inside the
   tenant that signed the request.

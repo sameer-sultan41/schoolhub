@@ -52,7 +52,7 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 | Concern | Where |
 | ------- | ----- |
-| Auth guard (routing only, cookie presence) | `src/middleware.ts` |
+| Auth guard (routing only, cookie presence) | `src/proxy.ts` (Next 16's rename of `middleware`) |
 | Access token in memory + refresh-on-401 | `src/lib/auth.ts` → `@schoolhub/api-client` |
 | Permission helpers (`hasPermission`, `<Can>`) | `src/lib/permissions.ts`, `src/components/can.tsx` |
 | TanStack Query client + key factory | `src/lib/query-client.ts` |

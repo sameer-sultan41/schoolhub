@@ -22,7 +22,7 @@ import { env } from "./env";
  * no web-only shortcut is introduced here.
  */
 
-/** Presence-only hint the middleware reads; the API remains the authority. */
+/** Presence-only hint the proxy reads; the API remains the authority. */
 export const SESSION_COOKIE_NAME = "sh_session";
 
 export const accessTokenStore = createAccessTokenStore();

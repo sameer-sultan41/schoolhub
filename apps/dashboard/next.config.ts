@@ -5,6 +5,19 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  experimental: {
+    /**
+     * Next 16 type-checks builds by shelling out to the project-local `tsc` CLI. Our
+     * `typescript` dependency is the TS 6 API alias (`@typescript/typescript6`, which ships
+     * `tsc6`, not `tsc`) because typescript-eslint and eslint-config-next require that API —
+     * see the root AGENTS.md. So point Next at the JavaScript compiler API instead, which the
+     * TS 6 package does provide.
+     *
+     * TypeScript 7 still checks this project: `pnpm typecheck` runs the native `tsc` from
+     * `@typescript/native`, and it is a required CI check.
+     */
+    useTypeScriptCli: false,
+  },
   // Workspace packages ship TypeScript source; Next compiles them with the app.
   transpilePackages: ["@schoolhub/ui", "@schoolhub/api-client", "@schoolhub/types"],
   poweredByHeader: false,

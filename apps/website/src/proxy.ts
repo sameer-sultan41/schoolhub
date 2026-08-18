@@ -8,8 +8,9 @@ import {
 
 /**
  * Resolves the tenant host on every request (website-builder.md §1).
+ * (Next 16 renamed the `middleware` convention to `proxy`; the behaviour is unchanged.)
  *
- * The middleware performs the cheap, pure classification (wildcard subdomain vs custom
+ * The proxy performs the cheap, pure classification (wildcard subdomain vs custom
  * domain) and hands the result downstream as request headers. The authoritative lookup —
  * does this host belong to an active tenant? — happens in `lib/tenant.ts` against the API,
  * where the result can be cached.
@@ -17,7 +18,7 @@ import {
  * Security: inbound `x-schoolhub-*` headers are **deleted** before ours are set. Without
  * that, a client could hand us a header and read another school's site.
  */
-export function middleware(request: NextRequest): NextResponse {
+export function proxy(request: NextRequest): NextResponse {
   const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ?? "";
   const resolved = parseHost(request.headers.get("host"), platformDomain);
 

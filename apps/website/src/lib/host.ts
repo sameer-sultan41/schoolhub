@@ -1,7 +1,7 @@
 import type { ResolvedTenantHost } from "@schoolhub/types";
 
 /**
- * Pure Host-header parsing, shared by the middleware (edge runtime) and the server
+ * Pure Host-header parsing, shared by the proxy (edge runtime) and the server
  * components. No I/O, no env access — so it is trivially testable and safe at the edge.
  *
  * Tenant resolution is the security boundary of this app (website-builder.md §1): the
@@ -61,7 +61,7 @@ export function parseHost(
   return { kind: "custom-domain", host };
 }
 
-/** Header the middleware sets after resolving the host; client-supplied copies are stripped. */
+/** Header the proxy sets after resolving the host; client-supplied copies are stripped. */
 export const TENANT_HOST_HEADER = "x-schoolhub-host";
 export const TENANT_SLUG_HEADER = "x-schoolhub-tenant-slug";
 export const TENANT_KIND_HEADER = "x-schoolhub-host-kind";

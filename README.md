@@ -40,7 +40,7 @@ pnpm dev                      # runs every app through Turborepo
 
 | App | Dev URL | Notes |
 | --- | ------- | ----- |
-| `dashboard` | <http://localhost:3000> | Sign in at `/login`; the auth guard lives in `src/middleware.ts` |
+| `dashboard` | <http://localhost:3000> | Sign in at `/login`; the auth guard lives in `src/proxy.ts` |
 | `website` | <http://localhost:3001> | Needs a `Host` header that resolves to a tenant (see below) |
 
 ### Exercising multi-tenancy locally

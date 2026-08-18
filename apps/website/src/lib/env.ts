@@ -4,7 +4,7 @@ import { z } from "zod";
  * Renderer configuration.
  *
  * `API_BASE_URL` and `WEBSITE_MACHINE_TOKEN` are **server-only** — they are read in server
- * components, route handlers, and middleware, and must never be prefixed `NEXT_PUBLIC_` or
+ * components, route handlers, and the proxy, and must never be prefixed `NEXT_PUBLIC_` or
  * referenced from a client component. The machine token is scoped to
  * `website.public-content.view` (read-only, published content only).
  */

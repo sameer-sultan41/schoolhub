@@ -7,7 +7,7 @@ import { TENANT_HOST_HEADER } from "./host";
 /**
  * Tenant resolution for server components (website-builder.md §1, §7).
  *
- * The host arrives from the middleware, which is the only writer of that header. Nothing
+ * The host arrives from the proxy, which is the only writer of that header. Nothing
  * here accepts a tenant identifier from a query param, cookie, or client-supplied header.
  *
  * `cache()` dedupes the lookup within a single render pass; the ISR entry itself is keyed
@@ -19,7 +19,7 @@ export type TenantResolution =
   | { status: "suspended"; tenant: Tenant }
   | { status: "unknown" };
 
-/** The host the middleware resolved for this request. */
+/** The host the proxy resolved for this request. */
 export const getRequestHost = cache(async (): Promise<string | null> => {
   const headerList = await headers();
   return headerList.get(TENANT_HOST_HEADER);
