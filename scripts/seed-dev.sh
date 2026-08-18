@@ -89,8 +89,10 @@ fi
 
 [ -f "${ENV_FILE}" ] || fail "compose/.env is missing and --check-only was passed"
 
-# shellcheck disable=SC1090
-set -a; . "${ENV_FILE}"; set +a
+set -a
+# shellcheck source=/dev/null  # path is chosen at runtime
+. "${ENV_FILE}"
+set +a
 
 POSTGRES_DB="${POSTGRES_DB:-schoolhub}"
 POSTGRES_SUPERUSER="${POSTGRES_SUPERUSER:-postgres}"

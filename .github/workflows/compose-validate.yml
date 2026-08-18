@@ -223,8 +223,9 @@ jobs:
           fi
 
           # With a tenant set inside a transaction, exactly that tenant's row.
-          one="$(PGPASSWORD=ci-app-not-a-real-secret psql -U schoolhub_app -h localhost -d schoolhub -Atc \
-            "BEGIN; SET LOCAL app.tenant_id = '11111111-1111-1111-1111-111111111111'; SELECT count(*) FROM students; COMMIT;" | tail -1)"
+          one="$(PGPASSWORD=ci-app-not-a-real-secret psql -U schoolhub_app -h localhost -d schoolhub -At --single-transaction \
+            -c "SET LOCAL app.tenant_id = '11111111-1111-1111-1111-111111111111'" \
+            -c "SELECT count(*) FROM students" | tail -1)"
           if [ "$one" != "1" ]; then
             echo "::error::with a tenant set, schoolhub_app saw ${one} rows, expected 1."
             exit 1

@@ -67,7 +67,12 @@ jobs:
           - terraform/modules/cache
           - terraform/modules/storage
           - terraform/modules/ecs-service
-          - terraform/modules/cdn
+          # terraform/modules/cdn is intentionally absent: it declares
+          # configuration_aliases for the us-east-1 provider that CloudFront
+          # certificates require, and an aliased provider can only be supplied by a
+          # calling module. Validating it standalone fails on a missing provider
+          # rather than on anything wrong with the module. The env roots below pass
+          # the alias and therefore validate it in place.
           - terraform/envs/staging
           - terraform/envs/production
     steps:
@@ -117,7 +122,7 @@ jobs:
       # because an infrastructure warning nobody reads is an infrastructure
       # warning nobody reads.
       - name: Scan Terraform
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: terraform/
