@@ -69,8 +69,13 @@ choices. Two consequences worth knowing:
 - **Tailwind 4 is CSS-first.** There is no `tailwind.config.ts`. Design tokens live in
   `@theme` blocks — the shared layer is `packages/ui/src/styles/theme.css`, imported by each
   app's `globals.css`. PostCSS uses `@tailwindcss/postcss`.
-- **ESLint 10 is flat-config only** — `eslint.config.mjs`, extending
+- **ESLint is flat-config only** — `eslint.config.mjs`, extending
   `@schoolhub/config/eslint`. No `.eslintrc`.
+- **ESLint is pinned to 9.x, not 10.** ESLint 10 removed the deprecated `context.getFilename()`,
+  which `eslint-plugin-react` 7.37.5 still calls — and that plugin ships inside
+  `eslint-config-next`, with no ESLint 10-compatible release available. On ESLint 10 every app
+  lint task dies with `Error while loading rule 'react/display-name'`. Bump ESLint only once
+  `eslint-plugin-react` supports 10.
 - **TypeScript is pinned to exactly `6.0.3`, not 7.x, and not a caret range.**
   typescript-eslint 8 hard-throws `typescript-eslint does not support TS 7.0` the moment it
   resolves a TS 7 copy, and `eslint-config-next` requires typescript-eslint at module load —
