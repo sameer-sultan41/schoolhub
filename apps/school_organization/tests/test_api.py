@@ -172,13 +172,7 @@ class SectionEndpointTests(SchoolOrganizationAPITestCase):
         self.assertEqual(body["class_id"], str(self.grade.pk))
 
         with tenant_context(self.tenant.id):
-            rows = list(
-                Section.all_tenants.values("id", "tenant_id", "school_class_id", "deleted_at")
-            )
-            self.assertTrue(
-                Section.objects.filter(school_class=self.grade).exists(),
-                f"expected tenant={self.tenant.id} class={self.grade.pk}; rows in table: {rows}",
-            )
+            self.assertTrue(Section.objects.filter(school_class=self.grade).exists())
 
     def test_create_rejects_a_zero_capacity(self) -> None:
         self.allow("school.section.view", "school.section.create")
@@ -431,28 +425,11 @@ class ClassSubjectEndpointTests(SchoolOrganizationAPITestCase):
 
     def test_mapping_the_same_subject_twice_is_a_conflict(self) -> None:
         self.allow("school.subject.view", "school.subject.create")
-        first = self.client.post("/api/v1/class-subjects", self._payload(), format="json")
+        self.client.post("/api/v1/class-subjects", self._payload(), format="json")
 
         response = self.client.post("/api/v1/class-subjects", self._payload(), format="json")
 
-        with tenant_context(self.tenant.id):
-            rows = list(
-                ClassSubject.all_tenants.values(
-                    "id",
-                    "tenant_id",
-                    "academic_session_id",
-                    "school_class_id",
-                    "subject_id",
-                    "campus_id",
-                    "deleted_at",
-                )
-            )
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_409_CONFLICT,
-            f"first={first.status_code} {first.content[:300]!r}; "
-            f"second={response.content[:300]!r}; rows in table: {rows}",
-        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_an_inactive_subject_cannot_be_mapped(self) -> None:
         self.allow("school.subject.view", "school.subject.create")
