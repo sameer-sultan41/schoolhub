@@ -24,9 +24,9 @@
 ### Frontend (Next.js monorepo: dashboard + website)
 | Layer | Scope | Tooling |
 | ----- | ----- | ------- |
-| Component | UI components, forms + Zod validation, permission-based rendering | Vitest + React Testing Library |
-| E2E | Critical user journeys per role (login, attendance marking, fee collection, marks entry → result publish, admissions submit, parent payment) | Playwright against a seeded staging-like environment |
-| Accessibility | axe assertions on key screens (non-functional.md §5) | Playwright + axe |
+| Component | UI components, forms + Zod validation, permission-based rendering | Jest + React Testing Library (via `next/jest`) |
+| E2E | Critical user journeys per role (login, attendance marking, fee collection, marks entry → result publish, admissions submit, parent payment) | Not scaffolded. Browser-level coverage is a deliberate open decision — raise it explicitly rather than adding a second runner by default. |
+| Accessibility | axe assertions on key screens (non-functional.md §5) | `jest-axe` in component tests; browser-level auditing deferred with E2E above |
 
 Generated TypeScript API types (from OpenAPI) make many contract mismatches compile-time failures.
 

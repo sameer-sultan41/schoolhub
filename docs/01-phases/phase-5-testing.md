@@ -19,7 +19,7 @@ Prove the platform is launchable: functionally complete against the SRD, secure 
 
 ### 1. QA regression
 
-- Execute the full regression pack accumulated since Phase 2: per-module functional suites, cross-module scenarios (admission → enrollment → attendance → exam → result → fee), and the E2E Playwright suite across dashboard + parent portal + public website.
+- Execute the full regression pack accumulated since Phase 2: per-module functional suites, cross-module scenarios (admission → enrollment → attendance → exam → result → fee), and — if browser-level end-to-end coverage has been adopted by then (see [`../07-quality/testing-strategy.md`](../07-quality/testing-strategy.md)) — the journeys spanning dashboard, parent portal and public website.
 - **Cross-tenant regression** re-run in full — every endpoint class attempts foreign-tenant reads/writes and must 404 ([`multi-tenancy.md`](../02-architecture/multi-tenancy.md) §3.5).
 - Exploratory testing tours per persona (teacher day, accountant fee-day, parent journey), including RTL/Urdu locale and accessibility checks (keyboard-only passes on the top 10 flows).
 - Data-integrity checks: import → operate → export round-trips; report totals reconcile with ledgers.

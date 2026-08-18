@@ -63,7 +63,7 @@ schoolhub-frontend/
 | `packages/api-client/` | Regenerated in CI from the API's published OpenAPI spec |
 | `packages/ui/` | Only components used by ≥ 2 apps graduate here (shared-code policy) |
 
-**Conventions:** `kebab-case` file names, `PascalCase` components, `use*` hooks; tests co-located as `*.test.tsx` (Vitest + RTL), E2E in `apps/<app>/e2e/` (Playwright).
+**Conventions:** `kebab-case` file names, `PascalCase` components, `use*` hooks; tests co-located as `*.test.tsx` (Jest + React Testing Library via `next/jest`).
 
 ## 3. `schoolhub-infra` and `schoolhub-docs`
 
