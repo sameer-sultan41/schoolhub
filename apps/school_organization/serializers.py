@@ -59,8 +59,18 @@ class CampusSerializer(serializers.ModelSerializer):
     class Meta:
         model = Campus
         fields = (
-            "id", "name", "code", "address", "phone", "email", "timezone",
-            "head_staff_id", "is_primary", "is_active", "created_at", "updated_at",
+            "id",
+            "name",
+            "code",
+            "address",
+            "phone",
+            "email",
+            "timezone",
+            "head_staff_id",
+            "is_primary",
+            "is_active",
+            "created_at",
+            "updated_at",
         )
         read_only_fields = READ_ONLY_FIELDS
 
@@ -79,8 +89,16 @@ class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Department
         fields = (
-            "id", "name", "code", "department_type", "campus_id", "head_staff_id",
-            "description", "is_active", "created_at", "updated_at",
+            "id",
+            "name",
+            "code",
+            "department_type",
+            "campus_id",
+            "head_staff_id",
+            "description",
+            "is_active",
+            "created_at",
+            "updated_at",
         )
         read_only_fields = READ_ONLY_FIELDS
 
@@ -92,8 +110,14 @@ class AcademicSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AcademicSession
         fields = (
-            "id", "name", "start_date", "end_date", "status", "is_current",
-            "created_at", "updated_at",
+            "id",
+            "name",
+            "start_date",
+            "end_date",
+            "status",
+            "is_current",
+            "created_at",
+            "updated_at",
         )
         # Lifecycle moves only through :activate and :close, which are separately
         # permissioned and audited; a plain PATCH must not be able to flip them.
@@ -126,15 +150,19 @@ class TermSerializer(serializers.ModelSerializer):
     class Meta:
         model = Term
         fields = (
-            "id", "academic_session_id", "name", "sequence", "start_date", "end_date",
-            "created_at", "updated_at",
+            "id",
+            "academic_session_id",
+            "name",
+            "sequence",
+            "start_date",
+            "end_date",
+            "created_at",
+            "updated_at",
         )
         read_only_fields = READ_ONLY_FIELDS
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        session = attrs.get("academic_session") or getattr(
-            self.instance, "academic_session", None
-        )
+        session = attrs.get("academic_session") or getattr(self.instance, "academic_session", None)
         start = attrs.get("start_date") or getattr(self.instance, "start_date", None)
         end = attrs.get("end_date") or getattr(self.instance, "end_date", None)
         if session is None:
@@ -176,8 +204,16 @@ class SectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Section
         fields = (
-            "id", "class_id", "campus_id", "name", "capacity", "class_teacher_staff_id",
-            "room_id", "is_active", "created_at", "updated_at",
+            "id",
+            "class_id",
+            "campus_id",
+            "name",
+            "capacity",
+            "class_teacher_staff_id",
+            "room_id",
+            "is_active",
+            "created_at",
+            "updated_at",
         )
         read_only_fields = READ_ONLY_FIELDS
 
@@ -195,9 +231,7 @@ class SectionSerializer(serializers.ModelSerializer):
                 {"class_id": f"Class '{school_class.name}' is inactive."}
             )
         if campus is not None and not campus.is_active:
-            raise serializers.ValidationError(
-                {"campus_id": f"Campus '{campus.name}' is inactive."}
-            )
+            raise serializers.ValidationError({"campus_id": f"Campus '{campus.name}' is inactive."})
         return attrs
 
 
@@ -207,8 +241,15 @@ class SubjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subject
         fields = (
-            "id", "name", "code", "subject_type", "department_id", "description",
-            "is_active", "created_at", "updated_at",
+            "id",
+            "name",
+            "code",
+            "subject_type",
+            "department_id",
+            "description",
+            "is_active",
+            "created_at",
+            "updated_at",
         )
         read_only_fields = READ_ONLY_FIELDS
 
@@ -227,9 +268,19 @@ class ClassSubjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClassSubject
         fields = (
-            "id", "academic_session_id", "class_id", "subject_id", "campus_id",
-            "is_elective", "elective_group", "weekly_periods", "syllabus_file_id",
-            "term_plans", "notes", "created_at", "updated_at",
+            "id",
+            "academic_session_id",
+            "class_id",
+            "subject_id",
+            "campus_id",
+            "is_elective",
+            "elective_group",
+            "weekly_periods",
+            "syllabus_file_id",
+            "term_plans",
+            "notes",
+            "created_at",
+            "updated_at",
         )
         read_only_fields = READ_ONLY_FIELDS
 
@@ -239,9 +290,7 @@ class ClassSubjectSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        session = attrs.get("academic_session") or getattr(
-            self.instance, "academic_session", None
-        )
+        session = attrs.get("academic_session") or getattr(self.instance, "academic_session", None)
         if session is None:
             raise serializers.ValidationError({"academic_session_id": "This field is required."})
         services.assert_session_writable(session)
@@ -261,8 +310,15 @@ class HouseSerializer(serializers.ModelSerializer):
     class Meta:
         model = House
         fields = (
-            "id", "name", "code", "color", "motto", "house_master_staff_id",
-            "is_active", "created_at", "updated_at",
+            "id",
+            "name",
+            "code",
+            "color",
+            "motto",
+            "house_master_staff_id",
+            "is_active",
+            "created_at",
+            "updated_at",
         )
         read_only_fields = READ_ONLY_FIELDS
 

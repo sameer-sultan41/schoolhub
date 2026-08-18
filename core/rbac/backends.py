@@ -59,9 +59,7 @@ class IdentifierBackend(ModelBackend):
             return None
 
         if len(matched) > 1:
-            raise AmbiguousPrincipal(
-                "These credentials are valid at more than one school."
-            )
+            raise AmbiguousPrincipal("These credentials are valid at more than one school.")
 
         return matched[0]
 

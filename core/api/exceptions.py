@@ -86,13 +86,21 @@ def envelope_exception_handler(exc, context):
         # rather than silently returning a tidy envelope for a real bug.
         return None
 
-    code = getattr(exc, "default_code", None) or _CODE_BY_STATUS.get(
-        response.status_code, "error"
-    )
+    # Our own domain exceptions carry a meaningful code; DRF's built-ins carry
+    # generic ones ("invalid", "not_authenticated") that leak framework vocabulary
+    # into the documented contract, so those resolve from the status instead.
+    if isinstance(exc, DomainRuleViolation | Conflict):
+        code = exc.default_code
+    else:
+        code = _CODE_BY_STATUS.get(
+            response.status_code, getattr(exc, "default_code", None) or "error"
+        )
     detail = getattr(exc, "detail", response.data)
     details = _flatten_details(detail)
-    message = details[0]["issue"] if len(details) == 1 else _CODE_BY_STATUS.get(
-        response.status_code, "Request failed."
+    message = (
+        details[0]["issue"]
+        if len(details) == 1
+        else _CODE_BY_STATUS.get(response.status_code, "Request failed.")
     )
 
     if response.status_code >= 500:

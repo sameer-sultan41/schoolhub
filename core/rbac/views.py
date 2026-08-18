@@ -36,8 +36,9 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data, context={"request": request})
         if not serializer.is_valid():
-            record_security_event(request, "auth.login.failed",
-                                  identifier=request.data.get("identifier"))
+            record_security_event(
+                request, "auth.login.failed", identifier=request.data.get("identifier")
+            )
             return Response(
                 {
                     "error": {
@@ -58,7 +59,9 @@ class RefreshView(TokenRefreshView):
     """Rotating refresh. Reuse of a rotated token invalidates the family (theft detection)."""
 
     permission_classes = (AllowAny,)
-    throttle_classes = (AuthEndpointThrottle,)
+    # simplejwt annotates this as an empty tuple, so any override is a type error
+    # there rather than here.
+    throttle_classes = (AuthEndpointThrottle,)  # type: ignore[assignment]
 
 
 class LogoutView(APIView):

@@ -84,9 +84,7 @@ registry.register(
 registry.register("school.class.view", "List and read classes (grade levels).", ALL_STAFF)
 registry.register("school.class.create", "Create a class.", ACADEMIC_MANAGERS)
 registry.register("school.class.update", "Edit a class.", ACADEMIC_MANAGERS)
-registry.register(
-    "school.class.delete", "Deactivate or soft-delete a class.", ACADEMIC_MANAGERS
-)
+registry.register("school.class.delete", "Deactivate or soft-delete a class.", ACADEMIC_MANAGERS)
 
 registry.register("school.section.view", "List and read sections.", ALL_STAFF)
 registry.register("school.section.create", "Create a section.", ACADEMIC_MANAGERS)
@@ -115,9 +113,5 @@ registry.register("school.house.create", "Create a house.", OWNER_ADMIN)
 registry.register("school.house.update", "Edit a house.", OWNER_ADMIN)
 registry.register("school.house.delete", "Deactivate or soft-delete a house.", OWNER_ADMIN)
 
-registry.register(
-    "school.structure.import", "Bulk import structure from CSV/Excel.", STRUCTURE_IO
-)
-registry.register(
-    "school.structure.export", "Bulk export structure to CSV/Excel.", STRUCTURE_IO
-)
+registry.register("school.structure.import", "Bulk import structure from CSV/Excel.", STRUCTURE_IO)
+registry.register("school.structure.export", "Bulk export structure to CSV/Excel.", STRUCTURE_IO)

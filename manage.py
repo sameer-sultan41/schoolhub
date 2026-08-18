@@ -10,9 +10,7 @@ def main() -> None:
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
-        raise ImportError(
-            "Django is not installed or the virtualenv is not active."
-        ) from exc
+        raise ImportError("Django is not installed or the virtualenv is not active.") from exc
     execute_from_command_line(sys.argv)
 
 

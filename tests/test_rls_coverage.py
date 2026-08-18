@@ -43,9 +43,7 @@ def _tables_with_forced_rls() -> set[str]:
 
 def _tables_with_policies() -> set[str]:
     with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT tablename FROM pg_policies WHERE schemaname = current_schema()"
-        )
+        cursor.execute("SELECT tablename FROM pg_policies WHERE schemaname = current_schema()")
         return {row[0] for row in cursor.fetchall()}
 
 

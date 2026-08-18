@@ -462,9 +462,7 @@ class SchoolSettingsEndpointTests(SchoolOrganizationAPITestCase):
 
     def test_update_requires_the_update_permission(self) -> None:
         self.allow("school.settings.view")
-        response = self.client.patch(
-            "/api/v1/school-settings", {"locale": "ur"}, format="json"
-        )
+        response = self.client.patch("/api/v1/school-settings", {"locale": "ur"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 

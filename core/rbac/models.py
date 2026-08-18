@@ -165,9 +165,7 @@ class Role(TimestampedModel):
         default=False,
         help_text="Student/guardian role: can never hold staff permission keys.",
     )
-    permissions = models.ManyToManyField(
-        Permission, through="RolePermission", related_name="roles"
-    )
+    permissions = models.ManyToManyField(Permission, through="RolePermission", related_name="roles")
 
     objects = AllTenantsManager()
 
@@ -212,9 +210,7 @@ class UserRole(TimestampedModel):
         "tenancy.Tenant", on_delete=models.CASCADE, null=True, blank=True, related_name="+"
     )
     scope = models.CharField(max_length=20, choices=RecordScope.choices, default=RecordScope.ALL)
-    scope_ref = models.UUIDField(
-        null=True, blank=True, help_text="Campus id when scope='campus'."
-    )
+    scope_ref = models.UUIDField(null=True, blank=True, help_text="Campus id when scope='campus'.")
 
     objects = AllTenantsManager()
 

@@ -239,8 +239,7 @@ def assert_section_capacity(section: Section, *, occupied: int, incoming: int = 
     remaining = section_seats_remaining(section, occupied=occupied)
     if remaining is not None and incoming > remaining:
         raise DomainRuleViolation(
-            f"Section '{section.name}' has {max(remaining, 0)} seat(s) left; "
-            f"{incoming} requested."
+            f"Section '{section.name}' has {max(remaining, 0)} seat(s) left; {incoming} requested."
         )
 
 

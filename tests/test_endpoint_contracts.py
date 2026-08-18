@@ -35,9 +35,7 @@ def _api_views() -> list[tuple[str, type]]:
                 walk(pattern, route)
                 continue
             callback = getattr(pattern, "callback", None)
-            view_class = getattr(callback, "cls", None) or getattr(
-                callback, "view_class", None
-            )
+            view_class = getattr(callback, "cls", None) or getattr(callback, "view_class", None)
             if view_class is not None:
                 views.append((route, view_class))
 
@@ -86,9 +84,7 @@ class EndpointContractTests(TestCase):
             and HasPermissionKey not in getattr(view, "permission_classes", [])
             and AllowAny not in getattr(view, "permission_classes", [])
         ]
-        self.assertEqual(
-            offenders, [], f"Endpoints not enforcing HasPermissionKey: {offenders}"
-        )
+        self.assertEqual(offenders, [], f"Endpoints not enforcing HasPermissionKey: {offenders}")
 
 
 class PermissionRegistryTests(TestCase):
@@ -113,7 +109,5 @@ class PermissionRegistryTests(TestCase):
     def test_every_key_is_well_formed(self):
         for spec in registry.all():
             with self.subTest(key=spec.key):
-                self.assertEqual(
-                    len(spec.key.split(".")), 3, "Keys must be module.resource.action"
-                )
+                self.assertEqual(len(spec.key.split(".")), 3, "Keys must be module.resource.action")
                 self.assertEqual(spec.key, spec.key.lower())

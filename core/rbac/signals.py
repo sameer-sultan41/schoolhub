@@ -25,9 +25,7 @@ def evict_on_user_role_change(instance, **kwargs) -> None:
 
 @receiver([post_save, post_delete], sender=RolePermission)
 def evict_on_role_permission_change(instance, **kwargs) -> None:
-    _evict(
-        UserRole.objects.filter(role_id=instance.role_id).values_list("user_id", flat=True)
-    )
+    _evict(UserRole.objects.filter(role_id=instance.role_id).values_list("user_id", flat=True))
 
 
 @receiver(m2m_changed, sender=Role.permissions.through)

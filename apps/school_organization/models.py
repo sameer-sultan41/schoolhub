@@ -123,9 +123,7 @@ class Department(TenantOwnedModel):
         ]
         indexes = [
             models.Index(fields=["tenant", "campus"], name="departments_tenant_campus_idx"),
-            models.Index(
-                fields=["tenant", "department_type"], name="departments_tenant_type_idx"
-            ),
+            models.Index(fields=["tenant", "department_type"], name="departments_tenant_type_idx"),
         ]
 
     def __str__(self) -> str:
@@ -343,9 +341,7 @@ class ClassSubject(TenantOwnedModel):
     school_class = models.ForeignKey(
         Class, on_delete=models.PROTECT, related_name="class_subjects", db_column="class_id"
     )
-    subject = models.ForeignKey(
-        Subject, on_delete=models.PROTECT, related_name="class_subjects"
-    )
+    subject = models.ForeignKey(Subject, on_delete=models.PROTECT, related_name="class_subjects")
     campus = models.ForeignKey(
         Campus,
         on_delete=models.PROTECT,
@@ -392,9 +388,7 @@ class ClassSubject(TenantOwnedModel):
                 fields=["tenant", "academic_session", "school_class"],
                 name="class_subjects_session_idx",
             ),
-            models.Index(
-                fields=["tenant", "subject"], name="class_subjects_subject_idx"
-            ),
+            models.Index(fields=["tenant", "subject"], name="class_subjects_subject_idx"),
         ]
 
     def __str__(self) -> str:

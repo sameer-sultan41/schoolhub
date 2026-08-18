@@ -17,8 +17,19 @@ logger = logging.getLogger(__name__)
 # Never persist these into the audit trail, even if a serializer exposes them.
 _REDACTED_FIELDS = frozenset(
     {
-        "password", "new_password", "old_password", "token", "refresh", "access",
-        "secret", "api_key", "otp", "national_id", "bank_account", "iban", "cvv",
+        "password",
+        "new_password",
+        "old_password",
+        "token",
+        "refresh",
+        "access",
+        "secret",
+        "api_key",
+        "otp",
+        "national_id",
+        "bank_account",
+        "iban",
+        "cvv",
     }
 )
 
