@@ -1,8 +1,8 @@
-# AGENTS.md — schoolhub-api (template)
+# AGENTS.md — schoolhub-api-v2 (template)
 
 > Copy this file to the backend repo root as `AGENTS.md` when the repo is created, and fix the `DOCS` path/URL for how the docs repo is checked out there.
 
-Instructions for AI assistants working in **schoolhub-api** — the Django 5 + DRF backend of SchoolHub, an AI-powered multi-tenant School Management SaaS.
+Instructions for AI assistants working in **schoolhub-api-v2** — the Django 6 + DRF backend of SchoolHub, an AI-powered multi-tenant School Management SaaS.
 
 ## Required Reading, In Order
 

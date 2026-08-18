@@ -52,6 +52,20 @@ Django 5 + DRF + Celery/Redis · Next.js 15 (dashboard + website renderer) · Po
 - Locked vocabulary (role slugs, permission keys, table names, API shapes, template codes, AI feature IDs) is defined once and reused everywhere; see [`AGENTS.md`](AGENTS.md).
 - Diagrams are Mermaid and render on GitHub.
 
+## Implementing Repositories
+
+The docs here are the specification; these repositories implement it.
+
+| Repository | Implements |
+| ---------- | ---------- |
+| [`schoolhub-api-v2`](https://github.com/sameer-sultan41/schoolhub-api-v2) | Backend — Django 6 + DRF, tenancy, RBAC, module apps |
+| [`schoolhub-frontend-v2`](https://github.com/sameer-sultan41/schoolhub-frontend-v2) | Admin dashboard + public school website renderer (Next.js 16 monorepo) |
+| [`schoolhub-infra-v2`](https://github.com/sameer-sultan41/schoolhub-infra-v2) | Local stack, PostgreSQL roles, Terraform, runbooks |
+
+The architecture documents refer to these by their logical names (`schoolhub-api`,
+`schoolhub-frontend`, `schoolhub-infra`) — that naming describes the component's
+role and is unaffected by the repository's actual name.
+
 ## Status
 
 Phase 0 deliverable — the specification itself. Open items are collected in each module doc's §19 (Open Questions / Recommendations) and should be resolved at Phase 0 sign-off before Phase 1 design begins.

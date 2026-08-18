@@ -1,4 +1,4 @@
-# AGENTS.md — schoolhub-frontend / apps/website (template)
+# AGENTS.md — schoolhub-frontend-v2 / apps/website (template)
 
 > Copy this file to the public-website renderer app root as `AGENTS.md` when the repo is created, and fix the `DOCS` path/URL.
 

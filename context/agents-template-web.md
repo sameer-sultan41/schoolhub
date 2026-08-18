@@ -1,8 +1,8 @@
-# AGENTS.md — schoolhub-frontend / apps/dashboard (template)
+# AGENTS.md — schoolhub-frontend-v2 / apps/dashboard (template)
 
 > Copy this file to the frontend monorepo (or the dashboard app root) as `AGENTS.md` when the repo is created, and fix the `DOCS` path/URL.
 
-Instructions for AI assistants working on the **SchoolHub admin dashboard** — Next.js 15 + TypeScript in the Turborepo monorepo (`apps/dashboard`, shared `packages/ui`, `packages/api-client`, `packages/types`).
+Instructions for AI assistants working on the **SchoolHub admin dashboard** — Next.js 16 + TypeScript in the Turborepo monorepo (`apps/dashboard`, shared `packages/ui`, `packages/api-client`, `packages/types`).
 
 ## Required Reading, In Order
 
