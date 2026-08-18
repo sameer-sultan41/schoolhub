@@ -53,7 +53,7 @@ If a doc's `> **Agent Context**` header says the doc is not the one you need, st
 
 ## Stack (fixed — see `DOCS/docs/02-architecture/tech-stack.md` §3)
 
-Next.js 16 App Router · React 19 · TypeScript 7 (strict) · Tailwind CSS 4 + shadcn/ui ·
+Next.js 16 App Router · React 19 · TypeScript 6 (strict) · Tailwind CSS 4 + shadcn/ui ·
 TanStack Query v5 (server state) · Zustand v5 (the little true client state) · React Hook Form
 + Zod v4 · next-intl v4 · **Jest** + React Testing Library · Node 24.
 
@@ -71,13 +71,15 @@ choices. Two consequences worth knowing:
   app's `globals.css`. PostCSS uses `@tailwindcss/postcss`.
 - **ESLint 10 is flat-config only** — `eslint.config.mjs`, extending
   `@schoolhub/config/eslint`. No `.eslintrc`.
-- **The linter runs on TypeScript 6, the compiler on TypeScript 7.** typescript-eslint 8
-  hard-throws (`typescript-eslint does not support TS 7.0`) when it resolves a TS 7 copy, so
-  the root `pnpm.overrides` pins `typescript@6.0.3` **for the typescript-eslint packages
-  only** — the side-by-side arrangement TypeScript 7 documents. `tsc`, the apps, and the
-  packages all still use TS 7.0.2. Remove the overrides once typescript-eslint supports
-  TS ≥ 7.1 (typescript-eslint#10940); do not "fix" a lint crash by downgrading the repo's
-  TypeScript.
+- **TypeScript is pinned to exactly `6.0.3`, not 7.x, and not a caret range.**
+  typescript-eslint 8 hard-throws `typescript-eslint does not support TS 7.0` the moment it
+  resolves a TS 7 copy, and `eslint-config-next` requires typescript-eslint at module load —
+  so on TS 7 the whole lint layer dies, Next's rules included. TS 6.0.3 is the newest version
+  the lint ecosystem supports. The pin is exact because typescript-eslint's peer range stops
+  at `<6.1.0`.
+  Move to TypeScript 7 only when typescript-eslint ships support (typescript-eslint#10940)
+  **and** `eslint-config-next` picks it up — bump both together, in one PR, and watch the lint
+  job. Do not bump TypeScript on its own.
 
 ## Repo-Wide Hard Rules
 
