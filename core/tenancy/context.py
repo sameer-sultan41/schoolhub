@@ -38,6 +38,26 @@ def set_database_tenant(tenant_id: uuid.UUID | None) -> None:
             cursor.execute("SELECT set_config(%s, %s, true)", [TENANT_GUC, str(tenant_id)])
 
 
+def bind_tenant(tenant_id: uuid.UUID):
+    """Activate a tenant without a ``with`` block, returning a token to unbind with.
+
+    Request handling spans two hooks — bind after authentication, unbind once the
+    response is finalized — which a context manager cannot express.
+    """
+    token = _current_tenant_id.set(tenant_id)
+    set_database_tenant(tenant_id)
+    return token
+
+
+def unbind_tenant(token) -> None:
+    """Release a binding made by :func:`bind_tenant`.
+
+    Only the Python side is reset: the database setting is transaction-scoped and
+    unwinds with the transaction, and resetting it outside one would fail.
+    """
+    _current_tenant_id.reset(token)
+
+
 @contextlib.contextmanager
 def tenant_context(tenant_id: uuid.UUID | None):
     """Activate a tenant for the enclosing block, in Python and in the database.

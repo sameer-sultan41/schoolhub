@@ -14,6 +14,8 @@ from rest_framework.response import Response
 
 from core.audit.services import record_audit
 from core.rbac.permissions import HasPermissionKey, scope_queryset
+from core.tenancy.context import bind_tenant, unbind_tenant
+from core.tenancy.models import Tenant
 
 
 class TenantScopedViewSetMixin:
@@ -29,6 +31,54 @@ class TenantScopedViewSetMixin:
     permission_classes = [IsAuthenticated, HasPermissionKey]
     scope_own_field: str | None = None
     audit_resource: str | None = None
+
+    def initial(self, request, *args, **kwargs):
+        """Bind the tenant here rather than relying on middleware alone.
+
+        Two reasons this cannot live only in middleware:
+
+        1. Authentication is DRF's, not Django's. With JWT there is no session, so
+           Django's ``request.user`` is still anonymous while middleware runs and the
+           tenant would never be resolved in production — a gap the tests hide by
+           also calling ``force_login``.
+        2. ``SET LOCAL`` only has effect inside a transaction. ``ATOMIC_REQUESTS``
+           opens that transaction around the *view*, not around middleware, so a
+           binding made earlier would silently do nothing.
+
+        Accessing ``request.user`` forces DRF authentication, so the tenant is bound
+        before permission and throttle checks run.
+        """
+        user = request.user
+        tenant = getattr(request, "tenant", None)
+
+        if tenant is None and getattr(user, "is_authenticated", False):
+            tenant = self._resolve_tenant(user)
+            request.tenant = tenant
+            # DRF wraps the Django request; module code and audit reach for either.
+            request._request.tenant = tenant
+
+        if tenant is not None:
+            self._tenant_token = bind_tenant(tenant.pk)
+
+        super().initial(request, *args, **kwargs)
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        token = getattr(self, "_tenant_token", None)
+        if token is not None:
+            unbind_tenant(token)
+            self._tenant_token = None
+        return super().finalize_response(request, response, *args, **kwargs)
+
+    @staticmethod
+    def _resolve_tenant(user):
+        tenant_id = getattr(user, "tenant_id", None)
+        if tenant_id is None:
+            return None
+        return (
+            Tenant.objects.filter(pk=tenant_id, deleted_at__isnull=True)
+            .only("id", "name", "slug", "status", "timezone", "locale", "currency")
+            .first()
+        )
 
     def get_queryset(self):
         # The model's default manager is already tenant-scoped, and RLS enforces it
