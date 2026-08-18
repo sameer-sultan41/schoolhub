@@ -2,8 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "rootDir": "src",
-    "types": ["jest"],
+    // No `rootDir` — see packages/api-client/tsconfig.json for why.
+    // `@testing-library/jest-dom` is listed so its matchers (toBeDisabled, toHaveAttribute…)
+    // type-check: jest.setup.ts imports it at runtime but sits outside `include`.
+    "types": ["jest", "@testing-library/jest-dom"],
     "paths": {
       "@schoolhub/types": ["../types/src/index.ts"]
     }
