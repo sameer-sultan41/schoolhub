@@ -71,6 +71,13 @@ choices. Two consequences worth knowing:
   app's `globals.css`. PostCSS uses `@tailwindcss/postcss`.
 - **ESLint 10 is flat-config only** — `eslint.config.mjs`, extending
   `@schoolhub/config/eslint`. No `.eslintrc`.
+- **The linter runs on TypeScript 6, the compiler on TypeScript 7.** typescript-eslint 8
+  hard-throws (`typescript-eslint does not support TS 7.0`) when it resolves a TS 7 copy, so
+  the root `pnpm.overrides` pins `typescript@6.0.3` **for the typescript-eslint packages
+  only** — the side-by-side arrangement TypeScript 7 documents. `tsc`, the apps, and the
+  packages all still use TS 7.0.2. Remove the overrides once typescript-eslint supports
+  TS ≥ 7.1 (typescript-eslint#10940); do not "fix" a lint crash by downgrading the repo's
+  TypeScript.
 
 ## Repo-Wide Hard Rules
 
