@@ -41,6 +41,14 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Makes the two-TypeScript setup observable: `tsc` must be the native TS 7 from
+      # @typescript/native, while tools resolve the TS 6 API. A silent fallback to one
+      # version is a regression worth seeing in the log. See root AGENTS.md.
+      - name: Report TypeScript versions
+        run: |
+          echo "tsc (typecheck):    $(pnpm exec tsc --version)"
+          echo "typescript (tools): $(node -p "require('typescript').version")"
+
       - name: Typecheck
         run: pnpm typecheck
 
