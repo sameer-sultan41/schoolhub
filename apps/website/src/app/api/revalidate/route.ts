@@ -83,7 +83,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  for (const tag of tags) revalidateTag(tag);
+  // Next 16 requires a cache-life profile. `{ expire: 0 }` expires matching entries
+  // immediately, which is what "the school just published" means — a named profile like
+  // "max" would only invalidate entries already older than that profile's age.
+  // `updateTag` would be the read-your-own-writes equivalent, but it is Server-Action only.
+  for (const tag of tags) revalidateTag(tag, { expire: 0 });
 
   return NextResponse.json({ data: { revalidated: [...tags] } });
 }
