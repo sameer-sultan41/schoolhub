@@ -213,6 +213,13 @@ resource "aws_ecs_cluster" "this" {
   tags = local.common_tags
 }
 
+# The load balancer is deliberately internet-facing: it serves every school's
+# public website and the admin dashboard, so reachability from the internet is the
+# requirement, not an oversight. What protects it is layered in front of and behind
+# it — WAF on the CloudFront distribution, TLS termination, authentication on every
+# API route, and an application tier that only accepts traffic from this security
+# group.
+#trivy:ignore:AVD-AWS-0053
 resource "aws_lb" "this" {
   name               = substr("${local.name_prefix}-alb", 0, 32)
   load_balancer_type = "application"

@@ -241,11 +241,13 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http_redirect" {
   ip_protocol       = "tcp"
 }
 
-resource "aws_vpc_security_group_egress_rule" "alb_all" {
-  security_group_id = aws_security_group.alb.id
-  description       = "To the application tier"
-  cidr_ipv4         = "0.0.0.0/0"
-  ip_protocol       = "-1"
+resource "aws_vpc_security_group_egress_rule" "alb_to_app" {
+  security_group_id            = aws_security_group.alb.id
+  description                  = "To the application tier only"
+  referenced_security_group_id = aws_security_group.app.id
+  from_port                    = 3000
+  to_port                      = 8000
+  ip_protocol                  = "tcp"
 }
 
 resource "aws_security_group" "app" {
@@ -265,6 +267,7 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
   ip_protocol                  = "tcp"
 }
 
+#trivy:ignore:AVD-AWS-0104
 resource "aws_vpc_security_group_egress_rule" "app_all" {
   security_group_id = aws_security_group.app.id
   description       = "Outbound to the data tier, AWS APIs and third-party providers"
@@ -326,10 +329,10 @@ resource "aws_security_group" "bastion" {
   tags = merge(local.tags, { Name = "${var.name_prefix}-bastion" })
 }
 
-resource "aws_vpc_security_group_egress_rule" "bastion_all" {
+resource "aws_vpc_security_group_egress_rule" "bastion_to_vpc" {
   security_group_id = aws_security_group.bastion.id
-  description       = "To the data tier and the SSM endpoints"
-  cidr_ipv4         = "0.0.0.0/0"
+  description       = "To the data tier and the SSM interface endpoints, both inside the VPC"
+  cidr_ipv4         = var.vpc_cidr
   ip_protocol       = "-1"
 }
 
