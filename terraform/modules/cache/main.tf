@@ -132,8 +132,8 @@ resource "aws_elasticache_replication_group" "this" {
   automatic_failover_enabled = local.automatic_failover
   multi_az_enabled           = local.automatic_failover
 
-  subnet_group_name  = aws_elasticache_subnet_group.this.name
-  security_group_ids = var.security_group_ids
+  subnet_group_name    = aws_elasticache_subnet_group.this.name
+  security_group_ids   = var.security_group_ids
   parameter_group_name = aws_elasticache_parameter_group.this.name
 
   at_rest_encryption_enabled = true

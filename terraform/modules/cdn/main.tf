@@ -103,7 +103,7 @@ resource "aws_acm_certificate_validation" "this" {
 resource "aws_cloudfront_origin_access_control" "media" {
   name                              = "${var.name_prefix}-media-oac"
   description                       = "Signed origin requests to the uploads bucket"
-  origin_access_control_origin_type  = "s3"
+  origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
@@ -252,11 +252,11 @@ resource "aws_cloudfront_distribution" "this" {
     domain_name = var.alb_domain_name
 
     custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-      origin_read_timeout    = 60
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "https-only"
+      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_read_timeout      = 60
       origin_keepalive_timeout = 30
     }
   }

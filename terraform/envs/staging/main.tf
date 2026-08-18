@@ -364,10 +364,10 @@ module "dashboard" {
   health_check_path      = "/api/health"
 
   environment_variables = {
-    NODE_ENV                       = "production"
-    NEXT_PUBLIC_API_BASE_URL       = "https://api.${var.platform_domain}/api/v1"
-    NEXT_PUBLIC_PLATFORM_DOMAIN    = var.platform_domain
-    NEXT_TELEMETRY_DISABLED        = "1"
+    NODE_ENV                    = "production"
+    NEXT_PUBLIC_API_BASE_URL    = "https://api.${var.platform_domain}/api/v1"
+    NEXT_PUBLIC_PLATFORM_DOMAIN = var.platform_domain
+    NEXT_TELEMETRY_DISABLED     = "1"
   }
 
   desired_count = 1
