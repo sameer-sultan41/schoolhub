@@ -247,7 +247,8 @@ export class ApiClient {
     try {
       payload = await response.json();
     } catch {
-      payload = null;
+      // A non-JSON error body (an HTML 502 from a proxy, say) still has to produce an
+      // ApiError, so fall through with payload left null.
     }
 
     const envelope = parseErrorEnvelope(payload);

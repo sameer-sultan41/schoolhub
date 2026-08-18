@@ -1,6 +1,6 @@
 /**
  * Jest for a source-only TypeScript package: @swc/jest transpiles, no build step.
- * (The Next.js apps use `next/jest` instead — see `apps/*/jest.config.ts`.)
+ * (The Next.js apps use `next/jest` instead — see each app's own jest.config.ts.)
  *
  * @type {import('jest').Config}
  */
