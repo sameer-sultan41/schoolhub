@@ -40,7 +40,7 @@ Every candidate is scored against: (a) long-term maintainability, (b) scalabilit
 - **State management:** TanStack Query for server state (the majority), Zustand for the little true client state. Redux is not recommended — server-state libraries eliminate most of its use cases here.
 - **Forms & validation:** React Hook Form + Zod (schemas shared between client validation and API-contract types).
 - **Internationalization:** `next-intl` — English + Urdu (RTL-ready) initially; tenant-selectable locale. See localization requirements in [`../07-quality/non-functional.md`](../07-quality/non-functional.md).
-- **Testing:** Vitest + React Testing Library (unit/component), Playwright (E2E).
+- **Testing:** Jest + React Testing Library, wired through `next/jest`. Jest is the standard across this owner's projects, so a second runner would split conventions for no benefit; end-to-end browser coverage is deliberately not scaffolded and should be raised explicitly if it becomes necessary.
 - **Build tooling:** Turborepo monorepo for `dashboard`, `website`, and shared `ui`/`types` packages. See [`repo-structure.md`](repo-structure.md).
 
 ## 4. Database & Data Services
