@@ -53,7 +53,8 @@ If a doc's `> **Agent Context**` header says the doc is not the one you need, st
 
 ## Stack (fixed — see `DOCS/docs/02-architecture/tech-stack.md` §3)
 
-Next.js 16 App Router · React 19 · TypeScript 6 (strict) · Tailwind CSS 4 + shadcn/ui ·
+Next.js 16 App Router · React 19 · TypeScript 7 for `tsc` / 6 for tooling (strict) ·
+Tailwind CSS 4 + shadcn/ui ·
 TanStack Query v5 (server state) · Zustand v5 (the little true client state) · React Hook Form
 + Zod v4 · next-intl v4 · **Jest** + React Testing Library · Node 24.
 
@@ -71,20 +72,36 @@ choices. Two consequences worth knowing:
   app's `globals.css`. PostCSS uses `@tailwindcss/postcss`.
 - **ESLint is flat-config only** — `eslint.config.mjs`, extending
   `@schoolhub/config/eslint`. No `.eslintrc`.
-- **ESLint is pinned to 9.x, not 10.** ESLint 10 removed the deprecated `context.getFilename()`,
-  which `eslint-plugin-react` 7.37.5 still calls — and that plugin ships inside
-  `eslint-config-next`, with no ESLint 10-compatible release available. On ESLint 10 every app
-  lint task dies with `Error while loading rule 'react/display-name'`. Bump ESLint only once
-  `eslint-plugin-react` supports 10.
-- **TypeScript is pinned to exactly `6.0.3`, not 7.x, and not a caret range.**
-  typescript-eslint 8 hard-throws `typescript-eslint does not support TS 7.0` the moment it
-  resolves a TS 7 copy, and `eslint-config-next` requires typescript-eslint at module load —
-  so on TS 7 the whole lint layer dies, Next's rules included. TS 6.0.3 is the newest version
-  the lint ecosystem supports. The pin is exact because typescript-eslint's peer range stops
-  at `<6.1.0`.
-  Move to TypeScript 7 only when typescript-eslint ships support (typescript-eslint#10940)
-  **and** `eslint-config-next` picks it up — bump both together, in one PR, and watch the lint
-  job. Do not bump TypeScript on its own.
+- **ESLint is pinned to 9.x, not 10.** ESLint 10
+  ([migration guide](https://eslint.org/docs/latest/use/migrate-to-10.0.0)) removed the
+  deprecated `context.getFilename()`; `eslint-plugin-react` 7.37.5 still calls it, ships inside
+  `eslint-config-next`, and has no ESLint 10-compatible release. On ESLint 10 every app lint
+  task dies with `Error while loading rule 'react/display-name'`. ESLint's own guidance offers
+  a codemod for *first-party* rules only — for third-party plugins the answer is to stay on 9
+  until they migrate. Bump ESLint once `eslint-plugin-react` supports 10.
+- **Two TypeScripts, on purpose — this is the setup TypeScript 7 documents.** TypeScript 7.0
+  is the native (Go) port and ships **no stable programmatic API**; 7.1 will introduce a new
+  one. So every tool that consumes the compiler API — typescript-eslint, `eslint-config-next`
+  (which requires typescript-eslint at module load), Next's own type checking, your editor —
+  needs the TS 6 API, while `tsc` itself can be the fast native 7. Hence the aliases in every
+  `package.json`:
+
+  ```json
+  "typescript": "npm:@typescript/typescript6@^6.0.2",   // what tools resolve → TS 6 API
+  "@typescript/native": "npm:typescript@^7.0.2"          // provides the `tsc` binary → TS 7
+  ```
+
+  `pnpm typecheck` therefore runs TS 7 (`tsc --noEmit`), and the lockfile records the linter
+  bound to the TS 6 API: `typescript-eslint@8.67.0(@typescript/typescript6@6.0.2)`. TS 6 also
+  exposes `tsc6` if you need the old compiler directly.
+
+  Do **not** "simplify" this by pointing `typescript` at 7.x: the lint layer dies instantly
+  with `typescript-eslint does not support TS 7.0`, and Next loses its type checking. Collapse
+  back to a single TypeScript once typescript-eslint supports the 7.1 API
+  ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)) —
+  the maintainers describe that as months away, gated on an async ESLint parser.
+  Reference: [Announcing TypeScript 7.0](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/)
+  § running side-by-side with TypeScript 6.0.
 
 ## Repo-Wide Hard Rules
 

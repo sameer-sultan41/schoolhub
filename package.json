@@ -2,7 +2,7 @@
   "name": "schoolhub-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "SchoolHub frontend monorepo — admin dashboard + multi-tenant public website renderer",
+  "description": "SchoolHub frontend monorepo \u2014 admin dashboard + multi-tenant public website renderer",
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=24.0.0",
@@ -22,9 +22,10 @@
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "eslint": "^9.39.5",
     "prettier": "^3.4.2",
     "turbo": "^2.10.10",
-    "typescript": "6.0.3"
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
   }
 }
