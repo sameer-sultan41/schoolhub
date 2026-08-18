@@ -58,9 +58,9 @@ class LoginView(APIView):
 class RefreshView(TokenRefreshView):
     """Rotating refresh. Reuse of a rotated token invalidates the family (theft detection)."""
 
-    permission_classes = (AllowAny,)
-    # simplejwt annotates this as an empty tuple, so any override is a type error
-    # there rather than here.
+    # simplejwt annotates both of these as empty tuples, so any override is a type
+    # error in the library's stubs rather than here.
+    permission_classes = (AllowAny,)  # type: ignore[assignment]
     throttle_classes = (AuthEndpointThrottle,)  # type: ignore[assignment]
 
 

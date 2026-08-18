@@ -24,12 +24,12 @@ class RequestIDMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        incoming = request.META.get(REQUEST_ID_HEADER, "")
-        # Only trust an upstream value that looks like a UUID, so the field cannot be
-        # used to inject arbitrary content into logs.
+        # Only trust an upstream value that looks like a UUID, so the header cannot
+        # be used to inject arbitrary content into logs. META always yields a string,
+        # so a malformed value raises ValueError and nothing else.
         try:
-            request_id = str(uuid.UUID(incoming))
-        except (ValueError, AttributeError, TypeError):
+            request_id = str(uuid.UUID(request.META.get(REQUEST_ID_HEADER, "")))
+        except ValueError:
             request_id = str(uuid.uuid4())
 
         request.request_id = request_id
