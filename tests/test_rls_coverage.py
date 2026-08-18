@@ -65,7 +65,9 @@ class RLSCoverageTests(TestCase):
         expected = set(tenant_owned_tables())
         missing = expected - _tables_with_forced_rls()
         self.assertEqual(
-            missing, set(), f"Tenant-owned tables without FORCE ROW LEVEL SECURITY: {sorted(missing)}"
+            missing,
+            set(),
+            f"Tenant-owned tables without FORCE ROW LEVEL SECURITY: {sorted(missing)}",
         )
 
     def test_every_tenant_owned_table_has_a_policy(self):

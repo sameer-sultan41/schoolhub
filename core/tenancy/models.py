@@ -81,6 +81,9 @@ class TenantSettings(TimestampedModel):
     class Meta:
         db_table = "tenant_settings"
 
+    def __str__(self) -> str:
+        return f"Settings for {self.tenant_id}"
+
 
 class TenantOwnedModel(TimestampedModel):
     """Base class for every tenant-owned table.

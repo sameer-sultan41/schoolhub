@@ -7,6 +7,8 @@ and carried in the token thereafter.
 
 from __future__ import annotations
 
+import contextlib
+
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -66,12 +68,10 @@ class LogoutView(APIView):
     def post(self, request):
         token = request.data.get("refresh")
         if token:
-            try:
+            # An already-invalid token means the session is gone, which is the
+            # outcome the caller wanted; surfacing an error helps nobody.
+            with contextlib.suppress(TokenError):
                 RefreshToken(token).blacklist()
-            except TokenError:
-                # An already-invalid token means the session is gone, which is the
-                # outcome the caller wanted; surfacing an error helps nobody.
-                pass
         record_security_event(request, "auth.logout")
         return Response(status=status.HTTP_204_NO_CONTENT)
 

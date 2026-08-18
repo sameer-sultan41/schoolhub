@@ -160,15 +160,14 @@ class CheckConstraintTests(TenantFixtureMixin, TestCase):
                 )
 
     def test_curriculum_row_needs_at_least_one_weekly_period(self) -> None:
-        with tenant_context(self.tenant.id):
-            with self.assertRaises(IntegrityError):
-                ClassSubjectFactory(
-                    tenant=self.tenant,
-                    academic_session=AcademicSessionFactory(tenant=self.tenant),
-                    school_class=ClassFactory(tenant=self.tenant),
-                    subject=SubjectFactory(tenant=self.tenant),
-                    weekly_periods=0,
-                )
+        with tenant_context(self.tenant.id), self.assertRaises(IntegrityError):
+            ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=AcademicSessionFactory(tenant=self.tenant),
+                school_class=ClassFactory(tenant=self.tenant),
+                subject=SubjectFactory(tenant=self.tenant),
+                weekly_periods=0,
+            )
 
 
 class SessionLifecycleServiceTests(TenantFixtureMixin, TestCase):

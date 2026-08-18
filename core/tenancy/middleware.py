@@ -6,7 +6,7 @@ import logging
 
 from django.http import JsonResponse
 
-from core.tenancy.context import set_database_tenant, _current_tenant_id
+from core.tenancy.context import tenant_context
 from core.tenancy.models import Tenant
 
 logger = logging.getLogger(__name__)
@@ -44,14 +44,10 @@ class TenantMiddleware:
                 return self._deny(request, "tenant_suspended", status=403)
 
             request.tenant = tenant
-            token = _current_tenant_id.set(tenant.id)
-            try:
-                # ATOMIC_REQUESTS wraps the view in a transaction, so SET LOCAL binds
-                # for exactly this request and unwinds with it.
-                set_database_tenant(tenant.id)
+            # ATOMIC_REQUESTS wraps the view in a transaction, so the SET LOCAL this
+            # performs binds for exactly this request and unwinds with it.
+            with tenant_context(tenant.id):
                 return self.get_response(request)
-            finally:
-                _current_tenant_id.reset(token)
 
         return self.get_response(request)
 

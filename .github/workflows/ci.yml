@@ -67,7 +67,7 @@ jobs:
     env:
       DATABASE_URL: postgres://schoolhub:schoolhub@localhost:5432/schoolhub_test
       REDIS_URL: redis://localhost:6379/0
-      DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+      DJANGO_SECRET_KEY: 7Qk2mVx9RbT4wYzA1sHf6JpLn0CdGeUiOa3ZtXrMvB8yNqEcWk5DgSjFhPuT2LiR
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -108,5 +108,5 @@ jobs:
         run: python manage.py check --deploy --fail-level WARNING
         env:
           DJANGO_SETTINGS_MODULE: config.settings.prod
-          DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+          DJANGO_SECRET_KEY: 7Qk2mVx9RbT4wYzA1sHf6JpLn0CdGeUiOa3ZtXrMvB8yNqEcWk5DgSjFhPuT2LiR
           DJANGO_ALLOWED_HOSTS: example.com

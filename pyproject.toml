@@ -69,5 +69,19 @@ plugins = ["mypy_django_plugin.main"]
 ignore_missing_imports = true
 exclude = ["migrations"]
 
+[[tool.mypy.overrides]]
+# Tests lean on factory-boy and DRF test helpers, whose dynamic attributes mypy
+# cannot see. Type-checking production code is the point; type-checking fixtures
+# produces noise that trains people to ignore the checker.
+module = ["*.tests.*", "tests.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# django-stubs cannot follow Manager.from_queryset(), which builds a class at
+# runtime. The pattern is idiomatic Django and the resulting managers are covered
+# by tests.
+module = ["core.tenancy.managers"]
+disable_error_code = ["misc"]
+
 [tool.django-stubs]
 django_settings_module = "config.settings.dev"

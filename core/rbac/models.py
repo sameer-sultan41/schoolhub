@@ -58,7 +58,10 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
     """
 
     email = models.EmailField(max_length=254)
-    username = models.CharField(
+    # NULL rather than "" is load-bearing: the partial unique index below treats
+    # every NULL as distinct, so many users can lack a username while the ones that
+    # have it stay unique per tenant.
+    username = models.CharField(  # noqa: DJ001
         max_length=150,
         null=True,
         blank=True,
@@ -195,6 +198,9 @@ class RolePermission(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["role", "permission"], name="role_permission_unique"),
         ]
+
+    def __str__(self) -> str:
+        return f"{self.role_id} -> {self.permission_id}"
 
 
 class UserRole(TimestampedModel):

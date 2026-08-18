@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib.auth import authenticate
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -24,8 +25,8 @@ class LoginSerializer(TokenObtainPairSerializer):
     password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
     default_error_messages = {
-        "invalid_credentials": "Incorrect credentials.",
-        "inactive": "This account is not active.",
+        "invalid_credentials": _("Incorrect credentials."),
+        "inactive": _("This account is not active."),
     }
 
     def validate(self, attrs):

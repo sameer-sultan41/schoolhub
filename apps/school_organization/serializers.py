@@ -11,7 +11,7 @@ module doc §16.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, overload
 
 from rest_framework import serializers
 
@@ -40,6 +40,14 @@ def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
     built at import time would be frozen empty, and would silently reject every id.
     """
     return serializers.PrimaryKeyRelatedField(queryset=model.objects, **kwargs)
+
+
+@overload
+def _normalize_code(value: str) -> str: ...
+
+
+@overload
+def _normalize_code(value: None) -> None: ...
 
 
 def _normalize_code(value: str | None) -> str | None:
@@ -94,6 +102,10 @@ class AcademicSessionSerializer(serializers.ModelSerializer):
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         start = attrs.get("start_date") or getattr(self.instance, "start_date", None)
         end = attrs.get("end_date") or getattr(self.instance, "end_date", None)
+        if start is None or end is None:
+            raise serializers.ValidationError(
+                {"start_date": "Both start_date and end_date are required."}
+            )
         services.assert_no_session_overlap(
             start_date=start, end_date=end, exclude_id=getattr(self.instance, "pk", None)
         )
@@ -125,6 +137,12 @@ class TermSerializer(serializers.ModelSerializer):
         )
         start = attrs.get("start_date") or getattr(self.instance, "start_date", None)
         end = attrs.get("end_date") or getattr(self.instance, "end_date", None)
+        if session is None:
+            raise serializers.ValidationError({"academic_session_id": "This field is required."})
+        if start is None or end is None:
+            raise serializers.ValidationError(
+                {"start_date": "Both start_date and end_date are required."}
+            )
 
         services.assert_session_writable(session)
         services.assert_term_window(
@@ -224,6 +242,8 @@ class ClassSubjectSerializer(serializers.ModelSerializer):
         session = attrs.get("academic_session") or getattr(
             self.instance, "academic_session", None
         )
+        if session is None:
+            raise serializers.ValidationError({"academic_session_id": "This field is required."})
         services.assert_session_writable(session)
 
         is_elective = attrs.get("is_elective")
