@@ -13,8 +13,6 @@ frozen empty because no tenant context exists at import.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from django.db import transaction
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
@@ -64,16 +62,7 @@ from core.rbac.permissions import HasPermissionKey
 from core.tenancy.models import TenantSettings
 
 
-if TYPE_CHECKING:
-    # At runtime this is a plain mixin composed onto a viewset; declaring the base
-    # only for type-checking lets mypy resolve super().perform_destroy without
-    # changing the MRO.
-    _DestroyBase = TenantModelViewSet
-else:
-    _DestroyBase = object
-
-
-class BlockingDestroyMixin(_DestroyBase):
+class BlockingDestroyMixin(TenantScopedViewSetMixin):
     """Refuse to delete a structural record that other records still point at (§11).
 
     The PROTECT foreign keys would stop it anyway, but as an integrity error with

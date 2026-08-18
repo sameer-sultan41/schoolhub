@@ -57,8 +57,8 @@ class LoginView(APIView):
 class RefreshView(TokenRefreshView):
     """Rotating refresh. Reuse of a rotated token invalidates the family (theft detection)."""
 
-    permission_classes = [AllowAny]
-    throttle_classes = [AuthEndpointThrottle]
+    permission_classes = (AllowAny,)
+    throttle_classes = (AuthEndpointThrottle,)
 
 
 class LogoutView(APIView):

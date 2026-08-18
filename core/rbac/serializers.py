@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from core.rbac.backends import AmbiguousPrincipal
 from core.rbac.models import User
 from core.rbac.permissions import effective_permission_keys
 
@@ -23,10 +24,16 @@ class LoginSerializer(TokenObtainPairSerializer):
 
     identifier = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    school = serializers.SlugField(
+        write_only=True,
+        required=False,
+        help_text="Tenant slug. Required only when the identifier exists at more than one school.",
+    )
 
     default_error_messages = {
         "invalid_credentials": _("Incorrect credentials."),
         "inactive": _("This account is not active."),
+        "school_required": _("Specify which school to sign in to."),
     }
 
     def validate(self, attrs):
@@ -34,7 +41,18 @@ class LoginSerializer(TokenObtainPairSerializer):
         identifier = attrs.get("identifier", "").strip()
         password = attrs.get("password", "")
 
-        user = authenticate(request=request, username=identifier, password=password)
+        try:
+            user = authenticate(
+                request=request,
+                username=identifier,
+                password=password,
+                tenant_slug=attrs.get("school"),
+            )
+        except AmbiguousPrincipal:
+            # The password already matched, so naming the ambiguity leaks nothing
+            # and is the only way the client can complete the sign-in.
+            self.fail("school_required")
+
         if user is None:
             self.fail("invalid_credentials")
         if not user.is_active or user.deleted_at is not None:

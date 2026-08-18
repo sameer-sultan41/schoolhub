@@ -103,6 +103,14 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
+# auth.W004 warns that USERNAME_FIELD is not unique and asks that the backend be
+# able to handle non-unique usernames. That is deliberate here: an email is unique
+# per tenant (enforced by a partial unique constraint), because the same parent may
+# hold accounts at two schools. IdentifierBackend handles the multiplicity — it
+# verifies the password against every candidate and asks which school only when
+# more than one matches.
+SILENCED_SYSTEM_CHECKS = ["auth.W004"]
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
