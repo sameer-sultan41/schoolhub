@@ -63,11 +63,15 @@ locals {
 # A singleton service running two copies is a correctness bug, not a capacity
 # choice. Fail the plan rather than double-charge every school.
 resource "terraform_data" "singleton_guard" {
-  count = local.is_singleton && var.desired_count > 1 ? 1 : 0
+  count = local.is_singleton ? 1 : 0
+
+  input = var.desired_count
 
   lifecycle {
     precondition {
-      condition     = false
+      # Terraform requires the condition to reference configuration, so this asserts
+      # the rule directly rather than relying on `count` to decide whether to fail.
+      condition     = var.desired_count == 1
       error_message = "celery-beat must run exactly one task. Two schedulers fire every periodic job twice."
     }
   }

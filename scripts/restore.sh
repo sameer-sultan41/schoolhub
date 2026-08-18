@@ -73,7 +73,7 @@ esac
 # Refuse anything that smells like production unless explicitly confirmed.
 if [ "${CONFIRMED}" -eq 0 ]; then
   case "${TARGET_URL}" in
-    *prod*|*production*|*live*)
+    *prod*|*live*)
       fail "the target looks like production. Restore to a scratch instance and copy rows across instead. If you are certain, re-run with --i-understand."
       ;;
   esac

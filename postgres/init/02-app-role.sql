@@ -68,14 +68,24 @@
 \if :{?migration_password} \else \set migration_password '' \endif
 \if :{?readonly_password} \else \set readonly_password '' \endif
 
+-- psql does not substitute :'variables' inside $$ ... $$ blocks, so hand the values
+-- to the server as settings here (outside any dollar quoting) and read them back
+-- with current_setting() inside the plpgsql below.
+SELECT set_config('schoolhub.app_user', :'app_user', false),
+       set_config('schoolhub.app_password', :'app_password', false),
+       set_config('schoolhub.migration_user', :'migration_user', false),
+       set_config('schoolhub.migration_password', :'migration_password', false),
+       set_config('schoolhub.readonly_user', :'readonly_user', false),
+       set_config('schoolhub.readonly_password', :'readonly_password', false);
+
 DO $$
 DECLARE
-    v_app_user       text := :'app_user';
-    v_app_password   text := :'app_password';
-    v_mig_user       text := :'migration_user';
-    v_mig_password   text := :'migration_password';
-    v_ro_user        text := :'readonly_user';
-    v_ro_password    text := :'readonly_password';
+    v_app_user       text := current_setting('schoolhub.app_user');
+    v_app_password   text := current_setting('schoolhub.app_password');
+    v_mig_user       text := current_setting('schoolhub.migration_user');
+    v_mig_password   text := current_setting('schoolhub.migration_password');
+    v_ro_user        text := current_setting('schoolhub.readonly_user');
+    v_ro_password    text := current_setting('schoolhub.readonly_password');
 BEGIN
     IF coalesce(v_app_password, '') = ''
         OR coalesce(v_mig_password, '') = ''
@@ -197,7 +207,7 @@ BEGIN
     FOR r IN
         SELECT rolname, rolsuper, rolbypassrls
         FROM pg_roles
-        WHERE rolname IN (:'app_user', :'readonly_user')
+        WHERE rolname IN (current_setting('schoolhub.app_user'), current_setting('schoolhub.readonly_user'))
     LOOP
         IF r.rolsuper THEN
             RAISE EXCEPTION 'Role % is a superuser; RLS would not bind.', r.rolname;
@@ -209,6 +219,6 @@ BEGIN
 
     RAISE NOTICE
         'Roles ready: % (owner/migrations, direct 5432), % (application, via PgBouncer 6432, RLS-bound), % (audited read-only).',
-        :'migration_user', :'app_user', :'readonly_user';
+        current_setting('schoolhub.migration_user'), current_setting('schoolhub.app_user'), current_setting('schoolhub.readonly_user');
 END
 $$;
