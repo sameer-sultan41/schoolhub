@@ -13,7 +13,10 @@ dependencies = [
     "django-cors-headers>=4.9",
     "django-filter>=26.1",
     "celery[redis]>=5.6",
-    "redis>=8.1",
+    # Client library, not the server. Celery's kombu[redis] extra caps this at
+    # <6.5, so redis-py 8.x cannot be used until kombu widens the range — the
+    # Redis *server* stays on 8 regardless (see schoolhub-infra compose).
+    "redis>=5.0,<6.5",
     "argon2-cffi>=25.1",
     "gunicorn>=26.0",
 ]
@@ -21,10 +24,13 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff>=0.16",
-    "mypy>=2.3",
+    "mypy>=2.3,<2.4",
     "django-stubs>=6.1",
     "coverage>=7.15",
     "factory-boy>=3.3",
+    # Serves the Swagger UI assets locally instead of from a CDN, which keeps the
+    # docs page working offline and under a strict CSP.
+    "drf-spectacular-sidecar",
 ]
 
 [build-system]
