@@ -1,0 +1,74 @@
+# =============================================================================
+# Copy to terraform.tfvars (git-ignored) and fill in.
+#
+# NO SECRET VALUES BELONG IN THIS FILE — only ARNs, names and IDs. Every actual
+# secret lives in Secrets Manager and is referenced here by ARN. If you find
+# yourself pasting a password, stop: the secret is created by
+# scripts/rotate-secrets.sh and only its ARN comes back here.
+# =============================================================================
+
+# Region for everything except the CloudFront certificate, which ACM forces to
+# us-east-1 (handled by the aws.us_east_1 provider alias in main.tf).
+aws_region = "us-east-1"
+
+# The staging platform domain. Tenant sites are <slug>.staging.schoolhub.example.
+# Source: whatever you registered; must match the hosted zone below.
+platform_domain = "staging.schoolhub.example"
+
+# Route 53 hosted zone ID for platform_domain.
+# Source: `aws route53 list-hosted-zones-by-name --dns-name staging.schoolhub.example`
+# Created out of band — Terraform does not manage the zone, because recreating a
+# zone changes its nameservers and takes the whole domain down.
+hosted_zone_id = "Z0123456789ABCDEFGHIJ"
+
+# VPC CIDR. Must not overlap production (10.30.0.0/16) or any office VPN range.
+vpc_cidr = "10.20.0.0/16"
+
+# -----------------------------------------------------------------------------
+# Images. Immutable, tagged with the git SHA — never :latest.
+# Source: the ECR push step of each repo's CI run.
+# CI overrides these with -var on every deploy; the values here are the
+# bootstrap so the first apply has something to run.
+# -----------------------------------------------------------------------------
+api_image       = "123456789012.dkr.ecr.us-east-1.amazonaws.com/schoolhub-api:0f4c1e9"
+dashboard_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/schoolhub-dashboard:0f4c1e9"
+website_image   = "123456789012.dkr.ecr.us-east-1.amazonaws.com/schoolhub-website:0f4c1e9"
+
+# -----------------------------------------------------------------------------
+# Buckets. Globally unique across all of S3, so include the account or a suffix
+# if these collide.
+# -----------------------------------------------------------------------------
+uploads_bucket_name = "schoolhub-staging-uploads"
+backup_bucket_name  = "schoolhub-staging-backups"
+
+# -----------------------------------------------------------------------------
+# Secret ARNs, not secret values.
+# Source: `aws secretsmanager list-secrets --query 'SecretList[].[Name,ARN]'`
+# The secrets themselves are created and rotated by scripts/rotate-secrets.sh.
+# -----------------------------------------------------------------------------
+
+# DJANGO_SECRET_KEY. Rotating this invalidates every session and signed token —
+# schedule it, do not do it on a Friday.
+django_secret_key_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-staging/django/secret-key-AbCdEf"
+
+# DATABASE_URL for the APPLICATION role only: schoolhub_app, via PgBouncer on
+# 6432. Never the RDS master URL and never a direct 5432 URL — the app must not
+# be able to run DDL, and session-scoped connections break RLS under pooling.
+app_database_url_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-staging/db/app-url-AbCdEf"
+
+# Sentry DSN for the staging project. Leave "" to run without error tracking.
+# Source: Sentry -> Settings -> Projects -> schoolhub-staging -> Client Keys.
+sentry_dsn_arn = ""
+
+# -----------------------------------------------------------------------------
+# Alerting. Staging notifies a Slack channel and pages nobody.
+# Source: `aws sns list-topics`
+# -----------------------------------------------------------------------------
+alarm_sns_topic_arns = [
+  "arn:aws:sns:us-east-1:123456789012:schoolhub-staging-alerts",
+]
+
+tags = {
+  Owner      = "platform"
+  CostCenter = "engineering"
+}

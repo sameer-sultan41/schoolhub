@@ -1,0 +1,367 @@
+# SchoolHub — local development stack.
+#
+# Mirrors the production topology closely enough that tenant isolation, connection
+# pooling and background work behave the same locally as in staging/production:
+#   postgres 18  →  pgbouncer (transaction pooling)  →  api / worker / beat
+#
+# Applications connect to PgBouncer on 6432, never to Postgres on 5432 directly.
+# Only psql, migrations and restores use 5432.
+#
+# Usage:
+#   cp .env.example .env
+#   docker compose up -d postgres pgbouncer redis minio mailpit   # infra only
+#   docker compose up -d                                          # everything
+#
+# Spec: schoolhub-srd/docs/02-architecture/hosting-deployment.md §2,
+#       schoolhub-srd/docs/02-architecture/database-architecture.md §1.1
+
+name: schoolhub
+
+x-api-env: &api-env
+  DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.dev}
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+  DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api.localhost,api}
+  # Runtime traffic goes through PgBouncer as the non-owning, non-BYPASSRLS app role.
+  DATABASE_URL: postgres://${APP_DB_USER:-schoolhub_app}:${APP_DB_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-schoolhub}
+  # Migrations bypass the pooler and run as the schema-owning migrator role.
+  MIGRATION_DATABASE_URL: postgres://${MIGRATION_DB_USER:-schoolhub_migrator}:${MIGRATION_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-schoolhub}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  EMAIL_HOST: mailpit
+  EMAIL_PORT: "1025"
+  EMAIL_USE_TLS: "false"
+  DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@schoolhub.localhost}
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+  S3_BUCKET_NAME: ${S3_BUCKET_NAME:-schoolhub-dev}
+  S3_REGION_NAME: ${S3_REGION_NAME:-us-east-1}
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-schoolhub}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+  PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 18 — pinned major version. RLS and planner behavior are what we
+  # test against, so dev, CI and production run the same major.
+  #
+  # PGDATA is set explicitly: the postgres:18 image moved its default data
+  # directory, so pinning it keeps this volume mount valid across image rebuilds
+  # and makes the path in scripts/restore.sh unambiguous.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18-alpine
+    container_name: schoolhub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-schoolhub}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      # Consumed by the init scripts in ../postgres/init.
+      APP_DB_USER: ${APP_DB_USER:-schoolhub_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      MIGRATION_DB_USER: ${MIGRATION_DB_USER:-schoolhub_migrator}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD}
+      READONLY_DB_USER: ${READONLY_DB_USER:-schoolhub_readonly}
+      READONLY_DB_PASSWORD: ${READONLY_DB_PASSWORD}
+    command:
+      - postgres
+      # WAL settings mirror the production archiving posture (spec §7) so that
+      # replication-slot and WAL-volume surprises surface locally, not in prod.
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=4
+      - -c
+      - archive_mode=off
+      - -c
+      - max_connections=100
+      - -c
+      - log_min_duration_statement=500
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs once, on an empty data directory only. Re-run with:
+      #   docker compose down -v && docker compose up -d postgres
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DB:-schoolhub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PgBouncer — TRANSACTION pooling. See ../postgres/pgbouncer/pgbouncer.ini for
+  # why session-level SET is forbidden against this pooler.
+  # ---------------------------------------------------------------------------
+  pgbouncer:
+    # Latest stable PgBouncer. Pin to an exact tag once you have confirmed the
+    # digest you want in the registry — a floating tag on the component that
+    # holds the tenant-isolation-critical pooling mode is a review finding.
+    image: edoburu/pgbouncer:v1.25.2-p0
+    container_name: schoolhub-pgbouncer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../postgres/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      # Copy userlist.txt.example → userlist.txt and fill in the hashes. Git-ignored.
+      - ../postgres/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "${PGBOUNCER_PORT:-6432}:6432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${APP_DB_USER:-schoolhub_app} -d pgbouncer || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Redis 8 — cache, Celery broker, rate limiting. Disposable by design: it is
+  # never backed up, and nothing may be stored here that cannot be recomputed.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:8-alpine
+    container_name: schoolhub-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ---------------------------------------------------------------------------
+  # Django API
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ${API_REPO_PATH:-../../schoolhub-api-v2}
+      dockerfile: Dockerfile
+      target: ${API_BUILD_TARGET:-dev}
+      args:
+        # The API Dockerfile takes its base image as a build arg so the runtime
+        # version is pinned here, in infra, for every environment at once.
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.14-slim}
+    container_name: schoolhub-api
+    restart: unless-stopped
+    depends_on:
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment: *api-env
+    volumes:
+      - ${API_REPO_PATH:-../../schoolhub-api-v2}:/app
+      - api-venv:/app/.venv
+    command: >-
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Celery worker — one container listening on all three notification lanes.
+  # Production runs one autoscaled deployment per lane (spec: notifications.md).
+  # ---------------------------------------------------------------------------
+  celery-worker:
+    build:
+      context: ${API_REPO_PATH:-../../schoolhub-api-v2}
+      dockerfile: Dockerfile
+      target: ${API_BUILD_TARGET:-dev}
+      args:
+        # Same arg as the api service, so all three share one build cache entry
+        # instead of building the image three times.
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.14-slim}
+    container_name: schoolhub-worker
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+    environment: *api-env
+    volumes:
+      - ${API_REPO_PATH:-../../schoolhub-api-v2}:/app
+      - api-venv:/app/.venv
+    command: ["celery", "-A", "config.celery", "worker", "-l", "info", "-Q", "emergency,transactional,bulk,default", "--concurrency", "2"]
+
+  # ---------------------------------------------------------------------------
+  # Celery beat — scheduled work (retention jobs, digests, restore drills).
+  # Exactly one instance, ever: a second scheduler double-fires every job.
+  # ---------------------------------------------------------------------------
+  celery-beat:
+    build:
+      context: ${API_REPO_PATH:-../../schoolhub-api-v2}
+      dockerfile: Dockerfile
+      target: ${API_BUILD_TARGET:-dev}
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.14-slim}
+    container_name: schoolhub-beat
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+    environment: *api-env
+    volumes:
+      - ${API_REPO_PATH:-../../schoolhub-api-v2}:/app
+      - api-venv:/app/.venv
+    command: ["celery", "-A", "config.celery", "beat", "-l", "info"]
+
+  # ---------------------------------------------------------------------------
+  # Next.js 15 admin dashboard — app.<platform-domain>
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: ${FRONTEND_REPO_PATH:-../../schoolhub-web}
+      dockerfile: apps/dashboard/Dockerfile
+      target: ${FRONTEND_BUILD_TARGET:-dev}
+      args:
+        # Node 24 LTS, pinned here rather than in the app Dockerfile.
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}
+    container_name: schoolhub-dashboard
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: development
+      # Browser-visible: must be a host the browser can resolve, not "api".
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api.localhost:8000/api/v1}
+      # Server-side (SSR) calls stay on the compose network.
+      INTERNAL_API_BASE_URL: http://api:8000/api/v1
+      NEXT_PUBLIC_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - ${FRONTEND_REPO_PATH:-../../schoolhub-web}:/app
+      - dashboard-node-modules:/app/node_modules
+      - dashboard-next-cache:/app/apps/dashboard/.next
+    command: ["pnpm", "--filter", "dashboard", "dev", "--port", "3000", "--hostname", "0.0.0.0"]
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+
+  # ---------------------------------------------------------------------------
+  # Next.js 15 multi-tenant public website renderer.
+  # Resolves the tenant from the Host header: <slug>.localhost in dev, wildcard
+  # subdomains and verified custom domains in production.
+  # ---------------------------------------------------------------------------
+  website:
+    build:
+      context: ${FRONTEND_REPO_PATH:-../../schoolhub-web}
+      dockerfile: apps/website/Dockerfile
+      target: ${FRONTEND_BUILD_TARGET:-dev}
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}
+    container_name: schoolhub-website
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api.localhost:8000/api/v1}
+      INTERNAL_API_BASE_URL: http://api:8000/api/v1
+      NEXT_PUBLIC_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+      # Read-only machine token the renderer uses for public content.
+      PUBLIC_CONTENT_TOKEN: ${PUBLIC_CONTENT_TOKEN}
+      # Shared secret for the API → renderer on-demand ISR revalidation webhook.
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - ${FRONTEND_REPO_PATH:-../../schoolhub-web}:/app
+      - website-node-modules:/app/node_modules
+      - website-next-cache:/app/apps/website/.next
+    command: ["pnpm", "--filter", "website", "dev", "--port", "3001", "--hostname", "0.0.0.0"]
+    ports:
+      - "${WEBSITE_PORT:-3001}:3001"
+
+  # ---------------------------------------------------------------------------
+  # Mailpit — catches every outbound mail locally. Nothing ever leaves the host.
+  # ---------------------------------------------------------------------------
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: schoolhub-mailpit
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "5000"
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+  # ---------------------------------------------------------------------------
+  # MinIO — S3-compatible object storage. Keys are prefixed tenants/{tenant_id}/
+  # exactly as in production, so signed-URL and prefix bugs surface locally.
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2024-09-13T20-26-02Z
+    container_name: schoolhub-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-schoolhub}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  # Creates the dev bucket once MinIO is healthy, then exits. `docker compose up`
+  # reports this as exited(0) — that is expected, not a failure.
+  minio-init:
+    image: minio/mc:RELEASE.2024-09-16T17-43-14Z
+    container_name: schoolhub-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-schoolhub}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-schoolhub-dev}
+    entrypoint: >-
+      sh -c "mc alias set local http://minio:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\" &&
+             mc mb --ignore-existing local/\"$$S3_BUCKET_NAME\" &&
+             mc version enable local/\"$$S3_BUCKET_NAME\" &&
+             echo 'bucket ready'"
+    restart: "no"
+
+volumes:
+  postgres-data:
+  minio-data:
+  api-venv:
+  dashboard-node-modules:
+  dashboard-next-cache:
+  website-node-modules:
+  website-next-cache:
+
+networks:
+  default:
+    name: schoolhub

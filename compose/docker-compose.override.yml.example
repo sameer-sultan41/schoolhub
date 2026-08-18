@@ -1,0 +1,74 @@
+# Local-only overrides. Copy to docker-compose.override.yml (git-ignored) and edit.
+# Docker Compose merges this on top of docker-compose.yml automatically.
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#
+# Everything below is commented out, including the `services:` key — uncomment it
+# plus only the blocks you need. If you enable two blocks for the same service,
+# merge them into a single service entry: YAML rejects duplicate keys.
+#
+# Keep changes that everyone needs in docker-compose.yml instead — this file is
+# for personal workflow, not for shared configuration.
+
+# services:
+  # --- Attach a debugger to the API -------------------------------------------
+  # api:
+  #   command: >-
+  #     sh -c "python manage.py migrate --noinput &&
+  #            python -m debugpy --listen 0.0.0.0:5678 manage.py runserver 0.0.0.0:8000 --noreload"
+  #   ports:
+  #     - "8000:8000"
+  #     - "5678:5678"   # debugpy — attach from your editor
+
+  # --- Talk to the database directly, bypassing PgBouncer ---------------------
+  # Only for reproducing a pooling-related bug. Note that with a direct
+  # connection a session-level `SET app.tenant_id` appears to work — that is
+  # exactly the bug transaction pooling exposes. Never leave this enabled.
+  # api:
+  #   environment:
+  #     DATABASE_URL: postgres://schoolhub_app:CHANGE_ME@postgres:5432/schoolhub
+
+  # --- Run the frontends on the host instead of in containers ----------------
+  # Faster HMR on macOS. Stop the containers and run `pnpm dev` locally.
+  # dashboard:
+  #   profiles: ["disabled"]
+  # website:
+  #   profiles: ["disabled"]
+
+  # --- Isolate a Celery lane to reproduce queue behavior ---------------------
+  # celery-worker:
+  #   command: ["celery", "-A", "config.celery", "worker", "-l", "debug", "-Q", "bulk", "--concurrency", "1"]
+
+  # --- Give Postgres more room for a production-scale restore drill ----------
+  # postgres:
+  #   command:
+  #     - postgres
+  #     - -c
+  #     - shared_buffers=1GB
+  #     - -c
+  #     - work_mem=32MB
+  #     - -c
+  #     - maintenance_work_mem=512MB
+  #     - -c
+  #     - max_wal_size=4GB
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 4G
+
+  # --- Log every statement while chasing an RLS or N+1 problem ---------------
+  # postgres:
+  #   command:
+  #     - postgres
+  #     - -c
+  #     - log_statement=all
+  #     - -c
+  #     - log_min_duration_statement=0
+
+  # --- Pin a host port that collides with something else on your machine -----
+  # postgres:
+  #   ports:
+  #     - "55432:5432"
+  # redis:
+  #   ports:
+  #     - "56379:6379"

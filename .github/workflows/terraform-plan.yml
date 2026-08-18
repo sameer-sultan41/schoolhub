@@ -1,0 +1,214 @@
+# =============================================================================
+# Terraform validation and plan.
+#
+# THIS WORKFLOW NEVER APPLIES. Plan only, and the plan job assumes a read-only
+# AWS role. Production apply is manual and gated behind a GitHub Environment
+# approval (hosting-deployment.md §3).
+#
+# The plan step is currently disabled because no state backend exists yet — see
+# terraform/README.md. Everything above it (fmt, init -backend=false, validate,
+# tflint, tfsec) runs on every PR from day one, so the code cannot rot while it
+# waits for Phase 6.
+# =============================================================================
+
+name: terraform-plan
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-plan.yml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  # Required for OIDC role assumption once the plan step is enabled.
+  id-token: write
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_VERSION: "1.13.3"
+  TF_IN_AUTOMATION: "true"
+  # No colour codes in the PR comment.
+  TF_CLI_ARGS: "-no-color"
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt -check -recursive
+        run: terraform fmt -check -recursive terraform/
+
+  validate:
+    name: validate (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - terraform/modules/network
+          - terraform/modules/database
+          - terraform/modules/cache
+          - terraform/modules/storage
+          - terraform/modules/ecs-service
+          - terraform/modules/cdn
+          - terraform/envs/staging
+          - terraform/envs/production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      # -backend=false: validation needs the provider schemas, not the state.
+      # This is what lets the whole tree be checked before any bucket exists.
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: ${{ matrix.dir }}
+        run: terraform validate
+
+  lint:
+    name: tflint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: tflint --init
+        run: tflint --init
+        working-directory: terraform
+
+      - name: tflint --recursive
+        run: tflint --recursive --minimum-failure-severity=warning
+        working-directory: terraform
+
+  security:
+    name: trivy config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Static analysis of the HCL: public buckets, unencrypted volumes,
+      # world-open security groups. Findings fail the PR rather than warn,
+      # because an infrastructure warning nobody reads is an infrastructure
+      # warning nobody reads.
+      - name: Scan Terraform
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: terraform/
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+  plan:
+    name: plan (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    needs: [fmt, validate, lint, security]
+
+    # DISABLED. No state backend and no AWS account are wired up yet. Flip this
+    # to `github.event_name == 'pull_request'` in the same PR that creates the
+    # state buckets and the OIDC roles — not before, or every PR fails on an
+    # unassumable role and people learn to ignore a red check.
+    if: false
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: staging
+            dir: terraform/envs/staging
+            role: arn:aws:iam::123456789012:role/schoolhub-terraform-plan-staging
+          - env: production
+            dir: terraform/envs/production
+            role: arn:aws:iam::123456789012:role/schoolhub-terraform-plan-production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Read-only role. Plan needs Describe/Get/List and nothing else; if a plan
+      # ever needs a write permission, the plan is doing something it should not.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ matrix.role }}
+          aws-region: us-east-1
+          role-session-name: gha-terraform-plan-${{ github.run_id }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -input=false
+
+      - name: terraform plan
+        id: plan
+        working-directory: ${{ matrix.dir }}
+        # -detailed-exitcode: 0 = no changes, 2 = changes, 1 = error. A drifted
+        # environment should be visible, not silently re-converged.
+        run: |
+          set +e
+          terraform plan -input=false -lock-timeout=5m -out=tfplan -detailed-exitcode
+          code=$?
+          set -e
+          echo "exitcode=${code}" >> "$GITHUB_OUTPUT"
+          if [ "${code}" -eq 1 ]; then
+            exit 1
+          fi
+
+      - name: Render plan
+        working-directory: ${{ matrix.dir }}
+        run: terraform show -no-color tfplan | tee plan.txt
+
+      # Fail loudly on anything that destroys a stateful resource. A plan that
+      # replaces the database is sometimes correct and never routine.
+      - name: Flag destructive changes
+        working-directory: ${{ matrix.dir }}
+        run: |
+          if grep -qE '^\s*# .*(aws_db_instance|aws_s3_bucket|aws_route53_zone|aws_elasticache_replication_group).* will be (destroyed|replaced)' plan.txt; then
+            echo "::error::This plan destroys or replaces a stateful resource. Do not approve without a written recovery plan."
+            exit 1
+          fi
+
+      - name: Comment plan on the PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ matrix.dir }}/plan.txt', 'utf8');
+            const truncated = plan.length > 60000
+              ? plan.slice(0, 60000) + '\n\n... truncated, see the job log ...'
+              : plan;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### Terraform plan — \`${{ matrix.env }}\`\n\n<details><summary>Show plan</summary>\n\n\`\`\`terraform\n${truncated}\n\`\`\`\n\n</details>`,
+            });
