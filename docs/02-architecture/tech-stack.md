@@ -87,3 +87,26 @@ Every candidate is scored against: (a) long-term maintainability, (b) scalabilit
 | Mobile (future) | Flutter (single codebase, consumes the same REST API) — future phase only |
 
 All of the above are **recommendations**; any item can be swapped during Phase 0 sign-off without invalidating the module documentation, which is written stack-neutral except where a section explicitly says otherwise.
+
+## 8. As-Built Versions
+
+The evaluation above is version-agnostic; these are the versions the implementation
+pinned, verified by CI rather than assumed. Three could not be the newest release,
+and the constraint is recorded so nobody re-raises them and breaks the build.
+
+| Component | Pinned | Note |
+| --------- | ------ | ---- |
+| Python | 3.14 | |
+| Django | 6.1 | |
+| Django REST Framework | 3.18 | |
+| PostgreSQL | 18 | Server. RLS unchanged from the design above. |
+| Redis (server) | 8 | |
+| redis (Python client) | `>=5.0,<6.5` | **Constrained.** Celery's `kombu[redis]` extra caps the client below 6.5, so the 8.x client cannot be installed alongside Celery. Unrelated to the server version. |
+| Celery | 5.6 | |
+| Next.js | 16.3 | `middleware.ts` is now `proxy.ts` (Next 16 rename). |
+| React | 19.2 | |
+| TypeScript | 7.0 for `tsc`, 6.0 for tooling | **Split, per the TypeScript team's own guidance.** 7.0 is the native port and ships no stable programmatic API until 7.1, so compiler-API consumers need 6.x while `tsc` itself runs 7. Next additionally needs `experimental.useTypeScriptCli: false`. |
+| ESLint | 9.x | **Constrained.** ESLint 10 removed `context.getFilename()`, which `eslint-plugin-react` still calls and has no ESLint 10 release for. |
+| Tailwind CSS | 4.x | CSS-first config: `@import "tailwindcss"` plus `@theme` tokens, no `tailwind.config.ts`. |
+| Node | 24 LTS | |
+| Jest | 30 | Testing standard for this project; Vitest is not used. |

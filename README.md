@@ -43,7 +43,7 @@ Each module doc covers: purpose, business objective, users, permissions, feature
 
 ## Recommended Stack
 
-Django 5 + DRF + Celery/Redis · Next.js 15 (dashboard + website renderer) · PostgreSQL 16 with RLS · S3-compatible storage · versioned REST + OpenAPI · Flutter for the future mobile phase. Every choice is evaluated with alternatives in [`docs/02-architecture/tech-stack.md`](docs/02-architecture/tech-stack.md).
+Django 6 + DRF + Celery/Redis · Next.js 16 (dashboard + website renderer) · PostgreSQL 18 with RLS · S3-compatible storage · versioned REST + OpenAPI · Flutter for the future mobile phase. Every choice is evaluated with alternatives in [`docs/02-architecture/tech-stack.md`](docs/02-architecture/tech-stack.md), which also records the versions the implementation actually pinned and why a few could not be the newest release.
 
 ## Reading Conventions
 
