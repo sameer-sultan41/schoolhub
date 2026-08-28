@@ -1,0 +1,3122 @@
+openapi: 3.0.3
+info:
+  title: SchoolHub API
+  version: 1.0.0
+  description: Multi-tenant School Management SaaS — see the specification in docs/.
+paths:
+  /api/v1/academic-sessions:
+    get:
+      operationId: academic_sessions_list
+      description: |-
+        Academic sessions and their lifecycle (module doc §5.4, §7).
+
+        No destroy: §16 exposes no DELETE and §4 grants no delete key. A session that
+        should no longer be used is closed, which keeps its history addressable.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_current
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - archived
+          - closed
+          - planned
+        description: |-
+          * `planned` - Planned
+          * `active` - Active
+          * `closed` - Closed
+          * `archived` - Archived
+      tags:
+      - academic-sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAcademicSessionList'
+          description: ''
+    post:
+      operationId: academic_sessions_create
+      description: |-
+        Academic sessions and their lifecycle (module doc §5.4, §7).
+
+        No destroy: §16 exposes no DELETE and §4 grants no delete key. A session that
+        should no longer be used is closed, which keeps its history addressable.
+      tags:
+      - academic-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcademicSession'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AcademicSession'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AcademicSession'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicSession'
+          description: ''
+  /api/v1/academic-sessions/{id}:
+    get:
+      operationId: academic_sessions_retrieve
+      description: |-
+        Academic sessions and their lifecycle (module doc §5.4, §7).
+
+        No destroy: §16 exposes no DELETE and §4 grants no delete key. A session that
+        should no longer be used is closed, which keeps its history addressable.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this academic session.
+        required: true
+      tags:
+      - academic-sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicSession'
+          description: ''
+    put:
+      operationId: academic_sessions_update
+      description: |-
+        Academic sessions and their lifecycle (module doc §5.4, §7).
+
+        No destroy: §16 exposes no DELETE and §4 grants no delete key. A session that
+        should no longer be used is closed, which keeps its history addressable.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this academic session.
+        required: true
+      tags:
+      - academic-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcademicSession'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AcademicSession'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AcademicSession'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicSession'
+          description: ''
+    patch:
+      operationId: academic_sessions_partial_update
+      description: |-
+        Academic sessions and their lifecycle (module doc §5.4, §7).
+
+        No destroy: §16 exposes no DELETE and §4 grants no delete key. A session that
+        should no longer be used is closed, which keeps its history addressable.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this academic session.
+        required: true
+      tags:
+      - academic-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAcademicSession'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAcademicSession'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAcademicSession'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicSession'
+          description: ''
+  /api/v1/academic-sessions/{id}:activate:
+    post:
+      operationId: academic_sessions_:activate_create
+      description: |-
+        Academic sessions and their lifecycle (module doc §5.4, §7).
+
+        No destroy: §16 exposes no DELETE and §4 grants no delete key. A session that
+        should no longer be used is closed, which keeps its history addressable.
+      summary: Activate an academic session
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - academic-sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicSession'
+          description: ''
+        '422':
+          description: Structure incomplete for activation
+  /api/v1/academic-sessions/{id}:clone:
+    post:
+      operationId: academic_sessions_:clone_create
+      description: |-
+        Academic sessions and their lifecycle (module doc §5.4, §7).
+
+        No destroy: §16 exposes no DELETE and §4 grants no delete key. A session that
+        should no longer be used is closed, which keeps its history addressable.
+      summary: Clone a session's curriculum into a new session
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - academic-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionClone'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SessionClone'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SessionClone'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicSession'
+          description: ''
+  /api/v1/academic-sessions/{id}:close:
+    post:
+      operationId: academic_sessions_:close_create
+      description: |-
+        Academic sessions and their lifecycle (module doc §5.4, §7).
+
+        No destroy: §16 exposes no DELETE and §4 grants no delete key. A session that
+        should no longer be used is closed, which keeps its history addressable.
+      summary: Close an academic session
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - academic-sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicSession'
+          description: ''
+        '409':
+          description: Not active
+  /api/v1/auth/change-password:
+    post:
+      operationId: auth_change_password_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/login:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/logout:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/me:
+    get:
+      operationId: auth_me_retrieve
+      description: The authenticated principal, with effective permissions for UI
+        gating.
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/refresh:
+    post:
+      operationId: auth_refresh_create
+      description: Rotating refresh. Reuse of a rotated token invalidates the family
+        (theft detection).
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/campuses:
+    get:
+      operationId: campuses_list
+      description: Campuses/branches of the school (module doc §5.2).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: is_primary
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - campuses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCampusList'
+          description: ''
+    post:
+      operationId: campuses_create
+      description: Campuses/branches of the school (module doc §5.2).
+      tags:
+      - campuses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Campus'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Campus'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Campus'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campus'
+          description: ''
+  /api/v1/campuses/{id}:
+    get:
+      operationId: campuses_retrieve
+      description: Campuses/branches of the school (module doc §5.2).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this campus.
+        required: true
+      tags:
+      - campuses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campus'
+          description: ''
+    put:
+      operationId: campuses_update
+      description: Campuses/branches of the school (module doc §5.2).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this campus.
+        required: true
+      tags:
+      - campuses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Campus'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Campus'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Campus'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campus'
+          description: ''
+    patch:
+      operationId: campuses_partial_update
+      description: Campuses/branches of the school (module doc §5.2).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this campus.
+        required: true
+      tags:
+      - campuses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCampus'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCampus'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCampus'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campus'
+          description: ''
+    delete:
+      operationId: campuses_destroy
+      description: Campuses/branches of the school (module doc §5.2).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this campus.
+        required: true
+      tags:
+      - campuses
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/class-subjects:
+    get:
+      operationId: class_subjects_list
+      description: |-
+        Curriculum mapping of subjects onto classes for one session.
+
+        Shares the subject permission keys: mapping a subject to a class is subject
+        management, and §4 declares no separate key for it.
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: elective_group
+        schema:
+          type: string
+      - in: query
+        name: is_elective
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: subject_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - class-subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClassSubjectList'
+          description: ''
+    post:
+      operationId: class_subjects_create
+      description: |-
+        Curriculum mapping of subjects onto classes for one session.
+
+        Shares the subject permission keys: mapping a subject to a class is subject
+        management, and §4 declares no separate key for it.
+      tags:
+      - class-subjects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassSubject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassSubject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassSubject'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassSubject'
+          description: ''
+  /api/v1/class-subjects/{id}:
+    get:
+      operationId: class_subjects_retrieve
+      description: |-
+        Curriculum mapping of subjects onto classes for one session.
+
+        Shares the subject permission keys: mapping a subject to a class is subject
+        management, and §4 declares no separate key for it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this class subject.
+        required: true
+      tags:
+      - class-subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassSubject'
+          description: ''
+    put:
+      operationId: class_subjects_update
+      description: |-
+        Curriculum mapping of subjects onto classes for one session.
+
+        Shares the subject permission keys: mapping a subject to a class is subject
+        management, and §4 declares no separate key for it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this class subject.
+        required: true
+      tags:
+      - class-subjects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassSubject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassSubject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassSubject'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassSubject'
+          description: ''
+    patch:
+      operationId: class_subjects_partial_update
+      description: |-
+        Curriculum mapping of subjects onto classes for one session.
+
+        Shares the subject permission keys: mapping a subject to a class is subject
+        management, and §4 declares no separate key for it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this class subject.
+        required: true
+      tags:
+      - class-subjects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedClassSubject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedClassSubject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedClassSubject'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassSubject'
+          description: ''
+    delete:
+      operationId: class_subjects_destroy
+      description: |-
+        Curriculum mapping of subjects onto classes for one session.
+
+        Shares the subject permission keys: mapping a subject to a class is subject
+        management, and §4 declares no separate key for it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this class subject.
+        required: true
+      tags:
+      - class-subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/classes:
+    get:
+      operationId: classes_list
+      description: Grade levels; ``level`` is the promotion ladder (module doc §5.5).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: level
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - classes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClassList'
+          description: ''
+    post:
+      operationId: classes_create
+      description: Grade levels; ``level`` is the promotion ladder (module doc §5.5).
+      tags:
+      - classes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Class'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Class'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Class'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Class'
+          description: ''
+  /api/v1/classes/{id}:
+    get:
+      operationId: classes_retrieve
+      description: Grade levels; ``level`` is the promotion ladder (module doc §5.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this class.
+        required: true
+      tags:
+      - classes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Class'
+          description: ''
+    put:
+      operationId: classes_update
+      description: Grade levels; ``level`` is the promotion ladder (module doc §5.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this class.
+        required: true
+      tags:
+      - classes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Class'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Class'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Class'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Class'
+          description: ''
+    patch:
+      operationId: classes_partial_update
+      description: Grade levels; ``level`` is the promotion ladder (module doc §5.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this class.
+        required: true
+      tags:
+      - classes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedClass'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedClass'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedClass'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Class'
+          description: ''
+    delete:
+      operationId: classes_destroy
+      description: Grade levels; ``level`` is the promotion ladder (module doc §5.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this class.
+        required: true
+      tags:
+      - classes
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/departments:
+    get:
+      operationId: departments_list
+      description: Academic and administrative departments (module doc §5.3).
+      parameters:
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: department_type
+        schema:
+          type: string
+          enum:
+          - academic
+          - administrative
+        description: |-
+          * `academic` - Academic
+          * `administrative` - Administrative
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - departments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDepartmentList'
+          description: ''
+    post:
+      operationId: departments_create
+      description: Academic and administrative departments (module doc §5.3).
+      tags:
+      - departments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Department'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Department'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Department'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+          description: ''
+  /api/v1/departments/{id}:
+    get:
+      operationId: departments_retrieve
+      description: Academic and administrative departments (module doc §5.3).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this department.
+        required: true
+      tags:
+      - departments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+          description: ''
+    put:
+      operationId: departments_update
+      description: Academic and administrative departments (module doc §5.3).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this department.
+        required: true
+      tags:
+      - departments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Department'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Department'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Department'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+          description: ''
+    patch:
+      operationId: departments_partial_update
+      description: Academic and administrative departments (module doc §5.3).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this department.
+        required: true
+      tags:
+      - departments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDepartment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDepartment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDepartment'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+          description: ''
+    delete:
+      operationId: departments_destroy
+      description: Academic and administrative departments (module doc §5.3).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this department.
+        required: true
+      tags:
+      - departments
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/houses:
+    get:
+      operationId: houses_list
+      description: Houses/groups used for sports, discipline and points (module doc
+        §5.7).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - houses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedHouseList'
+          description: ''
+    post:
+      operationId: houses_create
+      description: Houses/groups used for sports, discipline and points (module doc
+        §5.7).
+      tags:
+      - houses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/House'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/House'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/House'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/House'
+          description: ''
+  /api/v1/houses/{id}:
+    get:
+      operationId: houses_retrieve
+      description: Houses/groups used for sports, discipline and points (module doc
+        §5.7).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this house.
+        required: true
+      tags:
+      - houses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/House'
+          description: ''
+    put:
+      operationId: houses_update
+      description: Houses/groups used for sports, discipline and points (module doc
+        §5.7).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this house.
+        required: true
+      tags:
+      - houses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/House'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/House'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/House'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/House'
+          description: ''
+    patch:
+      operationId: houses_partial_update
+      description: Houses/groups used for sports, discipline and points (module doc
+        §5.7).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this house.
+        required: true
+      tags:
+      - houses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedHouse'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedHouse'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedHouse'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/House'
+          description: ''
+    delete:
+      operationId: houses_destroy
+      description: Houses/groups used for sports, discipline and points (module doc
+        §5.7).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this house.
+        required: true
+      tags:
+      - houses
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/school-settings:
+    get:
+      operationId: school_settings_retrieve
+      description: |-
+        Singleton school profile and academic configuration (module doc §16).
+
+        A singleton rather than a collection because a tenant is one school; the
+        branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
+        locale and currency stay on the tenant row, which is where the request
+        middleware and every other module already read them from.
+      tags:
+      - school-settings
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolSettings'
+          description: ''
+    patch:
+      operationId: school_settings_partial_update
+      description: |-
+        Singleton school profile and academic configuration (module doc §16).
+
+        A singleton rather than a collection because a tenant is one school; the
+        branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
+        locale and currency stay on the tenant row, which is where the request
+        middleware and every other module already read them from.
+      tags:
+      - school-settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSchoolSettings'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSchoolSettings'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSchoolSettings'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolSettings'
+          description: ''
+  /api/v1/sections:
+    get:
+      operationId: sections_list
+      description: Divisions of a class at a campus, with capacity (module doc §5.5).
+      parameters:
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - sections
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSectionList'
+          description: ''
+    post:
+      operationId: sections_create
+      description: Divisions of a class at a campus, with capacity (module doc §5.5).
+      tags:
+      - sections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Section'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Section'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Section'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Section'
+          description: ''
+  /api/v1/sections/{id}:
+    get:
+      operationId: sections_retrieve
+      description: Divisions of a class at a campus, with capacity (module doc §5.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this section.
+        required: true
+      tags:
+      - sections
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Section'
+          description: ''
+    put:
+      operationId: sections_update
+      description: Divisions of a class at a campus, with capacity (module doc §5.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this section.
+        required: true
+      tags:
+      - sections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Section'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Section'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Section'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Section'
+          description: ''
+    patch:
+      operationId: sections_partial_update
+      description: Divisions of a class at a campus, with capacity (module doc §5.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this section.
+        required: true
+      tags:
+      - sections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSection'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSection'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSection'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Section'
+          description: ''
+    delete:
+      operationId: sections_destroy
+      description: Divisions of a class at a campus, with capacity (module doc §5.5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this section.
+        required: true
+      tags:
+      - sections
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/subjects:
+    get:
+      operationId: subjects_list
+      description: The tenant's subject catalog (module doc §5.6).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: department_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: subject_type
+        schema:
+          type: string
+          enum:
+          - co_curricular
+          - core
+          - elective
+        description: |-
+          * `core` - Core
+          * `elective` - Elective
+          * `co_curricular` - Co-curricular
+      tags:
+      - subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSubjectList'
+          description: ''
+    post:
+      operationId: subjects_create
+      description: The tenant's subject catalog (module doc §5.6).
+      tags:
+      - subjects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Subject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Subject'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+          description: ''
+  /api/v1/subjects/{id}:
+    get:
+      operationId: subjects_retrieve
+      description: The tenant's subject catalog (module doc §5.6).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subject.
+        required: true
+      tags:
+      - subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+          description: ''
+    put:
+      operationId: subjects_update
+      description: The tenant's subject catalog (module doc §5.6).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subject.
+        required: true
+      tags:
+      - subjects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Subject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Subject'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+          description: ''
+    patch:
+      operationId: subjects_partial_update
+      description: The tenant's subject catalog (module doc §5.6).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subject.
+        required: true
+      tags:
+      - subjects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSubject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSubject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSubject'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+          description: ''
+    delete:
+      operationId: subjects_destroy
+      description: The tenant's subject catalog (module doc §5.6).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subject.
+        required: true
+      tags:
+      - subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/terms:
+    get:
+      operationId: terms_list
+      description: Terms of a session. Governed by the academic-session permission
+        keys (§4).
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - terms
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTermList'
+          description: ''
+    post:
+      operationId: terms_create
+      description: Terms of a session. Governed by the academic-session permission
+        keys (§4).
+      tags:
+      - terms
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Term'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Term'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Term'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Term'
+          description: ''
+  /api/v1/terms/{id}:
+    get:
+      operationId: terms_retrieve
+      description: Terms of a session. Governed by the academic-session permission
+        keys (§4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this term.
+        required: true
+      tags:
+      - terms
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Term'
+          description: ''
+    put:
+      operationId: terms_update
+      description: Terms of a session. Governed by the academic-session permission
+        keys (§4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this term.
+        required: true
+      tags:
+      - terms
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Term'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Term'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Term'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Term'
+          description: ''
+    patch:
+      operationId: terms_partial_update
+      description: Terms of a session. Governed by the academic-session permission
+        keys (§4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this term.
+        required: true
+      tags:
+      - terms
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTerm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTerm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTerm'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Term'
+          description: ''
+components:
+  schemas:
+    AcademicSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          description: School year label, e.g. "2026–27".
+          maxLength: 50
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        is_current:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - end_date
+      - id
+      - is_current
+      - name
+      - start_date
+      - status
+      - updated_at
+    Campus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 20
+        address:
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+          maxLength: 32
+        email:
+          nullable: true
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        timezone:
+          type: string
+          nullable: true
+          description: IANA identifier. Null inherits the tenant timezone.
+          maxLength: 64
+        head_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: staff(id) — campus head.
+        is_primary:
+          type: boolean
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - updated_at
+    ChangePassword:
+      type: object
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+        new_password:
+          type: string
+          writeOnly: true
+          minLength: 10
+      required:
+      - current_password
+      - new_password
+    Class:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        code:
+          type: string
+          nullable: true
+          maxLength: 20
+        level:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Promotion ordering; the next level up is the promotion target.
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - level
+      - name
+      - updated_at
+    ClassSubject:
+      type: object
+      description: 'Curriculum mapping: this class studies this subject in this session.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_elective:
+          type: boolean
+        elective_group:
+          type: string
+          nullable: true
+          description: Options sharing a group are mutually choosable ("choose 1 of
+            N").
+          maxLength: 50
+        weekly_periods:
+          type: integer
+          maximum: 32767
+          minimum: 1
+          description: Target periods per week.
+        syllabus_file_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: files(id).
+        term_plans:
+          nullable: true
+          description: '[{term_id, topics: [...]}] per-term topic plan.'
+        notes:
+          type: string
+          nullable: true
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session_id
+      - class_id
+      - created_at
+      - id
+      - subject_id
+      - updated_at
+    Department:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 20
+        department_type:
+          $ref: '#/components/schemas/DepartmentTypeEnum'
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        head_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: staff(id) — head of dept.
+        description:
+          type: string
+          nullable: true
+          maxLength: 300
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - updated_at
+    DepartmentTypeEnum:
+      enum:
+      - academic
+      - administrative
+      type: string
+      description: |-
+        * `academic` - Academic
+        * `administrative` - Administrative
+    House:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        code:
+          type: string
+          nullable: true
+          maxLength: 20
+        color:
+          type: string
+          nullable: true
+          description: Token or hex.
+          maxLength: 20
+        motto:
+          type: string
+          nullable: true
+          maxLength: 200
+        house_master_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: staff(id).
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    Login:
+      type: object
+      description: |-
+        Email/username + password login.
+
+        Deliberately returns the same generic error for unknown accounts and wrong
+        passwords so the endpoint cannot be used to enumerate who has an account at
+        a school.
+      properties:
+        identifier:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          writeOnly: true
+        school:
+          type: string
+          writeOnly: true
+          description: Tenant slug. Required only when the identifier exists at more
+            than one school.
+          pattern: ^[-a-zA-Z0-9_]+$
+      required:
+      - identifier
+      - password
+    PaginatedAcademicSessionList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AcademicSession'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedCampusList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campus'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedClassList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Class'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedClassSubjectList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassSubject'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedDepartmentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Department'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedHouseList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/House'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedSectionList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Section'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedSubjectList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subject'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedTermList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Term'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PatchedAcademicSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          description: School year label, e.g. "2026–27".
+          maxLength: 50
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        is_current:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedCampus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 20
+        address:
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+          maxLength: 32
+        email:
+          nullable: true
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        timezone:
+          type: string
+          nullable: true
+          description: IANA identifier. Null inherits the tenant timezone.
+          maxLength: 64
+        head_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: staff(id) — campus head.
+        is_primary:
+          type: boolean
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedClass:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        code:
+          type: string
+          nullable: true
+          maxLength: 20
+        level:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Promotion ordering; the next level up is the promotion target.
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedClassSubject:
+      type: object
+      description: 'Curriculum mapping: this class studies this subject in this session.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_elective:
+          type: boolean
+        elective_group:
+          type: string
+          nullable: true
+          description: Options sharing a group are mutually choosable ("choose 1 of
+            N").
+          maxLength: 50
+        weekly_periods:
+          type: integer
+          maximum: 32767
+          minimum: 1
+          description: Target periods per week.
+        syllabus_file_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: files(id).
+        term_plans:
+          nullable: true
+          description: '[{term_id, topics: [...]}] per-term topic plan.'
+        notes:
+          type: string
+          nullable: true
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedDepartment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 20
+        department_type:
+          $ref: '#/components/schemas/DepartmentTypeEnum'
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        head_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: staff(id) — head of dept.
+        description:
+          type: string
+          nullable: true
+          maxLength: 300
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedHouse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        code:
+          type: string
+          nullable: true
+          maxLength: 20
+        color:
+          type: string
+          nullable: true
+          description: Token or hex.
+          maxLength: 20
+        motto:
+          type: string
+          nullable: true
+          maxLength: 200
+        house_master_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: staff(id).
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedSchoolSettings:
+      type: object
+      description: |-
+        School profile and academic configuration (module doc §16, singleton resource).
+
+        Backed by ``tenant_settings`` JSONB rather than its own table: the shape is
+        tenant-configurable (accreditation fields, holiday calendar, weekend definition)
+        and columns would force a migration per school that wants one more field.
+      properties:
+        branding: {}
+        academic: {}
+        timezone:
+          type: string
+          maxLength: 64
+        locale:
+          type: string
+          maxLength: 10
+        currency:
+          type: string
+          maxLength: 3
+          minLength: 3
+    PatchedSection:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        class_id:
+          type: string
+          format: uuid
+        campus_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Division label, e.g. "A".
+          maxLength: 30
+        capacity:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          description: Enrollment ceiling. Null means unlimited.
+        class_teacher_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: staff(id) — homeroom teacher.
+        room_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: rooms(id) — default homeroom.
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedSubject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        code:
+          type: string
+          maxLength: 20
+        subject_type:
+          $ref: '#/components/schemas/SubjectTypeEnum'
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          nullable: true
+          maxLength: 300
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedTerm:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 50
+        sequence:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Order within the session, 1-based.
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    SchoolSettings:
+      type: object
+      description: |-
+        School profile and academic configuration (module doc §16, singleton resource).
+
+        Backed by ``tenant_settings`` JSONB rather than its own table: the shape is
+        tenant-configurable (accreditation fields, holiday calendar, weekend definition)
+        and columns would force a migration per school that wants one more field.
+      properties:
+        branding: {}
+        academic: {}
+        timezone:
+          type: string
+          maxLength: 64
+        locale:
+          type: string
+          maxLength: 10
+        currency:
+          type: string
+          maxLength: 3
+          minLength: 3
+    Section:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        class_id:
+          type: string
+          format: uuid
+        campus_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Division label, e.g. "A".
+          maxLength: 30
+        capacity:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          description: Enrollment ceiling. Null means unlimited.
+        class_teacher_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: staff(id) — homeroom teacher.
+        room_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: rooms(id) — default homeroom.
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - campus_id
+      - class_id
+      - created_at
+      - id
+      - name
+      - updated_at
+    SessionClone:
+      type: object
+      description: Input for ``POST /academic-sessions/{id}:clone`` — the new session's
+        identity.
+      properties:
+        name:
+          type: string
+          maxLength: 50
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+      required:
+      - end_date
+      - name
+      - start_date
+    StatusEnum:
+      enum:
+      - planned
+      - active
+      - closed
+      - archived
+      type: string
+      description: |-
+        * `planned` - Planned
+        * `active` - Active
+        * `closed` - Closed
+        * `archived` - Archived
+    Subject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        code:
+          type: string
+          maxLength: 20
+        subject_type:
+          $ref: '#/components/schemas/SubjectTypeEnum'
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          nullable: true
+          maxLength: 300
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - updated_at
+    SubjectTypeEnum:
+      enum:
+      - core
+      - elective
+      - co_curricular
+      type: string
+      description: |-
+        * `core` - Core
+        * `elective` - Elective
+        * `co_curricular` - Co-curricular
+    Term:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 50
+        sequence:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Order within the session, 1-based.
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session_id
+      - created_at
+      - end_date
+      - id
+      - name
+      - sequence
+      - start_date
+      - updated_at
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          nullable: true
+          description: School-issued login for students without email.
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        tenant:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        is_platform:
+          type: boolean
+          readOnly: true
+          description: Platform-scope principal (no tenant).
+        mfa_enabled:
+          type: boolean
+          readOnly: true
+        permissions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        roles:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - email
+      - first_name
+      - full_name
+      - id
+      - is_platform
+      - last_name
+      - mfa_enabled
+      - permissions
+      - phone
+      - roles
+      - tenant
+      - username
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

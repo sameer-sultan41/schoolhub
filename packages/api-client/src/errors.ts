@@ -99,21 +99,30 @@ export function parseErrorEnvelope(payload: unknown): ApiErrorBody | null {
   };
 }
 
-/** Fallback `error.code` for a status the server did not describe itself. */
+/**
+ * Fallback `error.code` for a status the server did not describe itself.
+ *
+ * Mirrors `_CODE_BY_STATUS` in `apps/api/core/api/exceptions.py` so a synthesised
+ * code is indistinguishable from one the server sent, and callers only ever have
+ * to match on a single spelling. The two 5xx values below have no server
+ * counterpart: an unhandled 500 returns no envelope at all.
+ */
 export function codeForStatus(status: number): string {
   switch (status) {
     case 400:
       return "validation_error";
     case 401:
-      return "authentication_failed";
+      return "unauthenticated";
     case 403:
       return "permission_denied";
     case 404:
       return "not_found";
+    case 405:
+      return "method_not_allowed";
     case 409:
       return "conflict";
     case 422:
-      return "domain_rule_violation";
+      return "unprocessable";
     case 429:
       return "rate_limited";
     default:

@@ -85,16 +85,22 @@ export interface Page<TItem> {
  * rendering `error.message` for a code you do not recognise, never invent one.
  */
 export const API_ERROR_CODES = [
+  // Emitted by the server. Mirrors _CODE_BY_STATUS and the custom exception
+  // classes in apps/api/core/api/exceptions.py; a backend test asserts the two
+  // lists stay identical.
   "validation_error",
-  "authentication_failed",
-  "token_expired",
+  "unauthenticated",
   "permission_denied",
   "not_found",
+  "method_not_allowed",
   "conflict",
+  "unprocessable",
   "domain_rule_violation",
   "rate_limited",
-  "server_error",
+  // Synthesised by this client when the request never produced an envelope.
   "network_error",
+  "server_error",
+  "request_failed",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number] | (string & {});
