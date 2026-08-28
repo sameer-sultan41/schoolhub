@@ -54,7 +54,7 @@ locals {
     Project     = "schoolhub"
     Environment = local.environment
     ManagedBy   = "terraform"
-    Repo        = "schoolhub-infra-v2"
+    Repo        = "infra"
   })
 
   # The storage module needs the distribution ARN (to scope the bucket policy to

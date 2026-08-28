@@ -3,7 +3,7 @@
 Living hand-off note: what exists, what is deliberately missing, and where the next session
 should start. **Update this file in the same PR as the work it describes.**
 
-Spec repo (source of truth): <https://github.com/sameer-sultan41/schoolhub-srd>
+Specification (source of truth): [`./`](./) — this directory
 Read [`../AGENTS.md`](../AGENTS.md) first — especially the context-map rule.
 
 ---

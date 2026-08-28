@@ -4,7 +4,7 @@
 >
 > This is a **Phase 6 (Launch) target**. SchoolHub launches on a PaaS or on VMs
 > with managed Postgres — see
-> [`hosting-deployment.md`](https://github.com/sameer-sultan41/schoolhub-srd/blob/main/docs/02-architecture/hosting-deployment.md)
+> [`hosting-deployment.md`](../../docs/02-architecture/hosting-deployment.md)
 > §1, which recommends graduating to AWS at roughly 100 active tenants, or when
 > compliance or multi-region needs arrive first.
 >

@@ -1,7 +1,7 @@
 """Business rules for the school-organization module.
 
 Views stay thin: everything here is a rule from
-schoolhub-srd/docs/03-modules/school-organization.md §7 (workflows) and §11
+docs/03-modules/school-organization.md §7 (workflows) and §11
 (validations). Keeping it out of serializers means the same rules apply to the
 onboarding wizard, the bulk importer and Celery jobs, none of which go through a
 serializer.

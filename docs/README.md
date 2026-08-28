@@ -8,12 +8,12 @@ Professional engineering specification for an **AI-powered, multi-tenant School 
 
 | If you are… | Read |
 | ----------- | ---- |
-| New to the project | [`docs/00-overview/vision.md`](docs/00-overview/vision.md) → [`docs/00-overview/requirements.md`](docs/00-overview/requirements.md) → [`docs/02-architecture/system-architecture.md`](docs/02-architecture/system-architecture.md) |
-| Planning the build | [`docs/01-phases/phase-plan.md`](docs/01-phases/phase-plan.md), then the individual phase docs |
+| New to the project | [`00-overview/vision.md`](00-overview/vision.md) → [`00-overview/requirements.md`](00-overview/requirements.md) → [`02-architecture/system-architecture.md`](02-architecture/system-architecture.md) |
+| Planning the build | [`01-phases/phase-plan.md`](01-phases/phase-plan.md), then the individual phase docs |
 | Implementing a feature | [`AGENTS.md`](AGENTS.md) → [`context/context-map.md`](context/context-map.md) → your module doc |
-| Reviewing architecture | [`docs/02-architecture/`](docs/02-architecture/) — start with `system-architecture.md`, `multi-tenancy.md`, `api-architecture.md` |
-| Designing the schema | [`docs/05-database/erd-overview.md`](docs/05-database/erd-overview.md) → [`docs/05-database/entities/`](docs/05-database/entities/) |
-| Assessing AI scope | [`docs/04-ai/ai-features.md`](docs/04-ai/ai-features.md) + [`docs/04-ai/ai-governance.md`](docs/04-ai/ai-governance.md) |
+| Reviewing architecture | [`02-architecture/`](02-architecture/) — start with `system-architecture.md`, `multi-tenancy.md`, `api-architecture.md` |
+| Designing the schema | [`05-database/erd-overview.md`](05-database/erd-overview.md) → [`05-database/entities/`](05-database/entities/) |
+| Assessing AI scope | [`04-ai/ai-features.md`](04-ai/ai-features.md) + [`04-ai/ai-governance.md`](04-ai/ai-governance.md) |
 
 ## Structure
 
@@ -43,7 +43,7 @@ Each module doc covers: purpose, business objective, users, permissions, feature
 
 ## Recommended Stack
 
-Django 6 + DRF + Celery/Redis · Next.js 16 (dashboard + website renderer) · PostgreSQL 18 with RLS · S3-compatible storage · versioned REST + OpenAPI · Flutter for the future mobile phase. Every choice is evaluated with alternatives in [`docs/02-architecture/tech-stack.md`](docs/02-architecture/tech-stack.md), which also records the versions the implementation actually pinned and why a few could not be the newest release.
+Django 6 + DRF + Celery/Redis · Next.js 16 (dashboard + website renderer) · PostgreSQL 18 with RLS · S3-compatible storage · versioned REST + OpenAPI · Flutter for the future mobile phase. Every choice is evaluated with alternatives in [`02-architecture/tech-stack.md`](02-architecture/tech-stack.md), which also records the versions the implementation actually pinned and why a few could not be the newest release.
 
 ## Reading Conventions
 
@@ -52,19 +52,21 @@ Django 6 + DRF + Celery/Redis · Next.js 16 (dashboard + website renderer) · Po
 - Locked vocabulary (role slugs, permission keys, table names, API shapes, template codes, AI feature IDs) is defined once and reused everywhere; see [`AGENTS.md`](AGENTS.md).
 - Diagrams are Mermaid and render on GitHub.
 
-## Implementing Repositories
+## Where This Is Implemented
 
-The docs here are the specification; these repositories implement it.
+The docs here are the specification; these directories implement it.
 
-| Repository | Implements |
-| ---------- | ---------- |
-| [`schoolhub-api-v2`](https://github.com/sameer-sultan41/schoolhub-api-v2) | Backend — Django 6 + DRF, tenancy, RBAC, module apps |
-| [`schoolhub-frontend-v2`](https://github.com/sameer-sultan41/schoolhub-frontend-v2) | Admin dashboard + public school website renderer (Next.js 16 monorepo) |
-| [`schoolhub-infra-v2`](https://github.com/sameer-sultan41/schoolhub-infra-v2) | Local stack, PostgreSQL roles, Terraform, runbooks |
+| Directory | Implements |
+| --------- | ---------- |
+| [`apps/api`](../apps/api) | Backend — Django 6 + DRF, tenancy, RBAC, module apps |
+| [`apps/dashboard`](../apps/dashboard) | Next.js 16 admin dashboard |
+| [`apps/website`](../apps/website) | Next.js 16 multi-tenant public school website renderer |
+| [`packages/`](../packages) | Shared TypeScript: ui, types, api-client, config |
+| [`infra`](../infra) | Local stack, PostgreSQL roles, Terraform, runbooks |
 
-The architecture documents refer to these by their logical names (`schoolhub-api`,
-`schoolhub-frontend`, `schoolhub-infra`) — that naming describes the component's
-role and is unaffected by the repository's actual name.
+The architecture documents refer to these by logical names (`schoolhub-api`,
+`schoolhub-frontend`, `schoolhub-infra`); that naming describes a component's role
+and is unaffected by where it sits in the tree.
 
 ## Status
 

@@ -12,8 +12,8 @@
 #   docker compose up -d postgres pgbouncer redis minio mailpit   # infra only
 #   docker compose up -d                                          # everything
 #
-# Spec: schoolhub-srd/docs/02-architecture/hosting-deployment.md §2,
-#       schoolhub-srd/docs/02-architecture/database-architecture.md §1.1
+# Spec: docs/02-architecture/hosting-deployment.md §2,
+#       docs/02-architecture/database-architecture.md §1.1
 
 name: schoolhub
 
@@ -148,7 +148,7 @@ services:
   # ---------------------------------------------------------------------------
   api:
     build:
-      context: ${API_REPO_PATH:-../../schoolhub-api-v2}
+      context: ${API_REPO_PATH:-../../apps/api}
       dockerfile: Dockerfile
       target: ${API_BUILD_TARGET:-dev}
       args:
@@ -166,7 +166,7 @@ services:
         condition: service_healthy
     environment: *api-env
     volumes:
-      - ${API_REPO_PATH:-../../schoolhub-api-v2}:/app
+      - ${API_REPO_PATH:-../../apps/api}:/app
       - api-venv:/app/.venv
     command: >-
       sh -c "python manage.py migrate --noinput &&
@@ -186,7 +186,7 @@ services:
   # ---------------------------------------------------------------------------
   celery-worker:
     build:
-      context: ${API_REPO_PATH:-../../schoolhub-api-v2}
+      context: ${API_REPO_PATH:-../../apps/api}
       dockerfile: Dockerfile
       target: ${API_BUILD_TARGET:-dev}
       args:
@@ -202,7 +202,7 @@ services:
         condition: service_started
     environment: *api-env
     volumes:
-      - ${API_REPO_PATH:-../../schoolhub-api-v2}:/app
+      - ${API_REPO_PATH:-../../apps/api}:/app
       - api-venv:/app/.venv
     command: ["celery", "-A", "config.celery", "worker", "-l", "info", "-Q", "emergency,transactional,bulk,default", "--concurrency", "2"]
 
@@ -212,7 +212,7 @@ services:
   # ---------------------------------------------------------------------------
   celery-beat:
     build:
-      context: ${API_REPO_PATH:-../../schoolhub-api-v2}
+      context: ${API_REPO_PATH:-../../apps/api}
       dockerfile: Dockerfile
       target: ${API_BUILD_TARGET:-dev}
       args:
@@ -226,7 +226,7 @@ services:
         condition: service_started
     environment: *api-env
     volumes:
-      - ${API_REPO_PATH:-../../schoolhub-api-v2}:/app
+      - ${API_REPO_PATH:-../../apps/api}:/app
       - api-venv:/app/.venv
     command: ["celery", "-A", "config.celery", "beat", "-l", "info"]
 

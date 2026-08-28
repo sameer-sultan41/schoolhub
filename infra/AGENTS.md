@@ -6,17 +6,17 @@ Instructions for AI assistants and engineers working in this repository.
 
 The authoritative specification for SchoolHub is the separate documentation repo:
 
-**https://github.com/sameer-sultan41/schoolhub-srd**
+the specification in [`../docs/`](../docs/)
 
-Locally it is expected at `../schoolhub-srd/`. Nothing in this repo restates the spec; it
+Locally it is expected at `../docs/`. Nothing in this repo restates the spec; it
 implements it. If this repo and the spec disagree, **the spec is right and this repo is the bug**.
 
 ### Read before you change anything here
 
-Do **not** load the whole spec. Open `schoolhub-srd/context/context-map.md`, then read only what
+Do **not** load the whole spec. Open `docs/context/context-map.md`, then read only what
 your task needs. For infrastructure work that is almost always:
 
-| File in `schoolhub-srd/docs/02-architecture/` | Governs |
+| File in `docs/02-architecture/` | Governs |
 | --- | --- |
 | `hosting-deployment.md` | Environments, CI/CD, DNS/TLS, secrets, migrations in deploys, backup/restore, rollback, DR targets |
 | `database-architecture.md` | RLS mechanics, `app.tenant_id` GUC, PgBouncer interplay, backup/PITR |
@@ -49,10 +49,10 @@ asserts, and a version skew makes those assertions meaningless.
 
 | Repo | Contents |
 | --- | --- |
-| `schoolhub-srd` | The specification (source of truth) |
-| `schoolhub-api-v2` | Django 5 + DRF + Celery backend |
+| `docs/` | The specification (source of truth) |
+| `apps/api` | Django 5 + DRF + Celery backend |
 | `schoolhub-web` | Next.js 15 dashboard + multi-tenant website renderer |
-| `schoolhub-infra-v2` | This repo |
+| `infra` | This repo |
 
 The only artifact shared between the API and the frontends is the OpenAPI contract. This repo
 shares nothing with them at runtime — it provisions, and they consume through environment

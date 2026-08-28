@@ -1,7 +1,7 @@
 """Tenant model and the base classes every tenant-owned table inherits.
 
 Isolation strategy: shared schema + tenant_id + PostgreSQL Row-Level Security.
-See schoolhub-srd/docs/02-architecture/multi-tenancy.md §3.
+See docs/02-architecture/multi-tenancy.md §3.
 """
 
 import uuid

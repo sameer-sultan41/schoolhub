@@ -13,7 +13,7 @@
 # accepts 5432 from the application security group" survives a re-subnetting,
 # and a CIDR rule does not.
 #
-# Spec: schoolhub-srd/docs/02-architecture/hosting-deployment.md §1 (tier a)
+# Spec: docs/02-architecture/hosting-deployment.md §1 (tier a)
 # =============================================================================
 
 terraform {

@@ -3,10 +3,10 @@
 **Purpose.** Ship a verified build to staging and then to production, running
 migrations before the new code serves traffic, without downtime for any tenant.
 
-**Applies to.** `schoolhub-api-v2` (Django + Celery), `schoolhub-frontend-v2`
+**Applies to.** `apps/api` (Django + Celery), `the frontend workspace`
 (dashboard + tenant website renderer).
 
-**Spec.** [`hosting-deployment.md`](https://github.com/sameer-sultan41/schoolhub-srd/blob/main/docs/02-architecture/hosting-deployment.md) §3, §6.
+**Spec.** [`hosting-deployment.md`](../../docs/02-architecture/hosting-deployment.md) §3, §6.
 
 ## Preconditions
 

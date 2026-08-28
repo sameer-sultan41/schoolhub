@@ -16,7 +16,7 @@ learn from it afterwards.
 > Not "if confirmed" — on suspicion. This platform's entire security model is one
 > RLS boundary, and the failure mode is silent.
 
-**Spec.** [`hosting-deployment.md`](https://github.com/sameer-sultan41/schoolhub-srd/blob/main/docs/02-architecture/hosting-deployment.md) §10.
+**Spec.** [`hosting-deployment.md`](../../docs/02-architecture/hosting-deployment.md) §10.
 
 ## Preconditions
 

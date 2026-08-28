@@ -20,7 +20,7 @@
 #   ./restore.sh --file backups/schoolhub-full-*.dump --target postgres://.../scratch
 #   ./restore.sh --file <dump> --target <url> --tenant <uuid>   # one tenant's rows
 #
-# Spec: schoolhub-srd/docs/02-architecture/database-architecture.md §6
+# Spec: docs/02-architecture/database-architecture.md §6
 #       runbooks/backup-restore.md
 # =============================================================================
 

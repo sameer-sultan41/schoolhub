@@ -1,17 +1,17 @@
-# AGENTS.md — schoolhub-api
+# AGENTS.md — apps/api (backend)
 
 Instructions for AI assistants working in this repository: the Django 6 + DRF backend
 of **SchoolHub**, an AI-powered multi-tenant School Management SaaS.
 
 ## Read Before Coding
 
-1. **Specification repo** — https://github.com/sameer-sultan41/schoolhub-srd
-   Start at its `AGENTS.md`, then `context/context-map.md`, which tells you the exact
-   3–6 documents to load for your task type. Do not load the whole spec.
+1. **The specification** — [`../../docs/`](../../docs/). Start at the repository root
+   [`AGENTS.md`](../../AGENTS.md), then [`docs/context/context-map.md`](../../docs/context/context-map.md),
+   which names the 3–6 documents worth loading for your task type. Do not load the whole spec.
 2. **[`docs/ENGINEERING_STANDARDS.md`](docs/ENGINEERING_STANDARDS.md)** — this repo's
    style rules, security non-negotiables, and the authoritative external docs to consult.
    Read the official framework docs rather than relying on recall; versions here are current.
-3. For module work in `apps/<module>/`, the matching `docs/03-modules/<module>.md` in the
+3. For module work in `apps/<module>/`, the matching `../../docs/03-modules/<module>.md` in the
    spec repo **is the requirement**: features, workflows, validations, permission keys (§4),
    endpoints (§16). Its entity doc defines the schema.
 

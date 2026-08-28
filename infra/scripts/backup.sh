@@ -21,7 +21,7 @@
 #   ./backup.sh --upload s3://bucket/pg  # dump and upload, then delete locally
 #   ./backup.sh --schema-only            # structure only, no tenant data
 #
-# Spec: schoolhub-srd/docs/02-architecture/hosting-deployment.md §7
+# Spec: docs/02-architecture/hosting-deployment.md §7
 # =============================================================================
 
 set -euo pipefail

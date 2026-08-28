@@ -6,7 +6,7 @@ the database bootstrap (roles, extensions, connection pooling), the AWS Terrafor
 the CI workflows that validate infrastructure, the operational scripts, and the runbooks.
 
 The authoritative specification lives in the separate spec repo
-[`schoolhub-srd`](https://github.com/sameer-sultan41/schoolhub-srd). Where this repo and the
+[`docs/`](../docs/). Where this repo and the
 spec disagree, the spec wins and this repo is the bug. See [`AGENTS.md`](AGENTS.md).
 
 ---
@@ -69,10 +69,10 @@ By default the application services build from sibling checkouts. Set `API_REPO_
 
 ```
 ~/Documents/
-├── schoolhub-srd/          # specification (this repo's source of truth)
-├── schoolhub-api-v2/       # Django 5 + DRF + Celery
+├── docs/          # specification (this repo's source of truth)
+├── apps/api/       # Django 5 + DRF + Celery
 ├── schoolhub-web/          # Next.js 15 dashboard + website renderer
-└── schoolhub-infra-v2/     # you are here
+└── infra/     # you are here
 ```
 
 | Service | URL | Notes |
@@ -169,7 +169,7 @@ Full procedure: [`runbooks/deploy.md`](runbooks/deploy.md).
 ## 7. Layout
 
 ```
-schoolhub-infra-v2/
+infra/
 ├── compose/      # local development stack + documented .env.example
 ├── postgres/     # extensions, roles/RLS bootstrap, PgBouncer config
 ├── terraform/    # AWS target for Phase 6 — written, NOT applied

@@ -8,7 +8,7 @@
 -- On a managed provider (RDS / Render / Railway) these are created by a
 -- one-off migration or a provider console step instead; the set is identical.
 --
--- Spec: schoolhub-srd/docs/02-architecture/database-architecture.md §2
+-- Spec: docs/02-architecture/database-architecture.md §2
 -- =============================================================================
 
 \set ON_ERROR_STOP on

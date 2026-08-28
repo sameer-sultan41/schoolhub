@@ -14,7 +14,7 @@ single-tenant granularity, without breaking tenant isolation on the way back in.
 | Object storage | Bucket versioning + lifecycle | 90 days noncurrent | Overwritten or deleted files |
 | Redis | **Nothing, deliberately** | — | Nothing. It is disposable cache. |
 
-**Spec.** [`database-architecture.md`](https://github.com/sameer-sultan41/schoolhub-srd/blob/main/docs/02-architecture/database-architecture.md) §6.
+**Spec.** [`database-architecture.md`](../../docs/02-architecture/database-architecture.md) §6.
 
 ## Preconditions
 

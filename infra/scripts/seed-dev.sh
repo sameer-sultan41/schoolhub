@@ -201,7 +201,7 @@ log "running migrations as ${MIGRATION_DB_USER} (direct connection, not via the 
 if ! dc run --rm --no-deps \
      -e DATABASE_URL="${MIGRATION_DATABASE_URL:-postgres://${MIGRATION_DB_USER}:${MIGRATION_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}}" \
      api python manage.py migrate --noinput; then
-  fail "migrations failed. If the API repo is not checked out at ../schoolhub-api-v2, set API_REPO_PATH in compose/.env."
+  fail "migrations failed. If the API repo is not checked out at ../apps/api, set API_REPO_PATH in compose/.env."
 fi
 
 log "loading sample tenants"

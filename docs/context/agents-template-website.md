@@ -1,4 +1,4 @@
-# AGENTS.md — schoolhub-frontend-v2 / apps/website (template)
+# AGENTS.md — the frontend workspace / apps/website (template)
 
 > Copy this file to the public-website renderer app root as `AGENTS.md` when the repo is created, and fix the `DOCS` path/URL.
 
@@ -6,7 +6,7 @@ Instructions for AI assistants working on the **SchoolHub public school website 
 
 ## Required Reading, In Order
 
-`DOCS = <path or URL of the schoolhub-srd docs repo>`
+`DOCS = <path or URL of the docs/ docs repo>`
 
 1. `DOCS/AGENTS.md` — project summary, locked vocabulary, invariants. Always.
 2. `DOCS/docs/02-architecture/website-builder.md` — the rendering architecture: Host-header tenant resolution, theme system, ISR + publish invalidation, SEO, security boundary. This is your primary spec.

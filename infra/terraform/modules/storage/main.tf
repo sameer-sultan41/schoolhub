@@ -15,8 +15,8 @@
 # is no bucket-policy equivalent of RLS, so the prefix convention is load-
 # bearing and must be asserted in tests, not just in review.
 #
-# Spec: schoolhub-srd/docs/02-architecture/multi-tenancy.md §3.4
-#       schoolhub-srd/docs/02-architecture/hosting-deployment.md §7
+# Spec: docs/02-architecture/multi-tenancy.md §3.4
+#       docs/02-architecture/hosting-deployment.md §7
 # =============================================================================
 
 terraform {

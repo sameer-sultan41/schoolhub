@@ -6,8 +6,8 @@ modelling them again, which is what keeps organizational variation a matter of
 configuration instead of a code fork per school.
 
 Columns, defaults, uniques and indexes follow
-schoolhub-srd/docs/05-database/entities/academics.md; behaviour follows
-schoolhub-srd/docs/03-modules/school-organization.md.
+docs/05-database/entities/academics.md; behaviour follows
+docs/03-modules/school-organization.md.
 
 Two deliberate schema choices:
 

@@ -4,7 +4,7 @@ Backend API for **SchoolHub** — an AI-powered, multi-tenant School Management 
 One deployment serves many schools; each school (a *tenant*) is isolated by
 PostgreSQL Row-Level Security.
 
-**Specification:** https://github.com/sameer-sultan41/schoolhub-srd — the docs there
+**Specification:** [`../../docs/`](../../docs/) — the docs there
 define what to build. This repo implements it.
 
 ## Stack

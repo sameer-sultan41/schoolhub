@@ -1,12 +1,12 @@
-# AGENTS.md — schoolhub-api-v2 (template)
+# AGENTS.md — apps/api (template)
 
 > Copy this file to the backend repo root as `AGENTS.md` when the repo is created, and fix the `DOCS` path/URL for how the docs repo is checked out there.
 
-Instructions for AI assistants working in **schoolhub-api-v2** — the Django 6 + DRF backend of SchoolHub, an AI-powered multi-tenant School Management SaaS.
+Instructions for AI assistants working in **apps/api** — the Django 6 + DRF backend of SchoolHub, an AI-powered multi-tenant School Management SaaS.
 
 ## Required Reading, In Order
 
-`DOCS = <path or URL of the schoolhub-srd docs repo>`
+`DOCS = <path or URL of the docs/ docs repo>`
 
 1. `DOCS/AGENTS.md` — project summary, locked vocabulary, invariants. Always.
 2. `DOCS/context/context-map.md` — find your task type, load only its 3–6 files.

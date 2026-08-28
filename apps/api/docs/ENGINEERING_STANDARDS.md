@@ -29,7 +29,7 @@ Always check the version-matched page, not a search-engine result for an older r
 | mypy | https://mypy.readthedocs.io/ |
 | OWASP ASVS / Top 10 | https://owasp.org/www-project-application-security-verification-standard/ |
 
-Product specification (what to build): https://github.com/sameer-sultan41/schoolhub-srd
+Product specification (what to build): [`../../../docs/`](../../../docs/)
 Frontend counterparts: https://nextjs.org/docs · https://nextjs.org/docs/app/guides/ai-agents · https://vercel.com/docs/agent-resources/skills
 
 ## 2. Python Style
@@ -56,7 +56,7 @@ Follows PEP 8, enforced by Ruff (`pyproject.toml` → `[tool.ruff]`), not by rev
 
 ## 4. Security Non-Negotiables
 
-Detailed requirements: `schoolhub-srd/docs/06-security/security.md`.
+Detailed requirements: `docs/06-security/security.md`.
 
 1. Tenant isolation is enforced by PostgreSQL RLS; the app role has neither `BYPASSRLS` nor table ownership.
 2. Cross-tenant access returns **404**, never 403 — a 403 confirms the record exists.
@@ -67,7 +67,7 @@ Detailed requirements: `schoolhub-srd/docs/06-security/security.md`.
 
 ## 5. Testing
 
-Full strategy: `schoolhub-srd/docs/07-quality/testing-strategy.md`.
+Full strategy: `docs/07-quality/testing-strategy.md`.
 
 - Django's test runner with `TestCase`/`APITestCase` — **PostgreSQL only**, never SQLite, because RLS cannot be exercised on another backend.
 - Every new endpoint gets a **cross-tenant access test**; the shared harness auto-enrolls new routes so a missing test fails the build.
@@ -81,7 +81,7 @@ Full strategy: `schoolhub-srd/docs/07-quality/testing-strategy.md`.
 
 Each module in `apps/` mirrors one module doc in the specification repo.
 
-1. Read `schoolhub-srd/docs/03-modules/<module>.md` (behavior) and the matching
+1. Read `docs/03-modules/<module>.md` (behavior) and the matching
    `docs/05-database/entities/<domain>.md` (schema).
 2. `apps/<module>/` with `models.py`, `serializers.py`, `services.py`, `views.py`,
    `urls.py`, `permissions.py`, `filters.py`, `tests/`.

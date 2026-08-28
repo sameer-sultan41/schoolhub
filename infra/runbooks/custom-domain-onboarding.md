@@ -14,8 +14,8 @@ the fallback if the custom domain has a problem.
 school. We never take control of a school's domain, and we never ask for their
 registrar credentials.
 
-**Spec.** [`hosting-deployment.md`](https://github.com/sameer-sultan41/schoolhub-srd/blob/main/docs/02-architecture/hosting-deployment.md) §4 ·
-[`multi-tenancy.md`](https://github.com/sameer-sultan41/schoolhub-srd/blob/main/docs/02-architecture/multi-tenancy.md) §4.
+**Spec.** [`hosting-deployment.md`](../../docs/02-architecture/hosting-deployment.md) §4 ·
+[`multi-tenancy.md`](../../docs/02-architecture/multi-tenancy.md) §4.
 
 ## Preconditions
 

@@ -1,6 +1,6 @@
 """Base settings shared by all environments.
 
-Conventions come from the specification repo (schoolhub-srd):
+Conventions come from the specification repo (docs/):
 docs/02-architecture/tech-stack.md, api-architecture.md, multi-tenancy.md.
 """
 
@@ -44,7 +44,7 @@ CORE_APPS = [
     "core.audit",
 ]
 
-# One app per module doc in schoolhub-srd/docs/03-modules/.
+# One app per module doc in docs/03-modules/.
 MODULE_APPS = [
     "apps.school_organization",
 ]
@@ -160,7 +160,7 @@ SIMPLE_JWT = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "SchoolHub API",
-    "DESCRIPTION": "Multi-tenant School Management SaaS — see the schoolhub-srd spec repo.",
+    "DESCRIPTION": "Multi-tenant School Management SaaS — see the specification in docs/.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/v1",

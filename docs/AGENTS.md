@@ -14,32 +14,32 @@ SchoolHub is an **AI-powered, multi-tenant School Management SaaS**: one platfor
 
 | Directory | Contents |
 | --------- | -------- |
-| `docs/00-overview/` | vision, requirements + feature matrix, users & roles (locked role slugs), glossary (locked terms) |
-| `docs/01-phases/` | master phase plan + one doc per phase (0 discovery … 7 operate) |
-| `docs/02-architecture/` | system, multi-tenancy, API, database, auth/RBAC, AI, notifications, website builder, tech stack, repo structure, hosting |
-| `docs/03-modules/` | **one doc per module** (19) — the functional source of truth; `_template.md` defines their fixed 19-section shape |
-| `docs/04-ai/` | AI feature catalog (the `AI-XXX-NN` registry) + AI governance policy |
-| `docs/05-database/` | ERD overview + `entities/` column-level table specs per domain |
-| `docs/06-security/` | numbered security requirements (SEC-01…) |
-| `docs/07-quality/` | non-functional requirements, testing strategy |
-| `docs/08-future/` | mobile apps, extensibility roadmap |
+| `00-overview/` | vision, requirements + feature matrix, users & roles (locked role slugs), glossary (locked terms) |
+| `01-phases/` | master phase plan + one doc per phase (0 discovery … 7 operate) |
+| `02-architecture/` | system, multi-tenancy, API, database, auth/RBAC, AI, notifications, website builder, tech stack, repo structure, hosting |
+| `03-modules/` | **one doc per module** (19) — the functional source of truth; `_template.md` defines their fixed 19-section shape |
+| `04-ai/` | AI feature catalog (the `AI-XXX-NN` registry) + AI governance policy |
+| `05-database/` | ERD overview + `entities/` column-level table specs per domain |
+| `06-security/` | numbered security requirements (SEC-01…) |
+| `07-quality/` | non-functional requirements, testing strategy |
+| `08-future/` | mobile apps, extensibility roadmap |
 | `context/` | the context map + ready-to-copy AGENTS.md templates for the code repos |
 
 ## Locked Vocabulary (do not invent alternatives)
 
-- **Role slugs** — only those in [`docs/00-overview/users-and-roles.md`](docs/00-overview/users-and-roles.md) (e.g. `school_admin`, `teacher`, `guardian`, `platform_super_admin`).
-- **Permission keys** — `module.resource.action` (e.g. `fees.invoice.create`), defined per module in its doc's §4; model in [`docs/02-architecture/auth-and-rbac.md`](docs/02-architecture/auth-and-rbac.md).
-- **Table names** — plural snake_case, column-level specs only in `docs/05-database/entities/`. Every tenant-owned table implicitly has `id` (UUID PK), `tenant_id`, `created_at/updated_at`, `created_by/updated_by`, `deleted_at`.
-- **API** — versioned REST `/api/v1/…`, plural kebab-case resources, colon-actions (`:promote`, `:publish`); conventions in [`docs/02-architecture/api-architecture.md`](docs/02-architecture/api-architecture.md).
+- **Role slugs** — only those in [`00-overview/users-and-roles.md`](00-overview/users-and-roles.md) (e.g. `school_admin`, `teacher`, `guardian`, `platform_super_admin`).
+- **Permission keys** — `module.resource.action` (e.g. `fees.invoice.create`), defined per module in its doc's §4; model in [`02-architecture/auth-and-rbac.md`](02-architecture/auth-and-rbac.md).
+- **Table names** — plural snake_case, column-level specs only in `05-database/entities/`. Every tenant-owned table implicitly has `id` (UUID PK), `tenant_id`, `created_at/updated_at`, `created_by/updated_by`, `deleted_at`.
+- **API** — versioned REST `/api/v1/…`, plural kebab-case resources, colon-actions (`:promote`, `:publish`); conventions in [`02-architecture/api-architecture.md`](02-architecture/api-architecture.md).
 - **Notification template codes** — dotted `module.event-name` (e.g. `attendance.absence-alert`).
-- **AI feature IDs** — `AI-<MODULE PREFIX>-NN`, registered in [`docs/04-ai/ai-features.md`](docs/04-ai/ai-features.md).
-- **Terms** — Tenant, Campus, Academic Session, Term, Section, Fee Head, etc. per [`docs/00-overview/glossary.md`](docs/00-overview/glossary.md).
+- **AI feature IDs** — `AI-<MODULE PREFIX>-NN`, registered in [`04-ai/ai-features.md`](04-ai/ai-features.md).
+- **Terms** — Tenant, Campus, Academic Session, Term, Section, Fee Head, etc. per [`00-overview/glossary.md`](00-overview/glossary.md).
 
 ## Non-Negotiable Invariants (every change is checked against these)
 
-1. **Tenant isolation** — cross-tenant access is impossible by construction (RLS + scoped managers + 404-not-403). See `docs/02-architecture/multi-tenancy.md`.
+1. **Tenant isolation** — cross-tenant access is impossible by construction (RLS + scoped managers + 404-not-403). See `02-architecture/multi-tenancy.md`.
 2. **Money is append-only** — ledger entries are never updated or deleted; corrections are new entries.
-3. **AI drafts, humans publish** — no AI output reaches students, parents, or the public without a permission-gated human approval. See `docs/04-ai/ai-governance.md`.
+3. **AI drafts, humans publish** — no AI output reaches students, parents, or the public without a permission-gated human approval. See `04-ai/ai-governance.md`.
 4. **RBAC is server-side** — UI hiding is UX, never enforcement.
 5. **Mobile-readiness** — no web-only shortcut (cookie-bound auth, HTML-only flows) may be introduced; the same API must serve future mobile apps.
 

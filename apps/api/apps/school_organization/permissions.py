@@ -1,6 +1,6 @@
 """Permission keys owned by the school-organization module.
 
-Mirrors schoolhub-srd/docs/03-modules/school-organization.md §4 exactly. Keys are
+Mirrors docs/03-modules/school-organization.md §4 exactly. Keys are
 code, not data: the registry is the single source and a migration seeds the
 ``permissions`` table from it, so the two cannot drift.
 

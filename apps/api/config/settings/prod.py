@@ -1,6 +1,6 @@
 """Production settings.
 
-Everything here is a hardening decision; see schoolhub-srd/docs/06-security/security.md.
+Everything here is a hardening decision; see docs/06-security/security.md.
 """
 
 from config.settings.base import *  # noqa: F403

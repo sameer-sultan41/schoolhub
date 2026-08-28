@@ -18,7 +18,7 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 ## Required Reading, In Order
 
-`DOCS = https://github.com/sameer-sultan41/schoolhub-srd`
+`DOCS = <repo root>/docs`
 
 1. `DOCS/AGENTS.md` — project summary, locked vocabulary, invariants. Always.
 2. `DOCS/docs/02-architecture/website-builder.md` — the rendering architecture: Host-header

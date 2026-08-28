@@ -19,8 +19,8 @@
 # ACM certificates for CloudFront MUST be issued in us-east-1 regardless of
 # where everything else runs. The caller passes an aws.us_east_1 provider alias.
 #
-# Spec: schoolhub-srd/docs/02-architecture/hosting-deployment.md §4
-#       schoolhub-srd/docs/02-architecture/multi-tenancy.md §4
+# Spec: docs/02-architecture/hosting-deployment.md §4
+#       docs/02-architecture/multi-tenancy.md §4
 # =============================================================================
 
 terraform {

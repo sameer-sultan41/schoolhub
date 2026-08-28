@@ -12,8 +12,8 @@
 # marked sensitive but IS present in state — which is why the state bucket is
 # encrypted, versioned and access-controlled (terraform/envs/*/backend.tf).
 #
-# Spec: schoolhub-srd/docs/02-architecture/database-architecture.md §1, §6
-#       schoolhub-srd/docs/02-architecture/hosting-deployment.md §7, §9
+# Spec: docs/02-architecture/database-architecture.md §1, §6
+#       docs/02-architecture/hosting-deployment.md §7, §9
 # =============================================================================
 
 terraform {

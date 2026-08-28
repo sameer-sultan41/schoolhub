@@ -5,7 +5,7 @@ Shape validation lives here; rules that need to look at other rows live in
 the write arrives from the API, the bulk importer or a Celery job.
 
 Foreign keys are exposed with their ``_id`` suffix to match the column names in
-schoolhub-srd/docs/05-database/entities/academics.md and the filter names in the
+docs/05-database/entities/academics.md and the filter names in the
 module doc §16.
 """
 

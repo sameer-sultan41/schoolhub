@@ -4,7 +4,7 @@ Model: users hold roles, roles hold permissions, permissions are static code-def
 keys of the form ``module.resource.action``. There is no direct user→permission grant
 and no role inheritance — composition only.
 
-See schoolhub-srd/docs/02-architecture/auth-and-rbac.md.
+See docs/02-architecture/auth-and-rbac.md.
 """
 
 import uuid

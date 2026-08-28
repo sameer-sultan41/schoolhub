@@ -45,8 +45,8 @@
 --     -v readonly_user=schoolhub_readonly -v readonly_password='...' \
 --     -f 02-app-role.sql
 --
--- Spec: schoolhub-srd/docs/02-architecture/database-architecture.md §1
---       schoolhub-srd/docs/02-architecture/multi-tenancy.md §3
+-- Spec: docs/02-architecture/database-architecture.md §1
+--       docs/02-architecture/multi-tenancy.md §3
 -- =============================================================================
 
 \set ON_ERROR_STOP on

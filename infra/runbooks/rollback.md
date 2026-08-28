@@ -17,7 +17,7 @@ the smallest tool that fixes the fault.
 belongs to [`backup-restore.md`](backup-restore.md). Do not reach for it because
 the first four felt slow.
 
-**Spec.** [`hosting-deployment.md`](https://github.com/sameer-sultan41/schoolhub-srd/blob/main/docs/02-architecture/hosting-deployment.md) §8.
+**Spec.** [`hosting-deployment.md`](../../docs/02-architecture/hosting-deployment.md) §8.
 
 ## Preconditions
 

@@ -15,7 +15,7 @@
 # Putting secret-read permissions on the task role is the common mistake: it
 # lets application code read every secret, not just the ones injected into it.
 #
-# Spec: schoolhub-srd/docs/02-architecture/hosting-deployment.md §3, §8
+# Spec: docs/02-architecture/hosting-deployment.md §3, §8
 # =============================================================================
 
 terraform {

@@ -1,4 +1,4 @@
-# AGENTS.md — schoolhub-frontend-v2 / apps/dashboard (template)
+# AGENTS.md — the frontend workspace / apps/dashboard (template)
 
 > Copy this file to the frontend monorepo (or the dashboard app root) as `AGENTS.md` when the repo is created, and fix the `DOCS` path/URL.
 
@@ -6,7 +6,7 @@ Instructions for AI assistants working on the **SchoolHub admin dashboard** — 
 
 ## Required Reading, In Order
 
-`DOCS = <path or URL of the schoolhub-srd docs repo>`
+`DOCS = <path or URL of the docs/ docs repo>`
 
 1. `DOCS/AGENTS.md` — project summary, locked vocabulary, invariants. Always.
 2. `DOCS/context/context-map.md` — row "Build dashboard UI for a module".

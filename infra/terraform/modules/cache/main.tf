@@ -16,8 +16,8 @@
 # token, and task payloads carry tenant_id — the value the entire RLS boundary
 # is keyed on.
 #
-# Spec: schoolhub-srd/docs/02-architecture/system-architecture.md §2.9
-#       schoolhub-srd/docs/02-architecture/hosting-deployment.md §7
+# Spec: docs/02-architecture/system-architecture.md §2.9
+#       docs/02-architecture/hosting-deployment.md §7
 # =============================================================================
 
 terraform {

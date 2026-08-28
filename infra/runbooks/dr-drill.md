@@ -20,7 +20,7 @@ backup configuration, or the restore tooling.
 data is production PII and is deleted at the end — a drill that leaves a copy
 lying around has created the breach it was meant to prevent.
 
-**Spec.** [`hosting-deployment.md`](https://github.com/sameer-sultan41/schoolhub-srd/blob/main/docs/02-architecture/hosting-deployment.md) §9.
+**Spec.** [`hosting-deployment.md`](../../docs/02-architecture/hosting-deployment.md) §9.
 
 ## Preconditions
 
