@@ -1,10 +1,20 @@
 import createNextIntlPlugin from "next-intl/plugin";
+import path from "node:path";
+
 import type { NextConfig } from "next";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  /**
+   * Emits .next/standalone with only the files the server actually needs, which is
+   * what the Dockerfile copies (nextjs.org/docs/app/getting-started/deploying).
+   * outputFileTracingRoot points at the workspace root so tracing follows imports
+   * into packages/* rather than stopping at this app.
+   */
+  output: "standalone",
+  outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   experimental: {
     /**
      * Next 16 type-checks builds by shelling out to the project-local `tsc` CLI. Our

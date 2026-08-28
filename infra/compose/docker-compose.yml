@@ -235,7 +235,7 @@ services:
   # ---------------------------------------------------------------------------
   dashboard:
     build:
-      context: ${FRONTEND_REPO_PATH:-../../schoolhub-web}
+      context: ${FRONTEND_REPO_PATH:-../..}
       dockerfile: apps/dashboard/Dockerfile
       target: ${FRONTEND_BUILD_TARGET:-dev}
       args:
@@ -254,7 +254,7 @@ services:
       NEXT_PUBLIC_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
       NEXT_TELEMETRY_DISABLED: "1"
     volumes:
-      - ${FRONTEND_REPO_PATH:-../../schoolhub-web}:/app
+      - ${FRONTEND_REPO_PATH:-../..}:/app
       - dashboard-node-modules:/app/node_modules
       - dashboard-next-cache:/app/apps/dashboard/.next
     command: ["pnpm", "--filter", "dashboard", "dev", "--port", "3000", "--hostname", "0.0.0.0"]
@@ -268,7 +268,7 @@ services:
   # ---------------------------------------------------------------------------
   website:
     build:
-      context: ${FRONTEND_REPO_PATH:-../../schoolhub-web}
+      context: ${FRONTEND_REPO_PATH:-../..}
       dockerfile: apps/website/Dockerfile
       target: ${FRONTEND_BUILD_TARGET:-dev}
       args:
@@ -288,7 +288,7 @@ services:
       REVALIDATE_SECRET: ${REVALIDATE_SECRET}
       NEXT_TELEMETRY_DISABLED: "1"
     volumes:
-      - ${FRONTEND_REPO_PATH:-../../schoolhub-web}:/app
+      - ${FRONTEND_REPO_PATH:-../..}:/app
       - website-node-modules:/app/node_modules
       - website-next-cache:/app/apps/website/.next
     command: ["pnpm", "--filter", "website", "dev", "--port", "3001", "--hostname", "0.0.0.0"]

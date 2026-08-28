@@ -33,21 +33,70 @@ back out is far cheaper than the coordination tax was.
 
 ## Getting started
 
+**Prerequisites.** Python 3.14 (the backend pins `>=3.14,<3.15`), Node 24 or newer,
+pnpm 9.15, and Docker. `.nvmrc` and `packageManager` record the exact versions.
+
+**1. Start the backing services first.** Migrations need a database, so this comes
+before anything else.
+
 ```bash
-# Backend
-cd apps/api && cp .env.example .env      # then set DJANGO_SECRET_KEY
-pip install -e ".[dev]" && python manage.py migrate && python manage.py runserver
-
-# Frontends (pnpm workspace at the repository root)
-pnpm install
-pnpm dev
-
-# Supporting services
-docker compose -f infra/compose/docker-compose.yml up -d
+cp infra/compose/.env.example infra/compose/.env   # fill in the DB passwords
+docker compose -f infra/compose/docker-compose.yml up -d postgres pgbouncer redis
 ```
 
-- API: http://localhost:8000/api/v1/ · docs at `/api/docs/`
-- Dashboard: http://localhost:3000 · Website renderer: http://localhost:3001
+The application role is created without `BYPASSRLS` and owns nothing, which is what
+makes Row-Level Security actually bind — see `infra/postgres/init/02-app-role.sql`.
+
+**2. Backend.** Install into a virtual environment; never into the system Python.
+
+```bash
+cd apps/api
+python3.14 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env                    # then set DJANGO_SECRET_KEY
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
+```
+
+**3. Frontends.** From the repository root — the pnpm workspace covers both apps and
+every shared package.
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Next.js [recommends running the dev server natively rather than in Docker on
+macOS](https://nextjs.org/docs/app/getting-started/deploying#docker) for
+performance, which is why the compose stack above starts only the backing services.
+The `dashboard`, `website` and `api` services exist in that file for
+production-shaped builds.
+
+| Service | URL |
+| ------- | --- |
+| API | http://localhost:8000/api/v1/ (docs at `/api/docs/`, health at `/healthz`) |
+| Dashboard | http://localhost:3000 |
+| Website renderer | http://localhost:3001 |
+| Mailpit (captured email) | http://localhost:8025 |
+| MinIO console | http://localhost:9001 |
+
+PostgreSQL listens on 5432 and PgBouncer on 6432; the application connects through
+PgBouncer, which is why tenant context is set with `SET LOCAL` inside a transaction.
+
+**Changing the API contract.** The TypeScript client is generated, not written:
+
+```bash
+apps/api/scripts/generate-openapi.sh                 # refresh apps/api/openapi.yaml
+pnpm --filter @schoolhub/api-client generate         # refresh the typed schema
+```
+
+CI fails if either is stale, so both regenerate in the same commit as the change.
+
+**Documentation lookups.** `.mcp.json` registers [Context7](https://context7.com) so
+assistants read version-matched library docs instead of working from recall. Export
+`CONTEXT7_API_KEY` in your shell; it is interpolated at load time and never
+committed.
 
 ## Stack
 
