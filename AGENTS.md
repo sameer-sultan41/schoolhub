@@ -30,11 +30,13 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
 
 ## Before Coding
 
-0. **Look up library documentation through Context7**, registered in `.mcp.json`.
-   Resolve the library, read its version-matched docs, and follow them — do not
-   write setup steps, config or non-trivial API usage from recall. If Context7 is
-   unavailable in your session, say so rather than silently guessing, then fall
-   back to the vendor's official docs. Requires `CONTEXT7_API_KEY` exported.
+0. **Look up library documentation through Context7**, available via Anthropic's
+   official `context7` plugin (`claude plugin enable context7@claude-plugins-official`
+   if it is ever disabled). Resolve the library, read its version-matched docs, and
+   follow them — do not write setup steps, config or non-trivial API usage from
+   recall. It works anonymously; export `CONTEXT7_API_KEY` for higher rate limits.
+   If Context7 is unavailable in your session, say so rather than silently
+   guessing, then fall back to the vendor's official docs.
 0b. **Load the matching skill before writing frontend code.** These are Vercel's
    own guidance and are installed on this machine; they outrank generic advice on
    framework questions.
