@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "@schoolhub/ui/styles/theme.css";
+
+/* Tailwind v4 auto-detects sources in this app; the shared package needs an explicit hint. */
+@source "../../../../packages/ui/src";
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--sh-color-background);
+  color: var(--sh-color-foreground);
+  font-family: var(--sh-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Visible focus is a WCAG 2.1 AA requirement — never remove it. */
+:focus-visible {
+  outline: 2px solid var(--sh-color-ring);
+  outline-offset: 2px;
+}

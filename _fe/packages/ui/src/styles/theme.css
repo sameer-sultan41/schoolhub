@@ -1,0 +1,95 @@
+/*
+ * SchoolHub shared theme layer (Tailwind v4, CSS-first).
+ *
+ * Apps import this AFTER `@import "tailwindcss"`:
+ *
+ *   @import "tailwindcss";
+ *   @import "@schoolhub/ui/styles/theme.css";
+ *   @source "../../../../packages/ui/src";
+ *
+ * Every colour utility resolves to a `--sh-*` custom property (`@theme inline` keeps the
+ * var reference in the generated CSS instead of inlining its value). That is what makes
+ * per-tenant branding possible at runtime: set `--sh-color-primary` on a wrapper element
+ * from the tenant's branding settings and the whole subtree re-themes.
+ *
+ * The defaults below are deliberately NEUTRAL — greys, not a brand. No component may
+ * hardcode a brand colour; if a tenant sends no branding, neutral is the correct look.
+ */
+
+@theme inline {
+  --color-background: var(--sh-color-background);
+  --color-foreground: var(--sh-color-foreground);
+  --color-surface: var(--sh-color-surface);
+  --color-surface-foreground: var(--sh-color-surface-foreground);
+  --color-muted: var(--sh-color-muted);
+  --color-muted-foreground: var(--sh-color-muted-foreground);
+  --color-border: var(--sh-color-border);
+  --color-ring: var(--sh-color-ring);
+
+  --color-primary: var(--sh-color-primary);
+  --color-primary-foreground: var(--sh-color-primary-foreground);
+  --color-secondary: var(--sh-color-secondary);
+  --color-secondary-foreground: var(--sh-color-secondary-foreground);
+  --color-accent: var(--sh-color-accent);
+  --color-accent-foreground: var(--sh-color-accent-foreground);
+
+  --color-success: var(--sh-color-success);
+  --color-warning: var(--sh-color-warning);
+  --color-danger: var(--sh-color-danger);
+  --color-danger-foreground: var(--sh-color-danger-foreground);
+
+  --font-sans: var(--sh-font-body);
+  --font-heading: var(--sh-font-heading);
+
+  --radius-token: var(--sh-radius);
+}
+
+:root {
+  /* Neutral defaults — overridden per tenant at runtime. */
+  --sh-color-background: oklch(1 0 0);
+  --sh-color-foreground: oklch(0.21 0.006 285.9);
+  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface-foreground: oklch(0.21 0.006 285.9);
+  --sh-color-muted: oklch(0.967 0.001 286.4);
+  --sh-color-muted-foreground: oklch(0.552 0.014 285.9);
+  --sh-color-border: oklch(0.92 0.004 286.3);
+  --sh-color-ring: var(--sh-color-primary);
+
+  --sh-color-primary: oklch(0.37 0.013 285.8);
+  --sh-color-primary-foreground: oklch(0.985 0 0);
+  --sh-color-secondary: oklch(0.967 0.001 286.4);
+  --sh-color-secondary-foreground: oklch(0.21 0.006 285.9);
+  --sh-color-accent: oklch(0.967 0.001 286.4);
+  --sh-color-accent-foreground: oklch(0.21 0.006 285.9);
+
+  /* Status colours are product semantics, not branding — tenants do not override these. */
+  --sh-color-success: oklch(0.63 0.14 152);
+  --sh-color-warning: oklch(0.75 0.15 78);
+  --sh-color-danger: oklch(0.58 0.22 27.3);
+  --sh-color-danger-foreground: oklch(0.985 0 0);
+
+  --sh-font-body: ui-sans-serif, system-ui, sans-serif;
+  --sh-font-heading: var(--sh-font-body);
+  --sh-radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sh-color-background: oklch(0.141 0.005 285.8);
+    --sh-color-foreground: oklch(0.985 0 0);
+    --sh-color-surface: oklch(0.21 0.006 285.9);
+    --sh-color-surface-foreground: oklch(0.985 0 0);
+    --sh-color-muted: oklch(0.274 0.006 286);
+    --sh-color-muted-foreground: oklch(0.705 0.015 286);
+    --sh-color-border: oklch(0.274 0.006 286);
+    --sh-color-secondary: oklch(0.274 0.006 286);
+    --sh-color-secondary-foreground: oklch(0.985 0 0);
+    --sh-color-accent: oklch(0.274 0.006 286);
+    --sh-color-accent-foreground: oklch(0.985 0 0);
+  }
+}
+
+/* RTL (Urdu) support relies on logical properties; never use left/right offsets in components. */
+[dir="rtl"] {
+  --sh-direction: rtl;
+}

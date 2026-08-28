@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // No `rootDir`: this package type-checks against the sibling workspace's TypeScript
+    // source (`@schoolhub/types`), which by definition sits outside `src`. Nothing is
+    // emitted from here (`noEmit`), so `rootDir` would only be a constraint, never a layout.
+    "types": ["node", "jest"],
+    "paths": {
+      "@schoolhub/types": ["../types/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "coverage", ".turbo"]
+}

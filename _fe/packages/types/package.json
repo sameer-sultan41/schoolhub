@@ -1,0 +1,33 @@
+{
+  "name": "@schoolhub/types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript types and Zod schemas mirroring the SchoolHub API contract",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --passWithNoTests",
+    "clean": "rm -rf .turbo coverage *.tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@schoolhub/config": "workspace:*",
+    "@swc/core": "^1.10.1",
+    "@swc/jest": "^0.2.37",
+    "@types/jest": "^30.0.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "eslint": "^9.39.5",
+    "jest": "^30.2.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  }
+}
