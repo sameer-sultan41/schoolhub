@@ -78,3 +78,12 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 4. Live module data goes through a read function in `src/lib/content.ts` with tenant cache tags.
 
 Tests: Jest + React Testing Library, co-located as `*.test.ts(x)`. No E2E layer in this repo.
+
+## Guidance To Load First
+
+Before writing or reviewing code here, load the Vercel skill that matches the work:
+`react-best-practices` for performance (waterfalls, bundle size, re-renders),
+`next-best-practices` for route conventions, RSC boundaries and data fetching,
+`next-cache-components` for caching and PPR, and `web-design-guidelines` for
+accessibility review. They are installed on this machine and outrank generic
+advice on framework questions; this app's own conventions still win over both.

@@ -72,3 +72,12 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 4. Gate every action with `<Can permission="module.resource.action">`.
 5. Strings into `messages/en.json` **and** `messages/ur.json`.
 6. Co-locate tests as `*.test.tsx`.
+
+## Guidance To Load First
+
+Before writing or reviewing code here, load the Vercel skill that matches the work:
+`react-best-practices` for performance (waterfalls, bundle size, re-renders),
+`next-best-practices` for route conventions, RSC boundaries and data fetching,
+`next-cache-components` for caching and PPR, and `web-design-guidelines` for
+accessibility review. They are installed on this machine and outrank generic
+advice on framework questions; this app's own conventions still win over both.

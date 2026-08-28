@@ -35,6 +35,23 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
    write setup steps, config or non-trivial API usage from recall. If Context7 is
    unavailable in your session, say so rather than silently guessing, then fall
    back to the vendor's official docs. Requires `CONTEXT7_API_KEY` exported.
+0b. **Load the matching skill before writing frontend code.** These are Vercel's
+   own guidance and are installed on this machine; they outrank generic advice on
+   framework questions.
+
+   | Working on | Load |
+   | ---------- | ---- |
+   | React/Next performance — waterfalls, bundle size, re-renders | `react-best-practices` |
+   | Route/file conventions, RSC boundaries, data fetching | `next-best-practices` |
+   | Caching, PPR, `use cache` / `cacheLife` / `cacheTag` | `next-cache-components` |
+   | `turbo.json`, workspace layout, task graph, caching | `turborepo` |
+   | UI review, accessibility | `web-design-guidelines` |
+   | Bumping the Next.js major | `next-upgrade` |
+
+   Precedence when they conflict: this repository's own conventions first (they are
+   product decisions no vendor has an opinion on), then the vendor skill, then any
+   in-house generic guidance.
+
 1. Read `docs/AGENTS.md` for locked vocabulary and invariants.
 2. `docs/context/context-map.md` maps a task type to the 3–6 docs worth loading.
    Do not read the whole specification.
