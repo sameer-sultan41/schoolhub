@@ -1,0 +1,32 @@
+; userlist.txt — PgBouncer SCRAM credential file. NOT COMMITTED.
+;
+; Copy this file to userlist.txt (git-ignored) before starting the stack:
+;
+;     cp userlist.txt.example userlist.txt
+;
+; ...then fill in real verifiers. `scripts/seed-dev.sh` does both steps for you
+; by reading the verifiers PostgreSQL already computed, which is the only way to
+; be sure the two sides agree:
+;
+;     docker compose exec -T postgres psql -U postgres -d schoolhub -Atc \
+;       "SELECT '\"' || rolname || '\" \"' || rolpassword || '\"'
+;          FROM pg_authid WHERE rolname LIKE 'schoolhub_%'"
+;
+; Format: "username" "SCRAM-SHA-256$<iterations>:<salt>$<stored-key>:<server-key>"
+;
+; The strings below are placeholders with the right SHAPE and deliberately
+; invalid contents — they will not authenticate anywhere. Never paste a real
+; verifier into a committed file: a SCRAM verifier is offline-crackable, so it
+; is a secret, not a checksum.
+
+"schoolhub_app"       "SCRAM-SHA-256$4096:REPLACE_ME_SALT$REPLACE_ME_STORED_KEY:REPLACE_ME_SERVER_KEY"
+"pgbouncer_admin"     "SCRAM-SHA-256$4096:REPLACE_ME_SALT$REPLACE_ME_STORED_KEY:REPLACE_ME_SERVER_KEY"
+"pgbouncer_stats"     "SCRAM-SHA-256$4096:REPLACE_ME_SALT$REPLACE_ME_STORED_KEY:REPLACE_ME_SERVER_KEY"
+
+; schoolhub_migrator is intentionally absent. Migrations connect directly to
+; PostgreSQL on 5432 — DDL and CREATE INDEX CONCURRENTLY cannot run through a
+; transaction-mode pooler. If you find yourself adding it here, the migration
+; command is pointed at the wrong port.
+;
+; schoolhub_readonly is also absent: platform-level reporting runs on its own
+; audited connection path, not the application pool.

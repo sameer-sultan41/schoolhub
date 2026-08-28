@@ -1,0 +1,101 @@
+# =============================================================================
+# Copy to terraform.tfvars (git-ignored) and fill in.
+#
+# NO SECRET VALUES. ARNs, names and IDs only. Every real secret lives in Secrets
+# Manager; this file records where to find it, never what it is.
+#
+# Production apply is manual and gated. Read `terraform plan` in full before
+# approving — especially any line containing "destroy" against the database, the
+# backup bucket, or the Route 53 zone.
+# =============================================================================
+
+aws_region = "us-east-1"
+
+# The live platform domain. Tenant sites are <slug>.schoolhub.example; verified
+# custom domains also resolve to this distribution.
+platform_domain = "schoolhub.example"
+
+# Route 53 hosted zone ID for platform_domain.
+# Source: `aws route53 list-hosted-zones-by-name --dns-name schoolhub.example`
+hosted_zone_id = "Z0123456789ABCDEFGHIJ"
+
+# Must not overlap staging (10.20.0.0/16) or any office VPN range.
+vpc_cidr = "10.30.0.0/16"
+
+# -----------------------------------------------------------------------------
+# Images — the EXACT tags already verified in staging. Production does not
+# rebuild; it promotes (hosting-deployment.md §3). If these SHAs are not the
+# ones staging is currently running, stop and find out why.
+# Source: the staging deploy record / the ECR tag list.
+# -----------------------------------------------------------------------------
+api_image       = "123456789012.dkr.ecr.us-east-1.amazonaws.com/schoolhub-api:0f4c1e9"
+dashboard_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/schoolhub-dashboard:0f4c1e9"
+website_image   = "123456789012.dkr.ecr.us-east-1.amazonaws.com/schoolhub-website:0f4c1e9"
+
+# -----------------------------------------------------------------------------
+# Buckets. The backup bucket should live in a DIFFERENT ACCOUNT AND REGION from
+# this environment (hosting-deployment.md §7). Naming it here does not make that
+# true — check where it actually is before trusting the DR plan.
+# -----------------------------------------------------------------------------
+uploads_bucket_name = "schoolhub-production-uploads"
+backup_bucket_name  = "schoolhub-production-backups"
+
+# -----------------------------------------------------------------------------
+# Secret ARNs, not secret values.
+# Source: `aws secretsmanager list-secrets --query 'SecretList[].[Name,ARN]'`
+# Created and rotated by scripts/rotate-secrets.sh.
+# -----------------------------------------------------------------------------
+
+# Rotating DJANGO_SECRET_KEY logs every user out and invalidates every signed
+# URL and password-reset token in flight. Announce it; never do it during
+# admissions or exam-results week.
+django_secret_key_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/django/secret-key-AbCdEf"
+
+# APPLICATION role only: schoolhub_app, through PgBouncer on 6432.
+#
+# This must NOT be the RDS master URL. The master is rds_superuser-equivalent,
+# and RLS does not apply to it — pointing the application at it silently turns
+# every tenant boundary in the platform off. Verify with:
+#   psql "$URL" -c "SELECT current_user, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+# It must print schoolhub_app and f.
+app_database_url_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/db/app-url-AbCdEf"
+
+# Sentry DSN for the production project. Required — errors here page someone.
+sentry_dsn_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/sentry/dsn-AbCdEf"
+
+# Payment gateway credentials. Injected into the API and worker only; the
+# Next.js containers never receive it. Leave "" until fees go live.
+payment_gateway_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/payments/gateway-AbCdEf"
+
+# -----------------------------------------------------------------------------
+# Alerting. At least one topic is required by a variable validation: an alarm
+# nobody receives is a dashboard, not an alert.
+# Source: `aws sns list-topics`
+# -----------------------------------------------------------------------------
+alarm_sns_topic_arns = [
+  "arn:aws:sns:us-east-1:123456789012:schoolhub-production-page",
+  "arn:aws:sns:us-east-1:123456789012:schoolhub-production-slack",
+]
+
+# -----------------------------------------------------------------------------
+# Verified tenant custom domains.
+#
+# Appended by the onboarding pipeline AFTER DNS verification completes — see
+# runbooks/custom-domain-onboarding.md. Adding a domain whose validation record
+# is not yet live makes ACM wait, and the apply hangs for 30+ minutes before
+# failing. Never hand-edit this during an incident.
+# -----------------------------------------------------------------------------
+custom_domain_aliases = [
+  # "www.cityschool.example",
+  # "portal.greenvalley.example",
+]
+
+# CloudFront access logs. Empty disables them.
+# Source: the audit bucket in the logging account.
+cloudfront_log_bucket_domain_name = "schoolhub-production-cdn-logs.s3.amazonaws.com"
+
+tags = {
+  Owner       = "platform"
+  CostCenter  = "engineering"
+  Compliance  = "tenant-pii"
+}

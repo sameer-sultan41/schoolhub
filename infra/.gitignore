@@ -1,0 +1,56 @@
+# Secrets and local environment -------------------------------------------------
+# Only *.example files are ever committed. Real values come from the platform
+# secret manager (see README §4).
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+compose/.env
+compose/docker-compose.override.yml
+postgres/pgbouncer/userlist.txt
+!postgres/pgbouncer/userlist.txt.example
+*.pem
+*.key
+*.p12
+*.pfx
+age.key
+*.agekey
+
+# Terraform ---------------------------------------------------------------------
+.terraform/
+# NOTE: .terraform.lock.hcl is deliberately NOT ignored. The provider lock file
+# is committed so every engineer and every CI run resolves the same provider
+# builds — it is the terraform equivalent of a package lock, and ignoring it
+# means "~> 6.0" can quietly become a different provider between two plans.
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan
+*.tfplan
+
+# Backups and restore scratch ---------------------------------------------------
+backups/
+*.dump
+*.sql.gz
+*.tar.gz
+restore-scratch/
+
+# Tooling / OS ------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+!.vscode/extensions.json
+node_modules/
+__pycache__/
+*.log
