@@ -1,0 +1,26 @@
+# Node
+node_modules/
+.next/
+.turbo/
+dist/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+staticfiles/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Environment — never commit real secrets
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+.idea/
