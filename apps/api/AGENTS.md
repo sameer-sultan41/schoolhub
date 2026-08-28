@@ -27,6 +27,19 @@ apps/<module>/     one app per module doc — models/serializers/services/views/
 tests/             cross-cutting suites (RLS coverage, permission registry, cross-tenant matrix)
 ```
 
+## Skills To Load First
+
+Load the matching skill before touching this code — installed on this machine,
+outranking generic advice on framework questions per the precedence in the root
+AGENTS.md:
+
+| Working on | Load |
+| ---------- | ---- |
+| Auth, permissions, input handling, deployment settings | `django-security` |
+| Background jobs, beat schedules, retries, task testing | `django-celery` |
+| Query design, indexing, migrations | `postgresql-optimization` |
+| A production Dockerfile | `multi-stage-dockerfile` |
+
 ## Hard Rules
 
 1. **Tenancy.** Tenant-owned models inherit `TenantOwnedModel`. Never bypass the default
