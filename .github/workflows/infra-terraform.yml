@@ -105,11 +105,11 @@ jobs:
 
       - name: tflint --init
         run: tflint --init
-        working-directory: terraform
+        working-directory: infra/terraform
 
       - name: tflint --recursive
         run: tflint --recursive --minimum-failure-severity=warning
-        working-directory: terraform
+        working-directory: infra/terraform
 
   security:
     name: trivy config

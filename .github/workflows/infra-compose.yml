@@ -46,7 +46,7 @@ jobs:
       # docker compose config interpolates variables and fails on anything
       # undefined, so this is also a check that .env.example is complete.
       - name: Render the compose file
-        working-directory: compose
+        working-directory: infra/compose
         run: |
           cp .env.example .env
           docker compose config --quiet
@@ -55,7 +55,7 @@ jobs:
           docker compose config --services | sort
 
       - name: Assert the pinned image versions
-        working-directory: compose
+        working-directory: infra/compose
         run: |
           set -euo pipefail
           fail=0
@@ -72,7 +72,7 @@ jobs:
           exit "$fail"
 
       - name: Assert every expected service exists
-        working-directory: compose
+        working-directory: infra/compose
         run: |
           set -euo pipefail
           expected="api celery-beat celery-worker dashboard mailpit minio pgbouncer postgres redis website"
@@ -85,7 +85,7 @@ jobs:
           done
 
       - name: Assert the override example is valid YAML
-        working-directory: compose
+        working-directory: infra/compose
         run: |
           python3 -c "import yaml,sys; yaml.safe_load(open('docker-compose.override.yml.example'))"
 
