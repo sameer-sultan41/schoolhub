@@ -21,10 +21,10 @@ name: compose-validate
 on:
   pull_request:
     paths:
-      - "compose/**"
-      - "postgres/**"
-      - "scripts/**"
-      - ".github/workflows/compose-validate.yml"
+      - "infra/compose/**"
+      - "infra/postgres/**"
+      - "infra/scripts/**"
+      - ".github/workflows/infra-compose.yml"
   push:
     branches: [main]
   workflow_dispatch:
@@ -96,7 +96,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Parse the ini
-        run: python3 -c "import configparser; c=configparser.ConfigParser(); c.read('postgres/pgbouncer/pgbouncer.ini'); print(dict(c['pgbouncer']))"
+        run: python3 -c "import configparser; c=configparser.ConfigParser(); c.read('infra/postgres/pgbouncer/pgbouncer.ini'); print(dict(c['pgbouncer']))"
 
       # The single most important line in the pooler config. Session pooling
       # would make a stray `SET app.tenant_id` appear to work, and tenant
@@ -104,16 +104,16 @@ jobs:
       - name: Assert transaction pooling
         run: |
           set -euo pipefail
-          mode="$(python3 -c "import configparser; c=configparser.ConfigParser(); c.read('postgres/pgbouncer/pgbouncer.ini'); print(c['pgbouncer']['pool_mode'].strip())")"
+          mode="$(python3 -c "import configparser; c=configparser.ConfigParser(); c.read('infra/postgres/pgbouncer/pgbouncer.ini'); print(c['pgbouncer']['pool_mode'].strip())")"
           if [ "$mode" != "transaction" ]; then
-            echo "::error::pgbouncer pool_mode is '$mode', must be 'transaction'. See postgres/pgbouncer/pgbouncer.ini."
+            echo "::error::pgbouncer pool_mode is '$mode', must be 'transaction'. See infra/postgres/pgbouncer/pgbouncer.ini."
             exit 1
           fi
 
       - name: Assert SCRAM authentication
         run: |
           set -euo pipefail
-          auth="$(python3 -c "import configparser; c=configparser.ConfigParser(); c.read('postgres/pgbouncer/pgbouncer.ini'); print(c['pgbouncer']['auth_type'].strip())")"
+          auth="$(python3 -c "import configparser; c=configparser.ConfigParser(); c.read('infra/postgres/pgbouncer/pgbouncer.ini'); print(c['pgbouncer']['auth_type'].strip())")"
           if [ "$auth" != "scram-sha-256" ]; then
             echo "::error::pgbouncer auth_type is '$auth'. trust and md5 are not acceptable in any environment."
             exit 1
@@ -155,12 +155,12 @@ jobs:
       - name: Run the init scripts
         run: |
           set -euo pipefail
-          psql -v ON_ERROR_STOP=1 -f postgres/init/01-extensions.sql
+          psql -v ON_ERROR_STOP=1 -f infra/postgres/init/01-extensions.sql
           psql -v ON_ERROR_STOP=1 \
             -v app_user=schoolhub_app       -v app_password=ci-app-not-a-real-secret \
             -v migration_user=schoolhub_migrator -v migration_password=ci-mig-not-a-real-secret \
             -v readonly_user=schoolhub_readonly  -v readonly_password=ci-ro-not-a-real-secret \
-            -f postgres/init/02-app-role.sql
+            -f infra/postgres/init/02-app-role.sql
 
       # ---------------------------------------------------------------------
       # The assertion this entire repository exists to protect.
@@ -267,7 +267,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends shellcheck
-          shellcheck --severity=warning scripts/*.sh
+          shellcheck --severity=warning infra/scripts/*.sh
 
       # These scripts run during an incident, half-awake. `set -euo pipefail` is
       # the difference between a restore that stops on an error and one that
@@ -275,7 +275,7 @@ jobs:
       - name: Assert strict mode
         run: |
           set -euo pipefail
-          for f in scripts/*.sh; do
+          for f in infra/scripts/*.sh; do
             if ! grep -q 'set -euo pipefail' "$f"; then
               echo "::error file=$f::missing 'set -euo pipefail'"
               exit 1

@@ -1,0 +1,10 @@
+# Listed explicitly rather than globbed: apps/ also holds the Django backend,
+# which is not a pnpm package and must not be pulled into the workspace.
+packages:
+  - "apps/dashboard"
+  - "apps/website"
+  - "packages/*"
+
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

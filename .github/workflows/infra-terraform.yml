@@ -6,7 +6,7 @@
 # approval (hosting-deployment.md §3).
 #
 # The plan step is currently disabled because no state backend exists yet — see
-# terraform/README.md. Everything above it (fmt, init -backend=false, validate,
+# infra/terraform/README.md. Everything above it (fmt, init -backend=false, validate,
 # tflint, tfsec) runs on every PR from day one, so the code cannot rot while it
 # waits for Phase 6.
 # =============================================================================
@@ -16,12 +16,12 @@ name: terraform-plan
 on:
   pull_request:
     paths:
-      - "terraform/**"
-      - ".github/workflows/terraform-plan.yml"
+      - "infra/terraform/**"
+      - ".github/workflows/infra-terraform.yml"
   push:
     branches: [main]
     paths:
-      - "terraform/**"
+      - "infra/terraform/**"
   workflow_dispatch:
 
 permissions:
@@ -53,7 +53,7 @@ jobs:
           terraform_wrapper: false
 
       - name: terraform fmt -check -recursive
-        run: terraform fmt -check -recursive terraform/
+        run: terraform fmt -check -recursive infra/terraform/
 
   validate:
     name: validate (${{ matrix.dir }})
@@ -62,19 +62,19 @@ jobs:
       fail-fast: false
       matrix:
         dir:
-          - terraform/modules/network
-          - terraform/modules/database
-          - terraform/modules/cache
-          - terraform/modules/storage
-          - terraform/modules/ecs-service
-          # terraform/modules/cdn is intentionally absent: it declares
+          - infra/terraform/modules/network
+          - infra/terraform/modules/database
+          - infra/terraform/modules/cache
+          - infra/terraform/modules/storage
+          - infra/terraform/modules/ecs-service
+          # infra/terraform/modules/cdn is intentionally absent: it declares
           # configuration_aliases for the us-east-1 provider that CloudFront
           # certificates require, and an aliased provider can only be supplied by a
           # calling module. Validating it standalone fails on a missing provider
           # rather than on anything wrong with the module. The env roots below pass
           # the alias and therefore validate it in place.
-          - terraform/envs/staging
-          - terraform/envs/production
+          - infra/terraform/envs/staging
+          - infra/terraform/envs/production
     steps:
       - uses: actions/checkout@v4
 
@@ -125,7 +125,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
-          scan-ref: terraform/
+          scan-ref: infra/terraform/
           severity: HIGH,CRITICAL
           exit-code: "1"
 
@@ -145,10 +145,10 @@ jobs:
       matrix:
         include:
           - env: staging
-            dir: terraform/envs/staging
+            dir: infra/terraform/envs/staging
             role: arn:aws:iam::123456789012:role/schoolhub-terraform-plan-staging
           - env: production
-            dir: terraform/envs/production
+            dir: infra/terraform/envs/production
             role: arn:aws:iam::123456789012:role/schoolhub-terraform-plan-production
 
     steps:

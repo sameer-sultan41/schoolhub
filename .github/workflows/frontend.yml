@@ -3,8 +3,28 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/dashboard/**"
+      - "apps/website/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/frontend.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "apps/dashboard/**"
+      - "apps/website/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/frontend.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
