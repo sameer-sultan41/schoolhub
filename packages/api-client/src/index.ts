@@ -8,10 +8,12 @@
  * Everything else exported below is the hand-written transport core: envelope
  * unwrapping, bearer auth, refresh-on-401 and pagination.
  */
+import type { components } from "./schema";
+
 export type { paths, components, operations } from "./schema";
 
-/** Response body of an operation, e.g. `ApiResponse<"campuses_list">`. */
-export type ApiSchemas = import("./schema").components["schemas"];
+/** Every schema object the API defines, e.g. `ApiSchemas["Campus"]`. */
+export type ApiSchemas = components["schemas"];
 
 export { ApiClient, createApiClient, buildQueryString } from "./client";
 export type {

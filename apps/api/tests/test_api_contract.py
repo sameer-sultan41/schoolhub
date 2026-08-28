@@ -8,7 +8,6 @@ simply stopped after the first page, in every list in the product.
 Serializer-level tests cannot catch that; only the rendered envelope can.
 """
 
-from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
