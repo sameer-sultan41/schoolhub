@@ -30,4 +30,8 @@ if [ -d "apps/${app}/public" ]; then
   cp -R "apps/${app}/public" "${standalone}/public"
 fi
 
-exec env PORT="$port" HOSTNAME=127.0.0.1 node "${standalone}/server.js"
+# Bind every interface. Binding 127.0.0.1 only is a trap: `localhost` can resolve to ::1
+# first (it does on GitHub runners), and the health check then hits a refused IPv6 socket
+# while the server sits happily on IPv4 — which surfaces as a webServer timeout with a
+# perfectly healthy "Ready" in the log.
+exec env PORT="$port" HOSTNAME=0.0.0.0 node "${standalone}/server.js"

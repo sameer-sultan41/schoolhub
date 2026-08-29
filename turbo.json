@@ -72,17 +72,6 @@
       "outputs": [
         "src/schema.d.ts"
       ]
-    },
-    "e2e": {
-      "dependsOn": [
-        "^build"
-      ],
-      "cache": false,
-      "env": [
-        "E2E_*",
-        "PLAYWRIGHT_*"
-      ],
-      "outputs": []
     }
   }
 }

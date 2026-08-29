@@ -32,9 +32,12 @@ export function buildRole(overrides: Partial<Role> = {}): Role {
   };
 }
 
+/** Shared by `buildTenant` and `buildUser` so a user always belongs to the tenant on screen. */
+export const DEFAULT_TENANT_ID = "tenant-e2e";
+
 export function buildTenant(overrides: Partial<Tenant> = {}): Tenant {
   return {
-    id: id("tenant"),
+    id: DEFAULT_TENANT_ID,
     slug: "cityschool",
     name: "City School",
     status: "active",
@@ -49,16 +52,25 @@ export function buildTenant(overrides: Partial<Tenant> = {}): Tenant {
   };
 }
 
-/** Permissions a school admin holds for the modules that exist today. */
+/**
+ * Permissions a school admin holds.
+ *
+ * `canAccessModule` shows a nav entry when the user holds *any* key prefixed with that
+ * module (apps/dashboard/src/lib/permissions.ts), and `NAV_ITEMS` keys off `students`,
+ * `staff`, `fees`, … — so this deliberately grants some of those modules and not others.
+ * A set covering every module (or none of them) would make a filtering assertion vacuous.
+ */
 export const SCHOOL_ADMIN_PERMISSIONS: PermissionKey[] = [
   "school_organization.campus.view",
   "school_organization.campus.create",
   "school_organization.campus.update",
   "school_organization.class.view",
-  "school_organization.section.view",
-  "school_organization.subject.view",
-  "school_organization.academic_session.view",
+  "students.student.view",
+  "staff.member.view",
 ];
+
+/** A module this user must *not* see, for the negative half of a filtering assertion. */
+export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 
 export function buildUser(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
   return {
@@ -68,7 +80,7 @@ export function buildUser(overrides: Partial<AuthenticatedUser> = {}): Authentic
     full_name: "Ayesha Rahman",
     avatar_url: null,
     locale: "en",
-    tenant_id: "tenant-0001",
+    tenant_id: DEFAULT_TENANT_ID,
     roles: [buildRole()],
     permissions: SCHOOL_ADMIN_PERMISSIONS,
     ...overrides,

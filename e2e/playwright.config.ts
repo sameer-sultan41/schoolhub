@@ -1,4 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
+// Side-effect import: must run before `./src/env` parses process.env.
+import "./src/load-env";
 import { env } from "./src/env";
 
 /**
@@ -37,12 +39,17 @@ const appEnv = {
  * `next start` does not serve that build — see `scripts/serve-app.sh`.
  */
 function serve(app: "dashboard" | "website", url: string) {
+  const target = new URL(url);
+  // Health-check by address, not by name: `localhost` may resolve to ::1 before 127.0.0.1.
+  const healthUrl = new URL(url);
+  healthUrl.hostname = "127.0.0.1";
+
   return {
-    command: `./scripts/serve-app.sh ${app} ${new URL(url).port || "80"}`,
-    url,
+    command: `./scripts/serve-app.sh ${app} ${target.port || "80"}`,
+    url: healthUrl.toString(),
     env: appEnv,
     reuseExistingServer: !isCI,
-    timeout: 180_000,
+    timeout: 300_000,
     stdout: "pipe" as const,
     stderr: "pipe" as const,
   };

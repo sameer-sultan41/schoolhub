@@ -1,6 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import { API_PATH_PREFIX, API_ROUTE_GLOB } from "@/env";
-import { type MockResponse, fail } from "./envelope";
+import { type MockResponse, harnessError } from "./envelope";
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
@@ -19,6 +19,14 @@ export type MockHandler = (request: MockRequest) => MockResponse | Promise<MockR
 
 /** A reusable bundle of stubs for one API domain. See `./domains`. */
 export type MockModule = (api: MockApi) => void;
+
+/**
+ * Runs after a stub produces a response but *before* it is delivered to the page.
+ * Anything that must be true by the time the app reacts (a cookie the real API would
+ * have set) belongs here — a listener on `page.on("response")` fires too late and the
+ * app's next navigation races it.
+ */
+export type SideEffect = (request: MockRequest, response: MockResponse) => Promise<void>;
 
 export interface RecordedCall {
   method: HttpMethod;
@@ -57,7 +65,10 @@ function compile(path: string): { pattern: RegExp; paramNames: string[] } {
  */
 export class MockApi {
   private readonly routes: RegisteredRoute[] = [];
+  private readonly sideEffects: SideEffect[] = [];
   readonly calls: RecordedCall[] = [];
+  /** Requests no stub matched. Asserted empty at teardown by the `mockApi` fixture. */
+  readonly unmatched: string[] = [];
 
   on(method: HttpMethod, path: string, handler: MockHandler): this {
     const { pattern, paramNames } = compile(path);
@@ -77,6 +88,12 @@ export class MockApi {
   }
   delete(path: string, handler: MockHandler): this {
     return this.on("DELETE", path, handler);
+  }
+
+  /** Register a side effect awaited before each response reaches the page. */
+  after(effect: SideEffect): this {
+    this.sideEffects.push(effect);
+    return this;
   }
 
   /** Compose domain modules: `api.use(authModule({ user }), schoolsModule())`. */
@@ -106,7 +123,7 @@ export class MockApi {
     const cors: Record<string, string> = {
       "access-control-allow-origin": origin,
       "access-control-allow-credentials": "true",
-      "access-control-allow-headers": "authorization,content-type,x-request-id",
+      "access-control-allow-headers": "authorization,content-type,x-request-id,idempotency-key",
       "access-control-allow-methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
     };
 
@@ -127,11 +144,26 @@ export class MockApi {
 
     this.calls.push({ method, path, matched: match !== undefined });
 
-    const response = match
-      ? await match.route.handler(
-          buildRequest(method, path, url, request.headers(), request.postData(), match),
-        )
-      : fail(500, `No mock registered for ${method} ${path}`, { code: "e2e_unstubbed_route" });
+    let response: MockResponse;
+    if (match) {
+      const mockRequest = buildRequest(
+        method,
+        path,
+        url,
+        request.headers(),
+        request.postData(),
+        match,
+      );
+      response = await match.route.handler(mockRequest);
+      // Awaited here, not in a `page.on` listener: the page must not observe the response
+      // before an effect it depends on (a session cookie) has landed.
+      for (const effect of this.sideEffects) await effect(mockRequest, response);
+    } else {
+      this.unmatched.push(`${method} ${path}`);
+      // Deliberately not a 5xx: `shouldRetry` in apps/dashboard/src/lib/query-client.ts
+      // retries server errors, which would turn one missing stub into three requests.
+      response = harnessError(`No mock registered for ${method} ${path}`);
+    }
 
     await route.fulfill({
       status: response.status,

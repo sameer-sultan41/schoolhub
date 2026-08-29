@@ -16,8 +16,15 @@ import type {
  * against a shape the server no longer sends.
  */
 
+/**
+ * `418` is reserved for the harness itself (a missing stub) and is not something the API
+ * can send — which is the point: it can never be mistaken for a modelled API response,
+ * and `shouldRetry` in the dashboard's query client leaves 4xx alone.
+ */
+export const HARNESS_STATUS = 418;
+
 export interface MockResponse<TBody = unknown> {
-  status: ApiStatusCode;
+  status: ApiStatusCode | typeof HARNESS_STATUS;
   body: TBody;
   headers?: Record<string, string>;
 }
@@ -88,4 +95,12 @@ export function paginated<TItem>(
       },
     },
   });
+}
+
+/** A failure produced by the test harness, not modelled on any API behaviour. */
+export function harnessError(message: string): MockResponse<ApiErrorEnvelope> {
+  return {
+    status: HARNESS_STATUS,
+    body: { error: { code: "e2e_harness_error", message, request_id: "e2e-harness" } },
+  };
 }

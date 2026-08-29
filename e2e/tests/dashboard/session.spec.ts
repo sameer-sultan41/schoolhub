@@ -1,4 +1,4 @@
-import { buildUser, buildUserWithoutPermissions } from "@/data/factories";
+import { MODULE_WITHOUT_PERMISSION, buildUserWithoutPermissions } from "@/data/factories";
 import { expect, test } from "@/fixtures";
 
 test.describe("session restore", () => {
@@ -27,17 +27,26 @@ test.describe("session restore", () => {
 
     await dashboardPage.signOut.click();
 
+    // The proxy routes on the session cookie, so this only passes if logout actually
+    // cleared it — otherwise /login redirects straight back into the app.
     await expect(page).toHaveURL(/\/login/);
   });
 });
 
 test.describe("navigation is filtered by permission", () => {
-  test.use({ authUser: buildUser() });
-
-  test("shows a module the user can reach", async ({ dashboardPage, signedIn: _signedIn }) => {
+  test("shows the modules the user holds a permission for, and no others", async ({
+    dashboardPage,
+    signedIn,
+  }) => {
     await dashboardPage.goto();
 
-    await expect(dashboardPage.navLink("Dashboard")).toBeVisible();
+    // Granted via `students.student.view` / `staff.member.view`.
+    await expect(dashboardPage.navLink("Students")).toBeVisible();
+    await expect(dashboardPage.navLink("Staff")).toBeVisible();
+    // No `fees.*` key, so the entry must not render at all.
+    await expect(dashboardPage.navLink(MODULE_WITHOUT_PERMISSION)).toHaveCount(0);
+
+    expect(signedIn.permissions.some((key) => key.startsWith("fees."))).toBe(false);
   });
 });
 
@@ -49,7 +58,8 @@ test.describe("a user with no permissions", () => {
 
     await expect(dashboardPage.nav).toBeVisible();
     // The menu is filtered client-side for usability; the API re-checks every call.
-    await expect(dashboardPage.navLink("Fees & Finance")).toHaveCount(0);
     await expect(dashboardPage.navLink("Students")).toHaveCount(0);
+    await expect(dashboardPage.navLink("Staff")).toHaveCount(0);
+    await expect(dashboardPage.navLink(MODULE_WITHOUT_PERMISSION)).toHaveCount(0);
   });
 });

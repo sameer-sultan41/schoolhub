@@ -41,45 +41,39 @@ export interface E2EFixtures {
 export const test = base.extend<E2EOptions & E2EFixtures>({
   authUser: [buildUser(), { option: true }],
 
-  mockApi: async ({ page }, use) => {
+  mockApi: async ({ page }, use, testInfo) => {
     const api = new MockApi();
-    await api.install(page);
 
-    // The one effect the stub router cannot reproduce on its own: the real API sets the
-    // `sh_session` cookie on the dashboard's domain when a login succeeds, and the auth
-    // proxy routes on its presence. Without this, a successful sign-in would bounce
-    // straight back to /login and the redirect could never be asserted.
-    page.on("response", (response) => {
-      if (!response.ok()) return;
+    // The one effect the stub router cannot reproduce on its own: the API and the app are
+    // different origins here, so a `Set-Cookie` from the API would land on the wrong host.
+    // The dashboard's auth proxy routes on `sh_session`, so login must create it and logout
+    // must remove it. This runs as an awaited side effect rather than a `page.on("response")`
+    // listener because the app navigates the moment it sees the response — a listener loses
+    // that race and the redirect is decided against a stale cookie.
+    api.after(async (request, response) => {
+      if (response.status >= 400) return;
       const context = page.context();
-      // Swallowed: the context can close mid-flight at the end of a test, and the
-      // assertion that follows is what should report a real failure.
-      const ignore = () => {};
-
-      if (response.url().includes("/auth/login")) {
-        void context
-          .addCookies([
-            { name: SESSION_COOKIE_NAME, value: "e2e-session", url: env.DASHBOARD_URL },
-          ])
-          .catch(ignore);
-      } else if (response.url().includes("/auth/logout")) {
-        // Symmetric to login: without clearing it the proxy would still see a session
-        // and bounce the signed-out user straight back into the app.
-        void context.clearCookies({ name: SESSION_COOKIE_NAME }).catch(ignore);
+      if (request.path === "/auth/login") {
+        await context.addCookies([
+          { name: SESSION_COOKIE_NAME, value: "e2e-session", url: env.DASHBOARD_URL },
+        ]);
+      } else if (request.path === "/auth/logout") {
+        await context.clearCookies({ name: SESSION_COOKIE_NAME });
       }
     });
 
+    await api.install(page);
     await use(api);
-  },
 
-  signedIn: async ({ page, mockApi, authUser }, use) => {
-    mockApi.use(authModule({ user: authUser }), tenantModule());
-    // Presence-only hint the dashboard proxy reads to route an anonymous visitor to
-    // /login. The real cookie is set by the API; authenticity is the live lane's job.
-    await page.context().addCookies([
-      { name: SESSION_COOKIE_NAME, value: "e2e-session", url: env.DASHBOARD_URL },
-    ]);
-    await use(authUser);
+    // A missing stub answers 418 rather than hanging, but a test can still pass while
+    // quietly relying on that. Surface it — unless the test already failed, whose own
+    // error is the more useful one to report.
+    if (api.unmatched.length > 0 && testInfo.status === testInfo.expectedStatus) {
+      throw new Error(
+        `Requests reached no stub:\n  ${api.unmatched.join("\n  ")}\n` +
+          "Add them to a mock module in src/mocks/domains/.",
+      );
+    }
   },
 
   loginPage: async ({ page }, use) => {

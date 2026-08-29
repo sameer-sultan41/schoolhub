@@ -60,7 +60,8 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
           details: [{ field: "name", issue: "This field is required." }],
         });
       }
-      const created = buildCampus({ ...body, is_primary: false });
+      // id last: the server assigns it, so a client-supplied one must not win.
+      const created = buildCampus({ ...body, is_primary: false, id: id("campus") });
       campuses.push(created);
       return ok(created, { status: 201 });
     });

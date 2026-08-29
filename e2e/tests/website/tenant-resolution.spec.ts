@@ -1,12 +1,16 @@
-import { TENANT_HOST_HEADER, TENANT_SLUG_HEADER } from "@/constants";
-import { env, tenantOrigin } from "@/env";
+import { env } from "@/env";
 import { expect, test } from "@/fixtures";
 
 /**
  * Host → tenant resolution, which the proxy decides before any data is fetched
  * (`apps/website/src/proxy.ts`). These specs need no API, which is why they live in the
- * mocked lane: anything that has to prove a *rendered tenant's* content is correct needs
- * a real backend and belongs in `tests/live`.
+ * mocked lane.
+ *
+ * What is *not* here: the proxy's stripping of inbound `x-schoolhub-*` headers. Reaching
+ * the code that reads those headers requires a host that resolves to a real tenant, which
+ * requires the API — so that assertion lives in `tests/live/`. Asserting it against the
+ * platform apex would pass whether or not the stripping existed, because an unresolvable
+ * host is rewritten to `/_platform`, and `/_platform` reads no tenant header at all.
  */
 test.describe("unknown hosts never fall through to a tenant", () => {
   test("the platform apex shows the neutral landing page", async ({ publicSitePage }) => {
@@ -17,23 +21,18 @@ test.describe("unknown hosts never fall through to a tenant", () => {
 
   test("a reserved subdomain is not treated as a school", async ({ page, publicSitePage }) => {
     // `www` is reserved (apps/website/src/lib/host.ts); a school may not claim it.
-    await page.goto(`${new URL(env.WEBSITE_URL).protocol}//www.${new URL(env.WEBSITE_URL).host}/`);
+    const website = new URL(env.WEBSITE_URL);
+    await page.goto(`${website.protocol}//www.${website.host}/`);
 
     await expect(publicSitePage.platformFallback).toBeVisible();
   });
 
-  test("a client-supplied tenant header cannot select a school", async ({
-    page,
+  test("a deep path on an unknown host also lands on the fallback", async ({
     publicSitePage,
   }) => {
-    // The proxy deletes inbound x-schoolhub-* headers before setting its own. Without
-    // that, anyone could read any school's site by sending one header.
-    await page.setExtraHTTPHeaders({
-      [TENANT_SLUG_HEADER]: "victim-school",
-      [TENANT_HOST_HEADER]: tenantOrigin("victim-school"),
-    });
-
-    await publicSitePage.goto();
+    // The rewrite is not limited to "/" — no path on an unresolvable host may reach a
+    // tenant's CMS route.
+    await publicSitePage.goto({ path: "/admissions/apply" });
 
     await expect(publicSitePage.platformFallback).toBeVisible();
   });
@@ -42,9 +41,6 @@ test.describe("unknown hosts never fall through to a tenant", () => {
     await publicSitePage.goto();
 
     await expect(publicSitePage.platformFallback).toBeVisible();
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      "content",
-      /noindex/,
-    );
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   });
 });
