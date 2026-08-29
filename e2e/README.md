@@ -15,9 +15,15 @@ pnpm e2e:ui          # same, in Playwright's watch UI
 pnpm --filter @schoolhub/e2e e2e:report   # open the last HTML report
 ```
 
-Playwright builds and starts the apps itself (`webServer` in `playwright.config.ts`). The
-build goes through Turborepo, so a warm repeat is near-instant. Already running the apps?
-Set `E2E_NO_SERVER=1`.
+Playwright builds and starts the apps itself (`webServer` in `playwright.config.ts` →
+`scripts/serve-app.sh`). The build goes through Turborepo, so a warm repeat is near-instant.
+Already running the apps? Set `E2E_NO_SERVER=1`.
+
+Both apps set `output: "standalone"` for their Docker image, and **`next start` does not
+serve that build** — it reports "Ready" and then answers nothing. `serve-app.sh` runs
+`node .next/standalone/apps/<app>/server.js` instead, matching the Dockerfile's `CMD`, and
+copies `.next/static` alongside it the way the image does. So the suite exercises the same
+server production runs.
 
 ## The two lanes
 

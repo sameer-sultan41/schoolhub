@@ -30,12 +30,16 @@ const appEnv = {
   NEXT_TELEMETRY_DISABLED: "1",
 };
 
-/** Build (turbo-cached, so a warm repeat is near-instant) then serve the production output. */
+/**
+ * Build (turbo-cached, so a warm repeat is near-instant) then serve the standalone output.
+ *
+ * Not `next start`: both apps set `output: "standalone"` for their Docker image, and
+ * `next start` does not serve that build — see `scripts/serve-app.sh`.
+ */
 function serve(app: "dashboard" | "website", url: string) {
   return {
-    command: `pnpm turbo run build --filter=@schoolhub/${app} && pnpm --filter @schoolhub/${app} start`,
+    command: `./scripts/serve-app.sh ${app} ${new URL(url).port || "80"}`,
     url,
-    cwd: "..",
     env: appEnv,
     reuseExistingServer: !isCI,
     timeout: 180_000,
