@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Blocks direct pushes to main from any clone that has core.hooksPath set to
+# .githooks (every clone made after this commit, once the one-time git config
+# below has been run). main only moves via a reviewed, CI-green PR merge.
+set -euo pipefail
+
+protected_branch="main"
+remote="$1"
+z40="0000000000000000000000000000000000000000"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/$protected_branch" ]; then
+    if [ "$local_sha" != "$z40" ]; then
+      echo "" >&2
+      echo "Direct push to '$protected_branch' is blocked." >&2
+      echo "" >&2
+      echo "  git checkout -b <branch-name>" >&2
+      echo "  git push -u origin <branch-name>" >&2
+      echo "  gh pr create --base main" >&2
+      echo "" >&2
+      echo "Merge only after CI is green: gh pr merge --squash --delete-branch" >&2
+      echo "" >&2
+      echo "(Emergency override: git push --no-verify — leaves no record that this was bypassed, so avoid it.)" >&2
+      exit 1
+    fi
+  fi
+done
+
+exit 0

@@ -80,6 +80,19 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
 
 ## Working Here
 
+- **`main` only moves through a reviewed, CI-green pull request.** Direct pushes
+  to `main` are rejected by a repo-tracked pre-push hook (`.githooks/pre-push`).
+  One-time per clone: `git config core.hooksPath .githooks`. Workflow:
+  ```
+  git checkout -b <branch-name>
+  git push -u origin <branch-name>
+  gh pr create --base main
+  # wait for CI, then:
+  gh pr merge --squash --delete-branch
+  ```
+  GitHub's own branch protection is unavailable on this private repo without
+  GitHub Pro or moving it into an organization (`.github/rulesets/` has a ruleset
+  ready to import if either becomes true) — the hook is the enforcement until then.
 - A change spanning backend and frontend belongs in **one PR**. That is why these
   are in one repository.
 - CI is path-filtered: touching `apps/api/**` runs the backend jobs only. The
