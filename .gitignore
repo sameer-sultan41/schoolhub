@@ -24,3 +24,6 @@ staticfiles/
 # Editors / OS
 .DS_Store
 .idea/
+
+# graphify output — regenerate with /graphify, do not commit
+graphify-out/
