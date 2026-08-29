@@ -38,15 +38,26 @@ const appEnv = {
  * Not `next start`: both apps set `output: "standalone"` for their Docker image, and
  * `next start` does not serve that build — see `scripts/serve-app.sh`.
  */
+/**
+ * Readiness paths that touch no API.
+ *
+ * The website resolves its tenant from the Host header, and an unresolvable host is
+ * rewritten to the static `/_platform`. Probing `/` over an *address* rather than a name
+ * is what broke this before: `127.0.0.1` is not the platform domain and not a subdomain of
+ * it, so `parseHost` classified it as a **custom domain**, the page tried to look the
+ * tenant up against the API, and every probe 500'd with ECONNREFUSED. Probing `/_platform`
+ * directly keeps readiness independent of host classification entirely.
+ *
+ * The dashboard's `/` redirects to `/login`, which Playwright accepts.
+ */
+const HEALTH_PATH = { dashboard: "/", website: "/_platform" } as const;
+
 function serve(app: "dashboard" | "website", url: string) {
   const target = new URL(url);
-  // Health-check by address, not by name: `localhost` may resolve to ::1 before 127.0.0.1.
-  const healthUrl = new URL(url);
-  healthUrl.hostname = "127.0.0.1";
 
   return {
     command: `./scripts/serve-app.sh ${app} ${target.port || "80"}`,
-    url: healthUrl.toString(),
+    url: new URL(HEALTH_PATH[app], url).toString(),
     env: appEnv,
     reuseExistingServer: !isCI,
     timeout: 300_000,

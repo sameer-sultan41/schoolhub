@@ -30,8 +30,8 @@ if [ -d "apps/${app}/public" ]; then
   cp -R "apps/${app}/public" "${standalone}/public"
 fi
 
-# Bind every interface. Binding 127.0.0.1 only is a trap: `localhost` can resolve to ::1
-# first (it does on GitHub runners), and the health check then hits a refused IPv6 socket
-# while the server sits happily on IPv4 — which surfaces as a webServer timeout with a
-# perfectly healthy "Ready" in the log.
-exec env PORT="$port" HOSTNAME=0.0.0.0 node "${standalone}/server.js"
+# Bind dual-stack. Node accepts IPv4-mapped connections on `::`, so readiness does not
+# depend on whether `localhost` resolves to 127.0.0.1 or ::1 — binding either one alone
+# leaves the other refused, which surfaces as a webServer timeout under a healthy
+# "Ready" log with no error of its own.
+exec env PORT="$port" HOSTNAME=:: node "${standalone}/server.js"
