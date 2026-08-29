@@ -55,9 +55,15 @@ const HEALTH_PATH = { dashboard: "/", website: "/_platform" } as const;
 function serve(app: "dashboard" | "website", url: string) {
   const target = new URL(url);
 
+  // Dial the address, not a name: `localhost` may resolve to ::1, and the server binds
+  // IPv4. `baseURL` keeps the hostname, because Chromium falls back across families and
+  // the website's specs need name-based hosts.
+  const probe = new URL(HEALTH_PATH[app], url);
+  probe.hostname = "127.0.0.1";
+
   return {
     command: `./scripts/serve-app.sh ${app} ${target.port || "80"}`,
-    url: new URL(HEALTH_PATH[app], url).toString(),
+    url: probe.toString(),
     env: appEnv,
     reuseExistingServer: !isCI,
     timeout: 300_000,

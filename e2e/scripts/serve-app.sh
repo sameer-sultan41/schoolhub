@@ -30,8 +30,9 @@ if [ -d "apps/${app}/public" ]; then
   cp -R "apps/${app}/public" "${standalone}/public"
 fi
 
-# Bind dual-stack. Node accepts IPv4-mapped connections on `::`, so readiness does not
-# depend on whether `localhost` resolves to 127.0.0.1 or ::1 — binding either one alone
-# leaves the other refused, which surfaces as a webServer timeout under a healthy
-# "Ready" log with no error of its own.
-exec env PORT="$port" HOSTNAME=:: node "${standalone}/server.js"
+# Bind IPv4-any. Two other bindings were tried and both left the probe refused:
+#   HOSTNAME=127.0.0.1  → loopback only; a probe that resolved to ::1 could not connect
+#   HOSTNAME=::         → bound IPv6 ("Local: http://[::1]:3000"), leaving IPv4 refused
+# 0.0.0.0 is reachable at 127.0.0.1 on every Linux runner, and the readiness probe in
+# playwright.config.ts dials that address literally rather than resolving a name.
+exec env PORT="$port" HOSTNAME=0.0.0.0 node "${standalone}/server.js"
