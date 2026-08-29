@@ -12,6 +12,16 @@ const nextConfig: NextConfig = {
    */
   output: "standalone",
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  /**
+   * pnpm stores `next`'s own dependencies in the virtual store and symlinks them into
+   * `next/node_modules/`. The file tracer copies the symlink but not its target, so the
+   * standalone server dies at boot with `Cannot find module '@swc/helpers/esm/…'`.
+   * Tracing the real directory in fixes it. Found by the E2E suite, which runs the
+   * standalone output the same way the Dockerfile's CMD does.
+   */
+  outputFileTracingIncludes: {
+    "/*": ["../../node_modules/.pnpm/@swc+helpers*/node_modules/@swc/helpers/**/*"],
+  },
   experimental: {
     /**
      * Next 16 type-checks builds via the project-local `tsc` CLI; our `typescript` dependency
