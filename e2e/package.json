@@ -1,0 +1,30 @@
+{
+  "name": "@schoolhub/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SchoolHub end-to-end browser suite — Playwright",
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:live": "playwright test --project=live",
+    "e2e:report": "playwright show-report",
+    "e2e:install": "playwright install --with-deps chromium",
+    "e2e:codegen": "playwright codegen http://localhost:3000",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"@schoolhub/e2e holds no unit tests — run 'pnpm e2e' for the browser suite\"",
+    "clean": "rm -rf .turbo playwright-report test-results .auth *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@schoolhub/config": "workspace:*",
+    "@schoolhub/types": "workspace:*",
+    "@types/node": "^26.2.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "eslint": "^9.39.5",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "zod": "^4.4.3"
+  }
+}

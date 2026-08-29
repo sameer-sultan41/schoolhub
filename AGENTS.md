@@ -25,6 +25,7 @@ apps/api/          Django 6 + DRF backend
 apps/dashboard/    Next.js 16 admin dashboard
 apps/website/      Next.js 16 multi-tenant public school website renderer
 packages/          Shared TS: ui, types, api-client, config
+e2e/               Playwright browser suite (dashboard + website + live lane)
 infra/             Local stack, PostgreSQL roles, Terraform, runbooks
 ```
 
@@ -56,6 +57,7 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
    | `turbo.json`, workspace layout, task graph, caching | `turborepo` |
    | UI review, accessibility | `web-design-guidelines` |
    | Bumping the Next.js major | `next-upgrade` |
+   | Writing or fixing a Playwright spec | `e2e/README.md` (repo-local, not a skill) |
 
    Precedence when they conflict: this repository's own conventions first (they are
    product decisions no vendor has an opinion on), then the vendor skill, then any
@@ -69,7 +71,7 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
    its entity file under `docs/05-database/entities/`.
 4. Per-area rules live next to the code: `apps/api/AGENTS.md`,
    `apps/api/docs/ENGINEERING_STANDARDS.md`, `apps/dashboard/AGENTS.md`,
-   `apps/website/AGENTS.md`, `infra/AGENTS.md`.
+   `apps/website/AGENTS.md`, `e2e/AGENTS.md`, `infra/AGENTS.md`.
 
 ## Invariants
 
@@ -104,6 +106,10 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   are in one repository.
 - CI is path-filtered: touching `apps/api/**` runs the backend jobs only. The
   workflows are `.github/workflows/{api,frontend,infra-compose,infra-terraform}.yml`.
+- **Two test layers, and they are not interchangeable.** Jest covers units and
+  components in jsdom; `e2e/` drives a real browser. An assertion that needs a real
+  database (RLS, cross-tenant isolation) belongs in the E2E `live` lane and nowhere
+  else — a stubbed API returns whatever it was told to and proves nothing.
 - **Do not run tests, linters or typechecks locally.** Commit, push, and read CI —
   CI is the source of truth for pass/fail.
 - **Never add a `Co-Authored-By` trailer or any AI attribution** to a commit or PR.
@@ -113,6 +119,6 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
 ## Toolchains
 
 Python 3.14 / Django 6.1 in `apps/api` (its own `pyproject.toml`), and a pnpm +
-Turborepo workspace covering `apps/dashboard`, `apps/website` and `packages/*`.
+Turborepo workspace covering `apps/dashboard`, `apps/website`, `packages/*` and `e2e`.
 The workspace list is explicit rather than `apps/*`, because `apps/api` is not a
 pnpm package.

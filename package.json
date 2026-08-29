@@ -18,7 +18,11 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "format": "prettier --write \"**/*.{ts,tsx,mjs,json,md,css}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,mjs,json,md,css}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,mjs,json,md,css}\"",
+    "e2e": "pnpm --filter @schoolhub/e2e e2e",
+    "e2e:ui": "pnpm --filter @schoolhub/e2e e2e:ui",
+    "e2e:live": "pnpm --filter @schoolhub/e2e e2e:live",
+    "e2e:install": "pnpm --filter @schoolhub/e2e e2e:install"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
