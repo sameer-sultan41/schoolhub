@@ -30,6 +30,13 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
 
 ## Before Coding
 
+- **If `graphify-out/graph.json` exists**, read [`CLAUDE.md`](CLAUDE.md) first —
+  it has graphify's rules for using the knowledge graph instead of raw grep/find
+  for architecture and cross-module questions, and a PreToolUse hook
+  (`.claude/settings.json`) nudges toward it automatically. The graph is
+  gitignored and local-only; regenerate with `/graphify` if it's missing or stale.
+
+
 0. **Look up library documentation through Context7**, available via Anthropic's
    official `context7` plugin (`claude plugin enable context7@claude-plugins-official`
    if it is ever disabled). Resolve the library, read its version-matched docs, and

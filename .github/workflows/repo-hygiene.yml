@@ -1,0 +1,61 @@
+name: repo-hygiene
+
+# Deliberately has no `paths:` filter. Every other workflow is app-scoped
+# (apps/api/**, apps/dashboard/**, etc.), so a PR touching only docs, AGENTS.md,
+# .gitignore, or a workflow file itself would otherwise get zero CI coverage —
+# exactly the gap that let a broken link or invalid YAML merge silently.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-workflows:
+    name: Workflow YAML is valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Parse every workflow file
+        run: |
+          for f in .github/workflows/*.yml; do
+            python3 -c "import yaml, sys; yaml.safe_load(open('$f'))" || { echo "::error file=$f::invalid YAML"; exit 1; }
+          done
+
+  markdown-links:
+    name: Markdown links resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check every relative link in every .md file
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys, urllib.parse
+
+          broken = []
+          for p in pathlib.Path(".").rglob("*.md"):
+              if ".git" in p.parts or "node_modules" in p.parts:
+                  continue
+              text = p.read_text(errors="ignore")
+              for m in re.finditer(r'\[([^\]]*)\]\(([^)]+)\)', text):
+                  target = m.group(2).strip()
+                  if target.startswith(("http://", "https://", "mailto:", "#")):
+                      continue
+                  clean = urllib.parse.unquote(target.split("#")[0])
+                  if clean and not (p.parent / clean).exists():
+                      broken.append(f"{p}: {target}")
+
+          if broken:
+              print("::error::broken relative links found")
+              for b in broken:
+                  print(" ", b)
+              sys.exit(1)
+          print("all relative links resolve")
+          PY
