@@ -135,6 +135,12 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   schema-staleness gate in `frontend.yml`). `eslint-config-prettier` is wired into the
   shared ESLint base last, per Next.js's own documented integration, so ESLint's
   formatting-adjacent rules never fight Prettier's.
+
+  One-time per clone, alongside `core.hooksPath`: `git config blame.ignoreRevsFile
+  .git-blame-ignore-revs`. The first repo-wide Prettier pass is listed there, so
+  `git blame` skips over it and still points at the commit that actually changed a
+  line's meaning. Add a commit's SHA to that file only when it is genuinely
+  mechanical (a formatter run, a mass rename) and nothing else.
 - A change spanning backend and frontend belongs in **one PR**. That is why these
   are in one repository.
 - CI is path-filtered: touching `apps/api/**` runs the backend jobs only. The

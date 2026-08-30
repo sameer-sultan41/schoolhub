@@ -1,0 +1,7 @@
+# Commits here are excluded from 'git blame' by default (via
+# core.hooksPath-adjacent setup: git config blame.ignoreRevsFile .git-blame-ignore-revs).
+# Reserve this file for genuinely mechanical, no-semantic-change commits — a formatter
+# run, a mass rename — never for a commit that also fixed something.
+
+# style: apply Prettier to the existing codebase (first repo-wide format pass)
+44380a93f7ab67887b8fed5ecd833f7ce2b8f40c
