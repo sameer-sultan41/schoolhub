@@ -84,9 +84,9 @@ export const test = base.extend<E2EOptions & E2EFixtures>({
     // Set directly rather than through a login round-trip: these tests start already
     // authenticated, so no /auth/login response exists for the side effect to hang off.
     // The cookie is presence-only — the dashboard proxy reads nothing out of it.
-    await page.context().addCookies([
-      { name: SESSION_COOKIE_NAME, value: "e2e-session", url: env.DASHBOARD_URL },
-    ]);
+    await page
+      .context()
+      .addCookies([{ name: SESSION_COOKIE_NAME, value: "e2e-session", url: env.DASHBOARD_URL }]);
     await use(authUser);
   },
 

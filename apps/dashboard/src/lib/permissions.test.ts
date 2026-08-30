@@ -38,8 +38,9 @@ describe("hasPermission", () => {
   });
 
   it("does not treat a prefix as a match", () => {
-    expect(hasPermission(makeUser({ permissions: ["fees.invoice.viewer"] }), "fees.invoice.view"))
-      .toBe(false);
+    expect(
+      hasPermission(makeUser({ permissions: ["fees.invoice.viewer"] }), "fees.invoice.view"),
+    ).toBe(false);
   });
 });
 

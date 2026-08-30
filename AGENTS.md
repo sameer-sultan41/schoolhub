@@ -97,8 +97,13 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   git push -u origin <branch-name>
   gh pr create --base main
   # wait for CI, then:
-  gh pr merge --squash --delete-branch
+  gh pr merge --merge --delete-branch
   ```
+  Merge commit, not squash — every PR so far (#1–#4) has landed this way, and
+  `.git-blame-ignore-revs` depends on it: a squash merge produces a brand-new SHA on
+  `main` that was never listed in that file, so any entry there silently stops
+  doing anything (git does not warn on an unknown SHA). If a PR is ever squash-merged
+  instead, update `.git-blame-ignore-revs` afterward with the real squashed SHA.
   GitHub's own branch protection is unavailable on this private repo without
   GitHub Pro or moving it into an organization (`.github/rulesets/` has a ruleset
   ready to import if either becomes true) — the hook is the enforcement until then.
@@ -107,7 +112,7 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
 
   | Hook | Runs | Checks |
   | ---- | ---- | ------ |
-  | `pre-commit` | staged files only, fast | ESLint · ruff (`check` + `format --check`) · cspell |
+  | `pre-commit` | staged files only, fast | ESLint · Prettier (`--check`) · ruff (`check` + `format --check`) · cspell |
   | `pre-push` | project-wide, slower | `main`-push block · `tsc` typecheck · mypy |
 
   Split by cost: `tsc` and mypy need the whole project graph and are too slow to run
@@ -124,6 +129,27 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   vocabulary lives in `.cspell/project-words.txt` — add a genuine term there; do not
   add a word to silence a real typo. The docs are written in British English, which
   the `en-GB` locale covers, so those spellings are not listed individually.
+
+  Formatting is **Prettier** (root `prettier.config.mjs`; `apps/dashboard`,
+  `apps/website` and `packages/ui` each extend it with `prettier-plugin-tailwindcss`,
+  since Tailwind v4 is CSS-first and there is no single shared stylesheet to point the
+  sorter at — `packages/ui`'s own `styles/theme.css` is a partial, so it points at
+  `apps/dashboard`'s full stylesheet instead, which resolves the same theme). `pnpm
+  format` writes, `pnpm format:check` verifies (both run `prettier . `, letting
+  `.prettierignore` be the one place that decides what Prettier owns) — the same check
+  CI runs in `repo-hygiene.yml`. `.prettierignore` deliberately excludes markdown
+  (hand-tuned tables and mermaid diagrams), `apps/api/**` and `infra/**` (their own
+  tooling — ruff, Terraform — not Prettier's), and
+  `packages/api-client/src/schema.d.ts` (generated; reformatting it would break the
+  schema-staleness gate in `frontend.yml`). `eslint-config-prettier` is wired into the
+  shared ESLint base last, per Next.js's own documented integration, so ESLint's
+  formatting-adjacent rules never fight Prettier's.
+
+  One-time per clone, alongside `core.hooksPath`: `git config blame.ignoreRevsFile
+  .git-blame-ignore-revs`. The first repo-wide Prettier pass is listed there, so
+  `git blame` skips over it and still points at the commit that actually changed a
+  line's meaning. Add a commit's SHA to that file only when it is genuinely
+  mechanical (a formatter run, a mass rename) and nothing else.
 - A change spanning backend and frontend belongs in **one PR**. That is why these
   are in one repository.
 - CI is path-filtered: touching `apps/api/**` runs the backend jobs only. The

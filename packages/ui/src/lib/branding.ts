@@ -40,9 +40,7 @@ const TOKEN_MAP: ReadonlyArray<[keyof TenantBranding, string]> = [
  * @returns a style object to spread onto a wrapper element (or `<html>`), e.g.
  * `<div style={brandingToCssVariables(tenant.branding)}>`.
  */
-export function brandingToCssVariables(
-  branding: TenantBranding | null | undefined,
-): CSSProperties {
+export function brandingToCssVariables(branding: TenantBranding | null | undefined): CSSProperties {
   const style: Record<string, string> = {};
   if (!branding) return style as CSSProperties;
 

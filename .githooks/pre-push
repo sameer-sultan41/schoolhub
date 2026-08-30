@@ -30,7 +30,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       echo "  git push -u origin <branch-name>" >&2
       echo "  gh pr create --base main" >&2
       echo "" >&2
-      echo "Merge only after CI is green: gh pr merge --squash --delete-branch" >&2
+      echo "Merge only after CI is green: gh pr merge --merge --delete-branch" >&2
       echo "" >&2
       echo "(Emergency override: git push --no-verify — leaves no record that this was bypassed, so avoid it.)" >&2
       exit 1

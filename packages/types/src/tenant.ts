@@ -7,12 +7,7 @@
  */
 
 export type TenantStatus =
-  | "provisioning"
-  | "trial"
-  | "active"
-  | "past_due"
-  | "suspended"
-  | "closed";
+  "provisioning" | "trial" | "active" | "past_due" | "suspended" | "closed";
 
 /**
  * The theme token contract (website-builder.md §2). Every token is optional on the wire —

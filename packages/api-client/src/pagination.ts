@@ -35,9 +35,7 @@ export async function fetchPage<TItem>(
     ...rest,
     query: {
       ...query,
-      page_size: clampPageSize(
-        typeof query?.page_size === "number" ? query.page_size : undefined,
-      ),
+      page_size: clampPageSize(typeof query?.page_size === "number" ? query.page_size : undefined),
     },
   });
 

@@ -15,9 +15,7 @@ export async function ClassesList({ section, tenant }: SectionProps) {
 
   return (
     <section className="mx-auto max-w-4xl px-6 py-16">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        {parsed.data.heading}
-      </h2>
+      <h2 className="font-heading text-2xl font-semibold text-foreground">{parsed.data.heading}</h2>
       <dl className="mt-6 divide-y divide-black/10 border-y border-black/10">
         {classes.map((schoolClass) => (
           <div key={schoolClass.id} className="flex flex-wrap gap-x-6 gap-y-1 py-4">

@@ -17,9 +17,7 @@ export async function Gallery({ section, tenant }: SectionProps) {
 
   return (
     <section className="mx-auto max-w-5xl px-6 py-16">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        {parsed.data.heading}
-      </h2>
+      <h2 className="font-heading text-2xl font-semibold text-foreground">{parsed.data.heading}</h2>
       <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {images.map((image) => (
           <li key={image.id}>
@@ -32,9 +30,7 @@ export async function Gallery({ section, tenant }: SectionProps) {
                 className="aspect-square w-full rounded-[var(--sh-radius)] object-cover"
               />
               {image.caption ? (
-                <figcaption className="mt-1 text-xs text-foreground/70">
-                  {image.caption}
-                </figcaption>
+                <figcaption className="mt-1 text-xs text-foreground/70">{image.caption}</figcaption>
               ) : null}
             </figure>
           </li>

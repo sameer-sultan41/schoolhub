@@ -56,7 +56,7 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Page rendering (sections → components) | `src/app/render-page.tsx`, `src/app/[...slug]/page.tsx`, `src/app/page.tsx` |
 | Theme registry + token contract | `src/themes/index.ts`, `src/themes/default/` |
 | Publish invalidation webhook (HMAC) | `src/app/api/revalidate/route.ts` |
-| Unknown host landing | `src/app/_platform/page.tsx` (the proxy rewrites here) |
+| Unknown host landing | `src/app/platform-landing/page.tsx` (the proxy rewrites here) |
 
 ### The rules those files encode
 

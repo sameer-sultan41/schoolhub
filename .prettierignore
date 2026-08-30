@@ -1,0 +1,35 @@
+# Dependencies, build output, caches
+node_modules/
+**/.next/
+**/dist/
+**/.turbo/
+**/coverage/
+**/*.tsbuildinfo
+e2e/playwright-report/
+e2e/test-results/
+e2e/.auth/
+graphify-out/
+
+# Generated — never hand-edit, never reformat
+pnpm-lock.yaml
+# packages/api-client/src/schema.d.ts is regenerated from apps/api/openapi.yaml by
+# `pnpm --filter @schoolhub/api-client generate`, and frontend.yml diffs it byte-for-byte
+# in the "API types match the committed schema" gate. Reformatting it here would make
+# that gate fail on every PR that doesn't also run the generator with this exact
+# Prettier config — never touch it.
+packages/api-client/src/schema.d.ts
+
+# Python — ruff owns formatting there, not Prettier
+apps/api/
+
+# Infra — Terraform, compose, shell; a different domain with its own tooling and no
+# Prettier-formatting expectation anywhere in CI. Formatting scripts moved to
+# `prettier --write .` (letting this ignore file be the single source of truth for
+# what Prettier touches, rather than a hand-synced glob) would otherwise start
+# reformatting docker-compose.yml into a much more sprawling multi-line style —
+# a real, unreviewed change this PR never intended to make.
+infra/
+
+# Docs: hand-tuned tables and mermaid diagrams that Prettier's markdown formatter
+# would reflow. Deliberately out of scope for this pass — see AGENTS.md.
+**/*.md
