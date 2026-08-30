@@ -100,7 +100,9 @@ export function DataTable<TRow>({
                     )}
                     {...(onRowClick
                       ? {
-                          onClick: () => onRowClick(row),
+                          onClick: () => {
+                            onRowClick(row);
+                          },
                           tabIndex: 0,
                           onKeyDown: (event) => {
                             if (event.key === "Enter" || event.key === " ") {

@@ -68,8 +68,17 @@ export interface ApiErrorEnvelope {
 
 export type ApiEnvelope<TData> = ApiSuccessEnvelope<TData> | ApiErrorEnvelope;
 
-export function isErrorEnvelope<TData>(envelope: ApiEnvelope<TData>): envelope is ApiErrorEnvelope {
-  return typeof envelope === "object" && envelope !== null && "error" in envelope;
+/**
+ * Narrows an arbitrary parsed response body to the error envelope shape.
+ *
+ * Takes `unknown`, not `ApiEnvelope<TData>`: a caller with an already-typed envelope has
+ * nothing to narrow (`envelope.data`/`envelope.error` already discriminate it) — this
+ * exists for the actual use case, checking a value straight out of `response.json()`,
+ * which is untyped. Typing the parameter as `ApiEnvelope<TData>` made every runtime check
+ * here tautological, since the type already guaranteed the shape.
+ */
+export function isErrorEnvelope(payload: unknown): payload is ApiErrorEnvelope {
+  return typeof payload === "object" && payload !== null && "error" in payload;
 }
 
 /** A page of results plus the pagination metadata that produced it. */

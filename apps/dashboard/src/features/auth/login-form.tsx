@@ -41,7 +41,8 @@ export function LoginForm() {
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: () => {
-      getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
+      // Fire-and-forget: the redirect below does not need the cache to have settled first.
+      void getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
       const next = searchParams.get("next");
       router.replace(next?.startsWith("/") ? next : "/dashboard");
     },
@@ -84,7 +85,14 @@ export function LoginForm() {
 
         <form
           className="space-y-4"
-          onSubmit={handleSubmit((values) => mutation.mutate(values))}
+          // react-hook-form's handleSubmit always returns an async wrapper — even though
+          // mutation.mutate itself is fire-and-forget — so onSubmit must explicitly discard
+          // that promise rather than let React silently drop a validation-time rejection.
+          onSubmit={(event) =>
+            void handleSubmit((values) => {
+              mutation.mutate(values);
+            })(event)
+          }
           noValidate
         >
           <FormField

@@ -3,11 +3,13 @@ import { ApiError } from "./errors";
 import { collectPages } from "./pagination";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    ...init,
-    headers: { "Content-Type": "application/json", "X-Request-ID": "req-1", ...init.headers },
-  });
+  // Headers is a class, not a plain object — init.headers may be a real Headers instance
+  // (HeadersInit's type includes it), and spreading one copies nothing useful. Merge
+  // through the Headers constructor instead, which accepts any HeadersInit.
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", "application/json");
+  headers.set("X-Request-ID", "req-1");
+  return new Response(JSON.stringify(body), { status: 200, ...init, headers });
 }
 
 function authHeaderOf(mock: jest.Mock, call: number): string | null {
@@ -127,7 +129,12 @@ describe("ApiClient", () => {
     });
     // The refresh resolves on a timer so every concurrent 401 lands while it is in flight.
     const refreshAccessToken = jest.fn(
-      () => new Promise<string>((resolve) => setTimeout(() => resolve("fresh-token"), 10)),
+      () =>
+        new Promise<string>((resolve) => {
+          setTimeout(() => {
+            resolve("fresh-token");
+          }, 10);
+        }),
     );
     let token = "stale-token";
     const client = new ApiClient({
@@ -158,7 +165,7 @@ describe("ApiClient", () => {
     const client = new ApiClient({
       baseUrl: "https://api.test/api/v1",
       fetchImpl,
-      refreshAccessToken: async () => null,
+      refreshAccessToken: () => Promise.resolve(null),
       onUnauthorized,
     });
 

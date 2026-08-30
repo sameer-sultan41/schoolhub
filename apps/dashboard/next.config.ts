@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
     // Tenant logos and uploads come from the platform's object storage / CDN.
     remotePatterns: [{ protocol: "https", hostname: "**.schoolhub.cdn" }],
   },
-  async headers() {
+  headers() {
     return [
       {
         source: "/:path*",

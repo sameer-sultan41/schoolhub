@@ -43,5 +43,5 @@ export const DEFAULT_THEME_TOKENS: Record<ThemeToken, string> = {
  * Values are sanitized in `@schoolhub/ui` before they reach CSS.
  */
 export function themeStyle(branding: TenantBranding | null | undefined): CSSProperties {
-  return { ...DEFAULT_THEME_TOKENS, ...brandingToCssVariables(branding) } as CSSProperties;
+  return { ...DEFAULT_THEME_TOKENS, ...brandingToCssVariables(branding) };
 }
