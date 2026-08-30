@@ -29,8 +29,13 @@ export function proxy(request: NextRequest): NextResponse {
 
   if (!resolved) {
     // Unknown host → the platform landing page. Never fall back to another tenant.
-    if (request.nextUrl.pathname === "/_platform") return NextResponse.next();
-    return NextResponse.rewrite(new URL("/_platform", request.url));
+    //
+    // Not `/_platform`: Next.js treats an underscore-prefixed segment as a private
+    // folder, excluded from routing entirely — a rewrite to it 404s, silently, because
+    // the route does not exist. Confirmed against the build's own route manifest, which
+    // never lists it. `/platform-landing` is a normal route.
+    if (request.nextUrl.pathname === "/platform-landing") return NextResponse.next();
+    return NextResponse.rewrite(new URL("/platform-landing", request.url));
   }
 
   headers.set(TENANT_HOST_HEADER, resolved.host);
