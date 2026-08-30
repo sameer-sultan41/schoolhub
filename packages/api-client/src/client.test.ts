@@ -146,12 +146,14 @@ describe("ApiClient", () => {
   });
 
   it("gives up when the refresh fails and reports it exactly once", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(
-      jsonResponse(
-        { error: { code: "authentication_failed", message: "nope", request_id: "r" } },
-        { status: 401 },
-      ),
-    );
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { error: { code: "authentication_failed", message: "nope", request_id: "r" } },
+          { status: 401 },
+        ),
+      );
     const onUnauthorized = jest.fn();
     const client = new ApiClient({
       baseUrl: "https://api.test/api/v1",

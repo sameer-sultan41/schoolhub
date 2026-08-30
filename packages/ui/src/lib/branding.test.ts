@@ -16,9 +16,7 @@ describe("brandingToCssVariables", () => {
   });
 
   it("omits absent fields so the neutral defaults win", () => {
-    expect(brandingToCssVariables({ primary_color: null, secondary_color: undefined })).toEqual(
-      {},
-    );
+    expect(brandingToCssVariables({ primary_color: null, secondary_color: undefined })).toEqual({});
     expect(brandingToCssVariables(null)).toEqual({});
   });
 

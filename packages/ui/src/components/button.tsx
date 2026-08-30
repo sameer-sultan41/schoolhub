@@ -34,8 +34,7 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   /** Shows a spinner and disables the button. Use for in-flight mutations. */
   isLoading?: boolean;
   /** Announced by screen readers while `isLoading`. */

@@ -30,19 +30,17 @@ export function toPageSlug(segments: string[] | undefined): string {
   return (segments ?? []).filter(Boolean).join("/");
 }
 
-export const getPage = cache(
-  async (tenantId: string, slug: string): Promise<WebsitePage | null> =>
-    readJson<WebsitePage>("/public/pages", {
-      query: { slug: slug || "home" },
-      tags: [tenantTag(tenantId), pageTag(tenantId, slug)],
-    }),
+export const getPage = cache(async (tenantId: string, slug: string): Promise<WebsitePage | null> =>
+  readJson<WebsitePage>("/public/pages", {
+    query: { slug: slug || "home" },
+    tags: [tenantTag(tenantId), pageTag(tenantId, slug)],
+  }),
 );
 
-export const getSiteSettings = cache(
-  async (tenantId: string): Promise<SiteSettings | null> =>
-    readJson<SiteSettings>("/public/site-settings", {
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:settings`],
-    }),
+export const getSiteSettings = cache(async (tenantId: string): Promise<SiteSettings | null> =>
+  readJson<SiteSettings>("/public/site-settings", {
+    tags: [tenantTag(tenantId), `tenant:${tenantId}:settings`],
+  }),
 );
 
 export const getPublishedPaths = cache(

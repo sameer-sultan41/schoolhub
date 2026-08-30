@@ -140,7 +140,10 @@ export class MockApi {
     const match = this.routes
       .filter((candidate) => candidate.method === method)
       .map((candidate) => ({ route: candidate, result: candidate.pattern.exec(path) }))
-      .find((entry): entry is { route: RegisteredRoute; result: RegExpExecArray } => entry.result !== null);
+      .find(
+        (entry): entry is { route: RegisteredRoute; result: RegExpExecArray } =>
+          entry.result !== null,
+      );
 
     this.calls.push({ method, path, matched: match !== undefined });
 

@@ -17,19 +17,14 @@ export async function DepartmentsGrid({ section, tenant }: SectionProps) {
 
   return (
     <section className="mx-auto max-w-5xl px-6 py-16">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        {parsed.data.heading}
-      </h2>
+      <h2 className="font-heading text-2xl font-semibold text-foreground">{parsed.data.heading}</h2>
       {parsed.data.intro ? (
         <p className="mt-2 max-w-2xl text-foreground/75">{parsed.data.intro}</p>
       ) : null}
 
       <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {departments.map((department) => (
-          <li
-            key={department.id}
-            className="rounded-[var(--sh-radius)] border border-black/10 p-5"
-          >
+          <li key={department.id} className="rounded-[var(--sh-radius)] border border-black/10 p-5">
             <h3 className="font-heading text-base font-semibold text-foreground">
               {department.name}
             </h3>

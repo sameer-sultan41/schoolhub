@@ -10,7 +10,7 @@ export function Navigation({ tenant, settings }: ChromeProps) {
     <header className="border-b border-black/10 bg-background">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
         <Link href="/" className="flex items-center gap-3">
-          {settings?.logo_url ?? tenant.branding.logo_url ? (
+          {(settings?.logo_url ?? tenant.branding.logo_url) ? (
             <Image
               src={(settings?.logo_url ?? tenant.branding.logo_url) as string}
               alt=""

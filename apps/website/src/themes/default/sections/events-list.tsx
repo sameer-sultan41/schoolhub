@@ -22,9 +22,7 @@ export async function EventsList({ section, tenant }: SectionProps) {
 
   return (
     <section className="mx-auto max-w-4xl px-6 py-16">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        {parsed.data.heading}
-      </h2>
+      <h2 className="font-heading text-2xl font-semibold text-foreground">{parsed.data.heading}</h2>
       <ul className="mt-6 space-y-4">
         {events.map((event) => (
           <li
@@ -34,12 +32,8 @@ export async function EventsList({ section, tenant }: SectionProps) {
             <time dateTime={event.starts_at} className="text-sm text-foreground/70">
               {formatter.format(new Date(event.starts_at))}
             </time>
-            <h3 className="font-heading text-base font-semibold text-foreground">
-              {event.title}
-            </h3>
-            {event.location ? (
-              <p className="text-sm text-foreground/70">{event.location}</p>
-            ) : null}
+            <h3 className="font-heading text-base font-semibold text-foreground">{event.title}</h3>
+            {event.location ? <p className="text-sm text-foreground/70">{event.location}</p> : null}
             {event.summary ? (
               <p className="mt-1 text-sm text-foreground/80">{event.summary}</p>
             ) : null}

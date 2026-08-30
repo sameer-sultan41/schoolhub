@@ -91,7 +91,11 @@ export function buildUser(overrides: Partial<AuthenticatedUser> = {}): Authentic
 export function buildUserWithoutPermissions(
   overrides: Partial<AuthenticatedUser> = {},
 ): AuthenticatedUser {
-  return buildUser({ permissions: [], roles: [buildRole({ slug: "guest", name: "Guest" })], ...overrides });
+  return buildUser({
+    permissions: [],
+    roles: [buildRole({ slug: "guest", name: "Guest" })],
+    ...overrides,
+  });
 }
 
 export function buildLoginResponse(overrides: Partial<LoginResponse> = {}): LoginResponse {

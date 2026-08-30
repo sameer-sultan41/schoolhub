@@ -23,9 +23,7 @@ export async function NewsList({ section, tenant }: SectionProps) {
 
   return (
     <section className="mx-auto max-w-5xl px-6 py-16">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        {parsed.data.heading}
-      </h2>
+      <h2 className="font-heading text-2xl font-semibold text-foreground">{parsed.data.heading}</h2>
       <ul className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {posts.map((post) => (
           <li key={post.id} className="space-y-3">

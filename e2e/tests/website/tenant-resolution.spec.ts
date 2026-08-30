@@ -27,9 +27,7 @@ test.describe("unknown hosts never fall through to a tenant", () => {
     await expect(publicSitePage.platformFallback).toBeVisible();
   });
 
-  test("a deep path on an unknown host also lands on the fallback", async ({
-    publicSitePage,
-  }) => {
+  test("a deep path on an unknown host also lands on the fallback", async ({ publicSitePage }) => {
     // The rewrite is not limited to "/" — no path on an unresolvable host may reach a
     // tenant's CMS route.
     await publicSitePage.goto({ path: "/admissions/apply" });

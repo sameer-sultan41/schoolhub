@@ -51,15 +51,12 @@ export function DashboardSummary() {
     {
       key: "attendanceToday",
       permission: "attendance.student-attendance.view" as const,
-      value:
-        data && data.attendance_rate_today !== null ? `${data.attendance_rate_today}%` : "—",
+      value: data && data.attendance_rate_today !== null ? `${data.attendance_rate_today}%` : "—",
     },
     {
       key: "feesOutstanding",
       permission: "fees.invoice.view" as const,
-      value: data
-        ? formatMinorUnits(data.fees_outstanding_minor_units, data.currency, "en")
-        : "—",
+      value: data ? formatMinorUnits(data.fees_outstanding_minor_units, data.currency, "en") : "—",
     },
     {
       key: "openAdmissions",

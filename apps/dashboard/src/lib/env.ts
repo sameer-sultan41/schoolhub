@@ -25,9 +25,7 @@ const parsed = publicEnvSchema.safeParse({
 
 if (!parsed.success) {
   // Fail loudly at boot rather than with a confusing 404 on the first API call.
-  throw new Error(
-    `Invalid dashboard environment configuration:\n${z.prettifyError(parsed.error)}`,
-  );
+  throw new Error(`Invalid dashboard environment configuration:\n${z.prettifyError(parsed.error)}`);
 }
 
 export const env = parsed.data;

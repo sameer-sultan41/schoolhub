@@ -68,9 +68,7 @@ export interface ApiErrorEnvelope {
 
 export type ApiEnvelope<TData> = ApiSuccessEnvelope<TData> | ApiErrorEnvelope;
 
-export function isErrorEnvelope<TData>(
-  envelope: ApiEnvelope<TData>,
-): envelope is ApiErrorEnvelope {
+export function isErrorEnvelope<TData>(envelope: ApiEnvelope<TData>): envelope is ApiErrorEnvelope {
   return typeof envelope === "object" && envelope !== null && "error" in envelope;
 }
 

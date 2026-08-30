@@ -60,9 +60,9 @@ export function LoginForm() {
     mutation.error instanceof ApiError
       ? mutation.error.status === 401
         ? t("genericError")
-        : (tErrors.has(mutation.error.code)
+        : tErrors.has(mutation.error.code)
           ? tErrors(mutation.error.code)
-          : mutation.error.message)
+          : mutation.error.message
       : null;
 
   return (
@@ -94,12 +94,7 @@ export function LoginForm() {
             required
           >
             {(field) => (
-              <Input
-                {...field}
-                {...register("identifier")}
-                autoComplete="username"
-                autoFocus
-              />
+              <Input {...field} {...register("identifier")} autoComplete="username" autoFocus />
             )}
           </FormField>
 
@@ -114,12 +109,7 @@ export function LoginForm() {
             )}
           </FormField>
 
-          <Button
-            type="submit"
-            block
-            isLoading={mutation.isPending}
-            loadingLabel={t("submitting")}
-          >
+          <Button type="submit" block isLoading={mutation.isPending} loadingLabel={t("submitting")}>
             {t("submit")}
           </Button>
         </form>

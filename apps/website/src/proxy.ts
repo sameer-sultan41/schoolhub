@@ -1,10 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  TENANT_HOST_HEADER,
-  TENANT_KIND_HEADER,
-  TENANT_SLUG_HEADER,
-  parseHost,
-} from "@/lib/host";
+import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_SLUG_HEADER, parseHost } from "@/lib/host";
 
 /**
  * Resolves the tenant host on every request (website-builder.md §1).

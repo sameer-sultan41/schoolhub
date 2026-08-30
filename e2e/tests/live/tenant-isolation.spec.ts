@@ -14,10 +14,7 @@ import { expect, test } from "@/fixtures";
  * was told to, so proving Row-Level Security binds needs real rows in a real database.
  */
 test.describe("tenant isolation", () => {
-  test("signs in against the real API and survives a cold reload", async ({
-    page,
-    loginPage,
-  }) => {
+  test("signs in against the real API and survives a cold reload", async ({ page, loginPage }) => {
     await loginPage.goto();
     await loginPage.signIn({
       identifier: env.LIVE_ADMIN_IDENTIFIER,
