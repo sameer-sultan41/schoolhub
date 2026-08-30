@@ -9,8 +9,11 @@ import base from "../../prettier.config.mjs";
  * prettier-plugin-tailwindcss must be the LAST plugin when combined with others
  * (https://github.com/tailwindlabs/prettier-plugin-tailwindcss#compatibility-with-other-prettier-plugins).
  */
-export default {
+/** @type {import("prettier").Config} */
+const config = {
   ...base,
   plugins: ["prettier-plugin-tailwindcss"],
   tailwindStylesheet: "./src/app/globals.css",
 };
+
+export default config;
