@@ -114,6 +114,7 @@ recomputable
 recreatable
 rediss
 refetched
+refspecs
 regenerable
 regionalized
 relforcerowsecurity
@@ -162,6 +163,7 @@ undoable
 unindexed
 unmetered
 unmoderated
+unparseable
 Unrestorable
 unsubmitted
 unvalidated

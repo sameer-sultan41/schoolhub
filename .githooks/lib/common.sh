@@ -26,14 +26,29 @@ note()  { printf '%s  %s%s\n' "$C_DIM" "$*" "$C_OFF" >&2; }
 # here only. CI runs the real Node 24 and enforces the constraint properly.
 export npm_config_engine_strict=false
 
-# The toolchain's real floor: cspell 10 refuses to start below Node 22.18, and git runs
-# hooks with the login shell's default Node — not whatever `nvm use` was run in the
-# terminal. On a machine whose default is older, that surfaced as cspell exiting non-zero
-# with "Unsupported NodeJS version", which the hook then reported as "found unknown
-# words". So: check the version first, try to upgrade through nvm if one is available,
-# and skip cleanly rather than run a tool that cannot start.
+# Two different numbers on purpose:
+#   NODE_MIN_*      the tools' true floor — cspell 10 refuses to start below Node 22.18.
+#   NODE_TARGET_MAJOR  this project's actual target, read from .nvmrc (root package.json's
+#                      engines.node and CI both require it too). Falls back to 24 if
+#                      .nvmrc is missing or unparseable.
+#
+# Using only the lower number would let the hooks silently accept and run under a Node
+# the project does not support — pnpm typecheck included — with no visible sign that
+# happened. Using only the higher number would make the hooks warn-and-skip on most
+# contributor machines right now, since Node 24 isn't universally installed yet. So:
+# accept the lower floor to keep the hooks actually useful, but say so loudly (a `warn`,
+# not a dim `note`) whenever the selected Node falls short of the real target.
+#
+# git runs hooks with the login shell's default Node — not whatever `nvm use` was run in
+# the terminal. On a machine whose default is older than the tools' floor, that surfaced
+# as cspell exiting non-zero with "Unsupported NodeJS version", which the hook then
+# reported as "found unknown words". So: check the version first, try to upgrade through
+# nvm if one is available, and skip cleanly rather than run a tool that cannot start.
 NODE_MIN_MAJOR=22
 NODE_MIN_MINOR=18
+
+NODE_TARGET_MAJOR="$(sed -n 's/^v\{0,1\}\([0-9]\{1,\}\).*/\1/p' "$REPO_ROOT/.nvmrc" 2>/dev/null | head -1)"
+[ -n "$NODE_TARGET_MAJOR" ] || NODE_TARGET_MAJOR=24
 
 node_ok=""
 node_checked=0
@@ -74,23 +89,32 @@ ensure_node() {
   fi
 
   _v="$(node -p 'process.versions.node')"
-  case "$_v" in
-    24.*|2[5-9].*|[3-9][0-9].*) : ;;
-    *) note "using node v$_v for hooks; the repo targets >=24, which CI enforces" ;;
-  esac
+  _v_major="${_v%%.*}"
+  if [ "$_v_major" -lt "$NODE_TARGET_MAJOR" ]; then
+    warn "running hooks on node v$_v — this project targets >=$NODE_TARGET_MAJOR (.nvmrc), which CI enforces"
+    note "typecheck/mypy results here are not guaranteed to match CI on this Node version"
+  fi
   return 0
 }
 
-# Locate ruff/mypy from a venv if one exists, otherwise from PATH. Returns 1 when the
-# tool cannot be found at all.
-# Prints the tool's path and returns 0, or prints nothing and returns 1.
+# Locate ruff/mypy: an active venv first (a developer who activated one is telling us
+# which tool to use, pinned by apps/api/pyproject.toml's [dev] extra), then the repo's
+# own .venv, then PATH. Prints the tool's path and returns 0, or prints nothing and
+# returns 1 when it cannot be found at all.
+#
+# $VIRTUAL_ENV is checked for non-empty *before* building the path — with it unset,
+# "${VIRTUAL_ENV:-}/bin/$tool" degenerates to the literal "/bin/ruff", and the
+# [ -x "$candidate" ] test would happily match a real system binary living there.
 python_tool() {
   tool="$1"
+  if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/$tool" ]; then
+    printf '%s' "$VIRTUAL_ENV/bin/$tool"
+    return 0
+  fi
   for candidate in \
     "$REPO_ROOT/apps/api/.venv/bin/$tool" \
-    "$REPO_ROOT/.venv/bin/$tool" \
-    "${VIRTUAL_ENV:-}/bin/$tool"; do
-    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+    "$REPO_ROOT/.venv/bin/$tool"; do
+    if [ -x "$candidate" ]; then
       printf '%s' "$candidate"
       return 0
     fi

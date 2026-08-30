@@ -33,3 +33,6 @@ graphify-out/
 /e2e/test-results/
 /e2e/.auth/
 /e2e/blob-report/
+
+# TypeScript incremental build cache — regenerated on every tsc/typecheck run
+*.tsbuildinfo

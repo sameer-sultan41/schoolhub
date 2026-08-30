@@ -113,8 +113,12 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   Split by cost: `tsc` and mypy need the whole project graph and are too slow to run
   on every commit. A tool that is genuinely not installed (no Python venv, say)
   **warns and skips** rather than blocking — CI remains the authority, and a
-  frontend-only contributor must still be able to commit. Bypass with
-  `--no-verify`, or `SKIP_HOOKS=1` for a run.
+  frontend-only contributor must still be able to commit.
+
+  `SKIP_HOOKS=1` skips the lint/typecheck checks for one commit or push.
+  **It does not bypass the `main`-push block** — that check runs before `SKIP_HOOKS`
+  is even read, deliberately, since it enforces the PR-only workflow above, not code
+  quality. `git push --no-verify` is the only way past it.
 
   Spelling is checked by **cspell** (`cspell.json`, root `pnpm spell`). Project
   vocabulary lives in `.cspell/project-words.txt` — add a genuine term there; do not
