@@ -97,8 +97,13 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   git push -u origin <branch-name>
   gh pr create --base main
   # wait for CI, then:
-  gh pr merge --squash --delete-branch
+  gh pr merge --merge --delete-branch
   ```
+  Merge commit, not squash — every PR so far (#1–#4) has landed this way, and
+  `.git-blame-ignore-revs` depends on it: a squash merge produces a brand-new SHA on
+  `main` that was never listed in that file, so any entry there silently stops
+  doing anything (git does not warn on an unknown SHA). If a PR is ever squash-merged
+  instead, update `.git-blame-ignore-revs` afterward with the real squashed SHA.
   GitHub's own branch protection is unavailable on this private repo without
   GitHub Pro or moving it into an organization (`.github/rulesets/` has a ruleset
   ready to import if either becomes true) — the hook is the enforcement until then.
