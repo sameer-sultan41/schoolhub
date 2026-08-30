@@ -105,6 +105,25 @@ EOF
   fi
 fi
 
+# --------------------------------------------------------------- Prettier (check-only)
+# Check, never --write: this hook reads the working tree (see the KNOWN LIMITATION note
+# above), and a write-mode formatter could commit content that was never actually checked.
+# Unlike eslint, Prettier resolves its own config by walking up from each file (that's how
+# apps/dashboard and apps/website each get their own Tailwind-sorting config), so files
+# do not need to be grouped by workspace here — one invocation from the repo root is
+# correct. .prettierignore is honoured even when explicit paths are passed.
+fmt_files="$(filter '\.(ts|tsx|js|jsx|mjs|cjs|json|css)$')"
+if [ -n "$fmt_files" ] && ensure_node; then
+  if printf '%s\n' "$fmt_files" | tr '\n' '\0' \
+       | xargs -0 pnpm exec prettier --check --ignore-unknown 2>&1; then
+    ok "prettier"
+  else
+    fail "prettier found unformatted files"
+    note "fix: pnpm exec prettier --write <files>"
+    status=1
+  fi
+fi
+
 # ------------------------------------------------------------------ ruff (Python)
 # The repo uses ruff, not flake8 — ruff is its drop-in successor and is what
 # .github/workflows/api.yml actually runs (ruff check . && ruff format --check .).

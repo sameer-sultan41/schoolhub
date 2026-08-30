@@ -107,7 +107,7 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
 
   | Hook | Runs | Checks |
   | ---- | ---- | ------ |
-  | `pre-commit` | staged files only, fast | ESLint · ruff (`check` + `format --check`) · cspell |
+  | `pre-commit` | staged files only, fast | ESLint · Prettier (`--check`) · ruff (`check` + `format --check`) · cspell |
   | `pre-push` | project-wide, slower | `main`-push block · `tsc` typecheck · mypy |
 
   Split by cost: `tsc` and mypy need the whole project graph and are too slow to run
@@ -124,6 +124,17 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   vocabulary lives in `.cspell/project-words.txt` — add a genuine term there; do not
   add a word to silence a real typo. The docs are written in British English, which
   the `en-GB` locale covers, so those spellings are not listed individually.
+
+  Formatting is **Prettier** (root `prettier.config.mjs`; `apps/dashboard` and
+  `apps/website` each extend it with `prettier-plugin-tailwindcss`, since Tailwind v4
+  is CSS-first and each app needs its own stylesheet entry point). `pnpm format` writes,
+  `pnpm format:check` verifies — the same check CI runs in `repo-hygiene.yml`.
+  `.prettierignore` deliberately excludes markdown (hand-tuned tables and mermaid
+  diagrams), `apps/api/**` (ruff's territory), and
+  `packages/api-client/src/schema.d.ts` (generated; reformatting it would break the
+  schema-staleness gate in `frontend.yml`). `eslint-config-prettier` is wired into the
+  shared ESLint base last, per Next.js's own documented integration, so ESLint's
+  formatting-adjacent rules never fight Prettier's.
 - A change spanning backend and frontend belongs in **one PR**. That is why these
   are in one repository.
 - CI is path-filtered: touching `apps/api/**` runs the backend jobs only. The
