@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Fast, staged-files-only checks. Anything project-wide and slow (tsc, mypy) runs in
+# pre-push instead — a pre-commit hook that takes a minute is one people start
+# bypassing with --no-verify.
+#
+# Written for bash 3.2, which is what macOS still ships and therefore what
+# `/usr/bin/env bash` resolves to here: no `mapfile`, and no `set -u` (expanding an
+# empty array under it is an error in 3.2). Newline-delimited strings instead of
+# arrays keeps this portable; no path in this repo contains a newline.
+#
+# KNOWN LIMITATION: tools read files from the working tree, not the staged snapshot.
+# With partial staging (`git add -p`) or edits made after `git add`, what gets checked
+# and what gets committed can differ in both directions — a fix left unstaged is
+# checked as if it were committed, and a broken unstaged experiment can block an
+# unrelated clean commit in the same file. Fixing this needs stashing the unstaged
+# diff (the lint-staged approach) or reading `git show :<path>` content directly;
+# skipped here to keep the hook simple and reliable in bash 3.2. Stage exactly what
+# you intend to commit.
+#
+# Skip once:      git commit --no-verify
+# Skip session:   SKIP_HOOKS=1 git commit
+set -o pipefail
+
+. "$(dirname "$0")/lib/common.sh"
+
+if [ "${SKIP_HOOKS:-0}" = "1" ]; then
+  warn "SKIP_HOOKS=1 — pre-commit checks skipped"
+  exit 0
+fi
+
+cd "$REPO_ROOT" || exit 1
+
+# Added/Copied/Modified/Renamed only: a file staged for deletion has nothing to check.
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged" ] && exit 0
+
+status=0
+filter() { printf '%s\n' "$staged" | grep -E "$1"; }
+
+# ---------------------------------------------------------------- ESLint (JS/TS)
+# There is no root ESLint config — each workspace owns one (apps/*, packages/*, e2e).
+# So files are grouped by the nearest ancestor holding an eslint.config.*, and eslint
+# runs once per workspace from inside it. Running from the repo root instead just fails
+# with "couldn't find an eslint.config file".
+js_files="$(filter '\.(ts|tsx|js|jsx|mjs|cjs)$')"
+if [ -n "$js_files" ] && ensure_node; then
+  workspaces=""
+  unmatched=0
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    d="$(dirname "$f")"
+    while [ "$d" != "." ] && [ "$d" != "/" ]; do
+      if [ -n "$(ls "$d"/eslint.config.* 2>/dev/null)" ]; then break; fi
+      d="$(dirname "$d")"
+    done
+    if [ -z "$(ls "$d"/eslint.config.* 2>/dev/null)" ]; then
+      # A file outside every workspace has no config that applies to it. Counted, not
+      # silently dropped: enough of these and "eslint" would otherwise report success
+      # having actually checked nothing.
+      unmatched=$((unmatched + 1))
+      continue
+    fi
+    workspaces="$workspaces$d
+"
+  done <<EOF
+$js_files
+EOF
+
+  linted=0
+  for ws in $(printf '%s' "$workspaces" | sort -u); do
+    ws_files=""
+    while IFS= read -r f; do
+      # ws="." (a root config) matches every staged path as-is; anything deeper
+      # strips its own "<ws>/" prefix so eslint sees paths relative to $ws.
+      if [ "$ws" = "." ]; then
+        ws_files="$ws_files$f
+"
+      else
+        case "$f" in
+          "$ws"/*) ws_files="$ws_files${f#"$ws"/}
+" ;;
+        esac
+      fi
+    done <<EOF
+$js_files
+EOF
+    [ -n "$ws_files" ] || continue
+    linted=$((linted + 1))
+    # --no-warn-ignored: a staged file inside an ignore pattern is not an error.
+    if ! printf '%s' "$ws_files" | tr '\n' '\0' \
+         | (cd "$ws" && xargs -0 pnpm exec eslint --no-warn-ignored) 2>&1; then
+      fail "eslint found problems in $ws"
+      note "fix: (cd $ws && pnpm exec eslint --fix .)"
+      status=1
+    fi
+  done
+
+  if [ "$unmatched" -gt 0 ]; then
+    warn "$unmatched staged JS/TS file(s) matched no workspace eslint.config.* — not linted"
+  fi
+  if [ "$linted" -gt 0 ] && [ $status -eq 0 ]; then
+    ok "eslint"
+  elif [ "$linted" -eq 0 ]; then
+    note "eslint: nothing to check"
+  fi
+fi
+
+# ------------------------------------------------------------------ ruff (Python)
+# The repo uses ruff, not flake8 — ruff is its drop-in successor and is what
+# .github/workflows/api.yml actually runs (ruff check . && ruff format --check .).
+py_files="$(filter '\.py$')"
+if [ -n "$py_files" ]; then
+  ruff_bin="$(python_tool ruff)"
+  if [ -n "$ruff_bin" ]; then
+    # --force-exclude: ruff only honours pyproject.toml's extend-exclude
+    # (migrations/) during its own directory discovery. Passed explicit paths — which
+    # is what staged files are — are linted regardless without this flag. Without it,
+    # staging a generated migration blocks the commit on rules CI is green on (this
+    # repo's migrations run to 239 columns; line-length is 100).
+    if printf '%s\n' "$py_files" | tr '\n' '\0' | xargs -0 "$ruff_bin" check --force-exclude \
+       && printf '%s\n' "$py_files" | tr '\n' '\0' | xargs -0 "$ruff_bin" format --check --force-exclude; then
+      ok "ruff"
+    else
+      fail "ruff found problems"
+      note "fix: ruff check --fix <files> && ruff format <files>"
+      status=1
+    fi
+  else
+    warn "ruff not installed — skipping Python lint (CI still runs it)"
+    note "install: cd apps/api && python3.14 -m venv .venv && .venv/bin/pip install -e '.[dev]'"
+  fi
+fi
+
+# ------------------------------------------------------------------- cspell (all)
+if ensure_node; then
+  if printf '%s\n' "$staged" | tr '\n' '\0' \
+       | xargs -0 pnpm exec cspell lint --no-progress --no-summary --no-must-find-files 2>&1; then
+    ok "cspell"
+  else
+    fail "cspell found unknown words"
+    note "a real typo? fix it. a real term? add it to .cspell/project-words.txt"
+    status=1
+  fi
+fi
+
+if [ $status -ne 0 ]; then
+  echo "" >&2
+  note "bypass once with: git commit --no-verify"
+fi
+exit $status

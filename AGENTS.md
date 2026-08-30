@@ -102,6 +102,28 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   GitHub's own branch protection is unavailable on this private repo without
   GitHub Pro or moving it into an organization (`.github/rulesets/` has a ruleset
   ready to import if either becomes true) — the hook is the enforcement until then.
+- **Local hooks catch what CI would reject, sooner.** The same
+  `git config core.hooksPath .githooks` opt-in enables both:
+
+  | Hook | Runs | Checks |
+  | ---- | ---- | ------ |
+  | `pre-commit` | staged files only, fast | ESLint · ruff (`check` + `format --check`) · cspell |
+  | `pre-push` | project-wide, slower | `main`-push block · `tsc` typecheck · mypy |
+
+  Split by cost: `tsc` and mypy need the whole project graph and are too slow to run
+  on every commit. A tool that is genuinely not installed (no Python venv, say)
+  **warns and skips** rather than blocking — CI remains the authority, and a
+  frontend-only contributor must still be able to commit.
+
+  `SKIP_HOOKS=1` skips the lint/typecheck checks for one commit or push.
+  **It does not bypass the `main`-push block** — that check runs before `SKIP_HOOKS`
+  is even read, deliberately, since it enforces the PR-only workflow above, not code
+  quality. `git push --no-verify` is the only way past it.
+
+  Spelling is checked by **cspell** (`cspell.json`, root `pnpm spell`). Project
+  vocabulary lives in `.cspell/project-words.txt` — add a genuine term there; do not
+  add a word to silence a real typo. The docs are written in British English, which
+  the `en-GB` locale covers, so those spellings are not listed individually.
 - A change spanning backend and frontend belongs in **one PR**. That is why these
   are in one repository.
 - CI is path-filtered: touching `apps/api/**` runs the backend jobs only. The

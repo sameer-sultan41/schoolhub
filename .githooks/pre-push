@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
-# Blocks direct pushes to main from any clone that has core.hooksPath set to
-# .githooks (every clone made after this commit, once the one-time git config
-# below has been run). main only moves via a reviewed, CI-green PR merge.
-set -euo pipefail
+# Two jobs:
+#   1. Block direct pushes to main — main only moves via a reviewed, CI-green PR merge.
+#   2. Run the project-wide checks that are too slow for pre-commit: TypeScript and mypy.
+#      Neither is meaningful per-file (both need the whole project graph), which is why
+#      they live here and not in the pre-commit hook.
+#
+# Skip once:      git push --no-verify
+# Skip session:   SKIP_HOOKS=1 git push
+set -o pipefail
+
+. "$(dirname "$0")/lib/common.sh"
 
 protected_branch="main"
-remote="$1"
 z40="0000000000000000000000000000000000000000"
 
+# stdin gives one line per ref being pushed: "<local_ref> <local_sha> <remote_ref> <remote_sha>".
+# A single invocation can carry several (git push --all, or several refspecs at once), so the
+# changed-file set below is the UNION across all of them — not just whichever ref HEAD or
+# @{upstream} happen to point at right now, which may not even be one of the refs being pushed
+# (e.g. running `git push origin feature-b` while checked out on feature-a).
+changed=""
 while read -r local_ref local_sha remote_ref remote_sha; do
   if [ "$remote_ref" = "refs/heads/$protected_branch" ]; then
     if [ "$local_sha" != "$z40" ]; then
@@ -24,6 +36,56 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       exit 1
     fi
   fi
+
+  [ "$local_sha" = "$z40" ] && continue  # a delete; nothing to lint
+
+  if [ "$remote_sha" = "$z40" ]; then
+    # New remote ref: nothing on the far side to diff against, so diff from where this
+    # branch forked off main. Falls back to the pushed commit's own tree (i.e. "changed"
+    # includes every file it contains) only if that merge-base can't be found at all.
+    range_base="$(git merge-base "$local_sha" origin/main 2>/dev/null || echo "$local_sha")"
+  else
+    range_base="$remote_sha"
+  fi
+  changed="$changed
+$(git diff --name-only "$range_base" "$local_sha" 2>/dev/null)"
 done
 
-exit 0
+[ "${SKIP_HOOKS:-0}" = "1" ] && { warn "SKIP_HOOKS=1 — pre-push checks skipped"; exit 0; }
+
+cd "$REPO_ROOT"
+status=0
+
+# ------------------------------------------------------------ TypeScript (project-wide)
+if printf '%s\n' "$changed" | grep -qE '\.(ts|tsx)$|package\.json$|tsconfig.*\.json$'; then
+  if ensure_node; then
+    echo "" >&2
+    note "running typecheck (tsc)…"
+    if pnpm typecheck >/dev/null 2>&1; then
+      ok "typecheck"
+    else
+      fail "typecheck failed"
+      note "see it: pnpm typecheck"
+      status=1
+    fi
+  fi
+fi
+
+# ------------------------------------------------------------------ mypy (project-wide)
+if printf '%s\n' "$changed" | grep -qE '^apps/api/.*\.py$'; then
+  if mypy_bin="$(python_tool mypy)"; then
+    note "running mypy…"
+    if (cd apps/api && "$mypy_bin" core apps config >/dev/null 2>&1); then
+      ok "mypy"
+    else
+      fail "mypy failed"
+      note "see it: cd apps/api && mypy core apps config"
+      status=1
+    fi
+  else
+    warn "mypy not installed — skipping type check (CI still runs it)"
+  fi
+fi
+
+[ $status -ne 0 ] && { echo "" >&2; note "bypass once with: git push --no-verify"; }
+exit $status
