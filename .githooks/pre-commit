@@ -112,9 +112,14 @@ fi
 # apps/dashboard and apps/website each get their own Tailwind-sorting config), so files
 # do not need to be grouped by workspace here — one invocation from the repo root is
 # correct. .prettierignore is honoured even when explicit paths are passed.
-fmt_files="$(filter '\.(ts|tsx|js|jsx|mjs|cjs|json|css)$')"
-if [ -n "$fmt_files" ] && ensure_node; then
-  if printf '%s\n' "$fmt_files" | tr '\n' '\0' \
+#
+# Every staged file goes through, not just an extension allowlist: .prettierignore is the
+# single source of truth for what Prettier owns (root package.json's format/format:check
+# scripts run `prettier . ` for the same reason) — a second, hand-synced extension list
+# here would drift from it exactly like the old one did. --ignore-unknown means a file
+# type Prettier cannot format (a .py file, say) is silently skipped, not an error.
+if [ -n "$staged" ] && ensure_node; then
+  if printf '%s\n' "$staged" | tr '\n' '\0' \
        | xargs -0 pnpm exec prettier --check --ignore-unknown 2>&1; then
     ok "prettier"
   else

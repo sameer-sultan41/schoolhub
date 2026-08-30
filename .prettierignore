@@ -22,6 +22,14 @@ packages/api-client/src/schema.d.ts
 # Python — ruff owns formatting there, not Prettier
 apps/api/
 
+# Infra — Terraform, compose, shell; a different domain with its own tooling and no
+# Prettier-formatting expectation anywhere in CI. Formatting scripts moved to
+# `prettier --write .` (letting this ignore file be the single source of truth for
+# what Prettier touches, rather than a hand-synced glob) would otherwise start
+# reformatting docker-compose.yml into a much more sprawling multi-line style —
+# a real, unreviewed change this PR never intended to make.
+infra/
+
 # Docs: hand-tuned tables and mermaid diagrams that Prettier's markdown formatter
 # would reflow. Deliberately out of scope for this pass — see AGENTS.md.
 **/*.md
