@@ -130,12 +130,16 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   add a word to silence a real typo. The docs are written in British English, which
   the `en-GB` locale covers, so those spellings are not listed individually.
 
-  Formatting is **Prettier** (root `prettier.config.mjs`; `apps/dashboard` and
-  `apps/website` each extend it with `prettier-plugin-tailwindcss`, since Tailwind v4
-  is CSS-first and each app needs its own stylesheet entry point). `pnpm format` writes,
-  `pnpm format:check` verifies — the same check CI runs in `repo-hygiene.yml`.
-  `.prettierignore` deliberately excludes markdown (hand-tuned tables and mermaid
-  diagrams), `apps/api/**` (ruff's territory), and
+  Formatting is **Prettier** (root `prettier.config.mjs`; `apps/dashboard`,
+  `apps/website` and `packages/ui` each extend it with `prettier-plugin-tailwindcss`,
+  since Tailwind v4 is CSS-first and there is no single shared stylesheet to point the
+  sorter at — `packages/ui`'s own `styles/theme.css` is a partial, so it points at
+  `apps/dashboard`'s full stylesheet instead, which resolves the same theme). `pnpm
+  format` writes, `pnpm format:check` verifies (both run `prettier . `, letting
+  `.prettierignore` be the one place that decides what Prettier owns) — the same check
+  CI runs in `repo-hygiene.yml`. `.prettierignore` deliberately excludes markdown
+  (hand-tuned tables and mermaid diagrams), `apps/api/**` and `infra/**` (their own
+  tooling — ruff, Terraform — not Prettier's), and
   `packages/api-client/src/schema.d.ts` (generated; reformatting it would break the
   schema-staleness gate in `frontend.yml`). `eslint-config-prettier` is wired into the
   shared ESLint base last, per Next.js's own documented integration, so ESLint's
