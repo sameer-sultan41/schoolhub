@@ -102,3 +102,23 @@ export function buildLoginResponse(overrides: Partial<LoginResponse> = {}): Logi
     ...overrides,
   };
 }
+
+/** `/reports/dashboard-summary` — the tiles `DashboardSummary` renders on `/dashboard`. */
+export interface DashboardStats {
+  students_enrolled: number;
+  attendance_rate_today: number | null;
+  fees_outstanding_minor_units: number;
+  open_admission_enquiries: number;
+  currency: string;
+}
+
+export function buildDashboardStats(overrides: Partial<DashboardStats> = {}): DashboardStats {
+  return {
+    students_enrolled: 482,
+    attendance_rate_today: 94,
+    fees_outstanding_minor_units: 125_000_00,
+    open_admission_enquiries: 6,
+    currency: "PKR",
+    ...overrides,
+  };
+}

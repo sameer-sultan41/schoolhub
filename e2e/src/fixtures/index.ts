@@ -3,7 +3,7 @@ import type { AuthenticatedUser } from "@schoolhub/types";
 import { SESSION_COOKIE_NAME } from "@/constants";
 import { buildUser } from "@/data/factories";
 import { env } from "@/env";
-import { MockApi, authModule, tenantModule } from "@/mocks";
+import { MockApi, authModule, reportingModule, tenantModule } from "@/mocks";
 import { DashboardPage, LoginPage, PublicSitePage } from "@/pages";
 
 /**
@@ -77,7 +77,10 @@ export const test = base.extend<E2EOptions & E2EFixtures>({
   },
 
   signedIn: async ({ page, mockApi, authUser }, use) => {
-    mockApi.use(authModule({ user: authUser }), tenantModule());
+    // tenant + reporting: every authenticated page fetches both as chrome
+    // (AppShell branding, the dashboard's summary tiles) regardless of which
+    // specific screen a test is exercising.
+    mockApi.use(authModule({ user: authUser }), tenantModule(), reportingModule());
     // Set directly rather than through a login round-trip: these tests start already
     // authenticated, so no /auth/login response exists for the side effect to hang off.
     // The cookie is presence-only — the dashboard proxy reads nothing out of it.

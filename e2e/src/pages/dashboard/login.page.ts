@@ -11,12 +11,17 @@ import { BasePage } from "../base.page";
 export class LoginPage extends BasePage {
   readonly path = "/login";
 
+  // getByRole, not getByLabel: FormField renders the required marker as an aria-hidden
+  // sibling of the label text ("Password" + hidden "*"). getByRole's accessible-name
+  // computation correctly excludes aria-hidden content; getByLabel's text match does
+  // not, so `getByLabel("Password", { exact: true })` matches nothing — confirmed via
+  // Chromium's own accessibility tree, not assumed.
   get identifier(): Locator {
-    return this.page.getByLabel("Email, phone, or username");
+    return this.page.getByRole("textbox", { name: "Email, phone, or username", exact: true });
   }
 
   get password(): Locator {
-    return this.page.getByLabel("Password", { exact: true });
+    return this.page.getByRole("textbox", { name: "Password", exact: true });
   }
 
   get submit(): Locator {

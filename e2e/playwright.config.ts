@@ -39,18 +39,20 @@ const appEnv = {
  * `next start` does not serve that build — see `scripts/serve-app.sh`.
  */
 /**
- * Readiness paths that touch no API.
+ * Readiness path for each app.
  *
- * The website resolves its tenant from the Host header, and an unresolvable host is
- * rewritten to the static `/_platform`. Probing `/` over an *address* rather than a name
- * is what broke this before: `127.0.0.1` is not the platform domain and not a subdomain of
- * it, so `parseHost` classified it as a **custom domain**, the page tried to look the
- * tenant up against the API, and every probe 500'd with ECONNREFUSED. Probing `/_platform`
- * directly keeps readiness independent of host classification entirely.
- *
- * The dashboard's `/` redirects to `/login`, which Playwright accepts.
+ * - Dashboard: "/" redirects to `/login` (307), which Playwright's readiness check
+ *   accepts. No API dependency — the proxy only checks for a session cookie.
+ * - Website: NOT "/". The proxy resolves a tenant from the Host header, and this probe
+ *   dials `127.0.0.1` literally (see below) — an address that can never equal
+ *   `PLATFORM_DOMAIN` ("localhost"), so "/" always classifies as an unverified custom
+ *   domain, 404s once the tenant lookup misses, and 404 is not an accepted readiness
+ *   status (only 2xx/3xx/400–403 are) — the probe would poll it for the full timeout
+ *   while the server sat healthy the whole time. `/robots.txt` is a metadata route: it
+ *   is not wrapped by the root layout, so it never calls `resolveTenant()`, and returns
+ *   200 regardless of Host — confirmed with `curl` before relying on it here.
  */
-const HEALTH_PATH = { dashboard: "/", website: "/_platform" } as const;
+const HEALTH_PATH = { dashboard: "/", website: "/robots.txt" } as const;
 
 function serve(app: "dashboard" | "website", url: string) {
   const target = new URL(url);
@@ -120,5 +122,20 @@ export default defineConfig({
   // `live` brings its own stack (compose), so the built-in servers cover the other two.
   webServer: process.env.E2E_NO_SERVER
     ? undefined
-    : [serve("dashboard", env.DASHBOARD_URL), serve("website", env.WEBSITE_URL)],
+    : [
+        // Must be first: the website's root layout fetches this on every request,
+        // including its own readiness probe. See scripts/tenant-lookup-stub.mjs for why
+        // this exists at all — MockApi cannot reach a server-side fetch.
+        {
+          command: "node scripts/tenant-lookup-stub.mjs",
+          url: `${new URL(env.API_BASE_URL).origin}/healthz`,
+          env: { API_BASE_URL: env.API_BASE_URL },
+          reuseExistingServer: !isCI,
+          timeout: 15_000,
+          stdout: "pipe" as const,
+          stderr: "pipe" as const,
+        },
+        serve("dashboard", env.DASHBOARD_URL),
+        serve("website", env.WEBSITE_URL),
+      ],
 });
