@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Fast, staged-files-only checks. Anything project-wide and slow (tsc, mypy) runs in
+# pre-push instead — a pre-commit hook that takes a minute is one people start
+# bypassing with --no-verify.
+#
+# Written for bash 3.2, which is what macOS still ships and therefore what
+# `/usr/bin/env bash` resolves to here: no `mapfile`, and no `set -u` (expanding an
+# empty array under it is an error in 3.2). Newline-delimited strings instead of
+# arrays keeps this portable; no path in this repo contains a newline.
+#
+# Skip once:      git commit --no-verify
+# Skip session:   SKIP_HOOKS=1 git commit
+set -o pipefail
+
+. "$(dirname "$0")/lib/common.sh"
+
+if [ "${SKIP_HOOKS:-0}" = "1" ]; then
+  warn "SKIP_HOOKS=1 — pre-commit checks skipped"
+  exit 0
+fi
+
+cd "$REPO_ROOT" || exit 1
+
+# Added/Copied/Modified/Renamed only: a file staged for deletion has nothing to check.
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged" ] && exit 0
+
+status=0
+filter() { printf '%s\n' "$staged" | grep -E "$1"; }
+
+# ---------------------------------------------------------------- ESLint (JS/TS)
+# There is no root ESLint config — each workspace owns one (apps/*, packages/*, e2e).
+# So files are grouped by the nearest ancestor holding an eslint.config.*, and eslint
+# runs once per workspace from inside it. Running from the repo root instead just fails
+# with "couldn't find an eslint.config file".
+js_files="$(filter '\.(ts|tsx|js|jsx|mjs|cjs)$')"
+if [ -n "$js_files" ] && ensure_node; then
+  workspaces=""
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    d="$(dirname "$f")"
+    while [ "$d" != "." ] && [ "$d" != "/" ]; do
+      if [ -n "$(ls "$d"/eslint.config.* 2>/dev/null)" ]; then break; fi
+      d="$(dirname "$d")"
+    done
+    # A file outside every workspace has no config that applies to it; skip rather
+    # than fail, since eslint would only error about the missing config.
+    [ -n "$(ls "$d"/eslint.config.* 2>/dev/null)" ] || continue
+    workspaces="$workspaces$d
+"
+  done <<EOF
+$js_files
+EOF
+
+  for ws in $(printf '%s' "$workspaces" | sort -u); do
+    ws_files=""
+    while IFS= read -r f; do
+      case "$f" in
+        "$ws"/*) ws_files="$ws_files${f#"$ws"/}
+" ;;
+      esac
+    done <<EOF
+$js_files
+EOF
+    [ -n "$ws_files" ] || continue
+    # --no-warn-ignored: a staged file inside an ignore pattern is not an error.
+    if ! printf '%s' "$ws_files" | tr '\n' '\0' \
+         | (cd "$ws" && xargs -0 pnpm exec eslint --no-warn-ignored) 2>&1; then
+      fail "eslint found problems in $ws"
+      note "fix: (cd $ws && pnpm exec eslint --fix .)"
+      status=1
+    fi
+  done
+  [ $status -eq 0 ] && ok "eslint"
+fi
+
+# ------------------------------------------------------------------ ruff (Python)
+# The repo uses ruff, not flake8 — ruff is its drop-in successor and is what
+# .github/workflows/api.yml actually runs (ruff check . && ruff format --check .).
+py_files="$(filter '\.py$')"
+if [ -n "$py_files" ]; then
+  ruff_bin="$(python_tool ruff)"
+  if [ -n "$ruff_bin" ]; then
+    if printf '%s\n' "$py_files" | tr '\n' '\0' | xargs -0 "$ruff_bin" check \
+       && printf '%s\n' "$py_files" | tr '\n' '\0' | xargs -0 "$ruff_bin" format --check; then
+      ok "ruff"
+    else
+      fail "ruff found problems"
+      note "fix: ruff check --fix <files> && ruff format <files>"
+      status=1
+    fi
+  else
+    warn "ruff not installed — skipping Python lint (CI still runs it)"
+    note "install: cd apps/api && python3.14 -m venv .venv && .venv/bin/pip install -e '.[dev]'"
+  fi
+fi
+
+# ------------------------------------------------------------------- cspell (all)
+if ensure_node; then
+  if printf '%s\n' "$staged" | tr '\n' '\0' \
+       | xargs -0 pnpm exec cspell lint --no-progress --no-summary --no-must-find-files 2>&1; then
+    ok "cspell"
+  else
+    fail "cspell found unknown words"
+    note "a real typo? fix it. a real term? add it to .cspell/project-words.txt"
+    status=1
+  fi
+fi
+
+if [ $status -ne 0 ]; then
+  echo "" >&2
+  note "bypass once with: git commit --no-verify"
+fi
+exit $status
