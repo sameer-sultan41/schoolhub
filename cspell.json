@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+  "version": "0.2",
+  "//": "en-GB alongside en: the specification and module docs are written in British English (behaviour, colours, normalise). Adding the locale pulls in the whole dictionary rather than listing each spelling as a project word.",
+  "language": "en,en-GB",
+  "dictionaries": [
+    "typescript",
+    "node",
+    "npm",
+    "python",
+    "django",
+    "html",
+    "css",
+    "bash",
+    "softwareTerms",
+    "filetypes",
+    "project-words"
+  ],
+  "dictionaryDefinitions": [
+    {
+      "name": "project-words",
+      "path": ".cspell/project-words.txt",
+      "addWords": true
+    }
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/.turbo/**",
+    "**/coverage/**",
+    "**/playwright-report/**",
+    "**/test-results/**",
+    "graphify-out/**",
+    "pnpm-lock.yaml",
+    "**/*.svg",
+    "**/*.ico",
+    "**/*.png",
+    "**/*.webm",
+    "**/migrations/**",
+    "**/schema.d.ts",
+    "**/openapi.yaml",
+    "COMMENT: messages/*.json holds next-intl translation catalogues, including ur.json (Urdu). An English dictionary cannot validate them, and listing every non-English word as a project term would be meaningless.",
+    "**/messages/*.json",
+    ".git/**",
+    ".cspell/project-words.txt"
+  ]
+}

@@ -22,11 +22,13 @@
     "e2e": "pnpm --filter @schoolhub/e2e e2e",
     "e2e:ui": "pnpm --filter @schoolhub/e2e e2e:ui",
     "e2e:live": "pnpm --filter @schoolhub/e2e e2e:live",
-    "e2e:install": "pnpm --filter @schoolhub/e2e e2e:install"
+    "e2e:install": "pnpm --filter @schoolhub/e2e e2e:install",
+    "spell": "cspell lint --no-progress ."
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@typescript/native": "npm:typescript@^7.0.2",
+    "cspell": "^10.1.1",
     "eslint": "^9.39.5",
     "prettier": "^3.4.2",
     "turbo": "^2.10.10",
