@@ -46,7 +46,10 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
    messages for known codes.
 5. **Accessibility:** WCAG 2.1 AA per `DOCS/docs/07-quality/non-functional.md`.
 6. Component tests per `DOCS/docs/07-quality/testing-strategy.md` — **Jest + React Testing
-   Library** in this repo (the doc says Vitest; the team chose Jest). There is no E2E layer yet.
+   Library** in this repo (the doc says Vitest; the team chose Jest). Browser-level flows go
+   in `e2e/` (Playwright): this app fetches client-side, so its API can be stubbed per test
+   from the browser — see `e2e/README.md`. Anything needing a real database goes in the
+   E2E `live` lane, not here and not in Jest.
 
 ## How This App Is Wired
 

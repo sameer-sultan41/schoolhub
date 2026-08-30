@@ -77,7 +77,11 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 3. Register it in `src/themes/default/index.ts`. Unregistered types render nothing on purpose.
 4. Live module data goes through a read function in `src/lib/content.ts` with tenant cache tags.
 
-Tests: Jest + React Testing Library, co-located as `*.test.ts(x)`. No E2E layer in this repo.
+Tests: Jest + React Testing Library, co-located as `*.test.ts(x)`. Browser-level coverage
+lives in `e2e/` (Playwright). Note the limit: this app renders on the server, so a browser
+stub cannot intercept its fetches — the mocked `website` project covers only what the proxy
+decides before any fetch (host resolution, the unknown-host fallback, header stripping).
+Rendered tenant content needs the real stack and belongs in the E2E `live` lane.
 
 ## Guidance To Load First
 

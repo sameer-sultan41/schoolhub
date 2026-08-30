@@ -4,6 +4,7 @@ packages:
   - "apps/dashboard"
   - "apps/website"
   - "packages/*"
+  - "e2e"
 
 ignoredBuiltDependencies:
   - sharp
