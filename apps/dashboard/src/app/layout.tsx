@@ -22,11 +22,17 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" });
 // Nastaliq is what makes Urdu body/heading text render correctly at all — the platform
-// default before this had NO Urdu-capable face in its font stack.
+// default before this had NO Urdu-capable face in its font stack. preload: false because
+// next/font defaults to preloading whenever `subsets` is given: this heavy face sits
+// behind Inter/Fraunces in --sh-font-body and is only ever actually used by a per-
+// character fallback for Urdu glyphs, so preloading it would fetch it on the critical
+// path of every all-Latin page too. It's still resolved and served the moment Urdu text
+// appears, exactly as before — only the eager fetch on unrelated pages is removed.
 const notoNastaliqUrdu = Noto_Nastaliq_Urdu({
   subsets: ["arabic"],
   variable: "--font-noto-nastaliq-urdu",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {

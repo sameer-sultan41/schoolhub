@@ -13,10 +13,14 @@ import "./globals.css";
  */
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" });
+// preload: false — see apps/dashboard/src/app/layout.tsx for why: next/font defaults to
+// preloading whenever `subsets` is given, and this heavy face is only ever reached by a
+// per-character fallback for Urdu glyphs, not rendered on most tenant pages.
 const notoNastaliqUrdu = Noto_Nastaliq_Urdu({
   subsets: ["arabic"],
   variable: "--font-noto-nastaliq-urdu",
   display: "swap",
+  preload: false,
 });
 
 /**
