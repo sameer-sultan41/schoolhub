@@ -8,4 +8,4 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.dev} \
 DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-schema-generation-only} \
-  python manage.py spectacular --file openapi.yaml --validate --fail-on-warn
+  uv run manage.py spectacular --file openapi.yaml --validate --fail-on-warn

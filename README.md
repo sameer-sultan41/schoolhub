@@ -33,8 +33,11 @@ back out is far cheaper than the coordination tax was.
 
 ## Getting started
 
-**Prerequisites.** Python 3.14 (the backend pins `>=3.14,<3.15`), Node 24 or newer,
-pnpm 9.15, and Docker. `.nvmrc` and `packageManager` record the exact versions.
+**Prerequisites.** [uv](https://docs.astral.sh/uv/) (manages its own Python 3.14 —
+the backend pins `>=3.14,<3.15` — so a separate system Python install isn't required),
+Node 24 or newer, pnpm 9.15, and Docker. `.nvmrc` and `packageManager` record the exact
+frontend versions; `apps/api/.python-version` and `apps/api/pyproject.toml` record the
+backend's.
 
 **1. Start the backing services first.** Migrations need a database, so this comes
 before anything else.
@@ -47,16 +50,15 @@ docker compose -f infra/compose/docker-compose.yml up -d postgres pgbouncer redi
 The application role is created without `BYPASSRLS` and owns nothing, which is what
 makes Row-Level Security actually bind — see `infra/postgres/init/02-app-role.sql`.
 
-**2. Backend.** Install into a virtual environment; never into the system Python.
+**2. Backend.** uv manages the virtual environment itself — there's no `activate` step.
 
 ```bash
 cd apps/api
-python3.14 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync                                 # creates .venv, installs from the committed uv.lock
 cp .env.example .env                    # then set DJANGO_SECRET_KEY
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
+uv run manage.py migrate
+uv run manage.py createsuperuser
+uv run manage.py runserver
 ```
 
 **3. Frontends.** From the repository root — the pnpm workspace covers both apps and

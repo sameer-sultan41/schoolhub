@@ -116,9 +116,10 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   | `pre-push` | project-wide, slower | `main`-push block · `tsc` typecheck · mypy |
 
   Split by cost: `tsc` and mypy need the whole project graph and are too slow to run
-  on every commit. A tool that is genuinely not installed (no Python venv, say)
-  **warns and skips** rather than blocking — CI remains the authority, and a
-  frontend-only contributor must still be able to commit.
+  on every commit. A tool that is genuinely not installed (`apps/api`'s uv-managed
+  `.venv` never having been synced, say) **warns and skips** rather than blocking —
+  CI remains the authority, and a frontend-only contributor must still be able to
+  commit.
 
   ESLint is type-aware (`strictTypeChecked` + `projectService`) and stays in
   `pre-commit` deliberately — measured, not assumed: ~8s for a full 7-workspace
@@ -173,7 +174,8 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
 
 ## Toolchains
 
-Python 3.14 / Django 6.1 in `apps/api` (its own `pyproject.toml`), and a pnpm +
-Turborepo workspace covering `apps/dashboard`, `apps/website`, `packages/*` and `e2e`.
-The workspace list is explicit rather than `apps/*`, because `apps/api` is not a
-pnpm package.
+Python 3.14 / Django 6.1 in `apps/api`, managed by [uv](https://docs.astral.sh/uv/)
+(its own `pyproject.toml` + committed `uv.lock` — `uv sync` / `uv run`, not pip or an
+activated venv), and a pnpm + Turborepo workspace covering `apps/dashboard`,
+`apps/website`, `packages/*` and `e2e`. The workspace list is explicit rather than
+`apps/*`, because `apps/api` is not a pnpm package.
