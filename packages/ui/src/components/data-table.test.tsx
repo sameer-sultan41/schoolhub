@@ -17,7 +17,9 @@ const columns = [{ id: "name", header: "Name", cell: (row: Row) => row.name }];
 
 describe("DataTable", () => {
   it("renders one row per item, keyed by getRowId", () => {
-    render(<DataTable columns={columns} rows={rows} getRowId={(row) => row.id} emptyState="Empty" />);
+    render(
+      <DataTable columns={columns} rows={rows} getRowId={(row) => row.id} emptyState="Empty" />,
+    );
 
     expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
     expect(screen.getByText("Ayesha")).toBeInTheDocument();
@@ -25,7 +27,14 @@ describe("DataTable", () => {
   });
 
   it("shows the caller-supplied empty state, never a hardcoded fallback, when rows is empty", () => {
-    render(<DataTable columns={columns} rows={[]} getRowId={(row) => row.id} emptyState="Koi record nahi mila." />);
+    render(
+      <DataTable
+        columns={columns}
+        rows={[]}
+        getRowId={(row) => row.id}
+        emptyState="Koi record nahi mila."
+      />,
+    );
     expect(screen.getByText("Koi record nahi mila.")).toBeInTheDocument();
   });
 
