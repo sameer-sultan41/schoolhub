@@ -236,6 +236,11 @@ jobs:
   secrets:
     name: gitleaks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # gitleaks-action reads the PR's commit list to scan only what changed —
+      # same grant as frontend.yml's identical job.
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:

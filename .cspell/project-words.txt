@@ -96,6 +96,11 @@ permissioned
 pgbouncer
 pgcrypto
 PGDATA
+PGDATABASE
+PGHOST
+PGPASSWORD
+PGPORT
+PGUSER
 pidfile
 PITR
 plpgsql
