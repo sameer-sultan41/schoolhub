@@ -179,3 +179,10 @@ Python 3.14 / Django 6.1 in `apps/api`, managed by [uv](https://docs.astral.sh/u
 activated venv), and a pnpm + Turborepo workspace covering `apps/dashboard`,
 `apps/website`, `packages/*` and `e2e`. The workspace list is explicit rather than
 `apps/*`, because `apps/api` is not a pnpm package.
+
+uv itself is pinned to `0.11.x` in three places that must move together:
+`apps/api/pyproject.toml`'s `[tool.uv] required-version`, `apps/api/Dockerfile`'s
+`ghcr.io/astral-sh/uv:0.11.9` base, and `.github/actions/setup-api-env`'s
+`version:` input. `required-version` is a hard bound — every `uv` invocation refuses
+to run against a mismatched local install, including the hint printed by `pre-commit`
+— so a version bump is deliberately a single PR touching all three, not a rolling one.

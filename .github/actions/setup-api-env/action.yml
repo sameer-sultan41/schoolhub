@@ -14,6 +14,12 @@ runs:
       with:
         # Matches apps/api/pyproject.toml's [tool.uv] required-version bound.
         version: "0.11.9"
+        # apps/api/.python-version already pins 3.14 for `uv sync`/`uv run` to read at
+        # call time, but naming it here too lets setup-uv install and cache the managed
+        # interpreter itself — enable-cache alone only covers UV_CACHE_DIR (wheels),
+        # not uv's managed-Python directory, so every job would otherwise re-download
+        # the same ~35MB CPython on every run.
+        python-version: "3.14"
         enable-cache: true
         cache-dependency-glob: "apps/api/uv.lock"
 

@@ -21,8 +21,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Python version comes from apps/api/.python-version — setup-uv reads it directly, so
-# it is not repeated here (a second copy would just be one more place to forget to bump).
+# Python version comes from apps/api/.python-version — uv reads it at `uv sync`/`uv
+# run` time, so it is not repeated here (a second copy would just be one more place
+# to forget to bump).
 env:
   DJANGO_SETTINGS_MODULE: config.settings.test
 
