@@ -1,3 +1,4 @@
+import { Slot } from "@radix-ui/react-slot";
 import { type VariantProps, cva } from "class-variance-authority";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../lib/cn";
@@ -41,6 +42,13 @@ export interface ButtonProps
   loadingLabel?: string;
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
+  /**
+   * Render the styling onto a single child element (typically next/link's `<Link>`)
+   * instead of a `<button>` — e.g. `<Button asChild><Link href="/x">Go</Link></Button>`.
+   * `isLoading`/`leadingIcon`/`trailingIcon` and the forced `type` don't apply here: the
+   * child owns its own content and, usually, isn't a submittable form control at all.
+   */
+  asChild?: boolean;
 }
 
 export function Button({
@@ -55,8 +63,17 @@ export function Button({
   disabled,
   children,
   type = "button",
+  asChild = false,
   ...props
 }: ButtonProps) {
+  if (asChild) {
+    return (
+      <Slot className={cn(buttonVariants({ variant, size, block }), className)} {...props}>
+        {children}
+      </Slot>
+    );
+  }
+
   return (
     <button
       type={type}
