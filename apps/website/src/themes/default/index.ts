@@ -41,4 +41,4 @@ export const defaultTheme: Theme = {
   Footer,
 };
 
-export { themeStyle, DEFAULT_THEME_TOKENS, THEME_TOKENS } from "./tokens";
+export { themeStyle, THEME_TOKENS } from "./tokens";

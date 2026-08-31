@@ -12,8 +12,14 @@
  * per-tenant branding possible at runtime: set `--sh-color-primary` on a wrapper element
  * from the tenant's branding settings and the whole subtree re-themes.
  *
- * The defaults below are deliberately NEUTRAL — greys, not a brand. No component may
- * hardcode a brand colour; if a tenant sends no branding, neutral is the correct look.
+ * The tenant-overridable defaults below now carry SchoolHub's own "Marigold & Indigo"
+ * platform brand (previously neutral grey) — an unbranded tenant should look like
+ * SchoolHub, not like nothing. `branding.ts`'s TOKEN_MAP still wins the instant a tenant
+ * sets their own value; no component may hardcode a brand colour outside this file. A
+ * second, NEVER-overridable `--sh-platform-*` tier below skins surfaces that stay
+ * SchoolHub's regardless of tenant — /login chrome, the platform-landing page, the
+ * unknown-host page — because those are shown before any tenant is known, or to nobody's
+ * tenant at all.
  */
 
 @theme inline {
@@ -42,34 +48,121 @@
   --font-heading: var(--sh-font-heading);
 
   --radius-token: var(--sh-radius);
+
+  /*
+   * shadcn/ui alias layer — added so pasted shadcn component source (which references
+   * these standard names) resolves through the SAME `--sh-*` variables as everything
+   * else, with no second theming system. Every name below is a pure alias; the `--sh-*`
+   * variable it points at remains the only place a value is actually set. Never assign
+   * a literal value on the left-hand side here — that would create a second source of
+   * truth for a colour this file already owns.
+   */
+  --color-card: var(--sh-color-surface);
+  --color-card-foreground: var(--sh-color-surface-foreground);
+  --color-popover: var(--sh-color-surface);
+  --color-popover-foreground: var(--sh-color-surface-foreground);
+  --color-destructive: var(--sh-color-danger);
+  --color-destructive-foreground: var(--sh-color-danger-foreground);
+  --color-input: var(--sh-color-border);
+
+  /*
+   * Components across the repo currently write `rounded-[var(--sh-radius)]` as an
+   * arbitrary-value escape hatch (tailwind-merge cannot dedupe that against a plain
+   * `rounded-md`). Defining the standard `--radius` scale here lets both old and new
+   * components converge on the same generated utilities.
+   */
+  /*
+   * --sh-radius is tenant-overridable (branding.ts TOKEN_MAP), unlike shadcn's own fixed
+   * base — a tenant setting it to 0 or 2px would otherwise make `calc(var(--sh-radius) -
+   * 4px)` negative, an invalid border-radius that drops to square, inconsistently with
+   * --radius-lg (a bare var(), which stays valid at any value).
+   */
+  --radius: var(--sh-radius);
+  --radius-sm: max(calc(var(--sh-radius) - 4px), 0px);
+  --radius-md: max(calc(var(--sh-radius) - 2px), 0px);
+  --radius-lg: var(--sh-radius);
+  --radius-xl: calc(var(--sh-radius) + 4px);
 }
 
+/*
+ * Tailwind v4 has no `darkMode` config option — the `dark:` variant is defined here
+ * explicitly. Nothing in this codebase manages a `.dark` class today (no toggle, no
+ * next-themes) — the ONLY dark-mode mechanism that actually runs is the
+ * `prefers-color-scheme` media query below, which flips the `--sh-*` custom properties
+ * directly. A `.dark`-class variant would leave every `dark:`-prefixed utility (which
+ * shadcn's generated components use throughout) permanently inactive under OS dark mode,
+ * while the variables it reads have already flipped — the same light-treatment-on-a-
+ * dark-surface failure this token bridge exists to fix. Match the variant to the
+ * strategy this file actually implements; revisit if a class-based toggle is ever added.
+ */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
 :root {
-  /* Neutral defaults — overridden per tenant at runtime. */
+  /*
+   * SchoolHub platform brand — "Marigold & Indigo". These are the DEFAULT values for
+   * every tenant-overridable token; a tenant's own branding.ts TOKEN_MAP entry still
+   * wins the moment it is set (see branding.ts's own header comment). An unbranded
+   * tenant therefore looks like SchoolHub, not grey — this is a deliberate reversal of
+   * this file's previous "neutral means unbranded" doctrine, made because the platform
+   * itself now has a visual identity worth defaulting to.
+   *
+   * Values converted from the design system's hex palette via sRGB -> OKLab, matching
+   * the oklch() convention already used throughout this file:
+   *   Indigo   #2B2A6B -> oklch(0.327 0.110 279.1)  (primary — 12.8:1 on white, AAA)
+   *   Marigold #F0A427 -> oklch(0.774 0.155  73.4)  (accent  —  2.1:1 on white: NEVER
+   *                                                   used as text on a light surface,
+   *                                                   only as a fill with indigo text)
+   *   Emerald  #10796B -> oklch(0.518 0.090 180.7)  (success)
+   *   Madder   #C1443C -> oklch(0.560 0.162  27.2)  (danger)
+   *   Ivory    #FBF7EE -> oklch(0.977 0.013  86.8)  (surface)
+   */
   --sh-color-background: oklch(1 0 0);
   --sh-color-foreground: oklch(0.21 0.006 285.9);
-  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface: oklch(0.977 0.013 86.8);
   --sh-color-surface-foreground: oklch(0.21 0.006 285.9);
   --sh-color-muted: oklch(0.967 0.001 286.4);
   --sh-color-muted-foreground: oklch(0.552 0.014 285.9);
   --sh-color-border: oklch(0.92 0.004 286.3);
   --sh-color-ring: var(--sh-color-primary);
 
-  --sh-color-primary: oklch(0.37 0.013 285.8);
-  --sh-color-primary-foreground: oklch(0.985 0 0);
-  --sh-color-secondary: oklch(0.967 0.001 286.4);
-  --sh-color-secondary-foreground: oklch(0.21 0.006 285.9);
-  --sh-color-accent: oklch(0.967 0.001 286.4);
-  --sh-color-accent-foreground: oklch(0.21 0.006 285.9);
+  --sh-color-primary: oklch(0.327 0.11 279.1);
+  --sh-color-primary-foreground: oklch(0.977 0.013 86.8);
+  /* A pale indigo tint, not a second saturated hue — accent already carries marigold,
+     and stacking two loud colours into "primary" and "secondary" both would leave
+     nothing quiet to set the signature element against. */
+  --sh-color-secondary: oklch(0.94 0.02 279);
+  --sh-color-secondary-foreground: oklch(0.327 0.11 279.1);
+  --sh-color-accent: oklch(0.774 0.155 73.4);
+  --sh-color-accent-foreground: oklch(0.327 0.11 279.1);
 
-  /* Status colours are product semantics, not branding — tenants do not override these. */
-  --sh-color-success: oklch(0.63 0.14 152);
+  /*
+   * Status colours are product semantics, not branding — tenants do not override
+   * these (unlike primary/secondary/accent above, they have no TOKEN_MAP entry).
+   * success/danger are still given the platform's own brand-flavoured hues (Emerald /
+   * Madder) rather than generic red/green; `warning` is deliberately left at its
+   * existing amber value — Marigold's hue (73.4) sits close enough to a conventional
+   * warning amber that reusing it here would make a warning banner and an
+   * accent-coloured surface read as the same colour.
+   */
+  --sh-color-success: oklch(0.518 0.09 180.7);
   --sh-color-warning: oklch(0.75 0.15 78);
-  --sh-color-danger: oklch(0.58 0.22 27.3);
-  --sh-color-danger-foreground: oklch(0.985 0 0);
+  --sh-color-danger: oklch(0.56 0.162 27.2);
+  --sh-color-danger-foreground: oklch(0.977 0.013 86.8);
 
-  --sh-font-body: ui-sans-serif, system-ui, sans-serif;
-  --sh-font-heading: var(--sh-font-body);
+  /*
+   * Both apps load Inter, Fraunces and Noto Nastaliq Urdu via next/font/google and expose
+   * them as --font-inter/--font-fraunces/--font-noto-nastaliq-urdu on <html> (see each
+   * app's layout.tsx). Listed here only as the FALLBACK chain — a tenant's own
+   * body_font/heading_font (branding.ts TOKEN_MAP) still replaces the whole property, not
+   * just prepends to it. Noto Nastaliq Urdu sits in the SAME stack as the Latin faces
+   * rather than behind a `[lang="ur"]` override: a browser resolves font-family per
+   * character, so Urdu glyphs fall through Inter/Fraunces (which don't cover them) to
+   * Nastaliq automatically, in both locales, with no separate rule needed. Previously this
+   * stack had no Urdu-capable face at all.
+   */
+  --sh-font-body:
+    var(--font-inter), var(--font-noto-nastaliq-urdu), ui-sans-serif, system-ui, sans-serif;
+  --sh-font-heading: var(--font-fraunces), var(--sh-font-body);
   --sh-radius: 0.5rem;
 }
 
@@ -77,16 +170,46 @@
   :root {
     --sh-color-background: oklch(0.141 0.005 285.8);
     --sh-color-foreground: oklch(0.985 0 0);
-    --sh-color-surface: oklch(0.21 0.006 285.9);
-    --sh-color-surface-foreground: oklch(0.985 0 0);
+    /* Indigo-tinted rather than the previous hue-neutral dark grey, so cards read as
+       part of the same brand family at night. */
+    --sh-color-surface: oklch(0.24 0.03 279);
+    --sh-color-surface-foreground: oklch(0.977 0.013 86.8);
     --sh-color-muted: oklch(0.274 0.006 286);
     --sh-color-muted-foreground: oklch(0.705 0.015 286);
     --sh-color-border: oklch(0.274 0.006 286);
-    --sh-color-secondary: oklch(0.274 0.006 286);
-    --sh-color-secondary-foreground: oklch(0.985 0 0);
-    --sh-color-accent: oklch(0.274 0.006 286);
-    --sh-color-accent-foreground: oklch(0.985 0 0);
+    --sh-color-secondary: oklch(0.28 0.035 279);
+    --sh-color-secondary-foreground: oklch(0.94 0.02 279);
+    /* accent (marigold) genuinely doesn't need a dark-mode override — it stays 6.1:1
+       against indigo text in both schemes. primary does: the light-mode indigo
+       (#2b2a6b) computes to 1.56:1 against this dark background and 1.29:1 against
+       the dark surface above — both fail WCAG 1.4.11's 3:1 for a UI component
+       boundary, text-primary fails 1.4.3 outright, and --sh-color-ring inherits the
+       same failure since it's `var(--sh-color-primary)`. A lighter indigo restores
+       the boundary (5.95:1 / 4.94:1) with a dark, near-page-background foreground for
+       text placed on a solid primary surface (5.95:1 against this primary). */
+    --sh-color-primary: oklch(0.65 0.14 279.1);
+    --sh-color-primary-foreground: oklch(0.141 0.005 285.8);
+    --sh-color-accent: oklch(0.774 0.155 73.4);
+    --sh-color-accent-foreground: oklch(0.327 0.11 279.1);
   }
+}
+
+/*
+ * Platform-brand tier — fixed SchoolHub colours for chrome that is never a tenant's:
+ * the /login screen (shown before a tenant's user is authenticated), the platform's own
+ * marketing/landing surfaces, and the unknown-host page. These are NOT in branding.ts's
+ * TOKEN_MAP and must never be added to it — unlike --sh-color-primary etc. above, a
+ * tenant cannot override its own sign-in page or a page that, by definition, isn't
+ * theirs. Same palette as the tenant-overridable defaults (this IS the platform brand),
+ * kept as a separate name so a future default-value change to one tier can never
+ * accidentally move the other.
+ */
+:root {
+  --sh-platform-color-primary: oklch(0.327 0.11 279.1);
+  --sh-platform-color-primary-foreground: oklch(0.977 0.013 86.8);
+  --sh-platform-color-accent: oklch(0.774 0.155 73.4);
+  --sh-platform-color-accent-foreground: oklch(0.327 0.11 279.1);
+  --sh-platform-color-surface: oklch(0.977 0.013 86.8);
 }
 
 /* RTL (Urdu) support relies on logical properties; never use left/right offsets in components. */

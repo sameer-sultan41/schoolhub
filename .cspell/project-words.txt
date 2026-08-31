@@ -55,6 +55,7 @@ exfiltrates
 exfiltration
 Fdashboard
 filterset
+Fraunces
 frontends
 gantt
 gapless
@@ -81,6 +82,7 @@ manylinux
 maxmemory
 Meilisearch
 myschool
+Nastaliq
 navigations
 negotiables
 NOBYPASSRLS
@@ -89,6 +91,7 @@ noinput
 noout
 noreload
 NOTIF
+Noto
 notschoolhub
 nspname
 overdues

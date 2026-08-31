@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Supplies the animate-in/out, fade/zoom/slide utilities and data-[state] keyframes that
+   every Radix-backed component (Dialog, DropdownMenu, Select, Tooltip, Sheet, …) needs to
+   animate — without it those transitions are silent no-ops. */
+@import "tw-animate-css";
 @import "@schoolhub/ui/styles/theme.css";
 
 /* Tailwind v4 auto-detects sources in this app; the shared package needs an explicit hint. */
