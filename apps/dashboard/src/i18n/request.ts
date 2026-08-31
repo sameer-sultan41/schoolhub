@@ -20,10 +20,12 @@ export default getRequestConfig(async () => {
     requested && isSupportedLocale(requested) ? requested : env.NEXT_PUBLIC_DEFAULT_LOCALE;
 
   // A dynamic import with a computed specifier can't be resolved statically, so TS gives
-  // it type `any` — asserted against en.json's shape, the canonical structure every other
-  // locale file is expected to match. Cast the whole module object before touching
-  // `.default`, not after: asserting only the final expression still leaves the
-  // intermediate `.default` access unsafely typed as `any`.
+  // it type `any` — asserted against en.json's shape. This assertion only describes *this*
+  // value; it does not check any other locale file's real content — that check lives in
+  // messages.types-check.ts, a file that exists purely to fail `tsc` if a locale diverges.
+  // Cast the whole module object before touching `.default`, not after: asserting only
+  // the final expression still leaves the intermediate `.default` access unsafely typed
+  // as `any`.
   const messages = (await import(`../../messages/${locale}.json`)) as { default: Messages };
 
   return {
