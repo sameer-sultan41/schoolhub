@@ -3,6 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ApiError } from "@schoolhub/api-client";
 import {
+  Alert,
+  AlertDescription,
   Button,
   Card,
   CardContent,
@@ -17,6 +19,7 @@ import {
 } from "@schoolhub/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -83,12 +86,9 @@ export function LoginForm() {
         </div>
 
         {formError ? (
-          <p
-            role="alert"
-            className="rounded-[var(--sh-radius)] border border-danger px-3 py-2 text-sm text-danger"
-          >
-            {formError}
-          </p>
+          <Alert variant="danger">
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
         ) : null}
 
         <Form {...form}>
@@ -131,7 +131,15 @@ export function LoginForm() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel required>{t("password")}</FormLabel>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <FormLabel required>{t("password")}</FormLabel>
+                    <Link
+                      href="/forgot-password"
+                      className="text-xs text-primary underline-offset-4 hover:underline"
+                    >
+                      {t("forgotPassword")}
+                    </Link>
+                  </div>
                   <FormControl required>
                     <Input {...field} type="password" autoComplete="current-password" />
                   </FormControl>
