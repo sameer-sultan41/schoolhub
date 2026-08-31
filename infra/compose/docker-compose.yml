@@ -167,7 +167,6 @@ services:
     environment: *api-env
     volumes:
       - ${API_REPO_PATH:-../../apps/api}:/app
-      - api-venv:/app/.venv
     command: >-
       sh -c "python manage.py migrate --noinput &&
              python manage.py runserver 0.0.0.0:8000"
@@ -203,7 +202,6 @@ services:
     environment: *api-env
     volumes:
       - ${API_REPO_PATH:-../../apps/api}:/app
-      - api-venv:/app/.venv
     command: ["celery", "-A", "config.celery", "worker", "-l", "info", "-Q", "emergency,transactional,bulk,default", "--concurrency", "2"]
 
   # ---------------------------------------------------------------------------
@@ -227,7 +225,6 @@ services:
     environment: *api-env
     volumes:
       - ${API_REPO_PATH:-../../apps/api}:/app
-      - api-venv:/app/.venv
     command: ["celery", "-A", "config.celery", "beat", "-l", "info"]
 
   # ---------------------------------------------------------------------------
@@ -356,7 +353,6 @@ services:
 volumes:
   postgres-data:
   minio-data:
-  api-venv:
   dashboard-node-modules:
   dashboard-next-cache:
   website-node-modules:

@@ -15,7 +15,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=0
+    UV_PYTHON_DOWNLOADS=0 \
+    # infra/compose/docker-compose.yml bind-mounts the host source tree onto /app for
+    # every one of the three services this image runs as. A venv created at the default
+    # /app/.venv would sit inside that bind mount, which is exactly why compose also
+    # layers a persistent named volume (api-venv) on top of that one path — but a named
+    # volume is only ever seeded from the image once, while empty; a later image rebuild
+    # never refreshes it, so a second dependency change would silently keep running the
+    # first one. Keeping the venv outside /app avoids the collision entirely.
+    UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /app
 
@@ -25,10 +33,9 @@ WORKDIR /app
 # single-stage build had with `COPY pyproject.toml ./` before `COPY . .`.
 FROM base AS deps
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+# psycopg[binary], cffi and argon2-cffi-bindings all resolve to prebuilt manylinux
+# wheels for cp314 on both amd64 and arm64 (see uv.lock) — nothing here compiles, so
+# no build toolchain is actually needed to populate this layer.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
@@ -44,7 +51,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/opt/venv/bin:$PATH"
 
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
@@ -57,10 +64,11 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Only the resolved environment crosses the stage boundary — build-essential and
-# libpq-dev, needed to compile psycopg's binary wheel, never reach this image.
-COPY --from=deps /app/.venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH" \
+# Only the resolved environment crosses the stage boundary — nothing here ever
+# compiled anything (see the note in `deps`), so there is no build toolchain to leave
+# behind either way, but this also keeps the uv binary itself out of the shipped image.
+COPY --from=deps /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
