@@ -68,6 +68,7 @@ greppable
 healthcheck
 healthz
 hotspots
+htmlcov
 iban
 interceptable
 isready

@@ -1,0 +1,20 @@
+# Keep the build context to what the image actually needs — none of this should
+# ever end up baked into a layer or, worse, silently override what `uv sync`
+# built inside the container.
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+staticfiles/
+media/
