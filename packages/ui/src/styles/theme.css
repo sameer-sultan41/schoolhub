@@ -71,21 +71,31 @@
    * `rounded-md`). Defining the standard `--radius` scale here lets both old and new
    * components converge on the same generated utilities.
    */
+  /*
+   * --sh-radius is tenant-overridable (branding.ts TOKEN_MAP), unlike shadcn's own fixed
+   * base — a tenant setting it to 0 or 2px would otherwise make `calc(var(--sh-radius) -
+   * 4px)` negative, an invalid border-radius that drops to square, inconsistently with
+   * --radius-lg (a bare var(), which stays valid at any value).
+   */
   --radius: var(--sh-radius);
-  --radius-sm: calc(var(--sh-radius) - 4px);
-  --radius-md: calc(var(--sh-radius) - 2px);
+  --radius-sm: max(calc(var(--sh-radius) - 4px), 0px);
+  --radius-md: max(calc(var(--sh-radius) - 2px), 0px);
   --radius-lg: var(--sh-radius);
   --radius-xl: calc(var(--sh-radius) + 4px);
 }
 
 /*
  * Tailwind v4 has no `darkMode` config option — the `dark:` variant is defined here
- * explicitly. Shadcn's dark-mode blocks assume the `.dark` CLASS strategy (toggleable by
- * script/preference), which is what this enables; the `prefers-color-scheme` media query
- * below stays as the default when no class is present, so an unbranded, JS-less render
- * still gets a correct dark mode.
+ * explicitly. Nothing in this codebase manages a `.dark` class today (no toggle, no
+ * next-themes) — the ONLY dark-mode mechanism that actually runs is the
+ * `prefers-color-scheme` media query below, which flips the `--sh-*` custom properties
+ * directly. A `.dark`-class variant would leave every `dark:`-prefixed utility (which
+ * shadcn's generated components use throughout) permanently inactive under OS dark mode,
+ * while the variables it reads have already flipped — the same light-treatment-on-a-
+ * dark-surface failure this token bridge exists to fix. Match the variant to the
+ * strategy this file actually implements; revisit if a class-based toggle is ever added.
  */
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (@media (prefers-color-scheme: dark));
 
 :root {
   /*
@@ -161,10 +171,7 @@
     --sh-color-background: oklch(0.141 0.005 285.8);
     --sh-color-foreground: oklch(0.985 0 0);
     /* Indigo-tinted rather than the previous hue-neutral dark grey, so cards read as
-       part of the same brand family at night. primary/accent (the two saturated brand
-       hues) are deliberately NOT overridden here — same precedent this file already
-       sets by never overriding primary across schemes: a brand colour stays constant,
-       only the neutrals it sits on adapt. */
+       part of the same brand family at night. */
     --sh-color-surface: oklch(0.24 0.03 279);
     --sh-color-surface-foreground: oklch(0.977 0.013 86.8);
     --sh-color-muted: oklch(0.274 0.006 286);
@@ -172,6 +179,16 @@
     --sh-color-border: oklch(0.274 0.006 286);
     --sh-color-secondary: oklch(0.28 0.035 279);
     --sh-color-secondary-foreground: oklch(0.94 0.02 279);
+    /* accent (marigold) genuinely doesn't need a dark-mode override — it stays 6.1:1
+       against indigo text in both schemes. primary does: the light-mode indigo
+       (#2b2a6b) computes to 1.56:1 against this dark background and 1.29:1 against
+       the dark surface above — both fail WCAG 1.4.11's 3:1 for a UI component
+       boundary, text-primary fails 1.4.3 outright, and --sh-color-ring inherits the
+       same failure since it's `var(--sh-color-primary)`. A lighter indigo restores
+       the boundary (5.95:1 / 4.94:1) with a dark, near-page-background foreground for
+       text placed on a solid primary surface (5.95:1 against this primary). */
+    --sh-color-primary: oklch(0.65 0.14 279.1);
+    --sh-color-primary-foreground: oklch(0.141 0.005 285.8);
     --sh-color-accent: oklch(0.774 0.155 73.4);
     --sh-color-accent-foreground: oklch(0.327 0.11 279.1);
   }
