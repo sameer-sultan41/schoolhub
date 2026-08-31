@@ -1,7 +1,15 @@
 "use client";
 
 import { ApiError } from "@schoolhub/api-client";
-import { Card, CardContent, CardDescription, CardTitle } from "@schoolhub/ui";
+import {
+  Alert,
+  AlertDescription,
+  Card,
+  CardContent,
+  CardDescription,
+  CardTitle,
+  Skeleton,
+} from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Can } from "@/components/can";
@@ -35,10 +43,12 @@ export function DashboardSummary() {
 
   if (error instanceof ApiError) {
     return (
-      <p role="alert" className="text-sm text-danger">
-        {tErrors.has(error.code) ? tErrors(error.code) : error.message}
-        {error.requestId ? ` ${tErrors("requestId", { requestId: error.requestId })}` : ""}
-      </p>
+      <Alert variant="danger">
+        <AlertDescription>
+          {tErrors.has(error.code) ? tErrors(error.code) : error.message}
+          {error.requestId ? ` ${tErrors("requestId", { requestId: error.requestId })}` : ""}
+        </AlertDescription>
+      </Alert>
     );
   }
 
@@ -67,17 +77,23 @@ export function DashboardSummary() {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {tiles.map((tile) => (
+      {tiles.map((tile, index) => (
         <Can key={tile.key} permission={tile.permission}>
-          <Card>
+          {/*
+            The signature moment's second half (the woven rule above is the first): the
+            four tiles stagger in at 60ms intervals rather than popping in together. A
+            fixed per-index delay via inline style, since Tailwind utilities can't express
+            "the Nth item" — motion-reduce:animate-none turns it off entirely rather than
+            just speeding it up, matching the woven rule's own reduced-motion behaviour.
+          */}
+          <Card
+            className="animate-in fill-mode-backwards fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
+            style={{ animationDelay: `${index * 60}ms`, animationDuration: "400ms" }}
+          >
             <CardContent className="space-y-2 pt-6">
               <CardDescription>{t(`cards.${tile.key}`)}</CardDescription>
               <CardTitle className="text-2xl tabular-nums">
-                {isPending ? (
-                  <span className="block h-7 w-20 animate-pulse rounded bg-muted" />
-                ) : (
-                  tile.value
-                )}
+                {isPending ? <Skeleton className="h-7 w-20" /> : tile.value}
               </CardTitle>
             </CardContent>
           </Card>

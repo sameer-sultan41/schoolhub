@@ -86,6 +86,19 @@
 }
 
 /*
+ * "Drawing in" reveal for a stroked SVG path — pair with `pathLength="1"` on the <path>
+ * (normalizes stroke-dashoffset to the 0–1 range regardless of the path's real geometric
+ * length) and `[stroke-dasharray:1] [stroke-dashoffset:1]` as the element's own starting
+ * state. Used by the "woven rule" signature element; kept here rather than app-local
+ * since the technique is reusable by any future signature moment in any app.
+ */
+@keyframes draw-in {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/*
  * Tailwind v4 has no `darkMode` config option — the `dark:` variant is defined here
  * explicitly. Nothing in this codebase manages a `.dark` class today (no toggle, no
  * next-themes) — the ONLY dark-mode mechanism that actually runs is the
