@@ -17,10 +17,10 @@ Celery 5.6 · JWT auth · OpenAPI via drf-spectacular.
 ```bash
 cp .env.example .env          # then fill in DJANGO_SECRET_KEY
 docker compose up -d          # from the schoolhub-infra repo: postgres, pgbouncer, redis
-pip install -e ".[dev]"
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
+uv sync                       # creates .venv, installs from the committed uv.lock
+uv run manage.py migrate
+uv run manage.py createsuperuser
+uv run manage.py runserver
 ```
 
 - API: http://localhost:8000/api/v1/

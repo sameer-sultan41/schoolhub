@@ -1,0 +1,38 @@
+name: Set up the API environment
+description: >-
+  Install uv and sync apps/api's environment from its committed lockfile. Shared by
+  every job in api.yml so a dependency change only ever needs updating in one place,
+  and every job gets the same "uv.lock must match pyproject.toml" freshness check for
+  free via `uv sync --locked`.
+
+runs:
+  using: composite
+  steps:
+    # astral-sh/setup-uv only tags full semver, unlike actions/setup-python's rolling
+    # major-version tags — there is no `v10` to float on, so pin exactly.
+    - uses: astral-sh/setup-uv@v10.0.1
+      with:
+        # Matches apps/api/pyproject.toml's [tool.uv] required-version bound.
+        version: "0.11.9"
+        # apps/api/.python-version already pins 3.14 for `uv sync`/`uv run` to read at
+        # call time, but naming it here too lets setup-uv install and cache the managed
+        # interpreter itself — enable-cache alone only covers UV_CACHE_DIR (wheels),
+        # not uv's managed-Python directory, so every job would otherwise re-download
+        # the same ~35MB CPython on every run.
+        python-version: "3.14"
+        enable-cache: true
+        cache-dependency-glob: "apps/api/uv.lock"
+
+    # Fails with a clear "lockfile is out of date" error rather than the more
+    # confusing error `uv sync --locked` gives when it's the one to catch the
+    # mismatch — same intent as this repo's other generated-artifact freshness
+    # gates (openapi.yaml, packages/api-client/src/schema.d.ts).
+    - name: Check uv.lock is up to date
+      shell: bash
+      working-directory: apps/api
+      run: uv lock --check
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: apps/api
+      run: uv sync --locked

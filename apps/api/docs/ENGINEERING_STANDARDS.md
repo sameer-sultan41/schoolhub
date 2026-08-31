@@ -27,6 +27,7 @@ Always check the version-matched page, not a search-engine result for an older r
 | PostgreSQL Row-Level Security | https://www.postgresql.org/docs/18/ddl-rowsecurity.html |
 | Ruff (lint + format) | https://docs.astral.sh/ruff/ |
 | mypy | https://mypy.readthedocs.io/ |
+| uv (package manager) | https://docs.astral.sh/uv/ |
 | OWASP ASVS / Top 10 | https://owasp.org/www-project-application-security-verification-standard/ |
 
 Product specification (what to build): [`../../../docs/`](../../../docs/)

@@ -97,6 +97,7 @@ and the constraint is recorded so nobody re-raises them and breaks the build.
 | Component | Pinned | Note |
 | --------- | ------ | ---- |
 | Python | 3.14 | |
+| uv | `>=0.11,<0.12` | Package manager for `apps/api` — resolver, lockfile (`uv.lock`, committed) and venv, replacing pip + a hand-made `venv`. |
 | Django | 6.1 | |
 | Django REST Framework | 3.18 | |
 | PostgreSQL | 18 | Server. RLS unchanged from the design above. |

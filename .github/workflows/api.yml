@@ -21,8 +21,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Python version comes from apps/api/.python-version — uv reads it at `uv sync`/`uv
+# run` time, so it is not repeated here (a second copy would just be one more place
+# to forget to bump).
 env:
-  PYTHON_VERSION: "3.14"
   DJANGO_SETTINGS_MODULE: config.settings.test
 
 jobs:
@@ -30,28 +32,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: apps/api/pyproject.toml
-      - run: pip install -e ".[dev]"
+      - uses: ./.github/actions/setup-api-env
       - name: Ruff lint
-        run: ruff check .
+        run: uv run ruff check .
       - name: Ruff format check
-        run: ruff format --check .
+        run: uv run ruff format --check .
 
   typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: apps/api/pyproject.toml
-      - run: pip install -e ".[dev]"
-      - run: mypy core apps config
+      - uses: ./.github/actions/setup-api-env
+      - run: uv run mypy core apps config
 
   test:
     runs-on: ubuntu-latest
@@ -84,23 +76,18 @@ jobs:
       DJANGO_SECRET_KEY: 7Qk2mVx9RbT4wYzA1sHf6JpLn0CdGeUiOa3ZtXrMvB8yNqEcWk5DgSjFhPuT2LiR
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: apps/api/pyproject.toml
-      - run: pip install -e ".[dev]"
+      - uses: ./.github/actions/setup-api-env
 
       - name: Check for missing migrations
-        run: python manage.py makemigrations --check --dry-run
+        run: uv run manage.py makemigrations --check --dry-run
 
       - name: Run migrations
-        run: python manage.py migrate
+        run: uv run manage.py migrate
 
       - name: Tests with coverage
         run: |
-          coverage run manage.py test
-          coverage report
+          uv run coverage run manage.py test
+          uv run coverage report
 
       - name: Upload coverage
         if: always()
@@ -115,12 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: apps/api/pyproject.toml
-      - run: pip install -e ".[dev]"
+      - uses: ./.github/actions/setup-api-env
       - name: Regenerate the schema
         run: ./scripts/generate-openapi.sh
         env:
@@ -137,14 +119,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: apps/api/pyproject.toml
-      - run: pip install -e ".[dev]"
+      - uses: ./.github/actions/setup-api-env
       - name: Django deployment checks
-        run: python manage.py check --deploy --fail-level WARNING
+        run: uv run manage.py check --deploy --fail-level WARNING
         env:
           DJANGO_SETTINGS_MODULE: config.settings.prod
           DJANGO_SECRET_KEY: 7Qk2mVx9RbT4wYzA1sHf6JpLn0CdGeUiOa3ZtXrMvB8yNqEcWk5DgSjFhPuT2LiR

@@ -151,7 +151,7 @@ if [ -n "$py_files" ]; then
     fi
   else
     warn "ruff not installed — skipping Python lint (CI still runs it)"
-    note "install: cd apps/api && python3.14 -m venv .venv && .venv/bin/pip install -e '.[dev]'"
+    note "install: cd apps/api && uv sync"
   fi
 fi
 
