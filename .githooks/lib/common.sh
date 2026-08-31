@@ -98,9 +98,10 @@ ensure_node() {
 }
 
 # Locate ruff/mypy: an active venv first (a developer who activated one is telling us
-# which tool to use, pinned by apps/api/pyproject.toml's [dev] extra), then the repo's
-# own .venv, then PATH. Prints the tool's path and returns 0, or prints nothing and
-# returns 1 when it cannot be found at all.
+# which tool to use, pinned by apps/api/pyproject.toml's [dependency-groups] dev group),
+# then the repo's own .venv — exactly where `uv sync` puts apps/api/.venv — then PATH.
+# Prints the tool's path and returns 0, or prints nothing and returns 1 when it cannot
+# be found at all.
 #
 # $VIRTUAL_ENV is checked for non-empty *before* building the path — with it unset,
 # "${VIRTUAL_ENV:-}/bin/$tool" degenerates to the literal "/bin/ruff", and the
