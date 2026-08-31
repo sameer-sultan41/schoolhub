@@ -114,6 +114,7 @@ pollable
 pooler
 preflights
 prefs
+proptypes
 pseudonymization
 pseudonymized
 pseudonymizes
