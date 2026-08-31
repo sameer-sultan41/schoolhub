@@ -54,7 +54,7 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     });
 
     api.post("/campuses", (request) => {
-      const body = request.json<Partial<Campus>>() ?? {};
+      const body = (request.json() as Partial<Campus> | null) ?? {};
       if (!body.name?.trim()) {
         return fail(400, "Validation failed.", {
           details: [{ field: "name", issue: "This field is required." }],

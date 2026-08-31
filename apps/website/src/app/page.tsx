@@ -15,6 +15,6 @@ export async function generateMetadata(): Promise<Metadata> {
   return renderPageMetadata([]);
 }
 
-export default async function HomePage() {
+export default function HomePage() {
   return <RenderPage segments={[]} />;
 }

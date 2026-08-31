@@ -42,14 +42,14 @@ const TOKEN_MAP: ReadonlyArray<[keyof TenantBranding, string]> = [
  */
 export function brandingToCssVariables(branding: TenantBranding | null | undefined): CSSProperties {
   const style: Record<string, string> = {};
-  if (!branding) return style as CSSProperties;
+  if (!branding) return style;
 
   for (const [field, token] of TOKEN_MAP) {
-    const value = sanitizeCssValue(branding[field] as string | null | undefined);
+    const value = sanitizeCssValue(branding[field]);
     if (value) style[token] = value;
   }
 
-  return style as CSSProperties;
+  return style;
 }
 
 /** Same tokens as a CSS text block, for injecting into a `<style>` tag during SSR. */

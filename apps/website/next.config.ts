@@ -38,7 +38,7 @@ const nextConfig: NextConfig = {
     // Tenant media lives in tenant-prefixed object storage behind the CDN.
     remotePatterns: [{ protocol: "https", hostname: "**" }],
   },
-  async headers() {
+  headers() {
     return [
       {
         source: "/:path*",

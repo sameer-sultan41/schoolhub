@@ -27,7 +27,7 @@ interface CanProps {
  * *data* in this and assume it is protected: if the data reached the client, it leaked.
  */
 export function Can({ permission, anyOf, fallback = null, children }: CanProps) {
-  const hasSingle = usePermission(permission ?? ("__none__.__none__.__none__" as PermissionKey));
+  const hasSingle = usePermission(permission ?? "__none__.__none__.__none__");
   const hasAny = useAnyPermission(anyOf ?? []);
   const allowed = permission ? hasSingle : anyOf ? hasAny : false;
 

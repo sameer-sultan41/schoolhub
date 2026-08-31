@@ -32,7 +32,7 @@ export function authModule(options: AuthModuleOptions = {}): MockModule {
     let refreshCount = 0;
 
     api.post("/auth/login", (request) => {
-      const body = request.json<LoginCredentials>();
+      const body = request.json() as LoginCredentials | null;
       if (body?.identifier !== credentials.identifier || body.password !== credentials.password) {
         // The real API returns a deliberately vague 401 so it cannot be used to
         // enumerate which identifiers exist.

@@ -12,7 +12,10 @@ export interface MockRequest {
   params: Record<string, string>;
   searchParams: URLSearchParams;
   headers: Record<string, string>;
-  json<T = unknown>(): T | null;
+  // Not generic: a type parameter used only in the return position gives the caller a
+  // false sense of safety — nothing here actually checks the parsed body against T. The
+  // cast belongs at each call site instead, where it is visibly the caller's own claim.
+  json(): unknown;
 }
 
 export type MockHandler = (request: MockRequest) => MockResponse | Promise<MockResponse>;
@@ -196,10 +199,10 @@ function buildRequest(
     params,
     searchParams: url.searchParams,
     headers,
-    json<T>(): T | null {
+    json(): unknown {
       if (!postData) return null;
       try {
-        return JSON.parse(postData) as T;
+        return JSON.parse(postData);
       } catch {
         return null;
       }

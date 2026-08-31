@@ -32,9 +32,11 @@ export function CardHeader({ className, children, actions, ...props }: CardHeade
   );
 }
 
-export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
+export function CardTitle({ className, children, ...props }: HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h3 className={cn("font-heading text-base leading-none font-semibold", className)} {...props} />
+    <h3 className={cn("font-heading text-base leading-none font-semibold", className)} {...props}>
+      {children}
+    </h3>
   );
 }
 

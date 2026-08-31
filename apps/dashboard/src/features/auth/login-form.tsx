@@ -41,7 +41,8 @@ export function LoginForm() {
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: () => {
-      getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
+      // Fire-and-forget: the redirect below does not need the cache to have settled first.
+      void getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
       const next = searchParams.get("next");
       router.replace(next?.startsWith("/") ? next : "/dashboard");
     },
@@ -84,7 +85,21 @@ export function LoginForm() {
 
         <form
           className="space-y-4"
-          onSubmit={handleSubmit((values) => mutation.mutate(values))}
+          // react-hook-form's handleSubmit always returns an async wrapper, so onSubmit
+          // is a promise-returning function where the DOM expects void — but `void` alone
+          // only silences that mismatch, it does not handle a rejection. A validation
+          // failure itself never rejects (react-hook-form resolves that internally via
+          // setError), and mutation.mutate is fire-and-forget, but an unexpected throw
+          // inside the resolver would otherwise vanish as an unhandled rejection with
+          // nothing here to say so — hence the explicit .catch(), matching app-shell.tsx's
+          // sign-out handler rather than repeating its earlier, already-fixed mistake.
+          onSubmit={(event) => {
+            handleSubmit((values) => {
+              mutation.mutate(values);
+            })(event).catch((error: unknown) => {
+              console.error("Unexpected error while submitting the sign-in form:", error);
+            });
+          }}
           noValidate
         >
           <FormField

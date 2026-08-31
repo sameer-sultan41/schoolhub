@@ -120,6 +120,13 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   **warns and skips** rather than blocking — CI remains the authority, and a
   frontend-only contributor must still be able to commit.
 
+  ESLint is type-aware (`strictTypeChecked` + `projectService`) and stays in
+  `pre-commit` deliberately — measured, not assumed: ~8s for a full 7-workspace
+  `pnpm lint` cold, under 1s warm (turbo cache), ~11s for a realistic multi-workspace
+  staged commit. Nowhere near slow enough to justify deferring it to `pre-push`, and
+  it is the check most likely to catch a real bug (`no-floating-promises`,
+  `no-misused-promises`) before it is even committed.
+
   `SKIP_HOOKS=1` skips the lint/typecheck checks for one commit or push.
   **It does not bypass the `main`-push block** — that check runs before `SKIP_HOOKS`
   is even read, deliberately, since it enforces the PR-only workflow above, not code

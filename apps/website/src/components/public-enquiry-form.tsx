@@ -26,7 +26,7 @@ export function PublicEnquiryForm({
 }) {
   const [status, setStatus] = useState<Status>("idle");
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("submitting");
     const form = new FormData(event.currentTarget);
@@ -60,7 +60,10 @@ export function PublicEnquiryForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    // onSubmit is async and already catches its own errors internally (setStatus("error")
+    // never throws out), so `void` here only satisfies onSubmit's void-returning type —
+    // there is nothing left for a caller to await or handle.
+    <form onSubmit={(event) => void onSubmit(event)} className="space-y-4">
       <div className="space-y-1.5">
         <label htmlFor="enquiry-name" className="block text-sm font-medium text-foreground">
           Your name

@@ -105,9 +105,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={async () => {
-                  await logout();
-                  router.replace("/login");
+                onClick={() => {
+                  // onClick expects void, but logout() is async — and it intentionally
+                  // rethrows anything that isn't the expected ApiError (see its own
+                  // comment), so that rejection must be handled here rather than left to
+                  // become an unhandled promise rejection. The user still always reaches
+                  // /login: the unexpected case is logged, not swallowed or re-thrown.
+                  void logout()
+                    .catch((error: unknown) => {
+                      console.error("Sign-out request failed unexpectedly:", error);
+                    })
+                    .finally(() => {
+                      router.replace("/login");
+                    });
                 }}
               >
                 {t("signOut")}
