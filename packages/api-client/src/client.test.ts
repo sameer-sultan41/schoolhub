@@ -4,11 +4,16 @@ import { collectPages } from "./pagination";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   // Headers is a class, not a plain object — init.headers may be a real Headers instance
-  // (HeadersInit's type includes it), and spreading one copies nothing useful. Merge
-  // through the Headers constructor instead, which accepts any HeadersInit.
-  const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
-  headers.set("X-Request-ID", "req-1");
+  // (HeadersInit's type includes it), and spreading one copies nothing useful. Start from
+  // the defaults, then layer init.headers on top through the Headers constructor (which
+  // normalizes any HeadersInit shape) so a caller's own header still wins — building it
+  // the other way around and calling .set() for the defaults afterward inverts that and
+  // makes the defaults silently win instead, exactly backwards from what a test override
+  // needs.
+  const headers = new Headers({ "Content-Type": "application/json", "X-Request-ID": "req-1" });
+  new Headers(init.headers).forEach((value, key) => {
+    headers.set(key, value);
+  });
   return new Response(JSON.stringify(body), { status: 200, ...init, headers });
 }
 
