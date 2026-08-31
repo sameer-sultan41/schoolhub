@@ -8,7 +8,9 @@ description: >-
 runs:
   using: composite
   steps:
-    - uses: astral-sh/setup-uv@v10
+    # astral-sh/setup-uv only tags full semver, unlike actions/setup-python's rolling
+    # major-version tags — there is no `v10` to float on, so pin exactly.
+    - uses: astral-sh/setup-uv@v10.0.1
       with:
         # Matches apps/api/pyproject.toml's [tool.uv] required-version bound.
         version: "0.11.9"
