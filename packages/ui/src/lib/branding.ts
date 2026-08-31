@@ -76,3 +76,108 @@ export function brandingToCssText(
   const body = entries.map(([token, value]) => `${token}:${value}`).join(";");
   return `${selector}{${body}}`;
 }
+
+/**
+ * non-functional.md §5: "tenant branding choices (colors) are contrast-validated with a
+ * warning on failure." Parses #rgb/#rrggbb(aa)/rgb()/rgba() only — the common case for a
+ * colour-picker-driven settings form. Anything else (a named colour, oklch(), hsl()) is
+ * skipped rather than flagged: a false "fails contrast" on a value this cannot parse
+ * would be worse than not checking it at all.
+ */
+function parseColorToRgb(value: string): [number, number, number] | null {
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(value.trim());
+  const hexDigits = hex?.[1];
+  if (hexDigits) {
+    // #rgb(a) shorthand expands each digit to a pair, e.g. "a1" from "a".
+    const expanded =
+      hexDigits.length <= 4
+        ? hexDigits
+            .split("")
+            .map((d) => d + d)
+            .join("")
+        : hexDigits;
+    const r = Number.parseInt(expanded.slice(0, 2), 16);
+    const g = Number.parseInt(expanded.slice(2, 4), 16);
+    const b = Number.parseInt(expanded.slice(4, 6), 16);
+    return [r, g, b];
+  }
+
+  const rgb = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*[\d.]+\s*)?\)$/i.exec(
+    value.trim(),
+  );
+  if (rgb?.[1] && rgb[2] && rgb[3]) {
+    const r = Number.parseInt(rgb[1], 10);
+    const g = Number.parseInt(rgb[2], 10);
+    const b = Number.parseInt(rgb[3], 10);
+    if (r <= 255 && g <= 255 && b <= 255) return [r, g, b];
+  }
+
+  return null;
+}
+
+/** WCAG relative luminance (https://www.w3.org/TR/WCAG21/#dfn-relative-luminance). */
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const channel = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+/** WCAG contrast ratio (https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio); 1–21. */
+function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+  const lighter = Math.max(relativeLuminance(a), relativeLuminance(b));
+  const darker = Math.min(relativeLuminance(a), relativeLuminance(b));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** WCAG 2.1 AA for normal text — the bar non-functional.md §5 sets platform-wide. */
+const MIN_AA_CONTRAST = 4.5;
+
+/**
+ * The platform's own fixed `--sh-color-primary-foreground` default (theme.css) — never
+ * tenant-overridable (TOKEN_MAP above has no `*_foreground` entries), so a tenant's own
+ * `primary_color` is the only side of that pairing they control. Kept as a literal here
+ * rather than imported from CSS: this function has no access to a live stylesheet, and a
+ * hardcoded snapshot of the real default is the correct fixed reference point, not a
+ * magic number — update it if theme.css's own primary-foreground default ever changes.
+ */
+const PLATFORM_PRIMARY_FOREGROUND: [number, number, number] = [0xfb, 0xf7, 0xee]; // Ivory #FBF7EE
+const PLATFORM_BACKGROUND: [number, number, number] = [0xff, 0xff, 0xff]; // White #FFFFFF
+
+export interface ContrastWarning {
+  pair: "foreground_color/background_color" | "primary_color/primary_text";
+  ratio: number;
+}
+
+/**
+ * Checks the two highest-impact pairings — body text and primary-button text — not
+ * every possible token combination. Returns warnings, never blocks: this repo's own bar
+ * is "warning on failure," and a tenant may have real-world reasons (an existing brand
+ * guideline) for a choice that reads as low-contrast to this heuristic. A pair where
+ * either colour cannot be parsed (see parseColorToRgb) is silently skipped, not warned.
+ */
+export function checkBrandingContrast(
+  branding: TenantBranding | null | undefined,
+): ContrastWarning[] {
+  if (!branding) return [];
+  const warnings: ContrastWarning[] = [];
+
+  const foreground = branding.foreground_color ? parseColorToRgb(branding.foreground_color) : null;
+  const background = branding.background_color
+    ? parseColorToRgb(branding.background_color)
+    : PLATFORM_BACKGROUND;
+  if (foreground && background) {
+    const ratio = contrastRatio(foreground, background);
+    if (ratio < MIN_AA_CONTRAST)
+      warnings.push({ pair: "foreground_color/background_color", ratio });
+  }
+
+  const primary = branding.primary_color ? parseColorToRgb(branding.primary_color) : null;
+  if (primary) {
+    const ratio = contrastRatio(primary, PLATFORM_PRIMARY_FOREGROUND);
+    if (ratio < MIN_AA_CONTRAST) warnings.push({ pair: "primary_color/primary_text", ratio });
+  }
+
+  return warnings;
+}

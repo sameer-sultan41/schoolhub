@@ -121,5 +121,11 @@ export type { TextareaProps } from "./components/textarea";
 
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip";
 
-export { brandingToCssText, brandingToCssVariables, sanitizeCssValue } from "./lib/branding";
+export {
+  brandingToCssText,
+  brandingToCssVariables,
+  checkBrandingContrast,
+  sanitizeCssValue,
+} from "./lib/branding";
+export type { ContrastWarning } from "./lib/branding";
 export { cn } from "./lib/cn";
