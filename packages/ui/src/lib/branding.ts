@@ -25,6 +25,20 @@ export function sanitizeCssValue(value: string | null | undefined): string | nul
   return trimmed;
 }
 
+/**
+ * `heading_font`/`body_font` REPLACE the whole `--sh-font-*` property, not just prepend to
+ * it — same "tenant value wins outright" contract as every other row here. The platform
+ * default those properties fall back to (theme.css) chains Inter/Fraunces *then* Noto
+ * Nastaliq Urdu, so Urdu glyphs render correctly with no `[lang="ur"]` override needed. A
+ * tenant that sets a Latin-only custom `body_font` (e.g. "Poppins, sans-serif") loses that
+ * fallback entirely for their own site — their Urdu-locale UI text falls through to
+ * whatever generic sans-serif the visitor's OS ships, which typically has no Nastaliq
+ * shaping. This is accepted as the correct behaviour of "tenant branding always wins", not
+ * a bug: overriding it to silently re-inject Nastaliq would contradict that contract. If a
+ * tenant-configurable Urdu-safe font list becomes a real complaint, that is a product
+ * decision (e.g. validate `body_font` against a font that covers the tenant's own locales
+ * at branding-save time), not something to paper over here.
+ */
 const TOKEN_MAP: ReadonlyArray<[keyof TenantBranding, string]> = [
   ["primary_color", "--sh-color-primary"],
   ["secondary_color", "--sh-color-secondary"],
