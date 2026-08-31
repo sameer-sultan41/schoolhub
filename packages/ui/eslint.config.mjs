@@ -1,6 +1,7 @@
 import { defineConfig } from "eslint/config";
 import reactHooks from "eslint-plugin-react-hooks";
 import jsxA11y from "eslint-plugin-jsx-a11y";
+import tseslint from "typescript-eslint";
 import base from "@schoolhub/config/eslint";
 
 /**
@@ -17,4 +18,10 @@ export default defineConfig([
   reactHooks.configs.flat.recommended,
   jsxA11y.flatConfigs.recommended,
   ...base,
+  // This package's tsconfig include is scoped to src/**/*.ts(x) only (see tsconfig.json).
+  // The shared base's disableTypeChecked block already covers jest.setup.ts by exact
+  // name — this covers any OTHER future root-level .ts file (a codegen script, say),
+  // which would otherwise hard-error under type-aware linting rather than degrade to a
+  // normal rule result.
+  { files: ["*.ts"], ...tseslint.configs.disableTypeChecked },
 ]);

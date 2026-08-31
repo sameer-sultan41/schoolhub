@@ -54,17 +54,22 @@ export default tseslint.config(
     },
   },
   {
-    // Tests may reach for looser typing when building fixtures.
+    // Jest tests only — not e2e/**/*.spec.ts, deliberately. This carve-out exists for one
+    // specific, known limitation: jest.fn()'s generic does not survive chaining through
+    // its own fluent mock methods (e.g. `jest.fn<T>().mockResolvedValue(x)` infers back to
+    // `Mock<any, any, any>`, a known @types/jest limitation, not a real gap in this
+    // codebase), so every `.mock.calls[n][m]` access on a mocked function is `any`
+    // regardless of how carefully the mock is typed. The e2e suite has no jest.fn()
+    // anywhere — its mocking is the hand-typed MockApi in e2e/src/mocks/, not a jest
+    // mock — so it does not have this problem and is intentionally held to the full
+    // strict bar. Widening this glob to include .spec.ts would silently weaken that for
+    // no reason tied to an actual limitation.
     files: ["**/*.test.ts", "**/*.test.tsx", "**/jest.setup.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      // jest.fn()'s generic does not survive chaining through its own fluent mock methods
-      // (e.g. `jest.fn<T>().mockResolvedValue(x)` infers back to `Mock<any, any, any>`,
-      // a known @types/jest limitation, not a real gap in this codebase) — so every
-      // `.mock.calls[n][m]` access on a mocked function is `any` regardless of how
-      // carefully the mock is typed. Scoped to exactly the rules that fire on that, not
-      // the whole no-unsafe-* family, so a genuine `any` leaking through test logic
-      // itself is still caught.
+      // Scoped to exactly the rules that fire on the jest.fn() limitation above, not the
+      // whole no-unsafe-* family, so a genuine `any` leaking through test logic itself is
+      // still caught.
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
       "@typescript-eslint/no-unsafe-argument": "off",
