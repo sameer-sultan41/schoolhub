@@ -119,7 +119,7 @@ export function LoginForm() {
                   <FormLabel required>{t("identifier")}</FormLabel>
                   <FormDescription>{t("identifierHint")}</FormDescription>
                   <FormControl required>
-                    <Input {...field} autoComplete="username" autoFocus />
+                    <Input {...field} autoComplete="username" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
