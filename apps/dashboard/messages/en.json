@@ -16,7 +16,8 @@
     "settings": "Settings",
     "signOut": "Sign out",
     "skipToContent": "Skip to main content",
-    "primary": "Primary navigation"
+    "primary": "Primary navigation",
+    "closeMenu": "Close menu"
   },
   "auth": {
     "login": {
@@ -66,6 +67,8 @@
     "rate_limited": "Too many requests. Wait a moment and try again.",
     "network_error": "We could not reach the server. Check your connection.",
     "server_error": "Something went wrong on our side. The team has been notified.",
-    "requestId": "Reference: {requestId}"
+    "requestId": "Reference: {requestId}",
+    "pageErrorTitle": "Something went wrong",
+    "pageErrorBody": "This page hit an unexpected error. Try again, or contact support if it keeps happening."
   }
 }

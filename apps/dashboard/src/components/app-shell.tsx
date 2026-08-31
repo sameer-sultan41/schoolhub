@@ -1,12 +1,21 @@
 "use client";
 
 import type { PermissionKey, Tenant } from "@schoolhub/types";
-import { Button, cn } from "@schoolhub/ui";
+import {
+  Button,
+  cn,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+  SheetTrigger,
+} from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
+import { Menu } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { TenantTheme } from "@/components/tenant-theme";
 import { useSession } from "@/hooks/use-session";
 import { apiClient, logout } from "@/lib/auth";
@@ -30,12 +39,45 @@ const NAV_ITEMS: { key: string; href: string; module: string; permission?: Permi
   { key: "website", href: "/website", module: "website" },
 ];
 
+interface NavListProps {
+  items: typeof NAV_ITEMS;
+  pathname: string;
+  t: (key: string) => string;
+  onNavigate?: () => void;
+}
+
+function NavList({ items, pathname, t, onNavigate }: NavListProps) {
+  return (
+    <ul className="space-y-1 px-3 pb-4">
+      {items.map((item) => {
+        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        return (
+          <li key={item.key}>
+            <Link
+              href={item.href}
+              aria-current={isActive ? "page" : undefined}
+              onClick={onNavigate}
+              className={cn(
+                "block rounded-[var(--sh-radius)] px-3 py-2 text-sm",
+                isActive ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted",
+              )}
+            >
+              {t(item.key)}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useTranslations("nav");
   const tAuth = useTranslations("auth.session");
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useSession();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const { data: tenant } = useQuery({
     queryKey: queryKeys.tenant(),
@@ -47,6 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const visibleItems = NAV_ITEMS.filter(
     (item) => item.module === "" || canAccessModule(user, item.module),
   );
+  const tenantLabel = tenant?.name ?? "SchoolHub";
 
   return (
     <TenantTheme branding={tenant?.branding}>
@@ -65,43 +108,64 @@ export function AppShell({ children }: { children: ReactNode }) {
         ) : null}
 
         <div className="flex flex-1">
+          {/*
+            Desktop sidebar — unchanged from before: still `hidden md:block`, still the
+            ONE <nav aria-label="Primary navigation"> in the accessibility tree at any
+            viewport where it's actually rendered. e2e's dashboard.page.ts locates it by
+            this exact role+name and scopes every nav link inside it; do not touch this
+            landmark's shape. w-64 (not the old w-60) gives Urdu labels — 20-40% longer
+            than their English counterparts — a little more room before wrapping.
+          */}
           <nav
             aria-label={t("primary")}
-            className="hidden w-60 shrink-0 border-e border-border bg-surface md:block"
+            className="hidden w-64 shrink-0 border-e border-border bg-surface md:block"
           >
             <div className="px-5 py-4">
               <span className="font-heading text-base font-semibold text-foreground">
-                {tenant?.name ?? "SchoolHub"}
+                {tenantLabel}
               </span>
             </div>
-            <ul className="space-y-1 px-3 pb-4">
-              {visibleItems.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <li key={item.key}>
-                    <Link
-                      href={item.href}
-                      aria-current={isActive ? "page" : undefined}
-                      className={cn(
-                        "block rounded-[var(--sh-radius)] px-3 py-2 text-sm",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-foreground hover:bg-muted",
-                      )}
-                    >
-                      {t(item.key)}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <NavList items={visibleItems} pathname={pathname} t={t} />
           </nav>
 
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-3">
-              <span className="truncate text-sm text-muted-foreground">
-                {user?.full_name ?? ""}
-              </span>
+              <div className="flex min-w-0 items-center gap-2">
+                {/*
+                  Mobile nav trigger — the previous shell had NO replacement at all for the
+                  sidebar below the md breakpoint; it simply vanished. Radix Dialog (which
+                  Sheet wraps) doesn't mount SheetContent while closed, so this never
+                  produces a second "Primary navigation" landmark alongside the desktop one
+                  above — only ever one is actually in the DOM for a given viewport.
+                */}
+                <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="md:hidden">
+                      <Menu className="size-5" />
+                      <span className="sr-only">{t("primary")}</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="start" closeLabel={t("closeMenu")} className="w-72 p-0">
+                    <SheetTitle className="px-5 pt-5 pb-1">{tenantLabel}</SheetTitle>
+                    <SheetDescription className="sr-only">{t("primary")}</SheetDescription>
+                    <nav aria-label={t("primary")} className="pt-3">
+                      <NavList
+                        items={visibleItems}
+                        pathname={pathname}
+                        t={t}
+                        onNavigate={() => {
+                          setMobileNavOpen(false);
+                        }}
+                      />
+                    </nav>
+                  </SheetContent>
+                </Sheet>
+
+                <span className="truncate text-sm text-muted-foreground">
+                  {user?.full_name ?? ""}
+                </span>
+              </div>
+
               <Button
                 variant="ghost"
                 size="sm"
