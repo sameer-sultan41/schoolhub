@@ -147,14 +147,21 @@ function contrastRatio(a: [number, number, number], b: [number, number, number])
 const MIN_AA_CONTRAST = 4.5;
 
 /**
- * The platform's own fixed `--sh-color-primary-foreground` default (theme.css) — never
+ * The platform's own fixed `--sh-color-*-foreground` defaults (theme.css) — never
  * tenant-overridable (TOKEN_MAP above has no `*_foreground` entries), so a tenant's own
- * `primary_color` is the only side of that pairing they control. Kept as a literal here
- * rather than imported from CSS: this function has no access to a live stylesheet, and a
- * hardcoded snapshot of the real default is the correct fixed reference point, not a
- * magic number — update it if theme.css's own primary-foreground default ever changes.
+ * primary_color/secondary_color/accent_color is the only side of each pairing they
+ * control. Kept as literals here rather than imported from CSS: this function has no
+ * access to a live stylesheet, and a hardcoded snapshot of the real default is the correct
+ * fixed reference point, not a magic number — update these if theme.css's own defaults
+ * ever change. Light mode only, same limitation as PLATFORM_FOREGROUND above: primary's and
+ * secondary's dark-mode foreground differs from these (accent's happens not to).
  */
 const PLATFORM_PRIMARY_FOREGROUND: [number, number, number] = [0xfb, 0xf7, 0xee]; // Ivory #FBF7EE
+// secondary_color and accent_color both pair against the platform's fixed Indigo text
+// (theme.css's --sh-color-secondary-foreground/--sh-color-accent-foreground, never
+// tenant-overridable) — a pale/marigold surface with dark indigo text on top, the reverse
+// of primary/danger's light-text-on-saturated-surface pairing above.
+const PLATFORM_SECONDARY_ACCENT_FOREGROUND: [number, number, number] = [0x2b, 0x2a, 0x6b]; // Indigo #2B2A6B
 // theme.css :root light-mode defaults — the pairing a tenant who sets only ONE side of
 // foreground/background actually renders against, so this must fall back exactly like
 // PLATFORM_BACKGROUND does, on both sides. Light mode only: theme.css's own dark-mode media
@@ -165,16 +172,22 @@ const PLATFORM_FOREGROUND: [number, number, number] = [0x18, 0x18, 0x1b]; // #18
 const PLATFORM_BACKGROUND: [number, number, number] = [0xff, 0xff, 0xff]; // White #FFFFFF
 
 export interface ContrastWarning {
-  pair: "foreground_color/background_color" | "primary_color/primary_text";
+  pair:
+    | "foreground_color/background_color"
+    | "primary_color/primary_text"
+    | "secondary_color/secondary_text"
+    | "accent_color/accent_text";
   ratio: number;
 }
 
 /**
- * Checks the two highest-impact pairings — body text and primary-button text — not
- * every possible token combination. Returns warnings, never blocks: this repo's own bar
- * is "warning on failure," and a tenant may have real-world reasons (an existing brand
- * guideline) for a choice that reads as low-contrast to this heuristic. A pair where
- * either colour cannot be parsed (see parseColorToRgb) is silently skipped, not warned.
+ * Checks the highest-impact pairings — body text, plus every tenant-brandable colour
+ * TOKEN_MAP maps onto a surface with its own fixed platform text colour on top
+ * (primary/secondary/accent) — not every possible token combination. Returns warnings,
+ * never blocks: this repo's own bar is "warning on failure," and a tenant may have
+ * real-world reasons (an existing brand guideline) for a choice that reads as low-contrast
+ * to this heuristic. A pair where either colour cannot be parsed (see parseColorToRgb) is
+ * silently skipped, not warned.
  */
 export function checkBrandingContrast(
   branding: TenantBranding | null | undefined,
@@ -198,6 +211,18 @@ export function checkBrandingContrast(
   if (primary) {
     const ratio = contrastRatio(primary, PLATFORM_PRIMARY_FOREGROUND);
     if (ratio < MIN_AA_CONTRAST) warnings.push({ pair: "primary_color/primary_text", ratio });
+  }
+
+  const secondary = branding.secondary_color ? parseColorToRgb(branding.secondary_color) : null;
+  if (secondary) {
+    const ratio = contrastRatio(secondary, PLATFORM_SECONDARY_ACCENT_FOREGROUND);
+    if (ratio < MIN_AA_CONTRAST) warnings.push({ pair: "secondary_color/secondary_text", ratio });
+  }
+
+  const accent = branding.accent_color ? parseColorToRgb(branding.accent_color) : null;
+  if (accent) {
+    const ratio = contrastRatio(accent, PLATFORM_SECONDARY_ACCENT_FOREGROUND);
+    if (ratio < MIN_AA_CONTRAST) warnings.push({ pair: "accent_color/accent_text", ratio });
   }
 
   return warnings;

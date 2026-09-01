@@ -73,6 +73,20 @@ describe("checkBrandingContrast", () => {
     expect(warnings[0]?.ratio).toBeLessThan(1.1);
   });
 
+  it("warns when secondary_color or accent_color is too close to the fixed platform indigo text", () => {
+    // #3a3980 is a near-indigo tenant colour that would nearly vanish against the FIXED
+    // (never tenant-overridable) --sh-color-secondary-foreground/--sh-color-accent-foreground
+    // default of #2B2A6B — computed independently via the WCAG formula: ~1.26:1.
+    const secondaryWarnings = checkBrandingContrast({ secondary_color: "#3a3980" });
+    expect(secondaryWarnings).toHaveLength(1);
+    expect(secondaryWarnings[0]).toMatchObject({ pair: "secondary_color/secondary_text" });
+    expect(secondaryWarnings[0]?.ratio).toBeCloseTo(1.2616, 3);
+
+    const accentWarnings = checkBrandingContrast({ accent_color: "#3a3980" });
+    expect(accentWarnings).toHaveLength(1);
+    expect(accentWarnings[0]).toMatchObject({ pair: "accent_color/accent_text" });
+  });
+
   it("skips a pair it cannot parse rather than guessing", () => {
     expect(
       checkBrandingContrast({
