@@ -14,7 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { formatMinorUnits } from "@/lib/format";
+import { formatCount, formatMinorUnits, formatPercent } from "@/lib/format";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 
@@ -56,12 +56,15 @@ export function DashboardSummary() {
     {
       key: "students",
       permission: "students.student.view" as const,
-      value: data ? String(data.students_enrolled) : "—",
+      value: data ? formatCount(data.students_enrolled, locale) : "—",
     },
     {
       key: "attendanceToday",
       permission: "attendance.student-attendance.view" as const,
-      value: data && data.attendance_rate_today !== null ? `${data.attendance_rate_today}%` : "—",
+      value:
+        data && data.attendance_rate_today !== null
+          ? formatPercent(data.attendance_rate_today, locale)
+          : "—",
     },
     {
       key: "feesOutstanding",
@@ -73,7 +76,7 @@ export function DashboardSummary() {
     {
       key: "openAdmissions",
       permission: "admissions.enquiry.view" as const,
-      value: data ? String(data.open_admission_enquiries) : "—",
+      value: data ? formatCount(data.open_admission_enquiries, locale) : "—",
     },
   ];
 
