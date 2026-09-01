@@ -4,9 +4,16 @@
  * single-use values stay local to their component.
  */
 
-/** Elements DataTable's clickable-row handlers treat as "already interactive" — a click or
- * keydown originating from one of these must not also trigger the row's own onRowClick. */
-export const INTERACTIVE_ELEMENT_SELECTOR = "button, a, input, select, textarea";
+/**
+ * Elements DataTable's clickable-row handlers treat as "already interactive" — a click or
+ * keydown originating from one of these must not also trigger the row's own onRowClick.
+ * Covers today's real controls (button, a, input, select, textarea) plus the ARIA roles
+ * and native affordances a future actions-column cell could plausibly use instead —
+ * summary/[contenteditable], and role="button"/"link"/"menuitem" for a component that
+ * renders its own interactive semantics on a non-native element.
+ */
+export const INTERACTIVE_ELEMENT_SELECTOR =
+  'button, a, input, select, textarea, summary, [contenteditable], [role="button"], [role="link"], [role="menuitem"]';
 
 /** Placeholder row count DataTable renders while `isLoading` is true. */
 export const DEFAULT_SKELETON_ROW_COUNT = 3;
