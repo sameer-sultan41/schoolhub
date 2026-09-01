@@ -26,9 +26,17 @@ export function AdmissionsCta({ section }: SectionProps) {
           use site. bg-background and text-foreground override the primary variant's own
           bg-primary/text-primary-foreground classes; both sides share the same
           background-color/text-color class groups tailwind-merge dedupes on, so the
-          override reliably wins.
+          override reliably wins. hover:opacity-100 is load-bearing, not decorative: the
+          primary variant's own hover is hover:opacity-90 (a different tailwind-merge
+          group than hover:bg-background/90, so it survives untouched) — without this,
+          hovering would fade the whole button, text included, to 90% opacity on top of
+          the background-colour change below.
         */}
-        <Button asChild size="lg" className="bg-background text-foreground hover:bg-background/90">
+        <Button
+          asChild
+          size="lg"
+          className="bg-background text-foreground hover:bg-background/90 hover:opacity-100"
+        >
           <Link href={cta_href}>{cta_label}</Link>
         </Button>
       </div>
