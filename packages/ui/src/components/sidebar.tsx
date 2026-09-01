@@ -7,6 +7,7 @@ import {
   type ComponentProps,
   type CSSProperties,
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -96,22 +97,31 @@ export function SidebarProvider({
 
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const open = openProp ?? internalOpen;
-  const setOpen = (value: boolean | ((value: boolean) => boolean)) => {
-    const openState = typeof value === "function" ? value(open) : value;
-    if (setOpenProp) {
-      setOpenProp(openState);
-    } else {
-      setInternalOpen(openState);
-    }
-  };
+  // useCallback, not a plain function: the keydown listener below is only attached once
+  // (its effect depends on toggleSidebar, not on every render) and needs the CURRENT
+  // open/setOpenProp on every call, not whatever they were the one time the listener was
+  // registered — a plain function here reproduced exactly that bug: after the first
+  // press, every subsequent press recomputed the same stale !open and React bailed on
+  // setting state to a value it already held.
+  const setOpen = useCallback(
+    (value: boolean | ((value: boolean) => boolean)) => {
+      const openState = typeof value === "function" ? value(open) : value;
+      if (setOpenProp) {
+        setOpenProp(openState);
+      } else {
+        setInternalOpen(openState);
+      }
+    },
+    [open, setOpenProp],
+  );
 
-  const toggleSidebar = () => {
+  const toggleSidebar = useCallback(() => {
     if (isMobile) {
       setOpenMobile((value) => !value);
     } else {
       setOpen((value) => !value);
     }
-  };
+  }, [isMobile, setOpen]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -124,15 +134,13 @@ export function SidebarProvider({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- toggleSidebar closes over open/isMobile by design, matching upstream
-  }, [isMobile]);
+  }, [toggleSidebar]);
 
   const state = open ? "expanded" : "collapsed";
 
   const contextValue = useMemo<SidebarContextValue>(
     () => ({ state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setOpen/toggleSidebar are recreated every render by design, matching upstream
-    [state, open, isMobile, openMobile],
+    [state, open, isMobile, openMobile, setOpen, toggleSidebar],
   );
 
   return (
@@ -225,14 +233,16 @@ export function Sidebar({
       data-variant={variant}
       data-side={side}
     >
-      {/* Handles the layout gap on desktop. rtl:/ltr: (not a data-side selector) because the
-          visual mirroring this rotate achieves depends on the rendered direction, not on
-          which logical edge was requested. */}
+      {/* Handles the layout gap on desktop. Rotated only for an end-side sidebar — matches
+          upstream's own group-data-[side=right]:rotate-180 exactly, just keyed off the
+          logical `end` this file uses instead of physical `right`. This has nothing to do
+          with reading direction: an end-side sidebar needs the mirrored collapse-width
+          animation regardless of whether the document is ltr or rtl. */}
       <div
         className={cn(
           "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
           "group-data-[collapsible=offcanvas]:w-0",
-          "ltr:rotate-180 rtl:rotate-0",
+          "group-data-[side=end]:rotate-180",
           variant === "floating" || variant === "inset"
             ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
             : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
