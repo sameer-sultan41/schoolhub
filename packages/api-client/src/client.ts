@@ -1,5 +1,6 @@
 import type { ApiMeta, ApiSuccessEnvelope } from "@schoolhub/types";
 import { ApiError, codeForStatus, parseErrorEnvelope } from "./errors";
+import { TRAILING_SLASH_PATTERN } from "./regex";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -70,7 +71,7 @@ export function buildQueryString(query: QueryParams | undefined): string {
 }
 
 function joinUrl(baseUrl: string, path: string): string {
-  const base = baseUrl.replace(/\/+$/, "");
+  const base = baseUrl.replace(TRAILING_SLASH_PATTERN, "");
   const suffix = path.startsWith("/") ? path : `/${path}`;
   return `${base}${suffix}`;
 }
