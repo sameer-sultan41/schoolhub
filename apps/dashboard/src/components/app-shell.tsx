@@ -177,9 +177,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Button>
             </header>
 
-            <main id="main-content" className="flex-1 px-6 py-6">
+            {/* A plain div, not <main>: SidebarInset already renders the page's one <main>
+                landmark. Nesting a second <main> inside it (as this was before) is
+                invalid HTML and gives the accessibility tree two "main" landmarks, one
+                of them wrongly containing the header (user name, sign-out). id stays
+                here, not on SidebarInset, so the skip link still lands past the header
+                and only at the actual content, exactly as before. */}
+            <div id="main-content" className="flex-1 px-6 py-6">
               {children}
-            </main>
+            </div>
           </SidebarInset>
         </SidebarProvider>
       </div>
