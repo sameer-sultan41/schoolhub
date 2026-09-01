@@ -1,4 +1,5 @@
 import { Fraunces, Inter, Noto_Nastaliq_Urdu } from "next/font/google";
+import { checkBrandingContrast } from "@schoolhub/ui/lib/branding";
 import type { ReactNode } from "react";
 import { resolveTenant } from "@/lib/tenant";
 import { themeStyle } from "@/themes/default";
@@ -32,6 +33,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const tenant = resolution.status === "unknown" ? null : resolution.tenant;
   const locale = tenant?.locale.default_locale ?? "en";
   const dir = tenant?.locale.direction ?? "ltr";
+
+  // Server-side, not a client useEffect like apps/dashboard's TenantTheme: this is the only
+  // surface where a tenant's branding reaches the public, parent-facing site, so it's the
+  // one that most needs the same warning apps/dashboard's admin-only view already gets.
+  for (const warning of checkBrandingContrast(tenant?.branding)) {
+    console.warn(
+      `Tenant branding fails WCAG AA contrast for ${warning.pair} (${warning.ratio.toFixed(2)}:1, needs 4.5:1).`,
+    );
+  }
 
   return (
     <html
