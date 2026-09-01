@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
+import { LOGIN_PATH } from "@/lib/constants";
 
 /**
  * Auth guard. (Next 16 renamed the `middleware` convention to `proxy`.)
@@ -10,7 +11,7 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth";
  * read a user, roles, or permissions out of it. Every API call is authorized server-side.
  */
 
-const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
+const PUBLIC_PATHS = [LOGIN_PATH, "/forgot-password", "/reset-password"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -31,7 +32,7 @@ export function proxy(request: NextRequest): NextResponse {
     return NextResponse.next();
   }
 
-  const loginUrl = new URL("/login", request.url);
+  const loginUrl = new URL(LOGIN_PATH, request.url);
   // Only ever round-trip a same-origin path, so this cannot become an open redirect.
   if (pathname !== "/") loginUrl.searchParams.set("next", `${pathname}${search}`);
   return NextResponse.redirect(loginUrl);

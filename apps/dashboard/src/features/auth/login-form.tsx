@@ -70,7 +70,7 @@ export function LoginForm() {
 
   const formError =
     mutation.error instanceof ApiError
-      ? mutation.error.status === 401
+      ? mutation.error.isUnauthenticated
         ? t("genericError")
         : tErrors.has(mutation.error.code)
           ? tErrors(mutation.error.code)
