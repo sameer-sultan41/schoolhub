@@ -161,10 +161,13 @@ export function FormControl({
     useFormField();
   // Only reference an id when its element both exists in this FormItem's JSX and has
   // something to say — FormDescription always renders once present; FormMessage renders
-  // exactly when `error` is set (its own "return null" condition), so pairing hasMessage
-  // with error here mirrors that precisely rather than guessing from error alone.
+  // exactly when error.message is non-empty (its own "return null" condition is `!body`,
+  // and body is error.message here), so checking error?.message rather than just error
+  // mirrors that precisely: an error object with an empty-string message (a real shape a
+  // server-sourced setError() call can produce) still leaves FormMessage rendering
+  // nothing, and this must not reference an id no element in the DOM actually has.
   const describedBy =
-    [hasDescription ? formDescriptionId : null, hasMessage && error ? formMessageId : null]
+    [hasDescription ? formDescriptionId : null, hasMessage && error?.message ? formMessageId : null]
       .filter(Boolean)
       .join(" ") || undefined;
 
