@@ -4,6 +4,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { Fraunces, Inter, Noto_Nastaliq_Urdu } from "next/font/google";
 import type { ReactNode } from "react";
 import { AppProviders } from "@/components/providers";
+import { PLATFORM_NAME } from "@/lib/constants";
 import { directionFor } from "@/lib/env";
 import "./globals.css";
 
@@ -37,10 +38,10 @@ const notoNastaliqUrdu = Noto_Nastaliq_Urdu({
 
 export const metadata: Metadata = {
   title: {
-    default: "SchoolHub",
-    template: "%s · SchoolHub",
+    default: PLATFORM_NAME,
+    template: `%s · ${PLATFORM_NAME}`,
   },
-  description: "SchoolHub administration dashboard",
+  description: `${PLATFORM_NAME} administration dashboard`,
   // The dashboard is a private application: keep it out of every index.
   robots: { index: false, follow: false },
 };

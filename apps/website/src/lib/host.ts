@@ -1,4 +1,5 @@
 import type { ResolvedTenantHost } from "@schoolhub/types";
+import { HOSTNAME_PATTERN, PORT_SUFFIX_PATTERN, TRAILING_DOT_PATTERN } from "./regex";
 
 /**
  * Pure Host-header parsing, shared by the proxy (edge runtime) and the server
@@ -13,9 +14,9 @@ export function normalizeHost(rawHost: string | null | undefined): string | null
   if (!rawHost) return null;
   const host = rawHost.trim().toLowerCase().split(",")[0]?.trim();
   if (!host) return null;
-  const withoutPort = host.replace(/:\d+$/, "").replace(/\.$/, "");
+  const withoutPort = host.replace(PORT_SUFFIX_PATTERN, "").replace(TRAILING_DOT_PATTERN, "");
   // Reject anything that is not a plausible hostname before it reaches an API URL.
-  if (!/^[a-z0-9.-]+$/.test(withoutPort)) return null;
+  if (!HOSTNAME_PATTERN.test(withoutPort)) return null;
   return withoutPort;
 }
 

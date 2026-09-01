@@ -3,6 +3,7 @@
 import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 import { useQuery } from "@tanstack/react-query";
 import { restoreSession } from "@/lib/auth";
+import { SESSION_QUERY_STALE_TIME_MS } from "@/lib/constants";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 
@@ -17,7 +18,7 @@ export function useSession() {
   const query = useQuery<AuthenticatedUser | null>({
     queryKey: queryKeys.session(),
     queryFn: restoreSession,
-    staleTime: 5 * 60_000,
+    staleTime: SESSION_QUERY_STALE_TIME_MS,
     retry: false,
   });
 

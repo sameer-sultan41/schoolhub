@@ -1,5 +1,6 @@
 import type { RefreshResponse } from "@schoolhub/types";
 import { ApiError } from "./errors";
+import { TRAILING_SLASH_PATTERN } from "./regex";
 
 /**
  * In-memory access-token store.
@@ -73,7 +74,7 @@ export async function refreshAccessToken(
   options: RefreshOptions,
 ): Promise<{ accessToken: string; expiresIn: number } | null> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
-  const url = `${options.baseUrl.replace(/\/+$/, "")}${options.path ?? "/auth/refresh"}`;
+  const url = `${options.baseUrl.replace(TRAILING_SLASH_PATTERN, "")}${options.path ?? "/auth/refresh"}`;
 
   let response: Response;
   try {

@@ -12,6 +12,9 @@
 /** `SESSION_COOKIE_NAME` in `apps/dashboard/src/lib/auth.ts`. Read by the auth proxy. */
 export const SESSION_COOKIE_NAME = "sh_session";
 
+/** `LOCALE_COOKIE_NAME` in `apps/dashboard/src/i18n/request.ts`. Read to pick `dir`/locale. */
+export const LOCALE_COOKIE_NAME = "sh_locale";
+
 /** Tenant headers set by the website proxy — `apps/website/src/lib/host.ts` §65-67. */
 export const TENANT_HOST_HEADER = "x-schoolhub-host";
 export const TENANT_SLUG_HEADER = "x-schoolhub-tenant-slug";

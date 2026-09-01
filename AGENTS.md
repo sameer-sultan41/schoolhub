@@ -62,6 +62,23 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
    Precedence when they conflict: this repository's own conventions first (they are
    product decisions no vendor has an opinion on), then the vendor skill, then any
    in-house generic guidance.
+0c. **Prefer shadcn/ui's own component over a hand-rolled one.** Before building any
+   new UI primitive in `packages/ui`, check shadcn/ui's registry
+   (https://ui.shadcn.com/docs/components) — port their source rather than writing one
+   from scratch; this repo's shadcn migration (PR #9/#10/#12) exists specifically so
+   `packages/ui` stops accumulating hand-rolled equivalents of things shadcn already
+   solved. Two adaptations are required on every port, not optional polish:
+   1. Any `side`/direction prop must be logical (`start`/`end`), never shadcn's own
+      physical `left`/`right` — this repo's own `Sheet` already made this call, and
+      Urdu RTL depends on every component agreeing with it.
+   2. Any hardcoded English fallback text (an `sr-only` label, a defaulted prop like
+      shadcn's own `"Toggle Sidebar"`/`"Loading"`) becomes a **required** prop instead
+      — this package has no i18n of its own, so a silent default always ships
+      untranslated (`Dialog.closeLabel`, `Sheet.closeLabel`, `Button.loadingLabel`,
+      `DataTable`'s `emptyState`/pagination labels all already enforce this).
+
+   `packages/ui/src/components/sidebar.tsx`'s file-header comment is a worked example
+   of both, including why a straight port would have broken this repo's RTL support.
 
 1. Read `docs/AGENTS.md` for locked vocabulary and invariants.
 2. `docs/context/context-map.md` maps a task type to the 3–6 docs worth loading.

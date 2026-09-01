@@ -11,9 +11,10 @@ import {
   Skeleton,
 } from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
+import { formatCount, formatMinorUnits, formatPercent } from "@/lib/format";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 
@@ -25,10 +26,6 @@ interface DashboardStats {
   currency: string;
 }
 
-function formatMinorUnits(amount: number, currency: string, locale: string): string {
-  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount / 100);
-}
-
 /**
  * Each tile is permission-gated: a user without `fees.invoice.view` simply never sees the
  * outstanding-fees figure. The API would refuse the underlying call regardless.
@@ -36,6 +33,7 @@ function formatMinorUnits(amount: number, currency: string, locale: string): str
 export function DashboardSummary() {
   const t = useTranslations("dashboard");
   const tErrors = useTranslations("errors");
+  const locale = useLocale();
   const { user } = useSession();
 
   const { data, isPending, error } = useQuery({
@@ -58,22 +56,27 @@ export function DashboardSummary() {
     {
       key: "students",
       permission: "students.student.view" as const,
-      value: data ? String(data.students_enrolled) : "—",
+      value: data ? formatCount(data.students_enrolled, locale) : "—",
     },
     {
       key: "attendanceToday",
       permission: "attendance.student-attendance.view" as const,
-      value: data && data.attendance_rate_today !== null ? `${data.attendance_rate_today}%` : "—",
+      value:
+        data && data.attendance_rate_today !== null
+          ? formatPercent(data.attendance_rate_today, locale)
+          : "—",
     },
     {
       key: "feesOutstanding",
       permission: "fees.invoice.view" as const,
-      value: data ? formatMinorUnits(data.fees_outstanding_minor_units, data.currency, "en") : "—",
+      value: data
+        ? formatMinorUnits(data.fees_outstanding_minor_units, data.currency, locale)
+        : "—",
     },
     {
       key: "openAdmissions",
       permission: "admissions.enquiry.view" as const,
-      value: data ? String(data.open_admission_enquiries) : "—",
+      value: data ? formatCount(data.open_admission_enquiries, locale) : "—",
     },
   ];
 

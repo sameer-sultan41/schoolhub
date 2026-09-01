@@ -57,10 +57,28 @@ type ButtonOwnProps =
     }
   | {
       asChild?: false;
-      /** Shows a spinner and disables the button. Use for in-flight mutations. */
-      isLoading?: boolean;
-      /** Announced by screen readers while `isLoading`. */
-      loadingLabel?: string;
+      isLoading?: undefined;
+      loadingLabel?: never;
+      leadingIcon?: ReactNode;
+      trailingIcon?: ReactNode;
+    }
+  | {
+      asChild?: false;
+      /**
+       * Shows a spinner and disables the button. Use for in-flight mutations. Typed
+       * `boolean` (not the literal `true`) so a computed value like
+       * `isLoading={mutation.isPending}` still requires `loadingLabel` alongside it —
+       * narrowing to the `true` literal would reject exactly that call shape.
+       */
+      isLoading: boolean;
+      /**
+       * Announced by screen readers while `isLoading`. Required whenever `isLoading` is
+       * passed at all, not defaulted to an English string — this package has no i18n of
+       * its own, the same reason `Dialog.closeLabel`/`Sheet.closeLabel`/`DataTable`'s
+       * pagination labels are required rather than silently falling back to untranslated
+       * text.
+       */
+      loadingLabel: string;
       leadingIcon?: ReactNode;
       trailingIcon?: ReactNode;
     };
@@ -75,7 +93,7 @@ export function Button({
   size,
   block,
   isLoading = false,
-  loadingLabel = "Loading",
+  loadingLabel,
   leadingIcon,
   trailingIcon,
   disabled,
@@ -116,7 +134,12 @@ export function Button({
             aria-hidden="true"
             className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
           />
-          <span className="sr-only">{loadingLabel}</span>
+          {/* The type system requires loadingLabel whenever isLoading can be true, but a
+              JS consumer, cast, or widened spread could still bypass that at runtime —
+              skip the span entirely rather than announce nothing next to the spinner and
+              the button's own children, which would silently drop the loading/idle
+              distinction instead of failing loudly. */}
+          {loadingLabel ? <span className="sr-only">{loadingLabel}</span> : null}
         </>
       ) : (
         leadingIcon
