@@ -101,20 +101,34 @@ export function DataTable<TRow>({
                 <TableRow
                   key={getRowId(row)}
                   className={cn(onRowClick && "cursor-pointer hover:bg-muted")}
-                  {...(onRowClick
-                    ? {
-                        onClick: () => {
+                  // role="button" and tabIndex as plain conditional attribute VALUES, not
+                  // a conditional prop spread: eslint-plugin-jsx-a11y's static rules
+                  // (no-noninteractive-element-interactions and friends) inspect JSX
+                  // attributes directly on the element — a spread's contents are opaque
+                  // to that analysis, which is exactly how this row's interactivity went
+                  // unflagged before. role="button" also gives the row a real accessible
+                  // name for free: like a native <button>, an element with that role
+                  // computes its name from its own text content — every cell's rendered
+                  // text, here — rather than announcing as an ordinary, inert table row.
+                  role={onRowClick ? "button" : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onClick={
+                    onRowClick
+                      ? () => {
                           onRowClick(row);
-                        },
-                        tabIndex: 0,
-                        onKeyDown: (event) => {
+                        }
+                      : undefined
+                  }
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             onRowClick(row);
                           }
-                        },
-                      }
-                    : {})}
+                        }
+                      : undefined
+                  }
                 >
                   {columns.map((column) => (
                     <TableCell key={column.id} className={column.className}>
