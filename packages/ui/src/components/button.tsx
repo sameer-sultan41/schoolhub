@@ -134,7 +134,12 @@ export function Button({
             aria-hidden="true"
             className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
           />
-          <span className="sr-only">{loadingLabel}</span>
+          {/* The type system requires loadingLabel whenever isLoading can be true, but a
+              JS consumer, cast, or widened spread could still bypass that at runtime —
+              skip the span entirely rather than announce nothing next to the spinner and
+              the button's own children, which would silently drop the loading/idle
+              distinction instead of failing loudly. */}
+          {loadingLabel ? <span className="sr-only">{loadingLabel}</span> : null}
         </>
       ) : (
         leadingIcon
