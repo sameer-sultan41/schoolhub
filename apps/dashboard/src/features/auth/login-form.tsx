@@ -119,7 +119,12 @@ export function LoginForm() {
                   <FormLabel required>{t("identifier")}</FormLabel>
                   <FormDescription>{t("identifierHint")}</FormDescription>
                   <FormControl required>
-                    <Input {...field} autoComplete="username" />
+                    {/* eslint-disable-next-line jsx-a11y/no-autofocus -- this is a
+                      dedicated, single-purpose sign-in screen (no other content on the
+                      page competes for attention), the accepted exception jsx-a11y's own
+                      rule authors left autoFocus for. Without it, every sign-in costs an
+                      extra click or tab to reach the one field the page exists for. */}
+                    <Input {...field} autoComplete="username" autoFocus />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
