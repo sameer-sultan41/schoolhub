@@ -1,5 +1,10 @@
 import type { TenantBranding } from "@schoolhub/types";
-import { brandingToCssVariables } from "@schoolhub/ui";
+// Deep import, not the package root: this file needs one plain function, not any
+// component, so importing it directly keeps this file's own module graph minimal — even
+// though other files in this app legitimately import Button/Card/etc. from the barrel
+// anyway (see packages/ui/src/components/form.tsx for the sonner-leak this doesn't, by
+// itself, solve).
+import { brandingToCssVariables } from "@schoolhub/ui/lib/branding";
 import type { CSSProperties } from "react";
 
 /**
