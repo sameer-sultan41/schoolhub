@@ -17,7 +17,12 @@ function subscribe(onChange: () => void): () => void {
 }
 
 function getSnapshot(): boolean {
-  return window.innerWidth < MOBILE_BREAKPOINT_PX;
+  // Not window.innerWidth: a scrollbar's own width is included in some browsers' layout
+  // viewport but not others', so it and matchMedia's own boundary can disagree by exactly
+  // that many pixels right at the breakpoint. Querying matchMedia here too, the same way
+  // subscribe() does, means there is only ever one definition of "mobile" to disagree
+  // with itself.
+  return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`).matches;
 }
 
 /** True below shadcn's mobile breakpoint. `false` on the server and until the first
