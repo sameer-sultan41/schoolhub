@@ -1,6 +1,16 @@
 import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { Button } from "./button";
+import { Skeleton } from "./skeleton";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./table";
 
 export interface DataTableColumn<TRow> {
   /** Stable key, also used as the React key for the cell. */
@@ -21,20 +31,25 @@ export interface DataTableProps<TRow> {
   getRowId: (row: TRow) => string;
   caption?: string;
   isLoading?: boolean;
-  /** Rendered instead of rows when the (loaded) result set is empty. */
-  emptyState?: ReactNode;
+  /**
+   * Rendered instead of rows when the (loaded) result set is empty. Required, not
+   * defaulted to an English string — this package has no i18n of its own, so a silent
+   * fallback here would always ship untranslated. Callers pass `t("common.noResults")`.
+   */
+  emptyState: ReactNode;
   onRowClick?: (row: TRow) => void;
   /**
    * Cursor pagination controls (api-architecture.md §2.4). Omit for non-paginated tables.
    * `onNext`/`onPrevious` are disabled automatically when their cursor is null.
+   * `nextLabel`/`previousLabel` are required for the same reason as `emptyState`.
    */
   pagination?: {
     hasNext: boolean;
     hasPrevious: boolean;
     onNext: () => void;
     onPrevious: () => void;
-    nextLabel?: string;
-    previousLabel?: string;
+    nextLabel: string;
+    previousLabel: string;
   };
   className?: string;
 }
@@ -60,73 +75,90 @@ export function DataTable<TRow>({
 
   return (
     <div className={cn("w-full space-y-4", className)}>
-      <div className="overflow-x-auto rounded-[var(--sh-radius)] border border-border">
-        <table className="w-full border-collapse text-sm" aria-busy={isLoading || undefined}>
-          {caption ? <caption className="sr-only">{caption}</caption> : null}
-          <thead className="bg-muted text-muted-foreground">
-            <tr>
-              {columns.map((column) => (
-                <th
-                  key={column.id}
-                  scope="col"
-                  className={cn("px-4 py-3 text-start font-medium", column.className)}
-                >
-                  {column.srLabel ? (
-                    <span className="sr-only">{column.srLabel}</span>
-                  ) : (
-                    column.header
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading
-              ? Array.from({ length: 3 }, (_, rowIndex) => (
-                  <tr key={`skeleton-${rowIndex}`} className="border-t border-border">
-                    {columns.map((column) => (
-                      <td key={column.id} className="px-4 py-3">
-                        <span className="block h-4 w-2/3 animate-pulse rounded bg-muted" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              : rows.map((row) => (
-                  <tr
-                    key={getRowId(row)}
-                    className={cn(
-                      "border-t border-border",
-                      onRowClick && "cursor-pointer hover:bg-muted",
-                    )}
-                    {...(onRowClick
-                      ? {
-                          onClick: () => {
-                            onRowClick(row);
-                          },
-                          tabIndex: 0,
-                          onKeyDown: (event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              onRowClick(row);
-                            }
-                          },
+      <Table aria-busy={isLoading || undefined}>
+        {caption ? <TableCaption className="sr-only">{caption}</TableCaption> : null}
+        <TableHeader>
+          <TableRow>
+            {columns.map((column) => (
+              <TableHead key={column.id} className={column.className}>
+                {column.srLabel ? <span className="sr-only">{column.srLabel}</span> : column.header}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading
+            ? Array.from({ length: 3 }, (_, rowIndex) => (
+                <TableRow key={`skeleton-${rowIndex}`}>
+                  {columns.map((column) => (
+                    <TableCell key={column.id}>
+                      <Skeleton className="h-4 w-2/3" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            : rows.map((row) => (
+                <TableRow
+                  key={getRowId(row)}
+                  className={cn(onRowClick && "cursor-pointer hover:bg-muted")}
+                  // tabIndex as a plain conditional attribute VALUE, not a conditional prop
+                  // spread: eslint-plugin-jsx-a11y's static rules
+                  // (no-noninteractive-element-interactions and friends) inspect JSX
+                  // attributes directly on the element — a spread's contents are opaque to
+                  // that analysis, which is exactly how this row's interactivity went
+                  // unflagged before. Deliberately NOT role="button": that overrides the
+                  // row's implicit "row" role, breaking its ARIA structural relationship
+                  // to its own <td> children — a screen reader loses column navigation and
+                  // announces every cell's text concatenated as one control instead of
+                  // tabular data. tabIndex + the handlers below still make it keyboard-
+                  // focusable and activatable without that trade.
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onClick={
+                    onRowClick
+                      ? (event) => {
+                          // A future cell rendering its own <button>/<a> (an actions
+                          // column) must not also trigger the row's own click — bail out
+                          // if the click originated inside a nested interactive control.
+                          if (
+                            (event.target as HTMLElement).closest(
+                              "button, a, input, select, textarea",
+                            )
+                          )
+                            return;
+                          onRowClick(row);
                         }
-                      : {})}
-                  >
-                    {columns.map((column) => (
-                      <td key={column.id} className={cn("px-4 py-3", column.className)}>
-                        {column.cell(row)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-          </tbody>
-        </table>
-      </div>
+                      : undefined
+                  }
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
+                          if (
+                            (event.target as HTMLElement).closest(
+                              "button, a, input, select, textarea",
+                            )
+                          )
+                            return;
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onRowClick(row);
+                          }
+                        }
+                      : undefined
+                  }
+                >
+                  {columns.map((column) => (
+                    <TableCell key={column.id} className={column.className}>
+                      {column.cell(row)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+        </TableBody>
+      </Table>
 
       {showEmpty ? (
         <div className="rounded-[var(--sh-radius)] border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-          {emptyState ?? "No records found."}
+          {emptyState}
         </div>
       ) : null}
 
@@ -138,7 +170,7 @@ export function DataTable<TRow>({
             onClick={pagination.onPrevious}
             disabled={!pagination.hasPrevious || isLoading}
           >
-            {pagination.previousLabel ?? "Previous"}
+            {pagination.previousLabel}
           </Button>
           <Button
             variant="outline"
@@ -146,7 +178,7 @@ export function DataTable<TRow>({
             onClick={pagination.onNext}
             disabled={!pagination.hasNext || isLoading}
           >
-            {pagination.nextLabel ?? "Next"}
+            {pagination.nextLabel}
           </Button>
         </div>
       ) : null}

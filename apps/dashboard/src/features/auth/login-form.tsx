@@ -2,7 +2,19 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ApiError } from "@schoolhub/api-client";
-import { Button, Card, CardContent, FormField, Input } from "@schoolhub/ui";
+import {
+  Button,
+  Card,
+  CardContent,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+} from "@schoolhub/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -28,15 +40,11 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors },
-  } = useForm<LoginValues>({
+  const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { identifier: "", password: "" },
   });
+  const { handleSubmit, setError } = form;
 
   const mutation = useMutation({
     mutationFn: login,
@@ -83,51 +91,65 @@ export function LoginForm() {
           </p>
         ) : null}
 
-        <form
-          className="space-y-4"
-          // react-hook-form's handleSubmit always returns an async wrapper, so onSubmit
-          // is a promise-returning function where the DOM expects void — but `void` alone
-          // only silences that mismatch, it does not handle a rejection. A validation
-          // failure itself never rejects (react-hook-form resolves that internally via
-          // setError), and mutation.mutate is fire-and-forget, but an unexpected throw
-          // inside the resolver would otherwise vanish as an unhandled rejection with
-          // nothing here to say so — hence the explicit .catch(), matching app-shell.tsx's
-          // sign-out handler rather than repeating its earlier, already-fixed mistake.
-          onSubmit={(event) => {
-            handleSubmit((values) => {
-              mutation.mutate(values);
-            })(event).catch((error: unknown) => {
-              console.error("Unexpected error while submitting the sign-in form:", error);
-            });
-          }}
-          noValidate
-        >
-          <FormField
-            label={t("identifier")}
-            description={t("identifierHint")}
-            error={errors.identifier?.message}
-            required
+        <Form {...form}>
+          <form
+            className="space-y-4"
+            // react-hook-form's handleSubmit always returns an async wrapper, so onSubmit
+            // is a promise-returning function where the DOM expects void — but `void` alone
+            // only silences that mismatch, it does not handle a rejection. A validation
+            // failure itself never rejects (react-hook-form resolves that internally via
+            // setError), and mutation.mutate is fire-and-forget, but an unexpected throw
+            // inside the resolver would otherwise vanish as an unhandled rejection with
+            // nothing here to say so — hence the explicit .catch(), matching app-shell.tsx's
+            // sign-out handler rather than repeating its earlier, already-fixed mistake.
+            onSubmit={(event) => {
+              handleSubmit((values) => {
+                mutation.mutate(values);
+              })(event).catch((error: unknown) => {
+                console.error("Unexpected error while submitting the sign-in form:", error);
+              });
+            }}
+            noValidate
           >
-            {(field) => (
-              <Input {...field} {...register("identifier")} autoComplete="username" autoFocus />
-            )}
-          </FormField>
+            <FormField
+              control={form.control}
+              name="identifier"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required>{t("identifier")}</FormLabel>
+                  <FormDescription>{t("identifierHint")}</FormDescription>
+                  <FormControl required>
+                    <Input {...field} autoComplete="username" autoFocus />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <FormField label={t("password")} error={errors.password?.message} required>
-            {(field) => (
-              <Input
-                {...field}
-                {...register("password")}
-                type="password"
-                autoComplete="current-password"
-              />
-            )}
-          </FormField>
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required>{t("password")}</FormLabel>
+                  <FormControl required>
+                    <Input {...field} type="password" autoComplete="current-password" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <Button type="submit" block isLoading={mutation.isPending} loadingLabel={t("submitting")}>
-            {t("submit")}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              block
+              isLoading={mutation.isPending}
+              loadingLabel={t("submitting")}
+            >
+              {t("submit")}
+            </Button>
+          </form>
+        </Form>
       </CardContent>
     </Card>
   );

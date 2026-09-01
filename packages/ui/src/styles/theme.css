@@ -43,6 +43,7 @@
   --color-warning: var(--sh-color-warning);
   --color-danger: var(--sh-color-danger);
   --color-danger-foreground: var(--sh-color-danger-foreground);
+  --color-overlay: var(--sh-color-overlay);
 
   --font-sans: var(--sh-font-body);
   --font-heading: var(--sh-font-heading);
@@ -150,6 +151,16 @@
   --sh-color-danger-foreground: oklch(0.977 0.013 86.8);
 
   /*
+   * A modal/sheet scrim, not a themed surface — its one job is to dim whatever is behind
+   * it, in EITHER colour scheme, so deliberately not one of the tokens above that flip
+   * under prefers-color-scheme: dark. Fixed at this file's own light-mode --sh-color-
+   * foreground value (near-black) and never redefined in the dark-mode block below — using
+   * --sh-color-foreground itself for this (Dialog/Sheet's overlay previously did) inverts
+   * to near-WHITE in dark mode, washing the page instead of dimming it.
+   */
+  --sh-color-overlay: oklch(0.21 0.006 285.9);
+
+  /*
    * Both apps load Inter, Fraunces and Noto Nastaliq Urdu via next/font/google and expose
    * them as --font-inter/--font-fraunces/--font-noto-nastaliq-urdu on <html> (see each
    * app's layout.tsx). Listed here only as the FALLBACK chain — a tenant's own
@@ -191,6 +202,14 @@
     --sh-color-primary-foreground: oklch(0.141 0.005 285.8);
     --sh-color-accent: oklch(0.774 0.155 73.4);
     --sh-color-accent-foreground: oklch(0.327 0.11 279.1);
+    /* Same problem as primary above, same fix: the light-mode Madder (#c1443c) computes to
+       3.95:1 against this dark background and 3.28:1 against the dark surface — both fail
+       WCAG AA's 4.5:1 for text (Alert's danger variant renders --sh-color-danger as
+       text-danger). A lighter danger restores it (5.71:1 / 4.74:1), paired with the same
+       dark near-page-background foreground primary uses, for text on a solid danger
+       surface (Button's danger variant: 5.71:1 against this danger). */
+    --sh-color-danger: oklch(0.65 0.162 27.2);
+    --sh-color-danger-foreground: oklch(0.141 0.005 285.8);
   }
 }
 

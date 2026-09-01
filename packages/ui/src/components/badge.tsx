@@ -1,0 +1,29 @@
+import { type VariantProps, cva } from "class-variance-authority";
+import type { HTMLAttributes } from "react";
+import { cn } from "../lib/cn";
+
+const badgeVariants = cva(
+  "inline-flex w-fit shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap",
+  {
+    variants: {
+      variant: {
+        primary: "border-transparent bg-primary text-primary-foreground",
+        secondary: "border-transparent bg-secondary text-secondary-foreground",
+        outline: "border-border bg-transparent text-foreground",
+        success: "border-transparent bg-success text-primary-foreground",
+        warning: "border-transparent bg-warning text-foreground",
+        danger: "border-transparent bg-danger text-danger-foreground",
+      },
+    },
+    defaultVariants: { variant: "secondary" },
+  },
+);
+
+export interface BadgeProps
+  extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof badgeVariants> {}
+
+export function Badge({ className, variant, ...props }: BadgeProps) {
+  return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
+}
+
+export { badgeVariants };
