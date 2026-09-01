@@ -93,6 +93,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: async () => (await apiClient.get<Tenant>("/tenant")).data,
     enabled: Boolean(user),
     staleTime: TENANT_QUERY_STALE_TIME_MS,
+    // The global default gcTime (query-client.ts) is 5 minutes — shorter than this
+    // query's own 10-minute staleTime, so an unmount/remount anywhere in minutes 5-10
+    // would evict the cache entry and refetch regardless of the data still being
+    // nominally fresh. gcTime must be at least staleTime for staleTime to mean anything.
+    gcTime: TENANT_QUERY_STALE_TIME_MS,
   });
 
   const visibleItems = NAV_ITEMS.filter(
