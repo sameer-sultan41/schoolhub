@@ -17,6 +17,13 @@ import type { CSSProperties } from "react";
 /** Rejects the characters that could break out of a custom-property declaration. */
 const UNSAFE_CSS_VALUE = /[;{}<>()\\]|\/\*|url\s*\(/i;
 
+/** #rgb, #rgba, #rrggbb, or #rrggbbaa. */
+const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+/** rgb(r, g, b) or rgba(r, g, b, a), each channel 1-3 digits. */
+const RGB_COLOR_PATTERN =
+  /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+)\s*)?\)$/i;
+
 export function sanitizeCssValue(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -88,7 +95,7 @@ export function brandingToCssText(
  * translucent and reads at a lower contrast than its own channel values suggest.
  */
 function parseColorToRgb(value: string): [number, number, number] | null {
-  const hex = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(value.trim());
+  const hex = HEX_COLOR_PATTERN.exec(value.trim());
   const hexDigits = hex?.[1];
   if (hexDigits) {
     // 4/8-digit forms carry an alpha channel this function has no way to composite against
@@ -110,10 +117,7 @@ function parseColorToRgb(value: string): [number, number, number] | null {
     return [r, g, b];
   }
 
-  const rgb =
-    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(
-      value.trim(),
-    );
+  const rgb = RGB_COLOR_PATTERN.exec(value.trim());
   if (rgb?.[1] && rgb[2] && rgb[3]) {
     // Same reasoning as the hex case above: an explicit alpha argument means this colour is
     // translucent, which this function cannot correctly score without knowing the backdrop.
