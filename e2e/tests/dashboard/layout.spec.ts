@@ -54,6 +54,38 @@ test.describe("sidebar direction", () => {
   });
 });
 
+test.describe("keyboard shortcut", () => {
+  test("Ctrl+B collapses the desktop sidebar and a second press restores it", async ({
+    page,
+    dashboardPage,
+    signedIn: _signedIn,
+  }) => {
+    await dashboardPage.goto();
+
+    const nav = dashboardPage.nav;
+    const openBox = await nav.boundingBox();
+    expect(openBox).not.toBeNull();
+
+    // Collapsed on desktop moves the sidebar off-canvas (translated out of the viewport,
+    // not display:none), so toBeVisible() alone can't tell open from collapsed here —
+    // the bounding box's x position is what actually changes.
+    await page.keyboard.press("Control+b");
+    await expect.poll(async () => (await nav.boundingBox())?.x).toBeLessThan(-100);
+
+    // The regression this test exists for: SidebarProvider's own toggleSidebar/setOpen
+    // were plain (non-memoised) functions, so the keydown listener — attached once, its
+    // effect keyed on [isMobile] rather than [toggleSidebar] — kept calling the FIRST
+    // render's stale closure forever. That closure always recomputed !<the original
+    // open value>, so every press after the first tried to set state to the same value
+    // it already held and React silently dropped it: the sidebar collapsed once and
+    // then never came back.
+    await page.keyboard.press("Control+b");
+    await expect
+      .poll(async () => (await nav.boundingBox())?.x)
+      .toBeGreaterThan((openBox?.x ?? 0) - 10);
+  });
+});
+
 test.describe("mobile navigation drawer", () => {
   test("opens via the trigger, shows the nav, and closes on link click", async ({
     page,
