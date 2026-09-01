@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermissionKey, Tenant } from "@schoolhub/types";
+import type { Tenant } from "@schoolhub/types";
 import {
   Button,
   cn,
@@ -19,25 +19,15 @@ import { type ReactNode, useEffect, useState } from "react";
 import { TenantTheme } from "@/components/tenant-theme";
 import { useSession } from "@/hooks/use-session";
 import { apiClient, logout } from "@/lib/auth";
+import {
+  LOGIN_PATH,
+  PLATFORM_NAME,
+  TABLET_BREAKPOINT_PX,
+  TENANT_QUERY_STALE_TIME_MS,
+} from "@/lib/constants";
+import { NAV_ITEMS } from "@/lib/nav-items";
 import { canAccessModule } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
-
-/**
- * Navigation mirrors the module docs one-to-one. Each entry names the module it belongs to,
- * so the menu is filtered by the user's effective permissions — a teacher never sees the
- * payroll link. Server-side RBAC still enforces every one of these.
- */
-const NAV_ITEMS: { key: string; href: string; module: string; permission?: PermissionKey }[] = [
-  { key: "dashboard", href: "/dashboard", module: "" },
-  { key: "students", href: "/students", module: "students" },
-  { key: "staff", href: "/staff", module: "staff" },
-  { key: "attendance", href: "/attendance", module: "attendance" },
-  { key: "academics", href: "/academics", module: "academics" },
-  { key: "fees", href: "/fees", module: "fees" },
-  { key: "admissions", href: "/admissions", module: "admissions" },
-  { key: "communication", href: "/communication", module: "communication" },
-  { key: "website", href: "/website", module: "website" },
-];
 
 interface NavListProps {
   items: typeof NAV_ITEMS;
@@ -86,9 +76,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     // <nav> becomes visible purely via its own `md:block` CSS, while Radix keeps
     // rendering the Sheet's <nav> because nothing ever told it to close. Two identically
     // labelled "Primary navigation" landmarks would coexist — closing the Sheet the
-    // instant the viewport crosses the same `md` breakpoint (768px, Tailwind's default,
-    // unchanged in this repo) keeps it to exactly one at any given width.
-    const query = window.matchMedia("(min-width: 768px)");
+    // instant the viewport crosses the same `md` breakpoint (TABLET_BREAKPOINT_PX,
+    // Tailwind's default, unchanged in this repo) keeps it to exactly one at any width.
+    const query = window.matchMedia(`(min-width: ${TABLET_BREAKPOINT_PX}px)`);
     const onChange = (event: MediaQueryListEvent) => {
       if (event.matches) setMobileNavOpen(false);
     };
@@ -102,13 +92,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryKey: queryKeys.tenant(),
     queryFn: async () => (await apiClient.get<Tenant>("/tenant")).data,
     enabled: Boolean(user),
-    staleTime: 10 * 60_000,
+    staleTime: TENANT_QUERY_STALE_TIME_MS,
   });
 
   const visibleItems = NAV_ITEMS.filter(
     (item) => item.module === "" || canAccessModule(user, item.module),
   );
-  const tenantLabel = tenant?.name ?? "SchoolHub";
+  const tenantLabel = tenant?.name ?? PLATFORM_NAME;
 
   return (
     <TenantTheme branding={tenant?.branding}>
@@ -202,7 +192,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       console.error("Sign-out request failed unexpectedly:", error);
                     })
                     .finally(() => {
-                      router.replace("/login");
+                      router.replace(LOGIN_PATH);
                     });
                 }}
               >

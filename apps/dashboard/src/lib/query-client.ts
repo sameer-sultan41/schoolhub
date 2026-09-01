@@ -1,5 +1,6 @@
 import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, defaultShouldDehydrateQuery } from "@tanstack/react-query";
+import { DEFAULT_QUERY_GC_TIME_MS, DEFAULT_QUERY_STALE_TIME_MS } from "@/lib/constants";
 
 /**
  * TanStack Query owns all server state (tech-stack.md §3).
@@ -20,8 +21,8 @@ export function makeQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         // Long enough that a server-rendered payload is not refetched on hydration.
-        staleTime: 30_000,
-        gcTime: 5 * 60_000,
+        staleTime: DEFAULT_QUERY_STALE_TIME_MS,
+        gcTime: DEFAULT_QUERY_GC_TIME_MS,
         retry: shouldRetry,
         refetchOnWindowFocus: false,
         throwOnError: false,
