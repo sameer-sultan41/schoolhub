@@ -79,18 +79,26 @@ export function brandingToCssText(
 
 /**
  * non-functional.md §5: "tenant branding choices (colors) are contrast-validated with a
- * warning on failure." Parses #rgb/#rrggbb(aa)/rgb()/rgba() only — the common case for a
- * colour-picker-driven settings form. Anything else (a named colour, oklch(), hsl()) is
- * skipped rather than flagged: a false "fails contrast" on a value this cannot parse
- * would be worse than not checking it at all.
+ * warning on failure." Parses opaque #rgb/#rrggbb and rgb()/rgba() only — the common case
+ * for a colour-picker-driven settings form. Anything else is skipped rather than flagged: a
+ * false "fails contrast" on a value this cannot parse would be worse than not checking it
+ * at all. That includes any value carrying an alpha channel (#rgba, #rrggbbaa, an explicit
+ * rgba() alpha argument): this function has no backdrop to composite against, so treating
+ * one as opaque would risk the opposite mistake — a false PASS on a colour that renders
+ * translucent and reads at a lower contrast than its own channel values suggest.
  */
 function parseColorToRgb(value: string): [number, number, number] | null {
   const hex = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(value.trim());
   const hexDigits = hex?.[1];
   if (hexDigits) {
-    // #rgb(a) shorthand expands each digit to a pair, e.g. "a1" from "a".
+    // 4/8-digit forms carry an alpha channel this function has no way to composite against
+    // an unknown backdrop — treating it as opaque would score a translucent colour as fully
+    // solid, exactly the false pass this function exists to avoid. Skipped, per the same
+    // policy as an unparseable value.
+    if (hexDigits.length === 4 || hexDigits.length === 8) return null;
+    // #rgb shorthand expands each digit to a pair, e.g. "a1" from "a".
     const expanded =
-      hexDigits.length <= 4
+      hexDigits.length === 3
         ? hexDigits
             .split("")
             .map((d) => d + d)
@@ -102,10 +110,14 @@ function parseColorToRgb(value: string): [number, number, number] | null {
     return [r, g, b];
   }
 
-  const rgb = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*[\d.]+\s*)?\)$/i.exec(
-    value.trim(),
-  );
+  const rgb =
+    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(
+      value.trim(),
+    );
   if (rgb?.[1] && rgb[2] && rgb[3]) {
+    // Same reasoning as the hex case above: an explicit alpha argument means this colour is
+    // translucent, which this function cannot correctly score without knowing the backdrop.
+    if (rgb[4] !== undefined) return null;
     const r = Number.parseInt(rgb[1], 10);
     const g = Number.parseInt(rgb[2], 10);
     const b = Number.parseInt(rgb[3], 10);
@@ -143,6 +155,13 @@ const MIN_AA_CONTRAST = 4.5;
  * magic number — update it if theme.css's own primary-foreground default ever changes.
  */
 const PLATFORM_PRIMARY_FOREGROUND: [number, number, number] = [0xfb, 0xf7, 0xee]; // Ivory #FBF7EE
+// theme.css :root light-mode defaults — the pairing a tenant who sets only ONE side of
+// foreground/background actually renders against, so this must fall back exactly like
+// PLATFORM_BACKGROUND does, on both sides. Light mode only: theme.css's own dark-mode media
+// query swaps both of these (to #09090b / #fafafa), which this heuristic does not check —
+// a tenant-set foreground_color with no background_color is validated against light mode
+// only, and could still be unreadable for a visitor whose OS prefers dark.
+const PLATFORM_FOREGROUND: [number, number, number] = [0x18, 0x18, 0x1b]; // #18181b
 const PLATFORM_BACKGROUND: [number, number, number] = [0xff, 0xff, 0xff]; // White #FFFFFF
 
 export interface ContrastWarning {
@@ -163,7 +182,9 @@ export function checkBrandingContrast(
   if (!branding) return [];
   const warnings: ContrastWarning[] = [];
 
-  const foreground = branding.foreground_color ? parseColorToRgb(branding.foreground_color) : null;
+  const foreground = branding.foreground_color
+    ? parseColorToRgb(branding.foreground_color)
+    : PLATFORM_FOREGROUND;
   const background = branding.background_color
     ? parseColorToRgb(branding.background_color)
     : PLATFORM_BACKGROUND;
