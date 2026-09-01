@@ -56,6 +56,43 @@ done
 cd "$REPO_ROOT"
 status=0
 
+# --------------------------------------------------------------- graphify (local index)
+# graphify-out/ is gitignored — a local, regenerable index, never pushed or shared via
+# git — so this only ever keeps THIS machine's copy current, never a teammate's or CI's.
+# Purely a convenience refresh: never fails the push, and AST-only (no LLM/API cost) so
+# it stays fast — ~2s on this repo's current size. Skipped entirely on a pure branch
+# delete (nothing in $changed to index).
+if [ -n "$changed" ]; then
+  if command -v graphify >/dev/null 2>&1; then
+    # mkdir is an atomic, portable lock (works the same on macOS and Linux CI, unlike
+    # flock, which macOS doesn't ship) — two simultaneous pushes from this machine would
+    # otherwise both write graphify-out/graph.json at once. A lock older than 5 minutes
+    # almost certainly means a prior push's hook crashed without cleaning up rather than
+    # that it is still genuinely running, so it self-heals instead of wedging every push
+    # after it into silently skipping the refresh forever.
+    lock_dir="$REPO_ROOT/graphify-out/.pre-push.lock"
+    if [ -d "$lock_dir" ]; then
+      lock_age=$(( $(date +%s) - $(date -r "$lock_dir" +%s 2>/dev/null || echo 0) ))
+      [ "$lock_age" -gt 300 ] && rmdir "$lock_dir" 2>/dev/null
+    fi
+    if mkdir -p "$REPO_ROOT/graphify-out" 2>/dev/null && mkdir "$lock_dir" 2>/dev/null; then
+      graphify_log="$REPO_ROOT/graphify-out/.pre-push-update.log"
+      if graphify update . >"$graphify_log" 2>&1; then
+        ok "graphify index updated"
+        rm -f "$graphify_log"
+      else
+        warn "graphify update failed — pushing anyway (index may be stale)"
+        note "see it: cat graphify-out/.pre-push-update.log"
+      fi
+      rmdir "$lock_dir" 2>/dev/null
+    else
+      note "graphify update already running (another push?) — skipping this one"
+    fi
+  else
+    warn "graphify not installed — skipping index refresh"
+  fi
+fi
+
 # ------------------------------------------------------------ TypeScript (project-wide)
 if printf '%s\n' "$changed" | grep -qE '\.(ts|tsx)$|package\.json$|tsconfig.*\.json$'; then
   if ensure_node; then
