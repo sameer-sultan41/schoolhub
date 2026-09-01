@@ -101,20 +101,30 @@ export function DataTable<TRow>({
                 <TableRow
                   key={getRowId(row)}
                   className={cn(onRowClick && "cursor-pointer hover:bg-muted")}
-                  // role="button" and tabIndex as plain conditional attribute VALUES, not
-                  // a conditional prop spread: eslint-plugin-jsx-a11y's static rules
+                  // tabIndex as a plain conditional attribute VALUE, not a conditional prop
+                  // spread: eslint-plugin-jsx-a11y's static rules
                   // (no-noninteractive-element-interactions and friends) inspect JSX
-                  // attributes directly on the element — a spread's contents are opaque
-                  // to that analysis, which is exactly how this row's interactivity went
-                  // unflagged before. role="button" also gives the row a real accessible
-                  // name for free: like a native <button>, an element with that role
-                  // computes its name from its own text content — every cell's rendered
-                  // text, here — rather than announcing as an ordinary, inert table row.
-                  role={onRowClick ? "button" : undefined}
+                  // attributes directly on the element — a spread's contents are opaque to
+                  // that analysis, which is exactly how this row's interactivity went
+                  // unflagged before. Deliberately NOT role="button": that overrides the
+                  // row's implicit "row" role, breaking its ARIA structural relationship
+                  // to its own <td> children — a screen reader loses column navigation and
+                  // announces every cell's text concatenated as one control instead of
+                  // tabular data. tabIndex + the handlers below still make it keyboard-
+                  // focusable and activatable without that trade.
                   tabIndex={onRowClick ? 0 : undefined}
                   onClick={
                     onRowClick
-                      ? () => {
+                      ? (event) => {
+                          // A future cell rendering its own <button>/<a> (an actions
+                          // column) must not also trigger the row's own click — bail out
+                          // if the click originated inside a nested interactive control.
+                          if (
+                            (event.target as HTMLElement).closest(
+                              "button, a, input, select, textarea",
+                            )
+                          )
+                            return;
                           onRowClick(row);
                         }
                       : undefined
@@ -122,6 +132,12 @@ export function DataTable<TRow>({
                   onKeyDown={
                     onRowClick
                       ? (event) => {
+                          if (
+                            (event.target as HTMLElement).closest(
+                              "button, a, input, select, textarea",
+                            )
+                          )
+                            return;
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             onRowClick(row);
