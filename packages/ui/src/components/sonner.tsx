@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { Toaster as SonnerToaster, type ToasterProps } from "sonner";
+import { cn } from "../lib/cn";
 
 /**
  * `theme="system"` is sonner's own built-in OS-preference listener — no next-themes
@@ -10,17 +11,18 @@ import { Toaster as SonnerToaster, type ToasterProps } from "sonner";
  * also the only theme value that could be correct right now; revisit this the moment a
  * toggle exists.
  */
-export function Toaster({ theme = "system", ...props }: ToasterProps) {
+export function Toaster({ theme = "system", className, style, ...props }: ToasterProps) {
   return (
     <SonnerToaster
       theme={theme}
-      className="toaster group"
+      className={cn("toaster group", className)}
       style={
         {
           "--normal-bg": "var(--color-popover)",
           "--normal-text": "var(--color-popover-foreground)",
           "--normal-border": "var(--color-border)",
           "--border-radius": "var(--radius)",
+          ...style,
         } as CSSProperties
       }
       {...props}
