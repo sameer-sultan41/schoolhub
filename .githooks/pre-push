@@ -56,6 +56,19 @@ done
 cd "$REPO_ROOT"
 status=0
 
+# --------------------------------------------------------------- graphify (local index)
+# graphify-out/ is gitignored — a local, regenerable index, never pushed or shared via
+# git — so this only ever keeps THIS machine's copy current, never a teammate's or CI's.
+# Purely a convenience refresh: never fails the push, and AST-only (no LLM/API cost) so
+# it stays fast — ~2s on this repo's current size.
+if command -v graphify >/dev/null 2>&1 && [ -d graphify-out ]; then
+  if graphify update . >/dev/null 2>&1; then
+    ok "graphify index updated"
+  else
+    warn "graphify update failed — pushing anyway (index may be stale)"
+  fi
+fi
+
 # ------------------------------------------------------------ TypeScript (project-wide)
 if printf '%s\n' "$changed" | grep -qE '\.(ts|tsx)$|package\.json$|tsconfig.*\.json$'; then
   if ensure_node; then

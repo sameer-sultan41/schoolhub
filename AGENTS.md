@@ -130,7 +130,7 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   | Hook | Runs | Checks |
   | ---- | ---- | ------ |
   | `pre-commit` | staged files only, fast | ESLint · Prettier (`--check`) · ruff (`check` + `format --check`) · cspell |
-  | `pre-push` | project-wide, slower | `main`-push block · `tsc` typecheck · mypy |
+  | `pre-push` | project-wide, slower | `main`-push block · `tsc` typecheck · mypy · graphify index refresh |
 
   Split by cost: `tsc` and mypy need the whole project graph and are too slow to run
   on every commit. A tool that is genuinely not installed (`apps/api`'s uv-managed
@@ -144,6 +144,12 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   staged commit. Nowhere near slow enough to justify deferring it to `pre-push`, and
   it is the check most likely to catch a real bug (`no-floating-promises`,
   `no-misused-promises`) before it is even committed.
+
+  The graphify refresh is a pure convenience, never a gate — it never fails the push
+  even if it errors. `graphify-out/` is gitignored (a local, regenerable index, not
+  committed source), so this only ever keeps the CURRENT machine's copy current, never
+  a teammate's clone or CI's checkout; each of those needs its own `/graphify` run.
+  ~2s on this repo's current size (AST-only, no LLM/API cost).
 
   `SKIP_HOOKS=1` skips the lint/typecheck checks for one commit or push.
   **It does not bypass the `main`-push block** — that check runs before `SKIP_HOOKS`
