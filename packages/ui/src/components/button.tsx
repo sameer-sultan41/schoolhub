@@ -57,10 +57,28 @@ type ButtonOwnProps =
     }
   | {
       asChild?: false;
-      /** Shows a spinner and disables the button. Use for in-flight mutations. */
-      isLoading?: boolean;
-      /** Announced by screen readers while `isLoading`. */
-      loadingLabel?: string;
+      isLoading?: undefined;
+      loadingLabel?: never;
+      leadingIcon?: ReactNode;
+      trailingIcon?: ReactNode;
+    }
+  | {
+      asChild?: false;
+      /**
+       * Shows a spinner and disables the button. Use for in-flight mutations. Typed
+       * `boolean` (not the literal `true`) so a computed value like
+       * `isLoading={mutation.isPending}` still requires `loadingLabel` alongside it —
+       * narrowing to the `true` literal would reject exactly that call shape.
+       */
+      isLoading: boolean;
+      /**
+       * Announced by screen readers while `isLoading`. Required whenever `isLoading` is
+       * passed at all, not defaulted to an English string — this package has no i18n of
+       * its own, the same reason `Dialog.closeLabel`/`Sheet.closeLabel`/`DataTable`'s
+       * pagination labels are required rather than silently falling back to untranslated
+       * text.
+       */
+      loadingLabel: string;
       leadingIcon?: ReactNode;
       trailingIcon?: ReactNode;
     };
@@ -75,7 +93,7 @@ export function Button({
   size,
   block,
   isLoading = false,
-  loadingLabel = "Loading",
+  loadingLabel,
   leadingIcon,
   trailingIcon,
   disabled,

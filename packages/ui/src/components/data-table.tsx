@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { DEFAULT_SKELETON_ROW_COUNT, INTERACTIVE_ELEMENT_SELECTOR } from "../lib/constants";
 import { cn } from "../lib/cn";
 import { Button } from "./button";
 import { Skeleton } from "./skeleton";
@@ -88,7 +89,7 @@ export function DataTable<TRow>({
         </TableHeader>
         <TableBody>
           {isLoading
-            ? Array.from({ length: 3 }, (_, rowIndex) => (
+            ? Array.from({ length: DEFAULT_SKELETON_ROW_COUNT }, (_, rowIndex) => (
                 <TableRow key={`skeleton-${rowIndex}`}>
                   {columns.map((column) => (
                     <TableCell key={column.id}>
@@ -119,11 +120,7 @@ export function DataTable<TRow>({
                           // A future cell rendering its own <button>/<a> (an actions
                           // column) must not also trigger the row's own click — bail out
                           // if the click originated inside a nested interactive control.
-                          if (
-                            (event.target as HTMLElement).closest(
-                              "button, a, input, select, textarea",
-                            )
-                          )
+                          if ((event.target as HTMLElement).closest(INTERACTIVE_ELEMENT_SELECTOR))
                             return;
                           onRowClick(row);
                         }
@@ -132,11 +129,7 @@ export function DataTable<TRow>({
                   onKeyDown={
                     onRowClick
                       ? (event) => {
-                          if (
-                            (event.target as HTMLElement).closest(
-                              "button, a, input, select, textarea",
-                            )
-                          )
+                          if ((event.target as HTMLElement).closest(INTERACTIVE_ELEMENT_SELECTOR))
                             return;
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
