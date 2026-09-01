@@ -66,6 +66,18 @@
   --color-destructive-foreground: var(--sh-color-danger-foreground);
   --color-input: var(--sh-color-border);
 
+  /* Sidebar reuses the existing surface/primary tokens rather than introducing a new
+     --sh-color-sidebar-* tier — it's a --sh-color-surface panel, same as any other card,
+     so it already gets tenant branding (primary) and dark mode (surface) for free. */
+  --color-sidebar: var(--sh-color-surface);
+  --color-sidebar-foreground: var(--sh-color-surface-foreground);
+  --color-sidebar-primary: var(--sh-color-primary);
+  --color-sidebar-primary-foreground: var(--sh-color-primary-foreground);
+  --color-sidebar-accent: var(--sh-color-muted);
+  --color-sidebar-accent-foreground: var(--sh-color-foreground);
+  --color-sidebar-border: var(--sh-color-border);
+  --color-sidebar-ring: var(--sh-color-ring);
+
   /*
    * Components across the repo currently write `rounded-[var(--sh-radius)]` as an
    * arbitrary-value escape hatch (tailwind-merge cannot dedupe that against a plain
