@@ -12,8 +12,9 @@ import {
 } from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Can } from "@/components/can";
+import { useSession } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 
 interface DashboardStats {
@@ -35,6 +36,7 @@ function formatMinorUnits(amount: number, currency: string, locale: string): str
 export function DashboardSummary() {
   const t = useTranslations("dashboard");
   const tErrors = useTranslations("errors");
+  const { user } = useSession();
 
   const { data, isPending, error } = useQuery({
     queryKey: queryKeys.list("reporting", "dashboard-summary"),
@@ -75,29 +77,33 @@ export function DashboardSummary() {
     },
   ];
 
+  // Filtered before mapping, not per-tile via <Can>: the stagger delay below is
+  // `index * 60ms`, and index must come from the tiles actually being RENDERED — a
+  // per-tile <Can> wrapper hides children after this array (and its indices) are already
+  // fixed, so a role missing one permission mid-list saw its remaining tiles jump straight
+  // to their original, now-gapped delays instead of a smooth 0/60/120/180ms stagger.
+  const visibleTiles = tiles.filter((tile) => hasPermission(user, tile.permission));
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {tiles.map((tile, index) => (
-        <Can key={tile.key} permission={tile.permission}>
-          {/*
-            The signature moment's second half (the woven rule above is the first): the
-            four tiles stagger in at 60ms intervals rather than popping in together. A
-            fixed per-index delay via inline style, since Tailwind utilities can't express
-            "the Nth item" — motion-reduce:animate-none turns it off entirely rather than
-            just speeding it up, matching the woven rule's own reduced-motion behaviour.
-          */}
-          <Card
-            className="animate-in fill-mode-backwards fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
-            style={{ animationDelay: `${index * 60}ms`, animationDuration: "400ms" }}
-          >
-            <CardContent className="space-y-2 pt-6">
-              <CardDescription>{t(`cards.${tile.key}`)}</CardDescription>
-              <CardTitle className="text-2xl tabular-nums">
-                {isPending ? <Skeleton className="h-7 w-20" /> : tile.value}
-              </CardTitle>
-            </CardContent>
-          </Card>
-        </Can>
+      {visibleTiles.map((tile, index) => (
+        // The signature moment's second half (the woven rule above is the first): the
+        // tiles stagger in at 60ms intervals rather than popping in together. A fixed
+        // per-index delay via inline style, since Tailwind utilities can't express "the
+        // Nth item" — motion-reduce:animate-none turns it off entirely rather than just
+        // speeding it up, matching the woven rule's own reduced-motion behaviour.
+        <Card
+          key={tile.key}
+          className="animate-in fill-mode-backwards fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
+          style={{ animationDelay: `${index * 60}ms`, animationDuration: "400ms" }}
+        >
+          <CardContent className="space-y-2 pt-6">
+            <CardDescription>{t(`cards.${tile.key}`)}</CardDescription>
+            <CardTitle className="text-2xl tabular-nums">
+              {isPending ? <Skeleton className="h-7 w-20" /> : tile.value}
+            </CardTitle>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
