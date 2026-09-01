@@ -98,7 +98,10 @@ export {
 
 export { Skeleton } from "./components/skeleton";
 
-export { Toaster } from "./components/sonner";
+// Toaster is NOT re-exported here — see @schoolhub/ui/toaster. sonner runs a
+// CSS-injection side effect at module-evaluation time that survives tree-shaking (confirmed
+// via a real `next build`), so re-exporting it from this barrel would ship it to every
+// consumer of anything else here, including apps that never render <Toaster>.
 
 export {
   Table,

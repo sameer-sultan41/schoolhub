@@ -13,6 +13,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles/theme.css": "./src/styles/theme.css",
+    "./lib/branding": "./src/lib/branding.ts",
+    "./toaster": "./src/components/sonner.tsx",
     "./*": "./src/*"
   },
   "scripts": {

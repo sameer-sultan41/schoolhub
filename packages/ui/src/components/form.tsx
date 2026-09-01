@@ -12,18 +12,18 @@
  *
  * Confirmed, not hypothetical: a real `next build` of apps/website shows react-hook-form
  * and @radix-ui/react-dialog do NOT reach any client chunk — tree-shaking eliminates both,
- * since neither has an unconditional top-level side effect. sonner does reach one: a 238KB
- * chunk (the largest in the build) ships sonner's loading-spinner markup and its
- * toast-CSS-injection IIFE to every route apps/website serves, root-caused to that IIFE
- * running unconditionally at module-evaluation time — no bundler can prove that safe to
- * drop, regardless of barrel structure. apps/website's ONLY import from this package is
- * `brandingToCssVariables` (themes/default/tokens.ts) — a plain function, not a component —
- * yet the barrel's `export { Toaster } from "./components/sonner"` (src/index.ts) still
- * makes sonner's module reachable from that one unrelated import. Fix belongs where the
- * import happens: apps/website importing from `@schoolhub/ui/lib/branding` directly (the
- * `exports` wildcard already resolves it) instead of the barrel drops this specific leak
- * with no risk to any other consumer — tracked for the website PR, since this file doesn't
- * touch that import site.
+ * since neither has an unconditional top-level side effect. sonner did reach one (a ~220KB
+ * chunk, the largest in the build, on every route) even after apps/website's one plain-
+ * function import of this package was moved off the barrel — because several *other* files
+ * there legitimately import Button/Card/Alert/Skeleton from the same barrel, and the barrel
+ * re-exported Toaster unconditionally alongside them. apps/website never renders <Toaster>
+ * at all. Root cause was sonner's CSS-injection IIFE running unconditionally at
+ * module-evaluation time, which no bundler can prove safe to drop once anything reaches
+ * that module — so no single import site could fix this while the barrel kept offering
+ * Toaster to every consumer. Fixed at the source instead: Toaster is no longer exported
+ * from "." at all (see index.ts) — it's @schoolhub/ui/toaster now, a separate subpath the
+ * one real consumer (apps/dashboard's providers.tsx) imports explicitly, so a consumer of
+ * anything else here no longer touches sonner's module unless it actually wants a toaster.
  */
 import { Slot } from "@radix-ui/react-slot";
 import {
