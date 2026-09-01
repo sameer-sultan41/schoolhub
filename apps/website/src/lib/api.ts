@@ -1,5 +1,6 @@
 import type { ApiSuccessEnvelope } from "@schoolhub/types";
 import { env } from "./env";
+import { TRAILING_SLASH_PATTERN } from "./regex";
 
 /**
  * The renderer's ONLY route to the API — and it is read-only by construction.
@@ -31,7 +32,7 @@ export class ContentFetchError extends Error {
 function buildUrl(path: string, query: ReadOptions["query"]): string {
   const url = new URL(
     path.startsWith("/") ? path.slice(1) : path,
-    `${env.API_BASE_URL.replace(/\/+$/, "")}/`,
+    `${env.API_BASE_URL.replace(TRAILING_SLASH_PATTERN, "")}/`,
   );
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));

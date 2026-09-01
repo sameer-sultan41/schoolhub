@@ -1,5 +1,6 @@
 import { revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
+import { SHA256_PREFIX_PATTERN } from "@/lib/regex";
 
 /**
  * Publish-time invalidation webhook (website-builder.md §3).
@@ -41,7 +42,7 @@ async function isSignatureValid(rawBody: string, signature: string | null): Prom
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 
-  return timingSafeEqual(expected, signature.replace(/^sha256=/, "").toLowerCase());
+  return timingSafeEqual(expected, signature.replace(SHA256_PREFIX_PATTERN, "").toLowerCase());
 }
 
 export async function POST(request: NextRequest) {
