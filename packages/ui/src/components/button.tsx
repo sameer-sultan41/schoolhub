@@ -8,7 +8,11 @@ import { cn } from "../lib/cn";
  * `--sh-*` custom properties a tenant's branding overrides. No literal colour lives here.
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--sh-radius)] text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
+  // disabled:* only ever matches the real :disabled CSS pseudo-class (native <button>
+  // path, below); data-[disabled]:* is what makes the asChild path — usually an <a>,
+  // which HTML disabled cannot apply to at all — visually match, driven by the explicit
+  // data-disabled attribute that branch sets.
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--sh-radius)] text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
   {
     variants: {
       variant: {
@@ -67,8 +71,18 @@ export function Button({
   ...props
 }: ButtonProps) {
   if (asChild) {
+    // `disabled` is destructured out above specifically so it does NOT reach `...props`
+    // here unchanged — the native HTML attribute is meaningless on the <a> (or whatever
+    // else) this branch typically wraps, and Slot would otherwise pass it through inert.
+    // aria-disabled announces the state to assistive tech on any element; data-disabled
+    // drives the visual treatment via buttonVariants' data-[disabled]:* classes above.
     return (
-      <Slot className={cn(buttonVariants({ variant, size, block }), className)} {...props}>
+      <Slot
+        className={cn(buttonVariants({ variant, size, block }), className)}
+        aria-disabled={disabled || undefined}
+        data-disabled={disabled || undefined}
+        {...props}
+      >
         {children}
       </Slot>
     );
