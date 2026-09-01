@@ -4,11 +4,80 @@
  * order to build the components these rules send app code to. Kept out of ./eslint (the
  * repo-wide base every workspace, packages/ui included, extends) for exactly that reason.
  *
- * Both apps spread this AFTER eslint-config-next's core-web-vitals/typescript configs: the
- * jsx-a11y rules below are listed by name against a plugin core-web-vitals registers first
- * (see the comment on that block) — importing eslint-plugin-jsx-a11y here and spreading its
- * own flatConfigs.recommended would throw "Cannot redefine plugin jsx-a11y" instead.
+ * Both apps spread the default export AFTER eslint-config-next's core-web-vitals/typescript
+ * configs: the jsx-a11y rules below are listed by name against a plugin core-web-vitals
+ * registers first (see the comment on that block) — importing eslint-plugin-jsx-a11y here
+ * and spreading its own flatConfigs.recommended would throw "Cannot redefine plugin
+ * jsx-a11y" instead.
+ *
+ * `tokensOnlyRules` is also exported by itself: the tokens-only-colour and RTL-safety
+ * no-restricted-syntax rules apply just as much to packages/ui's own component source as
+ * to app code — nothing about "no hardcoded palette colour" or "no physical-direction
+ * utility" is specific to being an app — so packages/ui's own eslint.config.mjs spreads
+ * this alone, without react/forbid-elements or the jsx-a11y additions (it already runs the
+ * plugin's full recommended set directly, not through core-web-vitals' partial one).
  */
+export const tokensOnlyRules = {
+  rules: {
+    "no-restricted-syntax": [
+      "error",
+      {
+        // Every standard Tailwind palette family, PLUS an arbitrary bracket-value colour
+        // on the same set of colour-bearing utilities (bg-[#ff0000], text-[rgb(0,0,0)]) —
+        // the first alternative alone mirrors button.test.tsx's regex but would miss the
+        // second form entirely (verified: it does not match bg-[#ff0000]), which is just
+        // as much a literal colour as bg-red-500. The bracket alternative only matches
+        // when the bracket's own content starts with a colour syntax (#, rgb(/rgba(/
+        // hsl(/hsla() — outline-[2px]/ring-[2px] (arbitrary WIDTH, not colour) don't
+        // start with any of those and stay unmatched.
+        selector:
+          "Literal[value=/\\b(?:bg|text|border|divide|ring|outline|accent|caret|decoration|shadow|from|via|to|fill|stroke)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black|white)(?:-\\d{2,3})?\\b|\\b(?:bg|text|border|divide|ring|outline|accent|caret|decoration|shadow|from|via|to|fill|stroke)-\\[(?:#[0-9a-fA-F]{3,8}|rgba?\\(|hsla?\\()/]",
+        message:
+          "Use a --sh-* design token (bg-primary, text-foreground, border-border, ...) instead of a literal Tailwind palette colour — see theme.css. A genuine non-className match (a string literal, a test assertion) can disable this one line with a comment explaining why, rather than weakening the pattern.",
+      },
+      {
+        // Same pattern as above, against a TemplateElement instead of a Literal: a
+        // template-literal className (`h-3 w-full ${className ?? ""}`, already an
+        // established pattern in this codebase) puts its text in value.raw, not
+        // value — invisible to the Literal selector above.
+        selector:
+          "TemplateElement[value.raw=/\\b(?:bg|text|border|divide|ring|outline|accent|caret|decoration|shadow|from|via|to|fill|stroke)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black|white)(?:-\\d{2,3})?\\b|\\b(?:bg|text|border|divide|ring|outline|accent|caret|decoration|shadow|from|via|to|fill|stroke)-\\[(?:#[0-9a-fA-F]{3,8}|rgba?\\(|hsla?\\()/]",
+        message:
+          "Use a --sh-* design token (bg-primary, text-foreground, border-border, ...) instead of a literal Tailwind palette colour — see theme.css. A genuine non-className match (a string literal, a test assertion) can disable this one line with a comment explaining why, rather than weakening the pattern.",
+      },
+      {
+        // The same physical-direction utilities verified clean in this repo's own RTL
+        // audit. The first alternative catches the abbreviated-prefix forms (ml-4,
+        // rounded-l-lg); the second is a standalone \bleft\b/\bright\b word-boundary
+        // match, needed because "left"/"right" often has NO trailing hyphen at all —
+        // text-left, float-left, origin-left — so the old single pattern (which required
+        // one) missed every bare-suffix form entirely (verified: it did not match
+        // text-right). Two lookbehinds exclude the standalone match's two real false
+        // positives found running this against packages/ui: `data-[side=left]` is Radix's
+        // OWN attribute-selector vocabulary describing which side of the trigger a popover
+        // actually rendered on (not something the author chose, and there is no logical
+        // equivalent to switch it to); `slide-in-from-left`/`slide-out-to-right` is
+        // tw-animate-css's own physical-only utility naming, which this codebase already
+        // handles correctly by gating each one behind an ltr:/rtl: variant (sheet.tsx) — a
+        // different vocabulary the ms-/me-/start-/end- suggestion in this rule's own
+        // message does not even apply to. Urdu is a real, shipped locale on the dashboard,
+        // and a public school site is exactly the kind of page a parent may view in ur.
+        selector:
+          "Literal[value=/\\b(?:ml|mr|pl|pr|rounded-l|rounded-r|border-l|border-r)-|(?<!=)(?<!-from-)(?<!-to-)\\b(?:left|right)\\b/]",
+        message:
+          "Use logical properties (ms-/me-/ps-/pe-/start-/end-/rounded-s-/rounded-e-/border-s-/border-e-) instead of physical left/right utilities — must stay RTL-safe for the ur locale. A genuine non-className match can disable this one line with a comment explaining why, rather than weakening the pattern.",
+      },
+      {
+        // Same TemplateElement gap as the palette rule above.
+        selector:
+          "TemplateElement[value.raw=/\\b(?:ml|mr|pl|pr|rounded-l|rounded-r|border-l|border-r)-|(?<!=)(?<!-from-)(?<!-to-)\\b(?:left|right)\\b/]",
+        message:
+          "Use logical properties (ms-/me-/ps-/pe-/start-/end-/rounded-s-/rounded-e-/border-s-/border-e-) instead of physical left/right utilities — must stay RTL-safe for the ur locale. A genuine non-className match can disable this one line with a comment explaining why, rather than weakening the pattern.",
+      },
+    ],
+  },
+};
+
 export default [
   {
     rules: {
@@ -107,48 +176,7 @@ export default [
           ],
         },
       ],
-      "no-restricted-syntax": [
-        "error",
-        {
-          // Every standard Tailwind palette family — mirrors the regex
-          // packages/ui/src/components/button.test.tsx already enforces at the
-          // component level, extended here to every className in this app. This is
-          // what would have caught the 9 border-black/1x violations apps/website
-          // actually shipped, fixed by hand in an earlier PR in this stack.
-          selector:
-            "Literal[value=/\\b(?:bg|text|border|divide|ring|outline|accent|caret|decoration|shadow|from|via|to|fill|stroke)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black|white)(?:-\\d{2,3})?\\b/]",
-          message:
-            "Use a --sh-* design token (bg-primary, text-foreground, border-border, ...) instead of a literal Tailwind palette colour — see theme.css. A genuine non-className match (a string literal, a test assertion) can disable this one line with a comment explaining why, rather than weakening the pattern.",
-        },
-        {
-          // Same pattern as above, against a TemplateElement instead of a Literal: a
-          // template-literal className (`h-3 w-full ${className ?? ""}`, already an
-          // established pattern in this codebase) puts its text in value.raw, not
-          // value — invisible to the Literal selector above.
-          selector:
-            "TemplateElement[value.raw=/\\b(?:bg|text|border|divide|ring|outline|accent|caret|decoration|shadow|from|via|to|fill|stroke)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black|white)(?:-\\d{2,3})?\\b/]",
-          message:
-            "Use a --sh-* design token (bg-primary, text-foreground, border-border, ...) instead of a literal Tailwind palette colour — see theme.css. A genuine non-className match (a string literal, a test assertion) can disable this one line with a comment explaining why, rather than weakening the pattern.",
-        },
-        {
-          // The same physical-direction utilities verified clean in this repo's own
-          // RTL audit. Urdu is a real, shipped locale on the dashboard, and a public
-          // school site is exactly the kind of page a parent may view in ur — this is
-          // what keeps both apps clean going forward instead of relying on someone
-          // remembering to grep for it before every release.
-          selector:
-            "Literal[value=/\\b(?:ml|mr|pl|pr|rounded-l|rounded-r|border-l|border-r|left|right)-/]",
-          message:
-            "Use logical properties (ms-/me-/ps-/pe-/start-/end-/rounded-s-/rounded-e-/border-s-/border-e-) instead of physical left/right utilities — this app must stay RTL-safe for the ur locale. A genuine non-className match can disable this one line with a comment explaining why, rather than weakening the pattern.",
-        },
-        {
-          // Same TemplateElement gap as the palette rule above.
-          selector:
-            "TemplateElement[value.raw=/\\b(?:ml|mr|pl|pr|rounded-l|rounded-r|border-l|border-r|left|right)-/]",
-          message:
-            "Use logical properties (ms-/me-/ps-/pe-/start-/end-/rounded-s-/rounded-e-/border-s-/border-e-) instead of physical left/right utilities — this app must stay RTL-safe for the ur locale. A genuine non-className match can disable this one line with a comment explaining why, rather than weakening the pattern.",
-        },
-      ],
     },
   },
+  tokensOnlyRules,
 ];
