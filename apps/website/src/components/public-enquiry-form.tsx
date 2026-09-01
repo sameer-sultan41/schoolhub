@@ -1,7 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription, Button, Input, Label, Textarea } from "@schoolhub/ui";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Public form submission.
@@ -32,6 +32,15 @@ export function PublicEnquiryForm({
   tenantSlug: string;
 }) {
   const [status, setStatus] = useState<Status>("idle");
+  const confirmationRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // The success branch below unmounts the whole <form>, submit button included — without
+    // this, a keyboard/screen-reader user's focus falls back to <body>, dropped to the top
+    // of the document right after submitting. tabIndex={-1} on the wrapper (not a native
+    // focus target) makes it programmatically focusable without adding it to tab order.
+    if (status === "sent") confirmationRef.current?.focus();
+  }, [status]);
 
   async function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,11 +69,13 @@ export function PublicEnquiryForm({
 
   if (status === "sent") {
     return (
-      <Alert variant="success" role="status">
-        <AlertDescription>
-          Thank you — we have received your message and will be in touch.
-        </AlertDescription>
-      </Alert>
+      <div ref={confirmationRef} tabIndex={-1}>
+        <Alert variant="success" role="status">
+          <AlertDescription>
+            Thank you — we have received your message and will be in touch.
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
