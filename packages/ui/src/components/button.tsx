@@ -38,22 +38,36 @@ const buttonVariants = cva(
   },
 );
 
-export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-  /** Shows a spinner and disables the button. Use for in-flight mutations. */
-  isLoading?: boolean;
-  /** Announced by screen readers while `isLoading`. */
-  loadingLabel?: string;
-  leadingIcon?: ReactNode;
-  trailingIcon?: ReactNode;
-  /**
-   * Render the styling onto a single child element (typically next/link's `<Link>`)
-   * instead of a `<button>` — e.g. `<Button asChild><Link href="/x">Go</Link></Button>`.
-   * `isLoading`/`leadingIcon`/`trailingIcon` and the forced `type` don't apply here: the
-   * child owns its own content and, usually, isn't a submittable form control at all.
-   */
-  asChild?: boolean;
-}
+type ButtonOwnProps =
+  | {
+      /**
+       * Render the styling onto a single child element (typically next/link's `<Link>`)
+       * instead of a `<button>` — e.g. `<Button asChild><Link href="/x">Go</Link></Button>`.
+       * `isLoading`/`leadingIcon`/`trailingIcon` and the forced `type` don't apply here:
+       * the child owns its own content and, usually, isn't a submittable form control at
+       * all — this branch is a compile-time error precisely so that isn't a silent no-op:
+       * a Slot-wrapped child can't have a spinner injected into arbitrary content, so
+       * there is no correct behaviour for isLoading here to fall back to.
+       */
+      asChild: true;
+      isLoading?: never;
+      loadingLabel?: never;
+      leadingIcon?: never;
+      trailingIcon?: never;
+    }
+  | {
+      asChild?: false;
+      /** Shows a spinner and disables the button. Use for in-flight mutations. */
+      isLoading?: boolean;
+      /** Announced by screen readers while `isLoading`. */
+      loadingLabel?: string;
+      leadingIcon?: ReactNode;
+      trailingIcon?: ReactNode;
+    };
+
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
+  VariantProps<typeof buttonVariants> &
+  ButtonOwnProps;
 
 export function Button({
   className,
