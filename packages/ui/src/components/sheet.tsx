@@ -56,10 +56,18 @@ export function SheetContent({
   className,
   children,
   side = "end",
-  closeLabel = "Close",
+  closeLabel,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> &
-  VariantProps<typeof sheetVariants> & { closeLabel?: string }) {
+  VariantProps<typeof sheetVariants> & {
+    /**
+     * Accessible name for the built-in close button (its only content is an icon).
+     * Required, not defaulted to "Close" — this package has no i18n of its own, so a
+     * silent default here would always ship untranslated (the same reasoning already
+     * applied to DataTable's emptyState/pagination labels and Dialog's closeLabel).
+     */
+    closeLabel: string;
+  }) {
   return (
     <DialogPrimitive.Portal>
       <SheetOverlay />

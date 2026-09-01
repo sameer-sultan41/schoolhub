@@ -29,12 +29,18 @@ export function DialogContent({
   className,
   children,
   showCloseButton = true,
-  closeLabel = "Close",
+  closeLabel,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
-  /** Accessible name for the built-in close button — pass a translated string. */
-  closeLabel?: string;
+  /**
+   * Accessible name for the built-in close button (its only content is an icon).
+   * Required, not defaulted to "Close" — this package has no i18n of its own, so a
+   * silent default here would always ship untranslated (the same reasoning already
+   * applied to DataTable's emptyState/pagination labels). Pass `t("common.close")` or
+   * equivalent from the caller's own messages.
+   */
+  closeLabel: string;
 }) {
   return (
     <DialogPrimitive.Portal>
