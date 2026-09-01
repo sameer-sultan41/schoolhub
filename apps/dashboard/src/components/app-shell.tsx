@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -25,6 +26,50 @@ import { LOGIN_PATH, PLATFORM_NAME, TENANT_QUERY_STALE_TIME_MS } from "@/lib/con
 import { NAV_ITEMS } from "@/lib/nav-items";
 import { canAccessModule } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
+
+/**
+ * Rendered inside SidebarProvider so it can reach useSidebar() — needed for exactly one
+ * thing: closing the mobile drawer on navigation. SidebarProvider's own mobile state has
+ * no navigation-awareness of its own (confirmed by a real e2e regression: without this,
+ * the drawer stayed open behind the new page after a link click). setOpenMobile(false) is
+ * a no-op on desktop, where there's no drawer to close.
+ */
+function DashboardNav({
+  items,
+  pathname,
+  t,
+}: {
+  items: typeof NAV_ITEMS;
+  pathname: string;
+  t: (key: string) => string;
+}) {
+  const { setOpenMobile } = useSidebar();
+
+  return (
+    <nav aria-label={t("primary")}>
+      <SidebarMenu>
+        {items.map((item) => {
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <SidebarMenuItem key={item.key}>
+              <SidebarMenuButton asChild isActive={isActive}>
+                <Link
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={() => {
+                    setOpenMobile(false);
+                  }}
+                >
+                  {t(item.key)}
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          );
+        })}
+      </SidebarMenu>
+    </nav>
+  );
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useTranslations("nav");
@@ -92,22 +137,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
             </SidebarHeader>
             <SidebarContent>
-              <nav aria-label={t("primary")}>
-                <SidebarMenu>
-                  {visibleItems.map((item) => {
-                    const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                    return (
-                      <SidebarMenuItem key={item.key}>
-                        <SidebarMenuButton asChild isActive={isActive}>
-                          <Link href={item.href} aria-current={isActive ? "page" : undefined}>
-                            {t(item.key)}
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </nav>
+              <DashboardNav items={visibleItems} pathname={pathname} t={t} />
             </SidebarContent>
           </Sidebar>
 

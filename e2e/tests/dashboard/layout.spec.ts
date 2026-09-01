@@ -53,3 +53,32 @@ test.describe("sidebar direction", () => {
     }
   });
 });
+
+test.describe("mobile navigation drawer", () => {
+  test("opens via the trigger, shows the nav, and closes on link click", async ({
+    page,
+    dashboardPage,
+    signedIn: _signedIn,
+  }) => {
+    await page.setViewportSize({ width: 500, height: 800 });
+    await dashboardPage.goto();
+
+    // Below the breakpoint, Sidebar's own isMobile check swaps to the Sheet-based render
+    // entirely — the desktop nav isn't in the tree at all, only the trigger is.
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Primary navigation" }).click();
+
+    const nav = page.getByRole("navigation", { name: "Primary navigation" });
+    await expect(nav).toBeVisible();
+    const studentsLink = nav.getByRole("link", { name: "Dashboard" });
+    await expect(studentsLink).toBeVisible();
+
+    await studentsLink.click();
+
+    await expect(page).toHaveURL(/\/dashboard/);
+    // The drawer must not survive a client-side route change — SidebarProvider's mobile
+    // state has no navigation-aware close of its own; this only holds if the app wires it.
+    await expect(nav).toHaveCount(0);
+  });
+});
