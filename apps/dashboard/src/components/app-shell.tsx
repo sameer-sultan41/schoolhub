@@ -15,7 +15,7 @@ import { Menu } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { TenantTheme } from "@/components/tenant-theme";
 import { useSession } from "@/hooks/use-session";
 import { apiClient, logout } from "@/lib/auth";
@@ -79,6 +79,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useSession();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  useEffect(() => {
+    // mobileNavOpen is plain React state — it has no viewport binding of its own, so
+    // opening the Sheet below `md` and then widening the window (or rotating a tablet)
+    // past it without closing the Sheet first leaves BOTH navs mounted: the desktop
+    // <nav> becomes visible purely via its own `md:block` CSS, while Radix keeps
+    // rendering the Sheet's <nav> because nothing ever told it to close. Two identically
+    // labelled "Primary navigation" landmarks would coexist — closing the Sheet the
+    // instant the viewport crosses the same `md` breakpoint (768px, Tailwind's default,
+    // unchanged in this repo) keeps it to exactly one at any given width.
+    const query = window.matchMedia("(min-width: 768px)");
+    const onChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setMobileNavOpen(false);
+    };
+    query.addEventListener("change", onChange);
+    return () => {
+      query.removeEventListener("change", onChange);
+    };
+  }, []);
+
   const { data: tenant } = useQuery({
     queryKey: queryKeys.tenant(),
     queryFn: async () => (await apiClient.get<Tenant>("/tenant")).data,
@@ -134,9 +153,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {/*
                   Mobile nav trigger — the previous shell had NO replacement at all for the
                   sidebar below the md breakpoint; it simply vanished. Radix Dialog (which
-                  Sheet wraps) doesn't mount SheetContent while closed, so this never
-                  produces a second "Primary navigation" landmark alongside the desktop one
-                  above — only ever one is actually in the DOM for a given viewport.
+                  Sheet wraps) doesn't mount SheetContent while closed, so a second
+                  "Primary navigation" landmark alongside the desktop one above only ever
+                  exists while this Sheet is actually open — which is why the matchMedia
+                  effect above closes it the instant the viewport crosses md: without that,
+                  opening this below md and then widening past it (or rotating a tablet)
+                  without closing first would leave both navs mounted simultaneously.
                 */}
                 <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                   <SheetTrigger asChild>

@@ -86,6 +86,7 @@ myschool
 nahi
 Nastaliq
 navigations
+navs
 negotiables
 NOBYPASSRLS
 noeviction
