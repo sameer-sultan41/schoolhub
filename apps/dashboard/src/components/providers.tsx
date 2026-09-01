@@ -1,6 +1,7 @@
 "use client";
 
-import { Toaster, TooltipProvider } from "@schoolhub/ui";
+import { TooltipProvider } from "@schoolhub/ui";
+import { Toaster } from "@schoolhub/ui/toaster";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
