@@ -25,7 +25,7 @@ export async function NoticeBoard({ section, tenant }: SectionProps) {
         <h2 className="font-heading text-2xl font-semibold text-foreground">
           {parsed.data.heading}
         </h2>
-        <ul className="mt-6 divide-y divide-black/10">
+        <ul className="mt-6 divide-y divide-border">
           {notices.map((notice) => (
             <li key={notice.id} className="py-4">
               <time dateTime={notice.published_at} className="text-xs text-foreground/60">

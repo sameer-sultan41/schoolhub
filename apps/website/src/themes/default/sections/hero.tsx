@@ -1,3 +1,4 @@
+import { Button } from "@schoolhub/ui";
 import Image from "next/image";
 import Link from "next/link";
 import { z } from "zod";
@@ -43,12 +44,9 @@ export function Hero({ section }: SectionProps) {
           </p>
         ) : null}
         {cta_label && cta_href ? (
-          <Link
-            href={cta_href}
-            className="mt-8 inline-flex h-11 items-center rounded-[var(--sh-radius)] bg-primary px-6 text-sm font-medium text-primary-foreground"
-          >
-            {cta_label}
-          </Link>
+          <Button asChild size="lg" className="mt-8">
+            <Link href={cta_href}>{cta_label}</Link>
+          </Button>
         ) : null}
       </div>
     </section>

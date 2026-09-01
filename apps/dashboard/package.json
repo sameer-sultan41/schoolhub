@@ -21,6 +21,7 @@
     "@schoolhub/types": "workspace:*",
     "@schoolhub/ui": "workspace:*",
     "@tanstack/react-query": "^5.90.2",
+    "lucide-react": "^1.38.0",
     "next": "16.3.1",
     "next-intl": "^4.3.16",
     "react": "19.2.8",

@@ -1,3 +1,4 @@
+import { Button } from "@schoolhub/ui";
 import Link from "next/link";
 
 /** Shown for an unpublished path, and for a host that resolves to no tenant. */
@@ -8,12 +9,9 @@ export default function NotFound() {
       <p className="mt-3 text-foreground/75">
         The page you were looking for does not exist or is no longer published.
       </p>
-      <Link
-        href="/"
-        className="mt-6 inline-flex h-11 items-center rounded-[var(--sh-radius)] bg-primary px-6 text-sm font-medium text-primary-foreground"
-      >
-        Go to the homepage
-      </Link>
+      <Button asChild size="lg" className="mt-6">
+        <Link href="/">Go to the homepage</Link>
+      </Button>
     </main>
   );
 }

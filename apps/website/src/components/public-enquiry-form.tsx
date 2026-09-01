@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Alert, AlertDescription, Button, Input, Label, Textarea } from "@schoolhub/ui";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Public form submission.
@@ -9,6 +10,12 @@ import { useState } from "react";
  * read-only machine token is never involved (website-builder.md §6). The endpoints are
  * tenant-resolved and re-validated server-side, rate-limited per IP and per tenant, and
  * idempotency-protected — none of which we can or should reimplement here.
+ *
+ * Uncontrolled + native HTML5 validation (required/type=email/maxLength) rather than
+ * react-hook-form's Form/FormField set: three fields with no interdependent validation
+ * don't need it, and this app has never had a form-state dependency — pulling one in for
+ * this would be solving a problem this form doesn't have. Only the styling layer moves
+ * onto the shared components (Label/Input/Textarea/Button/Alert).
  */
 const ENDPOINTS = {
   contact: "/api/v1/public/contact-messages",
@@ -25,6 +32,15 @@ export function PublicEnquiryForm({
   tenantSlug: string;
 }) {
   const [status, setStatus] = useState<Status>("idle");
+  const confirmationRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // The success branch below unmounts the whole <form>, submit button included — without
+    // this, a keyboard/screen-reader user's focus falls back to <body>, dropped to the top
+    // of the document right after submitting. tabIndex={-1} on the wrapper (not a native
+    // focus target) makes it programmatically focusable without adding it to tab order.
+    if (status === "sent") confirmationRef.current?.focus();
+  }, [status]);
 
   async function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,9 +69,13 @@ export function PublicEnquiryForm({
 
   if (status === "sent") {
     return (
-      <p role="status" className="text-sm text-foreground">
-        Thank you — we have received your message and will be in touch.
-      </p>
+      <div ref={confirmationRef} tabIndex={-1}>
+        <Alert variant="success" role="status">
+          <AlertDescription>
+            Thank you — we have received your message and will be in touch.
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
@@ -65,62 +85,38 @@ export function PublicEnquiryForm({
     // there is nothing left for a caller to await or handle.
     <form onSubmit={(event) => void onSubmit(event)} className="space-y-4">
       <div className="space-y-1.5">
-        <label htmlFor="enquiry-name" className="block text-sm font-medium text-foreground">
-          Your name
-        </label>
-        <input
-          id="enquiry-name"
-          name="name"
-          required
-          maxLength={120}
-          autoComplete="name"
-          className="h-10 w-full rounded-[var(--sh-radius)] border border-black/15 px-3 text-sm"
-        />
+        <Label htmlFor="enquiry-name">Your name</Label>
+        <Input id="enquiry-name" name="name" required maxLength={120} autoComplete="name" />
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="enquiry-email" className="block text-sm font-medium text-foreground">
-          Email
-        </label>
-        <input
+        <Label htmlFor="enquiry-email">Email</Label>
+        <Input
           id="enquiry-email"
           name="email"
           type="email"
           required
           maxLength={254}
           autoComplete="email"
-          className="h-10 w-full rounded-[var(--sh-radius)] border border-black/15 px-3 text-sm"
         />
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="enquiry-message" className="block text-sm font-medium text-foreground">
-          Message
-        </label>
-        <textarea
-          id="enquiry-message"
-          name="message"
-          required
-          rows={5}
-          maxLength={2000}
-          className="w-full rounded-[var(--sh-radius)] border border-black/15 px-3 py-2 text-sm"
-        />
+        <Label htmlFor="enquiry-message">Message</Label>
+        <Textarea id="enquiry-message" name="message" required rows={5} maxLength={2000} />
       </div>
 
       {status === "error" ? (
-        <p role="alert" className="text-sm text-danger">
-          We could not send your message. Please try again in a moment.
-        </p>
+        <Alert variant="danger">
+          <AlertDescription>
+            We could not send your message. Please try again in a moment.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={status === "submitting"}
-        aria-busy={status === "submitting"}
-        className="h-11 rounded-[var(--sh-radius)] bg-primary px-6 text-sm font-medium text-primary-foreground disabled:opacity-50"
-      >
-        {status === "submitting" ? "Sending…" : "Send message"}
-      </button>
+      <Button type="submit" isLoading={status === "submitting"} loadingLabel="Sending">
+        Send message
+      </Button>
     </form>
   );
 }

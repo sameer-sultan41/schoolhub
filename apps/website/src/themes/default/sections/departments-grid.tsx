@@ -1,3 +1,4 @@
+import { Card, CardContent } from "@schoolhub/ui";
 import { z } from "zod";
 import { getDepartments } from "@/lib/content";
 import type { SectionProps } from "@/themes/types";
@@ -24,13 +25,17 @@ export async function DepartmentsGrid({ section, tenant }: SectionProps) {
 
       <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {departments.map((department) => (
-          <li key={department.id} className="rounded-[var(--sh-radius)] border border-black/10 p-5">
-            <h3 className="font-heading text-base font-semibold text-foreground">
-              {department.name}
-            </h3>
-            {department.description ? (
-              <p className="mt-2 text-sm text-foreground/75">{department.description}</p>
-            ) : null}
+          <li key={department.id}>
+            <Card className="h-full">
+              <CardContent className="pt-6">
+                <h3 className="font-heading text-base font-semibold text-foreground">
+                  {department.name}
+                </h3>
+                {department.description ? (
+                  <p className="mt-2 text-sm text-foreground/75">{department.description}</p>
+                ) : null}
+              </CardContent>
+            </Card>
           </li>
         ))}
       </ul>
