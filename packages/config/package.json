@@ -5,10 +5,12 @@
   "description": "Shared lint configuration for the SchoolHub frontend monorepo",
   "type": "module",
   "exports": {
-    "./eslint": "./eslint.base.mjs"
+    "./eslint": "./eslint.base.mjs",
+    "./eslint-app": "./eslint.app.mjs"
   },
   "files": [
-    "eslint.base.mjs"
+    "eslint.base.mjs",
+    "eslint.app.mjs"
   ],
   "scripts": {
     "lint": "eslint",
