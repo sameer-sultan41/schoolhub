@@ -1052,7 +1052,6 @@ export interface components {
         PatchedStudent: {
             /** Format: uuid */
             readonly id?: string;
-            /** @description Generated per the tenant's admission-number pattern. Immutable after creation (§11) — see services.assert_admission_number_immutable. */
             admission_number?: string;
             /**
              * Format: uuid
@@ -1186,8 +1185,7 @@ export interface components {
         Student: {
             /** Format: uuid */
             readonly id: string;
-            /** @description Generated per the tenant's admission-number pattern. Immutable after creation (§11) — see services.assert_admission_number_immutable. */
-            admission_number: string;
+            admission_number?: string;
             /**
              * Format: uuid
              * @description users(id) — portal account, tenant-checked at write time.

@@ -2998,8 +2998,6 @@ components:
           readOnly: true
         admission_number:
           type: string
-          description: Generated per the tenant's admission-number pattern. Immutable
-            after creation (§11) — see services.assert_admission_number_immutable.
           maxLength: 32
         user_id:
           type: string
@@ -3252,8 +3250,6 @@ components:
           readOnly: true
         admission_number:
           type: string
-          description: Generated per the tenant's admission-number pattern. Immutable
-            after creation (§11) — see services.assert_admission_number_immutable.
           maxLength: 32
         user_id:
           type: string
@@ -3329,7 +3325,6 @@ components:
           readOnly: true
       required:
       - admission_date
-      - admission_number
       - campus_id
       - created_at
       - date_of_birth
