@@ -1,7 +1,7 @@
 # ERD Overview
 
 > **Agent Context** — Load this block first.
-> **Summary:** Entity-relationship overview of the full SchoolHub schema (134 tables across 11 entity files): a domain map of which file owns which tables, per-domain Mermaid ER diagrams showing key relationships only (no attribute lists), a catalog of representative 1:1 / 1:N / M:N and cross-domain relationships, and a conventions recap. Column-level truth lives in [`entities/`](entities/); platform-wide column and RLS rules live in [`../02-architecture/database-architecture.md`](../02-architecture/database-architecture.md).
+> **Summary:** Entity-relationship overview of the full SchoolHub schema (136 tables across 11 entity files): a domain map of which file owns which tables, per-domain Mermaid ER diagrams showing key relationships only (no attribute lists), a catalog of representative 1:1 / 1:N / M:N and cross-domain relationships, and a conventions recap. Column-level truth lives in [`entities/`](entities/); platform-wide column and RLS rules live in [`../02-architecture/database-architecture.md`](../02-architecture/database-architecture.md).
 > **Co-load with:** [`../02-architecture/database-architecture.md`](../02-architecture/database-architecture.md) · [`entities/`](entities/) (the file owning the domain under discussion)
 
 ## 1. Domain Map
@@ -13,7 +13,7 @@
 | [`entities/academics.md`](entities/academics.md) | Academic structure, enrollment & timetable | campuses, departments, academic_sessions, terms, classes, sections, subjects, houses, student_enrollments, class_subjects, teacher_subject_allocations, student_promotions, rooms, periods, timetable_slots, teacher_substitutions |
 | [`entities/attendance.md`](entities/attendance.md) | Attendance & leave | student_attendance, staff_attendance, attendance_corrections, leave_types, leave_policies, leave_balances, leave_requests, leave_approvals |
 | [`entities/examinations.md`](entities/examinations.md) | Examinations & assessment | exams, exam_subjects, exam_schedules, grading_scales, grade_bands, marks, results, report_cards, admit_cards, question_banks, questions |
-| [`entities/finance.md`](entities/finance.md) | Finance & payroll | fee_heads, fee_structures, fee_schedules, fee_invoices, fee_invoice_lines, discounts, scholarships, fines, payments, receipts, refunds, ledger_accounts, ledger_entries, expense_categories, expenses, budgets, salary_structures, salary_components, payroll_runs, payslips |
+| [`entities/finance.md`](entities/finance.md) | Finance & payroll | fee_heads, fee_structures, fee_schedules, fee_invoices, fee_invoice_lines, discounts, scholarships, fines, payments, receipts, refunds, fee_vouchers, voucher_collection_imports, ledger_accounts, ledger_entries, expense_categories, expenses, budgets, salary_structures, salary_components, payroll_runs, payslips |
 | [`entities/admissions.md`](entities/admissions.md) | Admissions & lead management | admission_campaigns, enquiries, leads, applications, application_documents, interviews, admission_decisions |
 | [`entities/communication.md`](entities/communication.md) | Communication | announcements, notices, message_threads, messages, notification_templates, notifications, notification_preferences, delivery_logs |
 | [`entities/library-transport-inventory.md`](entities/library-transport-inventory.md) | Library, transport, inventory & assets | book_categories, book_titles, book_copies, library_members, book_issues, library_fines, vehicles, drivers, routes, route_stops, student_transport_assignments, vehicle_maintenance, suppliers, asset_categories, assets, asset_assignments, asset_maintenance, stock_items, stock_movements, purchase_orders, purchase_order_items |
@@ -116,6 +116,8 @@ erDiagram
     fee_invoices ||--o{ fee_invoice_lines : "itemized by"
     fines ||--o{ fee_invoice_lines : "invoiced as"
     fee_invoices ||--o{ payments : "settled by"
+    fee_invoices ||--o{ fee_vouchers : "collected via"
+    fee_vouchers |o--o| payments : "matched to"
     payments ||--|| receipts : "issues"
     payments ||--o{ refunds : "reversed by"
     ledger_accounts ||--o{ ledger_entries : "posts"

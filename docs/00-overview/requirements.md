@@ -24,7 +24,7 @@ Each requirement below is a one-line summary; the referenced module doc is the a
 - **FR-EXM** — Examination setup through result publishing: schedules, marks entry, grading/GPA, report cards, approval, admit cards, transcripts, question banks → [`../03-modules/examinations.md`](../03-modules/examinations.md).
 
 ### Money
-- **FR-FEE** — Fee structures, invoicing, collection, discounts/scholarships, fines, refunds, receipts, outstanding tracking, ledgers, expenses/income, budgeting, payroll (structures, allowances, deductions, processing, payslips), financial reports → [`../03-modules/fees-finance.md`](../03-modules/fees-finance.md).
+- **FR-FEE** — Fee structures, invoicing, collection (incl. bank/wallet fee vouchers with settlement-file reconciliation, and thermal-printer receipt/voucher output), discounts/scholarships, fines, refunds, receipts, outstanding tracking, ledgers, expenses/income, budgeting, payroll (structures, allowances, deductions, processing, payslips), financial reports → [`../03-modules/fees-finance.md`](../03-modules/fees-finance.md).
 
 ### Staff operations
 - **FR-HRL** — Employee records, leave policies/balances/requests, approval workflows, attendance and payroll integration → [`../03-modules/hr-leave.md`](../03-modules/hr-leave.md).
@@ -38,7 +38,7 @@ Each requirement below is a one-line summary; the referenced module doc is the a
 - **FR-LIB** — Library catalog, members, issue/return, fines, availability tracking → [`../03-modules/library.md`](../03-modules/library.md).
 - **FR-TRN** — Vehicles, drivers, routes/stops, student/driver assignments, maintenance, transport fees, tracking-integration readiness → [`../03-modules/transport.md`](../03-modules/transport.md).
 - **FR-INV** — Assets, equipment, stock, suppliers, purchases, stock movements, maintenance, asset assignment → [`../03-modules/inventory-assets.md`](../03-modules/inventory-assets.md).
-- **FR-CRT** — Certificate and document generation from templates (bonafide, transfer, character; staff documents), PDF output, digital records → [`../03-modules/certificates-documents.md`](../03-modules/certificates-documents.md).
+- **FR-CRT** — Certificate and document generation from templates (bonafide, transfer, character; staff documents), PDF output, digital records, and system-triggered birthday cards → [`../03-modules/certificates-documents.md`](../03-modules/certificates-documents.md).
 
 ### Insight
 - **FR-RPT** — Configurable reports and dashboards across all modules with filters, charts, exports, scheduling, and role-based visibility → [`../03-modules/reporting-analytics.md`](../03-modules/reporting-analytics.md).

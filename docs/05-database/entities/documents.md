@@ -1,7 +1,7 @@
 # Entities: Certificates & Documents
 
 > **Agent Context** — Load this block first.
-> **Summary:** Column-level specs for the document engine: versioned merge-field templates, every rendered document (with workflow status and merge-data snapshot), and the immutable certificate issuance registry (serial numbers, public verification codes, revocation). Owned by [`certificates-documents.md`](../../03-modules/certificates-documents.md).
+> **Summary:** Column-level specs for the document engine: versioned merge-field templates, every rendered document (with workflow status and merge-data snapshot), and the immutable certificate issuance registry (serial numbers, public verification codes, revocation). Also covers the `birthday_card` template category — a system-triggered, workflow-free document type that never enters the issuance registry. Owned by [`certificates-documents.md`](../../03-modules/certificates-documents.md).
 > **Co-load with:** `../../03-modules/certificates-documents.md` · `tenancy.md` (for `files`) · `people.md` (for `students`, `staff`)
 
 **Conventions:** every table here is tenant-owned and implicitly has `id UUID PK`, `tenant_id FK`, `created_at`/`updated_at`, `created_by`/`updated_by`, `deleted_at` (soft delete) — exceptions only are stated. Rendered PDFs live in object storage via `files` ([`tenancy.md`](tenancy.md)); report cards, admit cards, and fee receipts are owned by their own modules, not here.
@@ -15,7 +15,7 @@ Versioned, tenant-scoped merge-field template for a certificate or letter catego
 | ------ | ---- | ---- | ------- | ----- |
 | name | varchar(150) | no | — | Display name |
 | code | varchar(60) | no | — | Stable key, unique per tenant per version (e.g. `bonafide`) |
-| category | varchar(40) | no | — | Enum: `bonafide` `transfer_certificate` `character_certificate` `staff_experience_letter` `staff_appointment_letter` `staff_noc` `custom` |
+| category | varchar(40) | no | — | Enum: `bonafide` `transfer_certificate` `character_certificate` `staff_experience_letter` `staff_appointment_letter` `staff_noc` `birthday_card` `custom` |
 | subject_type | varchar(20) | no | — | Enum: `student` `staff` `other` — drives the merge-field catalog |
 | body_html | text | no | — | HTML with `{{merge.field}}` placeholders; rendered by WeasyPrint |
 | merge_fields | jsonb | no | `'[]'` | Declared placeholders: `{key, label, source(record|manual), required}` |
@@ -43,7 +43,7 @@ Every rendered document instance with its workflow status and reproducibility sn
 | staff_id | uuid | yes | — | FK → staff; required when subject_type = `staff` |
 | merge_data | jsonb | no | `'{}'` | Resolved merge values snapshot — re-render reproducible even after source records change |
 | purpose | varchar(300) | yes | — | Free-text purpose (e.g. "visa application"), printed if the template uses it |
-| status | varchar(30) | no | `'draft'` | Enum: `draft` `pending_approval` `approved` `rejected` `issued` |
+| status | varchar(30) | no | `'draft'` | Enum: `draft` `pending_approval` `approved` `rejected` `issued` `delivered`. `delivered` is terminal for system-triggered categories (`birthday_card`) that skip approval/issuance entirely — set once handed to communication (certificates-documents.md §7.3) |
 | requested_by_role | varchar(20) | yes | — | Enum: `staff` `student` `guardian` — self-service request origin *(recommendation)* |
 | approved_by | uuid | yes | — | FK → users; must differ from `created_by` (segregation of duties) |
 | approved_at | timestamptz | yes | — | |
@@ -52,7 +52,7 @@ Every rendered document instance with its workflow status and reproducibility sn
 | batch_job_id | uuid | yes | — | FK → background_jobs for bulk generation |
 
 Indexes: (tenant_id, status); (tenant_id, student_id); (tenant_id, staff_id); (document_template_id).
-Relationships: N:1 `document_templates`, `students`, `staff`, `files`, `background_jobs`; 1:1 optional `issued_certificates`.
+Relationships: N:1 `document_templates`, `students`, `staff`, `files`, `background_jobs`; 1:1 optional `issued_certificates` — never populated for `birthday_card`-category rows, which terminate at `delivered`.
 
 ### issued_certificates
 The immutable issuance registry: serial number, public verification code, revocation state. **Exceptions:** rows are never soft-deleted (`deleted_at` unused — registry is permanent); post-issuance updates limited to revocation fields, enforced in the service layer and audited.

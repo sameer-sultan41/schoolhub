@@ -47,6 +47,7 @@ DMARC
 Docstrings
 dogfooding
 Dramatiq
+Easypaisa
 edoburu
 EICAR
 encashment
@@ -74,6 +75,7 @@ htmlcov
 iban
 interceptable
 isready
+JazzCash
 Keyspace
 Laravel
 launchable
