@@ -26,6 +26,7 @@ baselined
 Bilal
 blockable
 bonafide
+brandable
 bursty
 BYPASSRLS
 chartable
@@ -114,6 +115,7 @@ pollable
 pooler
 preflights
 prefs
+proptypes
 pseudonymization
 pseudonymized
 pseudonymizes

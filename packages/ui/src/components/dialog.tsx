@@ -50,7 +50,10 @@ export function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[var(--sh-radius)] border border-border bg-surface p-6 text-surface-foreground shadow-lg",
+          // start-1/2, not left-1/2: mathematically identical for this centered-dialog
+          // technique (50% from either edge reaches the same point), but start- is what
+          // this codebase's RTL-safety rule expects, and it costs nothing here.
+          "fixed start-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[var(--sh-radius)] border border-border bg-surface p-6 text-surface-foreground shadow-lg",
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
           "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className,
