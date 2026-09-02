@@ -53,6 +53,8 @@ const nextConfig: NextConfig = {
     "next-intl",
     "use-intl",
     "@formatjs/fast-memoize",
+    "@formatjs/icu-messageformat-parser",
+    "@formatjs/icu-skeleton-parser",
     "intl-messageformat",
     "icu-minify",
     "@schummar/icu-type-parser",
