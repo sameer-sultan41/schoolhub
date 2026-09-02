@@ -1598,6 +1598,172 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/students:
+    get:
+      operationId: students_list
+      description: Student master records (module doc §5.1-2).
+      parameters:
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: house_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - graduated
+          - suspended
+          - transferred
+          - withdrawn
+        description: |-
+          * `active` - Active
+          * `suspended` - Suspended
+          * `transferred` - Transferred
+          * `withdrawn` - Withdrawn
+          * `graduated` - Graduated
+      tags:
+      - students
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStudentList'
+          description: ''
+    post:
+      operationId: students_create
+      description: Student master records (module doc §5.1-2).
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Student'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Student'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Student'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+          description: ''
+  /api/v1/students/{id}:
+    get:
+      operationId: students_retrieve
+      description: Student master records (module doc §5.1-2).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student.
+        required: true
+      tags:
+      - students
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+          description: ''
+    patch:
+      operationId: students_partial_update
+      description: Student master records (module doc §5.1-2).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student.
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStudent'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStudent'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStudent'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+          description: ''
+    delete:
+      operationId: students_destroy
+      description: Student master records (module doc §5.1-2).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student.
+        required: true
+      tags:
+      - students
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/subjects:
     get:
       operationId: subjects_list
@@ -1980,7 +2146,7 @@ components:
           format: date
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/AcademicSessionStatusEnum'
           readOnly: true
         is_current:
           type: boolean
@@ -2002,6 +2168,18 @@ components:
       - start_date
       - status
       - updated_at
+    AcademicSessionStatusEnum:
+      enum:
+      - planned
+      - active
+      - closed
+      - archived
+      type: string
+      description: |-
+        * `planned` - Planned
+        * `active` - Active
+        * `closed` - Closed
+        * `archived` - Archived
     Campus:
       type: object
       properties:
@@ -2218,6 +2396,18 @@ components:
       description: |-
         * `academic` - Academic
         * `administrative` - Administrative
+    GenderEnum:
+      enum:
+      - male
+      - female
+      - other
+      - unspecified
+      type: string
+      description: |-
+        * `male` - Male
+        * `female` - Female
+        * `other` - Other
+        * `unspecified` - Unspecified
     House:
       type: object
       properties:
@@ -2432,6 +2622,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedStudentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Student'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedSubjectList:
       type: object
       properties:
@@ -2493,7 +2704,7 @@ components:
           format: date
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/AcademicSessionStatusEnum'
           readOnly: true
         is_current:
           type: boolean
@@ -2778,6 +2989,90 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedStudent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        admission_number:
+          type: string
+          description: Generated per the tenant's admission-number pattern. Immutable
+            after creation (§11) — see services.assert_admission_number_immutable.
+          maxLength: 32
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: users(id) — portal account, tenant-checked at write time.
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        preferred_name:
+          type: string
+          nullable: true
+          maxLength: 100
+        date_of_birth:
+          type: string
+          format: date
+        gender:
+          $ref: '#/components/schemas/GenderEnum'
+        photo_file_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: files(id) — promoted when core.files lands.
+        campus_id:
+          type: string
+          format: uuid
+        house_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StudentStatusEnum'
+          readOnly: true
+        admission_date:
+          type: string
+          format: date
+        blood_group:
+          type: string
+          nullable: true
+          maxLength: 8
+        nationality:
+          type: string
+          nullable: true
+          maxLength: 80
+        religion:
+          type: string
+          nullable: true
+          description: Optional/sensitive; a tenant may disable.
+          maxLength: 80
+        previous_school:
+          type: string
+          nullable: true
+          maxLength: 200
+        medical_notes:
+          type: string
+          nullable: true
+          description: Restricted visibility — see serializers.StudentSerializer.to_representation
+            and core.audit.services._REDACTED_FIELDS.
+        address:
+          nullable: true
+        custom_fields: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedSubject:
       type: object
       properties:
@@ -2948,18 +3243,116 @@ components:
       - end_date
       - name
       - start_date
-    StatusEnum:
+    Student:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        admission_number:
+          type: string
+          description: Generated per the tenant's admission-number pattern. Immutable
+            after creation (§11) — see services.assert_admission_number_immutable.
+          maxLength: 32
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: users(id) — portal account, tenant-checked at write time.
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        preferred_name:
+          type: string
+          nullable: true
+          maxLength: 100
+        date_of_birth:
+          type: string
+          format: date
+        gender:
+          $ref: '#/components/schemas/GenderEnum'
+        photo_file_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: files(id) — promoted when core.files lands.
+        campus_id:
+          type: string
+          format: uuid
+        house_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StudentStatusEnum'
+          readOnly: true
+        admission_date:
+          type: string
+          format: date
+        blood_group:
+          type: string
+          nullable: true
+          maxLength: 8
+        nationality:
+          type: string
+          nullable: true
+          maxLength: 80
+        religion:
+          type: string
+          nullable: true
+          description: Optional/sensitive; a tenant may disable.
+          maxLength: 80
+        previous_school:
+          type: string
+          nullable: true
+          maxLength: 200
+        medical_notes:
+          type: string
+          nullable: true
+          description: Restricted visibility — see serializers.StudentSerializer.to_representation
+            and core.audit.services._REDACTED_FIELDS.
+        address:
+          nullable: true
+        custom_fields: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - admission_date
+      - admission_number
+      - campus_id
+      - created_at
+      - date_of_birth
+      - first_name
+      - gender
+      - id
+      - last_name
+      - status
+      - updated_at
+    StudentStatusEnum:
       enum:
-      - planned
       - active
-      - closed
-      - archived
+      - suspended
+      - transferred
+      - withdrawn
+      - graduated
       type: string
       description: |-
-        * `planned` - Planned
         * `active` - Active
-        * `closed` - Closed
-        * `archived` - Archived
+        * `suspended` - Suspended
+        * `transferred` - Transferred
+        * `withdrawn` - Withdrawn
+        * `graduated` - Graduated
     Subject:
       type: object
       properties:
