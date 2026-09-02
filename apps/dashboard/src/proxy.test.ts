@@ -3,7 +3,7 @@ import { proxy } from "./proxy";
 
 function makeRequest(path: string, { session = false }: { session?: boolean } = {}) {
   const url = `https://app.schoolhub.test${path}`;
-  const headers = session ? { cookie: "sh_session=1" } : {};
+  const headers: Record<string, string> = session ? { cookie: "sh_session=1" } : {};
   return new NextRequest(url, { headers });
 }
 

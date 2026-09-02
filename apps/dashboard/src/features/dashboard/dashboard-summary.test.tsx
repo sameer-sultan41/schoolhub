@@ -18,6 +18,10 @@ const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 
+function apiResult<T>(data: T) {
+  return { data, meta: undefined, requestId: null, status: 200 };
+}
+
 function makeUser(permissions: PermissionKey[]): AuthenticatedUser {
   return {
     id: "u1",
@@ -58,15 +62,15 @@ describe("DashboardSummary", () => {
   });
 
   it("renders formatted values once the data resolves", async () => {
-    mockGet.mockResolvedValue({
-      data: {
+    mockGet.mockResolvedValue(
+      apiResult({
         students_enrolled: 1234,
         attendance_rate_today: 92.5,
         fees_outstanding_minor_units: 150000,
         open_admission_enquiries: 7,
         currency: "PKR",
-      },
-    });
+      }),
+    );
 
     renderWithProviders(<DashboardSummary />);
 
@@ -85,15 +89,15 @@ describe("DashboardSummary", () => {
       isAuthenticated: true,
       refetch: jest.fn(),
     });
-    mockGet.mockResolvedValue({
-      data: {
+    mockGet.mockResolvedValue(
+      apiResult({
         students_enrolled: 10,
         attendance_rate_today: null,
         fees_outstanding_minor_units: 0,
         open_admission_enquiries: 0,
         currency: "PKR",
-      },
-    });
+      }),
+    );
 
     renderWithProviders(<DashboardSummary />);
 
@@ -104,15 +108,15 @@ describe("DashboardSummary", () => {
   });
 
   it("shows a placeholder when attendance has no data yet", async () => {
-    mockGet.mockResolvedValue({
-      data: {
+    mockGet.mockResolvedValue(
+      apiResult({
         students_enrolled: 10,
         attendance_rate_today: null,
         fees_outstanding_minor_units: 0,
         open_admission_enquiries: 0,
         currency: "PKR",
-      },
-    });
+      }),
+    );
 
     renderWithProviders(<DashboardSummary />);
 

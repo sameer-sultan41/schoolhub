@@ -27,6 +27,10 @@ const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 const mockLogout = logout as jest.MockedFunction<typeof logout>;
 
+function apiResult<T>(data: T) {
+  return { data, meta: undefined, requestId: null, status: 200 };
+}
+
 function makeUser(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
   return {
     id: "u1",
@@ -45,7 +49,7 @@ function makeUser(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser
 describe("AppShell", () => {
   beforeEach(() => {
     mockReplace.mockReset();
-    mockGet.mockReset().mockResolvedValue({ data: null });
+    mockGet.mockReset().mockResolvedValue(apiResult(null));
     mockLogout.mockReset().mockResolvedValue(undefined);
     mockUseSession.mockReset().mockReturnValue({
       user: makeUser(),
@@ -75,9 +79,7 @@ describe("AppShell", () => {
   });
 
   it("uses the tenant's own name once it loads", async () => {
-    mockGet.mockResolvedValue({
-      data: { id: "t1", name: "City School", branding: null },
-    });
+    mockGet.mockResolvedValue(apiResult({ id: "t1", name: "City School", branding: null }));
 
     renderWithProviders(<AppShell>content</AppShell>);
 
