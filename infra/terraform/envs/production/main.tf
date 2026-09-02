@@ -401,8 +401,15 @@ module "dashboard" {
   expose_via_alb         = true
   listener_arn           = aws_lb_listener.https.arn
   listener_rule_priority = 20
-  host_headers           = ["app.${var.platform_domain}"]
-  health_check_path      = "/api/health"
+  # *.app.<platform_domain> is the tenant's own dashboard (their school name in the URL,
+  # e.g. cityschool.app.schoolhub.example); bare app.<platform_domain> is the generic
+  # entry point (platform staff, or a school that hasn't been given a slug link yet).
+  # This is a DIFFERENT wildcard from the website's *.<platform_domain> below — the two
+  # can't share one, see that rule's own comment — so priority 20 (before website's 900)
+  # is what makes a tenant dashboard host match here first rather than falling through
+  # to the tenant *website* renderer.
+  host_headers      = ["*.app.${var.platform_domain}", "app.${var.platform_domain}"]
+  health_check_path = "/api/health"
 
   environment_variables = {
     NODE_ENV                    = "production"

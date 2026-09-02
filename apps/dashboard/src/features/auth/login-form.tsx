@@ -24,6 +24,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { login } from "@/lib/auth";
+import { env } from "@/lib/env";
+import { parseTenantSlug } from "@/lib/host";
 import { getQueryClient, queryKeys } from "@/lib/query-client";
 
 /**
@@ -104,7 +106,14 @@ export function LoginForm() {
             // sign-out handler rather than repeating its earlier, already-fixed mistake.
             onSubmit={(event) => {
               handleSubmit((values) => {
-                mutation.mutate(values);
+                // Tenant comes from the subdomain (<slug>.<platform-domain>:3000), not a
+                // form field — `window` is safe here since this handler only ever runs
+                // client-side, in response to a real submit event.
+                const school = parseTenantSlug(
+                  window.location.hostname,
+                  env.NEXT_PUBLIC_PLATFORM_DOMAIN,
+                );
+                mutation.mutate(school ? { ...values, school } : values);
               })(event).catch((error: unknown) => {
                 console.error("Unexpected error while submitting the sign-in form:", error);
               });

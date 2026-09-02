@@ -41,6 +41,33 @@ const nextConfig: NextConfig = {
   // Workspace packages ship TypeScript source; Next compiles them with the app.
   transpilePackages: ["@schoolhub/ui", "@schoolhub/api-client", "@schoolhub/types"],
   poweredByHeader: false,
+  /**
+   * The cookie-bearing auth endpoints (login, refresh, logout) are proxied through this
+   * server rather than called cross-origin from the browser. A tenant subdomain
+   * (<slug>.<platform-domain>) and this API's own fixed host are, in local dev,
+   * DIFFERENT "sites" for SameSite purposes — "localhost" has no further public-suffix
+   * structure, so browsers treat it as its own effective TLD (the same rule behind the
+   * Domain=.localhost rejection noted in apps/api/core/rbac/views.py), making
+   * demo.localhost and localhost different registrable sites even though they share the
+   * label "localhost". A SameSite=Lax refresh cookie set on one is never sent back on a
+   * fetch to the other, so session restore/rotation would silently fail on any page
+   * reload past the 15-minute access-token lifetime. Routing through this same-origin
+   * proxy sidesteps SameSite entirely — the browser only ever talks to its own origin.
+   */
+  rewrites() {
+    return [
+      {
+        source: "/api/auth/:path*",
+        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/:path*`,
+      },
+    ];
+  },
+  // Next blocks HMR/dev-asset requests from an origin other than the one the dev server
+  // detected unless allowlisted — tenant dashboard subdomains (<slug>.app.localhost:3000,
+  // see src/lib/host.ts) are a different origin per tenant. Both entries are listed
+  // explicitly rather than relying on "*.localhost" to also cover the two-label case.
+  // Dev-only; production builds don't run this dev server.
+  allowedDevOrigins: ["*.localhost", "*.app.localhost"],
   images: {
     // Tenant logos and uploads come from the platform's object storage / CDN.
     remotePatterns: [{ protocol: "https", hostname: "**.schoolhub.cdn" }],
