@@ -27,7 +27,7 @@ export interface TenantBranding {
   logo_url?: string | null;
   logo_dark_url?: string | null;
   favicon_url?: string | null;
-  /** Corner radius token, e.g. "0.5rem". */
+  /** Corner radius token, e.g. "0.625rem". */
   radius?: string | null;
 }
 
