@@ -106,7 +106,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </a>
 
         {user?.impersonated_by ? (
-          <p role="status" className="bg-warning px-4 py-2 text-center text-sm text-foreground">
+          <p
+            role="status"
+            className="bg-warning px-4 py-2 text-center text-sm text-warning-foreground"
+          >
             {tAuth("impersonating")}
           </p>
         ) : null}
