@@ -58,6 +58,7 @@ exfiltrates
 exfiltration
 Fdashboard
 filterset
+formatjs
 Fraunces
 frontends
 gantt
@@ -86,6 +87,7 @@ Mailpit
 manylinux
 maxmemory
 Meilisearch
+messageformat
 myschool
 nahi
 Nastaliq
@@ -152,6 +154,7 @@ Savepointed
 schedulable
 schemaname
 schoolhub
+schummar
 Shoulds
 signups
 simplejwt

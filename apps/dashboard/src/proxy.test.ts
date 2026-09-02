@@ -22,7 +22,11 @@ describe("proxy", () => {
   it("redirects an anonymous visitor away from a protected path to /login", () => {
     const response = proxy(makeRequest("/dashboard"));
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://app.schoolhub.test/login");
+    // Any non-root path carries itself forward as ?next= (see the dedicated test below) —
+    // only the bare root is redirected without one.
+    expect(response.headers.get("location")).toBe(
+      "https://app.schoolhub.test/login?next=%2Fdashboard",
+    );
   });
 
   it("carries the original path forward as ?next= for the post-login redirect", () => {
