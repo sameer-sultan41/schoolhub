@@ -88,7 +88,12 @@ describe("StudentDetail", () => {
     renderWithProviders(<StudentDetail studentId="s1" />);
 
     await screen.findByRole("heading", { name: "Amina Khan" });
-    expect(screen.getByText("—")).toBeInTheDocument();
+    // BASE_STUDENT already has several null optional fields (blood group,
+    // nationality, …) that each render their own em dash, so scope this
+    // assertion to the medical-notes card specifically rather than asserting
+    // on "—" anywhere in the document.
+    const restrictedBadge = screen.getByText("Restricted");
+    expect(restrictedBadge.closest(".space-y-2")).toHaveTextContent("—");
   });
 
   it("renders the ApiError envelope on a request failure", async () => {

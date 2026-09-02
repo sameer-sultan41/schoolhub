@@ -25,6 +25,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { useId } from "react";
 import { useForm } from "react-hook-form";
 import { mapFieldErrors } from "@/features/students/map-field-errors";
 import { studentSchema, type StudentFormValues } from "@/features/students/student-schema";
@@ -47,6 +48,7 @@ export function StudentForm({ mode, student }: StudentFormProps) {
   const queryClient = useQueryClient();
   const campuses = useCampuses();
   const houses = useHouses();
+  const admissionNumberFieldId = useId();
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -140,11 +142,22 @@ export function StudentForm({ mode, student }: StudentFormProps) {
             noValidate
           >
             {mode === "edit" && student ? (
-              <FormItem>
-                <FormLabel>{t("fields.admissionNumber")}</FormLabel>
-                <Input value={student.admission_number} disabled readOnly />
+              // Not a real RHF field — a static, disabled display — so this
+              // deliberately does NOT use FormItem/FormLabel: both call
+              // useFormField(), which requires a <FormField> (Controller)
+              // context this value has no binding to.
+              <div className="space-y-1.5">
+                <label htmlFor={admissionNumberFieldId} className="text-sm font-medium">
+                  {t("fields.admissionNumber")}
+                </label>
+                <Input
+                  id={admissionNumberFieldId}
+                  value={student.admission_number}
+                  disabled
+                  readOnly
+                />
                 <p className="text-xs text-muted-foreground">{t("form.admissionNumberHint")}</p>
-              </FormItem>
+              </div>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">

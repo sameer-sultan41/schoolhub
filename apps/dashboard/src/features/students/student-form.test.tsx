@@ -69,6 +69,8 @@ describe("StudentForm (create)", () => {
     await user.type(screen.getByLabelText(/Last name/), "Khan");
     await user.type(screen.getByLabelText(/Date of birth/), "2015-06-01");
     await user.type(screen.getByLabelText(/Admission date/), "2026-04-01");
+    await user.click(screen.getByRole("combobox", { name: "Campus" }));
+    await user.click(await screen.findByRole("option", { name: "Main Campus" }));
     await user.click(screen.getByRole("button", { name: "New student" }));
 
     expect(await screen.findByText("A student with this name already exists.")).toBeInTheDocument();
