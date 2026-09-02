@@ -18,14 +18,14 @@ jest.mock("@schoolhub/api-client", () => {
   };
 });
 
-// A static `import { ApiError } from "@schoolhub/api-client"` here would be hoisted by
-// the ES module loader ABOVE the `const mock* = jest.fn()` declarations above (imports
-// always run first, regardless of source order or jest.mock's own hoisting) — the mock
-// factory would then run before those consts are initialized, throwing a TDZ
-// ReferenceError. jest.requireActual is a plain function call, not hoisted, so it runs
-// exactly where it's written; ApiError itself is unaffected by the mock (spread through
-// from `actual` above) so this is the real class either way.
-const { ApiError } = jest.requireActual<typeof ApiClientModule>("@schoolhub/api-client");
+// Every test below re-imports "@schoolhub/api-client" fresh (never a stale top-level
+// capture): jest.resetModules() in beforeEach means each test's jest.mock factory calls
+// its own jest.requireActual, producing a NEW ApiError class each time — a class
+// captured once at file-load time would fail `instanceof` checks against errors thrown
+// by that test's own (later, different) module instance.
+async function importApiClient() {
+  return import("@schoolhub/api-client");
+}
 
 describe("auth", () => {
   beforeEach(() => {
@@ -80,6 +80,7 @@ describe("auth", () => {
   describe("logout", () => {
     it("clears the token and cookie even when the request fails with an ApiError", async () => {
       const { login, logout, accessTokenStore } = await import("./auth");
+      const { ApiError } = await importApiClient();
       mockPost.mockResolvedValueOnce({
         data: {
           access_token: "at-1",
@@ -165,6 +166,7 @@ describe("auth", () => {
       const handler = jest.fn();
       setUnauthorizedHandler(handler);
 
+      const { ApiError } = await importApiClient();
       const directClientConfig = mockClientConfigs[0];
       accessTokenStore.set("at-4", 900);
       directClientConfig?.onUnauthorized?.(

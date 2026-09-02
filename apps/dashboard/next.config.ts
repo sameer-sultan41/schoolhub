@@ -39,12 +39,18 @@ const nextConfig: NextConfig = {
     useTypeScriptCli: false,
   },
   // Workspace packages ship TypeScript source; Next compiles them with the app.
-  // next-intl is here too: it isn't in Next's own default-transpiled list, and
-  // `next/jest` derives its Jest transformIgnorePatterns from this array — without it,
-  // any test that renders a component using next-intl fails with "Jest encountered an
-  // unexpected token" against next-intl's ESM build (dev/build already handle it fine
-  // via webpack/Turbopack, which don't need this list at all).
-  transpilePackages: ["@schoolhub/ui", "@schoolhub/api-client", "@schoolhub/types", "next-intl"],
+  // next-intl and its use-intl dependency are here too: neither is in Next's own
+  // default-transpiled list, and `next/jest` derives its Jest transformIgnorePatterns
+  // from this array — without both, any test that renders a component using next-intl
+  // fails with "Jest encountered an unexpected token" against their ESM builds (dev/build
+  // already handle it fine via webpack/Turbopack, which don't need this list at all).
+  transpilePackages: [
+    "@schoolhub/ui",
+    "@schoolhub/api-client",
+    "@schoolhub/types",
+    "next-intl",
+    "use-intl",
+  ],
   poweredByHeader: false,
   /**
    * The cookie-bearing auth endpoints (login, refresh, logout) are proxied through this

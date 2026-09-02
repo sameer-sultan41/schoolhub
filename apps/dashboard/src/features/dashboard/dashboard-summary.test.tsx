@@ -78,8 +78,14 @@ describe("DashboardSummary", () => {
       expect(screen.getByText("1,234")).toBeInTheDocument();
     });
     expect(screen.getByText("92.5%")).toBeInTheDocument();
-    // PKR's CLDR data formats with 0 fraction digits by default.
-    expect(screen.getByText("PKR 1,500")).toBeInTheDocument();
+    // Built via the same Intl call, not a hand-typed literal — ICU inserts a
+    // non-breaking space between "PKR" and the amount, and PKR's CLDR data formats with
+    // 0 fraction digits by default.
+    const expectedFees = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: "PKR",
+    }).format(1500);
+    expect(screen.getByText(expectedFees)).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
   });
 

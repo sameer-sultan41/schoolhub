@@ -2,10 +2,16 @@ import { formatCount, formatMinorUnits, formatPercent } from "./format";
 
 describe("formatMinorUnits", () => {
   it("converts minor units to major units under the given currency", () => {
-    // PKR's CLDR data formats with 0 fraction digits by default (ICU-version-dependent,
-    // but stable across the Node versions this project targets) — USD below covers the
-    // 2-decimal case.
-    expect(formatMinorUnits(150000, "PKR", "en")).toBe("PKR 1,500");
+    // Built via the same Intl call rather than a hand-typed literal: ICU inserts a
+    // non-breaking space (U+00A0) between "PKR" and the amount, invisible in a diff but
+    // not equal to a normal typed space, and PKR's CLDR data uses 0 fraction digits by
+    // default (ICU-version-dependent, but stable across the Node versions this project
+    // targets) — USD below covers the 2-decimal case with a symbol, not a code, so
+    // neither quirk applies there.
+    const expected = new Intl.NumberFormat("en", { style: "currency", currency: "PKR" }).format(
+      1500,
+    );
+    expect(formatMinorUnits(150000, "PKR", "en")).toBe(expected);
   });
 
   it("handles zero and negative amounts", () => {

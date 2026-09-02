@@ -16,13 +16,13 @@ describe("PrincipalMessage", () => {
     );
 
     expect(screen.getByText("Welcome to a new academic year.")).toBeInTheDocument();
-    expect(screen.getByText("Dr. Ayesha Khan")).toBeInTheDocument();
-    expect(screen.getByText(/Principal/)).toBeInTheDocument();
+    const name = screen.getByText("Dr. Ayesha Khan");
+    expect(name.closest("figcaption")).toHaveTextContent("Dr. Ayesha Khan · Principal");
   });
 
   it("omits the attribution line when no principal name is given", () => {
     render(<PrincipalMessage section={makeSection({ message: "Hello." })} tenant={makeTenant()} />);
-    expect(screen.queryByText(/Principal/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Dr\. Ayesha Khan/)).not.toBeInTheDocument();
   });
 
   it("renders nothing without a message", () => {

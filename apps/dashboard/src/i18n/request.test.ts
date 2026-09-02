@@ -1,3 +1,10 @@
+/**
+ * @jest-environment node
+ *
+ * next-intl/server's getRequestConfig resolves a different (client-guarded) build under
+ * jsdom, throwing "not supported in Client Components" — this config is genuinely
+ * server-only (it reads next/headers), so it belongs in the node environment anyway.
+ */
 import { cookies } from "next/headers";
 import getRequestConfig, { LOCALE_COOKIE_NAME } from "./request";
 
