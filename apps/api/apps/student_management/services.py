@@ -39,7 +39,10 @@ def resolve_tenant_user_id(*, user_id: uuid.UUID | None, tenant_id: uuid.UUID) -
 
     from core.rbac.models import User
 
-    exists = User.all_tenants.filter(pk=user_id, tenant_id=tenant_id).exists()
+    # User.objects (UserManager) is deliberately unfiltered — see the model's own
+    # docstring — so the explicit tenant_id= filter here is the entire safety
+    # check; there is no all_tenants manager to fall back on for this model.
+    exists = User.objects.filter(pk=user_id, tenant_id=tenant_id).exists()
     if not exists:
         raise DomainRuleViolation({"user_id": "No user with this id exists for your school."})
     return user_id
