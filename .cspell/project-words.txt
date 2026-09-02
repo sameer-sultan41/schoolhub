@@ -71,6 +71,7 @@ greppable
 healthcheck
 healthz
 hotspots
+hrefs
 htmlcov
 iban
 interceptable
