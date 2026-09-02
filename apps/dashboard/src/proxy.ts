@@ -40,8 +40,11 @@ export function proxy(request: NextRequest): NextResponse {
 
 export const config = {
   /**
-   * Everything except Next internals, the health probe, and static assets.
-   * `/api/health` must stay reachable for the platform's uptime checks.
+   * Everything except Next internals, API routes, and static assets. `/api/health` must
+   * stay reachable for the platform's uptime checks, and `/api/auth/*` (rewritten to the
+   * real API — see next.config.ts) carries the login/refresh/logout calls that establish
+   * the session cookie this guard itself checks; gating it on that same cookie would make
+   * login impossible.
    */
-  matcher: ["/((?!_next/static|_next/image|api/health|favicon.ico|.*\\.(?:svg|png|jpg|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|api/|favicon.ico|.*\\.(?:svg|png|jpg|webp)$).*)"],
 };

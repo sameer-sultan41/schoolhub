@@ -106,6 +106,18 @@ class UserSerializer(serializers.ModelSerializer):
         )
 
 
+class RefreshResponseSerializer(serializers.Serializer):
+    """Documents ``RefreshView``'s actual response body for the OpenAPI schema.
+
+    Read-only and never instantiated to validate input — ``RefreshView`` builds this
+    shape itself from a rotated token, this exists purely so ``@extend_schema`` can
+    describe the real response instead of claiming an empty body.
+    """
+
+    access_token = serializers.CharField()
+    expires_in = serializers.IntegerField()
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(write_only=True, min_length=10)

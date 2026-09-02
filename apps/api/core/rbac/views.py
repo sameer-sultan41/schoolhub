@@ -8,20 +8,23 @@ Cookie contract (matches apps/dashboard/src/lib/auth.ts and packages/api-client)
   - The access token never touches a cookie — it's returned in the JSON body only,
     for the SPA to hold in memory.
   - ``REFRESH_COOKIE_NAME`` carries the rotating refresh token. HttpOnly, scoped to
-    ``REFRESH_COOKIE_PATH`` so it's only ever sent to the auth endpoints that need it.
-    Host-only (no explicit Domain): every refresh call targets this API's own fixed
-    host regardless of which dashboard subdomain the browser tab is on, so it never
-    needs to cross a subdomain boundary.
+    ``REFRESH_COOKIE_PATH``. The dashboard never calls these endpoints directly —
+    it proxies login/refresh/logout through its own ``/api/auth/*`` (see its
+    next.config.ts) — so from the browser's perspective this cookie is always
+    same-origin with whatever dashboard host it's currently on, host-only, no
+    SameSite/cross-site concern at all. That proxy exists because a direct
+    cross-origin call would put a tenant subdomain (``<slug>.PLATFORM_DOMAIN``) and
+    this API's own fixed host on different "sites" for SameSite purposes in local
+    dev: "localhost" has no further public-suffix structure, so browsers treat it as
+    its own effective TLD, the same rule that makes an explicit ``Domain=.localhost``
+    on a cookie be rejected outright (RFC 6265's public-suffix check, same as
+    ``Domain=.com``) — a ``SameSite=Lax`` cookie set on one such "site" is never sent
+    back on a fetch to the other.
   - The dashboard's own presence-only session marker (``sh_session``, read by its Next
-    proxy) is deliberately **not** set here. This API's own host and the dashboard's
-    host are never the same host once tenant subdomains are involved
-    (``<slug>.PLATFORM_DOMAIN:3000`` vs. this API's fixed host), so sharing it would
-    need an explicit ``Domain`` — which browsers reject outright when PLATFORM_DOMAIN
-    has no dot, as "localhost" does in local dev (RFC 6265's public-suffix check
-    treats a single-label host as its own effective TLD, the same rule that blocks
-    ``Domain=.com``). The dashboard sets and clears that cookie itself instead, from
-    JS already running on whichever host the browser is on — see
-    ``apps/dashboard/src/lib/auth.ts``.
+    proxy for route protection) is deliberately **not** set here at all — it can't be,
+    since it needs to exist even before any API call happens. The dashboard sets and
+    clears it itself from JS already running on whichever host the browser is on —
+    see ``apps/dashboard/src/lib/auth.ts``.
 """
 
 from __future__ import annotations
@@ -46,20 +49,20 @@ from core.audit.services import record_security_event
 from core.rbac.serializers import (
     ChangePasswordSerializer,
     LoginSerializer,
+    RefreshResponseSerializer,
     UserSerializer,
 )
 
 REFRESH_COOKIE_NAME = "sh_refresh"
-REFRESH_COOKIE_PATH = "/api/v1/auth"
+# Matches the dashboard's own public proxy path (/api/auth/*, see its next.config.ts),
+# NOT this API's internal /api/v1/auth/* route — a cookie's Path is matched against
+# whatever URL the browser actually requests, and since the dashboard never calls this
+# API directly (see the module docstring), the browser only ever requests /api/auth/*.
+REFRESH_COOKIE_PATH = "/api/auth"
 
 
-def _access_token_lifetime_seconds() -> int:
-    lifetime = cast(timedelta, settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"])
-    return int(lifetime.total_seconds())
-
-
-def _refresh_token_lifetime_seconds() -> int:
-    lifetime = cast(timedelta, settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"])
+def _simple_jwt_lifetime_seconds(key: str) -> int:
+    lifetime = cast(timedelta, settings.SIMPLE_JWT[key])
     return int(lifetime.total_seconds())
 
 
@@ -67,7 +70,7 @@ def _set_auth_cookies(response: HttpResponse, *, refresh_token: str) -> None:
     response.set_cookie(
         REFRESH_COOKIE_NAME,
         refresh_token,
-        max_age=_refresh_token_lifetime_seconds(),
+        max_age=_simple_jwt_lifetime_seconds("REFRESH_TOKEN_LIFETIME"),
         path=REFRESH_COOKIE_PATH,
         httponly=True,
         # secure=False only in DEBUG: local dev serves plain HTTP, and a Secure cookie
@@ -111,7 +114,7 @@ class LoginView(APIView):
             {
                 "data": {
                     "access_token": validated["access"],
-                    "expires_in": _access_token_lifetime_seconds(),
+                    "expires_in": _simple_jwt_lifetime_seconds("ACCESS_TOKEN_LIFETIME"),
                     "user": validated["user"],
                 }
             }
@@ -131,7 +134,7 @@ class RefreshView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AuthEndpointThrottle]
 
-    @extend_schema(request=None, responses={200: None})
+    @extend_schema(request=None, responses={200: RefreshResponseSerializer})
     def post(self, request):
         raw_token = request.COOKIES.get(REFRESH_COOKIE_NAME)
         if not raw_token:
@@ -149,7 +152,7 @@ class RefreshView(APIView):
             {
                 "data": {
                     "access_token": serializer.validated_data["access"],
-                    "expires_in": _access_token_lifetime_seconds(),
+                    "expires_in": _simple_jwt_lifetime_seconds("ACCESS_TOKEN_LIFETIME"),
                 }
             }
         )

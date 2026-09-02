@@ -14,7 +14,9 @@ import { env } from "./env";
  * - The **access token** (15 min) lives in memory only — never localStorage, never a
  *   readable cookie — so an XSS bug cannot exfiltrate a long-lived credential.
  * - The **refresh token** (30 days, rotating) is an HttpOnly SameSite cookie set by the API.
- *   JavaScript never touches it; `credentials: "include"` is what sends it.
+ *   JavaScript never touches it; `credentials: "include"` is what sends it. Login, refresh,
+ *   and logout go through this app's own `/api/auth/*` proxy (see AUTH_PROXY_BASE_URL below)
+ *   rather than calling the API directly, so the cookie is always same-origin.
  * - A 401 triggers exactly one refresh, shared across concurrent requests, then the original
  *   request replays. If the refresh fails we clear state and bounce to /login.
  *
@@ -58,13 +60,24 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
   onUnauthorized = handler;
 }
 
+/**
+ * Same-origin path this app's own `next.config.ts` rewrites to the real API's
+ * `/auth/*`. Login, refresh, and logout all read or write the refresh cookie, and must
+ * go through this proxy rather than a direct cross-origin call to `env.NEXT_PUBLIC_API_BASE_URL`
+ * — see next.config.ts's rewrites() comment for why a direct call would silently drop the
+ * cookie on a tenant subdomain.
+ */
+const AUTH_PROXY_BASE_URL = "/api/auth";
+
+async function refreshViaProxy(): Promise<{ accessToken: string; expiresIn: number } | null> {
+  return refreshAccessToken({ baseUrl: AUTH_PROXY_BASE_URL, path: "/refresh" }).catch(() => null);
+}
+
 export const apiClient: ApiClient = createApiClient({
   baseUrl: env.NEXT_PUBLIC_API_BASE_URL,
   getAccessToken: () => accessTokenStore.get(),
   refreshAccessToken: async () => {
-    const refreshed = await refreshAccessToken({ baseUrl: env.NEXT_PUBLIC_API_BASE_URL }).catch(
-      () => null,
-    );
+    const refreshed = await refreshViaProxy();
     if (!refreshed) {
       accessTokenStore.clear();
       return null;
@@ -79,9 +92,15 @@ export const apiClient: ApiClient = createApiClient({
   },
 });
 
+/** Only for the cookie-bearing auth endpoints — see AUTH_PROXY_BASE_URL. */
+const authProxyClient: ApiClient = createApiClient({
+  baseUrl: AUTH_PROXY_BASE_URL,
+  getAccessToken: () => accessTokenStore.get(),
+});
+
 export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
-  const { data } = await apiClient.post<LoginResponse>("/auth/login", credentials, {
-    // Lets the API set the HttpOnly refresh cookie on this response.
+  const { data } = await authProxyClient.post<LoginResponse>("/login", credentials, {
+    // Lets the API set the HttpOnly refresh cookie on this same-origin response.
     credentials: "include",
     skipAuthRefresh: true,
   });
@@ -92,7 +111,7 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
 
 export async function logout(): Promise<void> {
   try {
-    await apiClient.post("/auth/logout", undefined, {
+    await authProxyClient.post("/logout", undefined, {
       credentials: "include",
       skipAuthRefresh: true,
     });
@@ -119,9 +138,7 @@ export async function fetchCurrentUser(): Promise<AuthenticatedUser> {
  */
 export async function restoreSession(): Promise<AuthenticatedUser | null> {
   if (!accessTokenStore.isValid()) {
-    const refreshed = await refreshAccessToken({
-      baseUrl: env.NEXT_PUBLIC_API_BASE_URL,
-    }).catch(() => null);
+    const refreshed = await refreshViaProxy();
     if (!refreshed) return null;
     accessTokenStore.set(refreshed.accessToken, refreshed.expiresIn);
   }
