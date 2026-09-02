@@ -35,6 +35,13 @@ def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
 class StudentSerializer(serializers.ModelSerializer):
     campus_id = _fk(Campus, source="campus")
     house_id = _fk(House, source="house", required=False, allow_null=True)
+    # Explicitly optional: the model column has no `blank=True`, so DRF's
+    # ModelSerializer would otherwise auto-derive it as *required* — but the
+    # service always generates it server-side on create (views.py's
+    # perform_create never reads it out of validated_data) and rejects a
+    # changed value on update via validate_admission_number below. A
+    # client-supplied value on create is simply ignored, not an error.
+    admission_number = serializers.CharField(max_length=32, required=False)
 
     class Meta:
         model = Student

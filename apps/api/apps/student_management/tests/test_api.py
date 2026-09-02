@@ -157,8 +157,10 @@ class StudentUpdateTests(StudentManagementAPITestCase):
             f"/api/v1/students/{student.pk}", {"admission_number": "HACKED"}, format="json"
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json()["error"]["code"], "validation_error")
+        # A business-rule violation, not a shape/validation error — the field is
+        # syntactically valid, it just cannot change once set (§11).
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.json()["error"]["code"], "domain_rule_violation")
 
     def test_patching_status_directly_is_ignored(self) -> None:
         """status only moves through the enroll/change-section/withdraw actions (a later PR)."""
