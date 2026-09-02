@@ -88,10 +88,16 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   has `school_organization` and (in progress) `student_management` only.
 - **`e2e`'s `live` project is opt-in only** — needs the real docker-compose
   stack, not part of the PR gate.
-- **No feature-flag enforcement, no per-tenant number counters, no background-job
-  infrastructure, no two-step file upload** existed before `student-management`
-  work started building them as foundation (Phase-2 DoD requires a server-checked
-  flag per module, default off).
+- **Feature-flag enforcement and per-tenant number counters now exist**
+  (`core.tenancy.features`, `core.tenancy.sequences`, PR 1) — built as
+  `student-management` foundation, reusable by every later module. **Still
+  missing:** background-job infrastructure and two-step file upload (both
+  land in PR 2/4 of `student-management`), and the `files` table.
+- **`student-management`'s guardians, documents, enrollment lifecycle, and
+  import/ID cards are not built yet** — PR 1 covers the student master record
+  and CRUD only. `medical_notes` field-level restriction and the
+  `filter_assigned_to_user` fail-closed default (no `staff` table to join
+  against yet) both ship in PR 1, ahead of the features that will exercise them.
 
 ---
 
@@ -106,11 +112,17 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 4. **Decide the typed-routes question.** App code uses explicit prop types rather than Next 16's
    generated `PageProps`/`LayoutProps` globals. If the team prefers the generated
    globals, add `next typegen` to the `typecheck` script.
-5. **`student-management` is the active work.** See the per-module matrix above
-   and the module doc's own progress; `staff-management` is next after it per
-   the tier-1 build order.
+5. **`student-management` is the active work**, landing as 4 sequenced PRs (each
+   spanning backend + its dashboard screens): PR 1 foundation + student CRUD, PR 2
+   guardians/documents, PR 3 enrollment lifecycle, PR 4 import/ID cards. PR 1 is
+   up (student model, `module.students` feature flag off by default, a new
+   `core.tenancy.features` flag registry, `students` list/detail/create/edit
+   screens). `staff-management` is next after PR 4 per the tier-1 build order.
 6. Once `student-management`'s API exists, `staff-management` can start in
    parallel — it depends on `school-organization` only, not on `student-management`.
+   Two things it will need that PR 1 already built and can reuse as-is:
+   `core.tenancy.features` (register a `module.staff` flag) and
+   `core.tenancy.sequences.allocate_number` (for `employee_number`).
 
 ## Conventions worth re-reading before writing code
 
