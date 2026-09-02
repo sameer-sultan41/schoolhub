@@ -78,7 +78,8 @@ describe("DashboardSummary", () => {
       expect(screen.getByText("1,234")).toBeInTheDocument();
     });
     expect(screen.getByText("92.5%")).toBeInTheDocument();
-    expect(screen.getByText("PKR 1,500.00")).toBeInTheDocument();
+    // PKR's CLDR data formats with 0 fraction digits by default.
+    expect(screen.getByText("PKR 1,500")).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
   });
 

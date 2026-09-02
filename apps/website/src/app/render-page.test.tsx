@@ -63,7 +63,9 @@ const FAKE_THEME = {
 };
 
 beforeEach(() => {
-  mockNotFound.mockReset();
+  // .mockClear(), not .mockReset() — a reset would also wipe the throwing implementation
+  // set in the jest.mock factory above, leaving notFound() a silent no-op.
+  mockNotFound.mockClear();
   mockGetPage.mockReset();
   mockGetSiteSettings.mockReset().mockResolvedValue(null);
   mockResolveTenant.mockReset();

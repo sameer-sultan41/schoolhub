@@ -2,7 +2,10 @@ import { formatCount, formatMinorUnits, formatPercent } from "./format";
 
 describe("formatMinorUnits", () => {
   it("converts minor units to major units under the given currency", () => {
-    expect(formatMinorUnits(150000, "PKR", "en")).toBe("PKR 1,500.00");
+    // PKR's CLDR data formats with 0 fraction digits by default (ICU-version-dependent,
+    // but stable across the Node versions this project targets) — USD below covers the
+    // 2-decimal case.
+    expect(formatMinorUnits(150000, "PKR", "en")).toBe("PKR 1,500");
   });
 
   it("handles zero and negative amounts", () => {

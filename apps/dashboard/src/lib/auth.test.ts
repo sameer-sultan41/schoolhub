@@ -18,7 +18,14 @@ jest.mock("@schoolhub/api-client", () => {
   };
 });
 
-import { ApiError } from "@schoolhub/api-client";
+// A static `import { ApiError } from "@schoolhub/api-client"` here would be hoisted by
+// the ES module loader ABOVE the `const mock* = jest.fn()` declarations above (imports
+// always run first, regardless of source order or jest.mock's own hoisting) — the mock
+// factory would then run before those consts are initialized, throwing a TDZ
+// ReferenceError. jest.requireActual is a plain function call, not hoisted, so it runs
+// exactly where it's written; ApiError itself is unaffected by the mock (spread through
+// from `actual` above) so this is the real class either way.
+const { ApiError } = jest.requireActual<typeof ApiClientModule>("@schoolhub/api-client");
 
 describe("auth", () => {
   beforeEach(() => {

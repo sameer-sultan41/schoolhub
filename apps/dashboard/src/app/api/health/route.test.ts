@@ -1,3 +1,8 @@
+/**
+ * @jest-environment node
+ *
+ * NextResponse.json() needs the real Web Response global, absent under jsdom.
+ */
 import { GET } from "./route";
 
 describe("GET /api/health", () => {

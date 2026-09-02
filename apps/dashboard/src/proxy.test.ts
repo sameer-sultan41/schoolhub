@@ -1,3 +1,9 @@
+/**
+ * @jest-environment node
+ *
+ * next/server's NextRequest/NextResponse need the real Web Request/Response globals,
+ * which jsdom (this project's default testEnvironment) does not provide.
+ */
 import { NextRequest } from "next/server";
 import { proxy } from "./proxy";
 
