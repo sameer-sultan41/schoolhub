@@ -36,6 +36,7 @@ Paths are relative to the repo root. **Always** also load `AGENTS.md`.
 
 | Task type | Load these files |
 | --------- | ---------------- |
+| **Pick up in-flight work / check what exists** | `docs/project-status.md` — the per-module implementation matrix and "Start here next session" |
 | **Implement/change a module's backend API** | `M(x)` · `E(x)` · `docs/02-architecture/api-architecture.md` · `docs/02-architecture/auth-and-rbac.md` |
 | **Build dashboard UI for a module** | `M(x)` · `docs/02-architecture/api-architecture.md` · `docs/02-architecture/tech-stack.md` §3 · `docs/00-overview/users-and-roles.md` |
 | **Design or migrate DB schema** | `E(x)` · `docs/02-architecture/database-architecture.md` · `docs/05-database/erd-overview.md` |

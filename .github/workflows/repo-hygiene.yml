@@ -102,8 +102,8 @@ jobs:
       - name: Prettier
         run: pnpm format:check
 
-  frontend-status-sync:
-    name: frontend-status.md stays in sync
+  project-status-sync:
+    name: project-status.md stays in sync
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
@@ -111,13 +111,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      # docs/frontend-status.md documents its own scope on line 1: "what exists, what is
-      # deliberately missing, and where the next session should start", and its header rule
-      # is "Update this file in the same PR as the work it describes." This job is that rule,
-      # enforced — a PR that changes frontend surface area but not the status doc merges a
-      # stale doc, which is exactly how it went stale before (Marigold&Indigo/shadcn/E2E all
-      # drifted silently across several merged PRs).
-      - name: Frontend-surface PRs must update the status doc
+      # docs/project-status.md documents its own scope on line 1: "what exists, what is
+      # deliberately missing, and where the next session should start — across the
+      # backend, both frontends, and infra", and its header rule is "Update this file
+      # in the same PR as the work it describes." This job is that rule, enforced — a
+      # PR that changes backend or frontend surface area but not the status doc merges
+      # a stale doc, which is exactly how docs/frontend-status.md went stale before
+      # (Marigold&Indigo/shadcn/E2E all drifted silently across several merged PRs).
+      # Scope was widened from apps/dashboard|apps/website|packages|e2e to all of
+      # apps/**, packages/**, e2e/** and infra/** when the doc was consolidated to
+      # cover the backend too — a backend-only PR is exactly the kind of change most
+      # likely to invalidate the per-module implementation matrix.
+      - name: Backend- or frontend-surface PRs must update the status doc
         run: |
           git fetch origin "$GITHUB_BASE_REF" --depth=1
           CHANGED=$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")
@@ -129,9 +134,9 @@ jobs:
             exit 0
           fi
 
-          if echo "$CHANGED" | grep -qE '^(apps/dashboard/|apps/website/|packages/|e2e/)'; then
-            if ! echo "$CHANGED" | grep -qxF 'docs/frontend-status.md'; then
-              echo "::error file=docs/frontend-status.md::This PR changes apps/dashboard, apps/website, packages, or e2e but does not update docs/frontend-status.md. Update the 'Done' table and, if applicable, the 'Deliberately NOT done' / 'Start here next session' sections. If this change genuinely doesn't shift project status (a dependency patch, a typo fix), add [skip-status-doc] to the PR title."
+          if echo "$CHANGED" | grep -qE '^(apps/|packages/|e2e/|infra/)'; then
+            if ! echo "$CHANGED" | grep -qxF 'docs/project-status.md'; then
+              echo "::error file=docs/project-status.md::This PR changes apps/, packages/, e2e/, or infra/ but does not update docs/project-status.md. Update the 'Done' table, the per-module implementation matrix, and if applicable the 'Deliberately NOT done' / 'Start here next session' sections. If this change genuinely doesn't shift project status (a dependency patch, a typo fix), add [skip-status-doc] to the PR title."
               exit 1
             fi
           fi
