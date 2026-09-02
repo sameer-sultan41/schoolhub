@@ -41,6 +41,10 @@ const nextConfig: NextConfig = {
   // Workspace packages ship TypeScript source; Next compiles them with the app.
   transpilePackages: ["@schoolhub/ui", "@schoolhub/api-client", "@schoolhub/types"],
   poweredByHeader: false,
+  // Next blocks HMR/dev-asset requests from an origin other than the one the dev server
+  // detected unless allowlisted — tenant subdomains (<slug>.localhost:3000) are a
+  // different origin per tenant. Dev-only; production builds don't run this dev server.
+  allowedDevOrigins: ["*.localhost"],
   images: {
     // Tenant logos and uploads come from the platform's object storage / CDN.
     remotePatterns: [{ protocol: "https", hostname: "**.schoolhub.cdn" }],

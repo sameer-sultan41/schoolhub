@@ -25,6 +25,26 @@ import { env } from "./env";
 /** Presence-only hint the proxy reads; the API remains the authority. */
 export const SESSION_COOKIE_NAME = "sh_session";
 
+/** Mirrors the API's refresh-token lifetime (SIMPLE_JWT.REFRESH_TOKEN_LIFETIME). */
+const SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+
+/**
+ * Set/cleared here, not by the API: once tenant subdomains are in play the dashboard's
+ * own host (`<slug>.<platform-domain>`) is never the same host as the API's, so the API
+ * would need an explicit cross-host `Domain` to share this cookie — which browsers
+ * reject outright when the platform domain has no dot, as "localhost" does in local dev
+ * (RFC 6265's public-suffix check treats a single-label host as its own effective TLD,
+ * the same rule that blocks `Domain=.com`). Setting it from JS already running on
+ * whichever host the browser is on sidesteps that entirely, in every environment.
+ */
+function setSessionCookie(): void {
+  document.cookie = `${SESSION_COOKIE_NAME}=1; path=/; max-age=${SESSION_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+}
+
+function clearSessionCookie(): void {
+  document.cookie = `${SESSION_COOKIE_NAME}=; path=/; max-age=0; samesite=lax`;
+}
+
 export const accessTokenStore = createAccessTokenStore();
 
 type UnauthorizedHandler = (error: ApiError) => void;
@@ -54,6 +74,7 @@ export const apiClient: ApiClient = createApiClient({
   },
   onUnauthorized: (error) => {
     accessTokenStore.clear();
+    clearSessionCookie();
     onUnauthorized(error);
   },
 });
@@ -65,6 +86,7 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
     skipAuthRefresh: true,
   });
   accessTokenStore.set(data.access_token, data.expires_in);
+  setSessionCookie();
   return data;
 }
 
@@ -79,6 +101,7 @@ export async function logout(): Promise<void> {
     if (!(error instanceof ApiError)) throw error;
   } finally {
     accessTokenStore.clear();
+    clearSessionCookie();
   }
 }
 
@@ -104,9 +127,15 @@ export async function restoreSession(): Promise<AuthenticatedUser | null> {
   }
 
   try {
-    return await fetchCurrentUser();
+    const user = await fetchCurrentUser();
+    // Keeps the proxy's marker in sync with reality: it may be missing here even
+    // though the refresh cookie was still valid (e.g. non-HttpOnly cookies got
+    // cleared independently, or this is the first visit since this code shipped).
+    setSessionCookie();
+    return user;
   } catch {
     accessTokenStore.clear();
+    clearSessionCookie();
     return null;
   }
 }

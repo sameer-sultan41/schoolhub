@@ -14,6 +14,8 @@ const publicEnvSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
   NEXT_PUBLIC_DEFAULT_LOCALE: z.string().min(2).default("en"),
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
+  /** Apex domain for tenant wildcard subdomains: `<slug>.<platform-domain>:3000`. */
+  NEXT_PUBLIC_PLATFORM_DOMAIN: z.string().min(1),
 });
 
 const parsed = publicEnvSchema.safeParse({
@@ -21,6 +23,7 @@ const parsed = publicEnvSchema.safeParse({
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   NEXT_PUBLIC_DEFAULT_LOCALE: process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
   NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  NEXT_PUBLIC_PLATFORM_DOMAIN: process.env.NEXT_PUBLIC_PLATFORM_DOMAIN,
 });
 
 if (!parsed.success) {

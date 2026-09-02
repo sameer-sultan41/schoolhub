@@ -61,6 +61,8 @@ export interface LoginCredentials {
   /** Email, phone, or a school-issued username (`{tenant-slug}\{admission-no}`). */
   identifier: string;
   password: string;
+  /** Tenant slug. Only needed when `identifier` matches accounts at more than one school. */
+  school?: string;
 }
 
 export interface LoginResponse {

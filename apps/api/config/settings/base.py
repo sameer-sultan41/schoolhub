@@ -18,6 +18,10 @@ SECRET_KEY = env("DJANGO_SECRET_KEY", default="insecure-dev-key-override-in-env"
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
+# Apex domain for tenant wildcard subdomains: `<slug>.<PLATFORM_DOMAIN>`. Mirrors
+# apps/website's NEXT_PUBLIC_PLATFORM_DOMAIN — same concept, backend side.
+PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
+
 DJANGO_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -98,9 +102,19 @@ DATABASES["default"]["ATOMIC_REQUESTS"] = True
 AUTH_USER_MODEL = "rbac.User"
 
 # Students often log in with a school-issued username rather than an email.
+#
+# ModelBackend is deliberately NOT also listed here. IdentifierBackend already extends
+# it and inherits everything else it provides (get_user, permission checks) — adding
+# bare ModelBackend as a second backend would only add back its authenticate(), which
+# looks a user up by email alone with no tenant_slug awareness at all. Django tries
+# backends in order and accepts the first non-None result, so whenever IdentifierBackend
+# correctly rejects a cross-tenant login attempt (empty candidate set), a plain
+# ModelBackend entry would silently authenticate the same user anyway — defeating the
+# multi-tenancy check IdentifierBackend exists for. Confirmed by reproducing exactly
+# that: logging into another school's subdomain with a valid identifier/password from a
+# *different* tenant succeeded before this backend was removed.
 AUTHENTICATION_BACKENDS = [
     "core.rbac.backends.IdentifierBackend",
-    "django.contrib.auth.backends.ModelBackend",
 ]
 
 # auth.W004 warns that USERNAME_FIELD is not unique and asks that the backend be
