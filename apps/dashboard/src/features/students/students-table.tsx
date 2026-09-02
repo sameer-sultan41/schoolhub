@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@schoolhub/ui";
+import { isCursorPagination } from "@schoolhub/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -100,7 +101,12 @@ export function StudentsTable() {
   }
 
   const rows = data?.items ?? [];
-  const pagination = data?.pagination;
+  // /students paginates by cursor, never offset, but the API-client types
+  // `Page.pagination` as `Pagination` (the union) since fetchPage is generic
+  // over any endpoint — narrow it here rather than widening useCursorPager to
+  // accept a type it can't actually use.
+  const pagination =
+    data?.pagination && isCursorPagination(data.pagination) ? data.pagination : undefined;
 
   const columns: DataTableColumn<StudentRecord>[] = [
     {

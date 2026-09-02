@@ -58,6 +58,8 @@ describe("StudentsTable", () => {
     mockGet.mockResolvedValue({
       data: [STUDENT],
       meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
     });
 
     renderWithProviders(<StudentsTable />);
@@ -70,6 +72,8 @@ describe("StudentsTable", () => {
     mockGet.mockResolvedValue({
       data: [],
       meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
     });
 
     renderWithProviders(<StudentsTable />);
@@ -98,6 +102,8 @@ describe("StudentsTable", () => {
     mockGet.mockResolvedValue({
       data: [STUDENT],
       meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
     });
 
     renderWithProviders(<StudentsTable />);
