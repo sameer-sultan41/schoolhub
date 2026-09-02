@@ -97,7 +97,7 @@ flowchart TD
 
 ### 7.3 Payroll integration (leave → deductions)
 
-For each payroll period, fees-finance requests the LOP summary: approved unpaid-leave days + absence days HR has marked as LOP, per staff member. The figure is frozen when the payroll run is processed; later corrections flow into the next period as adjustments. See [`fees-finance.md`](fees-finance.md) §7.3.
+For each payroll period, fees-finance requests the LOP summary: approved unpaid-leave days + absence days HR has marked as LOP, per staff member. The figure is frozen when the payroll run is processed; later corrections flow into the next period as adjustments. See [`fees-finance.md`](fees-finance.md) §7.4.
 
 ## 8. User Journeys
 

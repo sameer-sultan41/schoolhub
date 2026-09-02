@@ -96,7 +96,7 @@ Draft → active → superseded (new version) → deactivated. Only `active` tem
 
 ### 7.3 System-triggered generation — birthday cards *(recommendation)*
 
-Unlike §7.1/§7.2, this flow is **not** staff-initiated: a daily scheduled job checks active students'/staff's date of birth, generates a card from the active `birthday_card` template for each match, and hands it to communication for delivery — no draft/approval/issuance states apply. `generated_documents` rows are still written (for the digital-records archive) but never enter `issued_certificates`. Tenants can disable the trigger per module-configuration convention ([`requirements.md`](../00-overview/requirements.md) BR-11).
+Unlike §7.1/§7.2, this flow is **not** staff-initiated: a daily scheduled job checks active students'/staff's date of birth, generates a card from the active `birthday_card` template for each match, and hands it to communication for delivery. `generated_documents` rows are still written (for the digital-records archive) with status going straight from `draft` to `delivered` — the `pending_approval`/`approved`/`rejected`/`issued` states never apply, and the row never enters `issued_certificates` ([`../05-database/entities/documents.md`](../05-database/entities/documents.md)). Tenants can disable the trigger via the tenant's own settings record (`tenant_settings.settings`, [`../05-database/entities/tenancy.md`](../05-database/entities/tenancy.md)) — a per-feature toggle, not the module-level flag in BR-11.
 
 ## 8. User Journeys
 

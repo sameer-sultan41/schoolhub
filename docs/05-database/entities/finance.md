@@ -1,7 +1,7 @@
 # Entities: Finance & Payroll
 
 > **Agent Context**
-> **Summary:** Column-level specs for the 20 tables owned by the fees-finance module: fee configuration, invoicing, collections, refunds, general ledger, expenses, budgets, and payroll. Every table is tenant-owned and implicitly carries `id UUID PK`, `tenant_id FK`, `created_at`/`updated_at`, `created_by`/`updated_by`, `deleted_at` (soft delete) — exceptions are stated per table. All monetary columns are `numeric(12,2)` in the tenant's configured currency (no per-row currency column).
+> **Summary:** Column-level specs for the 22 tables owned by the fees-finance module: fee configuration, invoicing, collections (incl. bank/wallet vouchers), refunds, general ledger, expenses, budgets, and payroll. Every table is tenant-owned and implicitly carries `id UUID PK`, `tenant_id FK`, `created_at`/`updated_at`, `created_by`/`updated_by`, `deleted_at` (soft delete) — exceptions are stated per table. All monetary columns are `numeric(12,2)` in the tenant's configured currency (no per-row currency column).
 > **Co-load with:** `../../03-modules/fees-finance.md` · `people.md` (students, staff) · `academics.md` (sessions, terms, classes, campuses) · `tenancy.md` (users, files)
 
 ### fee_heads
@@ -194,7 +194,7 @@ Relationships: one→one `payments`; many→one `files`.
 
 ### refunds
 
-Refund requests with approval state (workflow in fees-finance §7.2).
+Refund requests with approval state (workflow in fees-finance §7.3).
 
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
@@ -213,6 +213,44 @@ Refund requests with approval state (workflow in fees-finance §7.2).
 
 Indexes: `(tenant_id, status)`; `(tenant_id, payment_id)`; `(tenant_id, student_id)`.
 Relationships: many→one `payments`, `students`, `users` (requester/approver).
+
+### fee_vouchers
+
+Printable bank/wallet collection voucher per invoice, payable off-platform (workflow in fees-finance §7.2).
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| fee_invoice_id | uuid | no | — | FK → `fee_invoices.id` |
+| student_id | uuid | no | — | FK → `students.id` (denormalized, as `payments.student_id`) |
+| provider | varchar(40) | no | — | Enum, tenant-configurable: `bank_branch`, `easypaisa`, `jazzcash` |
+| consumer_number | varchar(60) | no | — | Bank/wallet consumer or reference number printed on the voucher |
+| amount | numeric(12,2) | no | — | Snapshot of the invoice balance at issuance |
+| due_date | date | no | — | Voucher becomes `expired` after this date if unpaid |
+| status | varchar(15) | no | `'issued'` | Enum: `issued`, `paid`, `void`, `expired` |
+| payment_id | uuid | yes | null | FK → `payments.id`; set when a settlement row matches (status → `paid`) |
+| voided_reason | text | yes | null | Set when re-issued or expired |
+| issued_by | uuid | no | — | FK → `users.id` |
+
+Indexes: unique `(tenant_id, provider, consumer_number)`; `(tenant_id, fee_invoice_id)`; `(tenant_id, status, due_date)`.
+Relationships: many→one `fee_invoices`, `students`, `users`; many→one optional `payments`.
+
+### voucher_collection_imports
+
+One imported bank/wallet settlement file and its match outcome (workflow in fees-finance §7.2).
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| provider | varchar(40) | no | — | Enum as `fee_vouchers.provider` |
+| file_id | uuid | no | — | FK → `files.id`; the uploaded settlement file |
+| imported_by | uuid | no | — | FK → `users.id` |
+| status | varchar(15) | no | `'processing'` | Enum: `processing`, `completed`, `failed` |
+| row_count | integer | no | `0` | Rows read from the file |
+| matched_count | integer | no | `0` | Rows posted to a `fee_vouchers` row |
+| exceptions | jsonb | no | `'[]'` | Unmatched rows for manual review: `{row, provider_reference, amount, reason}` |
+| completed_at | timestamptz | yes | null | |
+
+Indexes: `(tenant_id, provider, created_at)`; `(tenant_id, status)`.
+Relationships: many→one `files`, `users`; one→many `fee_vouchers` (via matched postings, not a direct FK).
 
 ### ledger_accounts
 
