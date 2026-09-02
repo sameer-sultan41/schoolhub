@@ -27,9 +27,12 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 CORS_ALLOWED_ORIGINS = env.list(
     "CORS_ALLOWED_ORIGINS", default=["http://localhost:3000", "http://localhost:3001"]
 )
-# Tenant subdomains (dashboard: <slug>.PLATFORM_DOMAIN:3000, website: :3001) aren't
-# enumerable up front, so they need a pattern rather than exact entries above.
+# Tenant subdomains aren't enumerable up front, so they need a pattern rather than exact
+# entries above. `*` (zero or more labels), not `?`: the website is <slug>.PLATFORM_DOMAIN
+# but the dashboard is <slug>.app.PLATFORM_DOMAIN (see apps/dashboard/src/lib/host.ts for
+# why it's a different wildcard from the website's), so more than one label can precede
+# PLATFORM_DOMAIN.
 CORS_ALLOWED_ORIGIN_REGEXES = [
-    rf"^https?://([a-z0-9-]+\.)?{re.escape(PLATFORM_DOMAIN)}(:\d+)?$",
+    rf"^https?://([a-z0-9-]+\.)*{re.escape(PLATFORM_DOMAIN)}(:\d+)?$",
 ]
 CORS_ALLOW_CREDENTIALS = True

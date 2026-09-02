@@ -63,9 +63,11 @@ const nextConfig: NextConfig = {
     ];
   },
   // Next blocks HMR/dev-asset requests from an origin other than the one the dev server
-  // detected unless allowlisted — tenant subdomains (<slug>.localhost:3000) are a
-  // different origin per tenant. Dev-only; production builds don't run this dev server.
-  allowedDevOrigins: ["*.localhost"],
+  // detected unless allowlisted — tenant dashboard subdomains (<slug>.app.localhost:3000,
+  // see src/lib/host.ts) are a different origin per tenant. Both entries are listed
+  // explicitly rather than relying on "*.localhost" to also cover the two-label case.
+  // Dev-only; production builds don't run this dev server.
+  allowedDevOrigins: ["*.localhost", "*.app.localhost"],
   images: {
     // Tenant logos and uploads come from the platform's object storage / CDN.
     remotePatterns: [{ protocol: "https", hostname: "**.schoolhub.cdn" }],
