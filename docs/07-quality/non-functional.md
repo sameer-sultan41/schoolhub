@@ -110,6 +110,7 @@ Per [`../02-architecture/tech-stack.md`](../02-architecture/tech-stack.md) §5:
 
 - Server-side PDF generation (WeasyPrint — recommendation) for report cards, admit cards, certificates, receipts, payslips, ID cards, and exported reports.
 - Tenant-configurable templates with merge fields, school branding, and signatory blocks ([`../03-modules/certificates-documents.md`](../03-modules/certificates-documents.md)); generated documents stored tenant-scoped with signed-URL delivery; bulk generation (a whole section's report cards) runs async as a job producing a zip.
+- Financial documents (fee vouchers, receipts) additionally support an 80mm thermal-printer layout alongside the standard A4/letter PDF, both rendered from the same template merge-field data so content never diverges between the two *(recommendation)* — see [`../03-modules/fees-finance.md`](../03-modules/fees-finance.md) §10.
 
 ## 15. SEO for Public Websites
 

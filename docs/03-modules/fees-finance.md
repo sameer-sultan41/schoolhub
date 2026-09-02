@@ -3,7 +3,7 @@
 > **Agent Context** — Load this block first.
 > **Summary:** Complete money module for a tenant school: fee configuration (heads, structures, schedules), invoice generation, collection with receipts, discounts/scholarships/fines, refunds with approval, outstanding/aging and student ledger, double-entry general ledger, expenses/income, budgeting, financial reporting, and payroll (salary structures, allowances/deductions, tax-configurable processing, payslips). Used daily by `accountant`/`finance_staff`, monthly by `hr_staff` (payroll inputs), and by `guardian`/`student` for fee visibility and payment. Business value: predictable cash flow and auditable school finances in one place.
 > **Co-load with:** `../02-architecture/auth-and-rbac.md` · `../05-database/entities/finance.md` · `../02-architecture/api-architecture.md` · `student-management.md` · `hr-leave.md`
-> **Owns entities:** `fee_heads`, `fee_structures`, `fee_schedules`, `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines`, `payments`, `receipts`, `refunds`, `ledger_accounts`, `ledger_entries`, `expenses`, `expense_categories`, `budgets`, `salary_structures`, `salary_components`, `payroll_runs`, `payslips`
+> **Owns entities:** `fee_heads`, `fee_structures`, `fee_schedules`, `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines`, `payments`, `receipts`, `refunds`, `fee_vouchers`, `voucher_collection_imports`, `ledger_accounts`, `ledger_entries`, `expenses`, `expense_categories`, `budgets`, `salary_structures`, `salary_components`, `payroll_runs`, `payslips`
 > **Depends on modules:** student-management, academics, staff-management, hr-leave, admissions, parent-portal, communication, library, transport, platform-admin (plans/flags)
 
 ## 1. Purpose
@@ -66,19 +66,21 @@ Segregation of duties: the user who processed a payroll run or requested a refun
 2. **Invoice generation** — scheduled or on-demand bulk generation of student invoices from structures; per-student ad-hoc invoices; automatic application of discounts, scholarships, and pending fines.
 3. **Discounts, scholarships & fines** — student-level grants (percent or fixed, optionally per fee head), scholarship lifecycle, and fines raised manually or by other modules (library, transport, late payment).
 4. **Payment collection & receipts** — record cash/cheque/bank/card/gateway payments against invoices; auto-numbered receipts with PDF; gateway payments via the integrations layer with idempotent confirmation.
-5. **Refunds with approval workflow** — request → approve/reject → process, with reason, method, and full audit trail.
-6. **Outstanding & aging + student ledger** — real-time balance per student, aging buckets (0–30/31–60/61–90/90+), defaulter lists, and a chronological student ledger (invoices, payments, refunds, adjustments).
-7. **General ledger** — double-entry, immutable `ledger_entries` posted automatically from payments, refunds, expenses, and payroll; chart of accounts per tenant; corrections by reversal only.
-8. **Expenses & income** — categorized expense entry with approval, receipt attachments; income beyond fees recorded via ledger accounts.
-9. **Budgeting** — per-category/per-account budgets by fiscal period with variance tracking.
-10. **Financial reporting** — collection, outstanding, income vs. expense, budget variance, trial balance, payroll register (see §13).
-11. **Payroll** — salary structures per staff member composed of earning/deduction components (allowances, statutory deductions, tax lines configured per tenant), monthly runs with attendance/leave inputs, approval, payslip generation and publishing.
+5. **Fee vouchers & bank/wallet collection** *(recommendation)* — printable voucher per invoice carrying a tenant-configurable consumer/reference number, payable off-platform at a bank branch or via a mobile-wallet agent (e.g. Easypaisa, JazzCash); daily settlement-file import matches paid vouchers back to invoices (§7.2).
+6. **Refunds with approval workflow** — request → approve/reject → process, with reason, method, and full audit trail.
+7. **Outstanding & aging + student ledger** — real-time balance per student, aging buckets (0–30/31–60/61–90/90+), defaulter lists, and a chronological student ledger (invoices, payments, refunds, adjustments).
+8. **General ledger** — double-entry, immutable `ledger_entries` posted automatically from payments, refunds, expenses, and payroll; chart of accounts per tenant; corrections by reversal only.
+9. **Expenses & income** — categorized expense entry with approval, receipt attachments; income beyond fees recorded via ledger accounts.
+10. **Budgeting** — per-category/per-account budgets by fiscal period with variance tracking.
+11. **Financial reporting** — collection, outstanding, income vs. expense, budget variance, trial balance, payroll register (see §13).
+12. **Payroll** — salary structures per staff member composed of earning/deduction components (allowances, statutory deductions, tax lines configured per tenant), monthly runs with attendance/leave inputs, approval, payslip generation and publishing.
 
 ## 6. Sub-features
 
 - **Fee configuration:** clone structure across sessions; campus-specific structures; effective-dating; sibling-aware structures via discounts.
 - **Invoicing:** invoice numbering sequence per tenant; proration on mid-term enrollment; cancellation with reason; regeneration guard (no duplicate invoice per student/schedule/period).
 - **Collection:** partial payments; advance payment held against next invoice (recommendation); daily collection register per cashier; gateway checkout links delivered via notifications.
+- **Fee vouchers:** per-provider numbering pattern for the consumer/reference number; PDF and thermal (80mm) print layouts from the same voucher data (§10); voided automatically once the underlying invoice is settled by any other channel.
 - **Fines:** auto late fee per schedule policy; waiver with permission + reason; cross-module fines land as invoice lines on the next invoice.
 - **Refunds:** partial or full; refund against a specific payment; processed via original method where the gateway supports it.
 - **Payroll:** components fixed or percent-of-basic; taxable/statutory flags; loss-of-pay days from hr-leave; off-cycle runs (recommendation); payslip PDF per staff member; bank-transfer export file (CSV).
@@ -111,7 +113,23 @@ flowchart TD
 
 Steps: (1) generation runs as a background job (`202 Accepted` + job resource); (2) each invoice is atomic — lines, discount application, totals; (3) every confirmed payment posts balanced debit/credit `ledger_entries`; (4) overdue invoices feed the reminder schedule and aging report.
 
-### 7.2 Refund approval
+### 7.2 Voucher collection & reconciliation *(recommendation)*
+
+```mermaid
+flowchart TD
+    A[Invoice issued] --> B[Voucher generated - consumer/reference number, due date, amount]
+    B --> C[Guardian pays off-platform<br>bank branch or wallet agent]
+    C --> D[Provider settlement file imported - CSV, daily]
+    D --> E{Row matches an open voucher<br>by provider + consumer_number + transaction_reference?}
+    E -- yes --> F[Payment posted - idempotent on the match key<br>invoice closed, receipt issued, ledger entries posted]
+    E -- no --> G[Row lands in exceptions queue<br>accountant matches manually or rejects]
+    B --> H{Due date passed unpaid?}
+    H -- yes --> I[Voucher void - re-issue required]
+```
+
+Vouchers are never edited once issued: a correction voids the voucher and issues a new one (mirrors BR-03's append-only money rule). A settlement-file row can never post twice — the match key is `(provider, consumer_number, transaction_reference)`.
+
+### 7.3 Refund approval
 
 ```mermaid
 flowchart TD
@@ -123,7 +141,7 @@ flowchart TD
     F --> G[Status: processed - reversal ledger entries posted<br>guardian notified, audit logged]
 ```
 
-### 7.3 Payroll run
+### 7.4 Payroll run
 
 ```mermaid
 flowchart TD
@@ -155,7 +173,7 @@ flowchart TD
 
 ## 10. Outputs
 
-- Issued invoices and receipt PDFs (WeasyPrint); refund vouchers; payslip PDFs; bank-transfer export files.
+- Issued invoices and receipt PDFs (WeasyPrint); fee vouchers (bank/wallet collection) and receipts in both A4/letter PDF and 80mm thermal layouts, generated from the same template data so content never diverges between the two *(recommendation)*; refund vouchers; payslip PDFs; bank-transfer export files.
 - Immutable ledger entries; aging snapshots; report exports (CSV/XLSX/PDF).
 - Events for webhooks/notifications: `fee.invoice.issued`, `fee.paid`, `fee.overdue`, `fee.refund.processed`, `payroll.payslip.published`.
 
@@ -163,6 +181,7 @@ flowchart TD
 
 - No duplicate invoice for the same student + fee schedule + period; invoice totals must equal the sum of lines minus discounts plus fines.
 - Payment amount ≤ invoice balance (unless advance-payment feature enabled); refund amount ≤ refundable paid amount of the referenced payment.
+- A settlement-file row can post at most once, keyed on `(provider, consumer_number, transaction_reference)`; a voucher past its due date is void and must be re-issued, never edited (mirrors BR-03's append-only money rule).
 - Discounts/scholarships cannot reduce a line below zero; percent values 0–100.
 - Ledger postings must balance (Σ debit = Σ credit per transaction); posting to archived accounts rejected; entries are append-only.
 - Payroll: one payslip per staff per run; run periods cannot overlap for the same campus scope; structures must have exactly one active version per staff member at a time.
@@ -221,6 +240,8 @@ All tables tenant-scoped with the implicit audit/soft-delete columns; full colum
 | `payments` | Payments received against invoices |
 | `receipts` | Numbered receipts (1:1 with confirmed payments) |
 | `refunds` | Refund requests and approval state |
+| `fee_vouchers` | Printable bank/wallet collection vouchers per invoice: consumer/reference number, provider, due date, status (`issued`/`paid`/`void`/`expired`) |
+| `voucher_collection_imports` | Imported provider settlement files: provider, imported by, row/match counts, exceptions |
 | `ledger_accounts` | Tenant chart of accounts |
 | `ledger_entries` | Immutable double-entry journal lines |
 | `expenses` | Expense records with approval state |
@@ -237,7 +258,8 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 
 - `GET/POST /api/v1/fee-heads` · `GET/POST/PATCH /api/v1/fee-structures` · `GET/POST /api/v1/fee-schedules`
 - `POST /api/v1/fee-invoices:generate` — bulk generation (202 + job); `GET /api/v1/fee-invoices?student=&status=&due_date__lte=` · `POST /api/v1/fee-invoices` (ad-hoc) · `POST /api/v1/fee-invoices/{id}:cancel`
-- ⚿ `POST /api/v1/payments` · `GET /api/v1/payments?invoice=&method=` · `GET /api/v1/receipts/{id}` (PDF via signed URL)
+- ⚿ `POST /api/v1/payments` · `GET /api/v1/payments?invoice=&method=` · `GET /api/v1/receipts/{id}` (PDF or thermal via signed URL, `?format=pdf|thermal`)
+- `POST /api/v1/fee-invoices/{id}/vouchers` — generate a voucher; `GET /api/v1/vouchers/{id}` (PDF or thermal via signed URL); ⚿ `POST /api/v1/voucher-collection-imports` — upload a provider settlement file (202 + job; matched/exception counts on completion)
 - ⚿ `POST /api/v1/refunds` · `POST /api/v1/refunds/{id}:approve` · `POST /api/v1/refunds/{id}:reject` · ⚿ `POST /api/v1/refunds/{id}:process`
 - `GET/POST /api/v1/discounts` · `GET/POST /api/v1/scholarships` · `GET/POST /api/v1/fines` · `POST /api/v1/fines/{id}:waive`
 - `GET /api/v1/students/{id}/ledger` — student ledger statement
@@ -250,6 +272,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 ## 17. Integration Requirements
 
 - **Payment gateways** — via the platform integrations layer (provider-agnostic adapter; tenant selects/configures provider). Checkout initiation from the parent portal; asynchronous confirmation via signed webhooks; reconciliation report for gateway settlements. No gateway credentials in tenant-visible config beyond masked identifiers.
+- **Bank/wallet voucher collection** *(recommendation)* — a batch file-import adapter, not a live callback: each provider (bank branch network, Easypaisa, JazzCash) delivers a daily settlement file in its own format; a per-provider adapter normalizes rows before matching (§7.2). Distinct from the gateway-adapter's initiate/callback pattern in `08-future/extensibility.md` §3, though it follows the same adapter-interface principle — a new provider is a new adapter, never a fees-module change.
 - **Notifications** — reminders, receipts, payslip delivery via [`notifications.md`](../02-architecture/notifications.md) (email/SMS/push/in-app; delivery per webhook conventions in api-architecture).
 - **Object storage** — receipt/payslip/expense-attachment PDFs via presigned uploads and signed download URLs.
 - **Internal** — hr-leave (LOP days), attendance (staff attendance for payroll), library/transport (fines and transport fees as invoice lines), admissions (application fees), platform-admin (plan limits, feature flags).
@@ -274,4 +297,5 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 - **Accounting period locking** and fiscal-year close procedure recommended; confirm the tenant's audit expectations.
 - **Payroll statutory templates** (per-country tax/pension presets) are recommended as configurable tenant templates rather than hardcoded regimes; only the generic engine is in scope initially.
 - **Gateway settlement reconciliation** granularity (per transaction vs. per settlement batch) needs client confirmation.
+- **Bank/wallet voucher file formats** are a recommendation, not client-confirmed: exact per-provider settlement-file layout (Easypaisa, JazzCash, and any partnered bank) needs confirmation with the chosen providers at Phase 4.
 - Multi-currency per tenant is out of scope (single tenant currency); flagged for future phases.

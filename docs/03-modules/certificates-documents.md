@@ -12,6 +12,8 @@ Every school regularly issues official documents: bonafide certificates for bank
 
 Report cards and admit cards are rendered by the examinations module using its own entities; this module owns the general-purpose template engine and the certificate registry. Fee receipts are owned by fees-finance.
 
+Not every document this module renders is an official, approval-gated certificate: it also owns lightweight, **system-triggered** cards — starting with student/staff birthday cards *(recommendation)* — that reuse the same template engine without the registry, approval gate, or serial numbering (§5, §7.3).
+
 ## 2. Business Objective
 
 - Reduce certificate turnaround from days to minutes; measurable via request→issue time.
@@ -57,6 +59,7 @@ Approvers cannot approve documents they generated (segregation of duties, RBAC �
 4. **Certificate registry** — every issued certificate gets a tenant-unique serial number and an immutable registry entry with the rendered PDF snapshot.
 5. **Public verification** — verify-by-code page: anyone holding a certificate can confirm authenticity via a unique verification code/QR without logging in *(recommendation — not explicit in scope, industry standard)*.
 6. **Digital records** — searchable archive of all generated/issued documents per student and staff member, surfaced on their profiles.
+7. **Birthday cards** *(recommendation)* — a branded, non-official card (no signatory block or serial number, unlike certificates) auto-generated daily for students/staff whose birthday falls that day, and delivered via the communication module (§7.3).
 
 ## 6. Sub-features
 
@@ -66,6 +69,7 @@ Approvers cannot approve documents they generated (segregation of duties, RBAC �
 - **Issuance:** serial number format configurable (`{prefix}/{session}/{seq}`); QR code embedding the verification URL; duplicate-copy issuance marked "DUPLICATE" and cross-referenced.
 - **Verification:** rate-limited public endpoint returning issue date, type, holder name (minimal PII), and validity status only.
 - **Revocation:** revoke with reason; verification page reflects revoked status; original PDF retained.
+- **Birthday cards:** template category `birthday_card` on `document_templates` — merge fields limited to name/photo/tenant branding; no approval, serial number, or verification code; tenant can opt out of the daily trigger entirely (§7.3, communication.md §12).
 
 ## 7. Workflows
 
@@ -89,6 +93,10 @@ Steps: (1) requester (staff with `document.generate`, or student/guardian with `
 ### 7.2 Template lifecycle
 
 Draft → active → superseded (new version) → deactivated. Only `active` templates can generate; existing issued documents always reference their frozen version and file.
+
+### 7.3 System-triggered generation — birthday cards *(recommendation)*
+
+Unlike §7.1/§7.2, this flow is **not** staff-initiated: a daily scheduled job checks active students'/staff's date of birth, generates a card from the active `birthday_card` template for each match, and hands it to communication for delivery — no draft/approval/issuance states apply. `generated_documents` rows are still written (for the digital-records archive) but never enter `issued_certificates`. Tenants can disable the trigger per module-configuration convention ([`requirements.md`](../00-overview/requirements.md) BR-11).
 
 ## 8. User Journeys
 
@@ -151,7 +159,7 @@ Cross-referenced to [`ai-features.md`](../04-ai/ai-features.md). All AI outputs 
 Owned tables (full column specs in [`../05-database/entities/documents.md`](../05-database/entities/documents.md)); all tenant-scoped:
 
 - `document_templates` — versioned merge-field templates per category.
-- `generated_documents` — every rendered document with merge-data snapshot and workflow status.
+- `generated_documents` — every rendered document with merge-data snapshot and workflow status; birthday cards land here with a `birthday_card` category and no approval workflow (§7.3).
 - `issued_certificates` — the immutable issuance registry (serial, verification code, revocation state).
 
 Referenced (not owned): `students`, `staff` ([`people.md`](../05-database/entities/people.md)), `files` ([`tenancy.md`](../05-database/entities/tenancy.md)).
@@ -188,5 +196,6 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md) 
 ## 19. Open Questions / Recommendations
 
 - Public verify-by-code page, auto-approval per category, and duplicate-copy handling are **recommendations** — confirm with client.
+- Birthday cards (§5, §7.3) are a **recommendation**, not client-confirmed: whether staff birthdays are included by default (vs. students only) and the default delivery channel need confirmation.
 - Digital signatures (cryptographic PDF signing) are proposed as a future enhancement, not initial scope *(recommendation)*.
 - Whether certificate requests may carry a configurable fee (invoiced via fees-finance) needs client confirmation.
