@@ -12,6 +12,7 @@ from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.api.permissions import RequiresModuleFeature
 from core.audit.services import record_audit
 from core.rbac.permissions import HasPermissionKey, scope_queryset
 from core.tenancy.context import bind_tenant, unbind_tenant
@@ -23,12 +24,19 @@ class TenantScopedViewSetMixin:
 
     Subclasses declare::
 
+        required_feature = "module.students"   # optional; None means "core, ungated"
         required_permission = "students.student.view"
         required_permission_map = {"create": "students.student.create", ...}
         scope_own_field = "user_id"      # optional, enables the `own` record scope
+
+    ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+    docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+    ahead of the feature-level (permission-key) check, and DRF evaluates
+    ``permission_classes`` in list order.
     """
 
-    permission_classes = [IsAuthenticated, HasPermissionKey]
+    permission_classes = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
+    required_feature: str | None = None
     scope_own_field: str | None = None
     audit_resource: str | None = None
 

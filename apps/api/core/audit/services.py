@@ -34,6 +34,7 @@ _REDACTED_FIELDS = frozenset(
         "bank_account",
         "iban",
         "cvv",
+        "medical_notes",
     }
 )
 
