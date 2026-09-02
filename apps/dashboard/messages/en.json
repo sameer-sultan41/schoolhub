@@ -49,6 +49,66 @@
     },
     "empty": "Nothing to show yet."
   },
+  "students": {
+    "title": "Students",
+    "summary": "Student profiles, guardians, and enrollment.",
+    "list": {
+      "caption": "Students",
+      "empty": "No students found.",
+      "searchPlaceholder": "Search by name or admission number"
+    },
+    "columns": {
+      "admissionNumber": "Admission #",
+      "name": "Name",
+      "status": "Status"
+    },
+    "filters": {
+      "search": "Search",
+      "status": "Status",
+      "all": "All"
+    },
+    "status": {
+      "active": "Active",
+      "suspended": "Suspended",
+      "transferred": "Transferred",
+      "withdrawn": "Withdrawn",
+      "graduated": "Graduated"
+    },
+    "gender": {
+      "male": "Male",
+      "female": "Female",
+      "other": "Other",
+      "unspecified": "Unspecified"
+    },
+    "fields": {
+      "admissionNumber": "Admission number",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "preferredName": "Preferred name",
+      "dateOfBirth": "Date of birth",
+      "gender": "Gender",
+      "campus": "Campus",
+      "selectCampus": "Select a campus",
+      "house": "House",
+      "none": "None",
+      "admissionDate": "Admission date",
+      "bloodGroup": "Blood group",
+      "nationality": "Nationality",
+      "religion": "Religion",
+      "previousSchool": "Previous school",
+      "medicalNotes": "Medical notes",
+      "medicalNotesRestricted": "Restricted"
+    },
+    "form": {
+      "createTitle": "New student",
+      "editTitle": "Edit student",
+      "submitting": "Saving",
+      "admissionNumberHint": "Generated automatically and cannot be changed."
+    },
+    "actions": {
+      "create": "New student"
+    }
+  },
   "common": {
     "loading": "Loading",
     "retry": "Try again",
@@ -61,10 +121,15 @@
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",
+    "unauthenticated": "Your session has expired. Sign in again.",
     "permission_denied": "You do not have permission to do that.",
     "not_found": "We could not find what you were looking for.",
+    "method_not_allowed": "That action is not supported here.",
     "conflict": "That change conflicts with the current data. Reload and try again.",
+    "unprocessable": "That request could not be completed.",
+    "domain_rule_violation": "That action isn't allowed right now.",
     "rate_limited": "Too many requests. Wait a moment and try again.",
+    "module_disabled": "This feature is not enabled for your school.",
     "network_error": "We could not reach the server. Check your connection.",
     "server_error": "Something went wrong on our side. The team has been notified.",
     "requestId": "Reference: {requestId}",

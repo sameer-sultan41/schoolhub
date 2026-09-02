@@ -49,6 +49,66 @@
     },
     "empty": "ابھی دکھانے کو کچھ نہیں۔"
   },
+  "students": {
+    "title": "طلبہ",
+    "summary": "طلبہ کے پروفائل، سرپرست، اور داخلہ۔",
+    "list": {
+      "caption": "طلبہ",
+      "empty": "کوئی طالب علم نہیں ملا۔",
+      "searchPlaceholder": "نام یا داخلہ نمبر سے تلاش کریں"
+    },
+    "columns": {
+      "admissionNumber": "داخلہ نمبر",
+      "name": "نام",
+      "status": "حیثیت"
+    },
+    "filters": {
+      "search": "تلاش",
+      "status": "حیثیت",
+      "all": "تمام"
+    },
+    "status": {
+      "active": "فعال",
+      "suspended": "معطل",
+      "transferred": "منتقل شدہ",
+      "withdrawn": "دستبردار",
+      "graduated": "فارغ التحصیل"
+    },
+    "gender": {
+      "male": "مرد",
+      "female": "عورت",
+      "other": "دیگر",
+      "unspecified": "غیر متعین"
+    },
+    "fields": {
+      "admissionNumber": "داخلہ نمبر",
+      "firstName": "پہلا نام",
+      "lastName": "آخری نام",
+      "preferredName": "پسندیدہ نام",
+      "dateOfBirth": "تاریخ پیدائش",
+      "gender": "صنف",
+      "campus": "کیمپس",
+      "selectCampus": "کیمپس منتخب کریں",
+      "house": "ہاؤس",
+      "none": "کوئی نہیں",
+      "admissionDate": "داخلے کی تاریخ",
+      "bloodGroup": "بلڈ گروپ",
+      "nationality": "قومیت",
+      "religion": "مذہب",
+      "previousSchool": "سابقہ سکول",
+      "medicalNotes": "طبی نوٹس",
+      "medicalNotesRestricted": "محدود رسائی"
+    },
+    "form": {
+      "createTitle": "نیا طالب علم",
+      "editTitle": "طالب علم میں ترمیم",
+      "submitting": "محفوظ ہو رہا ہے",
+      "admissionNumberHint": "خود بخود تیار کیا گیا ہے اور اسے تبدیل نہیں کیا جا سکتا۔"
+    },
+    "actions": {
+      "create": "نیا طالب علم"
+    }
+  },
   "common": {
     "loading": "لوڈ ہو رہا ہے",
     "retry": "دوبارہ کوشش کریں",
@@ -61,10 +121,15 @@
   },
   "errors": {
     "validation_error": "براہ کرم نشان زد خانوں کو درست کریں۔",
+    "unauthenticated": "آپ کا سیشن ختم ہو گیا ہے۔ دوبارہ سائن اِن کریں۔",
     "permission_denied": "آپ کو اس کی اجازت نہیں ہے۔",
     "not_found": "مطلوبہ چیز نہیں مل سکی۔",
+    "method_not_allowed": "یہ عمل یہاں ممکن نہیں۔",
     "conflict": "یہ تبدیلی موجودہ ڈیٹا سے متصادم ہے۔ صفحہ ریفریش کر کے دوبارہ کوشش کریں۔",
+    "unprocessable": "یہ درخواست مکمل نہیں کی جا سکی۔",
+    "domain_rule_violation": "یہ عمل اس وقت ممکن نہیں۔",
     "rate_limited": "بہت زیادہ درخواستیں۔ کچھ دیر بعد کوشش کریں۔",
+    "module_disabled": "یہ خصوصیت آپ کے سکول کے لیے فعال نہیں ہے۔",
     "network_error": "سرور تک رسائی نہیں ہو سکی۔ اپنا انٹرنیٹ کنکشن دیکھیں۔",
     "server_error": "ہماری طرف سے کچھ غلط ہو گیا۔ ٹیم کو اطلاع دے دی گئی ہے۔",
     "requestId": "حوالہ: {requestId}",
