@@ -209,7 +209,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Rotating refresh. Reuse of a rotated token invalidates the family (theft detection). */
+        /**
+         * @description Rotating refresh. Reuse of a rotated token invalidates the family (theft detection).
+         *
+         *     The refresh token travels only in ``REFRESH_COOKIE_NAME`` — never in the request
+         *     body — so this cannot reuse ``TokenRefreshView`` (which reads the body) even though
+         *     it delegates the actual rotation logic to simplejwt's own serializer.
+         */
         post: operations["auth_refresh_create"];
         delete?: never;
         options?: never;
@@ -1013,6 +1019,17 @@ export interface components {
             readonly updated_at?: string;
         };
         /**
+         * @description Documents ``RefreshView``'s actual response body for the OpenAPI schema.
+         *
+         *     Read-only and never instantiated to validate input — ``RefreshView`` builds this
+         *     shape itself from a rotated token, this exists purely so ``@extend_schema`` can
+         *     describe the real response instead of claiming an empty body.
+         */
+        RefreshResponse: {
+            access_token: string;
+            expires_in: number;
+        };
+        /**
          * @description School profile and academic configuration (module doc §16, singleton resource).
          *
          *     Backed by ``tenant_settings`` JSONB rather than its own table: the shape is
@@ -1107,10 +1124,6 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
-        };
-        TokenRefresh: {
-            readonly access: string;
-            refresh: string;
         };
         User: {
             /** Format: uuid */
@@ -1455,20 +1468,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TokenRefresh"];
-                "application/x-www-form-urlencoded": components["schemas"]["TokenRefresh"];
-                "multipart/form-data": components["schemas"]["TokenRefresh"];
-            };
-        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenRefresh"];
+                    "application/json": components["schemas"]["RefreshResponse"];
                 };
             };
         };

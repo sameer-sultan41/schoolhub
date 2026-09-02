@@ -1,5 +1,10 @@
 import type { Page, Route } from "@playwright/test";
-import { API_PATH_PREFIX, API_ROUTE_GLOB } from "@/env";
+import {
+  API_PATH_PREFIX,
+  API_ROUTE_GLOB,
+  DASHBOARD_AUTH_PROXY_GLOB,
+  DASHBOARD_AUTH_PROXY_PATH_PREFIX,
+} from "@/env";
 import { type MockResponse, harnessError } from "./envelope";
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -113,6 +118,9 @@ export class MockApi {
 
   async install(page: Page): Promise<void> {
     await page.route(API_ROUTE_GLOB, (route) => this.handle(route));
+    // Login/refresh/logout land on the dashboard's own origin — see
+    // DASHBOARD_AUTH_PROXY_GLOB's doc comment in env.ts.
+    await page.route(DASHBOARD_AUTH_PROXY_GLOB, (route) => this.handle(route));
   }
 
   private async handle(route: Route): Promise<void> {
@@ -138,7 +146,9 @@ export class MockApi {
     const method = request.method() as HttpMethod;
     const path = url.pathname.startsWith(API_PATH_PREFIX)
       ? url.pathname.slice(API_PATH_PREFIX.length) || "/"
-      : url.pathname;
+      : url.pathname.startsWith(DASHBOARD_AUTH_PROXY_PATH_PREFIX)
+        ? url.pathname.slice(DASHBOARD_AUTH_PROXY_PATH_PREFIX.length) || "/"
+        : url.pathname;
 
     const match = this.routes
       .filter((candidate) => candidate.method === method)

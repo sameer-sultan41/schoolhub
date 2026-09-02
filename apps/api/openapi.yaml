@@ -373,30 +373,23 @@ paths:
   /api/v1/auth/refresh:
     post:
       operationId: auth_refresh_create
-      description: Rotating refresh. Reuse of a rotated token invalidates the family
-        (theft detection).
+      description: |-
+        Rotating refresh. Reuse of a rotated token invalidates the family (theft detection).
+
+        The refresh token travels only in ``REFRESH_COOKIE_NAME`` — never in the request
+        body — so this cannot reuse ``TokenRefreshView`` (which reads the body) even though
+        it delegates the actual rotation logic to simplejwt's own serializer.
       tags:
       - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TokenRefresh'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/TokenRefresh'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/TokenRefresh'
-        required: true
       security:
+      - jwtAuth: []
       - {}
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenRefresh'
+                $ref: '#/components/schemas/RefreshResponse'
           description: ''
   /api/v1/campuses:
     get:
@@ -2850,6 +2843,22 @@ components:
           type: string
           format: date-time
           readOnly: true
+    RefreshResponse:
+      type: object
+      description: |-
+        Documents ``RefreshView``'s actual response body for the OpenAPI schema.
+
+        Read-only and never instantiated to validate input — ``RefreshView`` builds this
+        shape itself from a rotated token, this exists purely so ``@extend_schema`` can
+        describe the real response instead of claiming an empty body.
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+      required:
+      - access_token
+      - expires_in
     SchoolSettings:
       type: object
       description: |-
@@ -3041,17 +3050,6 @@ components:
       - sequence
       - start_date
       - updated_at
-    TokenRefresh:
-      type: object
-      properties:
-        access:
-          type: string
-          readOnly: true
-        refresh:
-          type: string
-      required:
-      - access
-      - refresh
     User:
       type: object
       properties:

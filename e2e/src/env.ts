@@ -53,6 +53,17 @@ export const API_ROUTE_GLOB = `${new URL(env.API_BASE_URL).origin}/**`;
 /** Path prefix (`/api/v1`) the mock router strips before matching. */
 export const API_PATH_PREFIX = new URL(env.API_BASE_URL).pathname.replace(/\/$/, "");
 
+/**
+ * The dashboard's login/refresh/logout never call the API directly — they go through
+ * this app's own same-origin proxy (apps/dashboard/next.config.ts's rewrites()), which
+ * exists so the refresh cookie is never cross-site. That means those three calls land on
+ * the *dashboard's* origin, not the API's, so they need their own `page.route` glob and
+ * their own prefix strip — `/api/auth/login` normalizes to `/auth/login`, the same key
+ * `authModule`'s stubs are already registered under, by stripping only `/api`.
+ */
+export const DASHBOARD_AUTH_PROXY_GLOB = `${new URL(env.DASHBOARD_URL).origin}/api/auth/**`;
+export const DASHBOARD_AUTH_PROXY_PATH_PREFIX = "/api";
+
 /** Host for a tenant's public site, e.g. `cityschool.localhost:3001`. */
 export function tenantHost(slug: string): string {
   const website = new URL(env.WEBSITE_URL);
