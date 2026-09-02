@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 /**
  * /login (and every other route under this group) is never a tenant's — it's shown
  * before a user, and therefore any tenant, is known. It renders SchoolHub's own
- * "Marigold & Indigo" platform brand rather than the tenant-overridable default, by
+ * "Navy & Gold" platform brand rather than the tenant-overridable default, by
  * overriding the same --sh-color-* variables every component already reads (bg-primary,
  * bg-surface, ...) with the never-tenant-overridable --sh-platform-* values from
  * theme.css — the identical mechanism TenantTheme uses to re-theme for a real tenant,

@@ -12,14 +12,38 @@
  * per-tenant branding possible at runtime: set `--sh-color-primary` on a wrapper element
  * from the tenant's branding settings and the whole subtree re-themes.
  *
- * The tenant-overridable defaults below now carry SchoolHub's own "Marigold & Indigo"
- * platform brand (previously neutral grey) — an unbranded tenant should look like
- * SchoolHub, not like nothing. `branding.ts`'s TOKEN_MAP still wins the instant a tenant
- * sets their own value; no component may hardcode a brand colour outside this file. A
- * second, NEVER-overridable `--sh-platform-*` tier below skins surfaces that stay
- * SchoolHub's regardless of tenant — /login chrome, the platform-landing page, the
- * unknown-host page — because those are shown before any tenant is known, or to nobody's
- * tenant at all.
+ * The tenant-overridable defaults below now carry SchoolHub's own "Navy & Gold" platform
+ * brand (previously "Marigold & Indigo") — an unbranded tenant should look like SchoolHub,
+ * not like nothing. `branding.ts`'s TOKEN_MAP still wins the instant a tenant sets their
+ * own value; no component may hardcode a brand colour outside this file. A second,
+ * NEVER-overridable `--sh-platform-*` tier below skins surfaces that stay SchoolHub's
+ * regardless of tenant — /login chrome, the platform-landing page, the unknown-host page —
+ * because those are shown before any tenant is known, or to nobody's tenant at all.
+ *
+ * Navy was chosen over the previous indigo for its colour psychology fit: it reads as
+ * trust, stability and competence — appropriate for an admin/staff-facing ERP handling
+ * attendance, fees and admissions — while staying calmer and less "corporate-cold" than a
+ * fully saturated blue. Gold pairs with navy the way a school crest or uniform trim does
+ * (achievement/excellence, not urgency) — navy sits at hue 263 and gold at hue 80, close
+ * to complementary on the wheel, which is exactly why the two read as a *pair* rather than
+ * a clash whenever they appear together (primary button next to a gold "top performer"
+ * badge, the gradient hero against a gold highlight card, …).
+ *
+ * The five hues were placed deliberately around the wheel, not picked independently, so
+ * that any two of them sitting side by side (a badge row, a stat tile next to an alert)
+ * read as a considered set rather than a coincidence:
+ *   danger 27° — warning 56° — accent 80° — success 160° — primary 263°
+ * danger/warning/accent sit ~24–29° apart from their neighbours — close enough that
+ * danger→warning→accent still reads as one escalating "alert temperature" family (this is
+ * also why warning was moved off hue 73, which sat only 7° from accent's 80° and could be
+ * mistaken for it in a badge row), while success and primary sit much further round the
+ * wheel (80°+ gaps) since they need to read as calm/settled rather than urgent. Saturation
+ * carries the same hierarchy: danger (C.162) > warning (C.143) > accent (C.130) > success
+ * (C.114) > primary (C.104) — the more urgent a colour's job, the more saturated it is.
+ *
+ * Every background/surface/border/muted token below is now cool (blue-tinted) rather than
+ * neutral-grey or warm-ivory, so light and dark mode both stay in the same colour family
+ * instead of the accent carrying the whole brand.
  */
 
 @theme inline {
@@ -40,7 +64,9 @@
   --color-accent-foreground: var(--sh-color-accent-foreground);
 
   --color-success: var(--sh-color-success);
+  --color-success-foreground: var(--sh-color-success-foreground);
   --color-warning: var(--sh-color-warning);
+  --color-warning-foreground: var(--sh-color-warning-foreground);
   --color-danger: var(--sh-color-danger);
   --color-danger-foreground: var(--sh-color-danger-foreground);
   --color-overlay: var(--sh-color-overlay);
@@ -125,55 +151,65 @@
 
 :root {
   /*
-   * SchoolHub platform brand — "Marigold & Indigo". These are the DEFAULT values for
-   * every tenant-overridable token; a tenant's own branding.ts TOKEN_MAP entry still
-   * wins the moment it is set (see branding.ts's own header comment). An unbranded
-   * tenant therefore looks like SchoolHub, not grey — this is a deliberate reversal of
-   * this file's previous "neutral means unbranded" doctrine, made because the platform
-   * itself now has a visual identity worth defaulting to.
+   * SchoolHub platform brand — "Navy & Gold". These are the DEFAULT values for every
+   * tenant-overridable token; a tenant's own branding.ts TOKEN_MAP entry still wins the
+   * moment it is set (see branding.ts's own header comment). An unbranded tenant
+   * therefore looks like SchoolHub, not grey.
    *
    * Values converted from the design system's hex palette via sRGB -> OKLab, matching
-   * the oklch() convention already used throughout this file:
-   *   Indigo   #2B2A6B -> oklch(0.327 0.110 279.1)  (primary — 12.8:1 on white, AAA)
-   *   Marigold #F0A427 -> oklch(0.774 0.155  73.4)  (accent  —  2.1:1 on white: NEVER
-   *                                                   used as text on a light surface,
-   *                                                   only as a fill with indigo text)
-   *   Emerald  #10796B -> oklch(0.518 0.090 180.7)  (success)
-   *   Madder   #C1443C -> oklch(0.560 0.162  27.2)  (danger)
-   *   Ivory    #FBF7EE -> oklch(0.977 0.013  86.8)  (surface)
+   * the oklch() convention already used throughout this file. Contrast ratios are WCAG
+   * 2.x (relative-luminance) ratios, not OKLCH lightness deltas:
+   *   Navy       #2E4A85 -> oklch(0.419 0.104 263.4)  (primary — 8.6:1 on white, AAA)
+   *   Gold       #D9A441 -> oklch(0.751 0.130  79.8)  (accent  —  2.3:1 on white: NEVER
+   *                                                     used as text on a light surface,
+   *                                                     only as a fill with navy text)
+   *   Green      #178257 -> oklch(0.538 0.114 160.3)  (success — 4.8:1 on white)
+   *   Brick red  #C1443C -> oklch(0.560 0.162  27.2)  (danger  — 5.1:1 on white, unchanged
+   *                                                     from the previous palette)
+   *   Cool white #F6F8FC -> oklch(0.979 0.006 264.5)  (surface)
    */
   --sh-color-background: oklch(1 0 0);
-  --sh-color-foreground: oklch(0.21 0.006 285.9);
-  --sh-color-surface: oklch(0.977 0.013 86.8);
-  --sh-color-surface-foreground: oklch(0.21 0.006 285.9);
-  --sh-color-muted: oklch(0.967 0.001 286.4);
-  --sh-color-muted-foreground: oklch(0.552 0.014 285.9);
-  --sh-color-border: oklch(0.92 0.004 286.3);
+  --sh-color-foreground: oklch(0.264 0.056 269.3);
+  --sh-color-surface: oklch(0.979 0.006 264.5);
+  --sh-color-surface-foreground: oklch(0.264 0.056 269.3);
+  --sh-color-muted: oklch(0.958 0.01 267.4);
+  --sh-color-muted-foreground: oklch(0.503 0.034 266.1);
+  --sh-color-border: oklch(0.912 0.018 264.5);
   --sh-color-ring: var(--sh-color-primary);
 
-  --sh-color-primary: oklch(0.327 0.11 279.1);
-  --sh-color-primary-foreground: oklch(0.977 0.013 86.8);
-  /* A pale indigo tint, not a second saturated hue — accent already carries marigold,
-     and stacking two loud colours into "primary" and "secondary" both would leave
-     nothing quiet to set the signature element against. */
-  --sh-color-secondary: oklch(0.94 0.02 279);
-  --sh-color-secondary-foreground: oklch(0.327 0.11 279.1);
-  --sh-color-accent: oklch(0.774 0.155 73.4);
-  --sh-color-accent-foreground: oklch(0.327 0.11 279.1);
+  --sh-color-primary: oklch(0.419 0.104 263.4);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  /* A pale navy tint, not a second saturated hue — accent already carries gold, and
+     stacking two loud colours into "primary" and "secondary" both would leave nothing
+     quiet to set the signature element against. */
+  --sh-color-secondary: oklch(0.934 0.02 270.2);
+  --sh-color-secondary-foreground: oklch(0.419 0.104 263.4);
+  --sh-color-accent: oklch(0.751 0.13 79.8);
+  --sh-color-accent-foreground: oklch(0.314 0.058 267);
 
   /*
-   * Status colours are product semantics, not branding — tenants do not override
-   * these (unlike primary/secondary/accent above, they have no TOKEN_MAP entry).
-   * success/danger are still given the platform's own brand-flavoured hues (Emerald /
-   * Madder) rather than generic red/green; `warning` is deliberately left at its
-   * existing amber value — Marigold's hue (73.4) sits close enough to a conventional
-   * warning amber that reusing it here would make a warning banner and an
-   * accent-coloured surface read as the same colour.
+   * Status colours are product semantics, not branding — tenants do not override these
+   * (unlike primary/secondary/accent above, they have no TOKEN_MAP entry). success/danger
+   * are still given the platform's own brand-flavoured hues (green / brick red) rather
+   * than generic pure red/green; `warning` is orange-amber at hue 55.6 — see the file-level
+   * comment above for why it sits there rather than at accent's hue 79.8 (only 7° apart
+   * previously, close enough to misread as the same colour when a warning badge and a
+   * gold "top performer" badge appear in the same row).
+   *
+   * success/warning now carry their OWN `-foreground` tokens rather than reusing
+   * `--sh-color-primary-foreground` (success, previously) or the page's global
+   * `--sh-color-foreground` (warning, previously) — both of those flip independently
+   * under dark mode and were never guaranteed to stay legible against a status colour
+   * that flips on its own schedule. `Badge`'s success/warning variants read these tokens
+   * directly (see badge.tsx); this is what fixed the previous dark-mode bug where a
+   * warning badge rendered near-white text on a still-light amber fill.
    */
-  --sh-color-success: oklch(0.518 0.09 180.7);
-  --sh-color-warning: oklch(0.75 0.15 78);
+  --sh-color-success: oklch(0.538 0.114 160.3);
+  --sh-color-success-foreground: oklch(1 0 0);
+  --sh-color-warning: oklch(0.745 0.143 55.6);
+  --sh-color-warning-foreground: oklch(0.264 0.056 269.3);
   --sh-color-danger: oklch(0.56 0.162 27.2);
-  --sh-color-danger-foreground: oklch(0.977 0.013 86.8);
+  --sh-color-danger-foreground: oklch(1 0 0);
 
   /*
    * A modal/sheet scrim, not a themed surface — its one job is to dim whatever is behind
@@ -183,7 +219,7 @@
    * --sh-color-foreground itself for this (Dialog/Sheet's overlay previously did) inverts
    * to near-WHITE in dark mode, washing the page instead of dimming it.
    */
-  --sh-color-overlay: oklch(0.21 0.006 285.9);
+  --sh-color-overlay: oklch(0.264 0.056 269.3);
 
   /*
    * Both apps load Inter, Fraunces and Noto Nastaliq Urdu via next/font/google and expose
@@ -199,42 +235,54 @@
   --sh-font-body:
     var(--font-inter), var(--font-noto-nastaliq-urdu), ui-sans-serif, system-ui, sans-serif;
   --sh-font-heading: var(--font-fraunces), var(--sh-font-body);
-  --sh-radius: 0.5rem;
+  /* 0.625rem rather than the previous 0.5rem — a deliberately softer, more rounded feel
+     across cards/buttons/inputs, matching this palette's "soft, clear" brief. */
+  --sh-radius: 0.625rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --sh-color-background: oklch(0.141 0.005 285.8);
-    --sh-color-foreground: oklch(0.985 0 0);
-    /* Indigo-tinted rather than the previous hue-neutral dark grey, so cards read as
-       part of the same brand family at night. */
-    --sh-color-surface: oklch(0.24 0.03 279);
-    --sh-color-surface-foreground: oklch(0.977 0.013 86.8);
-    --sh-color-muted: oklch(0.274 0.006 286);
-    --sh-color-muted-foreground: oklch(0.705 0.015 286);
-    --sh-color-border: oklch(0.274 0.006 286);
-    --sh-color-secondary: oklch(0.28 0.035 279);
-    --sh-color-secondary-foreground: oklch(0.94 0.02 279);
-    /* accent (marigold) genuinely doesn't need a dark-mode override — it stays 6.1:1
-       against indigo text in both schemes. primary does: the light-mode indigo
-       (#2b2a6b) computes to 1.56:1 against this dark background and 1.29:1 against
-       the dark surface above — both fail WCAG 1.4.11's 3:1 for a UI component
-       boundary, text-primary fails 1.4.3 outright, and --sh-color-ring inherits the
-       same failure since it's `var(--sh-color-primary)`. A lighter indigo restores
-       the boundary (5.95:1 / 4.94:1) with a dark, near-page-background foreground for
-       text placed on a solid primary surface (5.95:1 against this primary). */
-    --sh-color-primary: oklch(0.65 0.14 279.1);
-    --sh-color-primary-foreground: oklch(0.141 0.005 285.8);
-    --sh-color-accent: oklch(0.774 0.155 73.4);
-    --sh-color-accent-foreground: oklch(0.327 0.11 279.1);
-    /* Same problem as primary above, same fix: the light-mode Madder (#c1443c) computes to
-       3.95:1 against this dark background and 3.28:1 against the dark surface — both fail
-       WCAG AA's 4.5:1 for text (Alert's danger variant renders --sh-color-danger as
-       text-danger). A lighter danger restores it (5.71:1 / 4.74:1), paired with the same
-       dark near-page-background foreground primary uses, for text on a solid danger
-       surface (Button's danger variant: 5.71:1 against this danger). */
-    --sh-color-danger: oklch(0.65 0.162 27.2);
-    --sh-color-danger-foreground: oklch(0.141 0.005 285.8);
+    --sh-color-background: oklch(0.194 0.034 267.6);
+    --sh-color-foreground: oklch(0.973 0.007 268.5);
+    /* Navy-tinted rather than hue-neutral dark grey, so cards read as part of the same
+       brand family at night. */
+    --sh-color-surface: oklch(0.248 0.044 268);
+    --sh-color-surface-foreground: oklch(0.973 0.007 268.5);
+    --sh-color-muted: oklch(0.277 0.046 267.7);
+    --sh-color-muted-foreground: oklch(0.706 0.037 267.5);
+    --sh-color-border: oklch(0.31 0.049 268.9);
+    --sh-color-secondary: oklch(0.326 0.068 268.9);
+    --sh-color-secondary-foreground: oklch(0.864 0.041 268.5);
+    /* accent (gold) genuinely doesn't need a dark-mode override — it stays 8.2:1 against
+       this background in both schemes, and its foreground text below is dark in both
+       schemes too. primary does: the light-mode navy (#2e4a85) computes to 2.2:1 against
+       this dark background — fails WCAG 1.4.11's 3:1 for a UI component boundary,
+       text-primary fails 1.4.3 outright, and --sh-color-ring inherits the same failure
+       since it's `var(--sh-color-primary)`. A lighter navy restores the boundary (5.5:1)
+       with a dark, near-page-background foreground for text on a solid primary surface
+       (5.5:1 against this primary). */
+    --sh-color-primary: oklch(0.645 0.11 264.6);
+    --sh-color-primary-foreground: oklch(0.194 0.034 267.6);
+    --sh-color-accent: oklch(0.751 0.13 79.8);
+    --sh-color-accent-foreground: oklch(0.194 0.034 267.6);
+    /* success/warning share the same problem as primary above where their light-mode
+       foreground would fail against a fill that's staying the same lightness (warning) or
+       getting brighter (success) — both now pair with the same dark, near-page-background
+       foreground primary uses, rather than a token that flips independently. success
+       itself is also brightened for the dark background (7.9:1, was 4.1:1 unchanged). */
+    --sh-color-success: oklch(0.724 0.125 161.7);
+    --sh-color-success-foreground: oklch(0.194 0.034 267.6);
+    /* warning itself doesn't need a dark-mode override either — same reasoning as accent
+       above, it stays 7.8:1 against this background in both schemes — only its foreground
+       does, for the same reason success/danger's foreground does. */
+    --sh-color-warning-foreground: oklch(0.194 0.034 267.6);
+    /* Same problem as primary above, same fix: the light-mode brick red (#c1443c) computes
+       to 3.4:1 against this dark background — fails WCAG AA's 4.5:1 for text (Alert's
+       danger variant renders --sh-color-danger as text-danger). A lighter, gentler danger
+       restores it (6.3:1), paired with the same dark near-page-background foreground
+       primary uses, for text on a solid danger surface (6.3:1 against this danger). */
+    --sh-color-danger: oklch(0.706 0.113 28.3);
+    --sh-color-danger-foreground: oklch(0.194 0.034 267.6);
   }
 }
 
@@ -249,11 +297,11 @@
  * accidentally move the other.
  */
 :root {
-  --sh-platform-color-primary: oklch(0.327 0.11 279.1);
-  --sh-platform-color-primary-foreground: oklch(0.977 0.013 86.8);
-  --sh-platform-color-accent: oklch(0.774 0.155 73.4);
-  --sh-platform-color-accent-foreground: oklch(0.327 0.11 279.1);
-  --sh-platform-color-surface: oklch(0.977 0.013 86.8);
+  --sh-platform-color-primary: oklch(0.419 0.104 263.4);
+  --sh-platform-color-primary-foreground: oklch(1 0 0);
+  --sh-platform-color-accent: oklch(0.751 0.13 79.8);
+  --sh-platform-color-accent-foreground: oklch(0.314 0.058 267);
+  --sh-platform-color-surface: oklch(0.979 0.006 264.5);
 }
 
 /* RTL (Urdu) support relies on logical properties; never use left/right offsets in components. */
