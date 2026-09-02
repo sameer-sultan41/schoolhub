@@ -60,7 +60,7 @@ omit = ["*/migrations/*", "*/tests/*", "config/*"]
 
 [tool.coverage.report]
 # Floor per schoolhub-srd/docs/07-quality/testing-strategy.md; ratcheted upward over time.
-fail_under = 80
+fail_under = 95
 show_missing = true
 
 [tool.mypy]

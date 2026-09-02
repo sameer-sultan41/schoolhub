@@ -89,7 +89,7 @@ Tooling: k6 or Locust (recommendation) against staging with production-scale see
 3. Money-invariant suite on any PR touching fees-finance/payroll paths (path-triggered, plus nightly full run).
 4. Migration forward/backward check (§6) when migrations present; RLS coverage assertion always.
 5. OpenAPI contract diff — breaking `v1` change fails.
-6. **Coverage floor (recommendation): 80% overall backend, 90% on `fees`, `auth`, `tenancy` packages; coverage may never decrease** (ratchet).
+6. **Coverage floor (recommendation): 95% overall backend, 98% on `fees`, `auth`, `tenancy` packages; coverage may never decrease** (ratchet).
 7. E2E smoke subset (login, one CRUD flow, one payment flow) on PRs labeled for it; full E2E nightly and pre-release.
 
 ## 10. Release Regression Checklist
