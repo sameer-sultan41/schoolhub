@@ -66,7 +66,10 @@ describe("LoginForm", () => {
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/dashboard");
     });
-    expect(mockLogin).toHaveBeenCalledWith(
+    // TanStack Query's useMutation calls mutationFn with a second (context) argument
+    // beyond the variables — assert on the first call's first argument directly rather
+    // than via toHaveBeenCalledWith, which requires every argument to match.
+    expect(mockLogin.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ identifier: "admin@cityschool.test", password: "secret123" }),
     );
   });

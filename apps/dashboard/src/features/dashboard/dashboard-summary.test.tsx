@@ -80,11 +80,15 @@ describe("DashboardSummary", () => {
     expect(screen.getByText("92.5%")).toBeInTheDocument();
     // Built via the same Intl call, not a hand-typed literal — ICU inserts a
     // non-breaking space between "PKR" and the amount, and PKR's CLDR data formats with
-    // 0 fraction digits by default.
+    // 0 fraction digits by default. RTL's getByText normalizes DOM whitespace (including
+    // NBSP) to a plain space before matching, so the query string needs the same
+    // normalization — otherwise the raw NBSP here never matches the normalized DOM text.
     const expectedFees = new Intl.NumberFormat("en", {
       style: "currency",
       currency: "PKR",
-    }).format(1500);
+    })
+      .format(1500)
+      .replace(/\u00A0/g, " ");
     expect(screen.getByText(expectedFees)).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
   });
