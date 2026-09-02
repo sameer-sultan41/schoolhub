@@ -39,7 +39,25 @@ const nextConfig: NextConfig = {
     useTypeScriptCli: false,
   },
   // Workspace packages ship TypeScript source; Next compiles them with the app.
-  transpilePackages: ["@schoolhub/ui", "@schoolhub/api-client", "@schoolhub/types"],
+  // next-intl (and its own dependency chain) ships ESM-only with no CJS fallback as of
+  // 4.13 — every package in that chain must be listed, or Jest's transform (which derives
+  // transformIgnorePatterns from this array) fails on the first `export` it hits under
+  // node_modules. Chain: next-intl -> use-intl -> @formatjs/fast-memoize,
+  // intl-messageformat -> @formatjs/icu-messageformat-parser ->
+  // @formatjs/icu-skeleton-parser, plus icu-minify and @schummar/icu-type-parser.
+  transpilePackages: [
+    "@schoolhub/ui",
+    "@schoolhub/api-client",
+    "@schoolhub/types",
+    "next-intl",
+    "use-intl",
+    "@formatjs/fast-memoize",
+    "intl-messageformat",
+    "@formatjs/icu-messageformat-parser",
+    "@formatjs/icu-skeleton-parser",
+    "icu-minify",
+    "@schummar/icu-type-parser",
+  ],
   poweredByHeader: false,
   /**
    * The cookie-bearing auth endpoints (login, refresh, logout) are proxied through this
