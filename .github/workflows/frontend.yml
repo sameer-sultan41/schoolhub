@@ -45,7 +45,7 @@ env:
 
 jobs:
   verify:
-    name: Lint · Typecheck · Test
+    name: Lint · Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +85,26 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+  test:
+    name: Test (coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Kept out of `verify` on purpose: a coverage-threshold failure here must not skip
+      # `build`/`e2e` on an unrelated change — see this job's isolation from `needs:` below.
       - name: Test
         run: pnpm test:coverage
 
