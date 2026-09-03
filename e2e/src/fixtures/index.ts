@@ -115,7 +115,11 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
   },
 
   liveApiClient: [
-    async (_workerFixtures, use) => {
+    // Playwright parses this function's source to learn which fixtures it depends on, so
+    // the first parameter must literally be an (empty) destructuring pattern — a named
+    // parameter like `_workerFixtures` breaks that detection at runtime.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
       const client = await createLiveSession();
       await use(client);
     },

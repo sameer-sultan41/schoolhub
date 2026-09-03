@@ -23,7 +23,7 @@ built, or run locally: **CI is the source of truth** for lint/typecheck/test/bui
 | `packages/config` | Shared ESLint flat config (ESLint 9, typescript-eslint) |
 | `apps/dashboard` | Auth-guard proxy (Next 16's `middleware` rename), tenant-subdomain login (dashboard has its own subdomain namespace, auth cookies routed through a same-origin proxy), in-memory access token + refresh wiring, validated env, TanStack Query client + key factory, `hasPermission`/`<Can>`, `(auth)/login` with RHF + Zod, `(app)` shell with permission-filtered nav + collapsible sidebar (shadcn `Sidebar`, Ctrl/Cmd+B toggle) + tenant theming, dashboard page with permission-gated tiles, `/api/health`, next-intl (`en` + `ur`, RTL) |
 | `apps/website` | Host→tenant proxy (spoofed header stripping), cached tenant resolution, **read-only** content layer, `[...slug]` + `/` ISR rendering of `website_pages`/`page_sections`, theme registry + 12 section components + navigation/footer, per-tenant `sitemap.ts`/`robots.ts`, HMAC-signed revalidate webhook, unknown-host platform page |
-| `e2e` | Playwright suite (`e2e/`) with `dashboard` and `website` projects run in the PR gate against mocked routes; a `live` project exists for the real compose stack but is not part of the PR gate (see `e2e/README.md`) |
+| `e2e` | Playwright suite (`e2e/`) with `dashboard` and `website` projects run in the PR gate against mocked routes. `live` (real compose stack, seeded by `manage.py seed_e2e_data`) is opt-in via `.github/workflows/e2e-live.yml` (`workflow_dispatch` + nightly, not the PR gate) — real-browser journeys for login/logout/session/dashboard-summary/tenant-resolution, plus API-only journeys (no dashboard UI exists yet) for all nine `school_organization` resources, including the academic-session `:activate`/`:close`/`:clone` lifecycle. A `live-setup` project does one real login per run (`AuthEndpointThrottle` allows only 10/min) and caches it for every other `live` test. Two specs pin real current backend gaps (`/reports/dashboard-summary`, `/public/tenants/by-host` don't exist yet) instead of inventing coverage (see `e2e/README.md`) |
 
 Both apps were generated with `create-next-app` (Next 16, Turbopack, Tailwind 4, `src/`,
 `@/*`) and then customized; the Next-managed block at the top of each app `AGENTS.md` is
@@ -70,7 +70,12 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   `apps/api` only has the `school_organization` Django app; nothing downstream of it exists
   on the backend either, so there is no API to build most module screens against yet.
 - **`e2e`'s `live` project is opt-in only** — it needs the real docker-compose stack and does
-  not run in the PR gate; only the mocked `dashboard`/`website` projects do.
+  not run in the PR gate; only the mocked `dashboard`/`website` projects do. Trigger it via
+  `.github/workflows/e2e-live.yml` (`workflow_dispatch` or the nightly schedule).
+- **No real tenant-CMS-content or dashboard-summary e2e coverage yet** — both depend on
+  backend endpoints that don't exist (`/public/tenants/by-host`, `/reports/dashboard-summary`).
+  The corresponding `live` specs pin today's real degraded behavior instead and say what to
+  replace once each endpoint ships.
 
 ---
 
