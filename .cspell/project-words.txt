@@ -24,6 +24,7 @@ AWSPREVIOUS
 axllent
 barcoded
 baselined
+Bibi
 Bilal
 blockable
 bonafide
@@ -89,6 +90,7 @@ manylinux
 maxmemory
 Meilisearch
 messageformat
+msdownload
 myschool
 nahi
 Nastaliq
@@ -121,6 +123,8 @@ pollable
 pooler
 preflights
 prefs
+presign
+presigning
 pseudonymization
 pseudonymized
 pseudonymizes

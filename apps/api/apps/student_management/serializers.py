@@ -18,7 +18,14 @@ from rest_framework import serializers
 
 from apps.school_organization.models import Campus, House
 from apps.student_management import services
-from apps.student_management.models import Student
+from apps.student_management.models import (
+    EmergencyContact,
+    Guardian,
+    Student,
+    StudentDocument,
+    StudentGuardian,
+)
+from core.files.models import File
 from core.rbac.models import RecordScope
 from core.rbac.permissions import has_permission_key, user_scopes
 
@@ -36,6 +43,7 @@ def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
 class StudentSerializer(serializers.ModelSerializer):
     campus_id = _fk(Campus, source="campus")
     house_id = _fk(House, source="house", required=False, allow_null=True)
+    photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
     # Explicitly optional: the model column has no `blank=True`, so DRF's
     # ModelSerializer would otherwise auto-derive it as *required* — but the
     # service always generates it server-side on create (views.py's
@@ -131,3 +139,125 @@ def _can_see_medical_notes(user, student: Student) -> bool:
     # actually reached *this* record. Re-run the module's own assigned-filter
     # against just this instance rather than trusting scope membership in general.
     return Student.filter_assigned_to_user(Student.objects.filter(pk=student.pk), user).exists()
+
+
+class GuardianSerializer(serializers.ModelSerializer):
+    photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
+
+    class Meta:
+        model = Guardian
+        fields = (
+            "id",
+            "user_id",
+            "first_name",
+            "last_name",
+            "phone",
+            "alt_phone",
+            "email",
+            "occupation",
+            "employer",
+            "national_id",
+            "photo_file_id",
+            "address",
+            "custom_fields",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = READ_ONLY_FIELDS
+
+    def validate_photo_file_id(self, value: File | None) -> File | None:
+        # Mirrors Student.photo_file/StudentDocument.file: a resolved File still
+        # needs its purpose and upload-confirmed status checked — the tenant-scoped
+        # `_fk()` field only proves the id exists and belongs to this tenant.
+        if value is not None:
+            services.assert_file_usable(file=value, purpose="guardian.photo")
+        return value
+
+
+class StudentGuardianSerializer(serializers.ModelSerializer):
+    """Used both for the nested `POST /students/{id}/guardians` (student comes
+
+    from the URL, not the body — see the view) and the top-level
+    `PATCH /student-guardians/{id}` (link-flag updates only).
+    """
+
+    student_id = serializers.UUIDField(read_only=True)
+    guardian_id = _fk(Guardian, source="guardian")
+
+    class Meta:
+        model = StudentGuardian
+        fields = (
+            "id",
+            "student_id",
+            "guardian_id",
+            "relationship",
+            "is_primary",
+            "is_fee_responsible",
+            "can_pick_up",
+            "receives_communications",
+            "has_portal_access",
+            "access_revoked_reason",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = READ_ONLY_FIELDS
+
+
+class EmergencyContactSerializer(serializers.ModelSerializer):
+    student_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = EmergencyContact
+        fields = (
+            "id",
+            "student_id",
+            "name",
+            "relationship",
+            "phone",
+            "alt_phone",
+            "priority",
+            "notes",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = READ_ONLY_FIELDS
+
+
+class StudentDocumentSerializer(serializers.ModelSerializer):
+    student_id = serializers.UUIDField(read_only=True)
+    file_id = _fk(File, source="file")
+
+    class Meta:
+        model = StudentDocument
+        fields = (
+            "id",
+            "student_id",
+            "file_id",
+            "document_type",
+            "title",
+            "notes",
+            "verification_status",
+            "verified_by",
+            "verified_at",
+            "expires_at",
+            "created_at",
+            "updated_at",
+        )
+        # verification_status/verified_by/verified_at move only through the
+        # :verify colon-action (§4: "verification only by users holding
+        # students.document.verify") — never a plain PATCH.
+        read_only_fields = (
+            *READ_ONLY_FIELDS,
+            "verification_status",
+            "verified_by",
+            "verified_at",
+        )
+
+    def validate_document_type(self, value: str) -> str:
+        tenant = self.context["request"].tenant
+        services.assert_document_type_allowed(document_type=value, tenant_id=tenant.pk)
+        return value
+
+
+class DocumentVerifyRequestSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(choices=["verified", "rejected"])

@@ -16,9 +16,16 @@ from collections.abc import Callable
 from datetime import date
 
 from django.db import connection, transaction
+from django.utils import timezone
 
-from apps.student_management.models import Student
-from core.api.exceptions import DomainRuleViolation
+from apps.student_management.models import (
+    EmergencyContact,
+    Guardian,
+    Student,
+    StudentDocument,
+    StudentGuardian,
+)
+from core.api.exceptions import Conflict, DomainRuleViolation
 from core.tenancy.sequences import allocate_number
 
 # Pattern tokens the admission-number template may use. Anything else in the
@@ -170,9 +177,14 @@ def _tenant_settings(tenant_id: uuid.UUID) -> dict:
 def duplicate_candidates(*, first_name: str, last_name: str, date_of_birth: date):
     """Students matching on (first_name, last_name, date_of_birth), case-insensitive.
 
-    Exact match for PR1; the module doc §6 fuzzy name+DOB+guardian-phone match
-    upgrades this once `guardians` exists (a later PR) — conservative defaults
-    per §19's recommendation on tenant-tunable thresholds.
+    Exact match. The module doc §6 names a fuzzy name+DOB+guardian-phone match as
+    the eventual target, but `POST /students` takes no guardian payload — a
+    student is created standalone and guardians are linked afterward via
+    `POST /students/{id}/guardians` (this PR) — so there is no guardian phone
+    available at the point this check runs. The admissions handoff (Tier 6,
+    §7.1), which creates student+guardians together, is the natural place to
+    add the guardian-phone signal; conservative exact matching is what ships
+    until that caller exists, per §19's note on conservative defaults.
     """
     return Student.objects.alive().filter(
         first_name__iexact=first_name, last_name__iexact=last_name, date_of_birth=date_of_birth
@@ -256,7 +268,7 @@ def create_student(
     house=None,
     preferred_name: str | None = None,
     user_id: uuid.UUID | None = None,
-    photo_file_id: uuid.UUID | None = None,
+    photo_file=None,
     blood_group: str | None = None,
     nationality: str | None = None,
     religion: str | None = None,
@@ -282,6 +294,8 @@ def create_student(
         override_reason=duplicate_override_reason,
     )
     checked_user_id = resolve_tenant_user_id(user_id=user_id, tenant_id=tenant_id)
+    if photo_file is not None:
+        assert_file_usable(file=photo_file, purpose="student.photo")
 
     admission_number = allocate_admission_number(
         campus=campus, admission_date=admission_date, tenant_id=tenant_id
@@ -296,7 +310,7 @@ def create_student(
         preferred_name=preferred_name,
         date_of_birth=date_of_birth,
         gender=gender,
-        photo_file_id=photo_file_id,
+        photo_file=photo_file,
         campus=campus,
         house=house,
         admission_date=admission_date,
@@ -310,3 +324,178 @@ def create_student(
         created_by=actor_id,
         updated_by=actor_id,
     )
+
+
+def assert_file_usable(*, file, purpose: str):
+    """Check a resolved File instance matches the caller's intended purpose and is ready.
+
+    Tenant scoping and existence are already handled by the serializer's `_fk()`
+    field (a `PrimaryKeyRelatedField` bound to the tenant-scoped manager) before
+    this ever runs — what that field cannot express is "and it's the right kind
+    of file, and the upload actually finished".
+    """
+    if file.purpose != purpose:
+        raise DomainRuleViolation(
+            {"non_field": f"This file was uploaded for '{file.purpose}', not '{purpose}'."}
+        )
+    if file.status != "ready":
+        raise DomainRuleViolation({"non_field": "This file's upload has not been confirmed yet."})
+    return file
+
+
+@transaction.atomic
+def link_guardian(
+    *,
+    student: Student,
+    guardian: Guardian,
+    relationship: str,
+    is_primary: bool = False,
+    is_fee_responsible: bool = False,
+    can_pick_up: bool = True,
+    receives_communications: bool = True,
+    has_portal_access: bool = True,
+    actor_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+) -> StudentGuardian:
+    """Link a guardian to a student. Demotes any incumbent primary first — see
+
+    set_primary_guardian's docstring for why that ordering is load-bearing.
+    """
+    if is_primary:
+        _demote_primary_guardian(student=student, actor_id=actor_id)
+
+    return StudentGuardian.objects.create(
+        tenant_id=tenant_id,
+        student=student,
+        guardian=guardian,
+        relationship=relationship,
+        is_primary=is_primary,
+        is_fee_responsible=is_fee_responsible,
+        can_pick_up=can_pick_up,
+        receives_communications=receives_communications,
+        has_portal_access=has_portal_access,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+
+def _demote_primary_guardian(*, student: Student, actor_id: uuid.UUID) -> None:
+    StudentGuardian.objects.alive().filter(student=student, is_primary=True).update(
+        is_primary=False, updated_by=actor_id
+    )
+
+
+@transaction.atomic
+def set_primary_guardian(
+    *, student: Student, link: StudentGuardian, actor_id: uuid.UUID
+) -> StudentGuardian:
+    """Promote `link` to primary, demoting the incumbent first.
+
+    Must demote before promoting: the partial unique index
+    (`student_guardians_one_primary_per_student`) is checked per statement, so
+    writing two primaries and fixing it up afterwards raises instead of
+    succeeding — the same trap school_organization's `clear_primary_campus`
+    documents.
+    """
+    _demote_primary_guardian(student=student, actor_id=actor_id)
+    link.is_primary = True
+    link.updated_by = actor_id
+    link.save(update_fields=["is_primary", "updated_by", "updated_at"])
+    return link
+
+
+def add_emergency_contact(
+    *,
+    student: Student,
+    name: str,
+    relationship: str,
+    phone: str,
+    alt_phone: str | None = None,
+    priority: int = 1,
+    notes: str | None = None,
+    actor_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+) -> EmergencyContact:
+    return EmergencyContact.objects.create(
+        tenant_id=tenant_id,
+        student=student,
+        name=name,
+        relationship=relationship,
+        phone=phone,
+        alt_phone=alt_phone,
+        priority=priority,
+        notes=notes,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+
+def _document_type_allowed(*, document_type: str, tenant_id: uuid.UUID) -> bool:
+    from apps.student_management.models import DEFAULT_DOCUMENT_TYPES
+
+    extra = _tenant_settings(tenant_id).get("student_document_types") or []
+    return document_type in DEFAULT_DOCUMENT_TYPES or document_type in extra
+
+
+def assert_document_type_allowed(*, document_type: str, tenant_id: uuid.UUID) -> None:
+    if not _document_type_allowed(document_type=document_type, tenant_id=tenant_id):
+        raise DomainRuleViolation(
+            {"document_type": f"'{document_type}' is not a recognised document type."}
+        )
+
+
+@transaction.atomic
+def add_student_document(
+    *,
+    student: Student,
+    file,
+    document_type: str,
+    title: str,
+    notes: str | None = None,
+    expires_at=None,
+    actor_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+) -> StudentDocument:
+    assert_document_type_allowed(document_type=document_type, tenant_id=tenant_id)
+    assert_file_usable(file=file, purpose="student.document")
+
+    return StudentDocument.objects.create(
+        tenant_id=tenant_id,
+        student=student,
+        file=file,
+        document_type=document_type,
+        title=title,
+        notes=notes,
+        expires_at=expires_at,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+
+@transaction.atomic
+def verify_document(
+    *, document: StudentDocument, decision: str, actor_id: uuid.UUID
+) -> StudentDocument:
+    """Accept or reject a document. `decision` is 'verified' or 'rejected'.
+
+    Rejects re-verifying an already-decided document rather than silently
+    overwriting a prior verifier — a correction is a new decision an operator
+    should make deliberately, not a side effect of clicking the button twice.
+    """
+    if document.verification_status != "pending":
+        raise Conflict(f"This document was already {document.verification_status}.")
+
+    document.verification_status = decision
+    document.verified_by = actor_id
+    document.verified_at = timezone.now()
+    document.updated_by = actor_id
+    document.save(
+        update_fields=[
+            "verification_status",
+            "verified_by",
+            "verified_at",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+    return document

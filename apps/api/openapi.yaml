@@ -1174,6 +1174,354 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/files:
+    get:
+      operationId: files_list
+      description: |-
+        Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+
+        No update/delete: a file is immutable once created — the record it is
+        referenced from PROTECTs against deletion, and replacing content means
+        uploading a new file, not mutating this one.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - files
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFileList'
+          description: ''
+    post:
+      operationId: files_create
+      description: |-
+        Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+
+        No update/delete: a file is immutable once created — the record it is
+        referenced from PROTECTs against deletion, and replacing content means
+        uploading a new file, not mutating this one.
+      summary: Request a presigned upload slot
+      tags:
+      - files
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FileCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FileCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: ''
+  /api/v1/files/{id}:
+    get:
+      operationId: files_retrieve
+      description: |-
+        Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+
+        No update/delete: a file is immutable once created — the record it is
+        referenced from PROTECTs against deletion, and replacing content means
+        uploading a new file, not mutating this one.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this file.
+        required: true
+      tags:
+      - files
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: ''
+  /api/v1/files/{id}:confirm:
+    post:
+      operationId: files_:confirm_create
+      description: |-
+        Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+
+        No update/delete: a file is immutable once created — the record it is
+        referenced from PROTECTs against deletion, and replacing content means
+        uploading a new file, not mutating this one.
+      summary: Confirm a completed upload
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - files
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+          description: ''
+        '409':
+          description: Already confirmed
+        '422':
+          description: Upload not found at the storage key, or size mismatch
+  /api/v1/files/{id}:download:
+    post:
+      operationId: files_:download_create
+      description: |-
+        Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+
+        No update/delete: a file is immutable once created — the record it is
+        referenced from PROTECTs against deletion, and replacing content means
+        uploading a new file, not mutating this one.
+      summary: Get a signed download URL
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - files
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/File'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/File'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/File'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: '{''download_url'': str}'
+  /api/v1/guardians:
+    get:
+      operationId: guardians_list
+      description: |-
+        Guardian persons (module doc §16). No destroy — a guardian with no
+
+        remaining student links simply stops appearing in any student's roster;
+        hard removal is a retention operation, not documented as an API action.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - guardians
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGuardianList'
+          description: ''
+    post:
+      operationId: guardians_create
+      description: |-
+        Guardian persons (module doc §16). No destroy — a guardian with no
+
+        remaining student links simply stops appearing in any student's roster;
+        hard removal is a retention operation, not documented as an API action.
+      tags:
+      - guardians
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Guardian'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Guardian'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Guardian'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardian'
+          description: ''
+  /api/v1/guardians/{id}:
+    get:
+      operationId: guardians_retrieve
+      description: |-
+        Guardian persons (module doc §16). No destroy — a guardian with no
+
+        remaining student links simply stops appearing in any student's roster;
+        hard removal is a retention operation, not documented as an API action.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this guardian.
+        required: true
+      tags:
+      - guardians
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardian'
+          description: ''
+    put:
+      operationId: guardians_update
+      description: |-
+        Guardian persons (module doc §16). No destroy — a guardian with no
+
+        remaining student links simply stops appearing in any student's roster;
+        hard removal is a retention operation, not documented as an API action.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this guardian.
+        required: true
+      tags:
+      - guardians
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Guardian'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Guardian'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Guardian'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardian'
+          description: ''
+    patch:
+      operationId: guardians_partial_update
+      description: |-
+        Guardian persons (module doc §16). No destroy — a guardian with no
+
+        remaining student links simply stops appearing in any student's roster;
+        hard removal is a retention operation, not documented as an API action.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this guardian.
+        required: true
+      tags:
+      - guardians
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGuardian'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGuardian'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGuardian'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardian'
+          description: ''
   /api/v1/houses:
     get:
       operationId: houses_list
@@ -1598,6 +1946,204 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/student-documents/{id}:
+    get:
+      operationId: student_documents_retrieve
+      description: |-
+        Top-level access for `DELETE /student-documents/{id}` and the
+
+        `:verify` colon-action. §4 declares ``students.document.delete`` but §16
+        names no endpoint for it — added here so the key is reachable; the module
+        doc gets the corresponding update in this PR.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student document.
+        required: true
+      tags:
+      - student-documents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentDocument'
+          description: ''
+    delete:
+      operationId: student_documents_destroy
+      description: |-
+        Top-level access for `DELETE /student-documents/{id}` and the
+
+        `:verify` colon-action. §4 declares ``students.document.delete`` but §16
+        names no endpoint for it — added here so the key is reachable; the module
+        doc gets the corresponding update in this PR.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student document.
+        required: true
+      tags:
+      - student-documents
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/student-documents/{id}:verify:
+    post:
+      operationId: student_documents_:verify_create
+      description: |-
+        Top-level access for `DELETE /student-documents/{id}` and the
+
+        `:verify` colon-action. §4 declares ``students.document.delete`` but §16
+        names no endpoint for it — added here so the key is reachable; the module
+        doc gets the corresponding update in this PR.
+      summary: Verify or reject a student document
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-documents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DocumentVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentVerifyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentDocument'
+          description: ''
+        '409':
+          description: Already decided
+  /api/v1/student-guardians/{id}:
+    get:
+      operationId: student_guardians_retrieve
+      description: |-
+        Top-level access to a single link, for `PATCH /student-guardians/{id}`
+
+        (module doc §16: "link flags updatable via PATCH /api/v1/student-guardians/{id}").
+        Creation happens only through the nested `StudentGuardianLinkViewSet` below,
+        where the student is unambiguous from the URL.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student guardian.
+        required: true
+      tags:
+      - student-guardians
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentGuardian'
+          description: ''
+    put:
+      operationId: student_guardians_update
+      description: |-
+        Top-level access to a single link, for `PATCH /student-guardians/{id}`
+
+        (module doc §16: "link flags updatable via PATCH /api/v1/student-guardians/{id}").
+        Creation happens only through the nested `StudentGuardianLinkViewSet` below,
+        where the student is unambiguous from the URL.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student guardian.
+        required: true
+      tags:
+      - student-guardians
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentGuardian'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StudentGuardian'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentGuardian'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentGuardian'
+          description: ''
+    patch:
+      operationId: student_guardians_partial_update
+      description: |-
+        Top-level access to a single link, for `PATCH /student-guardians/{id}`
+
+        (module doc §16: "link flags updatable via PATCH /api/v1/student-guardians/{id}").
+        Creation happens only through the nested `StudentGuardianLinkViewSet` below,
+        where the student is unambiguous from the URL.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student guardian.
+        required: true
+      tags:
+      - student-guardians
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStudentGuardian'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStudentGuardian'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStudentGuardian'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentGuardian'
+          description: ''
   /api/v1/students:
     get:
       operationId: students_list
@@ -1764,6 +2310,263 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/students/{student_pk}/documents:
+    get:
+      operationId: students_documents_list
+      description: '`GET/POST /students/{student_pk}/documents`.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: path
+        name: student_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStudentDocumentList'
+          description: ''
+    post:
+      operationId: students_documents_create
+      description: '`GET/POST /students/{student_pk}/documents`.'
+      parameters:
+      - in: path
+        name: student_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentDocument'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StudentDocument'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentDocument'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentDocument'
+          description: ''
+  /api/v1/students/{student_pk}/emergency-contacts:
+    get:
+      operationId: students_emergency_contacts_list
+      description: |-
+        `GET/POST /students/{student_pk}/emergency-contacts`.
+
+        Reuses ``students.student.view``/``.update`` — §4 declares no dedicated
+        ``students.emergency-contact.*`` key even though §16 exposes this endpoint,
+        matching the ``ClassSubjectViewSet`` precedent in school_organization for
+        an endpoint whose parent resource already owns the permission story.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: path
+        name: student_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEmergencyContactList'
+          description: ''
+    post:
+      operationId: students_emergency_contacts_create
+      description: |-
+        `GET/POST /students/{student_pk}/emergency-contacts`.
+
+        Reuses ``students.student.view``/``.update`` — §4 declares no dedicated
+        ``students.emergency-contact.*`` key even though §16 exposes this endpoint,
+        matching the ``ClassSubjectViewSet`` precedent in school_organization for
+        an endpoint whose parent resource already owns the permission story.
+      parameters:
+      - in: path
+        name: student_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmergencyContact'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmergencyContact'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmergencyContact'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyContact'
+          description: ''
+  /api/v1/students/{student_pk}/guardians:
+    get:
+      operationId: students_guardians_list
+      description: |-
+        `GET/POST /students/{student_pk}/guardians` — links an existing guardian
+
+        (found via `GET /guardians?search=`, or created via `POST /guardians`) to
+        this student. The guardian is not created here.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: path
+        name: student_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStudentGuardianList'
+          description: ''
+    post:
+      operationId: students_guardians_create
+      description: |-
+        `GET/POST /students/{student_pk}/guardians` — links an existing guardian
+
+        (found via `GET /guardians?search=`, or created via `POST /guardians`) to
+        this student. The guardian is not created here.
+      parameters:
+      - in: path
+        name: student_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentGuardian'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StudentGuardian'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentGuardian'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentGuardian'
+          description: ''
   /api/v1/subjects:
     get:
       operationId: subjects_list
@@ -2344,6 +3147,14 @@ components:
       - id
       - subject_id
       - updated_at
+    DecisionEnum:
+      enum:
+      - verified
+      - rejected
+      type: string
+      description: |-
+        * `verified` - verified
+        * `rejected` - rejected
     Department:
       type: object
       properties:
@@ -2396,6 +3207,139 @@ components:
       description: |-
         * `academic` - Academic
         * `administrative` - Administrative
+    DocumentVerifyRequest:
+      type: object
+      properties:
+        decision:
+          $ref: '#/components/schemas/DecisionEnum'
+      required:
+      - decision
+    EmergencyContact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        relationship:
+          type: string
+          maxLength: 50
+        phone:
+          type: string
+          maxLength: 32
+        alt_phone:
+          type: string
+          nullable: true
+          maxLength: 32
+        priority:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Call order; 1 = first.
+        notes:
+          type: string
+          nullable: true
+          maxLength: 300
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - phone
+      - relationship
+      - student_id
+      - updated_at
+    File:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        original_name:
+          type: string
+          readOnly: true
+        mime_type:
+          type: string
+          readOnly: true
+        size_bytes:
+          type: integer
+          readOnly: true
+        purpose:
+          type: string
+          readOnly: true
+          description: What this file is for, e.g. 'student.photo', 'student.document'.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FileStatusEnum'
+          readOnly: true
+        visibility:
+          allOf:
+          - $ref: '#/components/schemas/VisibilityEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - mime_type
+      - original_name
+      - purpose
+      - size_bytes
+      - status
+      - updated_at
+      - visibility
+    FileCreate:
+      type: object
+      description: Input for ``POST /api/v1/files``.
+      properties:
+        original_name:
+          type: string
+          maxLength: 255
+        mime_type:
+          type: string
+          maxLength: 120
+        size_bytes:
+          type: integer
+          minimum: 1
+        purpose:
+          type: string
+          maxLength: 40
+      required:
+      - mime_type
+      - original_name
+      - purpose
+      - size_bytes
+    FileStatusEnum:
+      enum:
+      - pending
+      - ready
+      - quarantined
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `ready` - Ready
+        * `quarantined` - Quarantined
     GenderEnum:
       enum:
       - male
@@ -2408,6 +3352,74 @@ components:
         * `female` - Female
         * `other` - Other
         * `unspecified` - Unspecified
+    Guardian:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: users(id) — portal account, tenant-checked at write time.
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+          description: Primary contact; indexed for duplicate matching.
+          maxLength: 32
+        alt_phone:
+          type: string
+          nullable: true
+          maxLength: 32
+        email:
+          nullable: true
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        occupation:
+          type: string
+          nullable: true
+          maxLength: 120
+        employer:
+          type: string
+          nullable: true
+          maxLength: 200
+        national_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        photo_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        address:
+          nullable: true
+        custom_fields: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - first_name
+      - id
+      - last_name
+      - phone
+      - updated_at
     House:
       type: object
       properties:
@@ -2580,6 +3592,69 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedEmergencyContactList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmergencyContact'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedFileList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedGuardianList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Guardian'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedHouseList:
       type: object
       properties:
@@ -2608,6 +3683,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Section'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedStudentDocumentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentDocument'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedStudentGuardianList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentGuardian'
         meta:
           type: object
           properties:
@@ -2887,6 +4004,67 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedGuardian:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: users(id) — portal account, tenant-checked at write time.
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+          description: Primary contact; indexed for duplicate matching.
+          maxLength: 32
+        alt_phone:
+          type: string
+          nullable: true
+          maxLength: 32
+        email:
+          nullable: true
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        occupation:
+          type: string
+          nullable: true
+          maxLength: 120
+        employer:
+          type: string
+          nullable: true
+          maxLength: 200
+        national_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        photo_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        address:
+          nullable: true
+        custom_fields: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedHouse:
       type: object
       properties:
@@ -3023,7 +4201,6 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: files(id) — promoted when core.files lands.
         campus_id:
           type: string
           format: uuid
@@ -3063,6 +4240,49 @@ components:
         address:
           nullable: true
         custom_fields: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedStudentGuardian:
+      type: object
+      description: |-
+        Used both for the nested `POST /students/{id}/guardians` (student comes
+
+        from the URL, not the body — see the view) and the top-level
+        `PATCH /student-guardians/{id}` (link-flag updates only).
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        guardian_id:
+          type: string
+          format: uuid
+        relationship:
+          $ref: '#/components/schemas/RelationshipEnum'
+        is_primary:
+          type: boolean
+        is_fee_responsible:
+          type: boolean
+        can_pick_up:
+          type: boolean
+        receives_communications:
+          type: boolean
+        has_portal_access:
+          type: boolean
+        access_revoked_reason:
+          type: string
+          nullable: true
+          maxLength: 200
         created_at:
           type: string
           format: date-time
@@ -3152,6 +4372,22 @@ components:
       required:
       - access_token
       - expires_in
+    RelationshipEnum:
+      enum:
+      - father
+      - mother
+      - grandparent
+      - sibling
+      - legal_guardian
+      - other
+      type: string
+      description: |-
+        * `father` - Father
+        * `mother` - Mother
+        * `grandparent` - Grandparent
+        * `sibling` - Sibling
+        * `legal_guardian` - Legal guardian
+        * `other` - Other
     SchoolSettings:
       type: object
       description: |-
@@ -3275,7 +4511,6 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: files(id) — promoted when core.files lands.
         campus_id:
           type: string
           format: uuid
@@ -3333,6 +4568,120 @@ components:
       - id
       - last_name
       - status
+      - updated_at
+    StudentDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        file_id:
+          type: string
+          format: uuid
+        document_type:
+          type: string
+          description: 'Tenant-extensible; seeded values: birth_certificate, prior_transfer_certificate,
+            immunization_record, photo_id, prior_report_card, other.'
+          maxLength: 50
+        title:
+          type: string
+          maxLength: 200
+        notes:
+          type: string
+          nullable: true
+          maxLength: 500
+        verification_status:
+          allOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          readOnly: true
+        verified_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id).
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        expires_at:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - document_type
+      - file_id
+      - id
+      - student_id
+      - title
+      - updated_at
+      - verification_status
+      - verified_at
+      - verified_by
+    StudentGuardian:
+      type: object
+      description: |-
+        Used both for the nested `POST /students/{id}/guardians` (student comes
+
+        from the URL, not the body — see the view) and the top-level
+        `PATCH /student-guardians/{id}` (link-flag updates only).
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        guardian_id:
+          type: string
+          format: uuid
+        relationship:
+          $ref: '#/components/schemas/RelationshipEnum'
+        is_primary:
+          type: boolean
+        is_fee_responsible:
+          type: boolean
+        can_pick_up:
+          type: boolean
+        receives_communications:
+          type: boolean
+        has_portal_access:
+          type: boolean
+        access_revoked_reason:
+          type: string
+          nullable: true
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - guardian_id
+      - id
+      - relationship
+      - student_id
       - updated_at
     StudentStatusEnum:
       enum:
@@ -3501,6 +4850,24 @@ components:
       - roles
       - tenant
       - username
+    VerificationStatusEnum:
+      enum:
+      - pending
+      - verified
+      - rejected
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `verified` - Verified
+        * `rejected` - Rejected
+    VisibilityEnum:
+      enum:
+      - private
+      - public
+      type: string
+      description: |-
+        * `private` - Private
+        * `public` - Public
   securitySchemes:
     jwtAuth:
       type: http

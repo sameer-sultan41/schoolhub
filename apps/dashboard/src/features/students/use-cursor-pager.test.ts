@@ -19,6 +19,17 @@ describe("useCursorPager", () => {
     expect(result.current.hasPrevious).toBe(true);
   });
 
+  it("onNext does nothing when pagination itself is undefined", () => {
+    const { result } = renderHook(() => useCursorPager());
+
+    act(() => {
+      result.current.onNext(undefined);
+    });
+
+    expect(result.current.cursor).toBeNull();
+    expect(result.current.hasPrevious).toBe(false);
+  });
+
   it("onNext does nothing when there is no next_cursor", () => {
     const { result } = renderHook(() => useCursorPager());
 

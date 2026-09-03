@@ -1,6 +1,7 @@
 import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../messages/en.json";
 import { StudentsTable } from "@/features/students/students-table";
@@ -186,6 +187,52 @@ describe("StudentsTable", () => {
     await waitFor(() => {
       const lastCall = mockGet.mock.calls.at(-1)?.[1];
       expect(lastCall?.query?.search).toBe("Amina");
+    });
+  });
+
+  it("changing the status filter re-fetches with the selected status", async () => {
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<StudentsTable />);
+    await screen.findByText("2026-0001");
+
+    await user.click(screen.getByRole("combobox", { name: "Status" }));
+    await user.click(await screen.findByRole("option", { name: "Suspended" }));
+
+    await waitFor(() => {
+      const lastCall = mockGet.mock.calls.at(-1)?.[1];
+      expect(lastCall?.query?.status).toBe("suspended");
+    });
+  });
+
+  it("clicking Previous returns to the prior page", async () => {
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: "page-2", previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    renderWithProviders(<StudentsTable />);
+    await screen.findByText("2026-0001");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    const previousButton = await screen.findByRole("button", { name: "Previous" });
+    await waitFor(() => {
+      expect(previousButton).not.toBeDisabled();
+    });
+    mockGet.mockClear();
+    fireEvent.click(previousButton);
+
+    await waitFor(() => {
+      const lastCall = mockGet.mock.calls.at(-1)?.[1];
+      expect(lastCall?.query?.cursor).toBeUndefined();
     });
   });
 });

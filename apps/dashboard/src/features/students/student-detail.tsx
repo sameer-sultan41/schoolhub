@@ -1,11 +1,26 @@
 "use client";
 
 import { ApiError } from "@schoolhub/api-client";
-import { Alert, AlertDescription, Badge, Button, Card, CardContent, Skeleton } from "@schoolhub/ui";
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { Can } from "@/components/can";
+import { DocumentsPanel } from "@/features/students/documents-panel";
+import { EmergencyContactsPanel } from "@/features/students/emergency-contacts-panel";
+import { GuardiansPanel } from "@/features/students/guardians-panel";
 import type { StudentRecord } from "@/features/students/student-types";
 import { apiClient } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
@@ -72,42 +87,70 @@ export function StudentDetail({ studentId }: StudentDetailProps) {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="grid gap-4 pt-6 sm:grid-cols-2">
-          <dl className="contents">
-            <Field
-              label={t("fields.dateOfBirth")}
-              value={formatDate(student.date_of_birth, locale)}
-            />
-            <Field label={t("fields.gender")} value={t(`gender.${student.gender}`)} />
-            <Field
-              label={t("fields.admissionDate")}
-              value={formatDate(student.admission_date, locale)}
-            />
-            <Field label={t("fields.bloodGroup")} value={student.blood_group ?? EMPTY} />
-            <Field label={t("fields.nationality")} value={student.nationality ?? EMPTY} />
-            <Field label={t("fields.religion")} value={student.religion ?? EMPTY} />
-            <Field label={t("fields.previousSchool")} value={student.previous_school ?? EMPTY} />
-          </dl>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="profile">
+        <TabsList>
+          <TabsTrigger value="profile">{t("tabs.profile")}</TabsTrigger>
+          <TabsTrigger value="guardians">{t("tabs.guardians")}</TabsTrigger>
+          <TabsTrigger value="emergencyContacts">{t("tabs.emergencyContacts")}</TabsTrigger>
+          <TabsTrigger value="documents">{t("tabs.documents")}</TabsTrigger>
+        </TabsList>
 
-      {/* medical_notes is present in the payload only when the server chose to
-          include it — its absence is an authorization signal, not something to
-          default to a placeholder for. See student-types.ts's StudentRecord. */}
-      {"medical_notes" in student ? (
-        <Card>
-          <CardContent className="space-y-2 pt-6">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-medium text-foreground">{t("fields.medicalNotes")}</h2>
-              <Badge variant="warning">{t("fields.medicalNotesRestricted")}</Badge>
-            </div>
-            <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-              {student.medical_notes || EMPTY}
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+        <TabsContent value="profile" className="space-y-6 pt-4">
+          <Card>
+            <CardContent className="grid gap-4 pt-6 sm:grid-cols-2">
+              <dl className="contents">
+                <Field
+                  label={t("fields.dateOfBirth")}
+                  value={formatDate(student.date_of_birth, locale)}
+                />
+                <Field label={t("fields.gender")} value={t(`gender.${student.gender}`)} />
+                <Field
+                  label={t("fields.admissionDate")}
+                  value={formatDate(student.admission_date, locale)}
+                />
+                <Field label={t("fields.bloodGroup")} value={student.blood_group ?? EMPTY} />
+                <Field label={t("fields.nationality")} value={student.nationality ?? EMPTY} />
+                <Field label={t("fields.religion")} value={student.religion ?? EMPTY} />
+                <Field
+                  label={t("fields.previousSchool")}
+                  value={student.previous_school ?? EMPTY}
+                />
+              </dl>
+            </CardContent>
+          </Card>
+
+          {/* medical_notes is present in the payload only when the server chose to
+              include it — its absence is an authorization signal, not something to
+              default to a placeholder for. See student-types.ts's StudentRecord. */}
+          {"medical_notes" in student ? (
+            <Card>
+              <CardContent className="space-y-2 pt-6">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-medium text-foreground">
+                    {t("fields.medicalNotes")}
+                  </h2>
+                  <Badge variant="warning">{t("fields.medicalNotesRestricted")}</Badge>
+                </div>
+                <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                  {student.medical_notes || EMPTY}
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="guardians" className="pt-4">
+          <GuardiansPanel studentId={studentId} />
+        </TabsContent>
+
+        <TabsContent value="emergencyContacts" className="pt-4">
+          <EmergencyContactsPanel studentId={studentId} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="pt-4">
+          <DocumentsPanel studentId={studentId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
