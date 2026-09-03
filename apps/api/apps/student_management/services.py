@@ -774,6 +774,7 @@ def request_transfer(
     actor_id: uuid.UUID,
     tenant_id: uuid.UUID,
 ) -> StudentTransfer:
+    assert_student_active(student)
     assert_transfer_campus_fields(
         transfer_type=transfer_type,
         from_campus=from_campus,
@@ -806,6 +807,7 @@ def assert_transfer_decidable(*, transfer: StudentTransfer, actor_id: uuid.UUID)
 @transaction.atomic
 def approve_transfer(*, transfer: StudentTransfer, actor_id: uuid.UUID) -> StudentTransfer:
     assert_transfer_decidable(transfer=transfer, actor_id=actor_id)
+    assert_student_active(transfer.student)
     transfer.status = TransferStatus.APPROVED
     transfer.decided_by = actor_id
     transfer.decided_at = timezone.now()
@@ -847,6 +849,11 @@ def complete_transfer(
         )
 
     student = transfer.student
+    # Re-check now, not just at request/approve time: the student's status can have
+    # changed in the (possibly long) gap between approval and completion — e.g.
+    # withdrawn via a separate action — and completing here would otherwise silently
+    # reset that status back to `transferred`, undoing the withdrawal.
+    assert_student_active(student)
     if transfer.transfer_type == TransferType.INTER_CAMPUS:
         if section is None:
             raise DomainRuleViolation(

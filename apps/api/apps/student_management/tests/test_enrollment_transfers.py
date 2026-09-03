@@ -15,7 +15,7 @@ from apps.school_organization.tests.factories import (
     SectionFactory,
     TenantFactory,
 )
-from apps.student_management.models import StudentEnrollment
+from apps.student_management.models import StudentEnrollment, StudentStatus
 from apps.student_management.tests.factories import (
     EmergencyContactFactory,
     GuardianFactory,
@@ -319,6 +319,81 @@ class TransferTests(StudentManagementAPITestCase):
         with tenant_context(self.tenant.id):
             self.student.refresh_from_db()
         self.assertEqual(self.student.campus_id, self.to_campus.pk)
+
+    def test_complete_replays_the_stored_response_for_a_repeated_idempotency_key(self) -> None:
+        self.allow("students.transfer.create", "students.transfer.approve")
+        with tenant_context(self.tenant.id):
+            school_class = ClassFactory(tenant=self.tenant)
+            destination_section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.to_campus, capacity=5
+            )
+            transfer = StudentTransferFactory(
+                tenant=self.tenant,
+                student=self.student,
+                from_campus=self.campus,
+                to_campus=self.to_campus,
+                created_by=None,
+            )
+        self.client.post(f"/api/v1/student-transfers/{transfer.pk}:approve")
+
+        headers = {"HTTP_IDEMPOTENCY_KEY": "complete-once"}
+        first = self.client.post(
+            f"/api/v1/student-transfers/{transfer.pk}:complete",
+            {"section_id": str(destination_section.pk)},
+            format="json",
+            **headers,
+        )
+        second = self.client.post(
+            f"/api/v1/student-transfers/{transfer.pk}:complete",
+            {"section_id": str(destination_section.pk)},
+            format="json",
+            **headers,
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.json())
+        # Without idempotency wired up, this replay would instead re-run
+        # complete_transfer against an already-completed transfer and get back a
+        # 409 Conflict ("Transfer must be approved...") rather than the same 200.
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.json())
+        self.assertEqual(first.json()["data"], second.json()["data"])
+
+    def test_completing_a_transfer_for_a_no_longer_active_student_is_rejected(self) -> None:
+        self.allow("students.transfer.create", "students.transfer.approve")
+        with tenant_context(self.tenant.id):
+            school_class = ClassFactory(tenant=self.tenant)
+            destination_section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.to_campus, capacity=5
+            )
+            transfer = StudentTransferFactory(
+                tenant=self.tenant,
+                student=self.student,
+                from_campus=self.campus,
+                to_campus=self.to_campus,
+                created_by=None,
+            )
+
+        approve = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:approve")
+        self.assertEqual(approve.status_code, status.HTTP_200_OK, approve.json())
+
+        with tenant_context(self.tenant.id):
+            # Simulates the student being withdrawn through a separate action in the
+            # gap between approval and completion.
+            self.student.status = StudentStatus.WITHDRAWN
+            self.student.save(update_fields=["status"])
+
+        complete = self.client.post(
+            f"/api/v1/student-transfers/{transfer.pk}:complete",
+            {"section_id": str(destination_section.pk)},
+            format="json",
+        )
+
+        self.assertEqual(
+            complete.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, complete.json()
+        )
+        with tenant_context(self.tenant.id):
+            self.student.refresh_from_db()
+        self.assertEqual(self.student.status, StudentStatus.WITHDRAWN)
+        self.assertEqual(self.student.campus_id, self.campus.pk)
 
     def test_complete_before_approval_is_a_conflict(self) -> None:
         self.allow("students.transfer.create")

@@ -612,14 +612,23 @@ class StudentTransferViewSet(
         },
     )
     def approve(self, request, pk=None) -> Response:
-        from core.audit.services import record_audit
-
         transfer = self.get_object()
-        before = self.get_serializer(transfer).data
-        transfer = approve_transfer(transfer=transfer, actor_id=request.user.pk)
-        after = self.get_serializer(transfer).data
-        record_audit(request, "approve", transfer, before=before, after=after)
-        return ActionResponse.ok(after, message="Transfer approved.")
+
+        def execute() -> Response:
+            from core.audit.services import record_audit
+
+            before = self.get_serializer(transfer).data
+            approved = approve_transfer(transfer=transfer, actor_id=request.user.pk)
+            after = self.get_serializer(approved).data
+            record_audit(request, "approve", approved, before=before, after=after)
+            return ActionResponse.ok(after, message="Transfer approved.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="student-transfers:approve",
+            execute=execute,
+        )
 
     @extend_schema(
         summary="Reject a student transfer",
@@ -630,14 +639,23 @@ class StudentTransferViewSet(
         },
     )
     def reject(self, request, pk=None) -> Response:
-        from core.audit.services import record_audit
-
         transfer = self.get_object()
-        before = self.get_serializer(transfer).data
-        transfer = reject_transfer(transfer=transfer, actor_id=request.user.pk)
-        after = self.get_serializer(transfer).data
-        record_audit(request, "reject", transfer, before=before, after=after)
-        return ActionResponse.ok(after, message="Transfer rejected.")
+
+        def execute() -> Response:
+            from core.audit.services import record_audit
+
+            before = self.get_serializer(transfer).data
+            rejected = reject_transfer(transfer=transfer, actor_id=request.user.pk)
+            after = self.get_serializer(rejected).data
+            record_audit(request, "reject", rejected, before=before, after=after)
+            return ActionResponse.ok(after, message="Transfer rejected.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="student-transfers:reject",
+            execute=execute,
+        )
 
     @extend_schema(
         summary="Execute an approved student transfer",
@@ -648,18 +666,26 @@ class StudentTransferViewSet(
         },
     )
     def complete(self, request, pk=None) -> Response:
-        from core.audit.services import record_audit
-
         transfer = self.get_object()
         payload = TransferCompleteRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
 
-        before = self.get_serializer(transfer).data
-        transfer = complete_transfer(
-            transfer=transfer,
-            section=payload.validated_data.get("section"),
-            actor_id=request.user.pk,
+        def execute() -> Response:
+            from core.audit.services import record_audit
+
+            before = self.get_serializer(transfer).data
+            completed = complete_transfer(
+                transfer=transfer,
+                section=payload.validated_data.get("section"),
+                actor_id=request.user.pk,
+            )
+            after = self.get_serializer(completed).data
+            record_audit(request, "complete", completed, before=before, after=after)
+            return ActionResponse.ok(after, message="Transfer completed.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="student-transfers:complete",
+            execute=execute,
         )
-        after = self.get_serializer(transfer).data
-        record_audit(request, "complete", transfer, before=before, after=after)
-        return ActionResponse.ok(after, message="Transfer completed.")
