@@ -9,6 +9,7 @@ from django.urls import include, path
 urlpatterns = [
     path("", include("core.rbac.urls")),
     path("", include("core.files.urls")),
+    path("", include("core.jobs.urls")),
     path("", include("apps.school_organization.urls")),
     path("", include("apps.student_management.urls")),
 ]

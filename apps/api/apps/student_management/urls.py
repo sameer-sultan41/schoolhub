@@ -17,10 +17,13 @@ from rest_framework.routers import SimpleRouter
 from apps.student_management.views import (
     EmergencyContactLinkViewSet,
     GuardianViewSet,
+    IdCardGenerateViewSet,
     StudentDocumentLinkViewSet,
     StudentDocumentViewSet,
+    StudentExportViewSet,
     StudentGuardianLinkViewSet,
     StudentGuardianViewSet,
+    StudentImportViewSet,
     StudentTransferViewSet,
     StudentViewSet,
 )
@@ -87,6 +90,21 @@ urlpatterns = [
         "student-transfers/<uuid:pk>:complete",
         StudentTransferViewSet.as_view({"post": "complete"}),
         name="student-transfers-complete",
+    ),
+    path(
+        "student-imports",
+        StudentImportViewSet.as_view({"post": "create"}),
+        name="student-imports",
+    ),
+    path(
+        "student-exports",
+        StudentExportViewSet.as_view({"post": "create"}),
+        name="student-exports",
+    ),
+    path(
+        "id-cards:generate",
+        IdCardGenerateViewSet.as_view({"post": "create"}),
+        name="id-cards-generate",
     ),
     *router.urls,
 ]

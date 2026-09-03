@@ -119,3 +119,36 @@ def confirm_upload(*, file: File, actor_id: uuid.UUID) -> File:
 
 def get_download_url(file: File) -> str:
     return get_presigner().presign_download(storage_key=file.storage_key)
+
+
+@transaction.atomic
+def create_ready_file(
+    *,
+    tenant_id: uuid.UUID,
+    purpose: str,
+    original_name: str,
+    mime_type: str,
+    data: bytes,
+    actor_id: uuid.UUID,
+) -> File:
+    """Register a server-generated file (a background job's export/report/PDF).
+
+    Skips pending -> confirm entirely: the caller already has the bytes in
+    hand (there is no client upload to wait for), so this writes them straight
+    to storage and creates the row `ready`. Never used for a client-driven
+    upload — that always stays the two-step flow in `create_upload`.
+    """
+    storage_key = storage_key_for(tenant_id=tenant_id, purpose=purpose, original_name=original_name)
+    get_presigner().put(storage_key=storage_key, data=data, content_type=mime_type)
+
+    return File.objects.create(
+        tenant_id=tenant_id,
+        storage_key=storage_key,
+        original_name=original_name,
+        mime_type=mime_type,
+        size_bytes=len(data),
+        purpose=purpose,
+        status=FileStatus.READY,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )

@@ -74,6 +74,7 @@ CORE_APPS = [
     "core.audit",
     "core.files",
     "core.idempotency",
+    "core.jobs",
 ]
 
 # One app per module doc in docs/03-modules/.
@@ -219,10 +220,10 @@ CACHES = {
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/1")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/2")
 CELERY_TASK_ROUTES = {
-    # Priority lanes per docs/02-architecture/notifications.md.
-    "core.notifications.tasks.send_emergency*": {"queue": "emergency"},
-    "core.notifications.tasks.send_transactional*": {"queue": "transactional"},
-    "core.notifications.tasks.send_bulk*": {"queue": "bulk"},
+    # core.notifications does not exist yet (communication is a later tier) —
+    # the routes docs/02-architecture/notifications.md describes land with
+    # that module. Bulk, non-urgent background work routes to "bulk" for now.
+    "apps.student_management.tasks.*": {"queue": "bulk"},
 }
 
 LANGUAGE_CODE = "en-us"

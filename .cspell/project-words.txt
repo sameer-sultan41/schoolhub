@@ -85,6 +85,9 @@ JazzCash
 Keyspace
 Laravel
 launchable
+libgdk
+libpango
+libpangocairo
 libpq
 Mailpit
 manylinux
@@ -119,6 +122,7 @@ PGPORT
 PGUSER
 pidfile
 PITR
+pixbuf
 plpgsql
 pollable
 pooler
@@ -192,6 +196,7 @@ unindexed
 unmetered
 unmoderated
 unparseable
+unpermitted
 Unrestorable
 unsubmitted
 unvalidated
