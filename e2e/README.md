@@ -45,12 +45,28 @@ Never move a `live` assertion into a mocked project. A stub returns whatever it 
 ### Running the live lane
 
 ```bash
-docker compose -f infra/compose/docker-compose.yml up -d
-# seed a tenant + admin, then:
+./infra/scripts/seed-dev.sh          # brings up the stack AND seeds it (see below)
+E2E_NO_SERVER=1 \
 E2E_API_BASE_URL=http://localhost:8000/api/v1 \
-E2E_LIVE_ADMIN_PASSWORD=... \
 pnpm e2e:live
 ```
+
+`seed-dev.sh` now runs `manage.py seed_e2e_data` (alongside `seed_dev_data`) after
+migrations — it creates the `e2e-school`/`e2e-other-school` tenants and the
+`e2e-admin@schoolhub.test` admin `E2E_LIVE_*` expects (`src/env.ts`), plus one active
+campus/class/section/academic-session baseline the `live` specs assume exists. Set
+`E2E_LIVE_ADMIN_PASSWORD` before running the script if you want a non-default password;
+it must then match what you export for `pnpm e2e:live` too.
+
+`E2E_NO_SERVER=1` is required here: without it, Playwright's own `webServer` array tries
+to (re)build and serve the dashboard/website on the same ports the compose stack already
+bound them to.
+
+The `live` project itself splits into two Playwright projects: `live-setup` does one real
+UI login and caches it to `.auth/live-admin.json` (see `tests/live/live.setup.ts`) —
+`AuthEndpointThrottle` allows only 10 requests/minute per IP across login/refresh/logout,
+so every test logging in for itself would exhaust that fast — and `live` (the actual
+specs) depends on it and reuses that session. `pnpm e2e:live` runs both automatically.
 
 ## Layout
 
@@ -66,8 +82,14 @@ e2e/
 │   │   ├── envelope.ts      typed {data,meta} / {error} builders
 │   │   ├── router.ts        MockApi — path matching, CORS, call recording
 │   │   └── domains/         one file per API domain, composed with `.use(...)`
-│   └── data/factories.ts    deterministic API-shaped objects
+│   ├── data/
+│   │   ├── factories.ts      deterministic API-shaped objects, for stubbing
+│   │   └── live-factories.ts run-unique objects for the live lane's real rows
+│   └── lib/live-api.ts       one real login per worker, wired into @schoolhub/api-client
 └── tests/{dashboard,website,live}/
+    └── live/
+        ├── live.setup.ts     one real UI login, cached — see "Running the live lane"
+        └── api/               live API journeys for modules with no dashboard UI yet
 ```
 
 ## Writing a spec

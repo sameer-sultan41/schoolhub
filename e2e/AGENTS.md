@@ -28,6 +28,21 @@ because the website renders on the server and browser interception cannot see it
   `apps/api/core/api/exceptions.py`. Override `code` only for a genuine domain code.
 - Every spec is independent — `fullyParallel` is on.
 
+## The auth throttle, and why `live` never logs in per test
+
+`AuthEndpointThrottle` (`apps/api/core/api/throttling.py`) allows only 10 requests/minute
+per IP across login/refresh/logout combined. A real login per test blows through that the
+moment `tests/live/` grows past a handful of specs. Don't reintroduce it:
+
+- Browser specs use the shared session `tests/live/live.setup.ts` sets up once and caches
+  to `storageState` (see `playwright.config.ts`'s `live-setup`/`live` project split). A
+  spec that must exercise the login form itself opts out with
+  `test.use({ storageState: { cookies: [], origins: [] } })` — that's the only place a
+  live spec should call `loginPage.signIn()`.
+- API specs (`tests/live/api/`) destructure the worker-scoped `liveApiClient` fixture
+  (`src/fixtures/index.ts`, wired to `src/lib/live-api.ts`) — one real login per worker,
+  not per test or per file.
+
 ## Mirrored values
 
 `src/constants.ts` copies a few values out of the apps (the session cookie name, the

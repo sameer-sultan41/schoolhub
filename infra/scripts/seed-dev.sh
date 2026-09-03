@@ -208,6 +208,12 @@ log "loading sample tenants"
 dc run --rm --no-deps api python manage.py seed_dev_data \
   || log "WARNING: seed_dev_data is not available yet in the API repo — skipping sample data"
 
+log "loading e2e fixtures"
+dc run --rm --no-deps \
+  -e E2E_LIVE_ADMIN_PASSWORD="${E2E_LIVE_ADMIN_PASSWORD:-e2e-not-a-real-password}" \
+  api python manage.py seed_e2e_data \
+  || log "WARNING: seed_e2e_data is not available yet in the API repo — skipping e2e fixtures"
+
 log "starting the application services"
 dc up -d
 

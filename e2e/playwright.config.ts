@@ -113,9 +113,25 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], baseURL: env.WEBSITE_URL },
     },
     {
+      // Auth-throttle-safe: one real UI login (`AuthEndpointThrottle` allows only
+      // 10 requests/minute per IP across login/refresh/logout), cached to
+      // `.auth/live-admin.json` and reused by every `live` test via `dependencies`
+      // below, instead of every test logging in for itself.
+      name: "live-setup",
+      testDir: "./tests/live",
+      testMatch: /live\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: env.DASHBOARD_URL },
+    },
+    {
       name: "live",
       testDir: "./tests/live",
-      use: { ...devices["Desktop Chrome"], baseURL: env.DASHBOARD_URL },
+      testIgnore: /live\.setup\.ts/,
+      dependencies: ["live-setup"],
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: env.DASHBOARD_URL,
+        storageState: ".auth/live-admin.json",
+      },
     },
   ],
 

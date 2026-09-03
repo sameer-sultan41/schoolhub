@@ -6,13 +6,20 @@ import { expect, test } from "@/fixtures";
 /**
  * Live lane — requires the real stack (Postgres + PgBouncer + Django + both apps):
  *
- *   docker compose -f infra/compose/docker-compose.yml up -d
- *   # seed the two tenants and the admin, then:
- *   E2E_API_BASE_URL=http://localhost:8000/api/v1 pnpm e2e:live
+ *   ./infra/scripts/seed-dev.sh   # brings up the stack AND seeds the two tenants + admin
+ *   E2E_NO_SERVER=1 E2E_API_BASE_URL=http://localhost:8000/api/v1 pnpm e2e:live
+ *
+ * (see e2e/README.md's "Running the live lane" for the full explanation)
  *
  * These are the assertions a stubbed API cannot make honestly: a stub returns whatever it
  * was told to, so proving Row-Level Security binds needs real rows in a real database.
  */
+// Guest context: the `live` project now applies the shared `live-setup` session by
+// default (see playwright.config.ts and tests/live/live.setup.ts) — without opting out
+// here, the first test's `loginPage.goto()` would already be authenticated and the
+// proxy would redirect straight past /login before signIn() ever ran.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe("tenant isolation", () => {
   test("signs in against the real API and survives a cold reload", async ({ page, loginPage }) => {
     await loginPage.goto();

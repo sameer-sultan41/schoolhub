@@ -1,0 +1,141 @@
+name: e2e-live
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *" # nightly, 03:00 UTC
+
+concurrency:
+  group: e2e-live
+  cancel-in-progress: false # a nightly run against a real ephemeral stack should finish or time out on its own
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  PNPM_VERSION: "9.15.0"
+  TURBO_TELEMETRY_DISABLED: "1"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  live:
+    name: Live stack E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # `||`, not a bare secrets reference: a secret that was never set resolves to an empty
+      # string, not undefined — passed through to a shell `-e VAR`, that sets an actual
+      # empty env var, which the seed command's `os.environ.get(key, default)` would
+      # return as-is, and which e2e/src/env.ts's zod `min(1)` would reject outright.
+      E2E_LIVE_ADMIN_PASSWORD: ${{ secrets.E2E_LIVE_ADMIN_PASSWORD || 'e2e-not-a-real-password' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Chromium
+        run: pnpm --filter @schoolhub/e2e exec playwright install --with-deps chromium
+
+      - name: Create compose/.env
+        working-directory: infra/compose
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+
+          # .env.example's own defaults for these two point at sibling repos this
+          # workflow never checks out (schoolhub-api-v2, schoolhub-web) — a split-repo
+          # layout the compose file also supports. CI only ever has this one monorepo
+          # checkout, so build everything from the apps/ directories already here,
+          # matching docker-compose.yml's own fallback when these are unset.
+          echo "API_REPO_PATH=../../apps/api" >> .env
+          echo "FRONTEND_REPO_PATH=../.." >> .env
+
+          # A CI run is as short-lived as the container it lives in — random local
+          # secrets, same generation infra/scripts/seed-dev.sh uses.
+          for var in POSTGRES_SUPERUSER_PASSWORD APP_DB_PASSWORD MIGRATION_DB_PASSWORD \
+                     READONLY_DB_PASSWORD MINIO_ROOT_PASSWORD DJANGO_SECRET_KEY \
+                     PUBLIC_CONTENT_TOKEN REVALIDATE_SECRET; do
+            value="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-32)"
+            awk -v k="$var" -v v="$value" 'BEGIN{FS=OFS="="} $1==k {print k"="v; next} {print}' .env > .env.tmp
+            mv .env.tmp .env
+          done
+
+      - name: Bring up the real stack
+        working-directory: infra/compose
+        run: docker compose up -d --build
+
+      # No separate migrate step: the api service's own command is
+      # `migrate --noinput && runserver` (docker-compose.yml), so /healthz only ever
+      # answers once migrations have already applied.
+      - name: Wait for the API to be healthy
+        run: timeout 180 bash -c 'until curl -fsS http://localhost:8000/healthz; do sleep 3; done'
+
+      - name: Seed e2e fixtures
+        working-directory: infra/compose
+        run: |
+          docker compose run --rm --no-deps \
+            -e E2E_LIVE_ADMIN_PASSWORD \
+            api python manage.py seed_e2e_data
+
+      - name: Wait for the dashboard and website to respond
+        run: |
+          timeout 120 bash -c 'until curl -fsS http://localhost:3000/ -o /dev/null; do sleep 3; done'
+          timeout 120 bash -c 'until curl -fsS http://localhost:3001/robots.txt -o /dev/null; do sleep 3; done'
+
+      - name: Assert the live project actually has tests to run
+        env:
+          E2E_NO_SERVER: "1"
+        run: |
+          set -euo pipefail
+          count="$(pnpm --filter @schoolhub/e2e exec playwright test --project=live --list 2>/dev/null | grep -c ' › ' || true)"
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::the live project matched zero tests — this would otherwise report green for nothing tested"
+            exit 1
+          fi
+          echo "live project has ${count} test(s)"
+
+      - name: Run the live E2E lane
+        env:
+          E2E_NO_SERVER: "1"
+          E2E_API_BASE_URL: "http://localhost:8000/api/v1"
+          E2E_DASHBOARD_URL: "http://localhost:3000"
+          E2E_WEBSITE_URL: "http://localhost:3001"
+        run: pnpm --filter @schoolhub/e2e exec playwright test --project=live-setup --project=live
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-live
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Compose logs on failure
+        if: failure()
+        working-directory: infra/compose
+        run: docker compose logs --tail=200
+
+      - name: Tear down
+        if: always()
+        working-directory: infra/compose
+        run: docker compose down -v

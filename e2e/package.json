@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@schoolhub/api-client": "workspace:*",
     "@schoolhub/config": "workspace:*",
     "@schoolhub/types": "workspace:*",
     "@types/node": "^26.2.0",
