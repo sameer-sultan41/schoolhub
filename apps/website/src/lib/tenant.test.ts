@@ -1,6 +1,6 @@
-import type { Tenant } from "@schoolhub/types";
 import { headers } from "next/headers";
 import type * as ReactModule from "react";
+import { makeTenant } from "@/test-utils";
 import { readJson } from "./api";
 import { TENANT_HOST_HEADER } from "./host";
 import { canonicalOrigin, getActiveTenant, getRequestHost, resolveTenant } from "./tenant";
@@ -21,24 +21,6 @@ jest.mock("./api", () => ({
 
 const mockHeaders = headers as jest.MockedFunction<typeof headers>;
 const mockReadJson = readJson as jest.MockedFunction<typeof readJson>;
-
-function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
-  return {
-    id: "t1",
-    slug: "cityschool",
-    name: "City School",
-    status: "active",
-    custom_domain: null,
-    branding: {},
-    locale: {
-      default_locale: "en",
-      enabled_locales: ["en"],
-      timezone: "Asia/Karachi",
-      direction: "ltr",
-    },
-    ...overrides,
-  };
-}
 
 function mockHost(host: string | null) {
   mockHeaders.mockResolvedValue({

@@ -1,7 +1,6 @@
-import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor } from "@testing-library/react";
-import { renderWithProviders } from "@/test-utils";
+import { apiResult, makeUser, renderWithProviders } from "@/test-utils";
 import { useSession } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
 import { DashboardSummary } from "./dashboard-summary";
@@ -18,35 +17,19 @@ const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 
-function apiResult<T>(data: T) {
-  return { data, meta: undefined, requestId: null, status: 200 };
-}
-
-function makeUser(permissions: PermissionKey[]): AuthenticatedUser {
-  return {
-    id: "u1",
-    email: "admin@cityschool.test",
-    phone: null,
-    full_name: "Ayesha Khan",
-    avatar_url: null,
-    locale: "en",
-    tenant_id: "t1",
-    roles: [],
-    permissions,
-  };
-}
-
 describe("DashboardSummary", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockUseSession.mockReset();
     mockUseSession.mockReturnValue({
-      user: makeUser([
-        "students.student.view",
-        "attendance.student-attendance.view",
-        "fees.invoice.view",
-        "admissions.enquiry.view",
-      ]),
+      user: makeUser({
+        permissions: [
+          "students.student.view",
+          "attendance.student-attendance.view",
+          "fees.invoice.view",
+          "admissions.enquiry.view",
+        ],
+      }),
       isLoading: false,
       isAuthenticated: true,
       refetch: jest.fn(),
@@ -55,10 +38,14 @@ describe("DashboardSummary", () => {
 
   it("shows a skeleton for every visible tile while loading", () => {
     mockGet.mockReturnValue(new Promise(() => {}));
-    renderWithProviders(<DashboardSummary />);
+    const { container } = renderWithProviders(<DashboardSummary />);
 
     expect(screen.getByText("Enrolled students")).toBeInTheDocument();
     expect(screen.getByText("Outstanding fees")).toBeInTheDocument();
+    // The labels above render unconditionally regardless of isPending — the actual
+    // loading-state branch is the Skeleton in place of each tile's formatted value.
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(4);
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
   });
 
   it("renders formatted values once the data resolves", async () => {
@@ -95,7 +82,7 @@ describe("DashboardSummary", () => {
 
   it("only renders tiles the user has permission for", async () => {
     mockUseSession.mockReturnValue({
-      user: makeUser(["students.student.view"]),
+      user: makeUser({ permissions: ["students.student.view"] }),
       isLoading: false,
       isAuthenticated: true,
       refetch: jest.fn(),

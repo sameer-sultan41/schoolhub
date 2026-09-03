@@ -61,4 +61,35 @@ describe("proxy", () => {
     );
     expect(response.headers.get("x-middleware-request-x-schoolhub-tenant-slug")).toBe("cityschool");
   });
+
+  // The unresolved-host branch rewrites to platform-landing WITHOUT setting a tenant
+  // header of its own — unlike the resolved-host branch above, a spoofed header here
+  // isn't overwritten by a real value, it must be actively stripped. Regression coverage
+  // for a real bug: NextResponse.rewrite() forwards the original request headers
+  // unmodified unless given an explicit `request` override, so this path used to leak a
+  // client-supplied x-schoolhub-host/-tenant-slug all the way to the root layout's
+  // resolveTenant() call (every page, platform-landing included, renders inside it).
+  it("strips a spoofed tenant header when rewriting an unresolvable host", () => {
+    const response = proxy(
+      makeRequest("schoolhub.pk", "/", {
+        "x-schoolhub-tenant-slug": "spoofed-tenant",
+        "x-schoolhub-host": "spoofed-tenant.schoolhub.pk",
+      }),
+    );
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "https://schoolhub.pk/platform-landing",
+    );
+    expect(response.headers.get("x-middleware-request-x-schoolhub-tenant-slug")).toBeNull();
+    expect(response.headers.get("x-middleware-request-x-schoolhub-host")).toBeNull();
+  });
+
+  it("strips a spoofed tenant header even when already on the platform landing page", () => {
+    const response = proxy(
+      makeRequest("schoolhub.pk", "/platform-landing", {
+        "x-schoolhub-tenant-slug": "spoofed-tenant",
+      }),
+    );
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-request-x-schoolhub-tenant-slug")).toBeNull();
+  });
 });

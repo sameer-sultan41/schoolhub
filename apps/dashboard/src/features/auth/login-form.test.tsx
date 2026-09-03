@@ -1,24 +1,13 @@
 import { ApiError } from "@schoolhub/api-client";
-import type { AuthenticatedUser, LoginResponse } from "@schoolhub/types";
+import type { LoginResponse } from "@schoolhub/types";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderWithProviders } from "@/test-utils";
+import { makeUser, renderWithProviders } from "@/test-utils";
 import { login } from "@/lib/auth";
 import { LoginForm } from "./login-form";
 
 function makeLoginResponse(): LoginResponse {
-  const user: AuthenticatedUser = {
-    id: "u1",
-    email: "admin@cityschool.test",
-    phone: null,
-    full_name: "Ayesha Khan",
-    avatar_url: null,
-    locale: "en",
-    tenant_id: "t1",
-    roles: [],
-    permissions: [],
-  };
-  return { access_token: "at-1", expires_in: 900, user };
+  return { access_token: "at-1", expires_in: 900, user: makeUser() };
 }
 
 const mockReplace = jest.fn();

@@ -1,7 +1,6 @@
-import type { AuthenticatedUser } from "@schoolhub/types";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderWithProviders } from "@/test-utils";
+import { apiResult, makeUser, renderWithProviders } from "@/test-utils";
 import { useSession } from "@/hooks/use-session";
 import { apiClient, logout } from "@/lib/auth";
 import { AppShell } from "./app-shell";
@@ -27,32 +26,13 @@ const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 const mockLogout = logout as jest.MockedFunction<typeof logout>;
 
-function apiResult<T>(data: T) {
-  return { data, meta: undefined, requestId: null, status: 200 };
-}
-
-function makeUser(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
-  return {
-    id: "u1",
-    email: "admin@cityschool.test",
-    phone: null,
-    full_name: "Ayesha Khan",
-    avatar_url: null,
-    locale: "en",
-    tenant_id: "t1",
-    roles: [],
-    permissions: ["students.student.view"],
-    ...overrides,
-  };
-}
-
 describe("AppShell", () => {
   beforeEach(() => {
     mockReplace.mockReset();
     mockGet.mockReset().mockResolvedValue(apiResult(null));
     mockLogout.mockReset().mockResolvedValue(undefined);
     mockUseSession.mockReset().mockReturnValue({
-      user: makeUser(),
+      user: makeUser({ permissions: ["students.student.view"] }),
       isLoading: false,
       isAuthenticated: true,
       refetch: jest.fn(),

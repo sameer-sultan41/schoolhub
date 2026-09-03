@@ -1,7 +1,7 @@
-import type { AuthenticatedUser } from "@schoolhub/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { makeUser } from "@/test-utils";
 import { restoreSession } from "@/lib/auth";
 import { useAnyPermission, usePermission, useSession } from "./use-session";
 
@@ -10,21 +10,6 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 const mockRestoreSession = restoreSession as jest.MockedFunction<typeof restoreSession>;
-
-function makeUser(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
-  return {
-    id: "u1",
-    email: "admin@cityschool.test",
-    phone: null,
-    full_name: "Ayesha Khan",
-    avatar_url: null,
-    locale: "en",
-    tenant_id: "t1",
-    roles: [],
-    permissions: ["fees.invoice.create"],
-    ...overrides,
-  };
-}
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -46,7 +31,7 @@ describe("useSession", () => {
   });
 
   it("exposes the restored user once loaded", async () => {
-    mockRestoreSession.mockResolvedValue(makeUser());
+    mockRestoreSession.mockResolvedValue(makeUser({ permissions: ["fees.invoice.create"] }));
     const { result } = renderHook(() => useSession(), { wrapper });
 
     await waitFor(() => {
@@ -76,7 +61,7 @@ describe("usePermission", () => {
   });
 
   it("reflects the loaded user's permissions", async () => {
-    mockRestoreSession.mockResolvedValue(makeUser());
+    mockRestoreSession.mockResolvedValue(makeUser({ permissions: ["fees.invoice.create"] }));
     const { result } = renderHook(() => usePermission("fees.invoice.create"), { wrapper });
 
     await waitFor(() => {
@@ -94,7 +79,7 @@ describe("usePermission", () => {
 
 describe("useAnyPermission", () => {
   it("is true when the user holds at least one of the listed permissions", async () => {
-    mockRestoreSession.mockResolvedValue(makeUser());
+    mockRestoreSession.mockResolvedValue(makeUser({ permissions: ["fees.invoice.create"] }));
     const { result } = renderHook(
       () => useAnyPermission(["library.book.issue", "fees.invoice.create"]),
       { wrapper },
