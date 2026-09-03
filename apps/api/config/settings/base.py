@@ -42,6 +42,10 @@ FILE_UPLOAD_RULES = {
         "mime_types": {"image/jpeg", "image/png", "application/pdf"},
         "max_size_bytes": 10 * 1024 * 1024,
     },
+    "guardian.photo": {
+        "mime_types": {"image/jpeg", "image/png"},
+        "max_size_bytes": 5 * 1024 * 1024,
+    },
 }
 
 DJANGO_APPS = [

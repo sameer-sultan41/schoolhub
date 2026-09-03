@@ -18,7 +18,7 @@ from django.db import transaction
 
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.models import File, FileStatus
-from core.files.storage import get_presigner, storage_key_for
+from core.files.storage import NullPresigner, get_presigner, storage_key_for
 
 
 def assert_upload_allowed(*, purpose: str, mime_type: str, size_bytes: int) -> None:
@@ -89,16 +89,19 @@ def confirm_upload(*, file: File, actor_id: uuid.UUID) -> File:
     if file.status != FileStatus.PENDING:
         raise Conflict(f"File is already {file.status}.")
 
-    found = get_presigner().head(storage_key=file.storage_key)
+    presigner = get_presigner()
+    found = presigner.head(storage_key=file.storage_key)
     if found is None:
         raise DomainRuleViolation(
             {"non_field": "The upload has not completed — nothing found at that storage key yet."}
         )
-    if found["size_bytes"] != file.size_bytes and found["size_bytes"] != 0:
-        # NullPresigner.head() always reports 0 (see its docstring), so a real
-        # zero-byte upload against the null backend would false-positive here
-        # too — an acceptable trade in a backend that never talks to real
-        # storage in the first place.
+    # NullPresigner never talks to real storage — see its docstring, it always
+    # reports {"size_bytes": 0} regardless of what (if anything) was uploaded — so
+    # the mismatch check below is meaningless against it and must be skipped
+    # explicitly, by presigner identity, not by treating every reported 0 as "no
+    # real check happened": a real S3-backed zero-byte upload has to fail this check
+    # like any other mismatch, not be waved through.
+    if not isinstance(presigner, NullPresigner) and found["size_bytes"] != file.size_bytes:
         raise DomainRuleViolation(
             {
                 "non_field": (

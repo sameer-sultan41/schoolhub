@@ -165,6 +165,14 @@ class GuardianSerializer(serializers.ModelSerializer):
         )
         read_only_fields = READ_ONLY_FIELDS
 
+    def validate_photo_file_id(self, value: File | None) -> File | None:
+        # Mirrors Student.photo_file/StudentDocument.file: a resolved File still
+        # needs its purpose and upload-confirmed status checked — the tenant-scoped
+        # `_fk()` field only proves the id exists and belongs to this tenant.
+        if value is not None:
+            services.assert_file_usable(file=value, purpose="guardian.photo")
+        return value
+
 
 class StudentGuardianSerializer(serializers.ModelSerializer):
     """Used both for the nested `POST /students/{id}/guardians` (student comes

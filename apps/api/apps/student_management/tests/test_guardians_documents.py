@@ -167,6 +167,68 @@ class GuardianLinkTests(StudentManagementAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
+class GuardianPhotoFileTests(StudentManagementAPITestCase):
+    def test_creating_a_guardian_with_a_ready_guardian_photo_succeeds(self) -> None:
+        self.allow("students.guardian.create")
+        with tenant_context(self.tenant.id):
+            photo = FileFactory(
+                tenant=self.tenant, purpose="guardian.photo", status=FileStatus.READY
+            )
+
+        response = self.client.post(
+            "/api/v1/guardians",
+            {
+                "first_name": "Amina",
+                "last_name": "Khan",
+                "phone": "+923001234567",
+                "photo_file_id": str(photo.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+
+    def test_creating_a_guardian_with_an_unconfirmed_photo_is_rejected(self) -> None:
+        self.allow("students.guardian.create")
+        with tenant_context(self.tenant.id):
+            pending_photo = FileFactory(
+                tenant=self.tenant, purpose="guardian.photo", status=FileStatus.PENDING
+            )
+
+        response = self.client.post(
+            "/api/v1/guardians",
+            {
+                "first_name": "Amina",
+                "last_name": "Khan",
+                "phone": "+923001234567",
+                "photo_file_id": str(pending_photo.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def test_creating_a_guardian_with_a_wrong_purpose_photo_is_rejected(self) -> None:
+        self.allow("students.guardian.create")
+        with tenant_context(self.tenant.id):
+            student_photo = FileFactory(
+                tenant=self.tenant, purpose="student.photo", status=FileStatus.READY
+            )
+
+        response = self.client.post(
+            "/api/v1/guardians",
+            {
+                "first_name": "Amina",
+                "last_name": "Khan",
+                "phone": "+923001234567",
+                "photo_file_id": str(student_photo.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
 class EmergencyContactTests(StudentManagementAPITestCase):
     def test_add_an_emergency_contact(self) -> None:
         self.allow("students.student.update", "students.student.view")

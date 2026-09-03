@@ -31,6 +31,17 @@ class FileViewSet(
     required_permission = "platform.file.view"
     required_permission_map = {"create": "platform.file.create", "confirm": "platform.file.create"}
 
+    def get_queryset(self):
+        # Deliberately does NOT call TenantScopedViewSetMixin.get_queryset(): File has
+        # no campus/owner concept of its own — it's referenced from several modules
+        # under different names (Student.photo_file, StudentDocument.file, …), each
+        # declared with related_name="+" precisely so there's no reverse join to
+        # piggyback a campus scope on. The mixin's default scope_campus_field="campus_id"
+        # raises FieldError the moment a campus-scoped user (school_admin/principal/
+        # teacher) hits list/retrieve/confirm/download. Access control here is tenant
+        # RLS + the platform.file.* permission, not record-scope narrowing.
+        return File.objects.alive()
+
     @extend_schema(
         summary="Request a presigned upload slot",
         request=FileCreateSerializer,
