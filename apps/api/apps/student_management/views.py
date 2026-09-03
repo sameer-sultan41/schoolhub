@@ -26,23 +26,43 @@ from apps.student_management.models import (
     Student,
     StudentDocument,
     StudentGuardian,
+    StudentTransfer,
 )
 from apps.student_management.serializers import (
+    ChangeSectionRequestSerializer,
     DocumentVerifyRequestSerializer,
     EmergencyContactSerializer,
+    EnrollRequestSerializer,
     GuardianSerializer,
     StudentDocumentSerializer,
+    StudentEnrollmentSerializer,
     StudentGuardianSerializer,
     StudentSerializer,
+    StudentTransferSerializer,
+    TransferCompleteRequestSerializer,
+    WithdrawRequestSerializer,
 )
 from apps.student_management.services import (
+    active_enrollment,
     add_emergency_contact,
     add_student_document,
+    approve_transfer,
+    build_history,
+    complete_transfer,
     create_student,
+    enroll_student,
     link_guardian,
+    reject_transfer,
+    request_transfer,
     verify_document,
+    withdraw_student,
+)
+from apps.student_management.services import (
+    change_section as change_section_service,
 )
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
+from core.idempotency.services import replay_or_execute
+from core.rbac.permissions import has_permission_key
 
 
 class StudentViewSet(TenantModelViewSet):
@@ -61,6 +81,9 @@ class StudentViewSet(TenantModelViewSet):
         "update": "students.student.update",
         "partial_update": "students.student.update",
         "destroy": "students.student.delete",
+        "enroll": "students.enrollment.enroll",
+        "change_section": "students.enrollment.update",
+        "withdraw": "students.student.withdraw",
     }
     # §16 declares no PUT — additive edits are PATCH; a full replace is not part
     # of the documented contract.
@@ -102,6 +125,147 @@ class StudentViewSet(TenantModelViewSet):
             tenant_id=self.request.tenant.pk,
         )
         record_audit(self.request, "create", serializer.instance, after=serializer.data)
+
+    @extend_schema(
+        summary="Enroll a student into a session/class/section",
+        request=EnrollRequestSerializer,
+        responses={200: StudentEnrollmentSerializer},
+    )
+    def enroll(self, request, pk=None) -> Response:
+        student = self.get_object()
+        payload = EnrollRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def execute() -> Response:
+            from core.audit.services import record_audit
+
+            enrollment = enroll_student(
+                student=student,
+                academic_session=data["academic_session"],
+                school_class=data["school_class"],
+                section=data["section"],
+                enrollment_date=data["enrollment_date"],
+                roll_number=data.get("roll_number"),
+                capacity_override_reason=data.get("capacity_override_reason"),
+                actor_has_capacity_override=has_permission_key(
+                    request.user, "students.student.update"
+                ),
+                actor_id=request.user.pk,
+                tenant_id=request.tenant.pk,
+            )
+            after = StudentEnrollmentSerializer(enrollment).data
+            audit_extra = (
+                {"capacity_override_reason": data["capacity_override_reason"]}
+                if data.get("capacity_override_reason")
+                else {}
+            )
+            record_audit(request, "enroll", enrollment, after={**after, **audit_extra})
+            return ActionResponse.ok(after, message="Student enrolled.", status=201)
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="students:enroll",
+            execute=execute,
+        )
+
+    @extend_schema(
+        summary="Change a student's section allocation",
+        request=ChangeSectionRequestSerializer,
+        responses={200: StudentEnrollmentSerializer},
+    )
+    def change_section(self, request, pk=None) -> Response:
+        student = self.get_object()
+        payload = ChangeSectionRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        enrollment = active_enrollment(student)
+        if enrollment is None:
+            raise Http404
+
+        def execute() -> Response:
+            from core.audit.services import record_audit
+
+            before = StudentEnrollmentSerializer(enrollment).data
+            updated = change_section_service(
+                enrollment=enrollment,
+                section=data["section"],
+                roll_number=data.get("roll_number"),
+                capacity_override_reason=data.get("capacity_override_reason"),
+                actor_has_capacity_override=has_permission_key(
+                    request.user, "students.student.update"
+                ),
+                actor_id=request.user.pk,
+            )
+            after = StudentEnrollmentSerializer(updated).data
+            audit_extra = (
+                {"capacity_override_reason": data["capacity_override_reason"]}
+                if data.get("capacity_override_reason")
+                else {}
+            )
+            record_audit(
+                request, "change-section", updated, before=before, after={**after, **audit_extra}
+            )
+            return ActionResponse.ok(after, message="Section changed.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="students:change-section",
+            execute=execute,
+        )
+
+    @extend_schema(
+        summary="Withdraw a student",
+        request=WithdrawRequestSerializer,
+        responses={200: StudentSerializer},
+    )
+    def withdraw(self, request, pk=None) -> Response:
+        student = self.get_object()
+        payload = WithdrawRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def execute() -> Response:
+            from core.audit.services import record_audit
+
+            before = self.get_serializer(student).data
+            withdrawn = withdraw_student(
+                student=student,
+                reason=data["reason"],
+                effective_date=data["effective_date"],
+                waive_clearance=data.get("waive_clearance", False),
+                actor_has_withdrawal_approval=has_permission_key(
+                    request.user, "students.withdrawal.approve"
+                ),
+                actor_id=request.user.pk,
+            )
+            after = self.get_serializer(withdrawn).data
+            record_audit(
+                request,
+                "withdraw",
+                withdrawn,
+                before=before,
+                after={**after, "reason": data["reason"]},
+            )
+            return ActionResponse.ok(after, message="Student withdrawn.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="students:withdraw",
+            execute=execute,
+        )
+
+    @extend_schema(
+        summary="Assemble a student's chronological history",
+        responses={200: OpenApiResponse(description="Timeline of enrollment and transfer events")},
+    )
+    def history(self, request, pk=None) -> Response:
+        student = self.get_object()
+        return ActionResponse.ok(build_history(student))
 
 
 class GuardianViewSet(
@@ -389,3 +553,113 @@ class StudentDocumentViewSet(
         after = self.get_serializer(document).data
         record_audit(request, "verify", document, before=before, after=after)
         return ActionResponse.ok(after, message=f"Document {document.verification_status}.")
+
+
+class StudentTransferViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+
+    colon-actions (module doc §16). No update/destroy — a transfer's state
+    only ever moves through those three actions. §4 declares no
+    ``students.transfer.view`` key, so list/retrieve reuse
+    ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+    used elsewhere in this module — since a `principal` deciding on a
+    transfer needs to see it, not just the `school_admin` who created it.
+    """
+
+    queryset = StudentTransfer.objects
+    serializer_class = StudentTransferSerializer
+    required_feature = "module.students"
+    required_permission = "students.student.view"
+    required_permission_map = {
+        "create": "students.transfer.create",
+        "approve": "students.transfer.approve",
+        "reject": "students.transfer.approve",
+        # complete executes an already-approved transfer — an operational
+        # step for the same role that requested it, not a second decision, so
+        # it reuses the create key rather than the approve one.
+        "complete": "students.transfer.create",
+    }
+
+    def perform_create(self, serializer) -> None:
+        from core.audit.services import record_audit
+
+        data = serializer.validated_data
+        serializer.instance = request_transfer(
+            student=data["student"],
+            transfer_type=data["transfer_type"],
+            reason=data["reason"],
+            effective_date=data["effective_date"],
+            from_campus=data.get("from_campus"),
+            to_campus=data.get("to_campus"),
+            external_school_name=data.get("external_school_name"),
+            actor_id=self.request.user.pk,
+            tenant_id=self.request.tenant.pk,
+        )
+        record_audit(self.request, "create", serializer.instance, after=serializer.data)
+
+    @extend_schema(
+        summary="Approve a student transfer",
+        request=None,
+        responses={
+            200: StudentTransferSerializer,
+            409: OpenApiResponse(description="Already decided"),
+        },
+    )
+    def approve(self, request, pk=None) -> Response:
+        from core.audit.services import record_audit
+
+        transfer = self.get_object()
+        before = self.get_serializer(transfer).data
+        transfer = approve_transfer(transfer=transfer, actor_id=request.user.pk)
+        after = self.get_serializer(transfer).data
+        record_audit(request, "approve", transfer, before=before, after=after)
+        return ActionResponse.ok(after, message="Transfer approved.")
+
+    @extend_schema(
+        summary="Reject a student transfer",
+        request=None,
+        responses={
+            200: StudentTransferSerializer,
+            409: OpenApiResponse(description="Already decided"),
+        },
+    )
+    def reject(self, request, pk=None) -> Response:
+        from core.audit.services import record_audit
+
+        transfer = self.get_object()
+        before = self.get_serializer(transfer).data
+        transfer = reject_transfer(transfer=transfer, actor_id=request.user.pk)
+        after = self.get_serializer(transfer).data
+        record_audit(request, "reject", transfer, before=before, after=after)
+        return ActionResponse.ok(after, message="Transfer rejected.")
+
+    @extend_schema(
+        summary="Execute an approved student transfer",
+        request=TransferCompleteRequestSerializer,
+        responses={
+            200: StudentTransferSerializer,
+            409: OpenApiResponse(description="Not yet approved"),
+        },
+    )
+    def complete(self, request, pk=None) -> Response:
+        from core.audit.services import record_audit
+
+        transfer = self.get_object()
+        payload = TransferCompleteRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+
+        before = self.get_serializer(transfer).data
+        transfer = complete_transfer(
+            transfer=transfer,
+            section=payload.validated_data.get("section"),
+            actor_id=request.user.pk,
+        )
+        after = self.get_serializer(transfer).data
+        record_audit(request, "complete", transfer, before=before, after=after)
+        return ActionResponse.ok(after, message="Transfer completed.")

@@ -78,6 +78,7 @@ hotspots
 hrefs
 htmlcov
 iban
+idempot
 interceptable
 isready
 JazzCash
@@ -160,6 +161,7 @@ schedulable
 schemaname
 schoolhub
 schummar
+sess
 Shoulds
 signups
 simplejwt

@@ -11,7 +11,9 @@ from apps.student_management.models import (
     Guardian,
     Student,
     StudentDocument,
+    StudentEnrollment,
     StudentGuardian,
+    StudentTransfer,
 )
 
 
@@ -51,3 +53,15 @@ class EmergencyContactAdmin(TenantOwnedAdmin):
 class StudentDocumentAdmin(TenantOwnedAdmin):
     list_display = ("student", "title", "document_type", "verification_status", "tenant")
     list_filter = ("document_type", "verification_status")
+
+
+@admin.register(StudentEnrollment)
+class StudentEnrollmentAdmin(TenantOwnedAdmin):
+    list_display = ("student", "academic_session", "school_class", "section", "status", "tenant")
+    list_filter = ("status",)
+
+
+@admin.register(StudentTransfer)
+class StudentTransferAdmin(TenantOwnedAdmin):
+    list_display = ("student", "transfer_type", "status", "effective_date", "tenant")
+    list_filter = ("transfer_type", "status")

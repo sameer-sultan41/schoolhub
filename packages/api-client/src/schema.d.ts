@@ -768,6 +768,149 @@ export interface paths {
         patch: operations["student_guardians_partial_update"];
         trace?: never;
     };
+    "/api/v1/student-transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+         *
+         *     colon-actions (module doc §16). No update/destroy — a transfer's state
+         *     only ever moves through those three actions. §4 declares no
+         *     ``students.transfer.view`` key, so list/retrieve reuse
+         *     ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+         *     used elsewhere in this module — since a `principal` deciding on a
+         *     transfer needs to see it, not just the `school_admin` who created it.
+         */
+        get: operations["student_transfers_list"];
+        put?: never;
+        /**
+         * @description `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+         *
+         *     colon-actions (module doc §16). No update/destroy — a transfer's state
+         *     only ever moves through those three actions. §4 declares no
+         *     ``students.transfer.view`` key, so list/retrieve reuse
+         *     ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+         *     used elsewhere in this module — since a `principal` deciding on a
+         *     transfer needs to see it, not just the `school_admin` who created it.
+         */
+        post: operations["student_transfers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-transfers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+         *
+         *     colon-actions (module doc §16). No update/destroy — a transfer's state
+         *     only ever moves through those three actions. §4 declares no
+         *     ``students.transfer.view`` key, so list/retrieve reuse
+         *     ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+         *     used elsewhere in this module — since a `principal` deciding on a
+         *     transfer needs to see it, not just the `school_admin` who created it.
+         */
+        get: operations["student_transfers_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-transfers/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a student transfer
+         * @description `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+         *
+         *     colon-actions (module doc §16). No update/destroy — a transfer's state
+         *     only ever moves through those three actions. §4 declares no
+         *     ``students.transfer.view`` key, so list/retrieve reuse
+         *     ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+         *     used elsewhere in this module — since a `principal` deciding on a
+         *     transfer needs to see it, not just the `school_admin` who created it.
+         */
+        post: operations["student_transfers_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-transfers/{id}:complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Execute an approved student transfer
+         * @description `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+         *
+         *     colon-actions (module doc §16). No update/destroy — a transfer's state
+         *     only ever moves through those three actions. §4 declares no
+         *     ``students.transfer.view`` key, so list/retrieve reuse
+         *     ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+         *     used elsewhere in this module — since a `principal` deciding on a
+         *     transfer needs to see it, not just the `school_admin` who created it.
+         */
+        post: operations["student_transfers_:complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-transfers/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a student transfer
+         * @description `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+         *
+         *     colon-actions (module doc §16). No update/destroy — a transfer's state
+         *     only ever moves through those three actions. §4 declares no
+         *     ``students.transfer.view`` key, so list/retrieve reuse
+         *     ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+         *     used elsewhere in this module — since a `principal` deciding on a
+         *     transfer needs to see it, not just the `school_admin` who created it.
+         */
+        post: operations["student_transfers_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/students": {
         parameters: {
             query?: never;
@@ -803,6 +946,86 @@ export interface paths {
         head?: never;
         /** @description Student master records (module doc §5.1-2). */
         patch: operations["students_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/students/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assemble a student's chronological history
+         * @description Student master records (module doc §5.1-2).
+         */
+        get: operations["students_history_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}:change-section": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change a student's section allocation
+         * @description Student master records (module doc §5.1-2).
+         */
+        post: operations["students_:change_section_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}:enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enroll a student into a session/class/section
+         * @description Student master records (module doc §5.1-2).
+         */
+        post: operations["students_:enroll_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}:withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw a student
+         * @description Student master records (module doc §5.1-2).
+         */
+        post: operations["students_:withdraw_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/students/{student_pk}/documents": {
@@ -1012,6 +1235,12 @@ export interface components {
             current_password: string;
             new_password: string;
         };
+        ChangeSectionRequest: {
+            /** Format: uuid */
+            section_id: string;
+            roll_number?: string | null;
+            capacity_override_reason?: string | null;
+        };
         Class: {
             /** Format: uuid */
             readonly id: string;
@@ -1106,6 +1335,18 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        EnrollRequest: {
+            /** Format: uuid */
+            academic_session_id: string;
+            /** Format: uuid */
+            class_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /** Format: date */
+            enrollment_date: string;
+            roll_number?: string | null;
+            capacity_override_reason?: string | null;
         };
         File: {
             /** Format: uuid */
@@ -1324,6 +1565,16 @@ export interface components {
         };
         PaginatedStudentList: {
             data?: components["schemas"]["Student"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStudentTransferList: {
+            data?: components["schemas"]["StudentTransfer"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -1769,6 +2020,47 @@ export interface components {
             readonly updated_at: string;
         };
         /**
+         * @description Output-only — enrollments are created/changed through the :enroll and
+         *
+         *     :change-section colon-actions on StudentViewSet, never a plain serializer
+         *     save().
+         */
+        StudentEnrollment: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            /** Format: uuid */
+            readonly academic_session_id: string;
+            /** Format: uuid */
+            readonly class_id: string;
+            /** Format: uuid */
+            readonly section_id: string;
+            readonly roll_number: string | null;
+            /** Format: date */
+            readonly enrollment_date: string;
+            /**
+             * Format: date
+             * @description Set when status leaves active.
+             */
+            readonly end_date: string | null;
+            readonly status: components["schemas"]["StudentEnrollmentStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `active` - Active
+         *     * `promoted` - Promoted
+         *     * `retained` - Retained
+         *     * `transferred_out` - Transferred out
+         *     * `withdrawn` - Withdrawn
+         *     * `graduated` - Graduated
+         * @enum {string}
+         */
+        StudentEnrollmentStatusEnum: "active" | "promoted" | "retained" | "transferred_out" | "withdrawn" | "graduated";
+        /**
          * @description Used both for the nested `POST /students/{id}/guardians` (student comes
          *
          *     from the URL, not the body — see the view) and the top-level
@@ -1802,6 +2094,47 @@ export interface components {
          * @enum {string}
          */
         StudentStatusEnum: "active" | "suspended" | "transferred" | "withdrawn" | "graduated";
+        StudentTransfer: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            student_id: string;
+            transfer_type: components["schemas"]["TransferTypeEnum"];
+            /** Format: uuid */
+            from_campus_id?: string | null;
+            /** Format: uuid */
+            to_campus_id?: string | null;
+            external_school_name?: string | null;
+            reason: string;
+            readonly status: components["schemas"]["StudentTransferStatusEnum"];
+            /** Format: date */
+            effective_date: string;
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly decided_by: string | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            /**
+             * Format: uuid
+             * @description generated_documents(id) — Tier 7, not built yet.
+             */
+            readonly certificate_document_id: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `requested` - Requested
+         *     * `approved` - Approved
+         *     * `rejected` - Rejected
+         *     * `completed` - Completed
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        StudentTransferStatusEnum: "requested" | "approved" | "rejected" | "completed" | "cancelled";
         Subject: {
             /** Format: uuid */
             readonly id: string;
@@ -1841,6 +2174,24 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description `section_id` is required only for an inter-campus transfer — see
+         *
+         *     services.complete_transfer, which raises a field-specific error when it is
+         *     missing for that type rather than this serializer guessing at a
+         *     conditional-required rule.
+         */
+        TransferCompleteRequest: {
+            /** Format: uuid */
+            section_id?: string | null;
+        };
+        /**
+         * @description * `inter_campus` - Inter-campus
+         *     * `outgoing` - Outgoing
+         *     * `incoming` - Incoming
+         * @enum {string}
+         */
+        TransferTypeEnum: "inter_campus" | "outgoing" | "incoming";
         User: {
             /** Format: uuid */
             readonly id: string;
@@ -1873,6 +2224,13 @@ export interface components {
          * @enum {string}
          */
         VisibilityEnum: "private" | "public";
+        WithdrawRequest: {
+            reason: string;
+            /** Format: date */
+            effective_date: string;
+            /** @default false */
+            waive_clearance: boolean;
+        };
     };
     responses: never;
     parameters: never;
@@ -3608,10 +3966,177 @@ export interface operations {
             };
         };
     };
+    student_transfers_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStudentTransferList"];
+                };
+            };
+        };
+    };
+    student_transfers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentTransfer"];
+                "application/x-www-form-urlencoded": components["schemas"]["StudentTransfer"];
+                "multipart/form-data": components["schemas"]["StudentTransfer"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentTransfer"];
+                };
+            };
+        };
+    };
+    student_transfers_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student transfer. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentTransfer"];
+                };
+            };
+        };
+    };
+    "student_transfers_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentTransfer"];
+                };
+            };
+            /** @description Already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "student_transfers_:complete_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TransferCompleteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TransferCompleteRequest"];
+                "multipart/form-data": components["schemas"]["TransferCompleteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentTransfer"];
+                };
+            };
+            /** @description Not yet approved */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "student_transfers_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentTransfer"];
+                };
+            };
+            /** @description Already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     students_list: {
         parameters: {
             query?: {
+                academic_session_id?: string;
                 campus_id?: string;
+                class_id?: string;
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 house_id?: string;
@@ -3621,6 +4146,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                section_id?: string;
                 /**
                  * @description * `active` - Active
                  *     * `suspended` - Suspended
@@ -3729,6 +4255,107 @@ export interface operations {
                 "application/json": components["schemas"]["PatchedStudent"];
                 "application/x-www-form-urlencoded": components["schemas"]["PatchedStudent"];
                 "multipart/form-data": components["schemas"]["PatchedStudent"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Student"];
+                };
+            };
+        };
+    };
+    students_history_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Timeline of enrollment and transfer events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "students_:change_section_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeSectionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChangeSectionRequest"];
+                "multipart/form-data": components["schemas"]["ChangeSectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentEnrollment"];
+                };
+            };
+        };
+    };
+    "students_:enroll_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EnrollRequest"];
+                "multipart/form-data": components["schemas"]["EnrollRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentEnrollment"];
+                };
+            };
+        };
+    };
+    "students_:withdraw_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WithdrawRequest"];
+                "multipart/form-data": components["schemas"]["WithdrawRequest"];
             };
         };
         responses: {

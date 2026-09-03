@@ -11,7 +11,13 @@ import datetime
 
 import factory
 
-from apps.school_organization.tests.factories import CampusFactory, HouseFactory
+from apps.school_organization.tests.factories import (
+    AcademicSessionFactory,
+    CampusFactory,
+    ClassFactory,
+    HouseFactory,
+    SectionFactory,
+)
 from apps.student_management.models import (
     EmergencyContact,
     Gender,
@@ -19,12 +25,18 @@ from apps.student_management.models import (
     Relationship,
     Student,
     StudentDocument,
+    StudentEnrollment,
     StudentGuardian,
+    StudentTransfer,
+    TransferType,
 )
 from core.files.tests.factories import FileFactory
 
 DEFAULT_DOB = datetime.date(2015, 6, 1)
 DEFAULT_ADMISSION_DATE = datetime.date(2026, 4, 1)
+# Inside AcademicSessionFactory's default SESSION_START/SESSION_END window
+# (school_organization/tests/factories.py).
+DEFAULT_ENROLLMENT_DATE = datetime.date(2026, 4, 5)
 
 
 class StudentFactory(factory.django.DjangoModelFactory):
@@ -78,6 +90,26 @@ class StudentDocumentFactory(factory.django.DjangoModelFactory):
     # as `campus`/`student` elsewhere in this file.
 
 
+class StudentEnrollmentFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = StudentEnrollment
+
+    enrollment_date = DEFAULT_ENROLLMENT_DATE
+    # No SubFactory defaults for academic_session/school_class/section/student:
+    # each must belong to the same tenant and satisfy section_id -> class_id,
+    # so callers wire them up explicitly — same convention as StudentFactory's
+    # campus.
+
+
+class StudentTransferFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = StudentTransfer
+
+    transfer_type = TransferType.INTER_CAMPUS
+    reason = "Family relocation."
+    effective_date = DEFAULT_ENROLLMENT_DATE
+
+
 def enable_feature(tenant, key: str) -> None:
     """Force ``key`` on for ``tenant``, regardless of its coded default.
 
@@ -102,15 +134,21 @@ def enable_feature(tenant, key: str) -> None:
 
 
 __all__ = [
+    "AcademicSessionFactory",
     "CampusFactory",
+    "ClassFactory",
     "DEFAULT_ADMISSION_DATE",
     "DEFAULT_DOB",
+    "DEFAULT_ENROLLMENT_DATE",
     "EmergencyContactFactory",
     "FileFactory",
     "GuardianFactory",
     "HouseFactory",
+    "SectionFactory",
     "StudentDocumentFactory",
+    "StudentEnrollmentFactory",
     "StudentFactory",
     "StudentGuardianFactory",
+    "StudentTransferFactory",
     "enable_feature",
 ]

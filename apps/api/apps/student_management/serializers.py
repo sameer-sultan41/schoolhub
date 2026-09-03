@@ -16,14 +16,16 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.school_organization.models import Campus, House
+from apps.school_organization.models import AcademicSession, Campus, Class, House, Section
 from apps.student_management import services
 from apps.student_management.models import (
     EmergencyContact,
     Guardian,
     Student,
     StudentDocument,
+    StudentEnrollment,
     StudentGuardian,
+    StudentTransfer,
 )
 from core.files.models import File
 from core.rbac.models import RecordScope
@@ -261,3 +263,102 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
 
 class DocumentVerifyRequestSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=["verified", "rejected"])
+
+
+class StudentEnrollmentSerializer(serializers.ModelSerializer):
+    """Output-only — enrollments are created/changed through the :enroll and
+
+    :change-section colon-actions on StudentViewSet, never a plain serializer
+    save().
+    """
+
+    # Plain read-only UUID fields, not _fk(): PrimaryKeyRelatedField asserts
+    # against combining `queryset=` with `read_only=True`, and these never
+    # accept input — see the class docstring.
+    student_id = serializers.UUIDField(read_only=True)
+    academic_session_id = serializers.UUIDField(read_only=True)
+    class_id = serializers.UUIDField(source="school_class_id", read_only=True)
+    section_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = StudentEnrollment
+        fields = (
+            "id",
+            "student_id",
+            "academic_session_id",
+            "class_id",
+            "section_id",
+            "roll_number",
+            "enrollment_date",
+            "end_date",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class EnrollRequestSerializer(serializers.Serializer):
+    academic_session_id = _fk(AcademicSession, source="academic_session")
+    class_id = _fk(Class, source="school_class")
+    section_id = _fk(Section, source="section")
+    enrollment_date = serializers.DateField()
+    roll_number = serializers.CharField(max_length=16, required=False, allow_null=True)
+    capacity_override_reason = serializers.CharField(required=False, allow_null=True)
+
+
+class ChangeSectionRequestSerializer(serializers.Serializer):
+    section_id = _fk(Section, source="section")
+    roll_number = serializers.CharField(max_length=16, required=False, allow_null=True)
+    capacity_override_reason = serializers.CharField(required=False, allow_null=True)
+
+
+class WithdrawRequestSerializer(serializers.Serializer):
+    reason = serializers.CharField()
+    effective_date = serializers.DateField()
+    waive_clearance = serializers.BooleanField(required=False, default=False)
+
+
+class StudentTransferSerializer(serializers.ModelSerializer):
+    student_id = _fk(Student, source="student")
+    from_campus_id = _fk(Campus, source="from_campus", required=False, allow_null=True)
+    to_campus_id = _fk(Campus, source="to_campus", required=False, allow_null=True)
+
+    class Meta:
+        model = StudentTransfer
+        fields = (
+            "id",
+            "student_id",
+            "transfer_type",
+            "from_campus_id",
+            "to_campus_id",
+            "external_school_name",
+            "reason",
+            "status",
+            "effective_date",
+            "decided_by",
+            "decided_at",
+            "certificate_document_id",
+            "created_at",
+            "updated_at",
+        )
+        # status/decided_by/decided_at/certificate_document_id move only
+        # through the :approve/:reject/:complete colon-actions.
+        read_only_fields = (
+            *READ_ONLY_FIELDS,
+            "status",
+            "decided_by",
+            "decided_at",
+            "certificate_document_id",
+        )
+
+
+class TransferCompleteRequestSerializer(serializers.Serializer):
+    """`section_id` is required only for an inter-campus transfer — see
+
+    services.complete_transfer, which raises a field-specific error when it is
+    missing for that type rather than this serializer guessing at a
+    conditional-required rule.
+    """
+
+    section_id = _fk(Section, source="section", required=False, allow_null=True)
