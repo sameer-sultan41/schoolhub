@@ -156,4 +156,43 @@ describe("GuardiansPanel", () => {
       relationship: "father",
     });
   });
+
+  it("finds, selects, and links an existing guardian with the chosen relationship", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockImplementation((path: string) => {
+      if (path === "/students/s1/guardians") return Promise.resolve(apiResult([]));
+      if (path === "/guardians") {
+        return Promise.resolve(apiResult([{ ...GUARDIAN, id: "g3", first_name: "Sara" }]));
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+    mockPost.mockResolvedValue(apiResult({}));
+
+    const user = userEvent.setup();
+    renderWithProviders(<GuardiansPanel studentId="s1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Link guardian" }));
+    // Default tab is already "search" — switch away and back so the "Search
+    // existing" tab button's own onClick runs too, not just the initial state.
+    await user.click(screen.getByRole("button", { name: "Create new" }));
+    await user.click(screen.getByRole("button", { name: "Search existing" }));
+
+    await user.type(screen.getByPlaceholderText("Search by name or phone"), "Sara");
+
+    const result = await screen.findByRole("button", { name: /Sara Khan/ }, { timeout: 2000 });
+    await user.click(result);
+
+    await user.click(screen.getByLabelText("Relationship"));
+    await user.click(await screen.findByRole("option", { name: "Mother" }));
+
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Link guardian" }));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith("/students/s1/guardians", {
+        guardian_id: "g3",
+        relationship: "mother",
+      });
+    });
+  }, 10000);
 });

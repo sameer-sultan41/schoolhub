@@ -113,6 +113,21 @@ describe("StudentDetail", () => {
     expect(await screen.findByText(/could not find/i)).toBeInTheDocument();
   });
 
+  it("falls back to the raw message for an unmapped error code, with no request id", async () => {
+    mockGet.mockRejectedValue(
+      new ApiError({
+        code: "weird_unmapped_code",
+        message: "Something specific broke",
+        status: 500,
+        url: "/students/s1",
+      }),
+    );
+
+    renderWithProviders(<StudentDetail studentId="s1" />);
+
+    expect(await screen.findByText("Something specific broke")).toBeInTheDocument();
+  });
+
   it("switches to the Guardians tab and renders that tab's panel", async () => {
     mockGet.mockImplementation((path: string) => {
       if (path === "/students/s1") return Promise.resolve(apiResult(BASE_STUDENT));

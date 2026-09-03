@@ -82,6 +82,8 @@ describe("EmergencyContactsPanel", () => {
     await user.type(screen.getByLabelText("Name"), "Ayesha Bibi");
     await user.type(screen.getByLabelText("Relationship"), "aunt");
     await user.type(screen.getByLabelText("Phone"), "+923001234567");
+    await user.type(screen.getByLabelText("Alternate phone"), "+923009999999");
+    await user.type(screen.getByLabelText("Notes"), "Lives nearby");
 
     const dialog = screen.getByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Add contact" }));
@@ -91,9 +93,9 @@ describe("EmergencyContactsPanel", () => {
         name: "Ayesha Bibi",
         relationship: "aunt",
         phone: "+923001234567",
-        alt_phone: null,
+        alt_phone: "+923009999999",
         priority: 1,
-        notes: null,
+        notes: "Lives nearby",
       });
     });
   });

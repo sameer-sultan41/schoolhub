@@ -105,6 +105,24 @@ describe("DocumentsPanel", () => {
     });
   });
 
+  it("rejects a pending document when 'Reject' is clicked", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([DOCUMENT]));
+    mockPost.mockResolvedValue(apiResult({ ...DOCUMENT, verification_status: "rejected" }));
+
+    const user = userEvent.setup();
+    renderWithProviders(<DocumentsPanel studentId="s1" />);
+
+    const rejectButton = await screen.findByRole("button", { name: "Reject" });
+    await user.click(rejectButton);
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith("/student-documents/doc1:verify", {
+        decision: "rejected",
+      });
+    });
+  });
+
   it("deletes a document when 'Delete' is clicked", async () => {
     mockUsePermission.mockReturnValue(true);
     mockGet.mockResolvedValue(apiResult([DOCUMENT]));
@@ -183,15 +201,19 @@ describe("DocumentsPanel", () => {
     const file = new File(["hello"], "certificate.pdf", { type: "application/pdf" });
     await user.upload(within(dialog).getByLabelText("File"), file);
     await user.type(within(dialog).getByLabelText("Title"), "Amina's birth certificate");
+    await user.type(within(dialog).getByLabelText("Notes"), "Certified copy");
+    await user.type(within(dialog).getByLabelText("Expires on"), "2030-01-01");
+    await user.click(within(dialog).getByLabelText("Document type"));
+    await user.click(await screen.findByRole("option", { name: "Photo ID" }));
     await user.click(within(dialog).getByRole("button", { name: "Upload document" }));
 
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith("/students/s1/documents", {
         file_id: "f2",
-        document_type: "birth_certificate",
+        document_type: "photo_id",
         title: "Amina's birth certificate",
-        notes: null,
-        expires_at: null,
+        notes: "Certified copy",
+        expires_at: "2030-01-01",
       });
     });
   });
