@@ -10,6 +10,7 @@
 ACMR
 AIGW
 allkeys
+Amina
 ANAME
 appautoscaling
 appendonly
@@ -180,6 +181,7 @@ tsvector
 TTFB
 Turbopack
 undoable
+ungated
 unindexed
 unmetered
 unmoderated
@@ -187,7 +189,9 @@ unparseable
 Unrestorable
 unsubmitted
 unvalidated
+upsell
 upsells
+upserts
 varchar
 viewset
 viewset's

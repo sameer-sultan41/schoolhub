@@ -51,6 +51,7 @@ CORE_APPS = [
 # One app per module doc in docs/03-modules/.
 MODULE_APPS = [
     "apps.school_organization",
+    "apps.student_management",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS

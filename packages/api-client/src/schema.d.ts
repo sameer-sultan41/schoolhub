@@ -513,6 +513,43 @@ export interface paths {
         patch: operations["sections_partial_update"];
         trace?: never;
     };
+    "/api/v1/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Student master records (module doc §5.1-2). */
+        get: operations["students_list"];
+        put?: never;
+        /** @description Student master records (module doc §5.1-2). */
+        post: operations["students_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Student master records (module doc §5.1-2). */
+        get: operations["students_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description Student master records (module doc §5.1-2). */
+        delete: operations["students_destroy"];
+        options?: never;
+        head?: never;
+        /** @description Student master records (module doc §5.1-2). */
+        patch: operations["students_partial_update"];
+        trace?: never;
+    };
     "/api/v1/subjects": {
         parameters: {
             query?: never;
@@ -601,13 +638,21 @@ export interface components {
             start_date: string;
             /** Format: date */
             end_date: string;
-            readonly status: components["schemas"]["StatusEnum"];
+            readonly status: components["schemas"]["AcademicSessionStatusEnum"];
             readonly is_current: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `planned` - Planned
+         *     * `active` - Active
+         *     * `closed` - Closed
+         *     * `archived` - Archived
+         * @enum {string}
+         */
+        AcademicSessionStatusEnum: "planned" | "active" | "closed" | "archived";
         Campus: {
             /** Format: uuid */
             readonly id: string;
@@ -703,6 +748,14 @@ export interface components {
          * @enum {string}
          */
         DepartmentTypeEnum: "academic" | "administrative";
+        /**
+         * @description * `male` - Male
+         *     * `female` - Female
+         *     * `other` - Other
+         *     * `unspecified` - Unspecified
+         * @enum {string}
+         */
+        GenderEnum: "male" | "female" | "other" | "unspecified";
         House: {
             /** Format: uuid */
             readonly id: string;
@@ -805,6 +858,16 @@ export interface components {
                 };
             };
         };
+        PaginatedStudentList: {
+            data?: components["schemas"]["Student"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedSubjectList: {
             data?: components["schemas"]["Subject"][];
             meta?: {
@@ -834,7 +897,7 @@ export interface components {
             start_date?: string;
             /** Format: date */
             end_date?: string;
-            readonly status?: components["schemas"]["StatusEnum"];
+            readonly status?: components["schemas"]["AcademicSessionStatusEnum"];
             readonly is_current?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
@@ -986,6 +1049,47 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedStudent: {
+            /** Format: uuid */
+            readonly id?: string;
+            admission_number?: string;
+            /**
+             * Format: uuid
+             * @description users(id) — portal account, tenant-checked at write time.
+             */
+            user_id?: string | null;
+            first_name?: string;
+            last_name?: string;
+            preferred_name?: string | null;
+            /** Format: date */
+            date_of_birth?: string;
+            gender?: components["schemas"]["GenderEnum"];
+            /**
+             * Format: uuid
+             * @description files(id) — promoted when core.files lands.
+             */
+            photo_file_id?: string | null;
+            /** Format: uuid */
+            campus_id?: string;
+            /** Format: uuid */
+            house_id?: string | null;
+            readonly status?: components["schemas"]["StudentStatusEnum"];
+            /** Format: date */
+            admission_date?: string;
+            blood_group?: string | null;
+            nationality?: string | null;
+            /** @description Optional/sensitive; a tenant may disable. */
+            religion?: string | null;
+            previous_school?: string | null;
+            /** @description Restricted visibility — see serializers.StudentSerializer.to_representation and core.audit.services._REDACTED_FIELDS. */
+            medical_notes?: string | null;
+            address?: unknown;
+            custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         PatchedSubject: {
             /** Format: uuid */
             readonly id?: string;
@@ -1078,14 +1182,56 @@ export interface components {
             /** Format: date */
             end_date: string;
         };
+        Student: {
+            /** Format: uuid */
+            readonly id: string;
+            admission_number?: string;
+            /**
+             * Format: uuid
+             * @description users(id) — portal account, tenant-checked at write time.
+             */
+            user_id?: string | null;
+            first_name: string;
+            last_name: string;
+            preferred_name?: string | null;
+            /** Format: date */
+            date_of_birth: string;
+            gender: components["schemas"]["GenderEnum"];
+            /**
+             * Format: uuid
+             * @description files(id) — promoted when core.files lands.
+             */
+            photo_file_id?: string | null;
+            /** Format: uuid */
+            campus_id: string;
+            /** Format: uuid */
+            house_id?: string | null;
+            readonly status: components["schemas"]["StudentStatusEnum"];
+            /** Format: date */
+            admission_date: string;
+            blood_group?: string | null;
+            nationality?: string | null;
+            /** @description Optional/sensitive; a tenant may disable. */
+            religion?: string | null;
+            previous_school?: string | null;
+            /** @description Restricted visibility — see serializers.StudentSerializer.to_representation and core.audit.services._REDACTED_FIELDS. */
+            medical_notes?: string | null;
+            address?: unknown;
+            custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         /**
-         * @description * `planned` - Planned
-         *     * `active` - Active
-         *     * `closed` - Closed
-         *     * `archived` - Archived
+         * @description * `active` - Active
+         *     * `suspended` - Suspended
+         *     * `transferred` - Transferred
+         *     * `withdrawn` - Withdrawn
+         *     * `graduated` - Graduated
          * @enum {string}
          */
-        StatusEnum: "planned" | "active" | "closed" | "archived";
+        StudentStatusEnum: "active" | "suspended" | "transferred" | "withdrawn" | "graduated";
         Subject: {
             /** Format: uuid */
             readonly id: string;
@@ -2453,6 +2599,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Section"];
+                };
+            };
+        };
+    };
+    students_list: {
+        parameters: {
+            query?: {
+                campus_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                house_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `active` - Active
+                 *     * `suspended` - Suspended
+                 *     * `transferred` - Transferred
+                 *     * `withdrawn` - Withdrawn
+                 *     * `graduated` - Graduated
+                 */
+                status?: "active" | "graduated" | "suspended" | "transferred" | "withdrawn";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStudentList"];
+                };
+            };
+        };
+    };
+    students_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Student"];
+                "application/x-www-form-urlencoded": components["schemas"]["Student"];
+                "multipart/form-data": components["schemas"]["Student"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Student"];
+                };
+            };
+        };
+    };
+    students_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Student"];
+                };
+            };
+        };
+    };
+    students_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    students_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedStudent"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedStudent"];
+                "multipart/form-data": components["schemas"]["PatchedStudent"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Student"];
                 };
             };
         };

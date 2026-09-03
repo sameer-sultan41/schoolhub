@@ -48,6 +48,19 @@ class Conflict(exceptions.APIException):
     default_code = "conflict"
 
 
+class ModuleDisabled(exceptions.APIException):
+    """The requested module is not enabled for this tenant.
+
+    Raised by ``core.api.permissions.RequiresModuleFeature``. Distinct from the
+    generic 403 ``permission_denied`` so a client can tell
+    "your plan doesn't include this" from "ask an admin for access" apart.
+    """
+
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "This module is not enabled for your school."
+    default_code = "module_disabled"
+
+
 def _flatten_details(detail, prefix: str = "") -> list[dict[str, str]]:
     """Turn DRF's nested error structure into a flat, client-friendly list."""
     details: list[dict[str, str]] = []
@@ -89,7 +102,7 @@ def envelope_exception_handler(exc, context):
     # Our own domain exceptions carry a meaningful code; DRF's built-ins carry
     # generic ones ("invalid", "not_authenticated") that leak framework vocabulary
     # into the documented contract, so those resolve from the status instead.
-    if isinstance(exc, DomainRuleViolation | Conflict):
+    if isinstance(exc, DomainRuleViolation | Conflict | ModuleDisabled):
         code = exc.default_code
     else:
         code = _CODE_BY_STATUS.get(

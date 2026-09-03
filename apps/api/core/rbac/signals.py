@@ -13,7 +13,11 @@ from core.rbac.models import Role, RolePermission, UserRole
 
 
 def _evict(user_ids) -> None:
-    keys = [f"perm-keys:{user_id}" for user_id in user_ids]
+    # scopes: only ever changes via UserRole itself, but evicting it alongside
+    # perm-keys on every one of these signals (rather than just
+    # evict_on_user_role_change) costs nothing and keeps this one function the
+    # single place that knows both cache-key prefixes exist.
+    keys = [f"{prefix}:{user_id}" for user_id in user_ids for prefix in ("perm-keys", "scopes")]
     if keys:
         cache.delete_many(keys)
 

@@ -103,3 +103,93 @@ class TenantOwnedModel(TimestampedModel):
 
     class Meta:
         abstract = True
+
+
+class FeatureFlag(TimestampedModel):
+    """A server-checked module/feature switch. Platform-scope: code-defined, like Permission.
+
+    Flags are registered in code (``core.tenancy.features.FeatureRegistry``) and
+    synced into this table on ``post_migrate``, the same pattern
+    ``core.rbac.registry``/``sync`` uses for permission keys — so the registry and
+    the database can never drift. This table itself carries no ``tenant_id`` and no
+    RLS policy, matching ``Permission``/``Tenant``: it is not tenant-owned data.
+    """
+
+    key = models.CharField(max_length=100, unique=True, help_text="e.g. 'module.students'.")
+    description = models.CharField(max_length=255, blank=True)
+    default_enabled = models.BooleanField(
+        default=False, help_text="Resolved value when no tenant override applies."
+    )
+    is_kill_switch = models.BooleanField(
+        default=False,
+        help_text="When true, a tenant override can never turn this ON — only the "
+        "platform default can enable it. Overrides may still force it off.",
+    )
+
+    objects = models.Manager()
+
+    class Meta:
+        db_table = "feature_flags"
+        ordering = ["key"]
+
+    def __str__(self) -> str:
+        return self.key
+
+
+class TenantFeatureOverride(TenantOwnedModel):
+    """A per-tenant override of a FeatureFlag's resolved value, with an audit trail."""
+
+    feature_flag = models.ForeignKey(
+        FeatureFlag, on_delete=models.PROTECT, related_name="tenant_overrides"
+    )
+    enabled = models.BooleanField()
+    reason = models.TextField()
+    expires_at = models.DateTimeField(
+        null=True, blank=True, help_text="Null means the override never expires."
+    )
+
+    class Meta:
+        db_table = "tenant_feature_overrides"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "feature_flag"],
+                name="tenant_feature_overrides_unique_flag_per_tenant",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "feature_flag"], name="tenant_feat_override_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.feature_flag_id} -> {self.enabled} ({self.tenant_id})"
+
+
+class TenantCounter(TenantOwnedModel):
+    """A gapless per-tenant sequence, allocated under a row lock (database-architecture.md §4).
+
+    ``scope`` names what is being numbered (e.g. "admission_number"); ``series`` is
+    the rendered, non-sequence part of the pattern (e.g. a campus+year prefix), so
+    the same scope can run independent sequences per series without a second table.
+    An empty string is a valid series: it means the pattern has no such prefix.
+    """
+
+    scope = models.CharField(max_length=32)
+    series = models.CharField(max_length=64, blank=True)
+    next_value = models.PositiveBigIntegerField(default=1)
+
+    class Meta:
+        db_table = "tenant_counters"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "scope", "series"],
+                name="tenant_counters_unique_series_per_tenant",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "scope"], name="tenant_counters_scope_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.scope}:{self.series or '-'} @ {self.next_value} ({self.tenant_id})"

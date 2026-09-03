@@ -19,3 +19,13 @@ export function formatPercent(value: number, locale: string): string {
     value / 100,
   );
 }
+
+/** Formats an ISO date string (`"2026-04-01"`) as a localized display date. Returns the
+ * raw string unchanged if it isn't parseable, rather than throwing or showing "Invalid
+ * Date" — a malformed value from the server is a bug elsewhere, not a reason to crash
+ * a detail screen. */
+export function formatDate(isoDate: string, locale: string): string {
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(parsed);
+}

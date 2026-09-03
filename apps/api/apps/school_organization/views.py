@@ -56,6 +56,7 @@ from apps.school_organization.serializers import (
     SubjectSerializer,
     TermSerializer,
 )
+from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.rbac.permissions import HasPermissionKey
@@ -82,6 +83,7 @@ class CampusViewSet(BlockingDestroyMixin, TenantModelViewSet):
     filterset_class = CampusFilterSet
     search_fields = ["name", "code"]
     ordering_fields = ["name", "code", "created_at"]
+    required_feature = "module.school"
     required_permission = "school.campus.view"
     required_permission_map = {
         "create": "school.campus.create",
@@ -113,6 +115,7 @@ class DepartmentViewSet(BlockingDestroyMixin, TenantModelViewSet):
     filterset_class = DepartmentFilterSet
     search_fields = ["name", "code"]
     ordering_fields = ["name", "code", "created_at"]
+    required_feature = "module.school"
     required_permission = "school.department.view"
     required_permission_map = {
         "create": "school.department.create",
@@ -144,6 +147,7 @@ class AcademicSessionViewSet(
     filterset_class = AcademicSessionFilterSet
     search_fields = ["name"]
     ordering_fields = ["start_date", "name", "created_at"]
+    required_feature = "module.school"
     required_permission = "school.academic-session.view"
     required_permission_map = {
         "create": "school.academic-session.create",
@@ -221,6 +225,7 @@ class TermViewSet(
     filterset_class = TermFilterSet
     search_fields = ["name"]
     ordering_fields = ["sequence", "start_date"]
+    required_feature = "module.school"
     required_permission = "school.academic-session.view"
     required_permission_map = {
         "create": "school.academic-session.create",
@@ -240,6 +245,7 @@ class ClassViewSet(BlockingDestroyMixin, TenantModelViewSet):
     filterset_class = ClassFilterSet
     search_fields = ["name", "code"]
     ordering_fields = ["level", "name", "created_at"]
+    required_feature = "module.school"
     required_permission = "school.class.view"
     required_permission_map = {
         "create": "school.class.create",
@@ -257,6 +263,7 @@ class SectionViewSet(BlockingDestroyMixin, TenantModelViewSet):
     filterset_class = SectionFilterSet
     search_fields = ["name"]
     ordering_fields = ["name", "created_at"]
+    required_feature = "module.school"
     required_permission = "school.section.view"
     required_permission_map = {
         "create": "school.section.create",
@@ -277,6 +284,7 @@ class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
     filterset_class = SubjectFilterSet
     search_fields = ["name", "code"]
     ordering_fields = ["name", "code", "created_at"]
+    required_feature = "module.school"
     required_permission = "school.subject.view"
     required_permission_map = {
         "create": "school.subject.create",
@@ -301,6 +309,7 @@ class ClassSubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
     filterset_class = ClassSubjectFilterSet
     search_fields = ["elective_group"]
     ordering_fields = ["created_at"]
+    required_feature = "module.school"
     required_permission = "school.subject.view"
     required_permission_map = {
         "create": "school.subject.create",
@@ -348,6 +357,7 @@ class HouseViewSet(BlockingDestroyMixin, TenantModelViewSet):
     filterset_class = HouseFilterSet
     search_fields = ["name", "code"]
     ordering_fields = ["name", "created_at"]
+    required_feature = "module.school"
     required_permission = "school.house.view"
     required_permission_map = {
         "create": "school.house.create",
@@ -366,7 +376,8 @@ class SchoolSettingsView(APIView):
     middleware and every other module already read them from.
     """
 
-    permission_classes = [IsAuthenticated, HasPermissionKey]
+    permission_classes = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
+    required_feature = "module.school"
     required_permission = "school.settings.view"
     required_permission_map = {"patch": "school.settings.update"}
     serializer_class = SchoolSettingsSerializer
