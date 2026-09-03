@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -85,6 +86,16 @@ describe("GuardiansPanel", () => {
     expect(await screen.findByText("No guardians linked yet.")).toBeInTheDocument();
   });
 
+  it("renders the ApiError envelope when the links query fails", async () => {
+    mockGet.mockRejectedValue(
+      new ApiError({ code: "server_error", message: "boom", status: 500, url: "/x" }),
+    );
+
+    renderWithProviders(<GuardiansPanel studentId="s1" />);
+
+    expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
+  });
+
   it("renders a linked guardian with its relationship, flags, and primary badge", async () => {
     mockGet.mockImplementation((path: string) => {
       if (path === "/students/s1/guardians") return Promise.resolve(apiResult([LINK]));
@@ -121,6 +132,38 @@ describe("GuardiansPanel", () => {
     await waitFor(() => {
       expect(mockPatch).toHaveBeenCalledWith("/student-guardians/link2", { is_primary: true });
     });
+  });
+
+  it("shows an error inside the dialog when linking a new guardian fails", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([]));
+    mockPost.mockImplementation((path: string) => {
+      if (path === "/guardians") {
+        return Promise.reject(
+          new ApiError({
+            code: "conflict",
+            message: "conflict",
+            status: 409,
+            url: "/guardians",
+          }),
+        );
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<GuardiansPanel studentId="s1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Link guardian" }));
+    await user.click(screen.getByRole("button", { name: "Create new" }));
+    await user.type(screen.getByLabelText("First name"), "Amina");
+    await user.type(screen.getByLabelText("Last name"), "Rahman");
+    await user.type(screen.getByLabelText("Phone"), "+923009876543");
+
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Link guardian" }));
+
+    expect(await within(dialog).findByText(/conflicts with the current data/i)).toBeInTheDocument();
   });
 
   it("links a newly created guardian from the dialog", async () => {

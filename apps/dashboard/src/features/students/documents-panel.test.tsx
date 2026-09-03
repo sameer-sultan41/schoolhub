@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -75,6 +76,46 @@ describe("DocumentsPanel", () => {
     expect(await screen.findByText("Amina's birth certificate")).toBeInTheDocument();
     expect(screen.getByText(/Birth certificate/)).toBeInTheDocument();
     expect(screen.getByText("Pending")).toBeInTheDocument();
+  });
+
+  it("renders the ApiError envelope when the documents query fails", async () => {
+    mockGet.mockRejectedValue(
+      new ApiError({ code: "server_error", message: "boom", status: 500, url: "/x" }),
+    );
+
+    renderWithProviders(<DocumentsPanel studentId="s1" />);
+
+    expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
+  });
+
+  it("shows a verified document's badge and expiry, with no verify/reject actions", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(
+      apiResult([
+        {
+          ...DOCUMENT,
+          verification_status: "verified" as const,
+          expires_at: "2030-01-01",
+        },
+      ]),
+    );
+
+    renderWithProviders(<DocumentsPanel studentId="s1" />);
+
+    expect(await screen.findByText("Verified")).toBeInTheDocument();
+    expect(screen.getByText(/Expires 2030-01-01/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+  });
+
+  it("shows a rejected document's badge", async () => {
+    mockGet.mockResolvedValue(
+      apiResult([{ ...DOCUMENT, verification_status: "rejected" as const }]),
+    );
+
+    renderWithProviders(<DocumentsPanel studentId="s1" />);
+
+    expect(await screen.findByText("Rejected")).toBeInTheDocument();
   });
 
   it("only shows verify/reject actions to a caller with the verify permission", async () => {
@@ -216,5 +257,58 @@ describe("DocumentsPanel", () => {
         expires_at: "2030-01-01",
       });
     });
+  });
+
+  it("shows an error inside the dialog when registering the uploaded document fails", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([]));
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    mockPost.mockImplementation((path: string) => {
+      if (path === "/files") {
+        return Promise.resolve(
+          apiResult({
+            id: "f2",
+            original_name: "certificate.pdf",
+            mime_type: "application/pdf",
+            size_bytes: 3,
+            purpose: "student.document",
+            status: "pending",
+            visibility: "tenant",
+            created_at: "2026-04-01T00:00:00Z",
+            updated_at: "2026-04-01T00:00:00Z",
+            upload_url: "https://storage.invalid/f2",
+            upload_method: "PUT",
+            headers: {},
+            expires_at: "2026-04-01T00:15:00Z",
+          }),
+        );
+      }
+      if (path === "/files/f2:confirm")
+        return Promise.resolve(apiResult({ id: "f2", status: "ready" }));
+      if (path === "/students/s1/documents") {
+        return Promise.reject(
+          new ApiError({
+            code: "domain_rule_violation",
+            message: "not allowed",
+            status: 422,
+            url: "/students/s1/documents",
+          }),
+        );
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<DocumentsPanel studentId="s1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Upload document" }));
+
+    const dialog = screen.getByRole("dialog");
+    const file = new File(["hello"], "certificate.pdf", { type: "application/pdf" });
+    await user.upload(within(dialog).getByLabelText("File"), file);
+    await user.type(within(dialog).getByLabelText("Title"), "Amina's birth certificate");
+    await user.click(within(dialog).getByRole("button", { name: "Upload document" }));
+
+    expect(await within(dialog).findByText(/isn't allowed right now/i)).toBeInTheDocument();
   });
 });
