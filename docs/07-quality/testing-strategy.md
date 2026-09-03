@@ -30,6 +30,8 @@
 
 Generated TypeScript API types (from OpenAPI) make many contract mismatches compile-time failures.
 
+Component-layer coverage is gated at 85% global per app (§9.6) via each app's `jest.config.ts` `coverageThreshold`, enforced by CI's dedicated `test` job.
+
 ## 3. Cross-Tenant Access Suite (mandatory)
 
 The test mandate from [`../02-architecture/multi-tenancy.md`](../02-architecture/multi-tenancy.md) §3.5 and security.md SEC-03:
@@ -89,7 +91,7 @@ Tooling: k6 or Locust (recommendation) against staging with production-scale see
 3. Money-invariant suite on any PR touching fees-finance/payroll paths (path-triggered, plus nightly full run).
 4. Migration forward/backward check (§6) when migrations present; RLS coverage assertion always.
 5. OpenAPI contract diff — breaking `v1` change fails.
-6. **Coverage floor (recommendation): 80% overall backend, 90% on `fees`, `auth`, `tenancy` packages; coverage may never decrease** (ratchet).
+6. **Coverage floor (recommendation): 85% overall backend, 90% on `fees`, `auth`, `tenancy` packages; 85% global (statements/branches/functions/lines) on each of `apps/dashboard` and `apps/website`; coverage may never decrease** (ratchet). The frontend floor runs as its own CI check, isolated from lint/typecheck/build/E2E per §2 — a coverage-gate failure never withholds build or E2E signal from an unrelated change.
 7. E2E smoke subset (login, one CRUD flow, one payment flow) on PRs labeled for it; full E2E nightly and pre-release.
 
 ## 10. Release Regression Checklist
