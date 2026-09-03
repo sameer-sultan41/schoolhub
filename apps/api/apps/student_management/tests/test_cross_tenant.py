@@ -92,6 +92,21 @@ class CrossTenantAccessTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_a_foreign_user_id_cannot_be_smuggled_into_a_patch(self) -> None:
+        with tenant_context(self.tenant_b.id):
+            foreign_user = UserFactory(tenant=self.tenant_b)
+
+        response = self.client.patch(
+            f"/api/v1/students/{self.own['students'].pk}",
+            {"user_id": str(foreign_user.pk)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant_a.id):
+            self.own["students"].refresh_from_db()
+        self.assertIsNone(self.own["students"].user_id)
+
     def test_a_write_never_lands_in_another_tenant(self) -> None:
         response = self.client.post(
             "/api/v1/students",

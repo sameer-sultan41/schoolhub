@@ -59,6 +59,18 @@ describe("studentSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts an admission_date equal to date_of_birth", () => {
+    // Mirrors the backend's admission_date__gte=date_of_birth CheckConstraint
+    // (apps/api/apps/student_management/models.py), which allows same-day
+    // admission — this schema must not reject what the API would accept.
+    const result = studentSchema.safeParse({
+      ...validValues,
+      date_of_birth: "2026-04-01",
+      admission_date: "2026-04-01",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects a missing campus_id", () => {
     const result = studentSchema.safeParse({ ...validValues, campus_id: "" });
     expect(result.success).toBe(false);

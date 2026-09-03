@@ -35,8 +35,8 @@ export const studentSchema = z
     previous_school: z.string().max(200).optional().or(z.literal("")),
     medical_notes: z.string().optional().or(z.literal("")),
   })
-  .refine((values) => new Date(values.date_of_birth) < new Date(values.admission_date), {
-    message: "Admission date must be after the date of birth.",
+  .refine((values) => new Date(values.date_of_birth) <= new Date(values.admission_date), {
+    message: "Admission date must be on or after the date of birth.",
     path: ["admission_date"],
   });
 

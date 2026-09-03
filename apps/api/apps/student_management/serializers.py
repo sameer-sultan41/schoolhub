@@ -11,6 +11,7 @@ docs/05-database/entities/people.md and the filter names in the module doc §16.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from rest_framework import serializers
@@ -82,10 +83,24 @@ class StudentSerializer(serializers.ModelSerializer):
             services.assert_admission_number_immutable(instance=self.instance, new_value=value)
         return value
 
-    # No validate() override: creation validates duplicates/user-id/number
-    # allocation inside services.create_student, called from the viewset —
-    # those checks need a transaction and an actor/tenant id that a plain
-    # validate() does not have.
+    def validate_user_id(self, value: uuid.UUID | None) -> uuid.UUID | None:
+        """Re-run on every write, not just create.
+
+        ``TenantScopedViewSetMixin.perform_update`` saves a PATCH straight through
+        with no tenant-ownership recheck of its own (unlike ``perform_create``,
+        which every model here bypasses in favor of a service function precisely
+        so this kind of check has somewhere to live). ``user_id`` is a plain UUID
+        column, not a ForeignKey — see the model docstring — so without this,
+        DRF's auto-generated field accepts any syntactically valid UUID, including
+        another tenant's user id.
+        """
+        tenant = self.context["request"].tenant
+        return services.resolve_tenant_user_id(user_id=value, tenant_id=tenant.pk)
+
+    # No validate() override for cross-row create-time rules (duplicates,
+    # admission-number allocation): those need a transaction and an actor id a
+    # plain validate() does not have, so they live in services.create_student,
+    # called from the viewset instead.
 
     def to_representation(self, instance: Student) -> dict[str, Any]:
         """Strip medical_notes for callers without the visibility to see it.

@@ -23,6 +23,30 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 60
+_CACHE_GENERATION_KEY = "feature:cache_generation"
+
+
+def feature_cache_generation() -> int:
+    return cache.get(_CACHE_GENERATION_KEY, 0)
+
+
+def bump_feature_cache_generation() -> None:
+    """Invalidate every cached feature-flag resolution at once.
+
+    Not ``cache.clear()``: this is the *default* Django cache alias, shared
+    with RBAC's permission-key cache (core/rbac/permissions.py) and, more
+    importantly, DRF's rate-throttle counters (core/api/throttling.py uses the
+    same default cache) — clearing it resets every tenant's and every user's
+    throttle window platform-wide on every flag write, including a
+    currently-throttled login-brute-force counter. Bumping a generation baked
+    into the cache key (see is_feature_enabled) invalidates only this
+    namespace, in O(1), with no key enumeration needed even though a bare
+    FeatureFlag row carries no tenant_id to target a precise delete.
+    """
+    try:
+        cache.incr(_CACHE_GENERATION_KEY)
+    except ValueError:
+        cache.set(_CACHE_GENERATION_KEY, 1)
 
 
 @dataclass(frozen=True)
@@ -62,9 +86,6 @@ class FeatureRegistry:
     def keys(self) -> set[str]:
         return set(self._specs)
 
-    def __contains__(self, key: str) -> bool:
-        return key in self._specs
-
 
 registry = FeatureRegistry()
 
@@ -79,7 +100,7 @@ def load_module_features() -> None:
             __import__(f"{config.name}.features")
 
 
-def sync_feature_flags(*, verbose: bool = False) -> dict[str, int]:
+def sync_feature_flags() -> dict[str, int]:
     """Upsert every registered flag key. Returns a small change summary.
 
     Removal is not automatic, for the same reason core.rbac.sync leaves stale
@@ -126,7 +147,7 @@ def sync_feature_flags(*, verbose: bool = False) -> dict[str, int]:
         # bulk_create/bulk_update don't emit post_save, so signals.evict_on_flag_change
         # never runs — do its job here, or a flag's default flipped on deploy stays
         # resolved from the stale cached value for up to _CACHE_TTL.
-        cache.clear()
+        bump_feature_cache_generation()
 
     stale = sorted(set(existing) - registry.keys())
     if stale:
@@ -135,10 +156,7 @@ def sync_feature_flags(*, verbose: bool = False) -> dict[str, int]:
             ", ".join(stale),
         )
 
-    summary = {"created": len(to_create), "updated": len(to_update), "stale": len(stale)}
-    if verbose:
-        logger.info("feature flag sync: %s", summary)
-    return summary
+    return {"created": len(to_create), "updated": len(to_update), "stale": len(stale)}
 
 
 def sync_feature_flags_on_migrate(sender, **kwargs) -> None:
@@ -161,7 +179,7 @@ def is_feature_enabled(key: str, *, tenant_id: uuid.UUID) -> bool:
        arrive with platform-admin (Tier 5). This is the documented insertion point.
     4. The flag's own default.
     """
-    cache_key = f"feature:{tenant_id}:{key}"
+    cache_key = f"feature:{feature_cache_generation()}:{tenant_id}:{key}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached

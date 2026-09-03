@@ -43,9 +43,10 @@ def enable_feature(tenant, key: str) -> None:
     ``sync_feature_flags_on_migrate``), so it already exists by the time any
     test runs — this only adds the per-tenant override, wrapped in its own
     tenant context so it is safe to call regardless of the caller's.
+    ``TenantFeatureOverride.objects.create`` fires the ``post_save`` signal,
+    which evicts the cached resolution itself (core/tenancy/signals.py) — no
+    manual cache eviction needed here.
     """
-    from django.core.cache import cache
-
     from core.tenancy.context import tenant_context
     from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
@@ -54,7 +55,6 @@ def enable_feature(tenant, key: str) -> None:
         TenantFeatureOverride.objects.create(
             tenant=tenant, feature_flag=flag, enabled=True, reason="test setup"
         )
-    cache.delete(f"feature:{tenant.id}:{key}")
 
 
 __all__ = [

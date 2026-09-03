@@ -41,8 +41,6 @@ class StudentManagementAPITestCase(APITestCase):
 
 class ModuleFeatureGateTests(StudentManagementAPITestCase):
     def test_the_module_flag_off_is_403_module_disabled_even_with_permission(self) -> None:
-        from django.core.cache import cache
-
         from core.tenancy.models import TenantFeatureOverride
 
         self.allow("students.student.view")
@@ -54,7 +52,6 @@ class ModuleFeatureGateTests(StudentManagementAPITestCase):
             TenantFeatureOverride.objects.create(
                 tenant=self.tenant, feature_flag=flag, enabled=False, reason="test"
             )
-        cache.delete(f"feature:{self.tenant.id}:module.students")
 
         response = self.client.get("/api/v1/students")
 
@@ -122,6 +119,30 @@ class StudentCreateTests(StudentManagementAPITestCase):
         second = self.client.post("/api/v1/students", payload, format="json")
         self.assertEqual(second.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertEqual(second.json()["error"]["code"], "domain_rule_violation")
+
+    def test_a_misconfigured_admission_number_pattern_is_rejected_with_a_clear_error(self) -> None:
+        from core.tenancy.models import TenantSettings
+
+        self.allow("students.student.create", "students.student.view")
+        TenantSettings.all_tenants.create(
+            tenant=self.tenant, academic={"admission_number_pattern": "{campus}-{seq:2d}"}
+        )
+
+        response = self.client.post(
+            "/api/v1/students",
+            {
+                "first_name": "Amina",
+                "last_name": "Khan",
+                "date_of_birth": str(DEFAULT_DOB),
+                "gender": "female",
+                "campus_id": str(self.campus.pk),
+                "admission_date": str(DEFAULT_ADMISSION_DATE),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.json()["error"]["code"], "domain_rule_violation")
 
     def test_a_foreign_campus_id_is_rejected(self) -> None:
         self.allow("students.student.create", "students.student.view")

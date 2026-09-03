@@ -9,11 +9,13 @@ a serializer.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
+from collections.abc import Callable
 from datetime import date
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from apps.student_management.models import Student
 from core.api.exceptions import DomainRuleViolation
@@ -23,6 +25,12 @@ from core.tenancy.sequences import allocate_number
 # pattern is left as a literal character, never evaluated — see
 # render_admission_number's docstring for why.
 _PATTERN_TOKEN = re.compile(r"\{(campus|year)\}|\{seq(?::0(\d+)d)?\}")
+# Any `{...}` span at all, used only to catch a pattern that LOOKS like it meant
+# to use a token but doesn't match one of the three known-good shapes above
+# (e.g. a typo'd `{seq:2d}` missing the leading zero) — see
+# assert_pattern_tokens_valid's docstring for why that must be a loud, rejected
+# config error rather than a silently-literal substring.
+_ANY_BRACE_TOKEN = re.compile(r"\{[^}]*\}")
 
 _DEFAULT_PATTERN = "{year}-{seq:04d}"
 
@@ -48,27 +56,61 @@ def resolve_tenant_user_id(*, user_id: uuid.UUID | None, tenant_id: uuid.UUID) -
     return user_id
 
 
-def _render_pattern(pattern: str, *, campus_code: str, year: str, sequence: int) -> str:
-    """Substitute {campus}/{year}/{seq[:0Nd]} tokens; leave anything else literal.
+def assert_pattern_tokens_valid(pattern: str) -> None:
+    """Reject a pattern containing a `{...}` block that isn't a known token.
+
+    _PATTERN_TOKEN's substitution is a deliberate allowlist (see
+    _substitute_tokens's docstring) that leaves anything it doesn't recognize as
+    a literal, unsubstituted substring — silently correct for a pattern with no
+    braces, but silently *wrong* for a typo'd token like `{seq:2d}` (missing the
+    leading zero): every student in that campus+year would render that literal
+    text verbatim, with no sequence number ever substituted in. Fail loudly at
+    config-read time instead of producing that garbage.
+    """
+    for token in _ANY_BRACE_TOKEN.findall(pattern):
+        if not _PATTERN_TOKEN.fullmatch(token):
+            raise DomainRuleViolation(
+                {
+                    "admission_number_pattern": (
+                        f"'{token}' is not a recognized token. Use {{campus}}, {{year}}, "
+                        "{seq}, or {seq:0Nd}."
+                    )
+                }
+            )
+
+
+def _substitute_tokens(
+    pattern: str, *, campus: str, year: str, seq: Callable[[str | None], str]
+) -> str:
+    """Shared {campus}/{year}/{seq[:0Nd]} token dispatch against _PATTERN_TOKEN.
 
     Deliberately NOT ``pattern.format(**ctx)``: a tenant-controlled format string
     is an injection surface (``"{__class__}"``, ``"{0.__init__.__globals__}"``
     would both be valid ``str.format`` attribute-access syntax). A regex
     allowlist substitution can only ever produce the three token shapes it knows
     about; every other ``{...}`` in the pattern is left untouched rather than
-    evaluated.
+    evaluated (assert_pattern_tokens_valid is what turns "untouched" into a
+    loud config error instead of silent garbage).
     """
 
     def _sub(match: re.Match) -> str:
         name, width = match.group(1), match.group(2)
         if name == "campus":
-            return campus_code
+            return campus
         if name == "year":
             return year
-        # {seq} or {seq:0Nd}
-        return str(sequence).zfill(int(width)) if width else str(sequence)
+        return seq(width)
 
     return _PATTERN_TOKEN.sub(_sub, pattern)
+
+
+def _render_pattern(pattern: str, *, campus_code: str, year: str, sequence: int) -> str:
+    return _substitute_tokens(
+        pattern,
+        campus=campus_code,
+        year=year,
+        seq=lambda width: str(sequence).zfill(int(width)) if width else str(sequence),
+    )
 
 
 def admission_number_series(*, pattern: str, campus_code: str, admission_date: date) -> str:
@@ -81,15 +123,8 @@ def admission_number_series(*, pattern: str, campus_code: str, admission_date: d
     baked into the series would make every sequence collide on a stray `0`
     appearing elsewhere in the rendered string.
     """
-    return _PATTERN_TOKEN.sub(
-        lambda m: (
-            campus_code
-            if m.group(1) == "campus"
-            else str(admission_date.year)
-            if m.group(1) == "year"
-            else ""
-        ),
-        pattern,
+    return _substitute_tokens(
+        pattern, campus=campus_code, year=str(admission_date.year), seq=lambda width: ""
     )
 
 
@@ -114,6 +149,7 @@ def allocate_admission_number(*, campus, admission_date: date, tenant_id: uuid.U
     pattern = (tenant_settings.get("admission_number_pattern") or _DEFAULT_PATTERN).strip()
     if not pattern:
         pattern = _DEFAULT_PATTERN
+    assert_pattern_tokens_valid(pattern)
 
     series = admission_number_series(
         pattern=pattern, campus_code=campus.code, admission_date=admission_date
@@ -143,11 +179,49 @@ def duplicate_candidates(*, first_name: str, last_name: str, date_of_birth: date
     )
 
 
+def _duplicate_check_lock_key(
+    *, tenant_id: uuid.UUID, first_name: str, last_name: str, date_of_birth: date
+) -> int:
+    """A stable bigint key for pg_advisory_xact_lock, one per (tenant, name, DOB).
+
+    Not a DB unique constraint: assert_not_duplicate is deliberately advisory —
+    override_reason lets a caller bypass it for a legitimate case (twins), which
+    a hard constraint can't conditionally honor — so the concurrency fix has to
+    be a lock, not a constraint. Session-scoped pg_advisory_lock is prohibited
+    under this codebase's PgBouncer transaction-pooling mode (see
+    docs/02-architecture/database-architecture.md §1.1); pg_advisory_xact_lock
+    is transaction-scoped and auto-releases at commit/rollback, so it fits.
+    """
+    digest = hashlib.sha256(
+        f"{tenant_id}:{first_name.lower()}:{last_name.lower()}:{date_of_birth.isoformat()}".encode()
+    ).digest()
+    # Postgres advisory lock keys are signed 64-bit ints; interpret the first 8
+    # bytes as signed so every digest maps to a valid key.
+    return int.from_bytes(digest[:8], byteorder="big", signed=True)
+
+
 def assert_not_duplicate(
-    *, first_name: str, last_name: str, date_of_birth: date, override_reason: str | None = None
+    *,
+    tenant_id: uuid.UUID,
+    first_name: str,
+    last_name: str,
+    date_of_birth: date,
+    override_reason: str | None = None,
 ) -> None:
     if override_reason:
         return
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(%s)",
+            [
+                _duplicate_check_lock_key(
+                    tenant_id=tenant_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    date_of_birth=date_of_birth,
+                )
+            ],
+        )
     duplicate = duplicate_candidates(
         first_name=first_name, last_name=last_name, date_of_birth=date_of_birth
     ).first()
@@ -201,6 +275,7 @@ def create_student(
     rejected create never consumes a sequence value.
     """
     assert_not_duplicate(
+        tenant_id=tenant_id,
         first_name=first_name,
         last_name=last_name,
         date_of_birth=date_of_birth,

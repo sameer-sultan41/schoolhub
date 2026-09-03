@@ -33,12 +33,29 @@ def effective_permission_keys(user) -> frozenset[str]:
 
 
 def user_scopes(user) -> dict[str, list]:
-    """Record scopes granted to the user, keyed by scope type."""
+    """Record scopes granted to the user, keyed by scope type.
+
+    Cached per user, mirroring effective_permission_keys above — a serializer
+    calling this once per row in a list response (see
+    student_management/serializers.py's _can_see_medical_notes) would otherwise
+    issue one fresh query per row for the identical requesting user.
+    core/rbac/signals.py's _evict already runs on every UserRole change (the
+    only source of scope/scope_ref), so it evicts this cache key too.
+    """
+    if not user or not user.is_authenticated:
+        return {}
+
+    cache_key = f"scopes:{user.pk}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     scopes: dict[str, list] = {}
     for scope, ref in user.user_roles.filter(deleted_at__isnull=True).values_list(
         "scope", "scope_ref"
     ):
         scopes.setdefault(scope, []).append(ref)
+    cache.set(cache_key, scopes, _CACHE_TTL)
     return scopes
 
 
