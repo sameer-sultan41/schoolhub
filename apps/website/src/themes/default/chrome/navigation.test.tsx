@@ -43,27 +43,29 @@ describe("Navigation", () => {
   });
 
   it("renders no logo when neither settings nor branding supply one", () => {
-    render(<Navigation tenant={makeTenant()} settings={null} />);
-    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    const { container } = render(<Navigation tenant={makeTenant()} settings={null} />);
+    expect(container.querySelector("img")).toBeNull();
   });
 
   it("renders the CMS-configured logo when one is set", () => {
-    render(
+    // The logo is decorative (alt=""), so it has ARIA role "presentation", not "img" —
+    // query the DOM directly rather than by role.
+    const { container } = render(
       <Navigation
         tenant={makeTenant()}
         settings={makeSettings({ logo_url: "https://cdn.example.com/logo.png" })}
       />,
     );
-    expect(screen.getByRole("img")).toBeInTheDocument();
+    expect(container.querySelector("img")).not.toBeNull();
   });
 
   it("falls back to the tenant's branding logo when settings has none", () => {
-    render(
+    const { container } = render(
       <Navigation
         tenant={makeTenant({ branding: { logo_url: "https://cdn.example.com/brand-logo.png" } })}
         settings={null}
       />,
     );
-    expect(screen.getByRole("img")).toBeInTheDocument();
+    expect(container.querySelector("img")).not.toBeNull();
   });
 });

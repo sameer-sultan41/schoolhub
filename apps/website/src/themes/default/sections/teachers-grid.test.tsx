@@ -37,9 +37,13 @@ describe("TeachersGrid", () => {
       { id: "t2", full_name: "Sara Malik", photo_url: "https://cdn.example.com/sara.jpg" },
     ]);
 
-    render(await TeachersGrid({ section: makeSection({}), tenant: makeTenant() }));
+    // The photo has alt="" (decorative), so it has ARIA role "presentation", not "img" —
+    // query the DOM directly rather than by role.
+    const { container } = render(
+      await TeachersGrid({ section: makeSection({}), tenant: makeTenant() }),
+    );
 
-    expect(screen.getByRole("img")).toBeInTheDocument();
+    expect(container.querySelector("img")).not.toBeNull();
   });
 
   it("renders nothing when there are no teachers", async () => {
