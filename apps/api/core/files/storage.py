@@ -35,6 +35,14 @@ class Presigner(Protocol):
         """Return {"size_bytes": int} if the object exists, else None."""
         ...
 
+    def put(self, *, storage_key: str, data: bytes, content_type: str) -> None:
+        """Write bytes directly — for server-generated content (exports, ID-card
+
+        PDFs) that never goes through the two-step client-upload flow, so
+        there is no presigned URL for a client to PUT to in the first place.
+        """
+        ...
+
 
 def storage_key_for(*, tenant_id: uuid.UUID, purpose: str, original_name: str) -> str:
     """tenants/{tenant_id}/… prefix per multi-tenancy.md §3 — the tenant boundary
@@ -66,6 +74,9 @@ class NullPresigner:
         # able to run in tests regardless, so this always reports "found" at a
         # size the caller cannot have violated.
         return {"size_bytes": 0}
+
+    def put(self, *, storage_key: str, data: bytes, content_type: str) -> None:
+        pass
 
 
 class S3Presigner:
@@ -114,6 +125,11 @@ class S3Presigner:
                 return None
             raise
         return {"size_bytes": response["ContentLength"]}
+
+    def put(self, *, storage_key: str, data: bytes, content_type: str) -> None:
+        self._client.put_object(
+            Bucket=self._bucket, Key=storage_key, Body=data, ContentType=content_type
+        )
 
 
 def get_presigner() -> Presigner:

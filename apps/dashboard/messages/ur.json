@@ -106,7 +106,8 @@
       "admissionNumberHint": "خود بخود تیار کیا گیا ہے اور اسے تبدیل نہیں کیا جا سکتا۔"
     },
     "actions": {
-      "create": "نیا طالب علم"
+      "create": "نیا طالب علم",
+      "import": "درآمد کریں"
     },
     "tabs": {
       "profile": "پروفائل",
@@ -264,6 +265,35 @@
         "enrollment": "داخل کیا گیا — {session}, {className} {section}",
         "transfer": "منتقلی — {type}"
       }
+    },
+    "import": {
+      "title": "طلبہ درآمد کریں",
+      "description": "CSV یا .xlsx فائل سے بلک میں طلبہ بنائیں۔",
+      "templateTitle": "درکار کالم",
+      "templateHint": "فائل کی ہیڈر لائن میں یہی درست نام ہونے چاہئیں۔ اختیاری کالم نمایاں ہیں۔",
+      "fields": {
+        "file": "فائل"
+      },
+      "upload": "اپ لوڈ کریں",
+      "processing": "درآمد ہو رہا ہے — {progress}%",
+      "failed": "درآمد ناکام ہو گئی۔",
+      "summarySucceeded": "{count} درآمد ہوئے",
+      "summaryFailed": "{count} ناکام ہوئے",
+      "importAnother": "دوسری فائل درآمد کریں",
+      "errorTable": {
+        "row": "قطار",
+        "field": "فیلڈ",
+        "issue": "مسئلہ"
+      }
+    },
+    "idCards": {
+      "selectAll": "اس صفحے کے تمام طلبہ منتخب کریں",
+      "selectRow": "اس طالب علم کو منتخب کریں",
+      "generate": "شناختی کارڈ بنائیں ({count})",
+      "generating": "بن رہا ہے — {progress}%",
+      "failed": "شناختی کارڈ بنانے میں ناکامی۔",
+      "download": "PDF ڈاؤن لوڈ کریں",
+      "dismiss": "خارج کریں"
     }
   },
   "common": {

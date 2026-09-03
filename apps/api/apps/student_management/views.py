@@ -8,12 +8,14 @@ lives in ``services``. See core.api.viewsets.TenantScopedViewSetMixin for what
 
 from __future__ import annotations
 
+import base64
 from typing import TYPE_CHECKING
 
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
 if TYPE_CHECKING:
@@ -34,9 +36,11 @@ from apps.student_management.serializers import (
     EmergencyContactSerializer,
     EnrollRequestSerializer,
     GuardianSerializer,
+    IdCardGenerateRequestSerializer,
     StudentDocumentSerializer,
     StudentEnrollmentSerializer,
     StudentGuardianSerializer,
+    StudentImportRequestSerializer,
     StudentSerializer,
     StudentTransferSerializer,
     TransferCompleteRequestSerializer,
@@ -60,8 +64,15 @@ from apps.student_management.services import (
 from apps.student_management.services import (
     change_section as change_section_service,
 )
+from apps.student_management.tasks import (
+    export_students_task,
+    generate_id_cards_task,
+    import_students_task,
+)
+from core.api.exceptions import DomainRuleViolation
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
+from core.jobs.services import attach_celery_task_id, create_job
 from core.rbac.permissions import has_permission_key
 
 
@@ -689,3 +700,122 @@ class StudentTransferViewSet(
             endpoint="student-transfers:complete",
             execute=execute,
         )
+
+
+# A CSV/.xlsx import file, read once into a job payload rather than served
+# back out — see StudentImportRequestSerializer's docstring. 5 MB comfortably
+# covers a multi-thousand-row spreadsheet.
+_MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
+
+
+class StudentImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
+    """`POST /student-imports` -> `202` + job (module doc §16, §8's migration
+
+    journey). No list/retrieve — the job returned is the only handle a caller
+    needs; `GET /jobs/{id}` (core.jobs) is where progress and the row-level
+    error report show up.
+    """
+
+    required_feature = "module.students"
+    required_permission = "students.student.import"
+    parser_classes = [MultiPartParser]
+
+    @extend_schema(
+        summary="Bulk-import students from a CSV or .xlsx file",
+        request=StudentImportRequestSerializer,
+        responses={
+            202: OpenApiResponse(description="{'data': {'job_id': str, 'status': 'queued'}}")
+        },
+    )
+    def create(self, request, *args, **kwargs) -> Response:
+        from core.audit.services import record_audit
+
+        payload = StudentImportRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        upload = payload.validated_data["file"]
+
+        content = upload.read()
+        if len(content) > _MAX_IMPORT_FILE_BYTES:
+            raise DomainRuleViolation(
+                {"file": f"Import file exceeds the {_MAX_IMPORT_FILE_BYTES}-byte limit."}
+            )
+
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="import.students",
+            payload={
+                "filename": upload.name,
+                "content_base64": base64.b64encode(content).decode(),
+            },
+            actor_id=request.user.pk,
+        )
+        result = import_students_task.delay(
+            tenant_id=str(request.tenant.pk), job_id=str(job.pk), actor_id=str(request.user.pk)
+        )
+        attach_celery_task_id(job=job, celery_task_id=result.id)
+        record_audit(request, "import", job, after={"job_id": str(job.pk), "filename": upload.name})
+        return ActionResponse.accepted(str(job.pk), message="Import queued.")
+
+
+class StudentExportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
+    """`POST /student-exports` -> `202` + job (plan deviation B: §16 declares
+
+    `students.student.export` with no endpoint for it).
+    """
+
+    required_feature = "module.students"
+    required_permission = "students.student.export"
+
+    @extend_schema(
+        summary="Export all students as CSV",
+        request=None,
+        responses={
+            202: OpenApiResponse(description="{'data': {'job_id': str, 'status': 'queued'}}")
+        },
+    )
+    def create(self, request, *args, **kwargs) -> Response:
+        from core.audit.services import record_audit
+
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="export.students",
+            payload={},
+            actor_id=request.user.pk,
+        )
+        result = export_students_task.delay(
+            tenant_id=str(request.tenant.pk), job_id=str(job.pk), actor_id=str(request.user.pk)
+        )
+        attach_celery_task_id(job=job, celery_task_id=result.id)
+        record_audit(request, "export", job, after={"job_id": str(job.pk)})
+        return ActionResponse.accepted(str(job.pk), message="Export queued.")
+
+
+class IdCardGenerateViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
+    """`POST /id-cards:generate` -> `202` + job (module doc §6, §17)."""
+
+    required_feature = "module.students"
+    required_permission = "students.id-card.generate"
+
+    @extend_schema(
+        summary="Batch-generate student ID cards as one merged PDF",
+        request=IdCardGenerateRequestSerializer,
+        responses={
+            202: OpenApiResponse(description="{'data': {'job_id': str, 'status': 'queued'}}")
+        },
+    )
+    def create(self, request, *args, **kwargs) -> Response:
+        payload = IdCardGenerateRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        student_ids = payload.validated_data["student_ids"]
+
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="id-cards.generate",
+            payload={"student_ids": [str(student_id) for student_id in student_ids]},
+            actor_id=request.user.pk,
+        )
+        result = generate_id_cards_task.delay(
+            tenant_id=str(request.tenant.pk), job_id=str(job.pk), actor_id=str(request.user.pk)
+        )
+        attach_celery_task_id(job=job, celery_task_id=result.id)
+        return ActionResponse.accepted(str(job.pk), message="ID cards queued.")

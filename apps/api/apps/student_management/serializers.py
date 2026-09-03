@@ -362,3 +362,20 @@ class TransferCompleteRequestSerializer(serializers.Serializer):
     """
 
     section_id = _fk(Section, source="section", required=False, allow_null=True)
+
+
+class StudentImportRequestSerializer(serializers.Serializer):
+    """`POST /student-imports` (multipart).
+
+    The file goes straight into the background job's own payload rather than
+    through core.files' two-step presigned flow — that flow exists for large
+    binary media served back out to users later (photos, documents); an
+    import file is read once, synchronously, into the job and never needs a
+    signed download URL of its own.
+    """
+
+    file = serializers.FileField()
+
+
+class IdCardGenerateRequestSerializer(serializers.Serializer):
+    student_ids = serializers.ListField(child=serializers.UUIDField(), min_length=1)

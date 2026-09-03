@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { Can } from "@/components/can";
+import { IdCardBatchAction } from "@/features/students/id-card-batch-action";
 import { SEARCH_DEBOUNCE_MS, STUDENTS_PAGE_SIZE } from "@/features/students/student-constants";
 import { useCursorPager } from "@/features/students/use-cursor-pager";
 import type { StudentRecord, StudentStatus } from "@/features/students/student-types";
@@ -54,6 +55,7 @@ export function StudentsTable() {
   const [status, setStatus] = useState<StudentStatus | typeof ALL_STATUSES>(ALL_STATUSES);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Simple debounce: schedule the commit, clear it on every keystroke. The raw
   // `search` value stays bound to the input so typing never lags; only
@@ -108,7 +110,48 @@ export function StudentsTable() {
   const pagination =
     data?.pagination && isCursorPagination(data.pagination) ? data.pagination : undefined;
 
+  function toggleRow(id: string, checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  const allOnPageSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
+
   const columns: DataTableColumn<StudentRecord>[] = [
+    {
+      id: "select",
+      header: (
+        <input
+          type="checkbox"
+          aria-label={t("idCards.selectAll")}
+          checked={allOnPageSelected}
+          onChange={(event) => {
+            setSelectedIds((current) => {
+              const next = new Set(current);
+              for (const row of rows) {
+                if (event.target.checked) next.add(row.id);
+                else next.delete(row.id);
+              }
+              return next;
+            });
+          }}
+        />
+      ),
+      cell: (row) => (
+        <input
+          type="checkbox"
+          aria-label={t("idCards.selectRow")}
+          checked={selectedIds.has(row.id)}
+          onChange={(event) => {
+            toggleRow(row.id, event.target.checked);
+          }}
+        />
+      ),
+    },
     {
       id: "admissionNumber",
       header: t("columns.admissionNumber"),
@@ -131,12 +174,27 @@ export function StudentsTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Can permission="students.student.create">
-          <Button asChild size="sm">
-            <Link href="/students/new">{t("actions.create")}</Link>
-          </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Can permission="students.id-card.generate">
+          <IdCardBatchAction
+            selectedIds={[...selectedIds]}
+            onDone={() => {
+              setSelectedIds(new Set());
+            }}
+          />
         </Can>
+        <div className="flex items-center gap-2">
+          <Can permission="students.student.import">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/students/import">{t("actions.import")}</Link>
+            </Button>
+          </Can>
+          <Can permission="students.student.create">
+            <Button asChild size="sm">
+              <Link href="/students/new">{t("actions.create")}</Link>
+            </Button>
+          </Can>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">

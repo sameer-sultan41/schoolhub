@@ -607,6 +607,50 @@ export interface paths {
         patch: operations["houses_partial_update"];
         trace?: never;
     };
+    "/api/v1/id-cards:generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch-generate student ID cards as one merged PDF
+         * @description `POST /id-cards:generate` -> `202` + job (module doc §6, §17).
+         */
+        post: operations["id_cards:generate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/v1/jobs/{id}` (api-architecture.md §2.7).
+         *
+         *     No list — jobs are discovered from the `job_id` a `202` response returns,
+         *     never browsed. Restricted to jobs the caller themselves created,
+         *     regardless of their record scope elsewhere: "permission context is the
+         *     initiator's" (entities/tenancy.md), not a role-wide grant.
+         */
+        get: operations["jobs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/school-settings": {
         parameters: {
             query?: never;
@@ -731,6 +775,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/student-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export all students as CSV
+         * @description `POST /student-exports` -> `202` + job (plan deviation B: §16 declares
+         *
+         *     `students.student.export` with no endpoint for it).
+         */
+        post: operations["student_exports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/student-guardians/{id}": {
         parameters: {
             query?: never;
@@ -766,6 +832,30 @@ export interface paths {
          *     where the student is unambiguous from the URL.
          */
         patch: operations["student_guardians_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/student-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-import students from a CSV or .xlsx file
+         * @description `POST /student-imports` -> `202` + job (module doc §16, §8's migration
+         *
+         *     journey). No list/retrieve — the job returned is the only handle a caller
+         *     needs; `GET /jobs/{id}` (core.jobs) is where progress and the row-level
+         *     error report show up.
+         */
+        post: operations["student_imports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/student-transfers": {
@@ -1209,6 +1299,33 @@ export interface components {
          * @enum {string}
          */
         AcademicSessionStatusEnum: "planned" | "active" | "closed" | "archived";
+        BackgroundJob: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description e.g. 'import.students', 'export.students', 'id-cards.generate'. */
+            readonly job_type: string;
+            readonly status: components["schemas"]["BackgroundJobStatusEnum"];
+            readonly progress: number;
+            /** @description Result summary, e.g. result_file_id. */
+            readonly result: unknown;
+            readonly error: string | null;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly finished_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `queued` - Queued
+         *     * `running` - Running
+         *     * `succeeded` - Succeeded
+         *     * `failed` - Failed
+         * @enum {string}
+         */
+        BackgroundJobStatusEnum: "queued" | "running" | "succeeded" | "failed";
         Campus: {
             /** Format: uuid */
             readonly id: string;
@@ -1429,6 +1546,9 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        IdCardGenerateRequest: {
+            student_ids: string[];
         };
         /**
          * @description Email/username + password login.
@@ -2084,6 +2204,19 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description `POST /student-imports` (multipart).
+         *
+         *     The file goes straight into the background job's own payload rather than
+         *     through core.files' two-step presigned flow — that flow exists for large
+         *     binary media served back out to users later (photos, documents); an
+         *     import file is read once, synchronously, into the job and never needs a
+         *     signed download URL of its own.
+         */
+        StudentImportRequest: {
+            /** Format: uri */
+            file: string;
         };
         /**
          * @description * `active` - Active
@@ -3612,6 +3745,52 @@ export interface operations {
             };
         };
     };
+    "id_cards:generate_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdCardGenerateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["IdCardGenerateRequest"];
+                "multipart/form-data": components["schemas"]["IdCardGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}} */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    jobs_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this background job. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackgroundJob"];
+                };
+            };
+        };
+    };
     school_settings_retrieve: {
         parameters: {
             query?: never;
@@ -3888,6 +4067,24 @@ export interface operations {
             };
         };
     };
+    student_exports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}} */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     student_guardians_retrieve: {
         parameters: {
             query?: never;
@@ -3963,6 +4160,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StudentGuardian"];
                 };
+            };
+        };
+    };
+    student_imports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["StudentImportRequest"];
+            };
+        };
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}} */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

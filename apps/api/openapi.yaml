@@ -1706,6 +1706,59 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/id-cards:generate:
+    post:
+      operationId: id_cards:generate_create
+      description: '`POST /id-cards:generate` -> `202` + job (module doc §6, §17).'
+      summary: Batch-generate student ID cards as one merged PDF
+      tags:
+      - id-cards:generate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdCardGenerateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IdCardGenerateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IdCardGenerateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+  /api/v1/jobs/{id}:
+    get:
+      operationId: jobs_retrieve
+      description: |-
+        `GET /api/v1/jobs/{id}` (api-architecture.md §2.7).
+
+        No list — jobs are discovered from the `job_id` a `202` response returns,
+        never browsed. Restricted to jobs the caller themselves created,
+        regardless of their record scope elsewhere: "permission context is the
+        initiator's" (entities/tenancy.md), not a role-wide grant.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this background job.
+        required: true
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackgroundJob'
+          description: ''
   /api/v1/school-settings:
     get:
       operationId: school_settings_retrieve
@@ -2039,6 +2092,21 @@ paths:
           description: ''
         '409':
           description: Already decided
+  /api/v1/student-exports:
+    post:
+      operationId: student_exports_create
+      description: |-
+        `POST /student-exports` -> `202` + job (plan deviation B: §16 declares
+
+        `students.student.export` with no endpoint for it).
+      summary: Export all students as CSV
+      tags:
+      - student-exports
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
   /api/v1/student-guardians/{id}:
     get:
       operationId: student_guardians_retrieve
@@ -2144,6 +2212,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/StudentGuardian'
           description: ''
+  /api/v1/student-imports:
+    post:
+      operationId: student_imports_create
+      description: |-
+        `POST /student-imports` -> `202` + job (module doc §16, §8's migration
+
+        journey). No list/retrieve — the job returned is the only handle a caller
+        needs; `GET /jobs/{id}` (core.jobs) is where progress and the row-level
+        error report show up.
+      summary: Bulk-import students from a CSV or .xlsx file
+      tags:
+      - student-imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentImportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
   /api/v1/student-transfers:
     get:
       operationId: student_transfers_list
@@ -3345,6 +3436,73 @@ components:
         * `active` - Active
         * `closed` - Closed
         * `archived` - Archived
+    BackgroundJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        job_type:
+          type: string
+          readOnly: true
+          description: e.g. 'import.students', 'export.students', 'id-cards.generate'.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BackgroundJobStatusEnum'
+          readOnly: true
+        progress:
+          type: integer
+          readOnly: true
+        result:
+          readOnly: true
+          nullable: true
+          description: Result summary, e.g. result_file_id.
+        error:
+          type: string
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - error
+      - finished_at
+      - id
+      - job_type
+      - progress
+      - result
+      - started_at
+      - status
+      - updated_at
+    BackgroundJobStatusEnum:
+      enum:
+      - queued
+      - running
+      - succeeded
+      - failed
+      type: string
+      description: |-
+        * `queued` - Queued
+        * `running` - Running
+        * `succeeded` - Succeeded
+        * `failed` - Failed
     Campus:
       type: object
       properties:
@@ -3867,6 +4025,17 @@ components:
       - id
       - name
       - updated_at
+    IdCardGenerateRequest:
+      type: object
+      properties:
+        student_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+      - student_ids
     Login:
       type: object
       description: |-
@@ -5190,6 +5359,22 @@ components:
       - relationship
       - student_id
       - updated_at
+    StudentImportRequest:
+      type: object
+      description: |-
+        `POST /student-imports` (multipart).
+
+        The file goes straight into the background job's own payload rather than
+        through core.files' two-step presigned flow — that flow exists for large
+        binary media served back out to users later (photos, documents); an
+        import file is read once, synchronously, into the job and never needs a
+        signed download URL of its own.
+      properties:
+        file:
+          type: string
+          format: uri
+      required:
+      - file
     StudentStatusEnum:
       enum:
       - active

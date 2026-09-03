@@ -10,7 +10,7 @@ import contextlib
 import uuid
 from contextvars import ContextVar
 
-from django.db import connection
+from django.db import connection, transaction
 
 _current_tenant_id: ContextVar[uuid.UUID | None] = ContextVar("current_tenant_id", default=None)
 
@@ -73,6 +73,27 @@ def tenant_context(tenant_id: uuid.UUID | None):
         _current_tenant_id.reset(token)
         # The GUC is transaction-scoped, so it unwinds with the transaction; resetting
         # here would fail outside one and is unnecessary.
+
+
+@contextlib.contextmanager
+def tenant_atomic(tenant_id: uuid.UUID | None):
+    """``tenant_context`` plus a fresh top-level transaction of its own.
+
+    ``set_database_tenant``'s ``SET LOCAL`` only survives for the remainder of an
+    already-open transaction. Outside one — which is where Celery tasks and
+    management commands run by default (autocommit mode, each statement its own
+    implicit transaction) — it has no lasting effect: it has already unwound
+    before the next statement runs. A long Celery task that opened one
+    transaction for its entire body would fix that, but at a real cost: every
+    write inside it (job progress included) stays uncommitted, and therefore
+    invisible to any other connection — a dashboard polling ``GET /jobs/{id}``
+    — until the task fully returns, and a killed worker discards all of it,
+    including whatever failure state it was about to record. Wrap each
+    independent unit of DB work in this instead, so it commits (and becomes
+    visible) as soon as that unit finishes.
+    """
+    with transaction.atomic(), tenant_context(tenant_id):
+        yield
 
 
 class TenantContextRequired(RuntimeError):

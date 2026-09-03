@@ -17,7 +17,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | Tier | Modules | Status |
 | ---- | ------- | ------ |
 | 0 — Foundation | tenancy, auth/RBAC, [`school-organization`](03-modules/school-organization.md) | Done in substance — tenancy/RBAC/audit/API plumbing in `apps/api/core/`, `school_organization` Django app shipped and merged |
-| 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **In progress** — `student-management` full-stack underway (see the per-module matrix below); `staff-management` not started |
+| 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **In progress** — `student-management` full-stack complete (PRs 1-4, see the per-module matrix below); `staff-management` not started |
 | 2–7 | attendance, academics, timetable, examinations, fees-finance, communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started (fees-finance has a spec-only PR: voucher/receipt/birthday-card docs) |
 
 ## Per-module implementation matrix
@@ -25,7 +25,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | Module | API | Dashboard screens | E2E | Spec doc |
 | ------ | --- | ------------------ | --- | -------- |
 | school-organization | done | — (platform-admin/setup UI not built) | — | done |
-| student-management | in progress (PR 1 CRUD, PR 2 guardians/documents/files, PR 3 enrollment lifecycle/transfers) | in progress (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs) | — | done |
+| student-management | done (CRUD, guardians/documents/files, enrollment lifecycle/transfers, import/export/ID cards) | done (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs, import wizard, ID-card batch action) | — | done |
 | staff-management | — | — | — | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
 | everything else (15 modules) | — | — | — | done (spec exists; nothing implemented) |
@@ -78,41 +78,54 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
-- **No module screens beyond the dashboard home + student-management (in
-  progress).** Fees, attendance, academics, timetable, examinations,
-  communication, parent-portal, … are untouched — the gap against
+- **No module screens beyond the dashboard home + student-management.**
+  Fees, attendance, academics, timetable, examinations, communication,
+  parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 1+.
 - **No `staff-management`, no other Tier 1+ backend module.** `apps/api/apps/`
-  has `school_organization` only — `student-management`'s Django app is not yet
-  scaffolded.
+  has `school_organization` and `student_management` only.
 - **`e2e`'s `live` project is opt-in only** — needs the real docker-compose
   stack, not part of the PR gate.
 - **Feature-flag enforcement and per-tenant number counters now exist**
   (`core.tenancy.features`, `core.tenancy.sequences`, PR 1) — built as
-  `student-management` foundation, reusable by every later module. **Still
-  missing:** background-job infrastructure (lands in PR 4).
+  `student-management` foundation, reusable by every later module.
 - **`core.files` now exists** (PR 2): the two-step presigned-upload flow
   (`POST /files` → `:confirm` → `:download`), backed by MinIO locally/in CI's
-  `NullPresigner`. **AV scanning is not implemented** — `FileStatus.QUARANTINED`
-  is unreachable; a documented gap against `api-architecture.md` §11, not an
-  oversight.
-- **`student-management`'s import/export and ID cards are not built yet** —
-  PR 1-3 cover the student master record, CRUD, guardians, emergency
-  contacts, documents, and the enrollment lifecycle (enroll/change-section/
-  withdraw, transfers). `medical_notes` field-level restriction and the
-  `filter_assigned_to_user` fail-closed default (no `staff` table to join
-  against yet) both ship in PR 1, ahead of the features that will exercise
-  them. The student<->guardian link has no destroy endpoint by design (see
-  the module doc) — the dashboard has no "unlink" UI to match.
+  `NullPresigner`, plus a direct `create_ready_file()`/`Presigner.put()` path
+  (PR 4) for server-generated content (exports, ID-card PDFs) that has no
+  client upload to wait for. **AV scanning is not implemented** —
+  `FileStatus.QUARANTINED` is unreachable; a documented gap against
+  `api-architecture.md` §11, not an oversight.
+- `medical_notes` field-level restriction and the `filter_assigned_to_user`
+  fail-closed default (no `staff` table to join against yet) both ship in
+  PR 1, ahead of the features that will exercise them. The student<->guardian
+  link has no destroy endpoint by design (see the module doc) — the
+  dashboard has no "unlink" UI to match.
 - **`core.idempotency` now exists** (PR 3): stores a colon-action's response
   per `(tenant, key, endpoint)` and replays it on a repeat `Idempotency-Key`
-  within 24h. No cleanup job prunes expired rows yet — Celery beat doesn't
-  exist until PR 4.
+  within 24h. No cleanup job prunes expired rows yet — no Celery beat exists
+  to run one.
 - **Withdrawal is a single audited action**, not initiate/approve — no
   `student_withdrawals` entity exists. Clearance checks (fees/library/
   transport) always return "clear" since none of those modules exist yet.
   `student-transfers`' `:cancel` action and the `incoming` transfer type's
   execution workflow are both undefined — documented gaps, not oversights.
+- **`core.jobs` and `core.tenancy.tasks.TenantAwareTask` now exist** (PR 4):
+  `BackgroundJob` + `GET /api/v1/jobs/{id}` (restricted to jobs the caller
+  themselves created), and the tenant-binding Celery base class every async
+  task builds on. `POST /student-imports` (CSV/.xlsx, exact template headers
+  — no column-mapping UI), `POST /student-exports` (not record-scope
+  narrowed — export is admin-only in practice), and
+  `POST /id-cards:generate` (QR code only, no barcode, no verification
+  endpoint yet) are the three jobs built on it. WeasyPrint needs system
+  libraries (`.github/workflows/api.yml`'s `test` job only — every
+  WeasyPrint import elsewhere is lazy). A real bug was found and fixed along
+  the way: `core.api.renderers.EnvelopeJSONRenderer` silently skipped the
+  `{"data": ...}` wrap for any response serializing a field literally named
+  `error` or `data` (matched on key presence, not the value's shape) —
+  `BackgroundJob.error` tripped it on every successful `GET /jobs/{id}`.
+- **`student-management` full-stack is now complete** (PRs 1-4) — this was
+  the whole of Phase 2 Tier 1's first module. `staff-management` is next.
 
 ---
 
@@ -131,22 +144,25 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 4. **Decide the typed-routes question.** App code uses explicit prop types rather than Next 16's
    generated `PageProps`/`LayoutProps` globals. If the team prefers the generated
    globals, add `next typegen` to the `typecheck` script.
-5. **`student-management` is the active work**, landing as 4 sequenced PRs (each
-   spanning backend + its dashboard screens), stacked one on the next: PR 1
-   foundation + student CRUD, PR 2 guardians/documents/files, PR 3 enrollment
-   lifecycle, PR 4 import/ID cards. PR 1-3 are up — student model,
-   `module.students` feature flag off by default, `core.tenancy.features`
-   flag registry, guardians/emergency contacts/documents, `core.files`'s
-   two-step upload, and now `core.idempotency` plus the full enrollment
-   lifecycle (`:enroll`/`:change-section`/`:withdraw`, `student-transfers`
-   with `:approve`/`:reject`/`:complete`, the assembled history timeline) —
-   with matching dashboard tabs and dialogs. PR 4 (import/export + ID cards)
-   is next. `staff-management` follows PR 4 per the tier-1 build order.
-6. Once `student-management`'s API exists, `staff-management` can start in
-   parallel — it depends on `school-organization` only, not on `student-management`.
-   Two things it will need that PR 1 already built and can reuse as-is:
-   `core.tenancy.features` (register a `module.staff` flag) and
-   `core.tenancy.sequences.allocate_number` (for `employee_number`).
+5. **`student-management` full-stack is complete**, landed as 4 sequenced,
+   stacked PRs: PR 1 foundation + student CRUD, PR 2 guardians/documents/
+   files, PR 3 enrollment lifecycle/transfers, PR 4 import/export + ID
+   cards. Along the way it built genuinely reusable platform infrastructure
+   every later module inherits: `core.tenancy.features` (feature flags),
+   `core.tenancy.sequences` (gapless per-tenant counters),
+   `core.tenancy.tasks.TenantAwareTask` (tenant-bound Celery base class),
+   `core.files` (two-step upload + server-generated `create_ready_file()`),
+   `core.idempotency` (`Idempotency-Key` replay), and `core.jobs`
+   (`BackgroundJob` + `GET /jobs/{id}`). `staff-management` is next per the
+   tier-1 build order.
+6. `staff-management` can start now — it depends on `school-organization`
+   only, not on `student-management`. It will need `core.tenancy.features`
+   (register a `module.staff` flag) and `core.tenancy.sequences.
+   allocate_number` (for `employee_number`), both already built and ready
+   to reuse as-is; if it needs bulk import/export or generated documents,
+   `core.jobs`/`core.tenancy.tasks.TenantAwareTask`/`core.files.
+   create_ready_file()` are reusable too, not `student_management`-specific
+   despite landing in that module's PRs.
 
 ## Conventions worth re-reading before writing code
 

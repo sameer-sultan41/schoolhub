@@ -3,8 +3,8 @@
 Views stay thin: everything here is a rule from
 docs/03-modules/student-management.md §6 (sub-features) and §11
 (validations). Keeping it out of serializers means the same rules apply to the
-API, the bulk importer (a later PR) and any Celery job, none of which go through
-a serializer.
+API, the bulk importer, and any Celery job, none of which go through a
+serializer.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import uuid
 from collections.abc import Callable
 from datetime import date
 
-from django.db import connection, transaction
+from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
 from apps.school_organization.models import Section
@@ -34,6 +34,7 @@ from apps.student_management.models import (
     TransferType,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.tenancy.context import tenant_atomic
 from core.tenancy.sequences import allocate_number
 
 # Pattern tokens the admission-number template may use. Anything else in the
@@ -960,3 +961,253 @@ def build_history(student: Student) -> list[dict]:
 
     events.sort(key=lambda event: event["date"])
     return events
+
+
+# Column mapping for arbitrary legacy headers is not built (plan §19 gap) —
+# the template's exact header names are required. Optional columns may be
+# blank; REQUIRED_IMPORT_COLUMNS must all have a value.
+IMPORT_COLUMNS = (
+    "first_name",
+    "last_name",
+    "date_of_birth",
+    "gender",
+    "campus_code",
+    "admission_date",
+    "preferred_name",
+    "blood_group",
+    "nationality",
+    "religion",
+    "previous_school",
+)
+REQUIRED_IMPORT_COLUMNS = (
+    "first_name",
+    "last_name",
+    "date_of_birth",
+    "gender",
+    "campus_code",
+    "admission_date",
+)
+
+
+def parse_import_rows(*, filename: str, data: bytes) -> list[dict[str, str]]:
+    """Parse a student-import file (CSV or .xlsx) into row dicts keyed by
+
+    IMPORT_COLUMNS's header names.
+    """
+    if filename.lower().endswith(".xlsx"):
+        return _parse_import_xlsx(data)
+    return _parse_import_csv(data)
+
+
+def _parse_import_csv(data: bytes) -> list[dict[str, str]]:
+    import csv
+    import io
+
+    # utf-8-sig strips a BOM if Excel's "CSV UTF-8" export added one; a plain
+    # utf-8 decode would otherwise leave it stuck to the first header name.
+    text = data.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+    return [{k: (v or "") for k, v in row.items()} for row in reader]
+
+
+def _parse_import_xlsx(data: bytes) -> list[dict[str, str]]:
+    import io
+
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    sheet = workbook.active
+    rows_iter = sheet.iter_rows(values_only=True)
+    header = [str(cell).strip() if cell is not None else "" for cell in next(rows_iter)]
+
+    rows: list[dict[str, str]] = []
+    for values in rows_iter:
+        if all(value is None for value in values):
+            continue
+        rows.append(
+            {header[i]: ("" if values[i] is None else str(values[i])) for i in range(len(header))}
+        )
+    return rows
+
+
+def import_student_row(
+    *, row: dict[str, str], row_number: int, tenant_id: uuid.UUID, actor_id: uuid.UUID
+) -> dict[str, str] | None:
+    """Create one student from a parsed import row.
+
+    Returns ``None`` on success, or ``{"row", "field", "issue"}`` on failure.
+    Each row commits (or rolls back) independently — one bad row must not
+    abort the whole batch (module doc §8's migration journey: "reviews the
+    row-level error report ... re-imports failed rows only").
+    """
+    import datetime
+
+    from apps.school_organization.models import Campus
+
+    missing = [column for column in REQUIRED_IMPORT_COLUMNS if not row.get(column)]
+    if missing:
+        field = missing[0]
+        return {
+            "row": str(row_number),
+            "field": field,
+            "issue": f"Missing required value for '{field}'.",
+        }
+
+    try:
+        date_of_birth = datetime.date.fromisoformat(row["date_of_birth"])
+        admission_date = datetime.date.fromisoformat(row["admission_date"])
+    except ValueError:
+        return {
+            "row": str(row_number),
+            "field": "date_of_birth",
+            "issue": "Dates must be in YYYY-MM-DD format.",
+        }
+
+    # One transaction (with the tenant GUC re-applied for it — see
+    # core.tenancy.context.tenant_atomic) for the whole row, not just the create:
+    # this is what actually makes each row "commit independently" as the docstring
+    # above promises, rather than nesting as a savepoint inside whatever
+    # transaction the caller happens to already have open.
+    try:
+        with tenant_atomic(tenant_id):
+            try:
+                campus = Campus.objects.get(code=row["campus_code"])
+            except Campus.DoesNotExist:
+                return {
+                    "row": str(row_number),
+                    "field": "campus_code",
+                    "issue": f"No campus with code '{row['campus_code']}'.",
+                }
+            create_student(
+                campus=campus,
+                admission_date=admission_date,
+                date_of_birth=date_of_birth,
+                first_name=row["first_name"],
+                last_name=row["last_name"],
+                gender=row["gender"],
+                preferred_name=row.get("preferred_name") or None,
+                blood_group=row.get("blood_group") or None,
+                nationality=row.get("nationality") or None,
+                religion=row.get("religion") or None,
+                previous_school=row.get("previous_school") or None,
+                actor_id=actor_id,
+                tenant_id=tenant_id,
+            )
+    except DomainRuleViolation as exc:
+        detail = exc.detail
+        if isinstance(detail, dict) and detail:
+            field, issue = next(iter(detail.items()))
+            return {"row": str(row_number), "field": str(field), "issue": str(issue)}
+        return {"row": str(row_number), "field": "non_field", "issue": str(detail)}
+    except IntegrityError:
+        return {
+            "row": str(row_number),
+            "field": "non_field",
+            "issue": "This row conflicts with existing data.",
+        }
+    return None
+
+
+def build_student_export_csv(*, tenant_id: uuid.UUID) -> bytes:
+    """All of a tenant's students as CSV (module doc §16, students.student.export).
+
+    Not record-scope-narrowed: export is admin-only (STUDENT_IO —
+    school_admin/it_admin), a role whose grant is already `all` in practice,
+    so a per-caller scope filter would add complexity without a real caller
+    it protects against today.
+    """
+    import csv
+    import io
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "admission_number",
+            "first_name",
+            "last_name",
+            "date_of_birth",
+            "gender",
+            "campus_code",
+            "status",
+            "admission_date",
+        ]
+    )
+    with tenant_atomic(tenant_id):
+        students = list(
+            Student.objects.alive().select_related("campus").order_by("last_name", "first_name")
+        )
+    for student in students:
+        writer.writerow(
+            [
+                student.admission_number,
+                student.first_name,
+                student.last_name,
+                student.date_of_birth.isoformat(),
+                student.gender,
+                student.campus.code,
+                student.status,
+                student.admission_date.isoformat(),
+            ]
+        )
+    return buffer.getvalue().encode("utf-8")
+
+
+def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -> tuple[bytes, int]:
+    """Render one merged PDF, one page per student (module doc §6, §17).
+
+    QR only, no barcode: api-architecture.md names "QR/barcode generation" as
+    in-process with no external dependency, but does not mandate both appear
+    on the card — a documented scope trim, not an oversight. The QR payload
+    is a plain "{tenant_id}:{admission_number}" string; there is no
+    verification endpoint yet to resolve it against (a later-tier concern).
+
+    Returns ``(pdf_bytes, rendered_count)`` — a caller-supplied id that does not
+    resolve to a live student (already withdrawn, wrong tenant, typo'd) is
+    silently skipped rather than failing the whole batch, so the caller needs
+    the actual rendered count to report, not just ``len(student_ids)``.
+    """
+    import base64
+    import io
+
+    import qrcode
+    from weasyprint import HTML
+
+    with tenant_atomic(tenant_id):
+        students = list(Student.objects.alive().filter(pk__in=student_ids).select_related("campus"))
+
+    cards_html = []
+    for student in students:
+        qr_image = qrcode.make(f"{tenant_id}:{student.admission_number}")
+        buffer = io.BytesIO()
+        qr_image.save(buffer, format="PNG")
+        qr_data_uri = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+        cards_html.append(
+            f"""
+            <div class="card">
+              <h2>{student.first_name} {student.last_name}</h2>
+              <p class="admission-number">{student.admission_number}</p>
+              <p>{student.campus.name}</p>
+              <img src="{qr_data_uri}" width="80" height="80" alt="" />
+            </div>
+            """
+        )
+
+    html = f"""
+    <html>
+      <head>
+        <style>
+          .card {{
+            page-break-after: always;
+            padding: 24px;
+            font-family: sans-serif;
+          }}
+          .admission-number {{
+            font-variant-numeric: tabular-nums;
+          }}
+        </style>
+      </head>
+      <body>{"".join(cards_html)}</body>
+    </html>
+    """
+    return HTML(string=html).write_pdf(), len(students)
