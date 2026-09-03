@@ -39,7 +39,7 @@ The monorepo skeleton is in place and structurally complete.
 | Area | State |
 | ---- | ----- |
 | Workspace root | pnpm workspace, Turborepo (`dev/build/lint/test/test:coverage/typecheck/clean`), `tsconfig.base.json` (strict + `noUncheckedIndexedAccess`), `.npmrc`, `.nvmrc` (Node 24), `.env.example`, `.gitignore`, committed `pnpm-lock.yaml` |
-| CI | `.github/workflows/frontend.yml` — install → API-schema-freshness check → lint → typecheck → test, then a build matrix over `dashboard`/`website`, a Playwright E2E job, and a gitleaks secret scan. `.github/workflows/api.yml` — ruff, mypy, tests on real PostgreSQL 18 with coverage, OpenAPI staleness gate, `manage.py check --deploy`. `.github/workflows/repo-hygiene.yml` runs on every PR regardless of path (workflow-YAML validation, markdown-link check, cspell, Prettier, and the doc-sync gate below) |
+| CI | `.github/workflows/frontend.yml` — install → API-schema-freshness check → lint → typecheck → test, then an isolated `Test (coverage)` job enforcing an **85% global `coverageThreshold`** per app (`pnpm test:coverage`, see [`07-quality/testing-strategy.md`](07-quality/testing-strategy.md) §9.6 — the floor is a ratchet, never decreases), a build matrix over `dashboard`/`website`, a Playwright E2E job, and a gitleaks secret scan. `.github/workflows/api.yml` — ruff, mypy, tests on real PostgreSQL 18 with coverage, OpenAPI staleness gate, `manage.py check --deploy`. `.github/workflows/repo-hygiene.yml` runs on every PR regardless of path (workflow-YAML validation, markdown-link check, cspell, Prettier, and the doc-sync gate below) |
 | `apps/api` | Django 6.1 + DRF 3.18, managed by `uv`. `core/tenancy` (Tenant/TenantSettings, RLS via `SET LOCAL` + `rls_operations`), `core/rbac` (User/Role/Permission, code-defined permission registry seeded via `post_migrate`), `core/audit` (append-only audit log), `core/api` (envelope renderer, pagination, exception handling, base viewsets). One Django app: `apps/school_organization` (campuses, departments, academic sessions, terms, classes, sections, subjects, houses) — the reference module every later app copies |
 | `packages/types` | API envelope `{data, meta}` / `{error:{code,message,details,request_id}}`, cursor + offset pagination, job resource, auth/RBAC types (`PermissionKey = module.resource.action`), tenant + branding, website CMS content types |
 | `packages/api-client` | Hand-written transport core: envelope unwrapping, bearer auth, single-flight refresh-on-401 + replay, `ApiError` normalization, cursor pagination helpers. The resource layer (`schema.d.ts`) is REGENERATED from `apps/api/openapi.yaml` and CI fails if it's stale |
@@ -103,7 +103,11 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 
 ## Start here next session
 
-1. **CI is fully green** — keep it that way; it is the source of truth for pass/fail.
+1. **CI is fully green, coverage floor included** — both dashboard and website clear the
+   85% `Test (coverage)` job (dashboard 87%/85%/87%/90%, website 96%/94%/96%/98%,
+   statements/branches/functions/lines). The floor is a ratchet (never decreases, see
+   above), so a new PR without its own tests fails this check — expected, not a gate bug.
+   CI overall remains the source of truth for pass/fail.
 2. **Leave the two-TypeScript setup alone.** `typescript` is aliased to the TS 6 API for
    tooling and `@typescript/native` supplies TS 7's `tsc`. Collapse to one
    TypeScript only after typescript-eslint supports the 7.1 API (#10940).

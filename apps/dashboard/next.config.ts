@@ -39,12 +39,13 @@ const nextConfig: NextConfig = {
     useTypeScriptCli: false,
   },
   // Workspace packages ship TypeScript source; Next compiles them with the app.
-  // next-intl (and its own dependency chain) ships ESM-only with no CJS fallback as of
-  // 4.13 — every package in that chain must be listed, or Jest's transform (which derives
-  // transformIgnorePatterns from this array) fails on the first `export` it hits under
-  // node_modules. Chain: next-intl -> use-intl -> @formatjs/fast-memoize,
-  // intl-messageformat -> @formatjs/icu-messageformat-parser ->
-  // @formatjs/icu-skeleton-parser, plus icu-minify and @schummar/icu-type-parser.
+  // next-intl's whole dependency chain is here too — none of these are in Next's own
+  // default-transpiled list, and `next/jest` derives its Jest transformIgnorePatterns
+  // from this array. Every package below ships ESM-only (`"type": "module"`, no CJS
+  // entry), so without all of them, any test that renders a component using next-intl
+  // fails with "Jest encountered an unexpected token" the moment `useTranslations`
+  // pulls one in for message formatting (dev/build already handle it fine via
+  // webpack/Turbopack, which resolve ESM directly and don't need this list at all).
   transpilePackages: [
     "@schoolhub/ui",
     "@schoolhub/api-client",

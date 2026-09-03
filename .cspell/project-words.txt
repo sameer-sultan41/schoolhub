@@ -32,6 +32,7 @@ BYPASSRLS
 chartable
 choosable
 cityschool
+CLDR
 codegen
 corsheaders
 crackable
@@ -73,6 +74,7 @@ greppable
 healthcheck
 healthz
 hotspots
+hrefs
 htmlcov
 iban
 interceptable

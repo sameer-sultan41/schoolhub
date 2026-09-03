@@ -29,8 +29,19 @@ export function proxy(request: NextRequest): NextResponse {
     // folder, excluded from routing entirely — a rewrite to it 404s, silently, because
     // the route does not exist. Confirmed against the build's own route manifest, which
     // never lists it. `/platform-landing` is a normal route.
-    if (request.nextUrl.pathname === "/platform-landing") return NextResponse.next();
-    return NextResponse.rewrite(new URL("/platform-landing", request.url));
+    //
+    // The stripped `headers` must go through here too, not just the resolved-host branch
+    // below: NextResponse.rewrite() without a `request` override forwards the ORIGINAL
+    // inbound headers unmodified, so a spoofed x-schoolhub-host/-tenant-slug would
+    // otherwise survive all the way to the root layout's resolveTenant() call (every
+    // page, platform-landing included, renders inside that layout) and leak a real
+    // tenant's branding onto a host that resolved to none.
+    if (request.nextUrl.pathname === "/platform-landing") {
+      return NextResponse.next({ request: { headers } });
+    }
+    return NextResponse.rewrite(new URL("/platform-landing", request.url), {
+      request: { headers },
+    });
   }
 
   headers.set(TENANT_HOST_HEADER, resolved.host);
