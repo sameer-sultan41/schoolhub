@@ -24,6 +24,7 @@ AWSPREVIOUS
 axllent
 barcoded
 baselined
+Bibi
 Bilal
 blockable
 bonafide

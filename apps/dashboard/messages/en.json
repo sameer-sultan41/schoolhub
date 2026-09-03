@@ -107,6 +107,90 @@
     },
     "actions": {
       "create": "New student"
+    },
+    "tabs": {
+      "profile": "Profile",
+      "guardians": "Guardians",
+      "emergencyContacts": "Emergency contacts",
+      "documents": "Documents"
+    },
+    "guardians": {
+      "title": "Guardians",
+      "empty": "No guardians linked yet.",
+      "link": "Link guardian",
+      "linkDescription": "Search for an existing guardian, or create a new one.",
+      "close": "Close",
+      "searchExisting": "Search existing",
+      "createNew": "Create new",
+      "searchPlaceholder": "Search by name or phone",
+      "primary": "Primary",
+      "makePrimary": "Make primary",
+      "fields": {
+        "firstName": "First name",
+        "lastName": "Last name",
+        "phone": "Phone",
+        "relationship": "Relationship"
+      },
+      "relationship": {
+        "father": "Father",
+        "mother": "Mother",
+        "grandparent": "Grandparent",
+        "sibling": "Sibling",
+        "legal_guardian": "Legal guardian",
+        "other": "Other"
+      },
+      "flags": {
+        "feeResponsible": "Fee responsible",
+        "canPickUp": "Can pick up",
+        "receivesCommunications": "Receives communications",
+        "hasPortalAccess": "Portal access"
+      }
+    },
+    "emergencyContacts": {
+      "title": "Emergency contacts",
+      "empty": "No emergency contacts added yet.",
+      "add": "Add contact",
+      "addDescription": "Someone to reach if a guardian cannot be contacted.",
+      "priority": "Priority {priority}",
+      "fields": {
+        "name": "Name",
+        "relationship": "Relationship",
+        "phone": "Phone",
+        "altPhone": "Alternate phone",
+        "notes": "Notes"
+      }
+    },
+    "documents": {
+      "title": "Documents",
+      "empty": "No documents uploaded yet.",
+      "upload": "Upload document",
+      "uploadDescription": "Uploads go straight to storage — the file never passes through this server.",
+      "uploading": "Uploading",
+      "download": "Download",
+      "verify": "Verify",
+      "reject": "Reject",
+      "delete": "Delete",
+      "expiresOn": "Expires {date}",
+      "fields": {
+        "file": "File",
+        "documentType": "Document type",
+        "title": "Title",
+        "expiresAt": "Expires on",
+        "notes": "Notes"
+      },
+      "type": {
+        "birth_certificate": "Birth certificate",
+        "prior_transfer_certificate": "Prior transfer certificate",
+        "immunization_record": "Immunization record",
+        "photo_id": "Photo ID",
+        "prior_report_card": "Prior report card",
+        "other": "Other"
+      },
+      "status": {
+        "pending": "Pending",
+        "verified": "Verified",
+        "rejected": "Rejected"
+      }
     }
   },
   "common": {

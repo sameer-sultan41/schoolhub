@@ -107,6 +107,90 @@
     },
     "actions": {
       "create": "نیا طالب علم"
+    },
+    "tabs": {
+      "profile": "پروفائل",
+      "guardians": "سرپرست",
+      "emergencyContacts": "ہنگامی رابطے",
+      "documents": "دستاویزات"
+    },
+    "guardians": {
+      "title": "سرپرست",
+      "empty": "ابھی تک کوئی سرپرست منسلک نہیں کیا گیا۔",
+      "link": "سرپرست منسلک کریں",
+      "linkDescription": "کسی موجودہ سرپرست کو تلاش کریں، یا نیا سرپرست بنائیں۔",
+      "close": "بند کریں",
+      "searchExisting": "موجودہ تلاش کریں",
+      "createNew": "نیا بنائیں",
+      "searchPlaceholder": "نام یا فون نمبر سے تلاش کریں",
+      "primary": "بنیادی",
+      "makePrimary": "بنیادی بنائیں",
+      "fields": {
+        "firstName": "پہلا نام",
+        "lastName": "آخری نام",
+        "phone": "فون",
+        "relationship": "رشتہ"
+      },
+      "relationship": {
+        "father": "والد",
+        "mother": "والدہ",
+        "grandparent": "دادا/دادی",
+        "sibling": "بہن بھائی",
+        "legal_guardian": "قانونی سرپرست",
+        "other": "دیگر"
+      },
+      "flags": {
+        "feeResponsible": "فیس کا ذمہ دار",
+        "canPickUp": "لے جانے کی اجازت",
+        "receivesCommunications": "مواصلات وصول کرتا ہے",
+        "hasPortalAccess": "پورٹل تک رسائی"
+      }
+    },
+    "emergencyContacts": {
+      "title": "ہنگامی رابطے",
+      "empty": "ابھی تک کوئی ہنگامی رابطہ شامل نہیں کیا گیا۔",
+      "add": "رابطہ شامل کریں",
+      "addDescription": "اگر سرپرست سے رابطہ نہ ہو سکے تو رابطہ کرنے کے لیے کوئی اور شخص۔",
+      "priority": "ترجیح {priority}",
+      "fields": {
+        "name": "نام",
+        "relationship": "رشتہ",
+        "phone": "فون",
+        "altPhone": "متبادل فون",
+        "notes": "نوٹس"
+      }
+    },
+    "documents": {
+      "title": "دستاویزات",
+      "empty": "ابھی تک کوئی دستاویز اپ لوڈ نہیں کی گئی۔",
+      "upload": "دستاویز اپ لوڈ کریں",
+      "uploadDescription": "اپ لوڈز براہ راست سٹوریج میں جاتی ہیں — فائل اس سرور سے نہیں گزرتی۔",
+      "uploading": "اپ لوڈ ہو رہا ہے",
+      "download": "ڈاؤن لوڈ",
+      "verify": "تصدیق کریں",
+      "reject": "مسترد کریں",
+      "delete": "حذف کریں",
+      "expiresOn": "میعاد ختم {date}",
+      "fields": {
+        "file": "فائل",
+        "documentType": "دستاویز کی قسم",
+        "title": "عنوان",
+        "expiresAt": "میعاد ختم ہونے کی تاریخ",
+        "notes": "نوٹس"
+      },
+      "type": {
+        "birth_certificate": "پیدائشی سرٹیفکیٹ",
+        "prior_transfer_certificate": "سابقہ منتقلی سرٹیفکیٹ",
+        "immunization_record": "حفاظتی ٹیکوں کا ریکارڈ",
+        "photo_id": "تصویری شناخت",
+        "prior_report_card": "سابقہ رپورٹ کارڈ",
+        "other": "دیگر"
+      },
+      "status": {
+        "pending": "زیر التوا",
+        "verified": "تصدیق شدہ",
+        "rejected": "مسترد"
+      }
     }
   },
   "common": {

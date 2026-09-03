@@ -1,6 +1,7 @@
 import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../messages/en.json";
 import { StudentDetail } from "@/features/students/student-detail";
@@ -110,5 +111,21 @@ describe("StudentDetail", () => {
     renderWithProviders(<StudentDetail studentId="s1" />);
 
     expect(await screen.findByText(/could not find/i)).toBeInTheDocument();
+  });
+
+  it("switches to the Guardians tab and renders that tab's panel", async () => {
+    mockGet.mockImplementation((path: string) => {
+      if (path === "/students/s1") return Promise.resolve(apiResult(BASE_STUDENT));
+      if (path === "/students/s1/guardians") return Promise.resolve(apiResult([]));
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<StudentDetail studentId="s1" />);
+
+    await screen.findByRole("heading", { name: "Amina Khan" });
+    await user.click(screen.getByRole("tab", { name: "Guardians" }));
+
+    expect(await screen.findByText("No guardians linked yet.")).toBeInTheDocument();
   });
 });
