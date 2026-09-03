@@ -140,7 +140,11 @@ describe("StudentsTable", () => {
 
     renderWithProviders(<StudentsTable />);
 
-    const nextButton = await screen.findByRole("button", { name: "Next" });
+    // The Next button exists (disabled) from the very first render, before the
+    // query resolves — wait for a row so `hasNext` reflects the loaded page's
+    // pagination, not the pre-fetch default.
+    await screen.findByText("2026-0001");
+    const nextButton = screen.getByRole("button", { name: "Next" });
     expect(nextButton).not.toBeDisabled();
     fireEvent.click(nextButton);
 
