@@ -20,7 +20,9 @@ import Link from "next/link";
 import { Can } from "@/components/can";
 import { DocumentsPanel } from "@/features/students/documents-panel";
 import { EmergencyContactsPanel } from "@/features/students/emergency-contacts-panel";
+import { EnrollmentPanel } from "@/features/students/enrollment-panel";
 import { GuardiansPanel } from "@/features/students/guardians-panel";
+import { HistoryPanel } from "@/features/students/history-panel";
 import type { StudentRecord } from "@/features/students/student-types";
 import { apiClient } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
@@ -87,12 +89,15 @@ export function StudentDetail({ studentId }: StudentDetailProps) {
         </div>
       </div>
 
+      <EnrollmentPanel studentId={studentId} />
+
       <Tabs defaultValue="profile">
         <TabsList>
           <TabsTrigger value="profile">{t("tabs.profile")}</TabsTrigger>
           <TabsTrigger value="guardians">{t("tabs.guardians")}</TabsTrigger>
           <TabsTrigger value="emergencyContacts">{t("tabs.emergencyContacts")}</TabsTrigger>
           <TabsTrigger value="documents">{t("tabs.documents")}</TabsTrigger>
+          <TabsTrigger value="history">{t("tabs.history")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6 pt-4">
@@ -149,6 +154,10 @@ export function StudentDetail({ studentId }: StudentDetailProps) {
 
         <TabsContent value="documents" className="pt-4">
           <DocumentsPanel studentId={studentId} />
+        </TabsContent>
+
+        <TabsContent value="history" className="pt-4">
+          <HistoryPanel studentId={studentId} />
         </TabsContent>
       </Tabs>
     </div>

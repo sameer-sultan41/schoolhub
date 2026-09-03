@@ -112,7 +112,8 @@
       "profile": "پروفائل",
       "guardians": "سرپرست",
       "emergencyContacts": "ہنگامی رابطے",
-      "documents": "دستاویزات"
+      "documents": "دستاویزات",
+      "history": "تاریخچہ"
     },
     "guardians": {
       "title": "سرپرست",
@@ -190,6 +191,78 @@
         "pending": "زیر التوا",
         "verified": "تصدیق شدہ",
         "rejected": "مسترد"
+      }
+    },
+    "enrollment": {
+      "title": "اندراج",
+      "notEnrolled": "فعال سیشن میں داخل نہیں کیا گیا۔",
+      "enroll": "داخل کریں",
+      "enrollDescription": "اس طالب علم کو سیشن، جماعت، اور سیکشن میں شامل کریں۔",
+      "changeSection": "سیکشن تبدیل کریں",
+      "withdraw": "دستبردار کریں",
+      "withdrawDescription": "موجودہ اندراج ختم کرتا ہے اور طالب علم کو دستبردار کے طور پر نشان زد کرتا ہے۔",
+      "rollNumber": "رول نمبر {roll}",
+      "status": {
+        "active": "فعال",
+        "promoted": "ترقی یافتہ",
+        "retained": "برقرار",
+        "transferred_out": "منتقل شدہ",
+        "withdrawn": "دستبردار",
+        "graduated": "فارغ التحصیل"
+      },
+      "fields": {
+        "academicSession": "تعلیمی سیشن",
+        "selectSession": "سیشن منتخب کریں",
+        "class": "جماعت",
+        "selectClass": "جماعت منتخب کریں",
+        "section": "سیکشن",
+        "selectSection": "سیکشن منتخب کریں",
+        "selectCampus": "کیمپس منتخب کریں",
+        "enrollmentDate": "داخلے کی تاریخ",
+        "rollNumber": "رول نمبر",
+        "overrideReason": "گنجائش نظرانداز کرنے کی وجہ",
+        "overrideReasonHint": "صرف اس وقت درکار جب سیکشن بھرا ہو",
+        "reason": "وجہ",
+        "effectiveDate": "نفاذ کی تاریخ"
+      }
+    },
+    "transfers": {
+      "title": "منتقلیاں",
+      "empty": "کوئی منتقلی ریکارڈ میں نہیں۔",
+      "request": "منتقلی کی درخواست",
+      "requestDescription": "بین کیمپس، بیرونی، یا آنے والی منتقلی کی درخواست کریں۔",
+      "approve": "منظور کریں",
+      "reject": "مسترد کریں",
+      "complete": "مکمل کریں",
+      "completeDescription": "منظور شدہ منتقلی کو نافذ کرتا ہے۔",
+      "type": {
+        "inter_campus": "بین کیمپس",
+        "outgoing": "بیرونی",
+        "incoming": "آنے والی"
+      },
+      "status": {
+        "requested": "درخواست شدہ",
+        "approved": "منظور شدہ",
+        "rejected": "مسترد",
+        "completed": "مکمل",
+        "cancelled": "منسوخ"
+      },
+      "fields": {
+        "type": "منتقلی کی قسم",
+        "fromCampus": "سابقہ کیمپس",
+        "toCampus": "نیا کیمپس",
+        "externalSchoolName": "بیرونی سکول کا نام",
+        "reason": "وجہ",
+        "effectiveDate": "نفاذ کی تاریخ",
+        "destinationSectionId": "منزل سیکشن آئی ڈی"
+      }
+    },
+    "history": {
+      "timelineTitle": "ٹائم لائن",
+      "empty": "ابھی تک کوئی تاریخچہ نہیں۔",
+      "event": {
+        "enrollment": "داخل کیا گیا — {session}, {className} {section}",
+        "transfer": "منتقلی — {type}"
       }
     }
   },
