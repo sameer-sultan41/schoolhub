@@ -65,12 +65,22 @@ describe("permission set helpers", () => {
     // "fee" must not match the "fees" module.
     expect(canAccessModule(makeUser(), "fee")).toBe(false);
   });
+
+  it("never grants anything without a user", () => {
+    expect(hasAllPermissions(null, ["fees.invoice.create"])).toBe(false);
+    expect(hasAnyPermission(null, ["fees.invoice.create"])).toBe(false);
+    expect(canAccessModule(null, "fees")).toBe(false);
+  });
 });
 
 describe("roles and parsing", () => {
   it("matches role slugs exactly", () => {
     expect(hasRole(makeUser(), "school_admin")).toBe(true);
     expect(hasRole(makeUser(), "teacher")).toBe(false);
+  });
+
+  it("never matches a role without a user", () => {
+    expect(hasRole(null, "school_admin")).toBe(false);
   });
 
   it("splits a well-formed key and rejects a malformed one", () => {

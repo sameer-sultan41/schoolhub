@@ -12,6 +12,7 @@ from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.api.permissions import RequiresModuleFeature
 from core.audit.services import record_audit
 from core.rbac.permissions import HasPermissionKey, scope_queryset
 from core.tenancy.context import bind_tenant, unbind_tenant
@@ -23,13 +24,30 @@ class TenantScopedViewSetMixin:
 
     Subclasses declare::
 
+        required_feature = "module.students"   # optional; None means "core, ungated"
         required_permission = "students.student.view"
         required_permission_map = {"create": "students.student.create", ...}
         scope_own_field = "user_id"      # optional, enables the `own` record scope
+        scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+    ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+    docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+    ahead of the feature-level (permission-key) check, and DRF evaluates
+    ``permission_classes`` in list order.
+
+    ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+    resource in a module tends to have — a child table (a student's guardians,
+    documents, …) has no such column of its own. Getting this wrong is not a
+    narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+    whatever this names, so a table without that column raises ``FieldError``
+    for every campus-scoped user the moment they hit the endpoint — override it
+    per child viewset rather than leaving the default.
     """
 
-    permission_classes = [IsAuthenticated, HasPermissionKey]
+    permission_classes = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
+    required_feature: str | None = None
     scope_own_field: str | None = None
+    scope_campus_field: str = "campus_id"
     audit_resource: str | None = None
 
     def initial(self, request, *args, **kwargs):
@@ -84,7 +102,12 @@ class TenantScopedViewSetMixin:
         # The model's default manager is already tenant-scoped, and RLS enforces it
         # in the database; this narrows further by the user's record scope.
         queryset = super().get_queryset().alive()
-        return scope_queryset(queryset, self.request.user, own_field=self.scope_own_field)
+        return scope_queryset(
+            queryset,
+            self.request.user,
+            own_field=self.scope_own_field,
+            campus_field=self.scope_campus_field,
+        )
 
     def perform_create(self, serializer):
         instance = serializer.save(

@@ -65,6 +65,8 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 
 - **Registration:** duplicate detection on create/import (name + DOB + guardian phone fuzzy match) with override + reason; photo upload with size/type validation; sensitive-field visibility rules (medical notes limited to admins + class teacher) *(recommendation)*.
 - **Enrollment & ID:** one active enrollment per student per session; roll-number auto-assignment (alphabetical or manual) unique within section; admission-number sequence gaps never reused; batch ID-card generation as a background job producing a merged PDF.
+
+**Implementation note (as shipped):** the ID-card template carries a QR code only (encoding `{tenant_id}:{admission_number}`), no barcode — there is no verification endpoint yet to resolve either against, and api-architecture.md §17 does not mandate both appear on one card. `POST /student-imports` requires the exact template column headers (`first_name`, `last_name`, `date_of_birth`, `gender`, `campus_code`, `admission_date`, plus the optional fields) — mapping arbitrary legacy headers is not built. `POST /student-exports` is not record-scope-narrowed (it exports every tenant student); `students.student.export` is admin-only in practice, so this has not needed a per-caller filter yet.
 - **Transfers:** inter-campus keeps the student record, moves campus + section; outbound sets status `transferred` and feeds certificate issuance.
 - **Withdrawal:** clearance checklist aggregated cross-module (outstanding invoices, un-returned books, transport/asset assignments); refund handling delegated to fees-finance.
 - **Guardians:** one guardian may link to multiple children (and vice versa); per-link `relationship`, `is_primary`, `can_pick_up`, `is_fee_responsible`, `receives_communications`; guardian portal account optional; change-request flow via parent-portal.
@@ -104,6 +106,8 @@ flowchart TD
 ```
 
 Transfers follow the same shape (`requested → approved/rejected → completed`), with inter-campus transfers additionally re-allocating section and outbound transfers ending in status `transferred` plus certificate issuance.
+
+**Implementation note (as shipped):** no `student_withdrawals` entity exists — withdrawal is a single audited `POST /api/v1/students/{id}:withdraw` (`students.student.withdraw`), not a separate initiate/approve pair. It is blocked while clearance blockers are non-empty; a caller who both passes `waive_clearance` and holds `students.withdrawal.approve` may override. Clearance checks (fees, library, transport) always return "clear" today, since none of those owning modules exist yet — this is a documented gap, not a false all-clear. `:cancel` is not implemented for transfers (only `:approve`/`:reject`/`:complete`), and `incoming` transfers have no defined execution workflow — completing one is a status-only change.
 
 ## 8. User Journeys
 

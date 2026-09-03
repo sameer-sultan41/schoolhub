@@ -44,6 +44,23 @@ describe("makeQueryClient retry policy", () => {
   });
 });
 
+describe("dehydrate.shouldDehydrateQuery", () => {
+  function shouldDehydrate(status: string): boolean {
+    const client = makeQueryClient();
+    const fn = client.getDefaultOptions().dehydrate?.shouldDehydrateQuery;
+    if (typeof fn !== "function") throw new Error("shouldDehydrateQuery must be a function");
+    return fn({ state: { status } } as never);
+  }
+
+  it("also dehydrates a still-pending query, not just successful ones", () => {
+    expect(shouldDehydrate("pending")).toBe(true);
+  });
+
+  it("does not dehydrate an errored query", () => {
+    expect(shouldDehydrate("error")).toBe(false);
+  });
+});
+
 describe("getQueryClient", () => {
   it("returns the same instance across calls in the browser", () => {
     const first = getQueryClient();

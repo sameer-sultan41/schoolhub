@@ -49,6 +49,253 @@
     },
     "empty": "Nothing to show yet."
   },
+  "students": {
+    "title": "Students",
+    "summary": "Student profiles, guardians, and enrollment.",
+    "list": {
+      "caption": "Students",
+      "empty": "No students found.",
+      "searchPlaceholder": "Search by name or admission number"
+    },
+    "columns": {
+      "admissionNumber": "Admission #",
+      "name": "Name",
+      "status": "Status"
+    },
+    "filters": {
+      "search": "Search",
+      "status": "Status",
+      "all": "All"
+    },
+    "status": {
+      "active": "Active",
+      "suspended": "Suspended",
+      "transferred": "Transferred",
+      "withdrawn": "Withdrawn",
+      "graduated": "Graduated"
+    },
+    "gender": {
+      "male": "Male",
+      "female": "Female",
+      "other": "Other",
+      "unspecified": "Unspecified"
+    },
+    "fields": {
+      "admissionNumber": "Admission number",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "preferredName": "Preferred name",
+      "dateOfBirth": "Date of birth",
+      "gender": "Gender",
+      "campus": "Campus",
+      "selectCampus": "Select a campus",
+      "house": "House",
+      "none": "None",
+      "admissionDate": "Admission date",
+      "bloodGroup": "Blood group",
+      "nationality": "Nationality",
+      "religion": "Religion",
+      "previousSchool": "Previous school",
+      "medicalNotes": "Medical notes",
+      "medicalNotesRestricted": "Restricted"
+    },
+    "form": {
+      "createTitle": "New student",
+      "editTitle": "Edit student",
+      "submitting": "Saving",
+      "admissionNumberHint": "Generated automatically and cannot be changed."
+    },
+    "actions": {
+      "create": "New student",
+      "import": "Import"
+    },
+    "tabs": {
+      "profile": "Profile",
+      "guardians": "Guardians",
+      "emergencyContacts": "Emergency contacts",
+      "documents": "Documents",
+      "history": "History"
+    },
+    "guardians": {
+      "title": "Guardians",
+      "empty": "No guardians linked yet.",
+      "link": "Link guardian",
+      "linkDescription": "Search for an existing guardian, or create a new one.",
+      "close": "Close",
+      "searchExisting": "Search existing",
+      "createNew": "Create new",
+      "searchPlaceholder": "Search by name or phone",
+      "primary": "Primary",
+      "makePrimary": "Make primary",
+      "fields": {
+        "firstName": "First name",
+        "lastName": "Last name",
+        "phone": "Phone",
+        "relationship": "Relationship"
+      },
+      "relationship": {
+        "father": "Father",
+        "mother": "Mother",
+        "grandparent": "Grandparent",
+        "sibling": "Sibling",
+        "legal_guardian": "Legal guardian",
+        "other": "Other"
+      },
+      "flags": {
+        "feeResponsible": "Fee responsible",
+        "canPickUp": "Can pick up",
+        "receivesCommunications": "Receives communications",
+        "hasPortalAccess": "Portal access"
+      }
+    },
+    "emergencyContacts": {
+      "title": "Emergency contacts",
+      "empty": "No emergency contacts added yet.",
+      "add": "Add contact",
+      "addDescription": "Someone to reach if a guardian cannot be contacted.",
+      "priority": "Priority {priority}",
+      "fields": {
+        "name": "Name",
+        "relationship": "Relationship",
+        "phone": "Phone",
+        "altPhone": "Alternate phone",
+        "notes": "Notes"
+      }
+    },
+    "documents": {
+      "title": "Documents",
+      "empty": "No documents uploaded yet.",
+      "upload": "Upload document",
+      "uploadDescription": "Uploads go straight to storage — the file never passes through this server.",
+      "uploading": "Uploading",
+      "download": "Download",
+      "verify": "Verify",
+      "reject": "Reject",
+      "delete": "Delete",
+      "expiresOn": "Expires {date}",
+      "fields": {
+        "file": "File",
+        "documentType": "Document type",
+        "title": "Title",
+        "expiresAt": "Expires on",
+        "notes": "Notes"
+      },
+      "type": {
+        "birth_certificate": "Birth certificate",
+        "prior_transfer_certificate": "Prior transfer certificate",
+        "immunization_record": "Immunization record",
+        "photo_id": "Photo ID",
+        "prior_report_card": "Prior report card",
+        "other": "Other"
+      },
+      "status": {
+        "pending": "Pending",
+        "verified": "Verified",
+        "rejected": "Rejected"
+      }
+    },
+    "enrollment": {
+      "title": "Enrollment",
+      "notEnrolled": "Not enrolled in an active session.",
+      "enroll": "Enroll",
+      "enrollDescription": "Place this student into a session, class, and section.",
+      "changeSection": "Change section",
+      "withdraw": "Withdraw",
+      "withdrawDescription": "Ends the current enrollment and marks the student withdrawn.",
+      "rollNumber": "Roll #{roll}",
+      "status": {
+        "active": "Active",
+        "promoted": "Promoted",
+        "retained": "Retained",
+        "transferred_out": "Transferred out",
+        "withdrawn": "Withdrawn",
+        "graduated": "Graduated"
+      },
+      "fields": {
+        "academicSession": "Academic session",
+        "selectSession": "Select a session",
+        "class": "Class",
+        "selectClass": "Select a class",
+        "section": "Section",
+        "selectSection": "Select a section",
+        "selectCampus": "Select a campus",
+        "enrollmentDate": "Enrollment date",
+        "rollNumber": "Roll number",
+        "overrideReason": "Capacity override reason",
+        "overrideReasonHint": "Only needed if the section is full",
+        "reason": "Reason",
+        "effectiveDate": "Effective date"
+      }
+    },
+    "transfers": {
+      "title": "Transfers",
+      "empty": "No transfers on record.",
+      "request": "Request transfer",
+      "requestDescription": "Request an inter-campus, outgoing, or incoming transfer.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "complete": "Complete",
+      "completeDescription": "Executes the approved transfer.",
+      "type": {
+        "inter_campus": "Inter-campus",
+        "outgoing": "Outgoing",
+        "incoming": "Incoming"
+      },
+      "status": {
+        "requested": "Requested",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "fields": {
+        "type": "Transfer type",
+        "fromCampus": "From campus",
+        "toCampus": "To campus",
+        "externalSchoolName": "External school name",
+        "reason": "Reason",
+        "effectiveDate": "Effective date",
+        "destinationSectionId": "Destination section ID"
+      }
+    },
+    "history": {
+      "timelineTitle": "Timeline",
+      "empty": "No history yet.",
+      "event": {
+        "enrollment": "Enrolled — {session}, {className} {section}",
+        "transfer": "Transfer — {type}"
+      }
+    },
+    "import": {
+      "title": "Import students",
+      "description": "Bulk-create students from a CSV or .xlsx file.",
+      "templateTitle": "Required columns",
+      "templateHint": "The file's header row must use these exact names. Optional columns are outlined.",
+      "fields": {
+        "file": "File"
+      },
+      "upload": "Upload",
+      "processing": "Importing — {progress}%",
+      "failed": "The import failed.",
+      "summarySucceeded": "{count} imported",
+      "summaryFailed": "{count} failed",
+      "importAnother": "Import another file",
+      "errorTable": {
+        "row": "Row",
+        "field": "Field",
+        "issue": "Issue"
+      }
+    },
+    "idCards": {
+      "selectAll": "Select all students on this page",
+      "selectRow": "Select this student",
+      "generate": "Generate ID cards ({count})",
+      "generating": "Generating — {progress}%",
+      "failed": "ID-card generation failed.",
+      "download": "Download PDF",
+      "dismiss": "Dismiss"
+    }
+  },
   "common": {
     "loading": "Loading",
     "retry": "Try again",
@@ -61,10 +308,15 @@
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",
+    "unauthenticated": "Your session has expired. Sign in again.",
     "permission_denied": "You do not have permission to do that.",
     "not_found": "We could not find what you were looking for.",
+    "method_not_allowed": "That action is not supported here.",
     "conflict": "That change conflicts with the current data. Reload and try again.",
+    "unprocessable": "That request could not be completed.",
+    "domain_rule_violation": "That action isn't allowed right now.",
     "rate_limited": "Too many requests. Wait a moment and try again.",
+    "module_disabled": "This feature is not enabled for your school.",
     "network_error": "We could not reach the server. Check your connection.",
     "server_error": "Something went wrong on our side. The team has been notified.",
     "requestId": "Reference: {requestId}",

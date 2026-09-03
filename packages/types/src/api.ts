@@ -104,6 +104,7 @@ export const API_ERROR_CODES = [
   "unprocessable",
   "domain_rule_violation",
   "rate_limited",
+  "module_disabled",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

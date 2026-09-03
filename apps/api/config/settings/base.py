@@ -22,6 +22,32 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 # apps/website's NEXT_PUBLIC_PLATFORM_DOMAIN — same concept, backend side.
 PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
 
+# Object storage (core.files) — matches infra/compose's MinIO service in dev, real S3 in
+# prod. Empty S3_ENDPOINT_URL selects NullPresigner (core.files.storage.get_presigner),
+# which is what test/CI runs on since neither talks to a real object store.
+S3_ENDPOINT_URL = env("S3_ENDPOINT_URL", default="")
+S3_BUCKET_NAME = env("S3_BUCKET_NAME", default="schoolhub-dev")
+S3_REGION_NAME = env("S3_REGION_NAME", default="us-east-1")
+AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
+
+# Server-side type/size whitelist per purpose (student-management.md §11: "type/size
+# whitelist, AV scan"). Sizes in bytes.
+FILE_UPLOAD_RULES = {
+    "student.photo": {
+        "mime_types": {"image/jpeg", "image/png"},
+        "max_size_bytes": 5 * 1024 * 1024,
+    },
+    "student.document": {
+        "mime_types": {"image/jpeg", "image/png", "application/pdf"},
+        "max_size_bytes": 10 * 1024 * 1024,
+    },
+    "guardian.photo": {
+        "mime_types": {"image/jpeg", "image/png"},
+        "max_size_bytes": 5 * 1024 * 1024,
+    },
+}
+
 DJANGO_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -46,11 +72,15 @@ CORE_APPS = [
     "core.tenancy",
     "core.rbac",
     "core.audit",
+    "core.files",
+    "core.idempotency",
+    "core.jobs",
 ]
 
 # One app per module doc in docs/03-modules/.
 MODULE_APPS = [
     "apps.school_organization",
+    "apps.student_management",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -190,10 +220,10 @@ CACHES = {
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/1")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/2")
 CELERY_TASK_ROUTES = {
-    # Priority lanes per docs/02-architecture/notifications.md.
-    "core.notifications.tasks.send_emergency*": {"queue": "emergency"},
-    "core.notifications.tasks.send_transactional*": {"queue": "transactional"},
-    "core.notifications.tasks.send_bulk*": {"queue": "bulk"},
+    # core.notifications does not exist yet (communication is a later tier) —
+    # the routes docs/02-architecture/notifications.md describes land with
+    # that module. Bulk, non-urgent background work routes to "bulk" for now.
+    "apps.student_management.tasks.*": {"queue": "bulk"},
 }
 
 LANGUAGE_CODE = "en-us"

@@ -1,4 +1,4 @@
-import { formatCount, formatMinorUnits, formatPercent } from "./format";
+import { formatCount, formatDate, formatMinorUnits, formatPercent } from "@/lib/format";
 
 describe("formatMinorUnits", () => {
   it("converts minor units to major units under the given currency", () => {
@@ -41,5 +41,16 @@ describe("formatPercent", () => {
 
   it("formats 100 as a whole percentage", () => {
     expect(formatPercent(100, "en")).toBe("100%");
+  });
+});
+
+describe("formatDate", () => {
+  it("formats an ISO date string for the given locale", () => {
+    const formatted = formatDate("2026-04-01", "en");
+    expect(formatted).toContain("2026");
+  });
+
+  it("returns the raw string unchanged when it cannot be parsed", () => {
+    expect(formatDate("not-a-date", "en")).toBe("not-a-date");
   });
 });
