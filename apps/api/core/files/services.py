@@ -19,6 +19,7 @@ from django.db import transaction
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.models import File, FileStatus
 from core.files.storage import NullPresigner, get_presigner, storage_key_for
+from core.tenancy.context import tenant_atomic
 
 
 def assert_upload_allowed(*, purpose: str, mime_type: str, size_bytes: int) -> None:
@@ -121,7 +122,6 @@ def get_download_url(file: File) -> str:
     return get_presigner().presign_download(storage_key=file.storage_key)
 
 
-@transaction.atomic
 def create_ready_file(
     *,
     tenant_id: uuid.UUID,
@@ -137,18 +137,24 @@ def create_ready_file(
     hand (there is no client upload to wait for), so this writes them straight
     to storage and creates the row `ready`. Never used for a client-driven
     upload — that always stays the two-step flow in `create_upload`.
+
+    Its own `tenant_atomic`, not a bare `@transaction.atomic`: this is called
+    from Celery tasks (core.tenancy.tasks.TenantAwareTask's docstring explains
+    why those don't hold one open transaction for their whole body), so the
+    tenant GUC needs re-applying here rather than assumed already set.
     """
     storage_key = storage_key_for(tenant_id=tenant_id, purpose=purpose, original_name=original_name)
     get_presigner().put(storage_key=storage_key, data=data, content_type=mime_type)
 
-    return File.objects.create(
-        tenant_id=tenant_id,
-        storage_key=storage_key,
-        original_name=original_name,
-        mime_type=mime_type,
-        size_bytes=len(data),
-        purpose=purpose,
-        status=FileStatus.READY,
-        created_by=actor_id,
-        updated_by=actor_id,
-    )
+    with tenant_atomic(tenant_id):
+        return File.objects.create(
+            tenant_id=tenant_id,
+            storage_key=storage_key,
+            original_name=original_name,
+            mime_type=mime_type,
+            size_bytes=len(data),
+            purpose=purpose,
+            status=FileStatus.READY,
+            created_by=actor_id,
+            updated_by=actor_id,
+        )

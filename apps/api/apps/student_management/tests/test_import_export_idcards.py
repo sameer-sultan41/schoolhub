@@ -169,6 +169,27 @@ class IdCardGenerateTests(StudentManagementJobsAPITestCase):
         self.assertEqual(file.mime_type, "application/pdf")
         self.assertEqual(job.result["count"], 1)
 
+    def test_reports_only_the_actually_rendered_count(self) -> None:
+        self.allow("students.id-card.generate")
+        with tenant_context(self.tenant.id):
+            student = StudentFactory(tenant=self.tenant, campus=self.campus)
+        missing_id = "00000000-0000-0000-0000-000000000000"
+
+        response = self.client.post(
+            "/api/v1/id-cards:generate",
+            {"student_ids": [str(student.pk), missing_id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        job_id = response.json()["data"]["job_id"]
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=job_id)
+        self.assertEqual(job.status, JobStatus.SUCCEEDED)
+        # Two ids were requested, but only one resolves to a real student — the
+        # reported count must reflect what was actually rendered, not the input size.
+        self.assertEqual(job.result["count"], 1)
+
     def test_requires_at_least_one_student_id(self) -> None:
         self.allow("students.id-card.generate")
 

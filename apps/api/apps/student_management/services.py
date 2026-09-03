@@ -34,6 +34,7 @@ from apps.student_management.models import (
     TransferType,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.tenancy.context import tenant_atomic
 from core.tenancy.sequences import allocate_number
 
 # Pattern tokens the admission-number template may use. Anything else in the
@@ -1053,15 +1054,6 @@ def import_student_row(
         }
 
     try:
-        campus = Campus.objects.get(code=row["campus_code"])
-    except Campus.DoesNotExist:
-        return {
-            "row": str(row_number),
-            "field": "campus_code",
-            "issue": f"No campus with code '{row['campus_code']}'.",
-        }
-
-    try:
         date_of_birth = datetime.date.fromisoformat(row["date_of_birth"])
         admission_date = datetime.date.fromisoformat(row["admission_date"])
     except ValueError:
@@ -1071,8 +1063,21 @@ def import_student_row(
             "issue": "Dates must be in YYYY-MM-DD format.",
         }
 
+    # One transaction (with the tenant GUC re-applied for it — see
+    # core.tenancy.context.tenant_atomic) for the whole row, not just the create:
+    # this is what actually makes each row "commit independently" as the docstring
+    # above promises, rather than nesting as a savepoint inside whatever
+    # transaction the caller happens to already have open.
     try:
-        with transaction.atomic():
+        with tenant_atomic(tenant_id):
+            try:
+                campus = Campus.objects.get(code=row["campus_code"])
+            except Campus.DoesNotExist:
+                return {
+                    "row": str(row_number),
+                    "field": "campus_code",
+                    "issue": f"No campus with code '{row['campus_code']}'.",
+                }
             create_student(
                 campus=campus,
                 admission_date=admission_date,
@@ -1128,7 +1133,10 @@ def build_student_export_csv(*, tenant_id: uuid.UUID) -> bytes:
             "admission_date",
         ]
     )
-    students = Student.objects.alive().select_related("campus").order_by("last_name", "first_name")
+    with tenant_atomic(tenant_id):
+        students = list(
+            Student.objects.alive().select_related("campus").order_by("last_name", "first_name")
+        )
     for student in students:
         writer.writerow(
             [
@@ -1145,7 +1153,7 @@ def build_student_export_csv(*, tenant_id: uuid.UUID) -> bytes:
     return buffer.getvalue().encode("utf-8")
 
 
-def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -> bytes:
+def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -> tuple[bytes, int]:
     """Render one merged PDF, one page per student (module doc §6, §17).
 
     QR only, no barcode: api-architecture.md names "QR/barcode generation" as
@@ -1153,6 +1161,11 @@ def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -
     on the card — a documented scope trim, not an oversight. The QR payload
     is a plain "{tenant_id}:{admission_number}" string; there is no
     verification endpoint yet to resolve it against (a later-tier concern).
+
+    Returns ``(pdf_bytes, rendered_count)`` — a caller-supplied id that does not
+    resolve to a live student (already withdrawn, wrong tenant, typo'd) is
+    silently skipped rather than failing the whole batch, so the caller needs
+    the actual rendered count to report, not just ``len(student_ids)``.
     """
     import base64
     import io
@@ -1160,7 +1173,8 @@ def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -
     import qrcode
     from weasyprint import HTML
 
-    students = Student.objects.alive().filter(pk__in=student_ids).select_related("campus")
+    with tenant_atomic(tenant_id):
+        students = list(Student.objects.alive().filter(pk__in=student_ids).select_related("campus"))
 
     cards_html = []
     for student in students:
@@ -1196,4 +1210,4 @@ def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -
       <body>{"".join(cards_html)}</body>
     </html>
     """
-    return HTML(string=html).write_pdf()
+    return HTML(string=html).write_pdf(), len(students)

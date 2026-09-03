@@ -4,16 +4,23 @@ Kept out of the task bodies so a task only has to call `mark_running` /
 `mark_succeeded` / `mark_failed` / `update_progress` and never touches the
 model's field bookkeeping directly — the same "services own the rules"
 convention as every other app in this codebase.
+
+`mark_running`/`update_progress`/`mark_succeeded`/`mark_failed` each open their
+own `tenant_atomic` (core.tenancy.tasks.TenantAwareTask's docstring explains
+why) rather than relying on an already-open transaction, so each commits — and
+becomes visible to a polling `GET /jobs/{id}` — the moment it returns, and a
+worker killed partway through a task still leaves whichever status was last
+written durably recorded.
 """
 
 from __future__ import annotations
 
 import uuid
 
-from django.db import transaction
 from django.utils import timezone
 
 from core.jobs.models import BackgroundJob, JobStatus
+from core.tenancy.context import tenant_atomic
 
 
 def create_job(
@@ -39,33 +46,34 @@ def attach_celery_task_id(*, job: BackgroundJob, celery_task_id: str) -> None:
     job.save(update_fields=["celery_task_id", "updated_at"])
 
 
-@transaction.atomic
 def mark_running(*, job: BackgroundJob) -> BackgroundJob:
-    job.status = JobStatus.RUNNING
-    job.started_at = timezone.now()
-    job.save(update_fields=["status", "started_at", "updated_at"])
+    with tenant_atomic(job.tenant_id):
+        job.status = JobStatus.RUNNING
+        job.started_at = timezone.now()
+        job.save(update_fields=["status", "started_at", "updated_at"])
     return job
 
 
 def update_progress(*, job: BackgroundJob, progress: int) -> None:
-    job.progress = max(0, min(100, progress))
-    job.save(update_fields=["progress", "updated_at"])
+    with tenant_atomic(job.tenant_id):
+        job.progress = max(0, min(100, progress))
+        job.save(update_fields=["progress", "updated_at"])
 
 
-@transaction.atomic
 def mark_succeeded(*, job: BackgroundJob, result: dict) -> BackgroundJob:
-    job.status = JobStatus.SUCCEEDED
-    job.progress = 100
-    job.result = result
-    job.finished_at = timezone.now()
-    job.save(update_fields=["status", "progress", "result", "finished_at", "updated_at"])
+    with tenant_atomic(job.tenant_id):
+        job.status = JobStatus.SUCCEEDED
+        job.progress = 100
+        job.result = result
+        job.finished_at = timezone.now()
+        job.save(update_fields=["status", "progress", "result", "finished_at", "updated_at"])
     return job
 
 
-@transaction.atomic
 def mark_failed(*, job: BackgroundJob, error: str) -> BackgroundJob:
-    job.status = JobStatus.FAILED
-    job.error = error
-    job.finished_at = timezone.now()
-    job.save(update_fields=["status", "error", "finished_at", "updated_at"])
+    with tenant_atomic(job.tenant_id):
+        job.status = JobStatus.FAILED
+        job.error = error
+        job.finished_at = timezone.now()
+        job.save(update_fields=["status", "error", "finished_at", "updated_at"])
     return job
