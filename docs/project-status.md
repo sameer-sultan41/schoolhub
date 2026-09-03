@@ -25,7 +25,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | Module | API | Dashboard screens | E2E | Spec doc |
 | ------ | --- | ------------------ | --- | -------- |
 | school-organization | done | — (platform-admin/setup UI not built) | — | done |
-| student-management | in progress | in progress | — | done |
+| student-management | in progress (PR 1 CRUD, PR 2 guardians/documents/files) | in progress (list/detail/create/edit + Guardians/Emergency contacts/Documents tabs) | — | done |
 | staff-management | — | — | — | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
 | everything else (15 modules) | — | — | — | done (spec exists; nothing implemented) |
@@ -90,13 +90,19 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 - **Feature-flag enforcement and per-tenant number counters now exist**
   (`core.tenancy.features`, `core.tenancy.sequences`, PR 1) — built as
   `student-management` foundation, reusable by every later module. **Still
-  missing:** background-job infrastructure and two-step file upload (both
-  land in PR 2/4 of `student-management`), and the `files` table.
-- **`student-management`'s guardians, documents, enrollment lifecycle, and
-  import/ID cards are not built yet** — PR 1 covers the student master record
-  and CRUD only. `medical_notes` field-level restriction and the
-  `filter_assigned_to_user` fail-closed default (no `staff` table to join
-  against yet) both ship in PR 1, ahead of the features that will exercise them.
+  missing:** background-job infrastructure (lands in PR 4).
+- **`core.files` now exists** (PR 2): the two-step presigned-upload flow
+  (`POST /files` → `:confirm` → `:download`), backed by MinIO locally/in CI's
+  `NullPresigner`. **AV scanning is not implemented** — `FileStatus.QUARANTINED`
+  is unreachable; a documented gap against `api-architecture.md` §11, not an
+  oversight.
+- **`student-management`'s enrollment lifecycle and import/ID cards are not
+  built yet** — PR 1+2 cover the student master record, CRUD, guardians,
+  emergency contacts, and documents. `medical_notes` field-level restriction
+  and the `filter_assigned_to_user` fail-closed default (no `staff` table to
+  join against yet) both ship in PR 1, ahead of the features that will
+  exercise them. The student<->guardian link has no destroy endpoint by
+  design (see the module doc) — the dashboard has no "unlink" UI to match.
 
 ---
 
@@ -116,11 +122,15 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
    generated `PageProps`/`LayoutProps` globals. If the team prefers the generated
    globals, add `next typegen` to the `typecheck` script.
 5. **`student-management` is the active work**, landing as 4 sequenced PRs (each
-   spanning backend + its dashboard screens): PR 1 foundation + student CRUD, PR 2
-   guardians/documents, PR 3 enrollment lifecycle, PR 4 import/ID cards. PR 1 is
-   up (student model, `module.students` feature flag off by default, a new
-   `core.tenancy.features` flag registry, `students` list/detail/create/edit
-   screens). `staff-management` is next after PR 4 per the tier-1 build order.
+   spanning backend + its dashboard screens), stacked one on the next: PR 1
+   foundation + student CRUD, PR 2 guardians/documents/files, PR 3 enrollment
+   lifecycle, PR 4 import/ID cards. PR 1 and PR 2 are up — student model,
+   `module.students` feature flag off by default, `core.tenancy.features`
+   flag registry, `students` list/detail/create/edit screens, guardians,
+   emergency contacts, student documents, and `core.files`'s two-step upload
+   with matching Guardians/Emergency contacts/Documents detail tabs. PR 3
+   (enrollment lifecycle) is next. `staff-management` follows PR 4 per the
+   tier-1 build order.
 6. Once `student-management`'s API exists, `staff-management` can start in
    parallel — it depends on `school-organization` only, not on `student-management`.
    Two things it will need that PR 1 already built and can reuse as-is:
