@@ -182,7 +182,7 @@ describe("DocumentsPanel", () => {
     const dialog = screen.getByRole("dialog");
     const file = new File(["hello"], "certificate.pdf", { type: "application/pdf" });
     await user.upload(within(dialog).getByLabelText("File"), file);
-    await user.type(within(dialog).getByLabelText("Title"), "Birth certificate");
+    await user.type(within(dialog).getByLabelText("Title"), "Amina's birth certificate");
     await user.click(within(dialog).getByRole("button", { name: "Upload document" }));
 
     await waitFor(() => {
