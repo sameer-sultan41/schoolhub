@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -15,7 +16,12 @@ jest.mock("@/hooks/use-session", () => ({
 jest.mock("@/features/students/use-reference-data", () => ({
   useAcademicSessions: () => ({ data: [{ id: "sess1", name: "2026-27" }] }),
   useClasses: () => ({ data: [{ id: "class1", name: "Grade 6" }] }),
-  useSectionsForClass: () => ({ data: [{ id: "section1", name: "A" }] }),
+  useSectionsForClass: () => ({
+    data: [
+      { id: "section1", name: "A" },
+      { id: "section2", name: "B" },
+    ],
+  }),
   useCampuses: () => ({ data: [] }),
 }));
 
@@ -129,5 +135,67 @@ describe("EnrollmentPanel", () => {
         effective_date: "2026-06-01",
       });
     });
+  });
+
+  it("changes the student's section from the dialog, excluding the current section", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([ACTIVE_ENROLLMENT_EVENT]));
+    mockPost.mockResolvedValue(apiResult({}));
+
+    const user = userEvent.setup();
+    renderWithProviders(<EnrollmentPanel studentId="s1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Change section" }));
+
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("combobox", { name: "Section" }));
+    // The current section ("A") must not be offered as its own replacement.
+    expect(screen.queryByRole("option", { name: "A" })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("option", { name: "B" }));
+    await user.type(within(dialog).getByLabelText("Roll number"), "7");
+    await user.click(within(dialog).getByRole("button", { name: "Change section" }));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith("/students/s1:change-section", {
+        section_id: "section2",
+        roll_number: "7",
+        capacity_override_reason: null,
+      });
+    });
+  });
+
+  it("shows an error inside the enroll dialog when enrolling fails", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([]));
+    mockPost.mockRejectedValue(
+      new ApiError({ code: "conflict", message: "conflict", status: 409, url: "/x" }),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(<EnrollmentPanel studentId="s1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Enroll" }));
+
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("combobox", { name: "Academic session" }));
+    await user.click(await screen.findByRole("option", { name: "2026-27" }));
+    await user.click(within(dialog).getByRole("combobox", { name: "Class" }));
+    await user.click(await screen.findByRole("option", { name: "Grade 6" }));
+    await user.click(within(dialog).getByRole("combobox", { name: "Section" }));
+    await user.click(await screen.findByRole("option", { name: "A" }));
+    await user.type(within(dialog).getByLabelText("Enrollment date"), "2026-04-05");
+    await user.click(within(dialog).getByRole("button", { name: "Enroll" }));
+
+    expect(await within(dialog).findByText(/conflicts with the current data/i)).toBeInTheDocument();
+  });
+
+  it("renders the ApiError envelope when the enrollment query fails", async () => {
+    mockGet.mockRejectedValue(
+      new ApiError({ code: "server_error", message: "boom", status: 500, url: "/x" }),
+    );
+
+    renderWithProviders(<EnrollmentPanel studentId="s1" />);
+
+    expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
   });
 });
