@@ -9,6 +9,7 @@ Professional engineering specification for an **AI-powered, multi-tenant School 
 | If you are… | Read |
 | ----------- | ---- |
 | New to the project | [`00-overview/vision.md`](00-overview/vision.md) → [`00-overview/requirements.md`](00-overview/requirements.md) → [`02-architecture/system-architecture.md`](02-architecture/system-architecture.md) |
+| Picking up the build | [`project-status.md`](project-status.md) — what's implemented, what's in progress, where to start |
 | Planning the build | [`01-phases/phase-plan.md`](01-phases/phase-plan.md), then the individual phase docs |
 | Implementing a feature | [`AGENTS.md`](AGENTS.md) → [`context/context-map.md`](context/context-map.md) → your module doc |
 | Reviewing architecture | [`02-architecture/`](02-architecture/) — start with `system-architecture.md`, `multi-tenancy.md`, `api-architecture.md` |
@@ -19,6 +20,7 @@ Professional engineering specification for an **AI-powered, multi-tenant School 
 
 ```
 AGENTS.md                  AI-agent entry point: vocabulary, invariants, the "load only what you need" rule
+project-status.md          Living hand-off note: what's built, what's in progress, where to start
 context/
   context-map.md           task type → exact files to load (the routing table)
   agents-template-*.md     ready-to-copy AGENTS.md for the api / dashboard / website repos

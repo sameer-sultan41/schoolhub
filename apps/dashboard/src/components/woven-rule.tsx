@@ -1,7 +1,7 @@
 /**
  * The one signature element of the redesign: a woven navy/gold band that separates
  * a screen's header from its content. Used sparingly (once per screen) — see
- * docs/frontend-status.md's design notes for why: everything else stays quiet so this
+ * docs/project-status.md's design notes for why: everything else stays quiet so this
  * stays memorable.
  *
  * `pathLength="1"` normalizes both paths to a fixed length regardless of their actual
