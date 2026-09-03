@@ -112,7 +112,8 @@
       "profile": "Profile",
       "guardians": "Guardians",
       "emergencyContacts": "Emergency contacts",
-      "documents": "Documents"
+      "documents": "Documents",
+      "history": "History"
     },
     "guardians": {
       "title": "Guardians",
@@ -190,6 +191,78 @@
         "pending": "Pending",
         "verified": "Verified",
         "rejected": "Rejected"
+      }
+    },
+    "enrollment": {
+      "title": "Enrollment",
+      "notEnrolled": "Not enrolled in an active session.",
+      "enroll": "Enroll",
+      "enrollDescription": "Place this student into a session, class, and section.",
+      "changeSection": "Change section",
+      "withdraw": "Withdraw",
+      "withdrawDescription": "Ends the current enrollment and marks the student withdrawn.",
+      "rollNumber": "Roll #{roll}",
+      "status": {
+        "active": "Active",
+        "promoted": "Promoted",
+        "retained": "Retained",
+        "transferred_out": "Transferred out",
+        "withdrawn": "Withdrawn",
+        "graduated": "Graduated"
+      },
+      "fields": {
+        "academicSession": "Academic session",
+        "selectSession": "Select a session",
+        "class": "Class",
+        "selectClass": "Select a class",
+        "section": "Section",
+        "selectSection": "Select a section",
+        "selectCampus": "Select a campus",
+        "enrollmentDate": "Enrollment date",
+        "rollNumber": "Roll number",
+        "overrideReason": "Capacity override reason",
+        "overrideReasonHint": "Only needed if the section is full",
+        "reason": "Reason",
+        "effectiveDate": "Effective date"
+      }
+    },
+    "transfers": {
+      "title": "Transfers",
+      "empty": "No transfers on record.",
+      "request": "Request transfer",
+      "requestDescription": "Request an inter-campus, outgoing, or incoming transfer.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "complete": "Complete",
+      "completeDescription": "Executes the approved transfer.",
+      "type": {
+        "inter_campus": "Inter-campus",
+        "outgoing": "Outgoing",
+        "incoming": "Incoming"
+      },
+      "status": {
+        "requested": "Requested",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "fields": {
+        "type": "Transfer type",
+        "fromCampus": "From campus",
+        "toCampus": "To campus",
+        "externalSchoolName": "External school name",
+        "reason": "Reason",
+        "effectiveDate": "Effective date",
+        "destinationSectionId": "Destination section ID"
+      }
+    },
+    "history": {
+      "timelineTitle": "Timeline",
+      "empty": "No history yet.",
+      "event": {
+        "enrollment": "Enrolled — {session}, {className} {section}",
+        "transfer": "Transfer — {type}"
       }
     }
   },

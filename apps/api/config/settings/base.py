@@ -73,6 +73,7 @@ CORE_APPS = [
     "core.rbac",
     "core.audit",
     "core.files",
+    "core.idempotency",
 ]
 
 # One app per module doc in docs/03-modules/.

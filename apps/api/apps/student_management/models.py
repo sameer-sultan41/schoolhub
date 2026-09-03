@@ -1,8 +1,8 @@
-"""Student management — the durable student master record and PR2's additions.
+"""Student management — the durable student master record and PR2/PR3's additions.
 
-PR1 scope was the `students` table only. PR2 adds guardians, the student<->
-guardian link, emergency contacts, and student documents. Enrollments and
-transfers land in a later PR.
+PR1 scope was the `students` table only. PR2 added guardians, the student<->
+guardian link, emergency contacts, and student documents. PR3 adds the
+enrollment lifecycle (`student_enrollments`, `student_transfers`).
 
 Columns, defaults, uniques and indexes follow
 docs/05-database/entities/people.md; behaviour follows
@@ -19,8 +19,15 @@ tenant-checked resolution an FK cannot express here.
 
 ``Student.photo_file_id`` and ``StudentDocument.file_id`` ARE real FKs to
 ``core.files.File`` — that table now exists (PR2) — while
-``student_transfers.certificate_document_id`` (a later PR) stays a plain UUID
-column, since its target (``generated_documents``) is Tier 7.
+``student_transfers.certificate_document_id`` stays a plain UUID column, since
+its target (``generated_documents``, the certificates & documents module) is
+Tier 7 and does not exist.
+
+``StudentTransfer.decided_by`` is a plain UUID column too, matching
+``StudentDocument.verified_by`` — it is always set server-side from
+``request.user.pk`` (never client-supplied), so the cross-tenant leak this
+docstring warns about elsewhere does not apply here; it stays a plain column
+simply for consistency with that established audit-reference pattern.
 
 Nullable varchar columns below are specified by the entity doc and NULL is not
 interchangeable with '' — see school_organization/models.py's header for why —
@@ -153,13 +160,14 @@ class Student(TenantOwnedModel):
         """Record scope `assigned` (auth-and-rbac.md §2.3) for a class teacher.
 
         The real join is `student_enrollments.section_id ->
-        sections.class_teacher_staff_id -> staff.user_id`, but `student_enrollments`
-        does not exist until a later PR and `staff` is the other Tier-1 module,
-        not yet built at all. Returning none() here is the fail-closed default
-        `core.rbac.permissions.scope_queryset` already falls back to when a model
-        has no hook — this override exists only so the gap is documented at the
-        model, not silently inherited. A class_teacher with `assigned` scope sees
-        zero students until both dependencies land; that is deliberate, not a bug.
+        sections.class_teacher_staff_id -> staff.user_id`. `student_enrollments`
+        exists as of PR3, but `staff` is the other Tier-1 module and is still not
+        built — that remaining hop is the blocker. Returning none() here is the
+        fail-closed default `core.rbac.permissions.scope_queryset` already falls
+        back to when a model has no hook — this override exists only so the gap
+        is documented at the model, not silently inherited. A class_teacher with
+        `assigned` scope sees zero students until `staff-management` lands; that
+        is deliberate, not a bug.
         """
         return queryset.none()
 
@@ -377,3 +385,158 @@ class StudentDocument(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.title} ({self.student_id})"
+
+
+class EnrollmentStatus(models.TextChoices):
+    ACTIVE = "active", "Active"
+    PROMOTED = "promoted", "Promoted"
+    RETAINED = "retained", "Retained"
+    TRANSFERRED_OUT = "transferred_out", "Transferred out"
+    WITHDRAWN = "withdrawn", "Withdrawn"
+    GRADUATED = "graduated", "Graduated"
+
+
+class StudentEnrollment(TenantOwnedModel):
+    """Session-scoped placement: class, section, roll number, and outcome.
+
+    One row per (student, academic_session) — module doc §11's "one *active*
+    enrollment per session" reads as "one enrollment, period" here: promotion
+    into a new session works only because that is a different
+    academic_session_id, per drift #6 in the plan.
+    """
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="enrollments")
+    academic_session = models.ForeignKey(
+        "school_organization.AcademicSession", on_delete=models.PROTECT, related_name="+"
+    )
+    # Python field name avoids the `class` keyword; column/API name stays
+    # `class_id`, exactly as school_organization.Section already does.
+    school_class = models.ForeignKey(
+        "school_organization.Class",
+        on_delete=models.PROTECT,
+        related_name="+",
+        db_column="class_id",
+    )
+    section = models.ForeignKey(
+        "school_organization.Section", on_delete=models.PROTECT, related_name="+"
+    )
+    roll_number = models.CharField(max_length=16, null=True, blank=True)
+    enrollment_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True, help_text="Set when status leaves active.")
+    status = models.CharField(
+        max_length=20, choices=EnrollmentStatus.choices, default=EnrollmentStatus.ACTIVE
+    )
+    # entities/academics.md also lists `elective_subject_ids` as a
+    # *(recommendation)* — no caller in this module or any shipped module reads
+    # or writes it (elective choice belongs to academics, a later tier), so it
+    # is not built. Add it here once academics needs it, not before.
+
+    class Meta:
+        db_table = "student_enrollments"
+        ordering = ["-enrollment_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "student", "academic_session"],
+                name="student_enrollments_unique_per_session",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "section", "roll_number"],
+                name="student_enrollments_unique_roll_per_section",
+                condition=models.Q(deleted_at__isnull=True, roll_number__isnull=False),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "section", "status"], name="student_enroll_section_idx"),
+            models.Index(
+                fields=["tenant", "academic_session", "school_class"],
+                name="student_enroll_sess_class_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.student_id} @ {self.academic_session_id}"
+
+
+class TransferType(models.TextChoices):
+    INTER_CAMPUS = "inter_campus", "Inter-campus"
+    OUTGOING = "outgoing", "Outgoing"
+    INCOMING = "incoming", "Incoming"
+
+
+class TransferStatus(models.TextChoices):
+    REQUESTED = "requested", "Requested"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+    COMPLETED = "completed", "Completed"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class StudentTransfer(TenantOwnedModel):
+    """A transfer request and its lifecycle (module doc §6-§7.2).
+
+    ``incoming`` and ``cancelled`` exist in the entity spec but have no
+    workflow in this PR (drift #2/#3 in the plan) — the enum values are here
+    for schema parity, ``:cancel`` is a documented gap, and completing an
+    ``incoming`` transfer is a no-op beyond the status change (see
+    ``services.complete_transfer``).
+    """
+
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="transfers")
+    transfer_type = models.CharField(max_length=20, choices=TransferType.choices)
+    from_campus = models.ForeignKey(
+        "school_organization.Campus",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    to_campus = models.ForeignKey(
+        "school_organization.Campus",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    external_school_name = models.CharField(max_length=200, null=True, blank=True)
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=20, choices=TransferStatus.choices, default=TransferStatus.REQUESTED
+    )
+    effective_date = models.DateField()
+    decided_by = models.UUIDField(null=True, blank=True, help_text="users(id).")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    certificate_document_id = models.UUIDField(
+        null=True, blank=True, help_text="generated_documents(id) — Tier 7, not built yet."
+    )
+
+    class Meta:
+        db_table = "student_transfers"
+        ordering = ["-effective_date"]
+        constraints = [
+            # decided_by/decided_at move together: null while requested, both
+            # set the moment status leaves requested — mirrors
+            # student_documents_verifier_required_when_decided.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status=TransferStatus.REQUESTED,
+                        decided_by__isnull=True,
+                        decided_at__isnull=True,
+                    )
+                    | (
+                        ~models.Q(status=TransferStatus.REQUESTED)
+                        & models.Q(decided_by__isnull=False, decided_at__isnull=False)
+                    )
+                ),
+                name="student_transfers_decider_required_when_decided",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "student"], name="student_transfers_student_idx"),
+            models.Index(fields=["tenant", "status"], name="student_transfers_status_idx"),
+            models.Index(fields=["tenant", "effective_date"], name="student_transfers_eff_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.student_id} transfer ({self.transfer_type}, {self.status})"

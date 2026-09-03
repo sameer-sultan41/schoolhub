@@ -2144,13 +2144,246 @@ paths:
               schema:
                 $ref: '#/components/schemas/StudentGuardian'
           description: ''
+  /api/v1/student-transfers:
+    get:
+      operationId: student_transfers_list
+      description: |-
+        `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+
+        colon-actions (module doc §16). No update/destroy — a transfer's state
+        only ever moves through those three actions. §4 declares no
+        ``students.transfer.view`` key, so list/retrieve reuse
+        ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+        used elsewhere in this module — since a `principal` deciding on a
+        transfer needs to see it, not just the `school_admin` who created it.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - student-transfers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStudentTransferList'
+          description: ''
+    post:
+      operationId: student_transfers_create
+      description: |-
+        `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+
+        colon-actions (module doc §16). No update/destroy — a transfer's state
+        only ever moves through those three actions. §4 declares no
+        ``students.transfer.view`` key, so list/retrieve reuse
+        ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+        used elsewhere in this module — since a `principal` deciding on a
+        transfer needs to see it, not just the `school_admin` who created it.
+      tags:
+      - student-transfers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentTransfer'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StudentTransfer'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentTransfer'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentTransfer'
+          description: ''
+  /api/v1/student-transfers/{id}:
+    get:
+      operationId: student_transfers_retrieve
+      description: |-
+        `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+
+        colon-actions (module doc §16). No update/destroy — a transfer's state
+        only ever moves through those three actions. §4 declares no
+        ``students.transfer.view`` key, so list/retrieve reuse
+        ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+        used elsewhere in this module — since a `principal` deciding on a
+        transfer needs to see it, not just the `school_admin` who created it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student transfer.
+        required: true
+      tags:
+      - student-transfers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentTransfer'
+          description: ''
+  /api/v1/student-transfers/{id}:approve:
+    post:
+      operationId: student_transfers_:approve_create
+      description: |-
+        `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+
+        colon-actions (module doc §16). No update/destroy — a transfer's state
+        only ever moves through those three actions. §4 declares no
+        ``students.transfer.view`` key, so list/retrieve reuse
+        ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+        used elsewhere in this module — since a `principal` deciding on a
+        transfer needs to see it, not just the `school_admin` who created it.
+      summary: Approve a student transfer
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-transfers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentTransfer'
+          description: ''
+        '409':
+          description: Already decided
+  /api/v1/student-transfers/{id}:complete:
+    post:
+      operationId: student_transfers_:complete_create
+      description: |-
+        `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+
+        colon-actions (module doc §16). No update/destroy — a transfer's state
+        only ever moves through those three actions. §4 declares no
+        ``students.transfer.view`` key, so list/retrieve reuse
+        ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+        used elsewhere in this module — since a `principal` deciding on a
+        transfer needs to see it, not just the `school_admin` who created it.
+      summary: Execute an approved student transfer
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-transfers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferCompleteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransferCompleteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransferCompleteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentTransfer'
+          description: ''
+        '409':
+          description: Not yet approved
+  /api/v1/student-transfers/{id}:reject:
+    post:
+      operationId: student_transfers_:reject_create
+      description: |-
+        `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+
+        colon-actions (module doc §16). No update/destroy — a transfer's state
+        only ever moves through those three actions. §4 declares no
+        ``students.transfer.view`` key, so list/retrieve reuse
+        ``students.student.view`` — the same ``ClassSubjectViewSet`` precedent
+        used elsewhere in this module — since a `principal` deciding on a
+        transfer needs to see it, not just the `school_admin` who created it.
+      summary: Reject a student transfer
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-transfers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentTransfer'
+          description: ''
+        '409':
+          description: Already decided
   /api/v1/students:
     get:
       operationId: students_list
       description: Student master records (module doc §5.1-2).
       parameters:
       - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
         name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: class_id
         schema:
           type: string
           format: uuid
@@ -2183,6 +2416,11 @@ paths:
         description: A search term.
         schema:
           type: string
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
       - in: query
         name: status
         schema:
@@ -2310,6 +2548,130 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/students/{id}/history:
+    get:
+      operationId: students_history_retrieve
+      description: Student master records (module doc §5.1-2).
+      summary: Assemble a student's chronological history
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Timeline of enrollment and transfer events
+  /api/v1/students/{id}:change-section:
+    post:
+      operationId: students_:change_section_create
+      description: Student master records (module doc §5.1-2).
+      summary: Change a student's section allocation
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeSectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangeSectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangeSectionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentEnrollment'
+          description: ''
+  /api/v1/students/{id}:enroll:
+    post:
+      operationId: students_:enroll_create
+      description: Student master records (module doc §5.1-2).
+      summary: Enroll a student into a session/class/section
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EnrollRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EnrollRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentEnrollment'
+          description: ''
+  /api/v1/students/{id}:withdraw:
+    post:
+      operationId: students_:withdraw_create
+      description: Student master records (module doc §5.1-2).
+      summary: Withdraw a student
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WithdrawRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WithdrawRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+          description: ''
   /api/v1/students/{student_pk}/documents:
     get:
       operationId: students_documents_list
@@ -3051,6 +3413,21 @@ components:
       required:
       - current_password
       - new_password
+    ChangeSectionRequest:
+      type: object
+      properties:
+        section_id:
+          type: string
+          format: uuid
+        roll_number:
+          type: string
+          nullable: true
+          maxLength: 16
+        capacity_override_reason:
+          type: string
+          nullable: true
+      required:
+      - section_id
     Class:
       type: object
       properties:
@@ -3263,6 +3640,33 @@ components:
       - relationship
       - student_id
       - updated_at
+    EnrollRequest:
+      type: object
+      properties:
+        academic_session_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        enrollment_date:
+          type: string
+          format: date
+        roll_number:
+          type: string
+          nullable: true
+          maxLength: 16
+        capacity_override_reason:
+          type: string
+          nullable: true
+      required:
+      - academic_session_id
+      - class_id
+      - enrollment_date
+      - section_id
     File:
       type: object
       properties:
@@ -3746,6 +4150,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Student'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedStudentTransferList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentTransfer'
         meta:
           type: object
           properties:
@@ -4633,6 +5058,88 @@ components:
       - verification_status
       - verified_at
       - verified_by
+    StudentEnrollment:
+      type: object
+      description: |-
+        Output-only — enrollments are created/changed through the :enroll and
+
+        :change-section colon-actions on StudentViewSet, never a plain serializer
+        save().
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        class_id:
+          type: string
+          format: uuid
+          readOnly: true
+        section_id:
+          type: string
+          format: uuid
+          readOnly: true
+        roll_number:
+          type: string
+          readOnly: true
+          nullable: true
+        enrollment_date:
+          type: string
+          format: date
+          readOnly: true
+        end_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          description: Set when status leaves active.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StudentEnrollmentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session_id
+      - class_id
+      - created_at
+      - end_date
+      - enrollment_date
+      - id
+      - roll_number
+      - section_id
+      - status
+      - student_id
+      - updated_at
+    StudentEnrollmentStatusEnum:
+      enum:
+      - active
+      - promoted
+      - retained
+      - transferred_out
+      - withdrawn
+      - graduated
+      type: string
+      description: |-
+        * `active` - Active
+        * `promoted` - Promoted
+        * `retained` - Retained
+        * `transferred_out` - Transferred out
+        * `withdrawn` - Withdrawn
+        * `graduated` - Graduated
     StudentGuardian:
       type: object
       description: |-
@@ -4697,6 +5204,90 @@ components:
         * `transferred` - Transferred
         * `withdrawn` - Withdrawn
         * `graduated` - Graduated
+    StudentTransfer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+        transfer_type:
+          $ref: '#/components/schemas/TransferTypeEnum'
+        from_campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        to_campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        external_school_name:
+          type: string
+          nullable: true
+          maxLength: 200
+        reason:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StudentTransferStatusEnum'
+          readOnly: true
+        effective_date:
+          type: string
+          format: date
+        decided_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id).
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        certificate_document_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: generated_documents(id) — Tier 7, not built yet.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - certificate_document_id
+      - created_at
+      - decided_at
+      - decided_by
+      - effective_date
+      - id
+      - reason
+      - status
+      - student_id
+      - transfer_type
+      - updated_at
+    StudentTransferStatusEnum:
+      enum:
+      - requested
+      - approved
+      - rejected
+      - completed
+      - cancelled
+      type: string
+      description: |-
+        * `requested` - Requested
+        * `approved` - Approved
+        * `rejected` - Rejected
+        * `completed` - Completed
+        * `cancelled` - Cancelled
     Subject:
       type: object
       properties:
@@ -4787,6 +5378,29 @@ components:
       - sequence
       - start_date
       - updated_at
+    TransferCompleteRequest:
+      type: object
+      description: |-
+        `section_id` is required only for an inter-campus transfer — see
+
+        services.complete_transfer, which raises a field-specific error when it is
+        missing for that type rather than this serializer guessing at a
+        conditional-required rule.
+      properties:
+        section_id:
+          type: string
+          format: uuid
+          nullable: true
+    TransferTypeEnum:
+      enum:
+      - inter_campus
+      - outgoing
+      - incoming
+      type: string
+      description: |-
+        * `inter_campus` - Inter-campus
+        * `outgoing` - Outgoing
+        * `incoming` - Incoming
     User:
       type: object
       properties:
@@ -4868,6 +5482,20 @@ components:
       description: |-
         * `private` - Private
         * `public` - Public
+    WithdrawRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+        effective_date:
+          type: string
+          format: date
+        waive_clearance:
+          type: boolean
+          default: false
+      required:
+      - effective_date
+      - reason
   securitySchemes:
     jwtAuth:
       type: http

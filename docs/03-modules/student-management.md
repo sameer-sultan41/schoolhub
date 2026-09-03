@@ -105,6 +105,8 @@ flowchart TD
 
 Transfers follow the same shape (`requested → approved/rejected → completed`), with inter-campus transfers additionally re-allocating section and outbound transfers ending in status `transferred` plus certificate issuance.
 
+**Implementation note (as shipped):** no `student_withdrawals` entity exists — withdrawal is a single audited `POST /api/v1/students/{id}:withdraw` (`students.student.withdraw`), not a separate initiate/approve pair. It is blocked while clearance blockers are non-empty; a caller who both passes `waive_clearance` and holds `students.withdrawal.approve` may override. Clearance checks (fees, library, transport) always return "clear" today, since none of those owning modules exist yet — this is a documented gap, not a false all-clear. `:cancel` is not implemented for transfers (only `:approve`/`:reject`/`:complete`), and `incoming` transfers have no defined execution workflow — completing one is a status-only change.
+
 ## 8. User Journeys
 
 - **`admission_staff`:** approves an application → handoff screen pre-fills the student form → confirms section (sees live capacity) → student enrolled, guardian portal invite sent — under five minutes.

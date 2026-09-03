@@ -18,12 +18,20 @@ from datetime import date
 from django.db import connection, transaction
 from django.utils import timezone
 
+from apps.school_organization.models import Section
+from apps.school_organization.services import assert_section_capacity, assert_session_writable
 from apps.student_management.models import (
     EmergencyContact,
+    EnrollmentStatus,
     Guardian,
     Student,
     StudentDocument,
+    StudentEnrollment,
     StudentGuardian,
+    StudentStatus,
+    StudentTransfer,
+    TransferStatus,
+    TransferType,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.tenancy.sequences import allocate_number
@@ -499,3 +507,456 @@ def verify_document(
         ]
     )
     return document
+
+
+def assert_student_active(student: Student) -> None:
+    if student.status != StudentStatus.ACTIVE:
+        raise DomainRuleViolation({"non_field": f"Student is {student.status}, not active."})
+
+
+def assert_section_belongs_to_class(*, section: Section, school_class) -> None:
+    if section.school_class_id != school_class.pk:
+        raise DomainRuleViolation({"section_id": "Section does not belong to the given class."})
+
+
+def assert_date_in_session(*, session, enrollment_date: date) -> None:
+    if not (session.start_date <= enrollment_date <= session.end_date):
+        raise DomainRuleViolation(
+            {"enrollment_date": "Date falls outside the academic session's window."}
+        )
+
+
+def assert_enrollment_prerequisites(student: Student) -> None:
+    """Module doc §11: enrolling requires at least one guardian and one emergency contact."""
+    if not StudentGuardian.objects.alive().filter(student=student).exists():
+        raise DomainRuleViolation(
+            {"non_field": "Student needs at least one guardian before enrolling."}
+        )
+    if not EmergencyContact.objects.alive().filter(student=student).exists():
+        raise DomainRuleViolation(
+            {"non_field": "Student needs at least one emergency contact before enrolling."}
+        )
+
+
+def active_enrollment(student: Student) -> StudentEnrollment | None:
+    return (
+        StudentEnrollment.objects.alive()
+        .filter(student=student, status=EnrollmentStatus.ACTIVE)
+        .first()
+    )
+
+
+def _assert_capacity(
+    *,
+    section: Section,
+    exclude_enrollment_id=None,
+    capacity_override_reason,
+    actor_has_capacity_override,
+) -> None:
+    """Lock ``section``, count its active occupants, and enforce capacity — or
+
+    require both a reason and the override permission to skip that check
+    (module doc §11: "override requires school_admin + reason, audited").
+    """
+    locked_section = Section.objects.select_for_update().get(pk=section.pk)
+    occupied_qs = StudentEnrollment.objects.alive().filter(
+        section=locked_section, status=EnrollmentStatus.ACTIVE
+    )
+    if exclude_enrollment_id is not None:
+        occupied_qs = occupied_qs.exclude(pk=exclude_enrollment_id)
+    occupied = occupied_qs.count()
+
+    if capacity_override_reason:
+        if not actor_has_capacity_override:
+            raise DomainRuleViolation(
+                {
+                    "capacity_override_reason": (
+                        "Only an admin holding students.student.update may override "
+                        "section capacity."
+                    )
+                }
+            )
+    else:
+        assert_section_capacity(locked_section, occupied=occupied)
+
+
+@transaction.atomic
+def enroll_student(
+    *,
+    student: Student,
+    academic_session,
+    school_class,
+    section: Section,
+    enrollment_date: date,
+    roll_number: str | None = None,
+    capacity_override_reason: str | None = None,
+    actor_has_capacity_override: bool = False,
+    actor_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+) -> StudentEnrollment:
+    """Enroll ``student`` into a session/class/section (module doc §7.1, §11).
+
+    Ordering matters: session-writable -> student-active -> prerequisites
+    (>=1 guardian, >=1 emergency contact) -> section-belongs-to-class ->
+    date-in-session -> lock the section row -> count active occupants under
+    that lock -> capacity check -> create. Locking after the cheap checks and
+    before the expensive count is what makes the capacity check race-safe
+    under concurrent enrollments into the same section.
+    """
+    assert_session_writable(academic_session)
+    assert_student_active(student)
+    assert_enrollment_prerequisites(student)
+    assert_section_belongs_to_class(section=section, school_class=school_class)
+    assert_date_in_session(session=academic_session, enrollment_date=enrollment_date)
+    _assert_capacity(
+        section=section,
+        capacity_override_reason=capacity_override_reason,
+        actor_has_capacity_override=actor_has_capacity_override,
+    )
+
+    return StudentEnrollment.objects.create(
+        tenant_id=tenant_id,
+        student=student,
+        academic_session=academic_session,
+        school_class=school_class,
+        section=section,
+        roll_number=roll_number,
+        enrollment_date=enrollment_date,
+        status=EnrollmentStatus.ACTIVE,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+
+@transaction.atomic
+def change_section(
+    *,
+    enrollment: StudentEnrollment,
+    section: Section,
+    roll_number: str | None = None,
+    capacity_override_reason: str | None = None,
+    actor_has_capacity_override: bool = False,
+    actor_id: uuid.UUID,
+) -> StudentEnrollment:
+    """Mid-session reallocation to a different section of the same class."""
+    assert_session_writable(enrollment.academic_session)
+    assert_section_belongs_to_class(section=section, school_class=enrollment.school_class)
+    _assert_capacity(
+        section=section,
+        exclude_enrollment_id=enrollment.pk,
+        capacity_override_reason=capacity_override_reason,
+        actor_has_capacity_override=actor_has_capacity_override,
+    )
+
+    enrollment.section = section
+    # Roll numbers are unique per section; carry the existing value forward
+    # when the caller does not supply a new one rather than clearing it —
+    # a genuine collision surfaces as the usual IntegrityError-mapped 409.
+    if roll_number is not None:
+        enrollment.roll_number = roll_number
+    enrollment.updated_by = actor_id
+    enrollment.save(update_fields=["section", "roll_number", "updated_by", "updated_at"])
+    return enrollment
+
+
+def clearance_blockers(student: Student) -> list[str]:
+    """Cross-module clearance checks (module doc §7.2): outstanding fee dues,
+
+    un-returned library books, un-returned transport/asset assignments. None
+    of those owning modules exist yet (all later tiers), so this always
+    returns no blockers today — a documented gap (plan §19 gap 9), not a
+    false "all clear". Extend this list as each owning module ships, in that
+    module's own PR.
+    """
+    return []
+
+
+@transaction.atomic
+def withdraw_student(
+    *,
+    student: Student,
+    reason: str,
+    effective_date: date,
+    waive_clearance: bool = False,
+    actor_has_withdrawal_approval: bool = False,
+    actor_id: uuid.UUID,
+) -> Student:
+    """Withdraw a student (module doc §7.2). A single audited action, not a
+
+    separate initiate/approve workflow — no `student_withdrawals` entity
+    exists in any entity doc and §16 exposes exactly one endpoint (plan
+    deviation A). Blocked while `clearance_blockers()` is non-empty unless the
+    caller both passes `waive_clearance` and holds
+    `students.withdrawal.approve`.
+    """
+    assert_student_active(student)
+    blockers = clearance_blockers(student)
+    if blockers:
+        if not waive_clearance:
+            raise DomainRuleViolation({"non_field": f"Cannot withdraw: {'; '.join(blockers)}."})
+        if not actor_has_withdrawal_approval:
+            raise DomainRuleViolation(
+                {
+                    "waive_clearance": (
+                        "Only a user holding students.withdrawal.approve may waive "
+                        "clearance blockers."
+                    )
+                }
+            )
+
+    enrollment = active_enrollment(student)
+    if enrollment is not None:
+        enrollment.status = EnrollmentStatus.WITHDRAWN
+        enrollment.end_date = effective_date
+        enrollment.updated_by = actor_id
+        enrollment.save(update_fields=["status", "end_date", "updated_by", "updated_at"])
+
+    student.status = StudentStatus.WITHDRAWN
+    student.updated_by = actor_id
+    student.save(update_fields=["status", "updated_by", "updated_at"])
+    return student
+
+
+def assert_transfer_campus_fields(
+    *,
+    transfer_type: str,
+    from_campus,
+    to_campus,
+    external_school_name: str | None,
+) -> None:
+    """Per-type nullability, service-enforced rather than a check constraint
+
+    (plan deviation E) — a 422 naming the field beats an opaque IntegrityError.
+    """
+    if transfer_type == TransferType.INTER_CAMPUS:
+        if from_campus is None or to_campus is None:
+            raise DomainRuleViolation(
+                {
+                    "non_field": (
+                        "Inter-campus transfers require both from_campus_id and to_campus_id."
+                    )
+                }
+            )
+        if external_school_name:
+            raise DomainRuleViolation(
+                {"external_school_name": "Not applicable to an inter-campus transfer."}
+            )
+    elif transfer_type == TransferType.OUTGOING:
+        if from_campus is None:
+            raise DomainRuleViolation({"from_campus_id": "Required for an outgoing transfer."})
+        if to_campus is not None:
+            raise DomainRuleViolation({"to_campus_id": "Not applicable to an outgoing transfer."})
+        if not external_school_name:
+            raise DomainRuleViolation(
+                {"external_school_name": "Required for an outgoing transfer."}
+            )
+    elif transfer_type == TransferType.INCOMING:
+        if to_campus is None:
+            raise DomainRuleViolation({"to_campus_id": "Required for an incoming transfer."})
+        if from_campus is not None:
+            raise DomainRuleViolation({"from_campus_id": "Not applicable to an incoming transfer."})
+        if not external_school_name:
+            raise DomainRuleViolation(
+                {"external_school_name": "Required for an incoming transfer."}
+            )
+
+
+@transaction.atomic
+def request_transfer(
+    *,
+    student: Student,
+    transfer_type: str,
+    reason: str,
+    effective_date: date,
+    from_campus=None,
+    to_campus=None,
+    external_school_name: str | None = None,
+    actor_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+) -> StudentTransfer:
+    assert_student_active(student)
+    assert_transfer_campus_fields(
+        transfer_type=transfer_type,
+        from_campus=from_campus,
+        to_campus=to_campus,
+        external_school_name=external_school_name,
+    )
+    return StudentTransfer.objects.create(
+        tenant_id=tenant_id,
+        student=student,
+        transfer_type=transfer_type,
+        from_campus=from_campus,
+        to_campus=to_campus,
+        external_school_name=external_school_name,
+        reason=reason,
+        effective_date=effective_date,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+
+def assert_transfer_decidable(*, transfer: StudentTransfer, actor_id: uuid.UUID) -> None:
+    if transfer.status != TransferStatus.REQUESTED:
+        raise Conflict(f"Transfer is already {transfer.status}.")
+    if transfer.created_by == actor_id:
+        raise DomainRuleViolation(
+            {"non_field": "The initiator of a transfer may not also approve or reject it."}
+        )
+
+
+@transaction.atomic
+def approve_transfer(*, transfer: StudentTransfer, actor_id: uuid.UUID) -> StudentTransfer:
+    assert_transfer_decidable(transfer=transfer, actor_id=actor_id)
+    assert_student_active(transfer.student)
+    transfer.status = TransferStatus.APPROVED
+    transfer.decided_by = actor_id
+    transfer.decided_at = timezone.now()
+    transfer.updated_by = actor_id
+    transfer.save(update_fields=["status", "decided_by", "decided_at", "updated_by", "updated_at"])
+    return transfer
+
+
+@transaction.atomic
+def reject_transfer(*, transfer: StudentTransfer, actor_id: uuid.UUID) -> StudentTransfer:
+    assert_transfer_decidable(transfer=transfer, actor_id=actor_id)
+    transfer.status = TransferStatus.REJECTED
+    transfer.decided_by = actor_id
+    transfer.decided_at = timezone.now()
+    transfer.updated_by = actor_id
+    transfer.save(update_fields=["status", "decided_by", "decided_at", "updated_by", "updated_at"])
+    return transfer
+
+
+@transaction.atomic
+def complete_transfer(
+    *,
+    transfer: StudentTransfer,
+    actor_id: uuid.UUID,
+    section: Section | None = None,
+) -> StudentTransfer:
+    """Execute an approved transfer (module doc §6-§7.2).
+
+    Inter-campus: reallocates the student's current enrollment to `section`
+    (which must belong to `to_campus`) and moves `student.campus`. Outgoing:
+    ends the active enrollment and sets the student's status to
+    `transferred`. Incoming has no defined workflow yet (plan drift #2) — this
+    is a status-only no-op for that type, documented rather than silently
+    guessed at.
+    """
+    if transfer.status != TransferStatus.APPROVED:
+        raise Conflict(
+            f"Transfer must be approved before it can be completed (currently {transfer.status})."
+        )
+
+    student = transfer.student
+    # Re-check now, not just at request/approve time: the student's status can have
+    # changed in the (possibly long) gap between approval and completion — e.g.
+    # withdrawn via a separate action — and completing here would otherwise silently
+    # reset that status back to `transferred`, undoing the withdrawal.
+    assert_student_active(student)
+    if transfer.transfer_type == TransferType.INTER_CAMPUS:
+        if section is None:
+            raise DomainRuleViolation(
+                {
+                    "section_id": (
+                        "A destination section is required to complete an inter-campus transfer."
+                    )
+                }
+            )
+        if section.campus_id != transfer.to_campus_id:
+            raise DomainRuleViolation(
+                {"section_id": "Section does not belong to the destination campus."}
+            )
+        # assert_transfer_campus_fields guarantees to_campus is set for every
+        # inter-campus transfer at creation time; this is the type checker's
+        # window into that runtime invariant.
+        assert transfer.to_campus is not None
+        enrollment = active_enrollment(student)
+        if enrollment is not None:
+            assert_section_belongs_to_class(section=section, school_class=enrollment.school_class)
+            _assert_capacity(
+                section=section,
+                exclude_enrollment_id=enrollment.pk,
+                capacity_override_reason=None,
+                actor_has_capacity_override=False,
+            )
+            enrollment.section = section
+            enrollment.updated_by = actor_id
+            enrollment.save(update_fields=["section", "updated_by", "updated_at"])
+        student.campus = transfer.to_campus
+        student.updated_by = actor_id
+        student.save(update_fields=["campus", "updated_by", "updated_at"])
+    elif transfer.transfer_type == TransferType.OUTGOING:
+        enrollment = active_enrollment(student)
+        if enrollment is not None:
+            enrollment.status = EnrollmentStatus.TRANSFERRED_OUT
+            enrollment.end_date = transfer.effective_date
+            enrollment.updated_by = actor_id
+            enrollment.save(update_fields=["status", "end_date", "updated_by", "updated_at"])
+        student.status = StudentStatus.TRANSFERRED
+        student.updated_by = actor_id
+        student.save(update_fields=["status", "updated_by", "updated_at"])
+    # incoming: no automated side effect — see the docstring.
+
+    transfer.status = TransferStatus.COMPLETED
+    transfer.updated_by = actor_id
+    transfer.save(update_fields=["status", "updated_by", "updated_at"])
+    return transfer
+
+
+def build_history(student: Student) -> list[dict]:
+    """Assemble the student's timeline from enrollments and transfers (module
+
+    doc §10). Promotions and a curated slice of the audit log are the other
+    two sources §10 names — promotions have no producer yet (academics is a
+    later tier) and folding in raw audit_log entries needs a curation pass to
+    avoid noise, so both are left out here rather than half-built.
+    """
+    events: list[dict] = []
+
+    enrollments = (
+        StudentEnrollment.objects.alive()
+        .filter(student=student)
+        .select_related("academic_session", "school_class", "section")
+    )
+    for enrollment in enrollments:
+        events.append(
+            {
+                "type": "enrollment",
+                "id": str(enrollment.pk),
+                "date": enrollment.enrollment_date.isoformat(),
+                "status": enrollment.status,
+                "academic_session_id": str(enrollment.academic_session_id),
+                "academic_session_name": enrollment.academic_session.name,
+                "class_id": str(enrollment.school_class_id),
+                "class_name": enrollment.school_class.name,
+                "section_id": str(enrollment.section_id),
+                "section_name": enrollment.section.name,
+                "roll_number": enrollment.roll_number,
+            }
+        )
+
+    transfers = (
+        StudentTransfer.objects.alive()
+        .filter(student=student)
+        .select_related("from_campus", "to_campus")
+    )
+    for transfer in transfers:
+        events.append(
+            {
+                "type": "transfer",
+                "id": str(transfer.pk),
+                "date": transfer.effective_date.isoformat(),
+                "status": transfer.status,
+                "transfer_type": transfer.transfer_type,
+                "from_campus_id": str(transfer.from_campus_id) if transfer.from_campus_id else None,
+                "from_campus_name": transfer.from_campus.name if transfer.from_campus else None,
+                "to_campus_id": str(transfer.to_campus_id) if transfer.to_campus_id else None,
+                "to_campus_name": transfer.to_campus.name if transfer.to_campus else None,
+                "external_school_name": transfer.external_school_name,
+                "reason": transfer.reason,
+            }
+        )
+
+    events.sort(key=lambda event: event["date"])
+    return events
