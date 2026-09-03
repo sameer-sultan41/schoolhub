@@ -12,7 +12,16 @@ import datetime
 import factory
 
 from apps.school_organization.tests.factories import CampusFactory, HouseFactory
-from apps.student_management.models import Gender, Student
+from apps.student_management.models import (
+    EmergencyContact,
+    Gender,
+    Guardian,
+    Relationship,
+    Student,
+    StudentDocument,
+    StudentGuardian,
+)
+from core.files.tests.factories import FileFactory
 
 DEFAULT_DOB = datetime.date(2015, 6, 1)
 DEFAULT_ADMISSION_DATE = datetime.date(2026, 4, 1)
@@ -32,6 +41,41 @@ class StudentFactory(factory.django.DjangoModelFactory):
     # the student, so callers pass an already-created, correctly-tenanted Campus
     # explicitly — matching CampusFactory/SectionFactory's own convention in
     # school_organization/tests/factories.py.
+
+
+class GuardianFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Guardian
+
+    first_name = factory.Sequence(lambda n: f"Guardian{n}")
+    last_name = "Test"
+    phone = factory.Sequence(lambda n: f"+92300{n:07d}")
+
+
+class StudentGuardianFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = StudentGuardian
+
+    relationship = Relationship.FATHER
+
+
+class EmergencyContactFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = EmergencyContact
+
+    name = factory.Sequence(lambda n: f"Contact{n}")
+    relationship = "aunt"
+    phone = factory.Sequence(lambda n: f"+92301{n:07d}")
+
+
+class StudentDocumentFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = StudentDocument
+
+    document_type = "birth_certificate"
+    title = factory.Sequence(lambda n: f"Document {n}")
+    # No SubFactory default for `file`: it must belong to the same tenant, same
+    # as `campus`/`student` elsewhere in this file.
 
 
 def enable_feature(tenant, key: str) -> None:
@@ -61,7 +105,12 @@ __all__ = [
     "CampusFactory",
     "DEFAULT_ADMISSION_DATE",
     "DEFAULT_DOB",
+    "EmergencyContactFactory",
+    "FileFactory",
+    "GuardianFactory",
     "HouseFactory",
+    "StudentDocumentFactory",
     "StudentFactory",
+    "StudentGuardianFactory",
     "enable_feature",
 ]

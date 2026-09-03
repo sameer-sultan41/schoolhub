@@ -89,6 +89,7 @@ manylinux
 maxmemory
 Meilisearch
 messageformat
+msdownload
 myschool
 nahi
 Nastaliq
@@ -121,6 +122,8 @@ pollable
 pooler
 preflights
 prefs
+presign
+presigning
 pseudonymization
 pseudonymized
 pseudonymizes

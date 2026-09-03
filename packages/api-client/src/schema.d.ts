@@ -405,6 +405,170 @@ export interface paths {
         patch: operations["departments_partial_update"];
         trace?: never;
     };
+    "/api/v1/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+         *
+         *     No update/delete: a file is immutable once created — the record it is
+         *     referenced from PROTECTs against deletion, and replacing content means
+         *     uploading a new file, not mutating this one.
+         */
+        get: operations["files_list"];
+        put?: never;
+        /**
+         * Request a presigned upload slot
+         * @description Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+         *
+         *     No update/delete: a file is immutable once created — the record it is
+         *     referenced from PROTECTs against deletion, and replacing content means
+         *     uploading a new file, not mutating this one.
+         */
+        post: operations["files_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+         *
+         *     No update/delete: a file is immutable once created — the record it is
+         *     referenced from PROTECTs against deletion, and replacing content means
+         *     uploading a new file, not mutating this one.
+         */
+        get: operations["files_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a completed upload
+         * @description Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+         *
+         *     No update/delete: a file is immutable once created — the record it is
+         *     referenced from PROTECTs against deletion, and replacing content means
+         *     uploading a new file, not mutating this one.
+         */
+        post: operations["files_:confirm_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a signed download URL
+         * @description Files (module doc: none — core platform infrastructure, api-architecture.md §2.8).
+         *
+         *     No update/delete: a file is immutable once created — the record it is
+         *     referenced from PROTECTs against deletion, and replacing content means
+         *     uploading a new file, not mutating this one.
+         */
+        post: operations["files_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/guardians": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Guardian persons (module doc §16). No destroy — a guardian with no
+         *
+         *     remaining student links simply stops appearing in any student's roster;
+         *     hard removal is a retention operation, not documented as an API action.
+         */
+        get: operations["guardians_list"];
+        put?: never;
+        /**
+         * @description Guardian persons (module doc §16). No destroy — a guardian with no
+         *
+         *     remaining student links simply stops appearing in any student's roster;
+         *     hard removal is a retention operation, not documented as an API action.
+         */
+        post: operations["guardians_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/guardians/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Guardian persons (module doc §16). No destroy — a guardian with no
+         *
+         *     remaining student links simply stops appearing in any student's roster;
+         *     hard removal is a retention operation, not documented as an API action.
+         */
+        get: operations["guardians_retrieve"];
+        /**
+         * @description Guardian persons (module doc §16). No destroy — a guardian with no
+         *
+         *     remaining student links simply stops appearing in any student's roster;
+         *     hard removal is a retention operation, not documented as an API action.
+         */
+        put: operations["guardians_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Guardian persons (module doc §16). No destroy — a guardian with no
+         *
+         *     remaining student links simply stops appearing in any student's roster;
+         *     hard removal is a retention operation, not documented as an API action.
+         */
+        patch: operations["guardians_partial_update"];
+        trace?: never;
+    };
     "/api/v1/houses": {
         parameters: {
             query?: never;
@@ -513,6 +677,97 @@ export interface paths {
         patch: operations["sections_partial_update"];
         trace?: never;
     };
+    "/api/v1/student-documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Top-level access for `DELETE /student-documents/{id}` and the
+         *
+         *     `:verify` colon-action. §4 declares ``students.document.delete`` but §16
+         *     names no endpoint for it — added here so the key is reachable; the module
+         *     doc gets the corresponding update in this PR.
+         */
+        get: operations["student_documents_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description Top-level access for `DELETE /student-documents/{id}` and the
+         *
+         *     `:verify` colon-action. §4 declares ``students.document.delete`` but §16
+         *     names no endpoint for it — added here so the key is reachable; the module
+         *     doc gets the corresponding update in this PR.
+         */
+        delete: operations["student_documents_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-documents/{id}:verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify or reject a student document
+         * @description Top-level access for `DELETE /student-documents/{id}` and the
+         *
+         *     `:verify` colon-action. §4 declares ``students.document.delete`` but §16
+         *     names no endpoint for it — added here so the key is reachable; the module
+         *     doc gets the corresponding update in this PR.
+         */
+        post: operations["student_documents_:verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-guardians/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Top-level access to a single link, for `PATCH /student-guardians/{id}`
+         *
+         *     (module doc §16: "link flags updatable via PATCH /api/v1/student-guardians/{id}").
+         *     Creation happens only through the nested `StudentGuardianLinkViewSet` below,
+         *     where the student is unambiguous from the URL.
+         */
+        get: operations["student_guardians_retrieve"];
+        /**
+         * @description Top-level access to a single link, for `PATCH /student-guardians/{id}`
+         *
+         *     (module doc §16: "link flags updatable via PATCH /api/v1/student-guardians/{id}").
+         *     Creation happens only through the nested `StudentGuardianLinkViewSet` below,
+         *     where the student is unambiguous from the URL.
+         */
+        put: operations["student_guardians_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Top-level access to a single link, for `PATCH /student-guardians/{id}`
+         *
+         *     (module doc §16: "link flags updatable via PATCH /api/v1/student-guardians/{id}").
+         *     Creation happens only through the nested `StudentGuardianLinkViewSet` below,
+         *     where the student is unambiguous from the URL.
+         */
+        patch: operations["student_guardians_partial_update"];
+        trace?: never;
+    };
     "/api/v1/students": {
         parameters: {
             query?: never;
@@ -548,6 +803,84 @@ export interface paths {
         head?: never;
         /** @description Student master records (module doc §5.1-2). */
         patch: operations["students_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/students/{student_pk}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET/POST /students/{student_pk}/documents`. */
+        get: operations["students_documents_list"];
+        put?: never;
+        /** @description `GET/POST /students/{student_pk}/documents`. */
+        post: operations["students_documents_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{student_pk}/emergency-contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET/POST /students/{student_pk}/emergency-contacts`.
+         *
+         *     Reuses ``students.student.view``/``.update`` — §4 declares no dedicated
+         *     ``students.emergency-contact.*`` key even though §16 exposes this endpoint,
+         *     matching the ``ClassSubjectViewSet`` precedent in school_organization for
+         *     an endpoint whose parent resource already owns the permission story.
+         */
+        get: operations["students_emergency_contacts_list"];
+        put?: never;
+        /**
+         * @description `GET/POST /students/{student_pk}/emergency-contacts`.
+         *
+         *     Reuses ``students.student.view``/``.update`` — §4 declares no dedicated
+         *     ``students.emergency-contact.*`` key even though §16 exposes this endpoint,
+         *     matching the ``ClassSubjectViewSet`` precedent in school_organization for
+         *     an endpoint whose parent resource already owns the permission story.
+         */
+        post: operations["students_emergency_contacts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{student_pk}/guardians": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET/POST /students/{student_pk}/guardians` — links an existing guardian
+         *
+         *     (found via `GET /guardians?search=`, or created via `POST /guardians`) to
+         *     this student. The guardian is not created here.
+         */
+        get: operations["students_guardians_list"];
+        put?: never;
+        /**
+         * @description `GET/POST /students/{student_pk}/guardians` — links an existing guardian
+         *
+         *     (found via `GET /guardians?search=`, or created via `POST /guardians`) to
+         *     this student. The guardian is not created here.
+         */
+        post: operations["students_guardians_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/subjects": {
@@ -722,6 +1055,12 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `verified` - verified
+         *     * `rejected` - rejected
+         * @enum {string}
+         */
+        DecisionEnum: "verified" | "rejected";
         Department: {
             /** Format: uuid */
             readonly id: string;
@@ -748,6 +1087,55 @@ export interface components {
          * @enum {string}
          */
         DepartmentTypeEnum: "academic" | "administrative";
+        DocumentVerifyRequest: {
+            decision: components["schemas"]["DecisionEnum"];
+        };
+        EmergencyContact: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            name: string;
+            relationship: string;
+            phone: string;
+            alt_phone?: string | null;
+            /** @description Call order; 1 = first. */
+            priority?: number;
+            notes?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        File: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly original_name: string;
+            readonly mime_type: string;
+            readonly size_bytes: number;
+            /** @description What this file is for, e.g. 'student.photo', 'student.document'. */
+            readonly purpose: string;
+            readonly status: components["schemas"]["FileStatusEnum"];
+            readonly visibility: components["schemas"]["VisibilityEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description Input for ``POST /api/v1/files``. */
+        FileCreate: {
+            original_name: string;
+            mime_type: string;
+            size_bytes: number;
+            purpose: string;
+        };
+        /**
+         * @description * `pending` - Pending
+         *     * `ready` - Ready
+         *     * `quarantined` - Quarantined
+         * @enum {string}
+         */
+        FileStatusEnum: "pending" | "ready" | "quarantined";
         /**
          * @description * `male` - Male
          *     * `female` - Female
@@ -756,6 +1144,32 @@ export interface components {
          * @enum {string}
          */
         GenderEnum: "male" | "female" | "other" | "unspecified";
+        Guardian: {
+            /** Format: uuid */
+            readonly id: string;
+            /**
+             * Format: uuid
+             * @description users(id) — portal account, tenant-checked at write time.
+             */
+            user_id?: string | null;
+            first_name: string;
+            last_name: string;
+            /** @description Primary contact; indexed for duplicate matching. */
+            phone: string;
+            alt_phone?: string | null;
+            email?: (string) | null;
+            occupation?: string | null;
+            employer?: string | null;
+            national_id?: string | null;
+            /** Format: uuid */
+            photo_file_id?: string | null;
+            address?: unknown;
+            custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         House: {
             /** Format: uuid */
             readonly id: string;
@@ -838,6 +1252,36 @@ export interface components {
                 };
             };
         };
+        PaginatedEmergencyContactList: {
+            data?: components["schemas"]["EmergencyContact"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedFileList: {
+            data?: components["schemas"]["File"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedGuardianList: {
+            data?: components["schemas"]["Guardian"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedHouseList: {
             data?: components["schemas"]["House"][];
             meta?: {
@@ -850,6 +1294,26 @@ export interface components {
         };
         PaginatedSectionList: {
             data?: components["schemas"]["Section"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStudentDocumentList: {
+            data?: components["schemas"]["StudentDocument"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStudentGuardianList: {
+            data?: components["schemas"]["StudentGuardian"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -989,6 +1453,32 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedGuardian: {
+            /** Format: uuid */
+            readonly id?: string;
+            /**
+             * Format: uuid
+             * @description users(id) — portal account, tenant-checked at write time.
+             */
+            user_id?: string | null;
+            first_name?: string;
+            last_name?: string;
+            /** @description Primary contact; indexed for duplicate matching. */
+            phone?: string;
+            alt_phone?: string | null;
+            email?: (string) | null;
+            occupation?: string | null;
+            employer?: string | null;
+            national_id?: string | null;
+            /** Format: uuid */
+            photo_file_id?: string | null;
+            address?: unknown;
+            custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         PatchedHouse: {
             /** Format: uuid */
             readonly id?: string;
@@ -1064,10 +1554,7 @@ export interface components {
             /** Format: date */
             date_of_birth?: string;
             gender?: components["schemas"]["GenderEnum"];
-            /**
-             * Format: uuid
-             * @description files(id) — promoted when core.files lands.
-             */
+            /** Format: uuid */
             photo_file_id?: string | null;
             /** Format: uuid */
             campus_id?: string;
@@ -1085,6 +1572,31 @@ export interface components {
             medical_notes?: string | null;
             address?: unknown;
             custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description Used both for the nested `POST /students/{id}/guardians` (student comes
+         *
+         *     from the URL, not the body — see the view) and the top-level
+         *     `PATCH /student-guardians/{id}` (link-flag updates only).
+         */
+        PatchedStudentGuardian: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            readonly student_id?: string;
+            /** Format: uuid */
+            guardian_id?: string;
+            relationship?: components["schemas"]["RelationshipEnum"];
+            is_primary?: boolean;
+            is_fee_responsible?: boolean;
+            can_pick_up?: boolean;
+            receives_communications?: boolean;
+            has_portal_access?: boolean;
+            access_revoked_reason?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -1133,6 +1645,16 @@ export interface components {
             access_token: string;
             expires_in: number;
         };
+        /**
+         * @description * `father` - Father
+         *     * `mother` - Mother
+         *     * `grandparent` - Grandparent
+         *     * `sibling` - Sibling
+         *     * `legal_guardian` - Legal guardian
+         *     * `other` - Other
+         * @enum {string}
+         */
+        RelationshipEnum: "father" | "mother" | "grandparent" | "sibling" | "legal_guardian" | "other";
         /**
          * @description School profile and academic configuration (module doc §16, singleton resource).
          *
@@ -1197,10 +1719,7 @@ export interface components {
             /** Format: date */
             date_of_birth: string;
             gender: components["schemas"]["GenderEnum"];
-            /**
-             * Format: uuid
-             * @description files(id) — promoted when core.files lands.
-             */
+            /** Format: uuid */
             photo_file_id?: string | null;
             /** Format: uuid */
             campus_id: string;
@@ -1218,6 +1737,57 @@ export interface components {
             medical_notes?: string | null;
             address?: unknown;
             custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        StudentDocument: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            /** Format: uuid */
+            file_id: string;
+            /** @description Tenant-extensible; seeded values: birth_certificate, prior_transfer_certificate, immunization_record, photo_id, prior_report_card, other. */
+            document_type: string;
+            title: string;
+            notes?: string | null;
+            readonly verification_status: components["schemas"]["VerificationStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly verified_by: string | null;
+            /** Format: date-time */
+            readonly verified_at: string | null;
+            /** Format: date */
+            expires_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description Used both for the nested `POST /students/{id}/guardians` (student comes
+         *
+         *     from the URL, not the body — see the view) and the top-level
+         *     `PATCH /student-guardians/{id}` (link-flag updates only).
+         */
+        StudentGuardian: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            /** Format: uuid */
+            guardian_id: string;
+            relationship: components["schemas"]["RelationshipEnum"];
+            is_primary?: boolean;
+            is_fee_responsible?: boolean;
+            can_pick_up?: boolean;
+            receives_communications?: boolean;
+            has_portal_access?: boolean;
+            access_revoked_reason?: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -1290,6 +1860,19 @@ export interface components {
             readonly permissions: string[];
             readonly roles: string[];
         };
+        /**
+         * @description * `pending` - Pending
+         *     * `verified` - Verified
+         *     * `rejected` - Rejected
+         * @enum {string}
+         */
+        VerificationStatusEnum: "pending" | "verified" | "rejected";
+        /**
+         * @description * `private` - Private
+         *     * `public` - Public
+         * @enum {string}
+         */
+        VisibilityEnum: "private" | "public";
     };
     responses: never;
     parameters: never;
@@ -2251,6 +2834,273 @@ export interface operations {
             };
         };
     };
+    files_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFileList"];
+                };
+            };
+        };
+    };
+    files_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["FileCreate"];
+                "multipart/form-data": components["schemas"]["FileCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+        };
+    };
+    files_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this file. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+        };
+    };
+    "files_:confirm_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+            /** @description Already confirmed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload not found at the storage key, or size mismatch */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "files_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["File"];
+                "application/x-www-form-urlencoded": components["schemas"]["File"];
+                "multipart/form-data": components["schemas"]["File"];
+            };
+        };
+        responses: {
+            /** @description {'download_url': str} */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    guardians_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedGuardianList"];
+                };
+            };
+        };
+    };
+    guardians_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Guardian"];
+                "application/x-www-form-urlencoded": components["schemas"]["Guardian"];
+                "multipart/form-data": components["schemas"]["Guardian"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Guardian"];
+                };
+            };
+        };
+    };
+    guardians_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this guardian. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Guardian"];
+                };
+            };
+        };
+    };
+    guardians_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this guardian. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Guardian"];
+                "application/x-www-form-urlencoded": components["schemas"]["Guardian"];
+                "multipart/form-data": components["schemas"]["Guardian"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Guardian"];
+                };
+            };
+        };
+    };
+    guardians_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this guardian. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedGuardian"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedGuardian"];
+                "multipart/form-data": components["schemas"]["PatchedGuardian"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Guardian"];
+                };
+            };
+        };
+    };
     houses_list: {
         parameters: {
             query?: {
@@ -2603,6 +3453,161 @@ export interface operations {
             };
         };
     };
+    student_documents_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student document. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentDocument"];
+                };
+            };
+        };
+    };
+    student_documents_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student document. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "student_documents_:verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DocumentVerifyRequest"];
+                "multipart/form-data": components["schemas"]["DocumentVerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentDocument"];
+                };
+            };
+            /** @description Already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    student_guardians_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student guardian. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentGuardian"];
+                };
+            };
+        };
+    };
+    student_guardians_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student guardian. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentGuardian"];
+                "application/x-www-form-urlencoded": components["schemas"]["StudentGuardian"];
+                "multipart/form-data": components["schemas"]["StudentGuardian"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentGuardian"];
+                };
+            };
+        };
+    };
+    student_guardians_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student guardian. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedStudentGuardian"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedStudentGuardian"];
+                "multipart/form-data": components["schemas"]["PatchedStudentGuardian"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentGuardian"];
+                };
+            };
+        };
+    };
     students_list: {
         parameters: {
             query?: {
@@ -2733,6 +3738,177 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Student"];
+                };
+            };
+        };
+    };
+    students_documents_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                student_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStudentDocumentList"];
+                };
+            };
+        };
+    };
+    students_documents_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentDocument"];
+                "application/x-www-form-urlencoded": components["schemas"]["StudentDocument"];
+                "multipart/form-data": components["schemas"]["StudentDocument"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentDocument"];
+                };
+            };
+        };
+    };
+    students_emergency_contacts_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                student_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedEmergencyContactList"];
+                };
+            };
+        };
+    };
+    students_emergency_contacts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmergencyContact"];
+                "application/x-www-form-urlencoded": components["schemas"]["EmergencyContact"];
+                "multipart/form-data": components["schemas"]["EmergencyContact"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmergencyContact"];
+                };
+            };
+        };
+    };
+    students_guardians_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                student_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStudentGuardianList"];
+                };
+            };
+        };
+    };
+    students_guardians_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentGuardian"];
+                "application/x-www-form-urlencoded": components["schemas"]["StudentGuardian"];
+                "multipart/form-data": components["schemas"]["StudentGuardian"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentGuardian"];
                 };
             };
         };
