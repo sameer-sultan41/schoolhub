@@ -47,20 +47,23 @@ test.describe("campuses (live API)", () => {
   // apps/api/apps/school_organization/tests/test_cross_tenant.py already exhaustively
   // proves it per-model at the Django level — repeating it in all nine resource files
   // here would prove the same thing nine times over. This version uses a real row and a
-  // real second identity: seed_e2e_data seeds the same admin email on both tenants
-  // (disambiguated by the `school` slug), so this logs in as the *other* tenant's admin
-  // rather than reusing the first tenant's own session against an id it never owned.
+  // real second identity: seed_e2e_data seeds a *distinct* admin email on the other
+  // tenant (not the same email disambiguated by `school` — two accounts sharing one
+  // email across tenants makes every browser-driven live-lane login ambiguous, since the
+  // dashboard's login form never sends `school`), so this logs in as a genuine second
+  // identity rather than reusing the first tenant's own session against an id it never owned.
   test("a real campus is 404 to another tenant's admin, never 403", async ({ liveApiClient }) => {
     const created = await liveApiClient.post("/campuses", buildLiveCampus());
     const campus = created.data as { id: string };
 
+    // Matches E2E_OTHER_ADMIN_EMAIL in
+    // apps/api/core/rbac/management/commands/seed_e2e_data.py.
     const otherTenantLogin = await fetch(`${env.API_BASE_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        identifier: env.LIVE_ADMIN_IDENTIFIER,
+        identifier: "e2e-admin-other@schoolhub.test",
         password: env.LIVE_ADMIN_PASSWORD,
-        school: env.LIVE_OTHER_TENANT_SLUG,
       }),
     });
     expect(otherTenantLogin.status).toBe(200);

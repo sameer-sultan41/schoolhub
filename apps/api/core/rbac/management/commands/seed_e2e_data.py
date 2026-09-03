@@ -33,6 +33,12 @@ from core.tenancy.models import Tenant, TenantSettings, TenantStatus
 E2E_TENANT_SLUG = "e2e-school"
 E2E_OTHER_TENANT_SLUG = "e2e-other-school"
 E2E_ADMIN_EMAIL = "e2e-admin@schoolhub.test"
+# A distinct email, not the same one disambiguated by `school`: the dashboard's login
+# form never sends `school` (it derives it from the subdomain, and the dashboard itself
+# has no tenant subdomain — see apps/dashboard/src/features/auth/login-form.tsx), so two
+# accounts sharing one email across tenants make every browser-driven live-lane login
+# genuinely ambiguous, not just theoretically. Confirmed against the real API, not assumed.
+E2E_OTHER_ADMIN_EMAIL = "e2e-admin-other@schoolhub.test"
 # Dev/CI-only seed data, matches e2e/src/env.ts's own fallback. `or`, not
 # `.get(key, default)`: an unset CI secret still sets the env var to an empty
 # string via `-e VAR` in the workflow, which `.get` would happily return.
@@ -57,12 +63,12 @@ class Command(BaseCommand):
         other_tenant = self._ensure_tenant(E2E_OTHER_TENANT_SLUG, "E2E Other School")
 
         role = self._ensure_school_owner_role()
-        self._ensure_admin_user(tenant, role)
-        # Same email, a distinct row per (tenant, email) uniqueness — lets a live spec log
-        # in as a real admin of *either* tenant (disambiguated by the `school` slug on
-        # LoginSerializer) to prove cross-tenant isolation against a real second identity,
-        # not just a placeholder id under the first tenant's own session.
-        self._ensure_admin_user(other_tenant, role)
+        self._ensure_admin_user(tenant, role, email=E2E_ADMIN_EMAIL)
+        # A distinct email (not the same one disambiguated by `school`) — lets a live spec
+        # log in as a real admin of the *other* tenant to prove cross-tenant isolation
+        # against a real second identity, not just a placeholder id under the first
+        # tenant's own session.
+        self._ensure_admin_user(other_tenant, role, email=E2E_OTHER_ADMIN_EMAIL)
 
         with tenant_context(tenant.id):
             TenantSettings.all_tenants.get_or_create(tenant=tenant)
@@ -79,8 +85,8 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Seeded tenants '{tenant.slug}' and '{E2E_OTHER_TENANT_SLUG}', each with "
-                f"admin {E2E_ADMIN_EMAIL} (disambiguate at login via the `school` slug)"
+                f"Seeded tenant '{tenant.slug}' with admin {E2E_ADMIN_EMAIL} and tenant "
+                f"'{E2E_OTHER_TENANT_SLUG}' with admin {E2E_OTHER_ADMIN_EMAIL}"
             )
         )
 
@@ -115,10 +121,10 @@ class Command(BaseCommand):
         )
         return role
 
-    def _ensure_admin_user(self, tenant: Tenant, role: Role) -> User:
+    def _ensure_admin_user(self, tenant: Tenant, role: Role, *, email: str) -> User:
         user, created = User.objects.get_or_create(
             tenant=tenant,
-            email=E2E_ADMIN_EMAIL,
+            email=email,
             defaults={
                 "first_name": "E2E",
                 "last_name": "Admin",

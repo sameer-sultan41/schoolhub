@@ -21,6 +21,7 @@ from apps.school_organization.models import (
 from core.rbac.management.commands.seed_e2e_data import (
     E2E_ADMIN_EMAIL,
     E2E_ADMIN_PASSWORD,
+    E2E_OTHER_ADMIN_EMAIL,
     E2E_OTHER_TENANT_SLUG,
     E2E_TENANT_SLUG,
 )
@@ -38,10 +39,13 @@ class SeedE2EDataTests(TestCase):
         self.assertEqual(tenant.status, TenantStatus.ACTIVE)
         self.assertEqual(other_tenant.status, TenantStatus.ACTIVE)
 
-        for row in (tenant, other_tenant):
-            user = User.objects.get(tenant=row, email=E2E_ADMIN_EMAIL)
+        role = Role.objects.get(tenant=None, slug="school_owner")
+        # Distinct emails, not the same one disambiguated by `school` on login — two
+        # accounts sharing an email across tenants would make every browser-driven
+        # live-lane login ambiguous, since the dashboard's login form never sends `school`.
+        for row, email in ((tenant, E2E_ADMIN_EMAIL), (other_tenant, E2E_OTHER_ADMIN_EMAIL)):
+            user = User.objects.get(tenant=row, email=email)
             self.assertTrue(user.check_password(E2E_ADMIN_PASSWORD))
-            role = Role.objects.get(tenant=None, slug="school_owner")
             self.assertTrue(UserRole.objects.filter(user=user, role=role).exists())
 
     def test_seeds_baseline_school_organization_data_on_the_primary_tenant(self) -> None:

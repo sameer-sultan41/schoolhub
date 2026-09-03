@@ -44,9 +44,11 @@ export function buildLiveClass(overrides: Partial<{ name: string; level: number 
   const tag = uniqueTag();
   return {
     name: `E2E Class ${tag}`,
-    // `level` is unique per tenant (the promotion ladder) — well clear of the seeded
-    // baseline class (level 1) and any other live spec's own random level.
-    level: 1000 + Math.floor(Math.random() * 1_000_000),
+    // `level` is unique per tenant (the promotion ladder) and a Postgres SMALLINT column
+    // (max 32767 — confirmed against the real API, which rejected an earlier version of
+    // this range with "Ensure this value is less than or equal to 32767") — well clear of
+    // both that ceiling and the seeded baseline class (level 1).
+    level: 100 + Math.floor(Math.random() * 30_000),
     is_active: true,
     ...overrides,
   };
@@ -86,11 +88,24 @@ export function buildLiveHouse(overrides: Partial<{ name: string; code: string }
 
 /**
  * A date window far enough from the seeded baseline session (roughly the current year)
- * to trivially avoid `assert_no_session_overlap` without reading the baseline's own dates.
+ * to trivially avoid `assert_no_session_overlap` without reading the baseline's own dates
+ * — and far enough from *every other call's* window, in this run or an earlier one, to
+ * avoid colliding with it either.
+ *
+ * A single random day offset within one future year was not enough: two 364-day windows
+ * both landing within the same ~300-day spread are virtually guaranteed to overlap, which
+ * is exactly what happened the first time two live specs each called this in the same run
+ * (confirmed against the real API, not assumed). Each call now gets its own ~800-day step
+ * (`sequence`), so calls within a run can never overlap, plus a base derived from the
+ * current second (changes every run) so a same-day rerun against a persistent dev database
+ * — where old sessions are never deleted — does not collide with yesterday's either.
  */
+let sequence = 0;
 export function farFutureSessionWindow(): { start_date: string; end_date: string } {
+  sequence += 1;
+  const baseDays = 3650 + (Math.floor(Date.now() / 1000) % 5000) + sequence * 800;
   const start = new Date();
-  start.setFullYear(start.getFullYear() + 10, 0, 1 + Math.floor(Math.random() * 300));
+  start.setDate(start.getDate() + baseDays);
   const end = new Date(start);
   end.setDate(end.getDate() + 364);
   return { start_date: isoDate(start), end_date: isoDate(end) };
