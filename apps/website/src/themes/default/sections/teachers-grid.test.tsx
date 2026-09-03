@@ -32,9 +32,25 @@ describe("TeachersGrid", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
+  it("renders a teacher photo when one is given", async () => {
+    mockGetTeachers.mockResolvedValue([
+      { id: "t2", full_name: "Sara Malik", photo_url: "https://cdn.example.com/sara.jpg" },
+    ]);
+
+    render(await TeachersGrid({ section: makeSection({}), tenant: makeTenant() }));
+
+    expect(screen.getByRole("img")).toBeInTheDocument();
+  });
+
   it("renders nothing when there are no teachers", async () => {
     mockGetTeachers.mockResolvedValue([]);
     const result = await TeachersGrid({ section: makeSection({}), tenant: makeTenant() });
     expect(result).toBeNull();
+  });
+
+  it("renders nothing when props fail validation", async () => {
+    const result = await TeachersGrid({ section: makeSection({ limit: 0 }), tenant: makeTenant() });
+    expect(result).toBeNull();
+    expect(mockGetTeachers).not.toHaveBeenCalled();
   });
 });

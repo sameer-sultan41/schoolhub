@@ -31,9 +31,26 @@ describe("NoticeBoard", () => {
     );
   });
 
+  it("renders a notice with no body or attachment", async () => {
+    mockGetNotices.mockResolvedValue([
+      { id: "n2", title: "Office closed Friday", published_at: "2027-01-05T00:00:00Z" },
+    ]);
+
+    render(await NoticeBoard({ section: makeSection({}), tenant: makeTenant() }));
+
+    expect(screen.getByText("Office closed Friday")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Download attachment" })).not.toBeInTheDocument();
+  });
+
   it("renders nothing when there are no notices", async () => {
     mockGetNotices.mockResolvedValue([]);
     const result = await NoticeBoard({ section: makeSection({}), tenant: makeTenant() });
     expect(result).toBeNull();
+  });
+
+  it("renders nothing when props fail validation", async () => {
+    const result = await NoticeBoard({ section: makeSection({ limit: 0 }), tenant: makeTenant() });
+    expect(result).toBeNull();
+    expect(mockGetNotices).not.toHaveBeenCalled();
   });
 });

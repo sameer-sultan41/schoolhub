@@ -26,9 +26,25 @@ describe("Gallery", () => {
     expect(screen.getByText("Annual Day 2027")).toBeInTheDocument();
   });
 
+  it("renders an image with no caption, at its natural size", async () => {
+    mockGetGallery.mockResolvedValue([
+      { id: "g2", url: "https://cdn.example.com/sports-day.jpg", alt: "Sports day" },
+    ]);
+
+    render(await Gallery({ section: makeSection({}), tenant: makeTenant() }));
+
+    expect(screen.getByAltText("Sports day")).toBeInTheDocument();
+  });
+
   it("renders nothing when there are no images", async () => {
     mockGetGallery.mockResolvedValue([]);
     const result = await Gallery({ section: makeSection({}), tenant: makeTenant() });
     expect(result).toBeNull();
+  });
+
+  it("renders nothing when props fail validation", async () => {
+    const result = await Gallery({ section: makeSection({ limit: 0 }), tenant: makeTenant() });
+    expect(result).toBeNull();
+    expect(mockGetGallery).not.toHaveBeenCalled();
   });
 });

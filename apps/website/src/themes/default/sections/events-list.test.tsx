@@ -34,9 +34,25 @@ describe("EventsList", () => {
     expect(mockGetEvents).toHaveBeenCalledWith("t1", 3);
   });
 
+  it("renders an event with no location or summary", async () => {
+    mockGetEvents.mockResolvedValue([
+      { id: "e2", title: "PTM", starts_at: "2027-04-01T09:00:00Z" },
+    ]);
+
+    render(await EventsList({ section: makeSection({}), tenant: makeTenant() }));
+
+    expect(screen.getByText("PTM")).toBeInTheDocument();
+  });
+
   it("renders nothing when there are no events", async () => {
     mockGetEvents.mockResolvedValue([]);
     const result = await EventsList({ section: makeSection({}), tenant: makeTenant() });
     expect(result).toBeNull();
+  });
+
+  it("renders nothing when props fail validation", async () => {
+    const result = await EventsList({ section: makeSection({ limit: 0 }), tenant: makeTenant() });
+    expect(result).toBeNull();
+    expect(mockGetEvents).not.toHaveBeenCalled();
   });
 });

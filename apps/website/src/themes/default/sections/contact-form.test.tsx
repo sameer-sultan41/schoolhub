@@ -51,4 +51,21 @@ describe("ContactForm", () => {
     render(<ContactForm section={makeSection({})} tenant={makeTenant({ contact: undefined })} />);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
+
+  it("renders an optional intro", () => {
+    render(
+      <ContactForm
+        section={makeSection({ intro: "We would love to hear from you." })}
+        tenant={makeTenant()}
+      />,
+    );
+    expect(screen.getByText("We would love to hear from you.")).toBeInTheDocument();
+  });
+
+  it("renders nothing when props fail validation", () => {
+    const { container } = render(
+      <ContactForm section={makeSection({ form: "not_a_real_form_kind" })} tenant={makeTenant()} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
 });

@@ -28,9 +28,31 @@ describe("NewsList", () => {
     expect(screen.getByText("A state-of-the-art facility for our students.")).toBeInTheDocument();
   });
 
+  it("renders a post with no cover image or excerpt", async () => {
+    mockGetNews.mockResolvedValue([
+      {
+        id: "n2",
+        title: "Sports day rescheduled",
+        slug: "sports-day-rescheduled",
+        published_at: "2027-02-01T00:00:00Z",
+      },
+    ]);
+
+    render(await NewsList({ section: makeSection({}), tenant: makeTenant() }));
+
+    expect(screen.getByRole("link", { name: "Sports day rescheduled" })).toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
   it("renders nothing when there are no posts", async () => {
     mockGetNews.mockResolvedValue([]);
     const result = await NewsList({ section: makeSection({}), tenant: makeTenant() });
     expect(result).toBeNull();
+  });
+
+  it("renders nothing when props fail validation", async () => {
+    const result = await NewsList({ section: makeSection({ limit: 0 }), tenant: makeTenant() });
+    expect(result).toBeNull();
+    expect(mockGetNews).not.toHaveBeenCalled();
   });
 });

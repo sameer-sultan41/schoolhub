@@ -46,4 +46,24 @@ describe("Navigation", () => {
     render(<Navigation tenant={makeTenant()} settings={null} />);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
+
+  it("renders the CMS-configured logo when one is set", () => {
+    render(
+      <Navigation
+        tenant={makeTenant()}
+        settings={makeSettings({ logo_url: "https://cdn.example.com/logo.png" })}
+      />,
+    );
+    expect(screen.getByRole("img")).toBeInTheDocument();
+  });
+
+  it("falls back to the tenant's branding logo when settings has none", () => {
+    render(
+      <Navigation
+        tenant={makeTenant({ branding: { logo_url: "https://cdn.example.com/brand-logo.png" } })}
+        settings={null}
+      />,
+    );
+    expect(screen.getByRole("img")).toBeInTheDocument();
+  });
 });

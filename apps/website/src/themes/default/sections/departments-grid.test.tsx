@@ -34,9 +34,26 @@ describe("DepartmentsGrid", () => {
     expect(screen.getByText("Explore our academic departments.")).toBeInTheDocument();
   });
 
+  it("renders a department with no description", async () => {
+    mockGetDepartments.mockResolvedValue([{ id: "d2", name: "Arts" }]);
+
+    render(await DepartmentsGrid({ section: makeSection({}), tenant: makeTenant() }));
+
+    expect(screen.getByText("Arts")).toBeInTheDocument();
+  });
+
   it("renders nothing when there are no departments", async () => {
     mockGetDepartments.mockResolvedValue([]);
     const result = await DepartmentsGrid({ section: makeSection({}), tenant: makeTenant() });
     expect(result).toBeNull();
+  });
+
+  it("renders nothing when props fail validation", async () => {
+    const result = await DepartmentsGrid({
+      section: makeSection({ heading: 123 }),
+      tenant: makeTenant(),
+    });
+    expect(result).toBeNull();
+    expect(mockGetDepartments).not.toHaveBeenCalled();
   });
 });

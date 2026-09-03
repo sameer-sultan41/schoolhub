@@ -21,6 +21,20 @@ describe("Hero", () => {
     expect(screen.getByRole("link", { name: "Apply now" })).toHaveAttribute("href", "/admissions");
   });
 
+  it("renders the background image when image_url is given", () => {
+    render(
+      <Hero
+        section={makeSection({
+          heading: "Welcome",
+          image_url: "https://cdn.example.com/hero.jpg",
+          image_alt: "Students in the courtyard",
+        })}
+        tenant={makeTenant()}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Students in the courtyard" })).toBeInTheDocument();
+  });
+
   it("omits the CTA when only one of label/href is given", () => {
     render(
       <Hero

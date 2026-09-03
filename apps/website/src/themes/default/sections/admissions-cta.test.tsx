@@ -30,4 +30,11 @@ describe("AdmissionsCta", () => {
       "/apply",
     );
   });
+
+  it("renders nothing when props fail validation", () => {
+    const { container } = render(
+      <AdmissionsCta section={makeSection({ heading: 123 })} tenant={makeTenant()} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
 });

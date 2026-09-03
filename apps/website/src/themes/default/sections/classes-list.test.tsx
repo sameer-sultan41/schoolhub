@@ -29,9 +29,26 @@ describe("ClassesList", () => {
     expect(screen.getByText("Primary")).toBeInTheDocument();
   });
 
+  it("renders an empty description when neither description nor level is set", async () => {
+    mockGetClasses.mockResolvedValue([{ id: "c1", name: "Grade 5" }]);
+
+    render(await ClassesList({ section: makeSection({}), tenant: makeTenant() }));
+
+    expect(screen.getByText("Grade 5")).toBeInTheDocument();
+  });
+
   it("renders nothing when there are no classes", async () => {
     mockGetClasses.mockResolvedValue([]);
     const result = await ClassesList({ section: makeSection({}), tenant: makeTenant() });
     expect(result).toBeNull();
+  });
+
+  it("renders nothing when props fail validation", async () => {
+    const result = await ClassesList({
+      section: makeSection({ heading: 123 }),
+      tenant: makeTenant(),
+    });
+    expect(result).toBeNull();
+    expect(mockGetClasses).not.toHaveBeenCalled();
   });
 });

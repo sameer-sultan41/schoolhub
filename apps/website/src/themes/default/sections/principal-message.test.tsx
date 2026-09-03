@@ -25,6 +25,32 @@ describe("PrincipalMessage", () => {
     expect(screen.queryByText(/Dr\. Ayesha Khan/)).not.toBeInTheDocument();
   });
 
+  it("shows the name without a title when no principal_title is given", () => {
+    render(
+      <PrincipalMessage
+        section={makeSection({ message: "Hello.", principal_name: "Dr. Ayesha Khan" })}
+        tenant={makeTenant()}
+      />,
+    );
+    const name = screen.getByText("Dr. Ayesha Khan");
+    expect(name.closest("figcaption")).toHaveTextContent("Dr. Ayesha Khan");
+    expect(name.closest("figcaption")).not.toHaveTextContent("·");
+  });
+
+  it("renders a photo when photo_url is given", () => {
+    render(
+      <PrincipalMessage
+        section={makeSection({
+          message: "Hello.",
+          principal_name: "Dr. Ayesha Khan",
+          photo_url: "https://cdn.example.com/principal.jpg",
+        })}
+        tenant={makeTenant()}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Dr. Ayesha Khan" })).toBeInTheDocument();
+  });
+
   it("renders nothing without a message", () => {
     const { container } = render(
       <PrincipalMessage section={makeSection({})} tenant={makeTenant()} />,
