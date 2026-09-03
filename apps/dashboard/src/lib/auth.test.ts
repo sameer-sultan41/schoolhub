@@ -176,5 +176,59 @@ describe("auth", () => {
       expect(accessTokenStore.get()).toBeNull();
       expect(handler).toHaveBeenCalledTimes(1);
     });
+
+    it("the default handler (before any override) just clears the token store", async () => {
+      const { accessTokenStore } = await import("./auth");
+      const { ApiError } = await importApiClient();
+      const directClientConfig = mockClientConfigs[0];
+      accessTokenStore.set("at-5", 900);
+
+      expect(() =>
+        directClientConfig?.onUnauthorized?.(
+          new ApiError({ code: "unauthenticated", message: "gone", status: 401, url: "/x" }),
+        ),
+      ).not.toThrow();
+
+      expect(accessTokenStore.get()).toBeNull();
+    });
+  });
+
+  describe("the direct client's getAccessToken/refreshAccessToken config", () => {
+    it("getAccessToken reads whatever is currently in the token store", async () => {
+      const { accessTokenStore } = await import("./auth");
+      const directClientConfig = mockClientConfigs[0];
+      accessTokenStore.set("at-6", 900);
+
+      expect(directClientConfig?.getAccessToken?.()).toBe("at-6");
+    });
+
+    it("refreshAccessToken clears the store and resolves null when the proxy has nothing", async () => {
+      const { accessTokenStore } = await import("./auth");
+      const directClientConfig = mockClientConfigs[0];
+      accessTokenStore.set("stale", 900);
+      mockRefreshAccessToken.mockResolvedValueOnce(null);
+
+      await expect(directClientConfig?.refreshAccessToken?.()).resolves.toBeNull();
+      expect(accessTokenStore.get()).toBeNull();
+    });
+
+    it("refreshAccessToken stores and returns the new token when the proxy refreshes", async () => {
+      const { accessTokenStore } = await import("./auth");
+      const directClientConfig = mockClientConfigs[0];
+      mockRefreshAccessToken.mockResolvedValueOnce({ accessToken: "at-7", expiresIn: 900 });
+
+      await expect(directClientConfig?.refreshAccessToken?.()).resolves.toBe("at-7");
+      expect(accessTokenStore.get()).toBe("at-7");
+    });
+  });
+
+  describe("the auth-proxy client's getAccessToken config", () => {
+    it("also reads from the shared token store", async () => {
+      const { accessTokenStore } = await import("./auth");
+      const authProxyClientConfig = mockClientConfigs[1];
+      accessTokenStore.set("at-8", 900);
+
+      expect(authProxyClientConfig?.getAccessToken?.()).toBe("at-8");
+    });
   });
 });

@@ -18,6 +18,10 @@ const config: Config = {
     "!src/**/*.test.{ts,tsx}",
     "!src/app/**/layout.tsx",
     "!src/**/*.d.ts",
+    // Compile-time-only: never imported by anything (see its own docstring) —
+    // importing it under Jest would trip the `declare const` it deliberately
+    // leaves unassigned. tsc/ESLint still walk it via their own glob include.
+    "!src/i18n/messages.types-check.ts",
   ],
   coverageThreshold: {
     global: {

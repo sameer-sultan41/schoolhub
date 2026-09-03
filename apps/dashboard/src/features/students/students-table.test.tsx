@@ -1,6 +1,6 @@
 import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../messages/en.json";
 import { StudentsTable } from "@/features/students/students-table";
@@ -13,8 +13,9 @@ jest.mock("@/hooks/use-session", () => ({
   usePermission: jest.fn(() => false),
   useAnyPermission: jest.fn(() => false),
 }));
+const mockPush = jest.fn();
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
 }));
 
 // apiClient.get's static type comes from the real ApiClient class (the mock
@@ -45,6 +46,7 @@ const STUDENT = {
 describe("StudentsTable", () => {
   beforeEach(() => {
     mockGet.mockReset();
+    mockPush.mockReset();
   });
 
   it("shows skeleton rows while loading", () => {
@@ -110,5 +112,76 @@ describe("StudentsTable", () => {
 
     const nextButton = await screen.findByRole("button", { name: "Next" });
     expect(nextButton).toBeDisabled();
+  });
+
+  it("clicking a row navigates to that student's detail page", async () => {
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    renderWithProviders(<StudentsTable />);
+
+    const cell = await screen.findByText("Amina Khan");
+    fireEvent.click(cell.closest("tr") as HTMLElement);
+
+    expect(mockPush).toHaveBeenCalledWith("/students/s1");
+  });
+
+  it("clicking Next fetches the next page by cursor when one is available", async () => {
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: "page-2", previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    renderWithProviders(<StudentsTable />);
+
+    const nextButton = await screen.findByRole("button", { name: "Next" });
+    expect(nextButton).not.toBeDisabled();
+    fireEvent.click(nextButton);
+
+    await waitFor(() => {
+      const lastCall = mockGet.mock.calls.at(-1)?.[1];
+      expect(lastCall?.query?.cursor).toBe("page-2");
+    });
+  });
+
+  it("debounces the search input before it reaches the query", async () => {
+    jest.useFakeTimers();
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    renderWithProviders(<StudentsTable />);
+    await screen.findByText("2026-0001");
+    const callsBeforeTyping = mockGet.mock.calls.length;
+
+    const searchInput = screen.getByLabelText("Search");
+    fireEvent.change(searchInput, { target: { value: "Am" } });
+    // A second keystroke before the debounce window elapses must clear the
+    // first pending commit rather than stacking two — only "Amina" should
+    // ever land in the query.
+    fireEvent.change(searchInput, { target: { value: "Amina" } });
+    expect(searchInput).toHaveValue("Amina");
+
+    // No new request yet: the debounced value hasn't committed.
+    expect(mockGet.mock.calls.length).toBe(callsBeforeTyping);
+
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    jest.useRealTimers();
+
+    await waitFor(() => {
+      const lastCall = mockGet.mock.calls.at(-1)?.[1];
+      expect(lastCall?.query?.search).toBe("Amina");
+    });
   });
 });

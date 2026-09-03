@@ -76,6 +76,30 @@ describe("StudentForm (create)", () => {
     expect(await screen.findByText("A student with this name already exists.")).toBeInTheDocument();
   });
 
+  it("surfaces a server field error for a field the form has no input for", async () => {
+    mockPost.mockRejectedValue(
+      new ApiError({
+        code: "validation_error",
+        message: "Please correct the highlighted fields.",
+        status: 400,
+        url: "/students",
+        details: [{ field: "photo_file_id", issue: "This file has not been confirmed yet." }],
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<StudentForm mode="create" />);
+
+    await user.type(screen.getByLabelText(/First name/), "Amina");
+    await user.type(screen.getByLabelText(/Last name/), "Khan");
+    await user.type(screen.getByLabelText(/Date of birth/), "2015-06-01");
+    await user.type(screen.getByLabelText(/Admission date/), "2026-04-01");
+    await user.click(screen.getByRole("combobox", { name: "Campus" }));
+    await user.click(await screen.findByRole("option", { name: "Main Campus" }));
+    await user.click(screen.getByRole("button", { name: "New student" }));
+
+    expect(await screen.findByText("This file has not been confirmed yet.")).toBeInTheDocument();
+  });
+
   it("invalidates the students cache and navigates to the detail page on success", async () => {
     mockPost.mockResolvedValue(apiResult({ id: "s1", admission_number: "2026-0001" }));
     const user = userEvent.setup();
