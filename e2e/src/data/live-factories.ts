@@ -90,20 +90,23 @@ export function buildLiveHouse(overrides: Partial<{ name: string; code: string }
  * A date window far enough from the seeded baseline session (roughly the current year)
  * to trivially avoid `assert_no_session_overlap` without reading the baseline's own dates
  * — and far enough from *every other call's* window, in this run or an earlier one, to
- * avoid colliding with it either.
+ * avoid colliding with it either. `AcademicSession` has no destroy endpoint
+ * (`AcademicSessionViewSet`'s own docstring), so every prior run's rows are still there
+ * for a new run to collide with; there is no server-side "is this window free?" check to
+ * ask instead, so this leans on a wide enough spread that a real collision is negligible.
  *
- * A single random day offset within one future year was not enough: two 364-day windows
- * both landing within the same ~300-day spread are virtually guaranteed to overlap, which
- * is exactly what happened the first time two live specs each called this in the same run
- * (confirmed against the real API, not assumed). Each call now gets its own ~800-day step
- * (`sequence`), so calls within a run can never overlap, plus a base derived from the
- * current second (changes every run) so a same-day rerun against a persistent dev database
- * — where old sessions are never deleted — does not collide with yesterday's either.
+ * Two prior versions both proved too narrow against the real API (not assumed): a single
+ * random day offset within one future year let two 364-day windows in the same run
+ * overlap, and a later fix based on the current second was still only a few hundred days
+ * apart for two runs a few minutes apart — exactly what iterating on this file locally
+ * does. `sequence` still guarantees calls *within* one run never overlap (800-day steps);
+ * the random component now spans ~1,400 years, wide enough that even back-to-back reruns
+ * land nowhere near each other.
  */
 let sequence = 0;
 export function farFutureSessionWindow(): { start_date: string; end_date: string } {
   sequence += 1;
-  const baseDays = 3650 + (Math.floor(Date.now() / 1000) % 5000) + sequence * 800;
+  const baseDays = 3650 + Math.floor(Math.random() * 500_000) + sequence * 800;
   const start = new Date();
   start.setDate(start.getDate() + baseDays);
   const end = new Date(start);
