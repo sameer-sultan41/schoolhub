@@ -156,7 +156,7 @@ class GuardianLinkTests(StudentManagementAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_nesting_under_a_foreign_student_is_404(self) -> None:
-        self.allow("students.guardian.create")
+        self.allow("students.guardian.create", "students.guardian.view")
         other_tenant = TenantFactory()
         with tenant_context(other_tenant.id):
             foreign_campus = CampusFactory(tenant=other_tenant)
