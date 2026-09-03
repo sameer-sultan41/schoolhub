@@ -106,7 +106,8 @@
       "admissionNumberHint": "Generated automatically and cannot be changed."
     },
     "actions": {
-      "create": "New student"
+      "create": "New student",
+      "import": "Import"
     },
     "tabs": {
       "profile": "Profile",
@@ -264,6 +265,35 @@
         "enrollment": "Enrolled — {session}, {className} {section}",
         "transfer": "Transfer — {type}"
       }
+    },
+    "import": {
+      "title": "Import students",
+      "description": "Bulk-create students from a CSV or .xlsx file.",
+      "templateTitle": "Required columns",
+      "templateHint": "The file's header row must use these exact names. Optional columns are outlined.",
+      "fields": {
+        "file": "File"
+      },
+      "upload": "Upload",
+      "processing": "Importing — {progress}%",
+      "failed": "The import failed.",
+      "summarySucceeded": "{count} imported",
+      "summaryFailed": "{count} failed",
+      "importAnother": "Import another file",
+      "errorTable": {
+        "row": "Row",
+        "field": "Field",
+        "issue": "Issue"
+      }
+    },
+    "idCards": {
+      "selectAll": "Select all students on this page",
+      "selectRow": "Select this student",
+      "generate": "Generate ID cards ({count})",
+      "generating": "Generating — {progress}%",
+      "failed": "ID-card generation failed.",
+      "download": "Download PDF",
+      "dismiss": "Dismiss"
     }
   },
   "common": {

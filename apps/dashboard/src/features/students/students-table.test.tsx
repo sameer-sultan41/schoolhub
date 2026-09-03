@@ -5,9 +5,10 @@ import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../messages/en.json";
 import { StudentsTable } from "@/features/students/students-table";
+import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
 
-jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn() } }));
+jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 // StudentsTable never calls useSession itself — it renders <Can>, which reads
 // usePermission/useAnyPermission — so those two are the ones to mock.
 jest.mock("@/hooks/use-session", () => ({
@@ -25,6 +26,7 @@ jest.mock("next/navigation", () => ({
 // runtime, it is jest.fn(), so it is safe to reference bare here.
 // eslint-disable-next-line @typescript-eslint/unbound-method
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
+const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -48,6 +50,7 @@ describe("StudentsTable", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockPush.mockReset();
+    mockUsePermission.mockReturnValue(false);
   });
 
   it("shows skeleton rows while loading", () => {
@@ -234,5 +237,25 @@ describe("StudentsTable", () => {
       const lastCall = mockGet.mock.calls.at(-1)?.[1];
       expect(lastCall?.query?.cursor).toBeUndefined();
     });
+  });
+
+  it("enables the ID-card action once a row is selected", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<StudentsTable />);
+
+    await screen.findByText("2026-0001");
+    expect(screen.getByRole("button", { name: "Generate ID cards (0)" })).toBeDisabled();
+
+    await user.click(screen.getByRole("checkbox", { name: "Select this student" }));
+
+    expect(screen.getByRole("button", { name: "Generate ID cards (1)" })).toBeEnabled();
   });
 });
