@@ -25,7 +25,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | Module | API | Dashboard screens | E2E | Spec doc |
 | ------ | --- | ------------------ | --- | -------- |
 | school-organization | done | — (platform-admin/setup UI not built) | — | done |
-| student-management | in progress (PR 1 CRUD, PR 2 guardians/documents/files) | in progress (list/detail/create/edit + Guardians/Emergency contacts/Documents tabs) | — | done |
+| student-management | in progress (PR 1 CRUD, PR 2 guardians/documents/files, PR 3 enrollment lifecycle/transfers) | in progress (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs) | — | done |
 | staff-management | — | — | — | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
 | everything else (15 modules) | — | — | — | done (spec exists; nothing implemented) |
@@ -96,13 +96,23 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   `NullPresigner`. **AV scanning is not implemented** — `FileStatus.QUARANTINED`
   is unreachable; a documented gap against `api-architecture.md` §11, not an
   oversight.
-- **`student-management`'s enrollment lifecycle and import/ID cards are not
-  built yet** — PR 1+2 cover the student master record, CRUD, guardians,
-  emergency contacts, and documents. `medical_notes` field-level restriction
-  and the `filter_assigned_to_user` fail-closed default (no `staff` table to
-  join against yet) both ship in PR 1, ahead of the features that will
-  exercise them. The student<->guardian link has no destroy endpoint by
-  design (see the module doc) — the dashboard has no "unlink" UI to match.
+- **`student-management`'s import/export and ID cards are not built yet** —
+  PR 1-3 cover the student master record, CRUD, guardians, emergency
+  contacts, documents, and the enrollment lifecycle (enroll/change-section/
+  withdraw, transfers). `medical_notes` field-level restriction and the
+  `filter_assigned_to_user` fail-closed default (no `staff` table to join
+  against yet) both ship in PR 1, ahead of the features that will exercise
+  them. The student<->guardian link has no destroy endpoint by design (see
+  the module doc) — the dashboard has no "unlink" UI to match.
+- **`core.idempotency` now exists** (PR 3): stores a colon-action's response
+  per `(tenant, key, endpoint)` and replays it on a repeat `Idempotency-Key`
+  within 24h. No cleanup job prunes expired rows yet — Celery beat doesn't
+  exist until PR 4.
+- **Withdrawal is a single audited action**, not initiate/approve — no
+  `student_withdrawals` entity exists. Clearance checks (fees/library/
+  transport) always return "clear" since none of those modules exist yet.
+  `student-transfers`' `:cancel` action and the `incoming` transfer type's
+  execution workflow are both undefined — documented gaps, not oversights.
 
 ---
 
@@ -124,13 +134,14 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 5. **`student-management` is the active work**, landing as 4 sequenced PRs (each
    spanning backend + its dashboard screens), stacked one on the next: PR 1
    foundation + student CRUD, PR 2 guardians/documents/files, PR 3 enrollment
-   lifecycle, PR 4 import/ID cards. PR 1 and PR 2 are up — student model,
+   lifecycle, PR 4 import/ID cards. PR 1-3 are up — student model,
    `module.students` feature flag off by default, `core.tenancy.features`
-   flag registry, `students` list/detail/create/edit screens, guardians,
-   emergency contacts, student documents, and `core.files`'s two-step upload
-   with matching Guardians/Emergency contacts/Documents detail tabs. PR 3
-   (enrollment lifecycle) is next. `staff-management` follows PR 4 per the
-   tier-1 build order.
+   flag registry, guardians/emergency contacts/documents, `core.files`'s
+   two-step upload, and now `core.idempotency` plus the full enrollment
+   lifecycle (`:enroll`/`:change-section`/`:withdraw`, `student-transfers`
+   with `:approve`/`:reject`/`:complete`, the assembled history timeline) —
+   with matching dashboard tabs and dialogs. PR 4 (import/export + ID cards)
+   is next. `staff-management` follows PR 4 per the tier-1 build order.
 6. Once `student-management`'s API exists, `staff-management` can start in
    parallel — it depends on `school-organization` only, not on `student-management`.
    Two things it will need that PR 1 already built and can reuse as-is:
