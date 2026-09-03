@@ -83,5 +83,10 @@ describe("ImportWizard", () => {
     expect(await screen.findByText("1 imported")).toBeInTheDocument();
     expect(screen.getByText("1 failed")).toBeInTheDocument();
     expect(screen.getByText("No campus with code 'NOPE'.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Import another file" }));
+
+    expect(screen.getByRole("button", { name: "Upload" })).toBeDisabled();
+    expect(screen.queryByText("1 imported")).not.toBeInTheDocument();
   });
 });
