@@ -230,7 +230,7 @@ class EnrollmentTests(StudentManagementAPITestCase):
         self.assertEqual(response.json()["data"]["status"], "withdrawn")
 
     def test_history_lists_the_enrollment(self) -> None:
-        self.allow("students.enrollment.enroll")
+        self.allow("students.enrollment.enroll", "students.student.view")
         self._satisfy_prerequisites()
         with tenant_context(self.tenant.id):
             StudentEnrollmentFactory(
