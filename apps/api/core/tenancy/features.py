@@ -122,6 +122,11 @@ def sync_feature_flags(*, verbose: bool = False) -> dict[str, int]:
         FeatureFlag.objects.bulk_update(
             to_update, ["description", "default_enabled", "is_kill_switch"], batch_size=500
         )
+    if to_create or to_update:
+        # bulk_create/bulk_update don't emit post_save, so signals.evict_on_flag_change
+        # never runs — do its job here, or a flag's default flipped on deploy stays
+        # resolved from the stale cached value for up to _CACHE_TTL.
+        cache.clear()
 
     stale = sorted(set(existing) - registry.keys())
     if stale:
@@ -149,12 +154,12 @@ def is_feature_enabled(key: str, *, tenant_id: uuid.UUID) -> bool:
 
     1. Flag row missing -> disabled, and logged: a required flag that was never
        registered is a deploy bug, not a "tenant doesn't have it" case.
-    2. Kill switch -> only the platform default counts; a tenant override cannot
-       turn it on ("kill switches cannot be overridden per tenant").
-    3. A live, non-expired tenant override -> its value.
-    4. Plan-level enablement -> skipped here, deliberately: `plans`/`subscriptions`
+    2. A live, non-expired tenant override -> its value, EXCEPT a kill-switch flag
+       ignores an override that tries to turn it on — only the platform default can
+       enable a kill switch; an override may still force it off.
+    3. Plan-level enablement -> skipped here, deliberately: `plans`/`subscriptions`
        arrive with platform-admin (Tier 5). This is the documented insertion point.
-    5. The flag's own default.
+    4. The flag's own default.
     """
     cache_key = f"feature:{tenant_id}:{key}"
     cached = cache.get(cache_key)
@@ -174,9 +179,6 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
         logger.error("feature flag %r has no row — treating as disabled", key)
         return False
 
-    if flag.is_kill_switch:
-        return flag.default_enabled
-
     override = (
         TenantFeatureOverride.all_tenants.filter(
             tenant_id=tenant_id, feature_flag=flag, deleted_at__isnull=True
@@ -187,6 +189,12 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
     if override is not None and (
         override.expires_at is None or override.expires_at > timezone.now()
     ):
+        # A kill switch can still be force-disabled per tenant, just never force-enabled
+        # (FeatureFlag.is_kill_switch's own help_text: "a tenant override can never turn
+        # this ON — only the platform default can enable it. Overrides may still force
+        # it off.").
+        if flag.is_kill_switch and override.enabled:
+            return flag.default_enabled
         return override.enabled
 
     return flag.default_enabled

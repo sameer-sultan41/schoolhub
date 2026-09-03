@@ -101,12 +101,18 @@ class StudentSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
-        if user is None or not _can_see_medical_notes(user):
+        if user is None or not _can_see_medical_notes(user, instance):
             data.pop("medical_notes", None)
         return data
 
 
-def _can_see_medical_notes(user) -> bool:
+def _can_see_medical_notes(user, student: Student) -> bool:
     if has_permission_key(user, "students.student.update"):
         return True
-    return RecordScope.ASSIGNED in user_scopes(user)
+    if RecordScope.ASSIGNED not in user_scopes(user):
+        return False
+    # A user can hold `assigned` scope from one role and a broader scope (e.g.
+    # `campus`) from another — the aggregate scope set alone can't say which one
+    # actually reached *this* record. Re-run the module's own assigned-filter
+    # against just this instance rather than trusting scope membership in general.
+    return Student.filter_assigned_to_user(Student.objects.filter(pk=student.pk), user).exists()
