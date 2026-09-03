@@ -41,7 +41,7 @@ const DOCUMENT = {
   student_id: "s1",
   file_id: "f1",
   document_type: "birth_certificate",
-  title: "Birth certificate",
+  title: "Amina's birth certificate",
   notes: null,
   verification_status: "pending" as const,
   verified_by: null,
@@ -72,7 +72,7 @@ describe("DocumentsPanel", () => {
 
     renderWithProviders(<DocumentsPanel studentId="s1" />);
 
-    expect(await screen.findByText("Birth certificate")).toBeInTheDocument();
+    expect(await screen.findByText("Amina's birth certificate")).toBeInTheDocument();
     expect(screen.getByText(/Birth certificate/)).toBeInTheDocument();
     expect(screen.getByText("Pending")).toBeInTheDocument();
   });
@@ -82,7 +82,7 @@ describe("DocumentsPanel", () => {
 
     renderWithProviders(<DocumentsPanel studentId="s1" />);
 
-    await screen.findByText("Birth certificate");
+    await screen.findByText("Amina's birth certificate");
     expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
   });
@@ -189,7 +189,7 @@ describe("DocumentsPanel", () => {
       expect(mockPost).toHaveBeenCalledWith("/students/s1/documents", {
         file_id: "f2",
         document_type: "birth_certificate",
-        title: "Birth certificate",
+        title: "Amina's birth certificate",
         notes: null,
         expires_at: null,
       });
