@@ -860,6 +860,10 @@ def complete_transfer(
             raise DomainRuleViolation(
                 {"section_id": "Section does not belong to the destination campus."}
             )
+        # assert_transfer_campus_fields guarantees to_campus is set for every
+        # inter-campus transfer at creation time; this is the type checker's
+        # window into that runtime invariant.
+        assert transfer.to_campus is not None
         enrollment = active_enrollment(student)
         if enrollment is not None:
             assert_section_belongs_to_class(section=section, school_class=enrollment.school_class)
