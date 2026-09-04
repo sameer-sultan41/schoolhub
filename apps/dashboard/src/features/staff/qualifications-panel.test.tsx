@@ -178,6 +178,65 @@ describe("QualificationsPanel", () => {
     });
   });
 
+  it("adds a qualification with a chosen type, optional fields, and a supporting document", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([]));
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    mockPost.mockImplementation((path: string) => {
+      if (path === "/files") {
+        return Promise.resolve(
+          apiResult({
+            id: "f2",
+            original_name: "diploma.pdf",
+            mime_type: "application/pdf",
+            size_bytes: 3,
+            purpose: "staff.qualification",
+            status: "pending",
+            visibility: "tenant",
+            created_at: "2026-04-01T00:00:00Z",
+            updated_at: "2026-04-01T00:00:00Z",
+            upload_url: "https://storage.invalid/f2",
+            upload_method: "PUT",
+            headers: {},
+            expires_at: "2026-04-01T00:15:00Z",
+          }),
+        );
+      }
+      if (path === "/files/f2:confirm")
+        return Promise.resolve(apiResult({ id: "f2", status: "ready" }));
+      if (path === "/staff/st1/qualifications") return Promise.resolve(apiResult({}));
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<QualificationsPanel staffId="st1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Add qualification" }));
+
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByLabelText("Qualification type"));
+    await user.click(await screen.findByRole("option", { name: "Diploma" }));
+    await user.type(within(dialog).getByLabelText("Title"), "Diploma in IT");
+    await user.type(within(dialog).getByLabelText("Field of study"), "Networking");
+    await user.type(within(dialog).getByLabelText("Year awarded"), "2015");
+    await user.type(within(dialog).getByLabelText("Grade"), "A");
+    const file = new File(["hi"], "diploma.pdf", { type: "application/pdf" });
+    await user.upload(within(dialog).getByLabelText("Supporting document"), file);
+    await user.click(within(dialog).getByRole("button", { name: "Add qualification" }));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith("/staff/st1/qualifications", {
+        qualification_type: "diploma",
+        title: "Diploma in IT",
+        institution: null,
+        field_of_study: "Networking",
+        year_awarded: 2015,
+        grade: "A",
+        document_file_id: "f2",
+      });
+    });
+  });
+
   it("shows an error inside the dialog when adding a qualification fails", async () => {
     mockUsePermission.mockReturnValue(true);
     mockGet.mockResolvedValue(apiResult([]));

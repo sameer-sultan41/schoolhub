@@ -251,6 +251,41 @@ describe("StaffTable", () => {
     });
   });
 
+  it("changing the department filter re-fetches with the selected department", async () => {
+    mockGet.mockImplementation((path: string) => {
+      if (path === "/staff") {
+        return Promise.resolve({
+          data: [STAFF_MEMBER],
+          meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+          requestId: "req-list",
+          status: 200,
+        });
+      }
+      if (path === "/departments") {
+        return Promise.resolve({
+          data: [{ id: "dpt1", name: "Mathematics" }],
+          meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+          requestId: "req-departments",
+          status: 200,
+        });
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<StaffTable />);
+    await screen.findByText("EMP-0001");
+
+    await user.click(screen.getByRole("combobox", { name: "Department" }));
+    await user.click(await screen.findByRole("option", { name: "Mathematics" }));
+
+    await waitFor(() => {
+      const staffCalls = mockGet.mock.calls.filter((call) => call[0] === "/staff");
+      const lastCall = staffCalls.at(-1)?.[1];
+      expect(lastCall?.query?.department_id).toBe("dpt1");
+    });
+  });
+
   it("changing the employment-status filter re-fetches with the selected status", async () => {
     mockStaffAndDepartments({
       data: [STAFF_MEMBER],

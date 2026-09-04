@@ -89,6 +89,26 @@ describe("StaffDetail", () => {
     expect(screen.getByText("Public bio")).toBeInTheDocument();
   });
 
+  it("renders an em dash for a null date of birth", async () => {
+    mockGet.mockResolvedValue(apiResult({ ...BASE_STAFF, date_of_birth: null }));
+
+    renderWithProviders(<StaffDetail staffId="st1" />);
+
+    await screen.findByRole("heading", { name: "Bilal Ahmed" });
+    const dateOfBirthLabel = screen.getByText("Date of birth");
+    expect(dateOfBirthLabel.nextElementSibling).toHaveTextContent("—");
+  });
+
+  it("renders an em dash for a null email", async () => {
+    mockGet.mockResolvedValue(apiResult({ ...BASE_STAFF, email: null }));
+
+    renderWithProviders(<StaffDetail staffId="st1" />);
+
+    await screen.findByRole("heading", { name: "Bilal Ahmed" });
+    const emailLabel = screen.getByText("Email");
+    expect(emailLabel.nextElementSibling).toHaveTextContent("—");
+  });
+
   it("renders the ApiError envelope on a request failure", async () => {
     mockGet.mockRejectedValue(
       new ApiError({

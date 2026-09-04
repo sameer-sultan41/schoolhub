@@ -107,6 +107,30 @@ describe("StaffForm (create)", () => {
     expect(await screen.findByText("This file has not been confirmed yet.")).toBeInTheDocument();
   });
 
+  it("submits the selected department when one is chosen", async () => {
+    mockGet.mockResolvedValue(apiResult([{ id: "dpt1", name: "Mathematics" }]));
+    mockPost.mockResolvedValue(apiResult({ id: "st1", employee_number: "EMP-0001" }));
+    const user = userEvent.setup();
+    renderWithProviders(<StaffForm mode="create" />);
+
+    await user.type(screen.getByLabelText(/First name/), "Bilal");
+    await user.type(screen.getByLabelText(/Last name/), "Ahmed");
+    await user.type(screen.getByLabelText(/Joining date/), "2026-04-01");
+    await user.type(screen.getByLabelText(/Phone/), "+923001234567");
+    await user.click(screen.getByRole("combobox", { name: "Campus" }));
+    await user.click(await screen.findByRole("option", { name: "Main Campus" }));
+    await user.click(screen.getByRole("combobox", { name: "Department" }));
+    await user.click(await screen.findByRole("option", { name: "Mathematics" }));
+    await user.click(screen.getByRole("button", { name: "New staff member" }));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith(
+        "/staff",
+        expect.objectContaining({ department_id: "dpt1" }),
+      );
+    });
+  });
+
   it("invalidates the staff cache and navigates to the detail page on success", async () => {
     mockPost.mockResolvedValue(apiResult({ id: "st1", employee_number: "EMP-0001" }));
     const user = userEvent.setup();

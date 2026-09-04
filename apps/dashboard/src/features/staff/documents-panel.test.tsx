@@ -1,6 +1,6 @@
 import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../messages/en.json";
@@ -86,6 +86,29 @@ describe("DocumentsPanel", () => {
     renderWithProviders(<DocumentsPanel staffId="st1" />);
 
     expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the raw message for an unmapped documents-query error code", async () => {
+    mockGet.mockRejectedValue(
+      new ApiError({
+        code: "weird_unmapped_code",
+        message: "Something specific broke",
+        status: 500,
+        url: "/staff/st1/documents",
+      }),
+    );
+
+    renderWithProviders(<DocumentsPanel staffId="st1" />);
+
+    expect(await screen.findByText("Something specific broke")).toBeInTheDocument();
+  });
+
+  it("falls back to an empty document list when the query fails with a non-ApiError", async () => {
+    mockGet.mockRejectedValue(new Error("network down"));
+
+    renderWithProviders(<DocumentsPanel staffId="st1" />);
+
+    expect(await screen.findByText("No documents uploaded yet.")).toBeInTheDocument();
   });
 
   it("shows a verified document's badge and expiry, with no verify/reject actions", async () => {
@@ -310,5 +333,151 @@ describe("DocumentsPanel", () => {
     await user.click(within(dialog).getByRole("button", { name: "Upload document" }));
 
     expect(await within(dialog).findByText(/isn't allowed right now/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the raw message for an unmapped dialog registration error", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([]));
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    mockPost.mockImplementation((path: string) => {
+      if (path === "/files") {
+        return Promise.resolve(
+          apiResult({
+            id: "f2",
+            original_name: "contract.pdf",
+            mime_type: "application/pdf",
+            size_bytes: 3,
+            purpose: "staff.document",
+            status: "pending",
+            visibility: "tenant",
+            created_at: "2026-04-01T00:00:00Z",
+            updated_at: "2026-04-01T00:00:00Z",
+            upload_url: "https://storage.invalid/f2",
+            upload_method: "PUT",
+            headers: {},
+            expires_at: "2026-04-01T00:15:00Z",
+          }),
+        );
+      }
+      if (path === "/files/f2:confirm")
+        return Promise.resolve(apiResult({ id: "f2", status: "ready" }));
+      if (path === "/staff/st1/documents") {
+        return Promise.reject(
+          new ApiError({
+            code: "weird_unmapped_code",
+            message: "Something specific broke",
+            status: 500,
+            url: "/staff/st1/documents",
+          }),
+        );
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<DocumentsPanel staffId="st1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Upload document" }));
+
+    const dialog = screen.getByRole("dialog");
+    const file = new File(["hello"], "contract.pdf", { type: "application/pdf" });
+    await user.upload(within(dialog).getByLabelText("File"), file);
+    await user.type(within(dialog).getByLabelText("Title"), "Employment contract");
+    await user.click(within(dialog).getByRole("button", { name: "Upload document" }));
+
+    expect(await within(dialog).findByText("Something specific broke")).toBeInTheDocument();
+  });
+
+  it("resets the dialog's fields when it is closed without submitting", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([]));
+
+    const user = userEvent.setup();
+    renderWithProviders(<DocumentsPanel staffId="st1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Upload document" }));
+    let dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Title"), "Employment contract");
+    expect(within(dialog).getByLabelText("Title")).toHaveValue("Employment contract");
+
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "Upload document" }));
+    dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByLabelText("Title")).toHaveValue("");
+  });
+
+  it("clears the selected file when the dialog's file input selection is cleared", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([]));
+
+    const user = userEvent.setup();
+    renderWithProviders(<DocumentsPanel staffId="st1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Upload document" }));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Title"), "Employment contract");
+    const input = within(dialog).getByLabelText("File");
+    const file = new File(["hello"], "contract.pdf", { type: "application/pdf" });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(within(dialog).getByRole("button", { name: "Upload document" })).toBeEnabled();
+
+    fireEvent.change(input, { target: { files: [] } });
+
+    expect(within(dialog).getByRole("button", { name: "Upload document" })).toBeDisabled();
+  });
+
+  it("shows the uploading label on the submit button while registration is pending", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(apiResult([]));
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    let resolveCreate: (value: unknown) => void = () => {};
+    mockPost.mockImplementation((path: string) => {
+      if (path === "/files") {
+        return Promise.resolve(
+          apiResult({
+            id: "f2",
+            original_name: "contract.pdf",
+            mime_type: "application/pdf",
+            size_bytes: 3,
+            purpose: "staff.document",
+            status: "pending",
+            visibility: "tenant",
+            created_at: "2026-04-01T00:00:00Z",
+            updated_at: "2026-04-01T00:00:00Z",
+            upload_url: "https://storage.invalid/f2",
+            upload_method: "PUT",
+            headers: {},
+            expires_at: "2026-04-01T00:15:00Z",
+          }),
+        );
+      }
+      if (path === "/files/f2:confirm")
+        return Promise.resolve(apiResult({ id: "f2", status: "ready" }));
+      if (path === "/staff/st1/documents") {
+        return new Promise((resolve) => {
+          resolveCreate = resolve;
+        });
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<DocumentsPanel staffId="st1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Upload document" }));
+    const dialog = screen.getByRole("dialog");
+    const file = new File(["hello"], "contract.pdf", { type: "application/pdf" });
+    await user.upload(within(dialog).getByLabelText("File"), file);
+    await user.type(within(dialog).getByLabelText("Title"), "Employment contract");
+    await user.click(within(dialog).getByRole("button", { name: "Upload document" }));
+
+    expect(await within(dialog).findByRole("button", { name: "Uploading" })).toBeInTheDocument();
+
+    resolveCreate(apiResult({}));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 });
