@@ -872,6 +872,26 @@ export interface paths {
         patch: operations["staff_qualifications_partial_update"];
         trace?: never;
     };
+    "/api/v1/staff-qualifications/{id}:verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify or reject a staff qualification
+         * @description Top-level access for `PATCH /staff-qualifications/{id}` and `:verify`.
+         */
+        post: operations["staff_qualifications_:verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff/{id}": {
         parameters: {
             query?: never;
@@ -4888,6 +4908,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StaffQualification"];
                 };
+            };
+        };
+    };
+    "staff_qualifications_:verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VerifyRequest"];
+                "multipart/form-data": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffQualification"];
+                };
+            };
+            /** @description Already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -297,6 +297,11 @@ class StaffQualificationViewSet(
         "partial_update": "staff.qualification.update",
         "verify": "staff.qualification.verify",
     }
+    # §16 declares no PUT (same convention as StaffViewSet); "post" must stay
+    # allowed for the hand-wired :verify action — View.dispatch() checks
+    # http_method_names before the URL's own {"post": "verify"} map ever
+    # runs, so omitting it here 405s that action regardless of urls.py.
+    http_method_names = ["get", "patch", "post", "head", "options"]
     scope_campus_field = "staff__campus_id"
 
     @extend_schema(
