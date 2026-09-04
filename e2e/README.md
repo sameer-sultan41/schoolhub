@@ -62,11 +62,15 @@ it must then match what you export for `pnpm e2e:live` too.
 to (re)build and serve the dashboard/website on the same ports the compose stack already
 bound them to.
 
-The `live` project itself splits into two Playwright projects: `live-setup` does one real
-UI login and caches it to `.auth/live-admin.json` (see `tests/live/live.setup.ts`) —
-`AuthEndpointThrottle` allows only 10 requests/minute per IP across login/refresh/logout,
-so every test logging in for itself would exhaust that fast — and `live` (the actual
-specs) depends on it and reuses that session. `pnpm e2e:live` runs both automatically.
+The `live` project splits into two Playwright projects: `live-setup` (see
+`tests/live/live.setup.ts`) and `live` (the actual specs, depending on it). `pnpm
+e2e:live` runs both automatically. `AuthEndpointThrottle` allows only 10 requests/minute
+per IP across login/refresh/logout, so a real login per test would exhaust that fast — but
+refresh tokens also *rotate*, so a shared browser session (what `live-setup` was built
+for) is only safe for one cold-navigation test per run, confirmed against the real API.
+Every live browser spec logs in for itself instead (see `e2e/AGENTS.md`'s auth-throttle
+section for the confirmed reasoning); `liveApiClient` (a worker-scoped fixture, no browser
+involved) is what safely shares one real login across the `tests/live/api/` files.
 
 ## Layout
 

@@ -1,19 +1,33 @@
 import { SESSION_COOKIE_NAME } from "@/constants";
+import { env } from "@/env";
 import { expect, test } from "@/fixtures";
 
 /**
  * Live lane — requires the real stack, seeded (see `tests/live/tenant-isolation.spec.ts`'s
  * header comment for the run command).
  *
- * Uses the shared `live-setup` session (see `live.setup.ts`) — every test here starts
- * already signed in, so it costs no extra `/auth/login` call against the throttle.
+ * Real login, guest context — not the shared `live-setup` session. Refresh tokens
+ * *rotate*, so a cold `/dashboard` visit's refresh call invalidates the shared session's
+ * one refresh cookie for every other test that still expects to reuse it (confirmed
+ * against the real API: a second consumer's own refresh 401'd with the family already
+ * rotated away). Exactly one browser test may ever consume that shared cookie's refresh
+ * per run, and `fullyParallel` gives no guaranteed ordering to make that "one" reliable —
+ * so this test owns its session end to end instead.
  */
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe("session (real API)", () => {
   test("signing out revokes the session, not just the current tab", async ({
     page,
+    loginPage,
     dashboardPage,
   }) => {
-    await dashboardPage.goto();
+    await loginPage.goto();
+    await loginPage.signIn({
+      identifier: env.LIVE_ADMIN_IDENTIFIER,
+      password: env.LIVE_ADMIN_PASSWORD,
+    });
+    await expect(page).toHaveURL("/dashboard");
     await expect(dashboardPage.heading).toBeVisible();
 
     // Captured before sign-out: proving revocation means replaying the *real* leftover
@@ -34,18 +48,25 @@ test.describe("session (real API)", () => {
     await expect(page).toHaveURL("/login");
 
     // The strongest proof a stub cannot make honestly: replay those leftover cookies in a
-    // brand-new browser context and try the protected route with them. If the server
-    // actually revoked the refresh token, restoring a session still fails and this
-    // redirects to /login; if sign-out only cleared the one tab's client state, this
-    // would authenticate.
+    // brand-new browser context and try the protected route with them. Assert on the real
+    // /auth/refresh response, not on where the page ends up — sh_session only gates the
+    // dashboard's *proxy* (a routing decision, cookie-presence only, by design), so a
+    // present-but-stale sh_session still lets the replayed context load /dashboard's page
+    // chrome even once the refresh token is genuinely revoked; the page just renders
+    // without a restored session rather than redirecting away, which is a separate,
+    // milder UX question from the one this test actually cares about.
     const browser = page.context().browser();
     if (!browser) throw new Error("expected a real Browser instance for a fresh context");
     const replayContext = await browser.newContext();
     try {
       await replayContext.addCookies([refreshCookie, sessionCookie]);
       const replayPage = await replayContext.newPage();
+      const refreshAttempt = replayPage.waitForResponse((response) =>
+        response.url().endsWith("/api/auth/refresh"),
+      );
       await replayPage.goto("/dashboard");
-      await expect(replayPage).toHaveURL("/login");
+      const refreshResponse = await refreshAttempt;
+      expect(refreshResponse.status()).toBe(401);
     } finally {
       await replayContext.close();
     }

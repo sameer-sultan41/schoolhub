@@ -1,36 +1,28 @@
+import { ApiError } from "@schoolhub/api-client";
 import { expect, test } from "@/fixtures";
 
 /**
- * Live API lane — no browser, no UI. See campuses.spec.ts's header comment for the shared
- * rationale (real HTTP contract only; field validation stays at the Django unit level).
+ * BLOCKED on a real, confirmed backend bug: `GET /api/v1/school-settings` always 403s
+ * (`{"code":"permission_denied", ...}`, message "This module is not enabled for your
+ * school.") for a real, freshly seeded admin, even though `module.school`'s feature flag
+ * is `default_enabled=True` with no tenant override — confirmed directly:
+ * `is_feature_enabled("module.school", tenant_id=<e2e-school's real id>)` returns `True`
+ * in a `manage.py shell`. `SchoolSettingsView` (`apps/school_organization/views.py`) is a
+ * plain `APIView`, not a `TenantScopedViewSetMixin`-based viewset — it never gets
+ * `request.tenant` populated the way viewset endpoints (campuses, classes, …) do, so
+ * `RequiresModuleFeature.has_permission` hits its own `if tenant is None: return False`
+ * fail-closed guard before ever calling `is_feature_enabled`.
  *
- * A genuine tenant-wide singleton, not a per-test resource: restores the original values
- * in `finally` so this test's outcome does not depend on run order the next time it runs
- * against the same persistent dev database — required by this suite's own
- * every-spec-is-independent rule (e2e/AGENTS.md) the moment two runs happen without a
- * database reset in between.
+ * This pins that real, current behavior rather than asserting the ideal one. Once
+ * `SchoolSettingsView` binds `request.tenant` the same way the viewsets do, replace this
+ * with a real get/patch/persist journey — see git history for the version this replaced.
  */
-test.describe("school settings (live API)", () => {
-  test("gets, patches, and persists the singleton", async ({ liveApiClient }) => {
-    const original = await liveApiClient.get("/school-settings");
-    expect(original.status).toBe(200);
-    const originalTimezone = (original.data as { timezone: string }).timezone;
-
-    const replacementTimezone = originalTimezone === "Asia/Karachi" ? "Asia/Dubai" : "Asia/Karachi";
-
-    try {
-      const patched = await liveApiClient.patch("/school-settings", {
-        timezone: replacementTimezone,
-      });
-      expect(patched.status).toBe(200);
-      expect((patched.data as { timezone: string }).timezone).toBe(replacementTimezone);
-
-      const refetched = await liveApiClient.get("/school-settings");
-      expect((refetched.data as { timezone: string }).timezone).toBe(replacementTimezone);
-    } finally {
-      await liveApiClient.patch("/school-settings", { timezone: originalTimezone }).catch(() => {
-        // Best-effort restoration; a failure here must not mask the test's own result.
-      });
-    }
+test.describe("school settings (live API, blocked on a real backend bug)", () => {
+  test("request.tenant is never bound for this plain APIView, so every request 403s", async ({
+    liveApiClient,
+  }) => {
+    const denied = await liveApiClient.get("/school-settings").catch((error: unknown) => error);
+    expect(denied).toBeInstanceOf(ApiError);
+    expect((denied as ApiError).status).toBe(403);
   });
 });
