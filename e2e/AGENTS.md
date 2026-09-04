@@ -28,6 +28,34 @@ because the website renders on the server and browser interception cannot see it
   `apps/api/core/api/exceptions.py`. Override `code` only for a genuine domain code.
 - Every spec is independent — `fullyParallel` is on.
 
+## The auth throttle — and why every live browser spec logs in for itself
+
+`AuthEndpointThrottle` (`apps/api/core/api/throttling.py`) allows only 10 requests/minute
+per IP across login/refresh/logout combined. A real login per test blows through that the
+moment `tests/live/` grows past a handful of specs, so don't do that either — but the
+"share one login" fix has a sharp edge, confirmed against the real API, not assumed:
+
+- **Refresh tokens rotate** (`core/rbac/views.py::RefreshView`). Any browser spec that
+  does a cold, session-restoring navigation (`dashboardPage.goto()`) triggers a real
+  `/auth/refresh` call, which rotates the refresh cookie. `tests/live/live.setup.ts`'s
+  shared `storageState` file is therefore safe for **at most one** such spec per run —
+  the second one to reuse it gets a 401, its token family already rotated away by the
+  first. `fullyParallel` gives no guaranteed file order to make "the first one" reliable
+  even if only two specs ever did this.
+- So: **every live browser spec does its own real login**, guest context —
+  `test.use({ storageState: { cookies: [], origins: [] } })` at the top of the file, then
+  `loginPage.signIn(...)` — the same pattern `login.spec.ts`, `session.spec.ts`,
+  `dashboard-summary.spec.ts` and `tenant-isolation.spec.ts` all use. That's ~5-6 real
+  logins per full run today, comfortably under the 10/min budget; re-check that math
+  before adding another one.
+- `live.setup.ts`/`playwright.config.ts`'s `live-setup` project stays wired up for a
+  future spec that is genuinely safe to share (one that never triggers its own refresh),
+  but nothing uses it today — read `live.setup.ts`'s own header before reaching for it.
+- API specs (`tests/live/api/`) destructure the worker-scoped `liveApiClient` fixture
+  (`src/fixtures/index.ts`, wired to `src/lib/live-api.ts`) — one real login per worker,
+  not per test or per file. This one has no rotation problem: it's a raw `fetch`-based
+  session, not a browser `storageState`, so nothing else tries to reuse its cookie.
+
 ## Mirrored values
 
 `src/constants.ts` copies a few values out of the apps (the session cookie name, the

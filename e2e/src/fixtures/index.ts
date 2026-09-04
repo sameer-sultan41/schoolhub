@@ -1,8 +1,10 @@
 import { test as base, expect } from "@playwright/test";
+import type { ApiClient } from "@schoolhub/api-client";
 import type { AuthenticatedUser } from "@schoolhub/types";
 import { SESSION_COOKIE_NAME } from "@/constants";
 import { buildUser } from "@/data/factories";
 import { env } from "@/env";
+import { createLiveSession } from "@/lib/live-api";
 import { MockApi, authModule, reportingModule, tenantModule } from "@/mocks";
 import { DashboardPage, LoginPage, PublicSitePage } from "@/pages";
 
@@ -38,7 +40,17 @@ export interface E2EFixtures {
   publicSitePage: PublicSitePage;
 }
 
-export const test = base.extend<E2EOptions & E2EFixtures>({
+export interface E2EWorkerFixtures {
+  /**
+   * A real, authenticated `ApiClient` against the live API — one login for the whole
+   * worker (see `@/lib/live-api`'s docstring for why: `AuthEndpointThrottle` allows only
+   * 10 requests/minute per IP across login/refresh/logout). Live API specs destructure
+   * this instead of authenticating themselves.
+   */
+  liveApiClient: ApiClient;
+}
+
+export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
   authUser: [buildUser(), { option: true }],
 
   mockApi: async ({ page }, use, testInfo) => {
@@ -101,6 +113,18 @@ export const test = base.extend<E2EOptions & E2EFixtures>({
   publicSitePage: async ({ page }, use) => {
     await use(new PublicSitePage(page));
   },
+
+  liveApiClient: [
+    // Playwright parses this function's source to learn which fixtures it depends on, so
+    // the first parameter must literally be an (empty) destructuring pattern — a named
+    // parameter like `_workerFixtures` breaks that detection at runtime.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      const client = await createLiveSession();
+      await use(client);
+    },
+    { scope: "worker" },
+  ],
 });
 
 export { expect };

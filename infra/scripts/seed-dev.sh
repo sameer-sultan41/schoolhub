@@ -204,9 +204,29 @@ if ! dc run --rm --no-deps \
   fail "migrations failed. If the API repo is not checked out at ../apps/api, set API_REPO_PATH in compose/.env."
 fi
 
+# The two seed commands are independent of each other (sample dev data vs. e2e
+# fixtures) -- run both regardless of either's outcome, but still fail the script
+# loudly at the end if either failed, rather than either swallowing the failure or
+# letting one command's failure prevent the other from ever being attempted.
+seed_dev_data_ok=1
 log "loading sample tenants"
-dc run --rm --no-deps api python manage.py seed_dev_data \
-  || log "WARNING: seed_dev_data is not available yet in the API repo — skipping sample data"
+if ! dc run --rm --no-deps api python manage.py seed_dev_data; then
+  log "ERROR: seed_dev_data failed. Check the API container logs above."
+  seed_dev_data_ok=0
+fi
+
+seed_e2e_data_ok=1
+log "loading e2e fixtures"
+if ! dc run --rm --no-deps \
+     -e E2E_LIVE_ADMIN_PASSWORD="${E2E_LIVE_ADMIN_PASSWORD:-e2e-not-a-real-password}" \
+     api python manage.py seed_e2e_data; then
+  log "ERROR: seed_e2e_data failed. Check the API container logs above."
+  seed_e2e_data_ok=0
+fi
+
+if [ "${seed_dev_data_ok}" -eq 0 ] || [ "${seed_e2e_data_ok}" -eq 0 ]; then
+  fail "one or more seed commands failed -- see the ERROR line(s) above."
+fi
 
 log "starting the application services"
 dc up -d

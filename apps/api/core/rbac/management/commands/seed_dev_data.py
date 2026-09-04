@@ -8,9 +8,9 @@ reach staging or production.
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from core.rbac.models import Permission, RecordScope, Role, RolePermission, User, UserRole
+from core.rbac.seeding import ensure_admin_user, ensure_school_owner_role, ensure_tenant
 from core.tenancy.context import tenant_context
-from core.tenancy.models import Tenant, TenantSettings, TenantStatus
+from core.tenancy.models import TenantSettings
 
 DEMO_TENANT_SLUG = "demo"
 DEMO_OWNER_EMAIL = "owner@demo.localhost"
@@ -22,56 +22,19 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        tenant, created = Tenant.objects.get_or_create(
-            slug=DEMO_TENANT_SLUG,
-            defaults={"name": "Demo School", "status": TenantStatus.ACTIVE},
-        )
-        if not created and tenant.status != TenantStatus.ACTIVE:
-            tenant.status = TenantStatus.ACTIVE
-            tenant.save(update_fields=["status"])
+        tenant = ensure_tenant(DEMO_TENANT_SLUG, "Demo School")
 
         with tenant_context(tenant.id):
             TenantSettings.all_tenants.get_or_create(tenant=tenant)
 
-        # school_owner "can hold every permission" (docs/00-overview/users-and-roles.md
-        # §3) — granting the full current registry keeps this in sync as permissions
-        # are added, rather than hardcoding a subset that would silently go stale.
-        role, _ = Role.objects.get_or_create(
-            tenant=None,
-            slug="school_owner",
-            defaults={"name": "School Owner", "is_default": True},
-        )
-        granted_permission_ids = set(
-            RolePermission.objects.filter(role=role).values_list("permission_id", flat=True)
-        )
-        RolePermission.objects.bulk_create(
-            [
-                RolePermission(role=role, permission=permission)
-                for permission in Permission.objects.exclude(id__in=granted_permission_ids)
-            ],
-            batch_size=500,
-            ignore_conflicts=True,
-        )
-
-        user, user_created = User.objects.get_or_create(
-            tenant=tenant,
+        role = ensure_school_owner_role()
+        ensure_admin_user(
+            tenant,
+            role,
             email=DEMO_OWNER_EMAIL,
-            defaults={
-                "first_name": "Demo",
-                "last_name": "Owner",
-                "is_active": True,
-            },
-        )
-        if user_created:
-            user.set_password(DEMO_OWNER_PASSWORD)
-            user.save(update_fields=["password"])
-
-        UserRole.objects.get_or_create(
-            user=user,
-            role=role,
-            scope=RecordScope.ALL,
-            scope_ref=None,
-            defaults={"tenant": tenant},
+            password=DEMO_OWNER_PASSWORD,
+            first_name="Demo",
+            last_name="Owner",
         )
 
         self.stdout.write(

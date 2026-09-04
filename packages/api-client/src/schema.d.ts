@@ -665,6 +665,13 @@ export interface paths {
          *     branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
          *     locale and currency stay on the tenant row, which is where the request
          *     middleware and every other module already read them from.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` purely for its ``initial()``/
+         *     ``finalize_response()`` tenant binding — this is a plain ``APIView``, not a
+         *     viewset, so the mixin's queryset/create/update helpers are never called and
+         *     are harmless dead code here. Without this, ``request.tenant`` is never set
+         *     (only viewsets get it, via that same mixin), so ``RequiresModuleFeature``
+         *     fails closed on every request before ``is_feature_enabled`` is even checked.
          */
         get: operations["school_settings_retrieve"];
         put?: never;
@@ -679,6 +686,13 @@ export interface paths {
          *     branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
          *     locale and currency stay on the tenant row, which is where the request
          *     middleware and every other module already read them from.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` purely for its ``initial()``/
+         *     ``finalize_response()`` tenant binding — this is a plain ``APIView``, not a
+         *     viewset, so the mixin's queryset/create/update helpers are never called and
+         *     are harmless dead code here. Without this, ``request.tenant`` is never set
+         *     (only viewsets get it, via that same mixin), so ``RequiresModuleFeature``
+         *     fails closed on every request before ``is_feature_enabled`` is even checked.
          */
         patch: operations["school_settings_partial_update"];
         trace?: never;

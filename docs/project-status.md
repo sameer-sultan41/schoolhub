@@ -24,7 +24,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 
 | Module | API | Dashboard screens | E2E | Spec doc |
 | ------ | --- | ------------------ | --- | -------- |
-| school-organization | done | — (platform-admin/setup UI not built) | — | done |
+| school-organization | done | — (platform-admin/setup UI not built) | live-lane API journeys only (no dashboard UI to drive) — CRUD + tenant isolation for all 9 resources, plus the academic-session `:activate`/`:close`/`:clone` lifecycle | done |
 | student-management | done (CRUD, guardians/documents/files, enrollment lifecycle/transfers, import/export/ID cards) | done (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs, import wizard, ID-card batch action) | — | done |
 | staff-management | — | — | — | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
@@ -47,7 +47,7 @@ The monorepo skeleton is in place and structurally complete.
 | `packages/config` | Shared ESLint flat config (ESLint 9, typescript-eslint) |
 | `apps/dashboard` | Auth-guard proxy, tenant-subdomain login (own subdomain namespace, auth cookies via a same-origin proxy), in-memory access token + refresh, TanStack Query client + key factory, `hasPermission`/`<Can>`, `(auth)/login` (RHF + Zod), `(app)` shell with permission-filtered nav + collapsible sidebar + tenant theming, dashboard page, `/api/health`, next-intl (`en` + `ur`, RTL) |
 | `apps/website` | Host→tenant proxy, cached tenant resolution, read-only content layer, ISR rendering of `website_pages`/`page_sections`, theme registry + 12 section components, per-tenant sitemap/robots, HMAC-signed revalidate webhook |
-| `e2e` | Playwright suite with `dashboard` and `website` projects run in the PR gate against mocked routes; a `live` project exists for the real compose stack but is not part of the PR gate |
+| `e2e` | Playwright suite with `dashboard` and `website` projects run in the PR gate against mocked routes. `live` (real compose stack, seeded by `manage.py seed_e2e_data`) is opt-in via `.github/workflows/e2e-live.yml` (`workflow_dispatch` + nightly, not the PR gate) — real-browser journeys for login/logout/session/dashboard-summary/tenant-resolution, plus API-only journeys for every `school_organization` resource (no dashboard UI exists for that module yet). `AuthEndpointThrottle` allows only 10 requests/minute, and refresh tokens rotate, so a shared browser session can safely serve at most one cold-navigation test — every live browser spec logs in for itself instead (`e2e/AGENTS.md` has the confirmed reasoning); the `live-setup` project stays wired up for a future spec that's actually safe to share, but nothing uses it today. Live API specs (`tests/live/api/`) share one real login per worker via a worker-scoped fixture instead, which has no rotation problem |
 | `infra` | Local dev stack (Docker: Postgres/Redis/MinIO/PgBouncer/Mailpit) |
 
 Both apps (`dashboard`, `website`) were generated with `create-next-app` (Next 16,
@@ -85,7 +85,30 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 - **No `staff-management`, no other Tier 1+ backend module.** `apps/api/apps/`
   has `school_organization` and `student_management` only.
 - **`e2e`'s `live` project is opt-in only** — needs the real docker-compose
-  stack, not part of the PR gate.
+  stack, not part of the PR gate. Trigger it via `.github/workflows/e2e-live.yml`
+  (`workflow_dispatch` or the nightly schedule).
+- **No real tenant-CMS-content or dashboard-summary e2e coverage yet** — both
+  depend on backend endpoints that don't exist (`/public/tenants/by-host`,
+  `/reports/dashboard-summary`). The corresponding `live` specs pin today's
+  real degraded behavior instead and say what to replace once each ships.
+- **A real bug was found running the live lane against the real stack**:
+  `GET /api/v1/school-settings` 403s for every request
+  (`{"code":"permission_denied", ...}`, "This module is not enabled for your
+  school.") even for a real admin whose `module.school` feature flag resolves
+  `True` directly (`is_feature_enabled(...)` in a shell) — because
+  `SchoolSettingsView` is a plain `APIView`, not a `TenantScopedViewSetMixin`-
+  based viewset, it never gets `request.tenant` populated the way viewset
+  endpoints do, so `RequiresModuleFeature.has_permission`'s own
+  `if tenant is None: return False` guard denies it before the flag is ever
+  checked. `student-management`'s new `TenantMiddleware`
+  (`core/tenancy/middleware.py`) does not fix this: it runs as Django
+  middleware, before DRF's JWT authentication populates `request.user`, so its
+  own tenant-binding never fires for a JWT-authenticated API call either — it
+  only changed this endpoint's failure mode from a 500 (RLS violation writing
+  `TenantSettings` with no tenant bound) to a clean 403, by coincidence of
+  `RequiresModuleFeature` now running first. The School Settings feature is
+  still broken for every tenant today, not just in tests. `e2e/tests/live/
+  api/school-settings.spec.ts` pins this real behavior. Not fixed yet.
 - **Feature-flag enforcement and per-tenant number counters now exist**
   (`core.tenancy.features`, `core.tenancy.sequences`, PR 1) — built as
   `student-management` foundation, reusable by every later module.

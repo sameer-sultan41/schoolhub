@@ -223,6 +223,9 @@ importers:
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
+      '@schoolhub/api-client':
+        specifier: workspace:*
+        version: link:../packages/api-client
       '@schoolhub/config':
         specifier: workspace:*
         version: link:../packages/config
