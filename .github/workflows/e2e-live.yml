@@ -41,9 +41,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Resolve Playwright version
         id: pw
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -53,36 +50,42 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
-      - name: Install Chromium
-        run: pnpm --filter @schoolhub/e2e exec playwright install --with-deps chromium
-
-      - name: Create compose/.env
-        working-directory: infra/compose
+      # docker compose's build has no dependency on the Node/Playwright toolchain (and
+      # vice versa) — background it and `wait` at the end so both run concurrently on
+      # this one runner instead of strictly in sequence.
+      - name: Bring up the real stack while installing the Node/Playwright toolchain
         run: |
           set -euo pipefail
-          cp .env.example .env
+          (
+            cd infra/compose
+            cp .env.example .env
 
-          # .env.example's own defaults for these two point at sibling repos this
-          # workflow never checks out (schoolhub-api-v2, schoolhub-web) — a split-repo
-          # layout the compose file also supports. CI only ever has this one monorepo
-          # checkout, so build everything from the apps/ directories already here,
-          # matching docker-compose.yml's own fallback when these are unset.
-          echo "API_REPO_PATH=../../apps/api" >> .env
-          echo "FRONTEND_REPO_PATH=../.." >> .env
+            # .env.example's own defaults for these two point at sibling repos this
+            # workflow never checks out (schoolhub-api-v2, schoolhub-web) — a split-repo
+            # layout the compose file also supports. CI only ever has this one monorepo
+            # checkout, so build everything from the apps/ directories already here,
+            # matching docker-compose.yml's own fallback when these are unset.
+            echo "API_REPO_PATH=../../apps/api" >> .env
+            echo "FRONTEND_REPO_PATH=../.." >> .env
 
-          # A CI run is as short-lived as the container it lives in — random local
-          # secrets, same generation infra/scripts/seed-dev.sh uses.
-          for var in POSTGRES_SUPERUSER_PASSWORD APP_DB_PASSWORD MIGRATION_DB_PASSWORD \
-                     READONLY_DB_PASSWORD MINIO_ROOT_PASSWORD DJANGO_SECRET_KEY \
-                     PUBLIC_CONTENT_TOKEN REVALIDATE_SECRET; do
-            value="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-32)"
-            awk -v k="$var" -v v="$value" 'BEGIN{FS=OFS="="} $1==k {print k"="v; next} {print}' .env > .env.tmp
-            mv .env.tmp .env
-          done
+            # A CI run is as short-lived as the container it lives in — random local
+            # secrets, same generation infra/scripts/seed-dev.sh uses.
+            for var in POSTGRES_SUPERUSER_PASSWORD APP_DB_PASSWORD MIGRATION_DB_PASSWORD \
+                       READONLY_DB_PASSWORD MINIO_ROOT_PASSWORD DJANGO_SECRET_KEY \
+                       PUBLIC_CONTENT_TOKEN REVALIDATE_SECRET; do
+              value="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-32)"
+              awk -v k="$var" -v v="$value" 'BEGIN{FS=OFS="="} $1==k {print k"="v; next} {print}' .env > .env.tmp
+              mv .env.tmp .env
+            done
 
-      - name: Bring up the real stack
-        working-directory: infra/compose
-        run: docker compose up -d --build
+            docker compose up -d --build
+          ) &
+          compose_pid=$!
+
+          pnpm install --frozen-lockfile
+          pnpm --filter @schoolhub/e2e exec playwright install --with-deps chromium
+
+          wait "$compose_pid"
 
       # No separate migrate step: the api service's own command is
       # `migrate --noinput && runserver` (docker-compose.yml), so /healthz only ever
@@ -99,8 +102,22 @@ jobs:
 
       - name: Wait for the dashboard and website to respond
         run: |
-          timeout 120 bash -c 'until curl -fsS http://localhost:3000/ -o /dev/null; do sleep 3; done'
-          timeout 120 bash -c 'until curl -fsS http://localhost:3001/robots.txt -o /dev/null; do sleep 3; done'
+          timeout 120 bash -c 'until curl -fsS http://localhost:3000/ -o /dev/null; do sleep 3; done' &
+          dashboard_pid=$!
+          timeout 120 bash -c 'until curl -fsS http://localhost:3001/robots.txt -o /dev/null; do sleep 3; done' &
+          website_pid=$!
+
+          # `wait pid1 pid2` only reports the LAST pid's exit status — capture each
+          # explicitly so one readiness check timing out can't be masked by the other
+          # succeeding.
+          dashboard_status=0
+          website_status=0
+          wait "$dashboard_pid" || dashboard_status=$?
+          wait "$website_pid" || website_status=$?
+          if [ "$dashboard_status" -ne 0 ] || [ "$website_status" -ne 0 ]; then
+            echo "::error::dashboard (exit $dashboard_status) or website (exit $website_status) never became ready"
+            exit 1
+          fi
 
       - name: Assert the live project actually has tests to run
         env:
