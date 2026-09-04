@@ -73,10 +73,14 @@ def resolve_tenant_staff_id(
     """
     if staff_id is None:
         return None
-    exists = Staff.objects.alive().filter(pk=staff_id, tenant_id=tenant_id).exists()
+    exists = (
+        Staff.objects.alive()
+        .filter(pk=staff_id, tenant_id=tenant_id, employment_status=EmploymentStatus.ACTIVE)
+        .exists()
+    )
     if not exists:
         raise DomainRuleViolation(
-            {"non_field": "No staff member with this id exists for your school."}
+            {"non_field": "No active staff member with this id exists for your school."}
         )
     return staff_id
 
@@ -376,14 +380,21 @@ def _verify_record(*, instance, decision: str, actor_id: uuid.UUID, label: str):
 
     Generic over StaffQualification and StaffDocument — both expose the same
     four audit fields and the same VerificationStatus enum.
+
+    Re-fetches with select_for_update() rather than trusting the caller's already-read
+    `instance`: without a lock, two concurrent :verify calls on the same row could both
+    read PENDING, both pass the guard below, and race to overwrite each other's decision
+    with no error surfaced to either caller. The second call now blocks until the first
+    commits, then sees the real (already-decided) status.
     """
-    if instance.verification_status != VerificationStatus.PENDING:
-        raise Conflict(f"This {label} was already {instance.verification_status}.")
-    instance.verification_status = decision
-    instance.verified_by = actor_id
-    instance.verified_at = timezone.now()
-    instance.updated_by = actor_id
-    instance.save(
+    locked = type(instance).objects.select_for_update().get(pk=instance.pk)
+    if locked.verification_status != VerificationStatus.PENDING:
+        raise Conflict(f"This {label} was already {locked.verification_status}.")
+    locked.verification_status = decision
+    locked.verified_by = actor_id
+    locked.verified_at = timezone.now()
+    locked.updated_by = actor_id
+    locked.save(
         update_fields=[
             "verification_status",
             "verified_by",
@@ -392,7 +403,7 @@ def _verify_record(*, instance, decision: str, actor_id: uuid.UUID, label: str):
             "updated_at",
         ]
     )
-    return instance
+    return locked
 
 
 def verify_qualification(
@@ -458,6 +469,12 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor_id: uuid.UUID
     """
     if staff.user_id is not None:
         raise Conflict("This staff member already has a linked account.")
+    if staff.employment_status in (
+        EmploymentStatus.RESIGNED,
+        EmploymentStatus.RETIRED,
+        EmploymentStatus.TERMINATED,
+    ):
+        raise Conflict(f"This staff member has already exited ({staff.employment_status}).")
 
     from django.db.models import Q
 
@@ -563,7 +580,14 @@ def clearance_blockers(staff: Staff) -> list[str]:
 
 
 @transaction.atomic
-def exit_staff(*, staff: Staff, exit_date: date, exit_reason: str, actor_id: uuid.UUID) -> Staff:
+def exit_staff(
+    *,
+    staff: Staff,
+    exit_date: date,
+    exit_reason: str,
+    actor_id: uuid.UUID,
+    exit_type: str = EmploymentStatus.RESIGNED,
+) -> Staff:
     if staff.employment_status in (
         EmploymentStatus.RESIGNED,
         EmploymentStatus.RETIRED,
@@ -576,7 +600,7 @@ def exit_staff(*, staff: Staff, exit_date: date, exit_reason: str, actor_id: uui
     if blockers:
         raise DomainRuleViolation({"non_field": " ".join(blockers)})
 
-    staff.employment_status = EmploymentStatus.RESIGNED
+    staff.employment_status = exit_type
     staff.exit_date = exit_date
     staff.exit_reason = exit_reason
     staff.updated_by = actor_id
@@ -635,10 +659,18 @@ def _parse_import_csv(data: bytes) -> list[dict[str, str]]:
     import csv
     import io
 
-    # utf-8-sig strips a BOM if Excel's "CSV UTF-8" export added one.
+    # utf-8-sig strips a BOM if Excel's "CSV UTF-8" added one.
     text = data.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
-    return [{k: (v or "") for k, v in row.items()} for row in reader]
+    rows: list[dict[str, str]] = []
+    for row in reader:
+        entry = {k: (v or "") for k, v in row.items()}
+        # DictReader silently skips a fully blank physical line (row == []), so a plain
+        # by-position index would drift from the real file row the moment one appears.
+        # reader.line_num already accounts for every line consumed, skipped or not.
+        entry["__row_number__"] = str(reader.line_num)
+        rows.append(entry)
+    return rows
 
 
 def _parse_import_xlsx(data: bytes) -> list[dict[str, str]]:
@@ -654,45 +686,52 @@ def _parse_import_xlsx(data: bytes) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for sheet_row, values in enumerate(rows_iter, start=2):  # header occupies row 1
         if all(value is None for value in values):
+            # Skipped, not appended — a plain by-position index into `rows` would
+            # otherwise drift from the real sheet row the moment one of these appears.
+            # __row_number__ below is what keeps every downstream error message correct.
             continue
         try:
-            rows.append(
-                {
-                    header[i]: ("" if values[i] is None else str(values[i]))
-                    for i in range(len(header))
-                }
-            )
+            entry = {
+                header[i]: ("" if values[i] is None else str(values[i])) for i in range(len(header))
+            }
         except IndexError:
             # A row with fewer trailing cells than the header — record it as a
             # per-row error instead of failing the whole import (see
             # import_staff_row's matching __parse_error__ check below).
-            rows.append(
-                {"__parse_error__": f"Row {sheet_row} has fewer columns than the header row."}
-            )
+            entry = {"__parse_error__": f"Row {sheet_row} has fewer columns than the header row."}
+        entry["__row_number__"] = str(sheet_row)
+        rows.append(entry)
     return rows
 
 
 def import_staff_row(
-    *, row: dict[str, str], row_number: int, tenant_id: uuid.UUID, actor_id: uuid.UUID
+    *, row: dict[str, str], tenant_id: uuid.UUID, actor_id: uuid.UUID
 ) -> dict[str, str] | None:
     """Create one staff record from a parsed import row.
 
     Returns ``None`` on success, or ``{"row", "field", "issue"}`` on failure.
     Each row commits (or rolls back) independently — one bad row must not
     abort the whole batch, mirroring import_student_row exactly.
+
+    The reported row number comes from ``row["__row_number__"]`` (set by both
+    ``_parse_import_csv`` and ``_parse_import_xlsx``) rather than the row's position in
+    the parsed list — a blank physical row is silently dropped by both parsers, so a
+    by-position index would drift from the real file row after the first one.
     """
     import datetime
 
     from apps.school_organization.models import Campus
 
+    row_number = row["__row_number__"]
+
     if "__parse_error__" in row:
-        return {"row": str(row_number), "field": "non_field", "issue": row["__parse_error__"]}
+        return {"row": row_number, "field": "non_field", "issue": row["__parse_error__"]}
 
     missing = [column for column in REQUIRED_IMPORT_COLUMNS if not row.get(column)]
     if missing:
         field = missing[0]
         return {
-            "row": str(row_number),
+            "row": row_number,
             "field": field,
             "issue": f"Missing required value for '{field}'.",
         }
@@ -704,7 +743,7 @@ def import_staff_row(
         )
     except ValueError:
         return {
-            "row": str(row_number),
+            "row": row_number,
             "field": "joining_date",
             "issue": "Dates must be in YYYY-MM-DD format.",
         }
@@ -714,12 +753,22 @@ def import_staff_row(
     try:
         with tenant_atomic(tenant_id):
             try:
-                campus = Campus.objects.get(code=row["campus_code"])
+                campus = Campus.objects.alive().get(code=row["campus_code"])
             except Campus.DoesNotExist:
                 return {
                     "row": str(row_number),
                     "field": "campus_code",
                     "issue": f"No campus with code '{row['campus_code']}'.",
+                }
+            except Campus.MultipleObjectsReturned:
+                # The campus-code uniqueness constraint is scoped to non-deleted rows
+                # only, so a code reused after a soft-delete can match more than one
+                # row here without .alive() — report it as an import error rather than
+                # letting the exception fail the whole batch.
+                return {
+                    "row": str(row_number),
+                    "field": "campus_code",
+                    "issue": f"More than one campus has code '{row['campus_code']}'.",
                 }
             create_staff(
                 campus=campus,

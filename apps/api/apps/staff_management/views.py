@@ -184,6 +184,7 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
                 staff=staff,
                 exit_date=data["exit_date"],
                 exit_reason=data["exit_reason"],
+                exit_type=data["exit_type"],
                 actor_id=request.user.pk,
             )
             after = self.get_serializer(updated).data

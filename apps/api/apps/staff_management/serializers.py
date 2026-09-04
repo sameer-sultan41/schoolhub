@@ -18,7 +18,13 @@ from rest_framework import serializers
 
 from apps.school_organization.models import Campus, Department
 from apps.staff_management import services
-from apps.staff_management.models import Designation, Staff, StaffDocument, StaffQualification
+from apps.staff_management.models import (
+    Designation,
+    EmploymentStatus,
+    Staff,
+    StaffDocument,
+    StaffQualification,
+)
 from core.files.models import File
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
@@ -233,6 +239,15 @@ class InviteRequestSerializer(serializers.Serializer):
 class ExitRequestSerializer(serializers.Serializer):
     exit_date = serializers.DateField()
     exit_reason = serializers.CharField(max_length=300)
+    # Optional, defaulting to the most common case — resignation — so existing callers
+    # that only ever sent exit_date/exit_reason keep working unchanged; a caller that
+    # knows this was a retirement or termination can now say so explicitly instead of
+    # every exit being recorded as a resignation regardless of the real reason.
+    exit_type = serializers.ChoiceField(
+        choices=[EmploymentStatus.RESIGNED, EmploymentStatus.RETIRED, EmploymentStatus.TERMINATED],
+        required=False,
+        default=EmploymentStatus.RESIGNED,
+    )
 
 
 class StaffImportRequestSerializer(serializers.Serializer):

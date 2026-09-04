@@ -4658,9 +4658,23 @@ components:
         exit_reason:
           type: string
           maxLength: 300
+        exit_type:
+          allOf:
+          - $ref: '#/components/schemas/ExitTypeEnum'
+          default: resigned
       required:
       - exit_date
       - exit_reason
+    ExitTypeEnum:
+      enum:
+      - resigned
+      - retired
+      - terminated
+      type: string
+      description: |-
+        * `resigned` - resigned
+        * `retired` - retired
+        * `terminated` - terminated
     File:
       type: object
       properties:

@@ -36,7 +36,6 @@ def import_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
         for index, row in enumerate(rows, start=1):
             error = import_staff_row(
                 row=row,
-                row_number=index + 1,
                 tenant_id=uuid.UUID(tenant_id),
                 actor_id=uuid.UUID(actor_id),
             )

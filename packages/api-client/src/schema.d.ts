@@ -1767,7 +1767,16 @@ export interface components {
             /** Format: date */
             exit_date: string;
             exit_reason: string;
+            /** @default resigned */
+            exit_type: components["schemas"]["ExitTypeEnum"];
         };
+        /**
+         * @description * `resigned` - resigned
+         *     * `retired` - retired
+         *     * `terminated` - terminated
+         * @enum {string}
+         */
+        ExitTypeEnum: "resigned" | "retired" | "terminated";
         File: {
             /** Format: uuid */
             readonly id: string;

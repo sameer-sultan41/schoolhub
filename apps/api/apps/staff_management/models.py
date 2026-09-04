@@ -220,7 +220,15 @@ class Staff(TenantOwnedModel):
         """
         if user is None or not getattr(user, "is_authenticated", False):
             return queryset.none()
-        return queryset.filter(reports_to__user_id=user.pk)
+        # Matches student_management.Student.filter_assigned_to_user's employment-status
+        # check on the acting user's own staff record — an on-leave/exited manager
+        # should not keep "assigned" visibility into their former reports any more than
+        # an on-leave/exited class teacher keeps it into their former students.
+        return queryset.filter(
+            reports_to__deleted_at__isnull=True,
+            reports_to__employment_status=EmploymentStatus.ACTIVE,
+            reports_to__user_id=user.pk,
+        )
 
 
 class Designation(TenantOwnedModel):
