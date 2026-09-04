@@ -35,7 +35,7 @@ class Migration(migrations.Migration):
                 'ordering': ['name'],
                 'constraints': [
                     models.UniqueConstraint(condition=models.Q(('deleted_at__isnull', True)), fields=('tenant', 'name'), name='designations_unique_name_per_tenant'),
-                    models.UniqueConstraint(condition=models.Q(('deleted_at__isnull', True), ('code__isnull', False)), fields=('tenant', 'code'), name='designations_unique_code_per_tenant'),
+                    models.UniqueConstraint(condition=models.Q(('code__isnull', False), ('deleted_at__isnull', True)), fields=('tenant', 'code'), name='designations_unique_code_per_tenant'),
                 ],
             },
         ),
@@ -87,7 +87,7 @@ class Migration(migrations.Migration):
                     models.UniqueConstraint(condition=models.Q(('deleted_at__isnull', True)), fields=('tenant', 'employee_number'), name='staff_unique_employee_number_per_tenant'),
                     models.UniqueConstraint(condition=models.Q(('deleted_at__isnull', True), ('user_id__isnull', False)), fields=('tenant', 'user_id'), name='staff_unique_user_per_tenant'),
                     models.UniqueConstraint(condition=models.Q(('deleted_at__isnull', True), ('national_id__isnull', False)), fields=('tenant', 'national_id'), name='staff_unique_national_id_per_tenant'),
-                    models.CheckConstraint(condition=models.Q(models.Q(('exit_date__isnull', True)), models.Q(('exit_date__gte', models.F('joining_date'))), _connector='OR'), name='staff_exit_on_or_after_joining'),
+                    models.CheckConstraint(condition=models.Q(('exit_date__isnull', True), ('exit_date__gte', models.F('joining_date')), _connector='OR'), name='staff_exit_on_or_after_joining'),
                 ],
             },
         ),
