@@ -21,7 +21,14 @@ from apps.school_organization.tests.factories import (
     grant,
 )
 from apps.staff_management.models import Staff
-from apps.staff_management.tests.factories import DesignationFactory, StaffFactory, enable_feature
+from apps.staff_management.tests.factories import (
+    DesignationFactory,
+    FileFactory,
+    StaffDocumentFactory,
+    StaffFactory,
+    StaffQualificationFactory,
+    enable_feature,
+)
 from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
 
@@ -173,4 +180,43 @@ class CrossTenantAccessTests(APITestCase):
 
     def test_nested_documents_under_a_foreign_staff_is_404(self) -> None:
         response = self.client.get(f"/api/v1/staff/{self.foreign['staff'].pk}/documents")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_inviting_another_tenants_staff_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/staff/{self.foreign['staff'].pk}:invite", {"role_ids": []}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_exiting_another_tenants_staff_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/staff/{self.foreign['staff'].pk}:exit",
+            {"exit_date": "2026-04-01", "exit_reason": "resigned"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_verifying_another_tenants_qualification_is_404(self) -> None:
+        with tenant_context(self.tenant_b.id):
+            qualification = StaffQualificationFactory(
+                tenant=self.tenant_b, staff=self.foreign["staff"]
+            )
+        response = self.client.post(
+            f"/api/v1/staff-qualifications/{qualification.pk}:verify",
+            {"decision": "verified"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_verifying_another_tenants_document_is_404(self) -> None:
+        with tenant_context(self.tenant_b.id):
+            file = FileFactory(tenant=self.tenant_b)
+            document = StaffDocumentFactory(
+                tenant=self.tenant_b, staff=self.foreign["staff"], file=file
+            )
+        response = self.client.post(
+            f"/api/v1/staff-documents/{document.pk}:verify",
+            {"decision": "verified"},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

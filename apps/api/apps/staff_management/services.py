@@ -73,7 +73,7 @@ def resolve_tenant_staff_id(
     """
     if staff_id is None:
         return None
-    exists = Staff.objects.filter(pk=staff_id, tenant_id=tenant_id).exists()
+    exists = Staff.objects.alive().filter(pk=staff_id, tenant_id=tenant_id).exists()
     if not exists:
         raise DomainRuleViolation(
             {"non_field": "No staff member with this id exists for your school."}
@@ -371,16 +371,19 @@ def add_staff_qualification(
 
 
 @transaction.atomic
-def verify_qualification(
-    *, qualification: StaffQualification, decision: str, actor_id: uuid.UUID
-) -> StaffQualification:
-    if qualification.verification_status != VerificationStatus.PENDING:
-        raise Conflict(f"This qualification was already {qualification.verification_status}.")
-    qualification.verification_status = decision
-    qualification.verified_by = actor_id
-    qualification.verified_at = timezone.now()
-    qualification.updated_by = actor_id
-    qualification.save(
+def _verify_record(*, instance, decision: str, actor_id: uuid.UUID, label: str):
+    """Accept or reject a verification_status/verified_by/verified_at record.
+
+    Generic over StaffQualification and StaffDocument — both expose the same
+    four audit fields and the same VerificationStatus enum.
+    """
+    if instance.verification_status != VerificationStatus.PENDING:
+        raise Conflict(f"This {label} was already {instance.verification_status}.")
+    instance.verification_status = decision
+    instance.verified_by = actor_id
+    instance.verified_at = timezone.now()
+    instance.updated_by = actor_id
+    instance.save(
         update_fields=[
             "verification_status",
             "verified_by",
@@ -389,7 +392,15 @@ def verify_qualification(
             "updated_at",
         ]
     )
-    return qualification
+    return instance
+
+
+def verify_qualification(
+    *, qualification: StaffQualification, decision: str, actor_id: uuid.UUID
+) -> StaffQualification:
+    return _verify_record(
+        instance=qualification, decision=decision, actor_id=actor_id, label="qualification"
+    )
 
 
 @transaction.atomic
@@ -420,7 +431,6 @@ def add_staff_document(
     )
 
 
-@transaction.atomic
 def verify_document(
     *, document: StaffDocument, decision: str, actor_id: uuid.UUID
 ) -> StaffDocument:
@@ -428,22 +438,7 @@ def verify_document(
 
     rejection of re-verifying an already-decided document.
     """
-    if document.verification_status != VerificationStatus.PENDING:
-        raise Conflict(f"This document was already {document.verification_status}.")
-    document.verification_status = decision
-    document.verified_by = actor_id
-    document.verified_at = timezone.now()
-    document.updated_by = actor_id
-    document.save(
-        update_fields=[
-            "verification_status",
-            "verified_by",
-            "verified_at",
-            "updated_by",
-            "updated_at",
-        ]
-    )
-    return document
+    return _verify_record(instance=document, decision=decision, actor_id=actor_id, label="document")
 
 
 @transaction.atomic
@@ -486,9 +481,15 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor_id: uuid.UUID
 
     # A role_id may name either a tenant-custom role or a platform-seeded
     # default role (Role.tenant is null for those) — both are valid targets.
-    roles = Role.objects.filter(pk__in=role_ids).filter(
-        Q(tenant_id=staff.tenant_id) | Q(tenant__isnull=True)
+    roles = list(
+        Role.objects.filter(pk__in=role_ids).filter(
+            Q(tenant_id=staff.tenant_id) | Q(tenant__isnull=True)
+        )
     )
+    if len(roles) != len(set(role_ids)):
+        raise DomainRuleViolation(
+            {"role_ids": "One or more role ids do not exist for your school."}
+        )
     UserRole.objects.bulk_create(
         [UserRole(user=user, role=role, tenant_id=staff.tenant_id) for role in roles]
     )
@@ -510,6 +511,28 @@ def is_sole_class_teacher(*, staff: Staff) -> bool:
     return Section.objects.alive().filter(class_teacher_staff_id=staff.pk).exists()
 
 
+def has_direct_reports(*, staff: Staff) -> bool:
+    """§11: exit is blocked while other staff still report to this one."""
+    return Staff.objects.alive().filter(reports_to_id=staff.pk).exists()
+
+
+def is_referenced_as_head(*, staff: Staff) -> bool:
+    """§11: exit is blocked while this staff heads a campus or department."""
+    from apps.school_organization.models import Campus, Department
+
+    return (
+        Campus.objects.alive().filter(head_staff_id=staff.pk).exists()
+        or Department.objects.alive().filter(head_staff_id=staff.pk).exists()
+    )
+
+
+def is_referenced_as_house_master(*, staff: Staff) -> bool:
+    """§11: exit is blocked while this staff is set as a house master."""
+    from apps.school_organization.models import House
+
+    return House.objects.alive().filter(house_master_staff_id=staff.pk).exists()
+
+
 def clearance_blockers(staff: Staff) -> list[str]:
     """Exit clearance checks (§7 exit workflow). Assets/advances/allocation
 
@@ -521,6 +544,20 @@ def clearance_blockers(staff: Staff) -> list[str]:
         blockers.append(
             "This staff member is the class teacher for one or more sections. "
             "Reassign those sections before exiting them."
+        )
+    if has_direct_reports(staff=staff):
+        blockers.append(
+            "One or more staff members report to this staff member. Reassign their "
+            "reporting line before exiting them."
+        )
+    if is_referenced_as_head(staff=staff):
+        blockers.append(
+            "This staff member is set as the head of a campus or department. "
+            "Reassign that headship before exiting them."
+        )
+    if is_referenced_as_house_master(staff=staff):
+        blockers.append(
+            "This staff member is set as a house master. Reassign that house before exiting them."
         )
     return blockers
 
@@ -546,6 +583,14 @@ def exit_staff(*, staff: Staff, exit_date: date, exit_reason: str, actor_id: uui
     staff.save(
         update_fields=["employment_status", "exit_date", "exit_reason", "updated_by", "updated_at"]
     )
+    if staff.user_id is not None:
+        # An exited employee must not keep portal access or role assignments —
+        # UserRole has no soft-delete field, so it's removed outright rather
+        # than deactivated.
+        from core.rbac.models import User, UserRole
+
+        User.objects.filter(pk=staff.user_id).update(is_active=False)
+        UserRole.objects.filter(user_id=staff.user_id, tenant_id=staff.tenant_id).delete()
     return staff
 
 
@@ -607,12 +652,23 @@ def _parse_import_xlsx(data: bytes) -> list[dict[str, str]]:
     header = [str(cell).strip() if cell is not None else "" for cell in next(rows_iter)]
 
     rows: list[dict[str, str]] = []
-    for values in rows_iter:
+    for sheet_row, values in enumerate(rows_iter, start=2):  # header occupies row 1
         if all(value is None for value in values):
             continue
-        rows.append(
-            {header[i]: ("" if values[i] is None else str(values[i])) for i in range(len(header))}
-        )
+        try:
+            rows.append(
+                {
+                    header[i]: ("" if values[i] is None else str(values[i]))
+                    for i in range(len(header))
+                }
+            )
+        except IndexError:
+            # A row with fewer trailing cells than the header — record it as a
+            # per-row error instead of failing the whole import (see
+            # import_staff_row's matching __parse_error__ check below).
+            rows.append(
+                {"__parse_error__": f"Row {sheet_row} has fewer columns than the header row."}
+            )
     return rows
 
 
@@ -628,6 +684,9 @@ def import_staff_row(
     import datetime
 
     from apps.school_organization.models import Campus
+
+    if "__parse_error__" in row:
+        return {"row": str(row_number), "field": "non_field", "issue": row["__parse_error__"]}
 
     missing = [column for column in REQUIRED_IMPORT_COLUMNS if not row.get(column)]
     if missing:

@@ -148,6 +148,11 @@ registry.register(
     ("hr_staff",),
 )
 
+# TODO(staff_performance_reviews): a §19 recommendation only, not in the locked
+# entity map — no model, view, or UI exists for these four keys, and none is
+# scheduled. Unlike this file's other "registered early" precedent, there is no
+# follow-up PR that will consume them; they stay registered (matching that
+# precedent, and no test requires removing them) but grant nothing today.
 registry.register(
     "staff.performance-review.view",
     "View performance reviews (reviewer chain + hr; own finalized review visible to its subject).",

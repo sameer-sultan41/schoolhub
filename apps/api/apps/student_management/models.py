@@ -168,11 +168,17 @@ class Student(TenantOwnedModel):
         if user is None or not getattr(user, "is_authenticated", False):
             return queryset.none()
 
-        from apps.staff_management.models import Staff
+        from apps.staff_management.models import EmploymentStatus, Staff
 
-        staff_ids = Staff.objects.filter(user_id=user.pk).values_list("pk", flat=True)
+        staff_ids = (
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
         return queryset.filter(
-            enrollments__section__class_teacher_staff_id__in=staff_ids
+            enrollments__deleted_at__isnull=True,
+            enrollments__status=EnrollmentStatus.ACTIVE,
+            enrollments__section__class_teacher_staff_id__in=staff_ids,
         ).distinct()
 
 
