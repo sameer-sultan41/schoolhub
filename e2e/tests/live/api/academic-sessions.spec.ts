@@ -74,9 +74,17 @@ test.describe("academic sessions (live API)", () => {
       // invariant for any other live spec (and any rerun of this one) that assumes one
       // exists, rather than leaving it demoted after this test's own activation.
       if (incumbentId) {
-        await liveApiClient.post(`/academic-sessions/${incumbentId}:activate`).catch(() => {
-          // Best-effort restoration; a failure here must not mask the test's own result.
-        });
+        await liveApiClient
+          .post(`/academic-sessions/${incumbentId}:activate`)
+          .catch((error: unknown) => {
+            // Best-effort restoration; a failure here must not mask the test's own
+            // result, but IS a real invariant violation for the next run/spec —
+            // surface it rather than swallowing it silently.
+            console.error(
+              `[academic-sessions.spec] failed to restore current session ${incumbentId}:`,
+              error,
+            );
+          });
       }
     }
   });

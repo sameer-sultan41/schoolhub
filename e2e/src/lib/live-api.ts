@@ -1,4 +1,4 @@
-import { ApiClient } from "@schoolhub/api-client";
+import { ApiClient, refreshAccessToken as exchangeRefreshCookie } from "@schoolhub/api-client";
 import type { LoginResponse } from "@schoolhub/types";
 import { env } from "@/env";
 
@@ -36,14 +36,21 @@ export async function createLiveSession(): Promise<ApiClient> {
     getAccessToken: () => accessToken,
     refreshAccessToken: async () => {
       if (!refreshCookie) return null;
-      const response = await fetch(`${env.API_BASE_URL}/auth/refresh`, {
-        method: "POST",
-        headers: { Cookie: refreshCookie },
+      // token-store.ts's refreshAccessToken hardcodes `credentials: "include"`, a no-op
+      // under Node's global fetch (no cookie jar) — inject the Cookie header ourselves
+      // via fetchImpl instead, and capture the rotated Set-Cookie as a side effect.
+      const result = await exchangeRefreshCookie({
+        baseUrl: env.API_BASE_URL,
+        fetchImpl: async (url, init) => {
+          const headers = new Headers(init?.headers);
+          headers.set("Cookie", refreshCookie ?? "");
+          const response = await fetch(url, { ...init, headers });
+          refreshCookie = refreshCookieFrom(response) ?? refreshCookie;
+          return response;
+        },
       });
-      if (!response.ok) return null;
-      refreshCookie = refreshCookieFrom(response) ?? refreshCookie;
-      const { data } = (await response.json()) as { data: { access_token: string } };
-      accessToken = data.access_token;
+      if (!result) return null;
+      accessToken = result.accessToken;
       return accessToken;
     },
   });

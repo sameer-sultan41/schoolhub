@@ -113,20 +113,27 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], baseURL: env.WEBSITE_URL },
     },
     {
-      // Auth-throttle-safe: one real UI login (`AuthEndpointThrottle` allows only
-      // 10 requests/minute per IP across login/refresh/logout), cached to
-      // `.auth/live-admin.json` and reused by every `live` test via `dependencies`
-      // below, instead of every test logging in for itself.
+      // Not a `dependencies` of `live` (see below) — deliberately opt-in only, via
+      // `--project=live-setup,live`. See live.setup.ts's own header for what this
+      // caches and why nothing consumes it by default today.
       name: "live-setup",
       testDir: "./tests/live",
       testMatch: /live\.setup\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: env.DASHBOARD_URL },
     },
     {
+      // No `dependencies: ["live-setup"]`: every current live spec does its own real
+      // login and explicitly opts out of storageState (`test.use({ storageState: {
+      // cookies: [], origins: [] } })`), so a `live-setup` dependency here would only
+      // (a) burn one of AuthEndpointThrottle's 10 req/min on a login nothing reads, and
+      // (b) per Playwright's dependency semantics, report this entire project as
+      // "skipped" rather than "failed" if that unconsumed login ever throttled — masking
+      // real regressions. A future spec that wants live-setup's cached session must run
+      // `--project=live-setup,live` explicitly; `storageState` here still points at the
+      // file `live-setup` produces for that case.
       name: "live",
       testDir: "./tests/live",
       testIgnore: /live\.setup\.ts/,
-      dependencies: ["live-setup"],
       use: {
         ...devices["Desktop Chrome"],
         baseURL: env.DASHBOARD_URL,

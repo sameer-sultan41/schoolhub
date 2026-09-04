@@ -1,7 +1,14 @@
-import { ApiError } from "@schoolhub/api-client";
 import { buildLiveCampus } from "@/data/live-factories";
 import { env } from "@/env";
 import { expect, test } from "@/fixtures";
+import { runCrudLifecycle } from "@/lib/live-crud-lifecycle";
+import { E2E_OTHER_ADMIN_EMAIL } from "@/lib/seed-constants";
+
+interface Campus {
+  id: string;
+  name: string;
+  code: string;
+}
 
 /**
  * Live API lane — no browser, no UI (the dashboard has no screen for this module yet).
@@ -15,30 +22,21 @@ import { expect, test } from "@/fixtures";
  */
 test.describe("campuses (live API)", () => {
   test("supports the full create/read/update/delete lifecycle", async ({ liveApiClient }) => {
-    const created = await liveApiClient.post("/campuses", buildLiveCampus());
-    expect(created.status).toBe(201);
-    const campus = created.data as { id: string; name: string; code: string };
-    expect(campus.code).toBeTruthy();
-
-    const listed = await liveApiClient.get<Array<{ id: string }>>("/campuses");
-    expect(listed.status).toBe(200);
-    expect(listed.meta?.pagination).toBeDefined();
-    expect(listed.data.some((row) => row.id === campus.id)).toBe(true);
-
-    const fetched = await liveApiClient.get(`/campuses/${campus.id}`);
-    expect((fetched.data as { code: string }).code).toBe(campus.code);
-
-    const updated = await liveApiClient.patch(`/campuses/${campus.id}`, { name: "Renamed" });
-    expect((updated.data as { name: string }).name).toBe("Renamed");
-
-    const deleted = await liveApiClient.delete(`/campuses/${campus.id}`);
-    expect(deleted.status).toBe(204);
-
-    const afterDelete = await liveApiClient
-      .get(`/campuses/${campus.id}`)
-      .catch((error: unknown) => error);
-    expect(afterDelete).toBeInstanceOf(ApiError);
-    expect((afterDelete as ApiError).status).toBe(404);
+    await runCrudLifecycle<Campus>({
+      liveApiClient,
+      endpoint: "/campuses",
+      build: buildLiveCampus,
+      patch: { name: "Renamed" },
+      assertCreated: (campus) => {
+        expect(campus.code).toBeTruthy();
+      },
+      assertListed: (listed) => {
+        expect(listed.meta?.pagination).toBeDefined();
+      },
+      assertPatched: (campus) => {
+        expect(campus.name).toBe("Renamed");
+      },
+    });
   });
 
   // The one resource file that repeats the tenant-isolation probe (already proven with a
@@ -56,26 +54,28 @@ test.describe("campuses (live API)", () => {
     const created = await liveApiClient.post("/campuses", buildLiveCampus());
     const campus = created.data as { id: string };
 
-    // Matches E2E_OTHER_ADMIN_EMAIL in
-    // apps/api/core/rbac/management/commands/seed_e2e_data.py.
-    const otherTenantLogin = await fetch(`${env.API_BASE_URL}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        identifier: "e2e-admin-other@schoolhub.test",
-        password: env.LIVE_ADMIN_PASSWORD,
-      }),
-    });
-    expect(otherTenantLogin.status).toBe(200);
-    const { data: otherLogin } = (await otherTenantLogin.json()) as {
-      data: { access_token: string };
-    };
+    try {
+      const otherTenantLogin = await fetch(`${env.API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: E2E_OTHER_ADMIN_EMAIL,
+          password: env.LIVE_ADMIN_PASSWORD,
+        }),
+      });
+      expect(otherTenantLogin.status).toBe(200);
+      const { data: otherLogin } = (await otherTenantLogin.json()) as {
+        data: { access_token: string };
+      };
 
-    const probe = await fetch(`${env.API_BASE_URL}/campuses/${campus.id}`, {
-      headers: { Authorization: `Bearer ${otherLogin.access_token}` },
-    });
-    expect(probe.status).toBe(404);
-    const body = (await probe.json()) as { error?: { code?: string } };
-    expect(body.error?.code).toBe("not_found");
+      const probe = await fetch(`${env.API_BASE_URL}/campuses/${campus.id}`, {
+        headers: { Authorization: `Bearer ${otherLogin.access_token}` },
+      });
+      expect(probe.status).toBe(404);
+      const body = (await probe.json()) as { error?: { code?: string } };
+      expect(body.error?.code).toBe("not_found");
+    } finally {
+      await liveApiClient.delete(`/campuses/${campus.id}`).catch(() => {});
+    }
   });
 });
