@@ -1,4 +1,4 @@
-import { ApiError } from "@schoolhub/api-client";
+import { ApiError, type ApiResult } from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -62,7 +62,7 @@ const STAFF_MEMBER = {
   employment_status: "active",
 };
 
-function mockStaffAndDepartments(staffPage: unknown) {
+function mockStaffAndDepartments(staffPage: ApiResult<unknown>) {
   mockGet.mockImplementation((path: string) => {
     if (path === "/staff") return Promise.resolve(staffPage);
     if (path === "/departments") {

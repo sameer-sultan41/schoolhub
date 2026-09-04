@@ -40,6 +40,7 @@ const QUALIFICATION_TYPES: QualificationType[] = [
   "training",
   "license",
 ];
+const DEFAULT_QUALIFICATION_TYPE: QualificationType = "degree";
 
 const QUALIFICATION_UPLOAD_PURPOSE = "staff.qualification";
 
@@ -178,7 +179,7 @@ function AddQualificationDialog({ staffId, onAdded }: { staffId: string; onAdded
 
   const [open, setOpen] = useState(false);
   const [qualificationType, setQualificationType] = useState<QualificationType>(
-    QUALIFICATION_TYPES[0],
+    DEFAULT_QUALIFICATION_TYPE,
   );
   const [title, setTitle] = useState("");
   const [institution, setInstitution] = useState("");
@@ -190,7 +191,7 @@ function AddQualificationDialog({ staffId, onAdded }: { staffId: string; onAdded
   const upload = useFileUpload();
 
   function reset() {
-    setQualificationType(QUALIFICATION_TYPES[0]);
+    setQualificationType(DEFAULT_QUALIFICATION_TYPE);
     setTitle("");
     setInstitution("");
     setFieldOfStudy("");
