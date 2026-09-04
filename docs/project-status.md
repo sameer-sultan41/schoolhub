@@ -17,7 +17,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | Tier | Modules | Status |
 | ---- | ------- | ------ |
 | 0 — Foundation | tenancy, auth/RBAC, [`school-organization`](03-modules/school-organization.md) | Done in substance — tenancy/RBAC/audit/API plumbing in `apps/api/core/`, `school_organization` Django app shipped and merged |
-| 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **In progress** — `student-management` full-stack complete (PRs 1-4, see the per-module matrix below); `staff-management` not started |
+| 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **Both full-stack complete** — `student-management` (PRs 1-4) and `staff-management` (this PR), see the per-module matrix below |
 | 2–7 | attendance, academics, timetable, examinations, fees-finance, communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started (fees-finance has a spec-only PR: voucher/receipt/birthday-card docs) |
 
 ## Per-module implementation matrix
@@ -26,9 +26,9 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | ------ | --- | ------------------ | --- | -------- |
 | school-organization | done | — (platform-admin/setup UI not built) | — | done |
 | student-management | done (CRUD, guardians/documents/files, enrollment lifecycle/transfers, import/export/ID cards) | done (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs, import wizard, ID-card batch action) | — | done |
-| staff-management | — | — | — | done |
+| staff-management | done (CRUD, designations, qualifications/documents with verification, invite/exit, import/export) | done (list/detail/create/edit + Qualifications/Documents tabs, import wizard) | — | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
-| everything else (15 modules) | — | — | — | done (spec exists; nothing implemented) |
+| everything else (14 modules) | — | — | — | done (spec exists; nothing implemented) |
 
 ---
 
@@ -78,12 +78,13 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
-- **No module screens beyond the dashboard home + student-management.**
-  Fees, attendance, academics, timetable, examinations, communication,
-  parent-portal, … are untouched — the gap against
-  [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 1+.
-- **No `staff-management`, no other Tier 1+ backend module.** `apps/api/apps/`
-  has `school_organization` and `student_management` only.
+- **No module screens beyond the dashboard home + student-management +
+  staff-management.** Fees, attendance, academics, timetable, examinations,
+  communication, parent-portal, … are untouched — the gap against
+  [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
+- **No Tier 2+ backend module.** `apps/api/apps/` has `school_organization`,
+  `student_management`, and `staff_management` only — Tier 1 ("People") is
+  now complete.
 - **`e2e`'s `live` project is opt-in only** — needs the real docker-compose
   stack, not part of the PR gate.
 - **Feature-flag enforcement and per-tenant number counters now exist**
@@ -125,17 +126,44 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   `error` or `data` (matched on key presence, not the value's shape) —
   `BackgroundJob.error` tripped it on every successful `GET /jobs/{id}`.
 - **`student-management` full-stack is now complete** (PRs 1-4) — this was
-  the whole of Phase 2 Tier 1's first module. `staff-management` is next.
+  the whole of Phase 2 Tier 1's first module.
+- **`staff-management` full-stack is now complete** (this PR) — Tier 1's
+  second and final module, closing out "People". `staff`, `designations`,
+  `staff_qualifications`, `staff_documents` (module doc §15's owned entities);
+  onboarding link (`:invite`), exit with clearance checks (`:exit`),
+  qualification/document verification, bulk import/export. Deliberately
+  deferred: **performance reviews** — `staff_performance_reviews` is a §19
+  *recommendation*, absent from the locked entity map in
+  `05-database/entities/people.md`; its four permission keys
+  (`staff.performance-review.*`) are registered so the registry↔seeded-rows
+  contract test stays pinned to the full module doc, but no model or endpoint
+  ships. `TenantSettings` gained an `hr` JSON column (`employee_number_pattern`,
+  `staff_document_types`) — a dedicated namespace next to `academic`/`branding`/
+  `features`, since HR/leave and payroll (Tier 3/6) will need one too.
+  **`:invite` creates the linked `User` row but sends no email** —
+  `core.notifications` doesn't exist yet (communication is Tier 6); the
+  account is created inactive with an unusable password, a documented gap in
+  the same style as `core.files.File.av_scanned_at`.
+  Two pre-existing gaps this module unblocks were also closed in the same PR:
+  `Student.filter_assigned_to_user` now does the real
+  `enrollments→section.class_teacher_staff_id→staff.user_id` join instead of
+  `none()`, and `school_organization`'s three dangling `*_staff_id` columns
+  (`campuses`/`departments.head_staff_id`, `sections.class_teacher_staff_id`,
+  `houses.house_master_staff_id`) now validate tenant ownership via
+  `staff_management.services.resolve_tenant_staff_id`, closing the same class
+  of cross-tenant leak PR #25's review found in `student_management.user_id`.
+  `core.rbac.permissions.DenyRestrictedPrincipals` (previously dead code, zero
+  call sites) gets its first real use here on every staff endpoint.
 
 ---
 
 ## Start here next session
 
-1. **CI is fully green, coverage floor included** — both dashboard and website clear the
-   85% `Test (coverage)` job (dashboard 87%/85%/87%/90%, website 96%/94%/96%/98%,
-   statements/branches/functions/lines). The floor is a ratchet (never decreases, see
-   above), so a new PR without its own tests fails this check — expected, not a gate bug.
-   CI overall remains the source of truth for pass/fail.
+1. **CI is the source of truth for coverage** — the 85% `Test (coverage)` floor is a
+   ratchet (never decreases), so a new PR without its own tests fails this check —
+   expected, not a gate bug. Check the latest `frontend.yml` run for the current
+   per-app percentages rather than trusting a number written here, since it drifts
+   with every PR.
 2. **Leave the two-TypeScript setup alone.** `typescript` is aliased to the TS 6 API for
    tooling and `@typescript/native` supplies TS 7's `tsc`. Collapse to one
    TypeScript only after typescript-eslint supports the 7.1 API (#10940).
@@ -153,16 +181,18 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
    `core.tenancy.tasks.TenantAwareTask` (tenant-bound Celery base class),
    `core.files` (two-step upload + server-generated `create_ready_file()`),
    `core.idempotency` (`Idempotency-Key` replay), and `core.jobs`
-   (`BackgroundJob` + `GET /jobs/{id}`). `staff-management` is next per the
-   tier-1 build order.
-6. `staff-management` can start now — it depends on `school-organization`
-   only, not on `student-management`. It will need `core.tenancy.features`
-   (register a `module.staff` flag) and `core.tenancy.sequences.
-   allocate_number` (for `employee_number`), both already built and ready
-   to reuse as-is; if it needs bulk import/export or generated documents,
-   `core.jobs`/`core.tenancy.tasks.TenantAwareTask`/`core.files.
-   create_ready_file()` are reusable too, not `student_management`-specific
-   despite landing in that module's PRs.
+   (`BackgroundJob` + `GET /jobs/{id}`).
+6. **`staff-management` full-stack is complete** (one PR, not stacked —
+   the module is small enough that the students-style multi-PR split wasn't
+   needed), reusing every piece of infrastructure from item 5 as-is:
+   `core.tenancy.features` (`module.staff` flag), `core.tenancy.sequences.
+   allocate_number` (`employee_number`), `core.jobs`/`core.tenancy.tasks.
+   TenantAwareTask`/`core.files.create_ready_file()` (import/export jobs).
+   **Phase 2 Tier 1 ("People") is now done.**
+7. **Tier 2 is next**: attendance, academics, and timetable (per
+   `01-phases/phase-2-core-build.md`'s build order — all three depend on
+   `staff-management` for teacher/section assignment, now unblocked). No
+   scoping work has started on any of them yet.
 
 ## Conventions worth re-reading before writing code
 

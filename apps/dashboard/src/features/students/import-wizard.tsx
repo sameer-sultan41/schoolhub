@@ -21,7 +21,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import type { ImportResult } from "@/features/students/job-types";
-import { useJobPolling } from "@/features/students/use-job-polling";
+import { useJobPolling } from "@/hooks/use-job-polling";
 import { apiClient } from "@/lib/auth";
 
 const REQUIRED_COLUMNS = [
@@ -60,7 +60,7 @@ export function ImportWizard() {
     },
   });
 
-  const jobQuery = useJobPolling(jobId);
+  const jobQuery = useJobPolling("students", jobId);
   const job = jobQuery.data;
   const result = job?.result as ImportResult | null | undefined;
 

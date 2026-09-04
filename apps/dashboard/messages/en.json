@@ -296,6 +296,172 @@
       "dismiss": "Dismiss"
     }
   },
+  "staff": {
+    "title": "Staff",
+    "summary": "Staff profiles, designations, qualifications, and documents.",
+    "list": {
+      "caption": "Staff",
+      "empty": "No staff found.",
+      "searchPlaceholder": "Search by name, employee number, email, or phone"
+    },
+    "columns": {
+      "employeeNumber": "Employee #",
+      "name": "Name",
+      "staffType": "Type",
+      "employmentStatus": "Status"
+    },
+    "filters": {
+      "search": "Search",
+      "staffType": "Type",
+      "employmentStatus": "Status",
+      "campus": "Campus",
+      "department": "Department",
+      "designation": "Designation",
+      "all": "All"
+    },
+    "staffType": {
+      "teaching": "Teaching",
+      "non_teaching": "Non-teaching"
+    },
+    "employmentType": {
+      "full_time": "Full time",
+      "part_time": "Part time",
+      "contract": "Contract",
+      "visiting": "Visiting"
+    },
+    "employmentStatus": {
+      "active": "Active",
+      "on_leave": "On leave",
+      "suspended": "Suspended",
+      "resigned": "Resigned",
+      "retired": "Retired",
+      "terminated": "Terminated"
+    },
+    "gender": {
+      "male": "Male",
+      "female": "Female",
+      "other": "Other",
+      "unspecified": "Unspecified"
+    },
+    "fields": {
+      "employeeNumber": "Employee number",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "gender": "Gender",
+      "dateOfBirth": "Date of birth",
+      "staffType": "Staff type",
+      "campus": "Campus",
+      "selectCampus": "Select a campus",
+      "department": "Department",
+      "none": "None",
+      "designation": "Designation",
+      "employmentType": "Employment type",
+      "joiningDate": "Joining date",
+      "email": "Email",
+      "phone": "Phone",
+      "nationalId": "National ID",
+      "publicBio": "Public bio"
+    },
+    "form": {
+      "createTitle": "New staff member",
+      "editTitle": "Edit staff member",
+      "submitting": "Saving",
+      "employeeNumberHint": "Generated automatically and cannot be changed."
+    },
+    "actions": {
+      "create": "New staff member",
+      "import": "Import"
+    },
+    "tabs": {
+      "profile": "Profile",
+      "qualifications": "Qualifications",
+      "documents": "Documents"
+    },
+    "qualifications": {
+      "title": "Qualifications",
+      "empty": "No qualifications added yet.",
+      "add": "Add qualification",
+      "adding": "Adding",
+      "addDescription": "Record a degree, diploma, certification, training, or license.",
+      "close": "Close",
+      "verify": "Verify",
+      "reject": "Reject",
+      "type": {
+        "degree": "Degree",
+        "diploma": "Diploma",
+        "certification": "Certification",
+        "training": "Training",
+        "license": "License"
+      },
+      "status": {
+        "pending": "Pending",
+        "verified": "Verified",
+        "rejected": "Rejected"
+      },
+      "fields": {
+        "qualificationType": "Qualification type",
+        "title": "Title",
+        "institution": "Institution",
+        "fieldOfStudy": "Field of study",
+        "yearAwarded": "Year awarded",
+        "grade": "Grade",
+        "document": "Supporting document"
+      }
+    },
+    "documents": {
+      "title": "Documents",
+      "empty": "No documents uploaded yet.",
+      "upload": "Upload document",
+      "uploadDescription": "Uploads go straight to storage — the file never passes through this server.",
+      "uploading": "Uploading",
+      "close": "Close",
+      "download": "Download",
+      "verify": "Verify",
+      "reject": "Reject",
+      "delete": "Delete",
+      "expiresOn": "Expires {date}",
+      "fields": {
+        "file": "File",
+        "documentType": "Document type",
+        "title": "Title",
+        "expiresAt": "Expires on",
+        "notes": "Notes"
+      },
+      "type": {
+        "contract": "Contract",
+        "national_id": "National ID",
+        "resume": "Resume",
+        "police_clearance": "Police clearance",
+        "medical_certificate": "Medical certificate",
+        "other": "Other"
+      },
+      "status": {
+        "pending": "Pending",
+        "verified": "Verified",
+        "rejected": "Rejected"
+      }
+    },
+    "import": {
+      "title": "Import staff",
+      "description": "Bulk-create staff from a CSV or .xlsx file.",
+      "templateTitle": "Required columns",
+      "templateHint": "The file's header row must use these exact names. Optional columns are outlined.",
+      "fields": {
+        "file": "File"
+      },
+      "upload": "Upload",
+      "processing": "Importing — {progress}%",
+      "failed": "The import failed.",
+      "summarySucceeded": "{count} imported",
+      "summaryFailed": "{count} failed",
+      "importAnother": "Import another file",
+      "errorTable": {
+        "row": "Row",
+        "field": "Field",
+        "issue": "Issue"
+      }
+    }
+  },
   "common": {
     "loading": "Loading",
     "retry": "Try again",

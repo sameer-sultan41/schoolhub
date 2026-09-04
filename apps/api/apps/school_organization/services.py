@@ -347,3 +347,32 @@ def assert_deletable(instance) -> None:
             + ", ".join(sorted(blocking))
             + "). Deactivate it instead."
         )
+
+
+def resolve_tenant_staff_id(
+    *, staff_id: uuid.UUID | None, tenant_id: uuid.UUID
+) -> uuid.UUID | None:
+    """Tenant-checked resolution of `head_staff_id`/`class_teacher_staff_id`/
+
+    `house_master_staff_id` — those columns are plain UUIDs (not ForeignKeys),
+    for the same cross-tenant-leak reason `staff.user_id` is (see
+    staff_management/models.py's docstring): a naive `PrimaryKeyRelatedField`
+    would happily resolve another tenant's staff id.
+
+    Delegates to `staff_management.services.resolve_tenant_staff_id`, imported
+    lazily: this points school-organization at staff-management, which inverts
+    the direction docs/03-modules declares (staff-management depends on
+    school-organization, not the reverse) — the lazy import keeps that
+    inversion from becoming a hard import-time coupling between the two apps.
+    Degrades to a plain validation error, never an import error, if
+    staff-management is ever absent from INSTALLED_APPS.
+    """
+    if staff_id is None:
+        return None
+    try:
+        from apps.staff_management.services import (
+            resolve_tenant_staff_id as _resolve,
+        )
+    except ImportError as exc:  # pragma: no cover - defensive, see docstring
+        raise DomainRuleViolation({"non_field": "Staff references are unavailable."}) from exc
+    return _resolve(staff_id=staff_id, tenant_id=tenant_id)

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { useFileUpload } from "@/features/students/use-file-upload";
+import { useFileUpload } from "@/hooks/use-file-upload";
 import { apiClient } from "@/lib/auth";
 
 jest.mock("@/lib/auth", () => ({ apiClient: { post: jest.fn() } }));

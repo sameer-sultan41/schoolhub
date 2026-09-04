@@ -74,6 +74,13 @@ class TenantSettings(TimestampedModel):
     branding = models.JSONField(default=dict, blank=True)
     academic = models.JSONField(default=dict, blank=True)
     features = models.JSONField(default=dict, blank=True)
+    hr = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="HR/staff config, e.g. employee_number_pattern, staff_document_types. "
+        "A dedicated namespace rather than folding into `academic` — later "
+        "HR/leave and payroll modules (Tier 3/6) have a home here too.",
+    )
 
     objects = TenantScopedManager()
     all_tenants = AllTenantsManager()

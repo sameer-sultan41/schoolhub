@@ -17,11 +17,13 @@ const TERMINAL_STATUSES = new Set(["succeeded", "failed"]);
 
  * (api-architecture.md §2.7). `staleTime: 0` is deliberate: every tick must
  * be treated as stale so `refetchInterval` actually issues a new request
- * rather than serving a cached one.
+ * rather than serving a cached one. `module` scopes the query key to the
+ * calling feature (e.g. "students", "staff") so two features polling jobs at
+ * once never collide on the same cache entry.
  */
-export function useJobPolling(jobId: string | null) {
+export function useJobPolling(module: string, jobId: string | null) {
   return useQuery({
-    queryKey: queryKeys.detail("students", "jobs", jobId ?? ""),
+    queryKey: queryKeys.detail(module, "jobs", jobId ?? ""),
     queryFn: async () => (await apiClient.get<JobRecord>(`/jobs/${jobId}`)).data,
     enabled: Boolean(jobId),
     staleTime: 0,

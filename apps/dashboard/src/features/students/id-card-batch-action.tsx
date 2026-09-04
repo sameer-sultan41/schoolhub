@@ -5,7 +5,7 @@ import { Alert, AlertDescription, Button } from "@schoolhub/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { useJobPolling } from "@/features/students/use-job-polling";
+import { useJobPolling } from "@/hooks/use-job-polling";
 import { apiClient } from "@/lib/auth";
 
 interface IdCardBatchActionProps {
@@ -32,7 +32,7 @@ export function IdCardBatchAction({ selectedIds, onDone }: IdCardBatchActionProp
     },
   });
 
-  const jobQuery = useJobPolling(jobId);
+  const jobQuery = useJobPolling("students", jobId);
   const job = jobQuery.data;
 
   const downloadMutation = useMutation({
