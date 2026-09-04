@@ -21,52 +21,61 @@ def ensure_tenant(slug: str, name: str) -> Tenant:
     return tenant
 
 
-def _sync_role_permissions(role: Role, permissions: list[Permission]) -> None:
-    """Make `role`'s granted permissions exactly `permissions` — grants what's missing
-    *and* revokes what's no longer requested, so a re-seed after narrowing a role's
-    `permission_keys` (e.g. trimming a fixture role down for a stricter CUJ) actually
-    narrows it in the database too, rather than only ever accumulating grants.
-    ``RolePermission`` has a DB-level ``UniqueConstraint(role, permission)``, so
-    ``ignore_conflicts=True`` alone is already idempotent on the grant side — no need
-    to pre-filter already-granted rows first.
-    """
-    RolePermission.objects.bulk_create(
-        [RolePermission(role=role, permission=permission) for permission in permissions],
-        batch_size=500,
-        ignore_conflicts=True,
-    )
-    RolePermission.objects.filter(role=role).exclude(permission__in=permissions).delete()
-
-
 def ensure_school_owner_role(*, slug: str = "school_owner", name: str = "School Owner") -> Role:
     """`school_owner` "can hold every permission" (users-and-roles.md §3) — granting
 
     the full current registry keeps this in sync as permissions are added, rather
-    than hardcoding a subset that would silently go stale.
+    than hardcoding a subset that would silently go stale. Additive only, deliberately:
+    revoking here would mean re-deriving "every permission" from `Permission.objects.all()`
+    at call time is trusted to be *complete*, which it might not be if this ever ran
+    before `core.rbac.sync`'s `post_migrate` hook finished populating that table — an
+    incomplete read would then actively strip real grants rather than just fail to add
+    new ones. ``RolePermission`` has a DB-level ``UniqueConstraint(role, permission)``,
+    so ``ignore_conflicts=True`` alone is already idempotent — no need to pre-filter
+    already-granted rows first.
     """
     role, _ = Role.objects.get_or_create(
         tenant=None,
         slug=slug,
         defaults={"name": name, "is_default": True},
     )
-    _sync_role_permissions(role, list(Permission.objects.all()))
+    RolePermission.objects.bulk_create(
+        [
+            RolePermission(role=role, permission=permission)
+            for permission in Permission.objects.all()
+        ],
+        batch_size=500,
+        ignore_conflicts=True,
+    )
     return role
 
 
 def ensure_role_with_permissions(
+    tenant: Tenant,
     slug: str,
     name: str,
     permission_keys: list[str],
     *,
     is_restricted_principal: bool = False,
 ) -> Role:
-    """A tenant-agnostic role holding exactly `permission_keys`, not the full registry.
+    """A role holding exactly `permission_keys`, not the full registry, scoped to
+    `tenant` rather than the platform-wide `tenant=None` namespace.
 
     Unlike `ensure_school_owner_role`, which grants *everything* on purpose, this is
     for seeding a role-based e2e journey where an all-powerful user can't prove a
     narrower scope/permission set actually gates anything. `Permission` rows already
     exist by the time this runs (seeded by `core.rbac.sync`'s `post_migrate` hook,
     same as `ensure_school_owner_role` relies on) — this only looks each one up by key.
+
+    `tenant`-scoped, not `tenant=None`, and deliberately so: `slug` values like
+    "school_admin" are real, shipped role names — every module's permission registry
+    (`RECORD_MANAGERS`, `CONFIG_MANAGERS`, `ACADEMIC_MANAGERS`, etc.) is keyed off that
+    exact string. `Role.tenant=None` means "platform-seeded default, shared by every
+    tenant with no custom role" (see the field's own help text) — a `tenant=None`
+    "school_admin" row here would collide with that namespace, and this function's own
+    revoke-on-re-seed behavior (below) would then strip real, production-relevant grants
+    from whatever real default eventually lives there. Scoping to the e2e tenant makes
+    that collision structurally impossible rather than merely unlikely today.
 
     `is_restricted_principal` must be set for a student/guardian-style fixture role:
     `DenyRestrictedPrincipals` (`core/rbac/permissions.py`) is keyed off that flag, not
@@ -75,7 +84,7 @@ def ensure_role_with_permissions(
     permitted to hold — a false-safe fixture that can't catch a real regression there.
     """
     role, created = Role.objects.get_or_create(
-        tenant=None,
+        tenant=tenant,
         slug=slug,
         defaults={
             "name": name,
@@ -96,11 +105,19 @@ def ensure_role_with_permissions(
             f"{sorted(missing_keys)} — check for a renamed/removed permission key."
         )
 
-    _sync_role_permissions(role, permissions)
+    # Grant what's missing *and* revoke what's no longer requested — safe here because
+    # this role is scoped to one e2e tenant, so a narrower re-seed (trimming a fixture
+    # role down for a stricter CUJ) can only ever affect that tenant's own fixture.
+    RolePermission.objects.bulk_create(
+        [RolePermission(role=role, permission=permission) for permission in permissions],
+        batch_size=500,
+        ignore_conflicts=True,
+    )
+    RolePermission.objects.filter(role=role).exclude(permission__in=permissions).delete()
     return role
 
 
-def ensure_admin_user(
+def ensure_seed_user(
     tenant: Tenant,
     role: Role,
     *,
@@ -110,9 +127,17 @@ def ensure_admin_user(
     last_name: str,
     scope: str = RecordScope.ALL,
 ) -> User:
-    """Named for its original (and still most common) use — an all-scope admin — but
-    `scope` is overridable for a role-based journey that needs a narrower one (e.g.
+    """A seed user holding one `role`, at `scope` (default: unrestricted — the common
+    case for an admin fixture; overridden for a narrower role-based journey, e.g.
     `RecordScope.OWN` for a `student`-role seed user proving record-scope filtering).
+
+    Re-running with a *different* `scope` for the same (`user`, `role`) pair replaces
+    the assignment rather than adding a second one: `UserRole`'s real uniqueness is
+    `(user, role, scope, scope_ref)` (a user can legitimately hold one role at two
+    different scopes at once — see the model's own constraint), so a naive
+    `get_or_create` keyed on the *target* scope would leave a stale assignment at the
+    *previous* scope sitting alongside it, silently widening this identity's effective
+    access to the union of both instead of narrowing it to what `scope` now says.
     """
     user, created = User.objects.get_or_create(
         tenant=tenant,
@@ -123,6 +148,7 @@ def ensure_admin_user(
         user.set_password(password)
         user.save(update_fields=["password"])
 
+    UserRole.objects.filter(user=user, role=role).exclude(scope=scope, scope_ref=None).delete()
     UserRole.objects.get_or_create(
         user=user,
         role=role,

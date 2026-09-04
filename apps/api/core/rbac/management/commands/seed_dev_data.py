@@ -8,7 +8,7 @@ reach staging or production.
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from core.rbac.seeding import ensure_admin_user, ensure_school_owner_role, ensure_tenant
+from core.rbac.seeding import ensure_school_owner_role, ensure_seed_user, ensure_tenant
 from core.tenancy.context import tenant_context
 from core.tenancy.models import TenantSettings
 
@@ -28,7 +28,7 @@ class Command(BaseCommand):
             TenantSettings.all_tenants.get_or_create(tenant=tenant)
 
         role = ensure_school_owner_role()
-        ensure_admin_user(
+        ensure_seed_user(
             tenant,
             role,
             email=DEMO_OWNER_EMAIL,

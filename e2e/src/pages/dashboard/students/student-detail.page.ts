@@ -23,6 +23,18 @@ export class StudentDetailPage extends BasePage {
     return this.page.getByRole("dialog");
   }
 
+  /**
+   * Radix keeps a `Dialog` mounted through its close animation, so a check made right
+   * after a submit click can still see the dialog's own button sharing an accessible
+   * name with the page-level trigger behind it (e.g. both named "Link guardian") — a
+   * strict-mode violation waiting to happen, not just a flaky one. Every mutating method
+   * below awaits this before returning, so the caller's next assertion is never racing
+   * the animation.
+   */
+  private async waitForDialogClosed(): Promise<void> {
+    await this.dialog.waitFor({ state: "hidden" });
+  }
+
   /** The admission number has no label — it's a plain display string, `{year}-{seq}`. */
   admissionNumber(value: string): Locator {
     return this.page.getByText(value, { exact: true });
@@ -69,6 +81,7 @@ export class StudentDetailPage extends BasePage {
     await this.guardianLastName.fill(values.lastName);
     await this.guardianPhone.fill(values.phone);
     await this.submitLinkGuardian.click();
+    await this.waitForDialogClosed();
   }
 
   // --- Emergency contacts ---
@@ -103,24 +116,13 @@ export class StudentDetailPage extends BasePage {
     await this.contactRelationship.fill(values.relationship);
     await this.contactPhone.fill(values.phone);
     await this.submitAddContact.click();
+    await this.waitForDialogClosed();
   }
 
   // --- Enrollment ---
 
   get enrollTrigger(): Locator {
     return this.page.getByRole("button", { name: "Enroll", exact: true });
-  }
-
-  get enrollSession(): Locator {
-    return this.dialog.getByLabel("Academic session", { exact: true });
-  }
-
-  get enrollClass(): Locator {
-    return this.dialog.getByLabel("Class", { exact: true });
-  }
-
-  get enrollSection(): Locator {
-    return this.dialog.getByLabel("Section", { exact: true });
   }
 
   get enrollDate(): Locator {
@@ -131,6 +133,13 @@ export class StudentDetailPage extends BasePage {
     return this.dialog.getByRole("button", { name: "Enroll", exact: true });
   }
 
+  /** Same pattern as `StaffPage.chooseOption` — scoped to the open dialog here since
+   * every field label on this detail page is reused across more than one dialog. */
+  async chooseOption(fieldLabel: string, optionName: string | RegExp): Promise<void> {
+    await this.dialog.getByLabel(fieldLabel, { exact: true }).click();
+    await this.page.getByRole("option", { name: optionName }).click();
+  }
+
   async enroll(values: {
     sessionName: string;
     className: string;
@@ -138,14 +147,12 @@ export class StudentDetailPage extends BasePage {
     enrollmentDate: string;
   }): Promise<void> {
     await this.enrollTrigger.click();
-    await this.enrollSession.click();
-    await this.page.getByRole("option", { name: values.sessionName }).click();
-    await this.enrollClass.click();
-    await this.page.getByRole("option", { name: values.className }).click();
-    await this.enrollSection.click();
-    await this.page.getByRole("option", { name: values.sectionName }).click();
+    await this.chooseOption("Academic session", values.sessionName);
+    await this.chooseOption("Class", values.className);
+    await this.chooseOption("Section", values.sectionName);
     await this.enrollDate.fill(values.enrollmentDate);
     await this.submitEnroll.click();
+    await this.waitForDialogClosed();
   }
 
   /**

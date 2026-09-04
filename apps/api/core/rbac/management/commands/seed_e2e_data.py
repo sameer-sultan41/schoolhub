@@ -30,9 +30,9 @@ from apps.school_organization.models import (
 from apps.student_management.models import Gender, Student
 from core.rbac.models import RecordScope
 from core.rbac.seeding import (
-    ensure_admin_user,
     ensure_role_with_permissions,
     ensure_school_owner_role,
+    ensure_seed_user,
     ensure_tenant,
 )
 from core.tenancy.context import tenant_context
@@ -113,7 +113,7 @@ class Command(BaseCommand):
         other_tenant = ensure_tenant(E2E_OTHER_TENANT_SLUG, "E2E Other School")
 
         role = ensure_school_owner_role()
-        ensure_admin_user(
+        ensure_seed_user(
             tenant,
             role,
             email=E2E_ADMIN_EMAIL,
@@ -125,7 +125,7 @@ class Command(BaseCommand):
         # log in as a real admin of the *other* tenant to prove cross-tenant isolation
         # against a real second identity, not just a placeholder id under the first
         # tenant's own session.
-        ensure_admin_user(
+        ensure_seed_user(
             other_tenant,
             role,
             email=E2E_OTHER_ADMIN_EMAIL,
@@ -135,9 +135,9 @@ class Command(BaseCommand):
         )
 
         school_admin_role = ensure_role_with_permissions(
-            "school_admin", "School Admin", E2E_SCHOOL_ADMIN_PERMISSIONS
+            tenant, "school_admin", "School Admin", E2E_SCHOOL_ADMIN_PERMISSIONS
         )
-        ensure_admin_user(
+        ensure_seed_user(
             tenant,
             school_admin_role,
             email=E2E_SCHOOL_ADMIN_EMAIL,
@@ -146,9 +146,9 @@ class Command(BaseCommand):
             last_name="School Admin",
         )
         student_role = ensure_role_with_permissions(
-            "student", "Student", E2E_STUDENT_PERMISSIONS, is_restricted_principal=True
+            tenant, "student", "Student", E2E_STUDENT_PERMISSIONS, is_restricted_principal=True
         )
-        student_user = ensure_admin_user(
+        student_user = ensure_seed_user(
             tenant,
             student_role,
             email=E2E_STUDENT_EMAIL,
@@ -185,9 +185,15 @@ class Command(BaseCommand):
         """`module.students` defaults off (features.py) — every endpoint 403s with
         `module_disabled` until a tenant is explicitly onboarded onto it, same recipe
         `apps/student_management/tests/factories.py::enable_feature` uses.
+
+        `update_or_create`, not `get_or_create`: a prior run (or someone poking at the
+        override in the admin) could have left this row `enabled=False`, and
+        `get_or_create` only sets `defaults` on *creation* — it would leave an existing,
+        disabled row disabled forever, silently reintroducing the very `module_disabled`
+        403s this seed step exists to prevent.
         """
         flag = FeatureFlag.objects.get(key="module.students")
-        TenantFeatureOverride.objects.get_or_create(
+        TenantFeatureOverride.objects.update_or_create(
             tenant=tenant,
             feature_flag=flag,
             defaults={"enabled": True, "reason": "e2e live-lane fixture"},
