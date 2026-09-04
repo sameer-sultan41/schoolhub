@@ -298,7 +298,6 @@ class StaffQualificationViewSet(
         "verify": "staff.qualification.verify",
     }
     scope_campus_field = "staff__campus_id"
-    http_method_names = ["get", "patch", "head", "options"]
 
     @extend_schema(
         summary="Verify or reject a staff qualification",
