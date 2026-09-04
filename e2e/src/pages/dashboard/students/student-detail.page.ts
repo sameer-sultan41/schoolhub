@@ -14,7 +14,7 @@ import { BasePage } from "../../base.page";
 export class StudentDetailPage extends BasePage {
   readonly path = "";
 
-  async goto(options: { path?: string } = {}): Promise<void> {
+  override async goto(options: { path?: string } = {}): Promise<void> {
     if (!options.path) throw new Error("StudentDetailPage.goto requires a student id path");
     await this.page.goto(options.path);
   }
