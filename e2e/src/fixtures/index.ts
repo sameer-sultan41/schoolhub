@@ -6,7 +6,14 @@ import { buildUser } from "@/data/factories";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
 import { MockApi, authModule, reportingModule, tenantModule } from "@/mocks";
-import { DashboardPage, LoginPage, PublicSitePage, StaffPage } from "@/pages";
+import {
+  DashboardPage,
+  LoginPage,
+  PublicSitePage,
+  StaffPage,
+  StudentDetailPage,
+  StudentFormPage,
+} from "@/pages";
 
 /**
  * The single import surface for every spec:
@@ -39,6 +46,8 @@ export interface E2EFixtures {
   dashboardPage: DashboardPage;
   staffPage: StaffPage;
   publicSitePage: PublicSitePage;
+  studentFormPage: StudentFormPage;
+  studentDetailPage: StudentDetailPage;
 }
 
 export interface E2EWorkerFixtures {
@@ -117,6 +126,14 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   publicSitePage: async ({ page }, use) => {
     await use(new PublicSitePage(page));
+  },
+
+  studentFormPage: async ({ page }, use) => {
+    await use(new StudentFormPage(page));
+  },
+
+  studentDetailPage: async ({ page }, use) => {
+    await use(new StudentDetailPage(page));
   },
 
   liveApiClient: [

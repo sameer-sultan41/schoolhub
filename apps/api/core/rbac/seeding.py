@@ -45,6 +45,29 @@ def ensure_school_owner_role(*, slug: str = "school_owner", name: str = "School 
     return role
 
 
+def ensure_role_with_permissions(slug: str, name: str, permission_keys: list[str]) -> Role:
+    """A tenant-agnostic role holding exactly `permission_keys`, not the full registry.
+
+    Unlike `ensure_school_owner_role`, which grants *everything* on purpose, this is
+    for seeding a role-based e2e journey where an all-powerful user can't prove a
+    narrower scope/permission set actually gates anything. `Permission` rows already
+    exist by the time this runs (seeded by `core.rbac.sync`'s `post_migrate` hook,
+    same as `ensure_school_owner_role` relies on) — this only looks each one up by key.
+    """
+    role, _ = Role.objects.get_or_create(
+        tenant=None,
+        slug=slug,
+        defaults={"name": name, "is_default": True},
+    )
+    permissions = Permission.objects.filter(key__in=permission_keys)
+    RolePermission.objects.bulk_create(
+        [RolePermission(role=role, permission=permission) for permission in permissions],
+        batch_size=500,
+        ignore_conflicts=True,
+    )
+    return role
+
+
 def ensure_admin_user(
     tenant: Tenant,
     role: Role,
@@ -53,7 +76,12 @@ def ensure_admin_user(
     password: str,
     first_name: str,
     last_name: str,
+    scope: str = RecordScope.ALL,
 ) -> User:
+    """Named for its original (and still most common) use — an all-scope admin — but
+    `scope` is overridable for a role-based journey that needs a narrower one (e.g.
+    `RecordScope.OWN` for a `student`-role seed user proving record-scope filtering).
+    """
     user, created = User.objects.get_or_create(
         tenant=tenant,
         email=email,
@@ -66,7 +94,7 @@ def ensure_admin_user(
     UserRole.objects.get_or_create(
         user=user,
         role=role,
-        scope=RecordScope.ALL,
+        scope=scope,
         scope_ref=None,
         defaults={"tenant": tenant},
     )
