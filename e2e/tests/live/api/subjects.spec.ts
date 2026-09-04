@@ -34,11 +34,14 @@ test.describe("class-subjects (live API)", () => {
   test("maps a subject to a class for a session, and rejects a duplicate mapping", async ({
     liveApiClient,
   }) => {
-    const [session, schoolClass, subject] = await Promise.all([
+    const [sessionResponse, classResponse, subjectResponse] = await Promise.all([
       liveApiClient.post("/academic-sessions", buildLiveAcademicSession()),
       liveApiClient.post("/classes", buildLiveClass()),
       liveApiClient.post("/subjects", buildLiveSubject()),
-    ]).then((responses) => responses.map((response) => response.data) as Array<{ id: string }>);
+    ]);
+    const session = sessionResponse.data as { id: string };
+    const schoolClass = classResponse.data as { id: string };
+    const subject = subjectResponse.data as { id: string };
 
     let classSubjectId: string | undefined;
     try {
