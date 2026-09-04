@@ -6,7 +6,7 @@ import { buildUser } from "@/data/factories";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
 import { MockApi, authModule, reportingModule, tenantModule } from "@/mocks";
-import { DashboardPage, LoginPage, PublicSitePage } from "@/pages";
+import { DashboardPage, LoginPage, PublicSitePage, StaffPage } from "@/pages";
 
 /**
  * The single import surface for every spec:
@@ -37,6 +37,7 @@ export interface E2EFixtures {
   signedIn: AuthenticatedUser;
   loginPage: LoginPage;
   dashboardPage: DashboardPage;
+  staffPage: StaffPage;
   publicSitePage: PublicSitePage;
 }
 
@@ -108,6 +109,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   dashboardPage: async ({ page }, use) => {
     await use(new DashboardPage(page));
+  },
+
+  staffPage: async ({ page }, use) => {
+    await use(new StaffPage(page));
   },
 
   publicSitePage: async ({ page }, use) => {

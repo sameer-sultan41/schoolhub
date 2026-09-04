@@ -152,6 +152,36 @@ class CrossTenantAccessTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_a_foreign_staff_id_cannot_be_smuggled_into_head_staff_id(self) -> None:
+        """`head_staff_id`/`class_teacher_staff_id`/`house_master_staff_id` are
+
+        plain UUID columns, not ForeignKeys (same reasoning as
+        student_management's `user_id`) — this is the regression test for the
+        review finding that they previously had no ownership check at all.
+        """
+        from apps.staff_management.tests.factories import StaffFactory
+
+        with tenant_context(self.tenant_b.id):
+            foreign_staff = StaffFactory(tenant=self.tenant_b, campus=self.foreign["campuses"])
+
+        cases = {
+            "campuses": ("head_staff_id", self.own["campuses"]),
+            "departments": ("head_staff_id", self.own["departments"]),
+            "sections": ("class_teacher_staff_id", self.own["sections"]),
+            "houses": ("house_master_staff_id", self.own["houses"]),
+        }
+        for resource, (field, instance) in cases.items():
+            with self.subTest(resource=resource):
+                response = self.client.patch(
+                    f"/api/v1/{resource}/{instance.pk}",
+                    {field: str(foreign_staff.pk)},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+                with tenant_context(self.tenant_a.id):
+                    instance.refresh_from_db()
+                self.assertIsNone(getattr(instance, field))
+
     def test_a_write_never_lands_in_another_tenant(self) -> None:
         response = self.client.post(
             "/api/v1/campuses", {"name": "Owned", "code": "OWNED"}, format="json"

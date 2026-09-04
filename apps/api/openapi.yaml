@@ -1174,6 +1174,146 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/designations:
+    get:
+      operationId: designations_list
+      description: Tenant-defined designation catalog (module doc §5.4).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - designations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDesignationList'
+          description: ''
+    post:
+      operationId: designations_create
+      description: Tenant-defined designation catalog (module doc §5.4).
+      tags:
+      - designations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Designation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Designation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Designation'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Designation'
+          description: ''
+  /api/v1/designations/{id}:
+    get:
+      operationId: designations_retrieve
+      description: Tenant-defined designation catalog (module doc §5.4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this designation.
+        required: true
+      tags:
+      - designations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Designation'
+          description: ''
+    patch:
+      operationId: designations_partial_update
+      description: Tenant-defined designation catalog (module doc §5.4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this designation.
+        required: true
+      tags:
+      - designations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDesignation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDesignation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDesignation'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Designation'
+          description: ''
+    delete:
+      operationId: designations_destroy
+      description: Tenant-defined designation catalog (module doc §5.4).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this designation.
+        required: true
+      tags:
+      - designations
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/files:
     get:
       operationId: files_list
@@ -2013,6 +2153,623 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/staff:
+    get:
+      operationId: staff_list
+      description: Staff master records (module doc §5.1).
+      parameters:
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: department_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: designation_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: employment_status
+        schema:
+          type: string
+          enum:
+          - active
+          - on_leave
+          - resigned
+          - retired
+          - suspended
+          - terminated
+        description: |-
+          * `active` - Active
+          * `on_leave` - On leave
+          * `suspended` - Suspended
+          * `resigned` - Resigned
+          * `retired` - Retired
+          * `terminated` - Terminated
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: staff_type
+        schema:
+          type: string
+          enum:
+          - non_teaching
+          - teaching
+        description: |-
+          * `teaching` - Teaching
+          * `non_teaching` - Non-teaching
+      tags:
+      - staff
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStaffList'
+          description: ''
+    post:
+      operationId: staff_create
+      description: Staff master records (module doc §5.1).
+      tags:
+      - staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Staff'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Staff'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Staff'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+          description: ''
+  /api/v1/staff-documents/{id}:
+    get:
+      operationId: staff_documents_retrieve
+      description: Top-level access for `DELETE /staff-documents/{id}` and `:verify`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this staff document.
+        required: true
+      tags:
+      - staff-documents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffDocument'
+          description: ''
+    delete:
+      operationId: staff_documents_destroy
+      description: Top-level access for `DELETE /staff-documents/{id}` and `:verify`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this staff document.
+        required: true
+      tags:
+      - staff-documents
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/staff-documents/{id}:verify:
+    post:
+      operationId: staff_documents_:verify_create
+      description: Top-level access for `DELETE /staff-documents/{id}` and `:verify`.
+      summary: Verify or reject a staff document
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff-documents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffDocument'
+          description: ''
+        '409':
+          description: Already decided
+  /api/v1/staff-exports:
+    post:
+      operationId: staff_exports_create
+      description: '`POST /staff-exports` -> `202` + job.'
+      summary: Export all staff as CSV
+      tags:
+      - staff-exports
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+  /api/v1/staff-imports:
+    post:
+      operationId: staff_imports_create
+      description: '`POST /staff-imports` -> `202` + job (module doc §16).'
+      summary: Bulk-import staff from a CSV or .xlsx file
+      tags:
+      - staff-imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StaffImportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+  /api/v1/staff-qualifications/{id}:
+    get:
+      operationId: staff_qualifications_retrieve
+      description: Top-level access for `PATCH /staff-qualifications/{id}` and `:verify`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this staff qualification.
+        required: true
+      tags:
+      - staff-qualifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffQualification'
+          description: ''
+    patch:
+      operationId: staff_qualifications_partial_update
+      description: Top-level access for `PATCH /staff-qualifications/{id}` and `:verify`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this staff qualification.
+        required: true
+      tags:
+      - staff-qualifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStaffQualification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStaffQualification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStaffQualification'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffQualification'
+          description: ''
+  /api/v1/staff-qualifications/{id}:verify:
+    post:
+      operationId: staff_qualifications_:verify_create
+      description: Top-level access for `PATCH /staff-qualifications/{id}` and `:verify`.
+      summary: Verify or reject a staff qualification
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff-qualifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffQualification'
+          description: ''
+        '409':
+          description: Already decided
+  /api/v1/staff/{id}:
+    get:
+      operationId: staff_retrieve
+      description: Staff master records (module doc §5.1).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this staff.
+        required: true
+      tags:
+      - staff
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+          description: ''
+    patch:
+      operationId: staff_partial_update
+      description: Staff master records (module doc §5.1).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this staff.
+        required: true
+      tags:
+      - staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStaff'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStaff'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStaff'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+          description: ''
+    delete:
+      operationId: staff_destroy
+      description: Staff master records (module doc §5.1).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this staff.
+        required: true
+      tags:
+      - staff
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/staff/{id}:exit:
+    post:
+      operationId: staff_:exit_create
+      description: Staff master records (module doc §5.1).
+      summary: Exit a staff member (clearance-checked)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExitRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+          description: ''
+        '409':
+          description: Already exited
+        '422':
+          description: Clearance blockers or invalid dates
+  /api/v1/staff/{id}:invite:
+    post:
+      operationId: staff_:invite_create
+      description: Staff master records (module doc §5.1).
+      summary: Create a portal account for this staff member and assign roles
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+          description: ''
+        '409':
+          description: Already linked
+  /api/v1/staff/{staff_pk}/documents:
+    get:
+      operationId: staff_documents_list
+      description: '`GET/POST /staff/{staff_pk}/documents`.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: path
+        name: staff_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStaffDocumentList'
+          description: ''
+    post:
+      operationId: staff_documents_create
+      description: '`GET/POST /staff/{staff_pk}/documents`.'
+      parameters:
+      - in: path
+        name: staff_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffDocument'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StaffDocument'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StaffDocument'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffDocument'
+          description: ''
+  /api/v1/staff/{staff_pk}/qualifications:
+    get:
+      operationId: staff_qualifications_list
+      description: '`GET/POST /staff/{staff_pk}/qualifications`.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: path
+        name: staff_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStaffQualificationList'
+          description: ''
+    post:
+      operationId: staff_qualifications_create
+      description: '`GET/POST /staff/{staff_pk}/qualifications`.'
+      parameters:
+      - in: path
+        name: staff_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffQualification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StaffQualification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StaffQualification'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffQualification'
+          description: ''
   /api/v1/student-documents/{id}:
     get:
       operationId: student_documents_retrieve
@@ -3756,6 +4513,45 @@ components:
       description: |-
         * `academic` - Academic
         * `administrative` - Administrative
+    Designation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          maxLength: 20
+        description:
+          type: string
+          nullable: true
+          maxLength: 300
+        level:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+          description: Optional seniority ordering.
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
     DocumentVerifyRequest:
       type: object
       properties:
@@ -3812,6 +4608,34 @@ components:
       - relationship
       - student_id
       - updated_at
+    EmploymentStatusEnum:
+      enum:
+      - active
+      - on_leave
+      - suspended
+      - resigned
+      - retired
+      - terminated
+      type: string
+      description: |-
+        * `active` - Active
+        * `on_leave` - On leave
+        * `suspended` - Suspended
+        * `resigned` - Resigned
+        * `retired` - Retired
+        * `terminated` - Terminated
+    EmploymentTypeEnum:
+      enum:
+      - full_time
+      - part_time
+      - contract
+      - visiting
+      type: string
+      description: |-
+        * `full_time` - Full time
+        * `part_time` - Part time
+        * `contract` - Contract
+        * `visiting` - Visiting
     EnrollRequest:
       type: object
       properties:
@@ -3839,6 +4663,32 @@ components:
       - class_id
       - enrollment_date
       - section_id
+    ExitRequest:
+      type: object
+      properties:
+        exit_date:
+          type: string
+          format: date
+        exit_reason:
+          type: string
+          maxLength: 300
+        exit_type:
+          allOf:
+          - $ref: '#/components/schemas/ExitTypeEnum'
+          default: resigned
+      required:
+      - exit_date
+      - exit_reason
+    ExitTypeEnum:
+      enum:
+      - resigned
+      - retired
+      - terminated
+      type: string
+      description: |-
+        * `resigned` - resigned
+        * `retired` - retired
+        * `terminated` - terminated
     File:
       type: object
       properties:
@@ -4050,6 +4900,18 @@ components:
           minItems: 1
       required:
       - student_ids
+    InviteRequest:
+      type: object
+      description: |-
+        No email is sent (§17 gap — no notification infrastructure exists yet,
+        see services.invite_staff's docstring); this only creates and links the
+        account plus assigns the requested roles.
+      properties:
+        role_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
     Login:
       type: object
       description: |-
@@ -4179,6 +5041,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedDesignationList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Designation'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedEmergencyContactList:
       type: object
       properties:
@@ -4270,6 +5153,69 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Section'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedStaffDocumentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffDocument'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedStaffList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Staff'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedStaffQualificationList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffQualification'
         meta:
           type: object
           properties:
@@ -4612,6 +5558,40 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedDesignation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          nullable: true
+          maxLength: 20
+        description:
+          type: string
+          nullable: true
+          maxLength: 300
+        level:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+          description: Optional seniority ordering.
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedGuardian:
       type: object
       properties:
@@ -4767,6 +5747,162 @@ components:
           description: rooms(id) — default homeroom.
         is_active:
           type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedStaff:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        employee_number:
+          type: string
+          maxLength: 32
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: users(id) — portal account, tenant-checked at write time.
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        gender:
+          $ref: '#/components/schemas/GenderEnum'
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        photo_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        staff_type:
+          $ref: '#/components/schemas/StaffTypeEnum'
+        campus_id:
+          type: string
+          format: uuid
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        designation_id:
+          type: string
+          format: uuid
+          nullable: true
+        reports_to_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+        employment_type:
+          $ref: '#/components/schemas/EmploymentTypeEnum'
+        employment_status:
+          allOf:
+          - $ref: '#/components/schemas/EmploymentStatusEnum'
+          readOnly: true
+        joining_date:
+          type: string
+          format: date
+        exit_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        exit_reason:
+          type: string
+          readOnly: true
+          nullable: true
+        email:
+          nullable: true
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        phone:
+          type: string
+          maxLength: 32
+        national_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        public_bio:
+          type: string
+          nullable: true
+          description: Opt-in website-published bio (§10).
+        address:
+          nullable: true
+        custom_fields: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedStaffQualification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        staff_id:
+          type: string
+          format: uuid
+          readOnly: true
+        qualification_type:
+          $ref: '#/components/schemas/QualificationTypeEnum'
+        title:
+          type: string
+          maxLength: 200
+        institution:
+          type: string
+          nullable: true
+          maxLength: 200
+        field_of_study:
+          type: string
+          nullable: true
+          maxLength: 120
+        year_awarded:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+        grade:
+          type: string
+          nullable: true
+          maxLength: 50
+        document_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        verification_status:
+          allOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          readOnly: true
+        verified_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id).
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -4964,6 +6100,20 @@ components:
           type: string
           format: date-time
           readOnly: true
+    QualificationTypeEnum:
+      enum:
+      - degree
+      - diploma
+      - certification
+      - training
+      - license
+      type: string
+      description: |-
+        * `degree` - Degree
+        * `diploma` - Diploma
+        * `certification` - Certification
+        * `training` - Training
+        * `license` - License
     RefreshResponse:
       type: object
       description: |-
@@ -5085,6 +6235,271 @@ components:
       - end_date
       - name
       - start_date
+    Staff:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        employee_number:
+          type: string
+          maxLength: 32
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: users(id) — portal account, tenant-checked at write time.
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        gender:
+          $ref: '#/components/schemas/GenderEnum'
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        photo_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        staff_type:
+          $ref: '#/components/schemas/StaffTypeEnum'
+        campus_id:
+          type: string
+          format: uuid
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        designation_id:
+          type: string
+          format: uuid
+          nullable: true
+        reports_to_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+        employment_type:
+          $ref: '#/components/schemas/EmploymentTypeEnum'
+        employment_status:
+          allOf:
+          - $ref: '#/components/schemas/EmploymentStatusEnum'
+          readOnly: true
+        joining_date:
+          type: string
+          format: date
+        exit_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        exit_reason:
+          type: string
+          readOnly: true
+          nullable: true
+        email:
+          nullable: true
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        phone:
+          type: string
+          maxLength: 32
+        national_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        public_bio:
+          type: string
+          nullable: true
+          description: Opt-in website-published bio (§10).
+        address:
+          nullable: true
+        custom_fields: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - campus_id
+      - created_at
+      - employment_status
+      - exit_date
+      - exit_reason
+      - first_name
+      - id
+      - joining_date
+      - last_name
+      - phone
+      - staff_type
+      - updated_at
+    StaffDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        staff_id:
+          type: string
+          format: uuid
+          readOnly: true
+        file_id:
+          type: string
+          format: uuid
+        document_type:
+          type: string
+          description: 'Tenant-extensible; seeded values: contract, national_id, resume,
+            police_clearance, medical_certificate, other.'
+          maxLength: 50
+        title:
+          type: string
+          maxLength: 200
+        notes:
+          type: string
+          nullable: true
+          maxLength: 500
+        verification_status:
+          allOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          readOnly: true
+        verified_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id).
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        expires_at:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - document_type
+      - file_id
+      - id
+      - staff_id
+      - title
+      - updated_at
+      - verification_status
+      - verified_at
+      - verified_by
+    StaffImportRequest:
+      type: object
+      description: |-
+        `POST /staff-imports` (multipart) — mirrors StudentImportRequestSerializer:
+
+        the file goes straight into the background job's own payload, not through
+        core.files' two-step presigned flow (that's for binary media served back
+        out to users later; an import file is read once, synchronously).
+      properties:
+        file:
+          type: string
+          format: uri
+      required:
+      - file
+    StaffQualification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        staff_id:
+          type: string
+          format: uuid
+          readOnly: true
+        qualification_type:
+          $ref: '#/components/schemas/QualificationTypeEnum'
+        title:
+          type: string
+          maxLength: 200
+        institution:
+          type: string
+          nullable: true
+          maxLength: 200
+        field_of_study:
+          type: string
+          nullable: true
+          maxLength: 120
+        year_awarded:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+          nullable: true
+        grade:
+          type: string
+          nullable: true
+          maxLength: 50
+        document_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        verification_status:
+          allOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          readOnly: true
+        verified_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id).
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - qualification_type
+      - staff_id
+      - title
+      - updated_at
+      - verification_status
+      - verified_at
+      - verified_by
+    StaffTypeEnum:
+      enum:
+      - teaching
+      - non_teaching
+      type: string
+      description: |-
+        * `teaching` - Teaching
+        * `non_teaching` - Non-teaching
     Student:
       type: object
       properties:
@@ -5673,6 +7088,13 @@ components:
         * `pending` - Pending
         * `verified` - Verified
         * `rejected` - Rejected
+    VerifyRequest:
+      type: object
+      properties:
+        decision:
+          $ref: '#/components/schemas/DecisionEnum'
+      required:
+      - decision
     VisibilityEnum:
       enum:
       - private

@@ -30,7 +30,7 @@ import { useId, useState } from "react";
 import { Can } from "@/components/can";
 import { DEFAULT_DOCUMENT_TYPES } from "@/features/students/student-constants";
 import type { StudentDocumentRecord } from "@/features/students/family-types";
-import { useFileUpload } from "@/features/students/use-file-upload";
+import { useFileUpload } from "@/hooks/use-file-upload";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 

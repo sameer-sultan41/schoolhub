@@ -159,17 +159,27 @@ class Student(TenantOwnedModel):
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` (auth-and-rbac.md §2.3) for a class teacher.
 
-        The real join is `student_enrollments.section_id ->
-        sections.class_teacher_staff_id -> staff.user_id`. `student_enrollments`
-        exists as of PR3, but `staff` is the other Tier-1 module and is still not
-        built — that remaining hop is the blocker. Returning none() here is the
-        fail-closed default `core.rbac.permissions.scope_queryset` already falls
-        back to when a model has no hook — this override exists only so the gap
-        is documented at the model, not silently inherited. A class_teacher with
-        `assigned` scope sees zero students until `staff-management` lands; that
-        is deliberate, not a bug.
+        The real join, now that `staff-management` exists:
+        `student_enrollments.section_id -> sections.class_teacher_staff_id ->
+        staff.user_id`. A student counts as "assigned" to `user` if they have
+        any enrollment in a section whose `class_teacher_staff_id` matches a
+        staff row linked to `user`.
         """
-        return queryset.none()
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+
+        from apps.staff_management.models import EmploymentStatus, Staff
+
+        staff_ids = (
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
+        return queryset.filter(
+            enrollments__deleted_at__isnull=True,
+            enrollments__status=EnrollmentStatus.ACTIVE,
+            enrollments__section__class_teacher_staff_id__in=staff_ids,
+        ).distinct()
 
 
 class Relationship(models.TextChoices):

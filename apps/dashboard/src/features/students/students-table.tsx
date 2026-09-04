@@ -24,8 +24,8 @@ import { useMemo, useRef, useState } from "react";
 import { Can } from "@/components/can";
 import { IdCardBatchAction } from "@/features/students/id-card-batch-action";
 import { SEARCH_DEBOUNCE_MS, STUDENTS_PAGE_SIZE } from "@/features/students/student-constants";
-import { useCursorPager } from "@/features/students/use-cursor-pager";
 import type { StudentRecord, StudentStatus } from "@/features/students/student-types";
+import { useCursorPager } from "@/hooks/use-cursor-pager";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 

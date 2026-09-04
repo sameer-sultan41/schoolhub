@@ -296,6 +296,172 @@
       "dismiss": "خارج کریں"
     }
   },
+  "staff": {
+    "title": "عملہ",
+    "summary": "عملے کے پروفائل، عہدے، قابلیت، اور دستاویزات۔",
+    "list": {
+      "caption": "عملہ",
+      "empty": "کوئی رکن عملہ نہیں ملا۔",
+      "searchPlaceholder": "نام، ملازم نمبر، ای میل، یا فون سے تلاش کریں"
+    },
+    "columns": {
+      "employeeNumber": "ملازم نمبر",
+      "name": "نام",
+      "staffType": "قسم",
+      "employmentStatus": "حیثیت"
+    },
+    "filters": {
+      "search": "تلاش",
+      "staffType": "قسم",
+      "employmentStatus": "حیثیت",
+      "campus": "کیمپس",
+      "department": "شعبہ",
+      "designation": "عہدہ",
+      "all": "تمام"
+    },
+    "staffType": {
+      "teaching": "تدریسی",
+      "non_teaching": "غیر تدریسی"
+    },
+    "employmentType": {
+      "full_time": "کل وقتی",
+      "part_time": "جزوقتی",
+      "contract": "معاہدہ",
+      "visiting": "وزیٹنگ"
+    },
+    "employmentStatus": {
+      "active": "فعال",
+      "on_leave": "رخصت پر",
+      "suspended": "معطل",
+      "resigned": "مستعفی",
+      "retired": "ریٹائرڈ",
+      "terminated": "برخاست"
+    },
+    "gender": {
+      "male": "مرد",
+      "female": "عورت",
+      "other": "دیگر",
+      "unspecified": "غیر متعین"
+    },
+    "fields": {
+      "employeeNumber": "ملازم نمبر",
+      "firstName": "پہلا نام",
+      "lastName": "آخری نام",
+      "gender": "صنف",
+      "dateOfBirth": "تاریخ پیدائش",
+      "staffType": "عملے کی قسم",
+      "campus": "کیمپس",
+      "selectCampus": "کیمپس منتخب کریں",
+      "department": "شعبہ",
+      "none": "کوئی نہیں",
+      "designation": "عہدہ",
+      "employmentType": "ملازمت کی قسم",
+      "joiningDate": "شمولیت کی تاریخ",
+      "email": "ای میل",
+      "phone": "فون",
+      "nationalId": "قومی شناختی کارڈ",
+      "publicBio": "عوامی تعارف"
+    },
+    "form": {
+      "createTitle": "نیا رکن عملہ",
+      "editTitle": "رکن عملہ میں ترمیم",
+      "submitting": "محفوظ ہو رہا ہے",
+      "employeeNumberHint": "خود بخود تیار کیا گیا ہے اور اسے تبدیل نہیں کیا جا سکتا۔"
+    },
+    "actions": {
+      "create": "نیا رکن عملہ",
+      "import": "درآمد کریں"
+    },
+    "tabs": {
+      "profile": "پروفائل",
+      "qualifications": "قابلیت",
+      "documents": "دستاویزات"
+    },
+    "qualifications": {
+      "title": "قابلیت",
+      "empty": "ابھی تک کوئی قابلیت شامل نہیں کی گئی۔",
+      "add": "قابلیت شامل کریں",
+      "adding": "شامل ہو رہا ہے",
+      "addDescription": "ڈگری، ڈپلومہ، سرٹیفیکیشن، تربیت، یا لائسنس درج کریں۔",
+      "close": "بند کریں",
+      "verify": "تصدیق کریں",
+      "reject": "مسترد کریں",
+      "type": {
+        "degree": "ڈگری",
+        "diploma": "ڈپلومہ",
+        "certification": "سرٹیفیکیشن",
+        "training": "تربیت",
+        "license": "لائسنس"
+      },
+      "status": {
+        "pending": "زیر التوا",
+        "verified": "تصدیق شدہ",
+        "rejected": "مسترد"
+      },
+      "fields": {
+        "qualificationType": "قابلیت کی قسم",
+        "title": "عنوان",
+        "institution": "ادارہ",
+        "fieldOfStudy": "شعبہ تعلیم",
+        "yearAwarded": "سال",
+        "grade": "گریڈ",
+        "document": "معاون دستاویز"
+      }
+    },
+    "documents": {
+      "title": "دستاویزات",
+      "empty": "ابھی تک کوئی دستاویز اپ لوڈ نہیں کی گئی۔",
+      "upload": "دستاویز اپ لوڈ کریں",
+      "uploadDescription": "اپ لوڈز براہ راست سٹوریج میں جاتی ہیں — فائل اس سرور سے نہیں گزرتی۔",
+      "uploading": "اپ لوڈ ہو رہا ہے",
+      "close": "بند کریں",
+      "download": "ڈاؤن لوڈ",
+      "verify": "تصدیق کریں",
+      "reject": "مسترد کریں",
+      "delete": "حذف کریں",
+      "expiresOn": "میعاد ختم {date}",
+      "fields": {
+        "file": "فائل",
+        "documentType": "دستاویز کی قسم",
+        "title": "عنوان",
+        "expiresAt": "میعاد ختم ہونے کی تاریخ",
+        "notes": "نوٹس"
+      },
+      "type": {
+        "contract": "معاہدہ",
+        "national_id": "قومی شناختی کارڈ",
+        "resume": "ریزیومے",
+        "police_clearance": "پولیس کلیئرنس",
+        "medical_certificate": "طبی سرٹیفکیٹ",
+        "other": "دیگر"
+      },
+      "status": {
+        "pending": "زیر التوا",
+        "verified": "تصدیق شدہ",
+        "rejected": "مسترد"
+      }
+    },
+    "import": {
+      "title": "عملہ درآمد کریں",
+      "description": "CSV یا .xlsx فائل سے بلک میں عملہ بنائیں۔",
+      "templateTitle": "درکار کالم",
+      "templateHint": "فائل کی ہیڈر لائن میں یہی درست نام ہونے چاہئیں۔ اختیاری کالم نمایاں ہیں۔",
+      "fields": {
+        "file": "فائل"
+      },
+      "upload": "اپ لوڈ کریں",
+      "processing": "درآمد ہو رہا ہے — {progress}%",
+      "failed": "درآمد ناکام ہو گئی۔",
+      "summarySucceeded": "{count} درآمد ہوئے",
+      "summaryFailed": "{count} ناکام ہوئے",
+      "importAnother": "دوسری فائل درآمد کریں",
+      "errorTable": {
+        "row": "قطار",
+        "field": "فیلڈ",
+        "issue": "مسئلہ"
+      }
+    }
+  },
   "common": {
     "loading": "لوڈ ہو رہا ہے",
     "retry": "دوبارہ کوشش کریں",

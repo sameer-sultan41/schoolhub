@@ -81,6 +81,7 @@ CORE_APPS = [
 MODULE_APPS = [
     "apps.school_organization",
     "apps.student_management",
+    "apps.staff_management",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -224,6 +225,7 @@ CELERY_TASK_ROUTES = {
     # the routes docs/02-architecture/notifications.md describes land with
     # that module. Bulk, non-urgent background work routes to "bulk" for now.
     "apps.student_management.tasks.*": {"queue": "bulk"},
+    "apps.staff_management.tasks.*": {"queue": "bulk"},
 }
 
 LANGUAGE_CODE = "en-us"

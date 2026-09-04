@@ -43,6 +43,7 @@ cutover
 dataloaders
 dblink
 dbname
+deactivatable
 destructures
 diffable
 disableable
@@ -78,6 +79,7 @@ hotspots
 hrefs
 htmlcov
 iban
+idcards
 idempot
 interceptable
 isready

@@ -30,12 +30,31 @@ export function buildCampus(overrides: Partial<Campus> = {}): Campus {
   };
 }
 
+/** Trimmed to the fields the staff feature reads (staff-form.tsx, staff-table.tsx). */
+export interface Department {
+  id: string;
+  name: string;
+  code: string;
+  is_active: boolean;
+}
+
+export function buildDepartment(overrides: Partial<Department> = {}): Department {
+  return {
+    id: id("department"),
+    name: "Science",
+    code: "SCI",
+    is_active: true,
+    ...overrides,
+  };
+}
+
 export interface SchoolOrganizationOptions {
   campuses?: Campus[];
+  departments?: Department[];
 }
 
 /**
- * `/campuses` and friends — the one module implemented so far.
+ * `/campuses`, `/departments` and friends.
  *
  * New modules get a sibling file here; nothing else changes. A spec opts in with
  * `mockApi.use(schoolOrganizationModule({ campuses }))`.
@@ -43,6 +62,7 @@ export interface SchoolOrganizationOptions {
 export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}): MockModule {
   return (api) => {
     const campuses = [...(options.campuses ?? [buildCampus()])];
+    const departments = [...(options.departments ?? [buildDepartment()])];
 
     api.get("/campuses", () => paginated(campuses));
 
@@ -65,5 +85,7 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
       campuses.push(created);
       return ok(created, { status: 201 });
     });
+
+    api.get("/departments", () => paginated(departments));
   };
 }

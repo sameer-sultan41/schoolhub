@@ -82,6 +82,11 @@ class CampusSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"'{value}' is not a valid IANA timezone.")
         return value
 
+    def validate_head_staff_id(self, value):
+        return services.resolve_tenant_staff_id(
+            staff_id=value, tenant_id=self.context["request"].tenant.pk
+        )
+
 
 class DepartmentSerializer(serializers.ModelSerializer):
     campus_id = _fk(Campus, source="campus", required=False, allow_null=True)
@@ -104,6 +109,11 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
     def validate_code(self, value: str) -> str:
         return _normalize_code(value)
+
+    def validate_head_staff_id(self, value):
+        return services.resolve_tenant_staff_id(
+            staff_id=value, tenant_id=self.context["request"].tenant.pk
+        )
 
 
 class AcademicSessionSerializer(serializers.ModelSerializer):
@@ -222,6 +232,11 @@ class SectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("capacity must be at least 1, or null for unlimited.")
         return value
 
+    def validate_class_teacher_staff_id(self, value):
+        return services.resolve_tenant_staff_id(
+            staff_id=value, tenant_id=self.context["request"].tenant.pk
+        )
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         school_class = attrs.get("school_class") or getattr(self.instance, "school_class", None)
         campus = attrs.get("campus") or getattr(self.instance, "campus", None)
@@ -324,6 +339,11 @@ class HouseSerializer(serializers.ModelSerializer):
 
     def validate_code(self, value: str | None) -> str | None:
         return _normalize_code(value)
+
+    def validate_house_master_staff_id(self, value):
+        return services.resolve_tenant_staff_id(
+            staff_id=value, tenant_id=self.context["request"].tenant.pk
+        )
 
 
 class SchoolSettingsSerializer(serializers.Serializer):

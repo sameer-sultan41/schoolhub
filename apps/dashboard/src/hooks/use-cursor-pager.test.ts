@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { useCursorPager } from "@/features/students/use-cursor-pager";
+import { useCursorPager } from "@/hooks/use-cursor-pager";
 
 describe("useCursorPager", () => {
   it("starts with no cursor and hasPrevious false", () => {

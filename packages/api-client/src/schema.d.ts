@@ -405,6 +405,43 @@ export interface paths {
         patch: operations["departments_partial_update"];
         trace?: never;
     };
+    "/api/v1/designations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Tenant-defined designation catalog (module doc §5.4). */
+        get: operations["designations_list"];
+        put?: never;
+        /** @description Tenant-defined designation catalog (module doc §5.4). */
+        post: operations["designations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/designations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Tenant-defined designation catalog (module doc §5.4). */
+        get: operations["designations_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description Tenant-defined designation catalog (module doc §5.4). */
+        delete: operations["designations_destroy"];
+        options?: never;
+        head?: never;
+        /** @description Tenant-defined designation catalog (module doc §5.4). */
+        patch: operations["designations_partial_update"];
+        trace?: never;
+    };
     "/api/v1/files": {
         parameters: {
             query?: never;
@@ -733,6 +770,235 @@ export interface paths {
         head?: never;
         /** @description Divisions of a class at a campus, with capacity (module doc §5.5). */
         patch: operations["sections_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Staff master records (module doc §5.1). */
+        get: operations["staff_list"];
+        put?: never;
+        /** @description Staff master records (module doc §5.1). */
+        post: operations["staff_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Top-level access for `DELETE /staff-documents/{id}` and `:verify`. */
+        get: operations["staff_documents_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description Top-level access for `DELETE /staff-documents/{id}` and `:verify`. */
+        delete: operations["staff_documents_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-documents/{id}:verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify or reject a staff document
+         * @description Top-level access for `DELETE /staff-documents/{id}` and `:verify`.
+         */
+        post: operations["staff_documents_:verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export all staff as CSV
+         * @description `POST /staff-exports` -> `202` + job.
+         */
+        post: operations["staff_exports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-import staff from a CSV or .xlsx file
+         * @description `POST /staff-imports` -> `202` + job (module doc §16).
+         */
+        post: operations["staff_imports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-qualifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Top-level access for `PATCH /staff-qualifications/{id}` and `:verify`. */
+        get: operations["staff_qualifications_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Top-level access for `PATCH /staff-qualifications/{id}` and `:verify`. */
+        patch: operations["staff_qualifications_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/staff-qualifications/{id}:verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify or reject a staff qualification
+         * @description Top-level access for `PATCH /staff-qualifications/{id}` and `:verify`.
+         */
+        post: operations["staff_qualifications_:verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Staff master records (module doc §5.1). */
+        get: operations["staff_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description Staff master records (module doc §5.1). */
+        delete: operations["staff_destroy"];
+        options?: never;
+        head?: never;
+        /** @description Staff master records (module doc §5.1). */
+        patch: operations["staff_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/staff/{id}:exit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exit a staff member (clearance-checked)
+         * @description Staff master records (module doc §5.1).
+         */
+        post: operations["staff_:exit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{id}:invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a portal account for this staff member and assign roles
+         * @description Staff master records (module doc §5.1).
+         */
+        post: operations["staff_:invite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{staff_pk}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET/POST /staff/{staff_pk}/documents`. */
+        get: operations["staff_documents_list"];
+        put?: never;
+        /** @description `GET/POST /staff/{staff_pk}/documents`. */
+        post: operations["staff_documents_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{staff_pk}/qualifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET/POST /staff/{staff_pk}/qualifications`. */
+        get: operations["staff_qualifications_list"];
+        put?: never;
+        /** @description `GET/POST /staff/{staff_pk}/qualifications`. */
+        post: operations["staff_qualifications_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/student-documents/{id}": {
@@ -1447,6 +1713,20 @@ export interface components {
          * @enum {string}
          */
         DepartmentTypeEnum: "academic" | "administrative";
+        Designation: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            code?: string | null;
+            description?: string | null;
+            /** @description Optional seniority ordering. */
+            level?: number | null;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         DocumentVerifyRequest: {
             decision: components["schemas"]["DecisionEnum"];
         };
@@ -1467,6 +1747,24 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `active` - Active
+         *     * `on_leave` - On leave
+         *     * `suspended` - Suspended
+         *     * `resigned` - Resigned
+         *     * `retired` - Retired
+         *     * `terminated` - Terminated
+         * @enum {string}
+         */
+        EmploymentStatusEnum: "active" | "on_leave" | "suspended" | "resigned" | "retired" | "terminated";
+        /**
+         * @description * `full_time` - Full time
+         *     * `part_time` - Part time
+         *     * `contract` - Contract
+         *     * `visiting` - Visiting
+         * @enum {string}
+         */
+        EmploymentTypeEnum: "full_time" | "part_time" | "contract" | "visiting";
         EnrollRequest: {
             /** Format: uuid */
             academic_session_id: string;
@@ -1479,6 +1777,20 @@ export interface components {
             roll_number?: string | null;
             capacity_override_reason?: string | null;
         };
+        ExitRequest: {
+            /** Format: date */
+            exit_date: string;
+            exit_reason: string;
+            /** @default resigned */
+            exit_type: components["schemas"]["ExitTypeEnum"];
+        };
+        /**
+         * @description * `resigned` - resigned
+         *     * `retired` - retired
+         *     * `terminated` - terminated
+         * @enum {string}
+         */
+        ExitTypeEnum: "resigned" | "retired" | "terminated";
         File: {
             /** Format: uuid */
             readonly id: string;
@@ -1565,6 +1877,14 @@ export interface components {
             student_ids: string[];
         };
         /**
+         * @description No email is sent (§17 gap — no notification infrastructure exists yet,
+         *     see services.invite_staff's docstring); this only creates and links the
+         *     account plus assigns the requested roles.
+         */
+        InviteRequest: {
+            role_ids?: string[];
+        };
+        /**
          * @description Email/username + password login.
          *
          *     Deliberately returns the same generic error for unknown accounts and wrong
@@ -1627,6 +1947,16 @@ export interface components {
                 };
             };
         };
+        PaginatedDesignationList: {
+            data?: components["schemas"]["Designation"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedEmergencyContactList: {
             data?: components["schemas"]["EmergencyContact"][];
             meta?: {
@@ -1669,6 +1999,36 @@ export interface components {
         };
         PaginatedSectionList: {
             data?: components["schemas"]["Section"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStaffDocumentList: {
+            data?: components["schemas"]["StaffDocument"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStaffList: {
+            data?: components["schemas"]["Staff"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStaffQualificationList: {
+            data?: components["schemas"]["StaffQualification"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -1838,6 +2198,20 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedDesignation: {
+            /** Format: uuid */
+            readonly id?: string;
+            name?: string;
+            code?: string | null;
+            description?: string | null;
+            /** @description Optional seniority ordering. */
+            level?: number | null;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         PatchedGuardian: {
             /** Format: uuid */
             readonly id?: string;
@@ -1919,6 +2293,76 @@ export interface components {
              */
             room_id?: string | null;
             is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedStaff: {
+            /** Format: uuid */
+            readonly id?: string;
+            employee_number?: string;
+            /**
+             * Format: uuid
+             * @description users(id) — portal account, tenant-checked at write time.
+             */
+            user_id?: string | null;
+            first_name?: string;
+            last_name?: string;
+            gender?: components["schemas"]["GenderEnum"];
+            /** Format: date */
+            date_of_birth?: string | null;
+            /** Format: uuid */
+            photo_file_id?: string | null;
+            staff_type?: components["schemas"]["StaffTypeEnum"];
+            /** Format: uuid */
+            campus_id?: string;
+            /** Format: uuid */
+            department_id?: string | null;
+            /** Format: uuid */
+            designation_id?: string | null;
+            /** Format: uuid */
+            reports_to_staff_id?: string | null;
+            employment_type?: components["schemas"]["EmploymentTypeEnum"];
+            readonly employment_status?: components["schemas"]["EmploymentStatusEnum"];
+            /** Format: date */
+            joining_date?: string;
+            /** Format: date */
+            readonly exit_date?: string | null;
+            readonly exit_reason?: string | null;
+            email?: (string) | null;
+            phone?: string;
+            national_id?: string | null;
+            /** @description Opt-in website-published bio (§10). */
+            public_bio?: string | null;
+            address?: unknown;
+            custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedStaffQualification: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            readonly staff_id?: string;
+            qualification_type?: components["schemas"]["QualificationTypeEnum"];
+            title?: string;
+            institution?: string | null;
+            field_of_study?: string | null;
+            year_awarded?: number | null;
+            grade?: string | null;
+            /** Format: uuid */
+            document_file_id?: string | null;
+            readonly verification_status?: components["schemas"]["VerificationStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly verified_by?: string | null;
+            /** Format: date-time */
+            readonly verified_at?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -2020,6 +2464,15 @@ export interface components {
             readonly updated_at?: string;
         };
         /**
+         * @description * `degree` - Degree
+         *     * `diploma` - Diploma
+         *     * `certification` - Certification
+         *     * `training` - Training
+         *     * `license` - License
+         * @enum {string}
+         */
+        QualificationTypeEnum: "degree" | "diploma" | "certification" | "training" | "license";
+        /**
          * @description Documents ``RefreshView``'s actual response body for the OpenAPI schema.
          *
          *     Read-only and never instantiated to validate input — ``RefreshView`` builds this
@@ -2089,6 +2542,119 @@ export interface components {
             /** Format: date */
             end_date: string;
         };
+        Staff: {
+            /** Format: uuid */
+            readonly id: string;
+            employee_number?: string;
+            /**
+             * Format: uuid
+             * @description users(id) — portal account, tenant-checked at write time.
+             */
+            user_id?: string | null;
+            first_name: string;
+            last_name: string;
+            gender?: components["schemas"]["GenderEnum"];
+            /** Format: date */
+            date_of_birth?: string | null;
+            /** Format: uuid */
+            photo_file_id?: string | null;
+            staff_type: components["schemas"]["StaffTypeEnum"];
+            /** Format: uuid */
+            campus_id: string;
+            /** Format: uuid */
+            department_id?: string | null;
+            /** Format: uuid */
+            designation_id?: string | null;
+            /** Format: uuid */
+            reports_to_staff_id?: string | null;
+            employment_type?: components["schemas"]["EmploymentTypeEnum"];
+            readonly employment_status: components["schemas"]["EmploymentStatusEnum"];
+            /** Format: date */
+            joining_date: string;
+            /** Format: date */
+            readonly exit_date: string | null;
+            readonly exit_reason: string | null;
+            email?: (string) | null;
+            phone: string;
+            national_id?: string | null;
+            /** @description Opt-in website-published bio (§10). */
+            public_bio?: string | null;
+            address?: unknown;
+            custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        StaffDocument: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly staff_id: string;
+            /** Format: uuid */
+            file_id: string;
+            /** @description Tenant-extensible; seeded values: contract, national_id, resume, police_clearance, medical_certificate, other. */
+            document_type: string;
+            title: string;
+            notes?: string | null;
+            readonly verification_status: components["schemas"]["VerificationStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly verified_by: string | null;
+            /** Format: date-time */
+            readonly verified_at: string | null;
+            /** Format: date */
+            expires_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description `POST /staff-imports` (multipart) — mirrors StudentImportRequestSerializer:
+         *
+         *     the file goes straight into the background job's own payload, not through
+         *     core.files' two-step presigned flow (that's for binary media served back
+         *     out to users later; an import file is read once, synchronously).
+         */
+        StaffImportRequest: {
+            /** Format: uri */
+            file: string;
+        };
+        StaffQualification: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly staff_id: string;
+            qualification_type: components["schemas"]["QualificationTypeEnum"];
+            title: string;
+            institution?: string | null;
+            field_of_study?: string | null;
+            year_awarded?: number | null;
+            grade?: string | null;
+            /** Format: uuid */
+            document_file_id?: string | null;
+            readonly verification_status: components["schemas"]["VerificationStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly verified_by: string | null;
+            /** Format: date-time */
+            readonly verified_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `teaching` - Teaching
+         *     * `non_teaching` - Non-teaching
+         * @enum {string}
+         */
+        StaffTypeEnum: "teaching" | "non_teaching";
         Student: {
             /** Format: uuid */
             readonly id: string;
@@ -2365,6 +2931,9 @@ export interface components {
          * @enum {string}
          */
         VerificationStatusEnum: "pending" | "verified" | "rejected";
+        VerifyRequest: {
+            decision: components["schemas"]["DecisionEnum"];
+        };
         /**
          * @description * `private` - Private
          *     * `public` - Public
@@ -3339,6 +3908,130 @@ export interface operations {
             };
         };
     };
+    designations_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDesignationList"];
+                };
+            };
+        };
+    };
+    designations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Designation"];
+                "application/x-www-form-urlencoded": components["schemas"]["Designation"];
+                "multipart/form-data": components["schemas"]["Designation"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Designation"];
+                };
+            };
+        };
+    };
+    designations_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this designation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Designation"];
+                };
+            };
+        };
+    };
+    designations_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this designation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    designations_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this designation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDesignation"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDesignation"];
+                "multipart/form-data": components["schemas"]["PatchedDesignation"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Designation"];
+                };
+            };
+        };
+    };
     files_list: {
         parameters: {
             query?: {
@@ -4000,6 +4693,537 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Section"];
+                };
+            };
+        };
+    };
+    staff_list: {
+        parameters: {
+            query?: {
+                campus_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                department_id?: string;
+                designation_id?: string;
+                /**
+                 * @description * `active` - Active
+                 *     * `on_leave` - On leave
+                 *     * `suspended` - Suspended
+                 *     * `resigned` - Resigned
+                 *     * `retired` - Retired
+                 *     * `terminated` - Terminated
+                 */
+                employment_status?: "active" | "on_leave" | "resigned" | "retired" | "suspended" | "terminated";
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `teaching` - Teaching
+                 *     * `non_teaching` - Non-teaching
+                 */
+                staff_type?: "non_teaching" | "teaching";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStaffList"];
+                };
+            };
+        };
+    };
+    staff_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Staff"];
+                "application/x-www-form-urlencoded": components["schemas"]["Staff"];
+                "multipart/form-data": components["schemas"]["Staff"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_documents_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff document. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffDocument"];
+                };
+            };
+        };
+    };
+    staff_documents_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff document. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "staff_documents_:verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VerifyRequest"];
+                "multipart/form-data": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffDocument"];
+                };
+            };
+            /** @description Already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staff_exports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}} */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staff_imports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["StaffImportRequest"];
+            };
+        };
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}} */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staff_qualifications_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff qualification. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffQualification"];
+                };
+            };
+        };
+    };
+    staff_qualifications_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff qualification. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedStaffQualification"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedStaffQualification"];
+                "multipart/form-data": components["schemas"]["PatchedStaffQualification"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffQualification"];
+                };
+            };
+        };
+    };
+    "staff_qualifications_:verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VerifyRequest"];
+                "multipart/form-data": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffQualification"];
+                };
+            };
+            /** @description Already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staff_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staff_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedStaff"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedStaff"];
+                "multipart/form-data": components["schemas"]["PatchedStaff"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    "staff_:exit_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExitRequest"];
+                "multipart/form-data": components["schemas"]["ExitRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            /** @description Already exited */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Clearance blockers or invalid dates */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "staff_:invite_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InviteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["InviteRequest"];
+                "multipart/form-data": components["schemas"]["InviteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+            /** @description Already linked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staff_documents_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                staff_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStaffDocumentList"];
+                };
+            };
+        };
+    };
+    staff_documents_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                staff_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffDocument"];
+                "application/x-www-form-urlencoded": components["schemas"]["StaffDocument"];
+                "multipart/form-data": components["schemas"]["StaffDocument"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffDocument"];
+                };
+            };
+        };
+    };
+    staff_qualifications_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                staff_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStaffQualificationList"];
+                };
+            };
+        };
+    };
+    staff_qualifications_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                staff_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffQualification"];
+                "application/x-www-form-urlencoded": components["schemas"]["StaffQualification"];
+                "multipart/form-data": components["schemas"]["StaffQualification"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffQualification"];
                 };
             };
         };
