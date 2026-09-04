@@ -41,6 +41,24 @@ test.describe("staff list", () => {
     await expect(page.getByRole("heading", { name: "Bilal Ahmed" })).toBeVisible();
     await expect(page.getByText("EMP-0001")).toBeVisible();
   });
+
+  // Confirms staffPage.searchInput's getByLabel locator actually resolves against the
+  // real page — the search field is a plain `<label htmlFor>`, not a FormField, so it
+  // doesn't hit the aria-hidden-required-marker gotcha the form fields below do, but
+  // that's a claim about the DOM worth checking live rather than trusting by inspection.
+  // The debounced re-fetch itself is already covered by students-table.test.tsx's Jest
+  // equivalent; this only proves the locator finds the real input and it accepts text.
+  test("the search field is reachable by its accessible label", async ({
+    mockApi,
+    staffPage,
+    signedIn: _signedIn,
+  }) => {
+    mockApi.use(schoolOrganizationModule({ campuses: [CAMPUS] }), staffModule({ staff: [] }));
+    await staffPage.goto();
+
+    await staffPage.searchInput.fill("Bilal");
+    await expect(staffPage.searchInput).toHaveValue("Bilal");
+  });
 });
 
 test.describe("creating a staff member", () => {

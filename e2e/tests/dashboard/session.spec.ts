@@ -40,7 +40,7 @@ test.describe("navigation is filtered by permission", () => {
   }) => {
     await dashboardPage.goto();
 
-    // Granted via `students.student.view` / `staff.member.view`.
+    // Granted via `students.student.view` / `staff.staff.view`.
     await expect(dashboardPage.navLink("Students")).toBeVisible();
     await expect(dashboardPage.navLink("Staff")).toBeVisible();
     // No `fees.*` key, so the entry must not render at all.

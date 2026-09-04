@@ -66,7 +66,7 @@ export const SCHOOL_ADMIN_PERMISSIONS: PermissionKey[] = [
   "school_organization.campus.update",
   "school_organization.class.view",
   "students.student.view",
-  "staff.member.view",
+  "staff.staff.view",
 ];
 
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
