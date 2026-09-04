@@ -26,9 +26,9 @@ from apps.school_organization.models import (
     SessionStatus,
     Term,
 )
-from core.rbac.models import Permission, RecordScope, Role, RolePermission, User, UserRole
+from core.rbac.seeding import ensure_admin_user, ensure_school_owner_role, ensure_tenant
 from core.tenancy.context import tenant_context
-from core.tenancy.models import Tenant, TenantSettings, TenantStatus
+from core.tenancy.models import Tenant, TenantSettings
 
 E2E_TENANT_SLUG = "e2e-school"
 E2E_OTHER_TENANT_SLUG = "e2e-other-school"
@@ -59,16 +59,30 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        tenant = self._ensure_tenant(E2E_TENANT_SLUG, "E2E School")
-        other_tenant = self._ensure_tenant(E2E_OTHER_TENANT_SLUG, "E2E Other School")
+        tenant = ensure_tenant(E2E_TENANT_SLUG, "E2E School")
+        other_tenant = ensure_tenant(E2E_OTHER_TENANT_SLUG, "E2E Other School")
 
-        role = self._ensure_school_owner_role()
-        self._ensure_admin_user(tenant, role, email=E2E_ADMIN_EMAIL)
+        role = ensure_school_owner_role()
+        ensure_admin_user(
+            tenant,
+            role,
+            email=E2E_ADMIN_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name="E2E",
+            last_name="Admin",
+        )
         # A distinct email (not the same one disambiguated by `school`) — lets a live spec
         # log in as a real admin of the *other* tenant to prove cross-tenant isolation
         # against a real second identity, not just a placeholder id under the first
         # tenant's own session.
-        self._ensure_admin_user(other_tenant, role, email=E2E_OTHER_ADMIN_EMAIL)
+        ensure_admin_user(
+            other_tenant,
+            role,
+            email=E2E_OTHER_ADMIN_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name="E2E",
+            last_name="Admin",
+        )
 
         with tenant_context(tenant.id):
             TenantSettings.all_tenants.get_or_create(tenant=tenant)
@@ -89,60 +103,6 @@ class Command(BaseCommand):
                 f"'{E2E_OTHER_TENANT_SLUG}' with admin {E2E_OTHER_ADMIN_EMAIL}"
             )
         )
-
-    def _ensure_tenant(self, slug: str, name: str) -> Tenant:
-        tenant, created = Tenant.objects.get_or_create(
-            slug=slug,
-            defaults={"name": name, "status": TenantStatus.ACTIVE},
-        )
-        if not created and tenant.status != TenantStatus.ACTIVE:
-            tenant.status = TenantStatus.ACTIVE
-            tenant.save(update_fields=["status"])
-        return tenant
-
-    def _ensure_school_owner_role(self) -> Role:
-        # Reuses the same tenant-agnostic role seed_dev_data.py seeds — both commands
-        # stay commutative against the same row regardless of run order or count.
-        role, _ = Role.objects.get_or_create(
-            tenant=None,
-            slug="school_owner",
-            defaults={"name": "School Owner", "is_default": True},
-        )
-        granted_permission_ids = set(
-            RolePermission.objects.filter(role=role).values_list("permission_id", flat=True)
-        )
-        RolePermission.objects.bulk_create(
-            [
-                RolePermission(role=role, permission=permission)
-                for permission in Permission.objects.exclude(id__in=granted_permission_ids)
-            ],
-            batch_size=500,
-            ignore_conflicts=True,
-        )
-        return role
-
-    def _ensure_admin_user(self, tenant: Tenant, role: Role, *, email: str) -> User:
-        user, created = User.objects.get_or_create(
-            tenant=tenant,
-            email=email,
-            defaults={
-                "first_name": "E2E",
-                "last_name": "Admin",
-                "is_active": True,
-            },
-        )
-        if created:
-            user.set_password(E2E_ADMIN_PASSWORD)
-            user.save(update_fields=["password"])
-
-        UserRole.objects.get_or_create(
-            user=user,
-            role=role,
-            scope=RecordScope.ALL,
-            scope_ref=None,
-            defaults={"tenant": tenant},
-        )
-        return user
 
     def _ensure_campus(self, tenant: Tenant) -> Campus:
         campus, _ = Campus.objects.get_or_create(

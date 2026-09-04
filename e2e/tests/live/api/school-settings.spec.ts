@@ -1,28 +1,47 @@
-import { ApiError } from "@schoolhub/api-client";
 import { expect, test } from "@/fixtures";
 
+interface SchoolSettings {
+  branding: unknown;
+  academic: unknown;
+  timezone: string;
+  locale: string;
+  currency: string;
+}
+
 /**
- * BLOCKED on a real, confirmed backend bug: `GET /api/v1/school-settings` always 403s
- * (`{"code":"permission_denied", ...}`, message "This module is not enabled for your
- * school.") for a real, freshly seeded admin, even though `module.school`'s feature flag
- * is `default_enabled=True` with no tenant override — confirmed directly:
- * `is_feature_enabled("module.school", tenant_id=<e2e-school's real id>)` returns `True`
- * in a `manage.py shell`. `SchoolSettingsView` (`apps/school_organization/views.py`) is a
- * plain `APIView`, not a `TenantScopedViewSetMixin`-based viewset — it never gets
- * `request.tenant` populated the way viewset endpoints (campuses, classes, …) do, so
- * `RequiresModuleFeature.has_permission` hits its own `if tenant is None: return False`
- * fail-closed guard before ever calling `is_feature_enabled`.
+ * Live API lane — no browser, no UI. See campuses.spec.ts's header comment for the shared
+ * rationale (real HTTP contract only; field validation stays at the Django unit level).
  *
- * This pins that real, current behavior rather than asserting the ideal one. Once
- * `SchoolSettingsView` binds `request.tenant` the same way the viewsets do, replace this
- * with a real get/patch/persist journey — see git history for the version this replaced.
+ * `SchoolSettingsView` used to never bind `request.tenant` (a plain `APIView`, unlike
+ * every viewset), so `RequiresModuleFeature` failed closed before ever checking the real
+ * feature flag and every request 403'd regardless of a real admin's real permissions —
+ * see the fix in `apps/school_organization/views.py`. This is the real journey that fix
+ * unblocks, not a pinned-bug regression test.
  */
-test.describe("school settings (live API, blocked on a real backend bug)", () => {
-  test("request.tenant is never bound for this plain APIView, so every request 403s", async ({
-    liveApiClient,
-  }) => {
-    const denied = await liveApiClient.get("/school-settings").catch((error: unknown) => error);
-    expect(denied).toBeInstanceOf(ApiError);
-    expect((denied as ApiError).status).toBe(403);
+test.describe("school settings (live API)", () => {
+  test("patching settings persists on a subsequent read", async ({ liveApiClient }) => {
+    const before = await liveApiClient.get("/school-settings");
+    expect(before.status).toBe(200);
+    const original = before.data as SchoolSettings;
+
+    // Toggle rather than hardcode a target: whichever currency seed_e2e_data leaves the
+    // tenant with, this always picks a different valid ISO 4217 code to patch to.
+    const nextCurrency = original.currency === "PKR" ? "USD" : "PKR";
+
+    try {
+      const patched = await liveApiClient.patch("/school-settings", { currency: nextCurrency });
+      expect(patched.status).toBe(200);
+      expect((patched.data as SchoolSettings).currency).toBe(nextCurrency);
+
+      const after = await liveApiClient.get("/school-settings");
+      expect(after.status).toBe(200);
+      expect((after.data as SchoolSettings).currency).toBe(nextCurrency);
+    } finally {
+      // school-settings is a tenant-wide singleton — restore it so other live specs
+      // (and reruns of this one) see the same baseline currency they started with.
+      await liveApiClient
+        .patch("/school-settings", { currency: original.currency })
+        .catch(() => {});
+    }
   });
 });
