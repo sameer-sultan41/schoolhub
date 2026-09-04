@@ -21,31 +21,45 @@ def ensure_tenant(slug: str, name: str) -> Tenant:
     return tenant
 
 
+def _sync_role_permissions(role: Role, permissions: list[Permission]) -> None:
+    """Make `role`'s granted permissions exactly `permissions` — grants what's missing
+    *and* revokes what's no longer requested, so a re-seed after narrowing a role's
+    `permission_keys` (e.g. trimming a fixture role down for a stricter CUJ) actually
+    narrows it in the database too, rather than only ever accumulating grants.
+    ``RolePermission`` has a DB-level ``UniqueConstraint(role, permission)``, so
+    ``ignore_conflicts=True`` alone is already idempotent on the grant side — no need
+    to pre-filter already-granted rows first.
+    """
+    RolePermission.objects.bulk_create(
+        [RolePermission(role=role, permission=permission) for permission in permissions],
+        batch_size=500,
+        ignore_conflicts=True,
+    )
+    RolePermission.objects.filter(role=role).exclude(permission__in=permissions).delete()
+
+
 def ensure_school_owner_role(*, slug: str = "school_owner", name: str = "School Owner") -> Role:
     """`school_owner` "can hold every permission" (users-and-roles.md §3) — granting
 
     the full current registry keeps this in sync as permissions are added, rather
-    than hardcoding a subset that would silently go stale. ``RolePermission`` has a
-    DB-level ``UniqueConstraint(role, permission)``, so ``ignore_conflicts=True``
-    alone is already idempotent — no need to pre-filter already-granted rows first.
+    than hardcoding a subset that would silently go stale.
     """
     role, _ = Role.objects.get_or_create(
         tenant=None,
         slug=slug,
         defaults={"name": name, "is_default": True},
     )
-    RolePermission.objects.bulk_create(
-        [
-            RolePermission(role=role, permission=permission)
-            for permission in Permission.objects.all()
-        ],
-        batch_size=500,
-        ignore_conflicts=True,
-    )
+    _sync_role_permissions(role, list(Permission.objects.all()))
     return role
 
 
-def ensure_role_with_permissions(slug: str, name: str, permission_keys: list[str]) -> Role:
+def ensure_role_with_permissions(
+    slug: str,
+    name: str,
+    permission_keys: list[str],
+    *,
+    is_restricted_principal: bool = False,
+) -> Role:
     """A tenant-agnostic role holding exactly `permission_keys`, not the full registry.
 
     Unlike `ensure_school_owner_role`, which grants *everything* on purpose, this is
@@ -53,18 +67,36 @@ def ensure_role_with_permissions(slug: str, name: str, permission_keys: list[str
     narrower scope/permission set actually gates anything. `Permission` rows already
     exist by the time this runs (seeded by `core.rbac.sync`'s `post_migrate` hook,
     same as `ensure_school_owner_role` relies on) — this only looks each one up by key.
+
+    `is_restricted_principal` must be set for a student/guardian-style fixture role:
+    `DenyRestrictedPrincipals` (`core/rbac/permissions.py`) is keyed off that flag, not
+    off the role's slug or permission set, so a seeded "student" role that omits it would
+    silently pass every restricted-principal check regardless of what it's actually
+    permitted to hold — a false-safe fixture that can't catch a real regression there.
     """
-    role, _ = Role.objects.get_or_create(
+    role, created = Role.objects.get_or_create(
         tenant=None,
         slug=slug,
-        defaults={"name": name, "is_default": True},
+        defaults={
+            "name": name,
+            "is_default": True,
+            "is_restricted_principal": is_restricted_principal,
+        },
     )
-    permissions = Permission.objects.filter(key__in=permission_keys)
-    RolePermission.objects.bulk_create(
-        [RolePermission(role=role, permission=permission) for permission in permissions],
-        batch_size=500,
-        ignore_conflicts=True,
-    )
+    if not created and role.is_restricted_principal != is_restricted_principal:
+        role.is_restricted_principal = is_restricted_principal
+        role.save(update_fields=["is_restricted_principal"])
+
+    permissions = list(Permission.objects.filter(key__in=permission_keys))
+    found_keys = {permission.key for permission in permissions}
+    missing_keys = set(permission_keys) - found_keys
+    if missing_keys:
+        raise ValueError(
+            f"ensure_role_with_permissions({slug!r}): no Permission row for "
+            f"{sorted(missing_keys)} — check for a renamed/removed permission key."
+        )
+
+    _sync_role_permissions(role, permissions)
     return role
 
 

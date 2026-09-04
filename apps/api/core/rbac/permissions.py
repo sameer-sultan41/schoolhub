@@ -127,6 +127,12 @@ def scope_queryset(queryset, user, *, own_field: str | None = None, campus_field
         if campus_ids:
             return queryset.filter(**{f"{campus_field}__in": campus_ids})
     if RecordScope.OWN in scopes and own_field:
+        # TODO(guardian-scope): this only matches `own_field == user.pk` — a student
+        # viewing themself. It never joins through `StudentGuardian` to a guardian's
+        # linked children, so "a guardian can see only their own child's record" is not
+        # actually enforced today. Confirmed via `api/students-record-scope.spec.ts`,
+        # which deliberately proves the student self-view path instead; see
+        # docs/project-status.md's "Deliberately NOT done" section for the full citation.
         return queryset.filter(**{own_field: user.pk})
     if RecordScope.ASSIGNED in scopes:
         # Each module defines what "assigned" means; it must override this hook.

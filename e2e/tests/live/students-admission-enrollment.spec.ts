@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { env } from "@/env";
 import { expect, test } from "@/fixtures";
 import {
@@ -7,6 +8,7 @@ import {
   E2E_BASELINE_SESSION_NAME,
   E2E_SCHOOL_ADMIN_EMAIL,
 } from "@/lib/seed-constants";
+import type { DashboardPage, LoginPage } from "@/pages";
 
 /**
  * Live lane — requires the real stack, seeded (`seed_e2e_data`; see
@@ -33,17 +35,73 @@ import {
  *
  * Every navigation after the one real sign-in is client-side (`nav` link clicks, not
  * `page.goto`) deliberately: a full page load re-boots the app with an empty in-memory
- * access token, forcing an eager refresh off the rotating `sh_refresh` cookie — fine
- * once, but this journey visits `/students/new` twice (create, then re-create for the
- * duplicate case) and a second cold refresh this soon after the first raced the token
- * rotation on a loaded machine and the app treated it as a logout (confirmed against the
- * real app, not assumed — this exact journey redirected to `/login` mid-run at the
- * `page.goto("/students/new")` version of this spec).
+ * access token, forcing an eager refresh off the rotating `sh_refresh` cookie. This
+ * journey visits `/students/new` twice (create, then re-create for the duplicate case),
+ * and an earlier `page.goto("/students/new")` version of this spec was observed getting
+ * bounced to `/login` mid-run on the second visit. The precise trigger wasn't pinned down
+ * (a genuinely throttled `AuthEndpointThrottle` 429 from concurrent local runs was live at
+ * the time), but it exposed a real, separate conflation worth fixing on its own footing:
+ * `packages/api-client/src/token-store.ts`'s `refreshAccessToken()` and
+ * `client.ts`'s `refreshOnce()` both collapse *any* non-2xx refresh response — a rate
+ * limit or a transient 5xx included, not just an actually-expired/invalid refresh token —
+ * into the same "session is over" signal that clears the access token and bounces to
+ * `/login`. Avoiding a second cold refresh here sidesteps the symptom; the conflation
+ * itself is unfixed and tracked in `docs/project-status.md`.
  */
 test.use({ storageState: { cookies: [], origins: [] } });
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Lands on `/students/new` and, if a `GET /campuses` fires, waits for it to resolve
+ * before handing back control — `Promise.all` registers the response listener in the
+ * same tick as the navigating click, so it cannot miss a response that fires faster than
+ * we could react to afterward (the exact race `page.waitForLoadState("networkidle")` was
+ * tried for first: it hung for the full 20s timeout instead, confirmed against the real
+ * app — this dashboard build keeps *some* connection open continuously, so "no network
+ * activity for 500ms" never becomes true).
+ *
+ * A *second* visit within the same test (the duplicate-rejection case re-opens this form)
+ * hits `useCampuses()`'s 10-minute `staleTime` and serves from cache with no new request
+ * at all — confirmed against the real app, which is why this tolerates the wait timing
+ * out rather than requiring the response. Either way, by the time this returns, the
+ * Campus select's data is settled and `StudentFormPage.fillRequired` needs no
+ * special-cased wait or extended click timeout for its data-driven re-render.
+ */
+async function openNewStudentForm(page: Page): Promise<void> {
+  const campusesLoaded = page
+    .waitForResponse(
+      (response) => response.url().includes("/campuses") && response.request().method() === "GET",
+      { timeout: 3_000 },
+    )
+    .catch(() => null);
+  await Promise.all([
+    campusesLoaded,
+    page.getByRole("link", { name: "New student", exact: true }).click(),
+  ]);
+}
+
+/** Shared by both tests below: real sign-in, then land on the create-student form. */
+async function signInAndOpenNewStudentForm(
+  page: Page,
+  loginPage: LoginPage,
+  dashboardPage: DashboardPage,
+): Promise<void> {
+  await loginPage.goto();
+  await loginPage.signIn({
+    identifier: E2E_SCHOOL_ADMIN_EMAIL,
+    password: env.LIVE_ADMIN_PASSWORD,
+  });
+  await expect(page).toHaveURL("/dashboard");
+  // The permission-gated nav (DashboardPage's own docstring) renders after the
+  // dashboard's own data loads — clicking "Students" before that finishes races an
+  // empty nav, confirmed against the real app.
+  await expect(dashboardPage.heading).toBeVisible();
+
+  await dashboardPage.navLink("Students").click();
+  await openNewStudentForm(page);
 }
 
 test.describe("admission -> enrollment (real API, school_admin)", () => {
@@ -58,20 +116,8 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     const firstName = "E2E";
     const lastName = `Journey ${tag}`;
 
-    await loginPage.goto();
-    await loginPage.signIn({
-      identifier: E2E_SCHOOL_ADMIN_EMAIL,
-      password: env.LIVE_ADMIN_PASSWORD,
-    });
-    await expect(page).toHaveURL("/dashboard");
-    // The permission-gated nav (DashboardPage's own docstring) renders after the
-    // dashboard's own data loads — clicking "Students" before that finishes races an
-    // empty nav, confirmed against the real app.
-    await expect(dashboardPage.heading).toBeVisible();
-
     // 1. Create the student.
-    await dashboardPage.navLink("Students").click();
-    await page.getByRole("link", { name: "New student", exact: true }).click();
+    await signInAndOpenNewStudentForm(page, loginPage, dashboardPage);
     await studentFormPage.fillRequired({
       firstName,
       lastName,
@@ -135,23 +181,14 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
       admissionDate: "2026-01-01",
       campusName: E2E_BASELINE_CAMPUS_NAME,
     };
-    const newStudentLink = page.getByRole("link", { name: "New student", exact: true });
 
-    await loginPage.goto();
-    await loginPage.signIn({
-      identifier: E2E_SCHOOL_ADMIN_EMAIL,
-      password: env.LIVE_ADMIN_PASSWORD,
-    });
-    await expect(dashboardPage.heading).toBeVisible();
-
-    await dashboardPage.navLink("Students").click();
-    await newStudentLink.click();
+    await signInAndOpenNewStudentForm(page, loginPage, dashboardPage);
     await studentFormPage.fillRequired(values);
     await studentFormPage.submit.click();
     await expect(page).toHaveURL(/\/students\/[0-9a-f-]{36}$/);
 
     await dashboardPage.navLink("Students").click();
-    await newStudentLink.click();
+    await openNewStudentForm(page);
     await studentFormPage.fillRequired(values);
     await studentFormPage.submit.click();
     // `role="alert"` also matches Next.js's own route announcer — scope by text, same

@@ -56,10 +56,13 @@ export class StudentFormPage extends BasePage {
     await this.lastName.fill(values.lastName);
     await this.dateOfBirth.fill(values.dateOfBirth);
     await this.admissionDate.fill(values.admissionDate);
-    // `useCampuses()` resolves after first paint and re-renders this trigger, which can
-    // detach a click already in flight — Playwright's own actionability retry handles
-    // that, but needs longer than the suite's default 10s action timeout here.
-    await this.campus.click({ timeout: 20_000 });
+    // `useCampuses()` resolves after first paint and re-renders this trigger with the
+    // fetched options — a click already in flight at that instant could hit a detached
+    // node. Handled deterministically one layer up: whoever navigates here (see
+    // `openNewStudentForm` in the admission-enrollment spec) waits for `GET /campuses`
+    // to resolve *before* handing control back, so by the time this method runs, that
+    // race is already closed and a plain click needs no special-cased timeout.
+    await this.campus.click();
     await this.page.getByRole("option", { name: values.campusName }).click();
   }
 }

@@ -87,36 +87,6 @@ export function buildLiveHouse(overrides: Partial<{ name: string; code: string }
 }
 
 /**
- * A student with a run-unique name — `assert_not_duplicate` rejects an exact
- * first/last/DOB match (the module's own "duplicate admission rate" invariant), so a
- * fixed name would collide with a prior run's leftover row (no destroy endpoint removes
- * a `Student` between runs, same reasoning as `farFutureSessionWindow` below). `campusId`
- * is required and has no sensible generated default — callers pass the seeded baseline
- * campus's id, confirmed via `GET /campuses` against the real API.
- */
-export function buildLiveStudent(
-  campusId: string,
-  overrides: Partial<{
-    first_name: string;
-    last_name: string;
-    date_of_birth: string;
-    gender: string;
-    admission_date: string;
-  }> = {},
-) {
-  const tag = uniqueTag();
-  return {
-    first_name: "E2E",
-    last_name: `Student ${tag}`,
-    date_of_birth: "2015-05-05",
-    gender: "unspecified",
-    campus_id: campusId,
-    admission_date: "2026-01-01",
-    ...overrides,
-  };
-}
-
-/**
  * A date window far enough from the seeded baseline session (roughly the current year)
  * to trivially avoid `assert_no_session_overlap` without reading the baseline's own dates
  * — and far enough from *every other call's* window, in this run or an earlier one, to

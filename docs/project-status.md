@@ -186,7 +186,29 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   natural record-scope story for this module. The live-lane record-scope CUJ
   (`api/students-record-scope.spec.ts`) proves the student self-view path
   instead, which is real; the guardian-child scope join is not fixed here —
-  future work should grep this citation rather than re-diagnose it.
+  future work should grep this citation rather than re-diagnose it (a
+  `TODO(guardian-scope)` sits directly on the vulnerable line in
+  `core/rbac/permissions.py::scope_queryset`).
+- **Another real gap surfaced by the same e2e work**: `packages/api-client`'s
+  refresh path conflates "the refresh token is genuinely invalid" with "the
+  refresh call failed for an unrelated, possibly-transient reason." Both
+  `token-store.ts`'s `refreshAccessToken()` (any non-2xx, non-401/403 status —
+  a `429` from `AuthEndpointThrottle`, a `5xx`, etc. — falls through to the
+  same `null` return as an actually-invalid token) and `client.ts`'s
+  `refreshOnce()` (catches *any* thrown error from the refresh callback and
+  coerces it to `null` too) treat a rate-limited or momentarily-unavailable
+  refresh identically to "this session is over," clearing the access token
+  and bouncing the user to `/login` even though their refresh cookie is still
+  good. Reachable by a real user reloading or opening a second tab in quick
+  succession under load, not just by test tooling — observed once during a
+  live-lane spec run (`e2e/tests/live/students-admission-enrollment.spec.ts`'s
+  header comment has the specific incident), though the trigger wasn't
+  isolated to confirm it was this conflation rather than a coincidental
+  throttle window. Not fixed here: a proper fix touches the shared
+  `packages/api-client` refresh pipeline used by both `dashboard` and
+  `website`, which is a bigger, riskier change than this e2e-focused PR
+  should carry — needs its own PR with `packages/api-client`'s existing test
+  suite updated alongside it.
 
 ---
 

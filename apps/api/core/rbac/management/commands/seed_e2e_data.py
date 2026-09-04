@@ -145,7 +145,9 @@ class Command(BaseCommand):
             first_name="E2E",
             last_name="School Admin",
         )
-        student_role = ensure_role_with_permissions("student", "Student", E2E_STUDENT_PERMISSIONS)
+        student_role = ensure_role_with_permissions(
+            "student", "Student", E2E_STUDENT_PERMISSIONS, is_restricted_principal=True
+        )
         student_user = ensure_admin_user(
             tenant,
             student_role,
@@ -199,26 +201,48 @@ class Command(BaseCommand):
         `RecordScope.OWN`; "B" has no linked user and is what that same user must get a
         404 on — proving the scope filters, not just the permission key.
         """
-        Student.objects.get_or_create(
-            tenant=tenant,
+        self._ensure_baseline_student(
+            tenant,
+            campus,
+            admission_number="E2E-STUDENT-A",
+            name=E2E_STUDENT_A_NAME,
+            date_of_birth="2015-06-01",
             user_id=student_user_id,
-            defaults={
-                "admission_number": "E2E-STUDENT-A",
-                "first_name": E2E_STUDENT_A_NAME[0],
-                "last_name": E2E_STUDENT_A_NAME[1],
-                "date_of_birth": "2015-06-01",
-                "gender": Gender.UNSPECIFIED,
-                "campus": campus,
-                "admission_date": "2026-01-01",
-            },
+        )
+        self._ensure_baseline_student(
+            tenant,
+            campus,
+            admission_number="E2E-STUDENT-B",
+            name=E2E_STUDENT_B_NAME,
+            date_of_birth="2016-06-01",
+        )
+
+    def _ensure_baseline_student(
+        self,
+        tenant: Tenant,
+        campus: Campus,
+        *,
+        admission_number: str,
+        name: tuple[str, str],
+        date_of_birth: str,
+        user_id: uuid.UUID | None = None,
+    ) -> None:
+        # `user_id`, not `admission_number`, is the lookup key when linking a student to a
+        # real user: `Student.user_id` is unique, so a second run with the same
+        # `student_user_id` must find "A" by that link rather than by name/admission
+        # number, which `get_or_create`'s `defaults` would otherwise let drift.
+        lookup: dict[str, object] = (
+            {"tenant": tenant, "user_id": user_id}
+            if user_id
+            else {"tenant": tenant, "admission_number": admission_number}
         )
         Student.objects.get_or_create(
-            tenant=tenant,
-            admission_number="E2E-STUDENT-B",
+            **lookup,
             defaults={
-                "first_name": E2E_STUDENT_B_NAME[0],
-                "last_name": E2E_STUDENT_B_NAME[1],
-                "date_of_birth": "2016-06-01",
+                "admission_number": admission_number,
+                "first_name": name[0],
+                "last_name": name[1],
+                "date_of_birth": date_of_birth,
                 "gender": Gender.UNSPECIFIED,
                 "campus": campus,
                 "admission_date": "2026-01-01",
