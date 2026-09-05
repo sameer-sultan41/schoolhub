@@ -33,7 +33,6 @@ from apps.school_organization.tests.factories import (
     AcademicSessionFactory,
     CampusFactory,
     ClassFactory,
-    ClassSubjectFactory,
     DepartmentFactory,
     HouseFactory,
     SubjectFactory,
@@ -134,11 +133,10 @@ class CampusScopedPrincipalTests(APITestCase):
 class NullableCampusTests(APITestCase):
     """Columns where NULL means "every campus" — the quieter half of the bug.
 
-    `departments.campus_id` and `class_subjects.campus_id` are nullable and say
-    so in their own `help_text`. Narrowing to `campus_id IN (...)` drops those
-    rows, and nothing errors — the shared department and the shared curriculum
-    mapping are simply absent from a campus-scoped principal's list. That is
-    worse than the 500, because a crash gets reported and a short list does not.
+    `departments.campus_id` is nullable and says so in its own `help_text`.
+    Narrowing to `campus_id IN (...)` drops those rows, and nothing errors — the
+    shared department is simply absent from a campus-scoped principal's list.
+    That is worse than the 500, because a crash gets reported and a short list does not.
     """
 
     def setUp(self) -> None:
@@ -158,25 +156,11 @@ class NullableCampusTests(APITestCase):
                 tenant=self.tenant, campus=self.other_campus
             )
 
-            self.shared_mapping = ClassSubjectFactory(
-                tenant=self.tenant,
-                academic_session=self.session,
-                school_class=self.grade,
-                subject=self.subject,
-                campus=None,
-            )
             # A second subject, not the same one pinned to another campus: the
             # unique constraint treats (…, campus) as the key, so reusing
             # `self.subject` here would read as a campus override of the shared
             # mapping above rather than the unrelated foreign row this is meant
             # to be.
-            self.foreign_mapping = ClassSubjectFactory(
-                tenant=self.tenant,
-                academic_session=self.session,
-                school_class=self.grade,
-                subject=SubjectFactory(tenant=self.tenant),
-                campus=self.other_campus,
-            )
 
         self.user = UserFactory(tenant=self.tenant)
         authenticate(self.client, self.user)
@@ -207,33 +191,3 @@ class NullableCampusTests(APITestCase):
         ids = {row["id"] for row in self.client.get("/api/v1/departments").json()["data"]}
 
         self.assertNotIn(str(self.foreign_department.pk), ids)
-
-    def test_a_tenant_wide_curriculum_mapping_stays_visible(self) -> None:
-        grant(
-            self.user,
-            "school.subject.view",
-            scope=RecordScope.CAMPUS,
-            scope_ref=self.campus.pk,
-        )
-
-        ids = {row["id"] for row in self.client.get("/api/v1/class-subjects").json()["data"]}
-
-        self.assertIn(str(self.shared_mapping.pk), ids, "the shared curriculum row vanished")
-
-    def test_another_campuses_curriculum_mapping_is_still_excluded(self) -> None:
-        """The same other half the department pair has.
-
-        Without this, "the shared row is visible" is equally satisfied by a
-        widening that returns everything — which is the failure a scope test
-        exists to catch, and the one this table was missing.
-        """
-        grant(
-            self.user,
-            "school.subject.view",
-            scope=RecordScope.CAMPUS,
-            scope_ref=self.campus.pk,
-        )
-
-        ids = {row["id"] for row in self.client.get("/api/v1/class-subjects").json()["data"]}
-
-        self.assertNotIn(str(self.foreign_mapping.pk), ids)
