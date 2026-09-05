@@ -11,6 +11,16 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 
 const BASE = { baseUrl: "https://api.test/api/v1" };
 
+/** Narrow a rejection to ApiError; the fulfilled branch throws, so the type is exact. */
+async function expectRejection(promise: Promise<unknown>): Promise<ApiError> {
+  return promise.then(
+    () => {
+      throw new Error("expected the refresh to reject, but it resolved");
+    },
+    (caught: unknown) => caught as ApiError,
+  );
+}
+
 describe("createAccessTokenStore", () => {
   it("holds a token and reports validity against its expiry", () => {
     const store = createAccessTokenStore();
@@ -90,9 +100,7 @@ describe("refreshAccessToken", () => {
     // rate-limited refresh signed the user out.
     const fetchImpl = jest.fn().mockResolvedValue(jsonResponse({}, { status }));
 
-    const error: ApiError = await refreshAccessToken({ ...BASE, fetchImpl }).catch(
-      (caught: unknown) => caught as ApiError,
-    );
+    const error = await expectRejection(refreshAccessToken({ ...BASE, fetchImpl }));
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(status);
@@ -111,9 +119,7 @@ describe("refreshAccessToken", () => {
   it("throws a network_error when the request never reaches the server", async () => {
     const fetchImpl = jest.fn().mockRejectedValue(new TypeError("offline"));
 
-    const error: ApiError = await refreshAccessToken({ ...BASE, fetchImpl }).catch(
-      (caught: unknown) => caught as ApiError,
-    );
+    const error = await expectRejection(refreshAccessToken({ ...BASE, fetchImpl }));
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.code).toBe("network_error");

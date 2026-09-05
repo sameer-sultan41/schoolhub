@@ -70,7 +70,10 @@ class InAppAdapter:
     why in-app is the mandatory floor — it cannot fail for an external reason.
     """
 
-    channel = NotificationChannel.IN_APP
+    # Annotated `str`, not `NotificationChannel`: ChannelAdapter is a Protocol and
+    # its attributes are invariant, so a narrower type here fails the structural
+    # match even though the value is a str subclass.
+    channel: str = NotificationChannel.IN_APP
 
     def send(self, message: RenderedMessage) -> ProviderReceipt:
         return ProviderReceipt(provider="in_app")
@@ -91,7 +94,7 @@ class EmailAdapter:
     than a second render, and a client that cannot show HTML still gets the words.
     """
 
-    channel = NotificationChannel.EMAIL
+    channel: str = NotificationChannel.EMAIL
 
     def send(self, message: RenderedMessage) -> ProviderReceipt:
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
