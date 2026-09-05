@@ -53,7 +53,10 @@ class TenantScopedViewSetMixin:
     permission_classes = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
     required_feature: str | None = None
     scope_own_field: str | None = None
-    scope_campus_field: str = "campus_id"
+    # `None` = this table has no campus dimension (classes, subjects, houses are
+    # defined once per school). See `scope_queryset` for why that passes through
+    # rather than narrowing to nothing.
+    scope_campus_field: str | None = "campus_id"
     audit_resource: str | None = None
 
     def initial(self, request, *args, **kwargs):

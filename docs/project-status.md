@@ -246,6 +246,20 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   `core/tenancy/tests/test_maintenance.py` asserts the unbound case through
   `all_tenants` — the assertion it had been carrying as a code comment because
   a superuser connection could not have demonstrated it.
+- **Campus record scope was a 500 on every tenant-wide table.**
+  `TenantScopedViewSetMixin` defaults `scope_campus_field` to `"campus_id"`, and
+  seven viewsets serve tables that have no such column — `/classes`,
+  `/subjects`, `/houses`, `/academic-sessions`, `/terms`, `/designations` and
+  `/campuses` itself. `scope_queryset` filtered on the missing column and raised
+  `FieldError`. Nothing caught it because it needs a campus-scoped caller *with*
+  a campus reference, and every test in the suite used an `all`-scoped user,
+  which returns before the campus branch is reached. `scope_campus_field = None`
+  is now the explicit opt-out meaning "this table has no campus dimension", and
+  such a scope passes through rather than narrowing to nothing — a campus admin
+  who cannot see "Grade 6" cannot create a section in it. `/campuses` scopes on
+  its own `id` instead. `tests/test_endpoint_contracts.py` walks the URL conf and
+  fails on any viewset whose scope field does not resolve, so the next
+  tenant-wide table is enrolled without anyone remembering to.
 - **`core.notifications` now exists** (PR 0) — the machinery every module doc's
   §12 table needs: the `notifications`/`delivery_logs` tables, the
   `ChannelAdapter` interface with working in-app and email adapters, a

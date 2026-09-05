@@ -202,6 +202,9 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
 class DesignationViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     """Tenant-defined designation catalog (module doc §5.4)."""
 
+    # Tenant-wide: a designation ("Head of Department") is defined once for the
+    # school, not per campus. See `scope_queryset` on why this passes through.
+    scope_campus_field = None
     queryset = Designation.objects
     serializer_class = DesignationSerializer
     search_fields = ["name", "code"]
