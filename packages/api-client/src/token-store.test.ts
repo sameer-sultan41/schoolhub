@@ -91,6 +91,26 @@ describe("refreshAccessToken", () => {
     await expect(refreshAccessToken({ ...BASE, fetchImpl })).resolves.toBeNull();
   });
 
+  it.each([404, 405, 409, 422])(
+    "returns null on a non-transient %s — there is no token to be had",
+    async (status) => {
+      // Must agree with ApiError.isTransient, which is what every retry
+      // decision downstream branches on.
+      const fetchImpl = jest.fn().mockResolvedValue(jsonResponse({}, { status }));
+
+      await expect(refreshAccessToken({ ...BASE, fetchImpl })).resolves.toBeNull();
+    },
+  );
+
+  it("throws when a 2xx body cannot be parsed — indeterminate, not terminal", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(new Response("{not json", { status: 200 }));
+
+    const error = await expectRejection(refreshAccessToken({ ...BASE, fetchImpl }));
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.isTransient).toBe(true);
+  });
+
   it.each([
     [429, "rate_limited"],
     [500, "server_error"],

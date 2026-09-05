@@ -14,6 +14,7 @@ render.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from core.notifications.models import (
@@ -21,6 +22,8 @@ from core.notifications.models import (
     NotificationChannel,
     NotificationPriority,
 )
+
+logger = logging.getLogger(__name__)
 
 # The floor from notifications.md §4: in-app is internal, always available, and
 # carries the reliability guarantee, so it can never be configured away.
@@ -71,6 +74,25 @@ class TriggerCatalog:
         unknown = resolved - set(NotificationChannel.values)
         if unknown:
             raise ValueError(f"Unknown channel(s) {sorted(unknown)} for trigger {event_key!r}")
+
+        # A channel can be a valid enum member and still have no adapter. Left
+        # unchecked, such a trigger registers silently and then logs `skipped`
+        # deliveries forever with nothing at startup to say why — the module doc
+        # promises SMS, the code quietly never sends it. Every other registry in
+        # core/ validates its declarations at app-ready; this is that check.
+        # A warning rather than a raise, because declaring the channel a module
+        # doc specifies is correct — it is the missing adapter that is the gap,
+        # and it should be visible rather than fatal.
+        from core.notifications.adapters import available_channels
+
+        unimplemented = resolved - available_channels()
+        if unimplemented:
+            logger.warning(
+                "trigger %r declares channel(s) with no adapter: %s — deliveries on "
+                "those channels will be recorded as skipped until one ships",
+                event_key,
+                ", ".join(sorted(unimplemented)),
+            )
 
         trigger = Trigger(
             event_key=event_key,

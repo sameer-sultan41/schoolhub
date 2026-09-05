@@ -53,7 +53,14 @@ class TenantScopedViewSetMixin:
     permission_classes = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
     required_feature: str | None = None
     scope_own_field: str | None = None
-    scope_campus_field: str = "campus_id"
+    # `None` = this table has no campus dimension (classes, subjects, houses are
+    # defined once per school). See `scope_queryset` for why that passes through
+    # rather than narrowing to nothing.
+    scope_campus_field: str | None = "campus_id"
+    # True where the campus column is nullable and NULL means "every campus".
+    # `IN (...)` drops NULL, so without this a campus-scoped principal silently
+    # loses the tenant-wide rows — no error, just a shorter list.
+    scope_campus_allows_null: bool = False
     audit_resource: str | None = None
 
     def initial(self, request, *args, **kwargs):
@@ -113,6 +120,7 @@ class TenantScopedViewSetMixin:
             self.request.user,
             own_field=self.scope_own_field,
             campus_field=self.scope_campus_field,
+            campus_allows_null=self.scope_campus_allows_null,
         )
 
     def perform_create(self, serializer):

@@ -68,6 +68,12 @@ FEATURE = "module.academics"
 class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
     """`class_subjects` — the session curriculum grid (§5.1)."""
 
+    # `class_subjects.campus_id` is nullable and means "applies to every campus"
+    # — the shared curriculum row every campus teaches. `IN (...)` drops NULL, so
+    # without this a campus-scoped principal silently loses exactly those rows.
+    # Carried over from `school_organization.ClassSubjectViewSet` with the
+    # endpoint; the fix landed on main while this move was in flight.
+    scope_campus_allows_null = True
     queryset = ClassSubject.objects
     serializer_class = CurriculumSerializer
     filterset_class = CurriculumFilterSet

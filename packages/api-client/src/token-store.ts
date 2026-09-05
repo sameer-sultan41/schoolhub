@@ -109,7 +109,7 @@ export async function refreshAccessToken(
 
   if (!response.ok) {
     const retryAfter = response.headers.get("Retry-After");
-    throw new ApiError({
+    const error = new ApiError({
       code: codeForStatus(response.status),
       message: retryAfter
         ? `Could not refresh the session; retry after ${retryAfter}s.`
@@ -118,17 +118,37 @@ export async function refreshAccessToken(
       url,
       requestId: response.headers.get("X-Request-ID"),
     });
+    // `isTransient` is the definition, not a second opinion: this module and
+    // every retry decision downstream must classify a status the same way, or a
+    // caller branching on `.isTransient` — the pattern this file establishes —
+    // silently disagrees with the thrower. A non-transient refusal (a proxy 404,
+    // a 422) is as terminal as a 401: there is no token to be had.
+    if (!error.isTransient) return null;
+    throw error;
   }
 
   // `Partial`, not `RefreshResponse`: this is untrusted JSON off the wire, and asserting
   // the full shape would make the guards below look redundant to the type-checker while
   // still being the only thing standing between a malformed body and a broken session.
-  const payload = (await response.json().catch(() => null)) as {
-    data?: Partial<RefreshResponse>;
-  } | null;
+  let payload: { data?: Partial<RefreshResponse> } | null;
+  try {
+    payload = (await response.json()) as { data?: Partial<RefreshResponse> } | null;
+  } catch (cause) {
+    // A 2xx we cannot parse is indeterminate, not terminal. Collapsing it into
+    // `null` would sign the user out over a truncating proxy or a serialization
+    // blip — the exact conflation this module exists to undo.
+    throw new ApiError({
+      code: "network_error",
+      message: "The authentication service returned an unreadable response.",
+      status: 0,
+      url,
+      cause,
+    });
+  }
+
   const data = payload?.data;
-  // A 2xx whose body carries no token is a spent session, not a transient fault: the
-  // server answered, it simply has no token to give.
+  // A 2xx whose body parses but carries no token is a spent session: the server
+  // answered, it simply has no token to give.
   if (!data?.access_token) return null;
   return { accessToken: data.access_token, expiresIn: data.expires_in ?? 900 };
 }

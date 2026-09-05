@@ -26,6 +26,16 @@ class FileViewSet(
     uploading a new file, not mutating this one.
     """
 
+    # No campus dimension: a File is referenced from several modules under
+    # different names, each with related_name="+", so there is no reverse join
+    # to hang a campus scope on.
+    #
+    # Declarative only today — `get_queryset` below bypasses the mixin's scoping
+    # entirely, so nothing reads this. It stays because the two must not
+    # disagree: if that override is ever dropped in favour of the mixin, the
+    # default `"campus_id"` would resolve to a column this model does not have
+    # and 500, which is exactly the bug this attribute was introduced to end.
+    scope_campus_field = None
     queryset = File.objects
     serializer_class = FileSerializer
     required_permission = "platform.file.view"

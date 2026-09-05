@@ -218,6 +218,19 @@ export class ApiClient {
    * user's refresh cookie was still perfectly good. Letting it propagate leaves the
    * session intact and lets the caller's retry policy do its job.
    */
+  /**
+   * Refresh through the shared single-flight promise.
+   *
+   * Public because the cold-load path needs it too: `restoreSession` used to
+   * call `refreshAccessToken` directly, so a page load could race an
+   * authenticated request's 401-triggered refresh and issue two at once —
+   * doubling load on precisely the endpoint whose throttle this client exists
+   * to handle gracefully.
+   */
+  async refresh(): Promise<string | null> {
+    return this.refreshOnce();
+  }
+
   private async refreshOnce(): Promise<string | null> {
     this.refreshInFlight ??= (async () => {
       try {

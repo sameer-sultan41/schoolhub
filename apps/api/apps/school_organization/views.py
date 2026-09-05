@@ -75,6 +75,10 @@ class BlockingDestroyMixin(TenantScopedViewSetMixin):
 class CampusViewSet(BlockingDestroyMixin, TenantModelViewSet):
     """Campuses/branches of the school (module doc §5.2)."""
 
+    # A campus-scoped principal sees the campuses they are scoped to — the row
+    # *is* the campus, so the dimension is its own primary key. `campus_id`
+    # (the default) is not a column here and raised FieldError.
+    scope_campus_field = "id"
     queryset = Campus.objects
     serializer_class = CampusSerializer
     filterset_class = CampusFilterSet
@@ -107,6 +111,11 @@ class CampusViewSet(BlockingDestroyMixin, TenantModelViewSet):
 class DepartmentViewSet(BlockingDestroyMixin, TenantModelViewSet):
     """Academic and administrative departments (module doc §5.3)."""
 
+    # `departments.campus_id` is nullable and means "spans every campus"
+    # (models.py). Without this a campus-scoped principal loses exactly those
+    # shared departments from the list — silently, since NULL is simply not in
+    # an `IN (...)`.
+    scope_campus_allows_null = True
     queryset = Department.objects
     serializer_class = DepartmentSerializer
     filterset_class = DepartmentFilterSet
@@ -139,6 +148,8 @@ class AcademicSessionViewSet(
     should no longer be used is closed, which keeps its history addressable.
     """
 
+    # Tenant-wide: a school year is not per-campus. See `scope_queryset`.
+    scope_campus_field = None
     queryset = AcademicSession.objects
     serializer_class = AcademicSessionSerializer
     filterset_class = AcademicSessionFilterSet
@@ -217,6 +228,8 @@ class TermViewSet(
 ):
     """Terms of a session. Governed by the academic-session permission keys (§4)."""
 
+    # Tenant-wide, following its session.
+    scope_campus_field = None
     queryset = Term.objects
     serializer_class = TermSerializer
     filterset_class = TermFilterSet
@@ -237,6 +250,9 @@ class TermViewSet(
 class ClassViewSet(BlockingDestroyMixin, TenantModelViewSet):
     """Grade levels; ``level`` is the promotion ladder (module doc §5.5)."""
 
+    # Tenant-wide: "Grade 6" is defined once and every campus uses it. A campus
+    # admin must see it to create a section in it.
+    scope_campus_field = None
     queryset = Class.objects
     serializer_class = ClassSerializer
     filterset_class = ClassFilterSet
@@ -276,6 +292,8 @@ class SectionViewSet(BlockingDestroyMixin, TenantModelViewSet):
 class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
     """The tenant's subject catalog (module doc §5.6)."""
 
+    # Tenant-wide, like classes.
+    scope_campus_field = None
     queryset = Subject.objects
     serializer_class = SubjectSerializer
     filterset_class = SubjectFilterSet
@@ -297,6 +315,8 @@ class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
 class HouseViewSet(BlockingDestroyMixin, TenantModelViewSet):
     """Houses/groups used for sports, discipline and points (module doc §5.7)."""
 
+    # Tenant-wide: houses span campuses by design.
+    scope_campus_field = None
     queryset = House.objects
     serializer_class = HouseSerializer
     filterset_class = HouseFilterSet
