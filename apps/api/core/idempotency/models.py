@@ -37,8 +37,8 @@ class IdempotencyRecord(TenantOwnedModel):
             ),
         ]
         indexes = [
-            # Supports a future cleanup job pruning rows past the 24h window
-            # (no Celery beat exists yet — PR4 territory).
+            # Supports core.idempotency.tasks.prune_tenant, which deletes rows
+            # past the replay window on the hourly beat schedule.
             models.Index(fields=["tenant", "created_at"], name="idempot_records_created_idx"),
         ]
 
