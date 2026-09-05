@@ -115,6 +115,14 @@ class ForEachTenantTests(TestCase):
         is what the compose stack and Terraform have always used, so the two
         layers can finally be told apart.
 
+        Kept separate from `tests/test_rls_enforcement.py`, which asserts the
+        same mechanism platform-wide, because the two answer different
+        questions: that one pins that RLS works at all, this one pins *why
+        `for_each_tenant` is shaped the way it is*. Delete this and the helper's
+        design rationale has no executable counterpart — a later refactor to a
+        single cross-tenant sweep would pass the platform test and silently prune
+        nothing.
+
         `all_tenants` is the point: it deliberately skips the Python scoping, so
         the only thing left standing between the query and the rows is the RLS
         policy. `current_setting('app.tenant_id', true)` resolves to NULL when
