@@ -111,3 +111,79 @@ class PermissionRegistryTests(TestCase):
             with self.subTest(key=spec.key):
                 self.assertEqual(len(spec.key.split(".")), 3, "Keys must be module.resource.action")
                 self.assertEqual(spec.key, spec.key.lower())
+
+
+class RecordScopeFieldTests(TestCase):
+    """`scope_campus_field` must name a field path that actually resolves.
+
+    This is the contract test for a bug that shipped in three modules at once and
+    could not be seen from any of them. `TenantScopedViewSetMixin` defaults the
+    field to `"campus_id"`, and `scope_queryset` filters on it — so a viewset over
+    a table with no campus column raised `FieldError`, a **500**, the moment a
+    campus-scoped principal opened the list. `/classes`, `/subjects`, `/houses`,
+    `/academic-sessions`, `/terms`, `/campuses` and `/designations` all did.
+
+    Nothing caught it because it needs three things at once: a table with no
+    campus dimension, a caller holding `RecordScope.CAMPUS`, and a campus
+    reference on the assignment. Every test in the suite used an `all`-scoped
+    user, which returns before the campus branch is ever reached.
+
+    Walking the URL conf rather than a list is the point — the next module that
+    adds a tenant-wide table is enrolled without anyone remembering to.
+    """
+
+    def test_every_campus_scope_field_resolves_on_its_model(self):
+        from django.core.exceptions import FieldError
+        from django.db.models import QuerySet
+
+        broken = []
+        for route, view in _api_views():
+            field = getattr(view, "scope_campus_field", None)
+            # None is the explicit opt-out for a table with no campus dimension.
+            if field is None:
+                continue
+            queryset = getattr(view, "queryset", None)
+            model = getattr(queryset, "model", None)
+            if model is None:
+                continue
+            # Mirrors `scope_queryset`'s own precedence: a model that defines the
+            # hook never reaches the field, so the field is not its contract.
+            # `StudentTransfer` is the case — two campus columns, no single path.
+            if callable(getattr(model, "filter_by_campus", None)):
+                continue
+            try:
+                # Builds the WHERE clause without executing it: field resolution
+                # happens in `add_q`, which is exactly what used to blow up.
+                QuerySet(model=model).filter(**{f"{field}__in": []})
+            except FieldError as exc:
+                broken.append(f"{route} ({view.__name__}.scope_campus_field={field!r}): {exc}")
+
+        self.assertEqual(
+            broken,
+            [],
+            "these viewsets would raise FieldError for a campus-scoped user; set "
+            "scope_campus_field to a real path, or to None if the table has no "
+            "campus dimension:\n" + "\n".join(broken),
+        )
+
+    def test_every_own_scope_field_resolves_on_its_model(self):
+        """The same trap on the other scope. `scope_own_field` has no default, so
+        this is a typo guard rather than a whole missing dimension."""
+        from django.core.exceptions import FieldError
+        from django.db.models import QuerySet
+
+        broken = []
+        for route, view in _api_views():
+            field = getattr(view, "scope_own_field", None)
+            if not field:
+                continue
+            queryset = getattr(view, "queryset", None)
+            model = getattr(queryset, "model", None)
+            if model is None:
+                continue
+            try:
+                QuerySet(model=model).filter(**{field: None})
+            except FieldError as exc:
+                broken.append(f"{route} ({view.__name__}.scope_own_field={field!r}): {exc}")
+
+        self.assertEqual(broken, [], "\n".join(broken))

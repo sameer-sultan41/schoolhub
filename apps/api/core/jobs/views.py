@@ -16,6 +16,8 @@ class JobViewSet(TenantScopedViewSetMixin, mixins.RetrieveModelMixin, viewsets.G
     initiator's" (entities/tenancy.md), not a role-wide grant.
     """
 
+    # A background job belongs to a tenant and an actor, not a campus.
+    scope_campus_field = None
     queryset = BackgroundJob.objects
     serializer_class = BackgroundJobSerializer
     required_permission = "platform.job.view"

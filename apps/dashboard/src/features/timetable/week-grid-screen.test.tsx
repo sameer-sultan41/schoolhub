@@ -234,8 +234,11 @@ describe("WeekGridScreen", () => {
 
     await user.click(screen.getByRole("button", { name: "Check for conflicts" }));
 
+    // Scoped to the panel: a finding that names a rendered cell also appears on
+    // that cell, by design. `getByText` across the whole screen would find both.
+    const panel = await screen.findByRole("status");
     expect(
-      await screen.findByText("This teacher is already teaching in this period."),
+      await within(panel).findByText("This teacher is already teaching in this period."),
     ).toBeInTheDocument();
     expect(mockPost).toHaveBeenCalledWith("/timetables/sec1:validate", {
       academic_session_id: "sess1",
@@ -303,7 +306,13 @@ describe("WeekGridScreen", () => {
         "This timetable cannot be published until the blocking conflicts below are resolved.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("This room is already in use in this period.")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("status")).getByText("This room is already in use in this period."),
+    ).toBeInTheDocument();
+    // And on the cell itself: the panel says what is wrong, the cell says
+    // *where*. A finding that names a rendered slot must reach both, which is
+    // why the assertions above are scoped rather than global.
+    expect(screen.getAllByText("This room is already in use in this period.")).toHaveLength(2);
   });
 
   it("still says something when a refused publish named no conflict at all", async () => {
@@ -358,7 +367,9 @@ describe("WeekGridScreen", () => {
     await user.click(screen.getByRole("button", { name: "Publish" }));
 
     expect(await screen.findByText("Published 32 periods.")).toBeInTheDocument();
-    expect(screen.getByText("This room is smaller than the section.")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("status")).getByText("This room is smaller than the section."),
+    ).toBeInTheDocument();
   });
 
   it("hides both actions from a user who holds neither permission", async () => {
