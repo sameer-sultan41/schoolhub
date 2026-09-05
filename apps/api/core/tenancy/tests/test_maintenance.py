@@ -83,27 +83,34 @@ class ForEachTenantTests(TestCase):
         self.assertEqual(summary["failed"], 1)
         self.assertEqual(summary["affected"], (summary["tenants"] - 1) * 2)
 
-    def test_a_sweep_without_a_bound_tenant_sees_nothing(self) -> None:
-        """Why for_each_tenant binds per tenant instead of deleting cross-tenant once.
+    def test_the_default_manager_sees_nothing_without_a_bound_tenant(self) -> None:
+        """Why for_each_tenant binds per tenant instead of sweeping cross-tenant once.
 
-        RLS resolves `current_setting('app.tenant_id', true)` to NULL when nothing
-        is bound, so `tenant_id = NULL` is NULL and no row matches. The unbound
-        query below does not error — it quietly reports zero, which is exactly the
-        failure mode a maintenance job must not have: it would look like a
-        successful sweep forever.
+        Two layers stop an unbound sweep, and neither of them *errors* — they
+        return zero rows, which is the failure mode a maintenance job must not
+        have: it would look like a successful sweep forever while pruning nothing.
 
-        The GUC has to be cleared explicitly rather than just left alone.
-        `tenant_context` binds with `SET LOCAL`, which lasts to the end of the
-        *transaction* — and `TestCase` wraps the whole test in one, so the value
-        set inside the `with` block above is still in effect after it exits. In
-        production each request or task gets a fresh transaction and starts
-        genuinely unbound; here that has to be reproduced.
+        1. `TenantScopedManager` returns `.none()` when no tenant is bound. That
+           is what this test asserts, and it holds everywhere.
+        2. The RLS policy resolves `current_setting('app.tenant_id', true)` to
+           NULL when unbound, so `tenant_id = NULL` is NULL and no row matches.
+           **That layer is deliberately not asserted here**, because CI cannot
+           demonstrate it: `.github/workflows/api.yml` connects as `schoolhub`,
+           the postgres image's `POSTGRES_USER`, which is a superuser *and* owns
+           the tables — and a superuser bypasses RLS even with FORCE. The compose
+           stack and Terraform both use the non-owning, non-BYPASSRLS
+           `schoolhub_app` role (`infra/postgres/init/02-app-role.sql`); CI does
+           not. Asserting layer 2 here would pass or fail on the runner's role
+           rather than on the policy, so it stays a code comment until CI runs as
+           a non-superuser. See docs/project-status.md.
         """
+        set_database_tenant(None)
+
+        self.assertEqual(BackgroundJob.objects.count(), 0)
+
         with tenant_context(self.first.pk):
             BackgroundJobFactory(tenant=self.first)
+            self.assertEqual(BackgroundJob.objects.count(), 1)
 
         set_database_tenant(None)
-        self.assertEqual(BackgroundJob.all_tenants.count(), 0)
-
-        with tenant_context(self.first.pk):
-            self.assertEqual(BackgroundJob.objects.count(), 1)
+        self.assertEqual(BackgroundJob.objects.count(), 0)
