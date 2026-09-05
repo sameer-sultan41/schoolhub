@@ -146,6 +146,11 @@ class RecordScopeFieldTests(TestCase):
             model = getattr(queryset, "model", None)
             if model is None:
                 continue
+            # Mirrors `scope_queryset`'s own precedence: a model that defines the
+            # hook never reaches the field, so the field is not its contract.
+            # `StudentTransfer` is the case — two campus columns, no single path.
+            if callable(getattr(model, "filter_by_campus", None)):
+                continue
             try:
                 # Builds the WHERE clause without executing it: field resolution
                 # happens in `add_q`, which is exactly what used to blow up.
