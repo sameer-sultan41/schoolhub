@@ -1,5 +1,5 @@
 import { ApiError, type ApiResult } from "@schoolhub/api-client";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PromotionBatchRecord } from "@/features/academics/academics-types";
 import { PromotionBatchesScreen } from "@/features/academics/promotion-batches-screen";
@@ -17,14 +17,24 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn() }),
   usePathname: () => "/academics/promotions",
 }));
+
+/** The two reference lists, in mutable bindings so one test can hold them in the
+ * `data: undefined` state the screen paints before they arrive. */
+interface Option {
+  id: string;
+  name: string;
+}
+const SESSIONS: Option[] = [
+  { id: "sess1", name: "2025-26" },
+  { id: "sess2", name: "2026-27" },
+];
+const CLASSES: Option[] = [{ id: "class8", name: "Grade 8" }];
+let mockSessions: { data: Option[] | undefined } = { data: SESSIONS };
+let mockClasses: { data: Option[] | undefined } = { data: CLASSES };
+
 jest.mock("@/features/students/use-reference-data", () => ({
-  useAcademicSessions: () => ({
-    data: [
-      { id: "sess1", name: "2025-26" },
-      { id: "sess2", name: "2026-27" },
-    ],
-  }),
-  useClasses: () => ({ data: [{ id: "class8", name: "Grade 8" }] }),
+  useAcademicSessions: () => mockSessions,
+  useClasses: () => mockClasses,
 }));
 jest.mock("@/features/academics/promotion-batch-form", () => ({
   PromotionBatchForm: () => <div data-testid="promotion-batch-form" />,
@@ -58,6 +68,8 @@ describe("PromotionBatchesScreen", () => {
     mockGet.mockReset();
     mockPush.mockReset();
     mockUsePermission.mockReturnValue(false);
+    mockSessions = { data: SESSIONS };
+    mockClasses = { data: CLASSES };
   });
 
   it("renders one row per batch, with its session pair, student count and status", async () => {
@@ -180,5 +192,43 @@ describe("PromotionBatchesScreen", () => {
     await waitFor(() => {
       expect(mockGet.mock.calls.at(-1)?.[1]?.query?.cursor).toBe("cursor-2");
     });
+  });
+
+  it("falls back to em dashes for the class and session names while the reference lists load", async () => {
+    mockSessions = { data: undefined };
+    mockClasses = { data: undefined };
+    mockGet.mockResolvedValue(page([ROW]));
+    const user = userEvent.setup();
+
+    renderWithProviders(<PromotionBatchesScreen />);
+
+    const cell = await screen.findByText("batch-1");
+    const row = cell.closest("tr") as HTMLElement;
+    expect(within(row).getByText("—")).toBeInTheDocument();
+    expect(within(row).getByText("— → —")).toBeInTheDocument();
+    expect(within(row).getByText("30")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("combobox", { name: "From session" }));
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByRole("option", { name: "All" })).toBeInTheDocument();
+  });
+
+  it("steps back to the first page, where Previous is no longer offered", async () => {
+    mockGet.mockResolvedValueOnce(page([ROW], "cursor-2"));
+    mockGet.mockResolvedValueOnce(page([{ ...ROW, batch_id: "batch-2" }]));
+    mockGet.mockResolvedValue(page([ROW], "cursor-2"));
+
+    renderWithProviders(<PromotionBatchesScreen />);
+    await screen.findByText("batch-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    // Await the second page's own row, not the request: Previous is guarded while
+    // a page is still in flight, so the click below has to land after it settles.
+    expect(await screen.findByText("batch-2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(await screen.findByText("batch-1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
   });
 });

@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import date
 
 from django.db import transaction
+from django.db.models import Q
 from django.http import Http404
 from django.utils import timezone
 
@@ -35,6 +37,10 @@ logger = logging.getLogger(__name__)
 # only — the doc calls these warnings, so they ride along in `meta` rather than
 # rejecting the write.
 DEFAULT_WEEKLY_PERIOD_NORM = 30
+
+# §12's "promotion batch pending approval" goes to the `principal`; the key is
+# what the endpoint actually gates on, so it is what the fan-out resolves.
+PROMOTION_APPROVAL_KEY = "academics.promotion.approve"
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +217,12 @@ def weekly_load_by_staff(*, session: AcademicSession) -> dict[uuid.UUID, int]:
     An allocation's own `weekly_periods` wins when set; that override column
     exists precisely so a teacher taking a subject at non-standard frequency does
     not distort the load maths.
+
+    "Current" is a window, not just an open end: `effective_to IS NULL` on its
+    own also matches an allocation that starts next term, so a teacher lined up
+    for September counts against today's norm and the §11 warning fires on load
+    nobody is carrying yet. A null `effective_from` means the allocation has
+    been in force all along.
     """
     curriculum = {
         (row["school_class_id"], row["subject_id"]): row["weekly_periods"]
@@ -219,10 +231,15 @@ def weekly_load_by_staff(*, session: AcademicSession) -> dict[uuid.UUID, int]:
         .values("school_class_id", "subject_id", "weekly_periods")
     }
 
+    today = timezone.localdate()
     totals: dict[uuid.UUID, int] = {}
     allocations = (
         TeacherSubjectAllocation.objects.alive()
-        .filter(academic_session=session, effective_to__isnull=True)
+        .filter(
+            Q(effective_from__isnull=True) | Q(effective_from__lte=today),
+            academic_session=session,
+            effective_to__isnull=True,
+        )
         .values("staff_id", "subject_id", "weekly_periods", "section__school_class_id")
     )
     for allocation in allocations:
@@ -372,6 +389,10 @@ def create_promotion_batch(
             {"class_id": "No actively enrolled students in this class for that session."}
         )
 
+    # The friendly path, and only that: this read takes no lock, so two
+    # simultaneous creates can both pass it and both insert. What actually holds
+    # under the race is `promotions_student_live_once` (models.py, where the
+    # reasoning lives), whose IntegrityError reaches the client as the same 409.
     existing = (
         StudentPromotion.objects.alive()
         .filter(
@@ -421,12 +442,29 @@ def create_promotion_batch(
     return batch_id, rows
 
 
-def batch_queryset(batch_id: uuid.UUID):
-    return StudentPromotion.objects.alive().filter(batch_id=batch_id)
+def batch_queryset(batch_id: uuid.UUID, *, for_update: bool = False):
+    """The rows of one batch. `for_update` locks them until the transaction ends.
+
+    Opt-in rather than always-on: the read paths (`retrieve`, the execute
+    snapshot) have no business taking a row lock over a whole class, and
+    `select_for_update` outside a transaction is an error rather than a no-op.
+    """
+    rows = StudentPromotion.objects.alive().filter(batch_id=batch_id)
+    return rows.select_for_update() if for_update else rows
 
 
 def assert_batch_in_status(*, batch_id: uuid.UUID, expected: str) -> list[StudentPromotion]:
-    rows = list(batch_queryset(batch_id))
+    """Read a batch under a row lock and require every row to be in `expected`.
+
+    The lock is half the check. Every caller is `@transaction.atomic`, so holding
+    the rows until commit is what stops a simultaneous `:approve` and `:reject`
+    from each passing this check and each writing — which would leave
+    `status=rejected` alongside a populated `approved_by`, a state
+    `promotions_approval_fields_together` does not forbid because it only couples
+    `approved_by` with `approved_at`. `_transition` restates the status in the
+    UPDATE's own WHERE as the second layer.
+    """
+    rows = list(batch_queryset(batch_id, for_update=True))
     if not rows:
         # 404, not 422: a batch id names a resource, and an id belonging to
         # another tenant must be indistinguishable from one that never existed
@@ -441,13 +479,48 @@ def assert_batch_in_status(*, batch_id: uuid.UUID, expected: str) -> list[Studen
     return rows
 
 
+def _transition(
+    batch_id: uuid.UUID,
+    *,
+    from_status: str | set[str],
+    to_status: str,
+    actor_id: uuid.UUID,
+    expected_rows: int,
+    **extra,
+) -> int:
+    """Move a whole batch from one status to the next, or move nothing at all.
+
+    The `status` in the WHERE is not redundant with the caller's
+    `assert_batch_in_status`: the lock that check takes is what prevents the
+    interleaving, and this is what keeps the *write* safe if a later refactor
+    drops the lock. A short count means someone else moved the batch between the
+    check and here, which is a 409 rather than a partially transitioned batch —
+    every row of a batch moves together (§7.2).
+    """
+    statuses = {from_status} if isinstance(from_status, str) else set(from_status)
+    updated = (
+        batch_queryset(batch_id)
+        .filter(status__in=statuses)
+        .update(status=to_status, updated_by=actor_id, updated_at=timezone.now(), **extra)
+    )
+    if updated != expected_rows:
+        raise Conflict("This batch changed while the action was running. Reload and try again.")
+    return updated
+
+
 @transaction.atomic
 def submit_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     rows = assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.DRAFT)
     _assert_decisions_complete(rows)
-    return batch_queryset(batch_id).update(
-        status=PromotionStatus.PENDING_APPROVAL, updated_by=actor_id, updated_at=timezone.now()
+    updated = _transition(
+        batch_id,
+        from_status=PromotionStatus.DRAFT,
+        to_status=PromotionStatus.PENDING_APPROVAL,
+        actor_id=actor_id,
+        expected_rows=len(rows),
     )
+    notify_promotion_pending(rows=rows, tenant_id=rows[0].tenant_id)
+    return updated
 
 
 def _assert_decisions_complete(rows: list[StudentPromotion]) -> None:
@@ -479,6 +552,31 @@ def _proposed_decision(row: StudentPromotion) -> str:
     )
 
 
+def assert_retention_keeps_the_class(
+    *, decision: str | None, from_class_id: uuid.UUID | None, to_class_id: uuid.UUID | None
+) -> None:
+    """§6: "retained students re-enroll in the same class next session".
+
+    Retention is the one decision whose target class is not a choice — it is
+    dictated by where the student already is, and a `retained` row pointing at
+    another class is a promotion wearing the wrong label: the source enrollment
+    closes as `retained` while the new one lands a level up, and nothing
+    downstream would ever question it.
+
+    A plain function over three ids rather than a check on a row, because both
+    gates that need it hold different things: the serializer has a half-applied
+    payload over an instance, and `_execute_one` has the row. Living here rather
+    than only in the serializer is what makes it hold for the importer and any
+    later job that writes a decision.
+    """
+    if decision != PromotionDecision.RETAINED or to_class_id is None:
+        return
+    if to_class_id != from_class_id:
+        raise DomainRuleViolation(
+            {"to_class_id": "A retained student re-enrolls in the same class they were in."}
+        )
+
+
 @transaction.atomic
 def approve_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     """§7.2 / RBAC §2.4: the approver may not be the preparer.
@@ -500,24 +598,33 @@ def approve_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
             }
         )
 
-    now = timezone.now()
-    return batch_queryset(batch_id).update(
-        status=PromotionStatus.APPROVED,
+    updated = _transition(
+        batch_id,
+        from_status=PromotionStatus.PENDING_APPROVAL,
+        to_status=PromotionStatus.APPROVED,
+        actor_id=actor_id,
+        expected_rows=len(rows),
         approved_by=actor_id,
-        approved_at=now,
-        updated_by=actor_id,
-        updated_at=now,
+        approved_at=timezone.now(),
     )
+    notify_promotion_outcome(rows=rows, outcome="approved", tenant_id=rows[0].tenant_id)
+    return updated
 
 
 @transaction.atomic
 def reject_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     """Send a batch back to draft. Not a terminal state — §7.2's `rejected` edge
     returns to the reviewer, who adjusts and resubmits."""
-    assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.PENDING_APPROVAL)
-    return batch_queryset(batch_id).update(
-        status=PromotionStatus.DRAFT, updated_by=actor_id, updated_at=timezone.now()
+    rows = assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.PENDING_APPROVAL)
+    updated = _transition(
+        batch_id,
+        from_status=PromotionStatus.PENDING_APPROVAL,
+        to_status=PromotionStatus.DRAFT,
+        actor_id=actor_id,
+        expected_rows=len(rows),
     )
+    notify_promotion_outcome(rows=rows, outcome="returned to draft", tenant_id=rows[0].tenant_id)
+    return updated
 
 
 @transaction.atomic
@@ -530,7 +637,7 @@ def revert_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     which always return "clear" for the same reason. When attendance and
     examinations land, this predicate must grow to consult them.
     """
-    rows = list(batch_queryset(batch_id))
+    rows = list(batch_queryset(batch_id, for_update=True))
     if not rows:
         raise Http404("No such promotion batch.")
 
@@ -549,12 +656,46 @@ def revert_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
                 "transfer those enrollments before reverting."
             )
 
-    return batch_queryset(batch_id).update(
-        status=PromotionStatus.REVERTED, updated_by=actor_id, updated_at=timezone.now()
+    # Reverting is reachable from four states, so the guard is the set actually
+    # observed under the lock rather than one named status.
+    return _transition(
+        batch_id,
+        from_status=statuses,
+        to_status=PromotionStatus.REVERTED,
+        actor_id=actor_id,
+        expected_rows=len(rows),
     )
 
 
-def execute_batch(*, batch_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: uuid.UUID) -> dict:
+def _assert_executable(statuses: set[str]) -> None:
+    if not statuses:
+        # 404 for the same reason `assert_batch_in_status` gives one.
+        raise Http404("No such promotion batch.")
+    if statuses - {PromotionStatus.APPROVED, PromotionStatus.EXECUTED}:
+        raise Conflict("Only an approved batch can be executed.")
+
+
+def assert_batch_executable(*, batch_id: uuid.UUID) -> None:
+    """The preconditions an `:execute` caller is entitled to hear synchronously.
+
+    `:execute` answers `202` and does the work on a worker, so without this the
+    only thing separating "queued" from "you asked to execute a draft batch" is
+    a job that fails out of band minutes later. Whether a batch is executable at
+    all is knowable at request time and does not need a queue to decide, so it
+    is decided here and the client keeps the 404/409 the endpoint always gave.
+    `execute_batch` re-checks under the worker's own read — this is a courtesy,
+    never the guarantee.
+    """
+    _assert_executable(set(batch_queryset(batch_id).values_list("status", flat=True)))
+
+
+def execute_batch(
+    *,
+    batch_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    on_progress: Callable[[int], None] | None = None,
+) -> dict:
     """Create next-session enrollments for an approved batch. Idempotent.
 
     Not `@transaction.atomic` around the whole batch, deliberately: this runs as
@@ -563,6 +704,13 @@ def execute_batch(*, batch_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: uuid.U
     must not discard the rest. Each student commits or fails on its own and the
     per-student outcome is reported, which is what §7.2's "per-student result
     report" means.
+
+    That per-student commit is the reason `apps/academics/tasks.py` exists and
+    the endpoint returns `202`. The `tenant_atomic` each student opens is only a
+    real, committing transaction when nothing else has one open; called inside a
+    DRF request it nests as a savepoint under `ATOMIC_REQUESTS`, so the isolation
+    survives but every row lock is held until the response is rendered and a
+    class of hundreds gets no visible progress before the gateway gives up.
 
     Re-execution is a no-op per row (§11: "re-execution attempts are no-ops"),
     which is what makes the `Idempotency-Key` on the endpoint meaningful beyond
@@ -576,26 +724,23 @@ def execute_batch(*, batch_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: uuid.U
                 "student", "from_enrollment", "to_academic_session", "to_class"
             )
         )
-    if not rows:
-        raise Http404("No such promotion batch.")
-
-    statuses = {row.status for row in rows}
-    if statuses - {PromotionStatus.APPROVED, PromotionStatus.EXECUTED}:
-        raise Conflict("Only an approved batch can be executed.")
+    _assert_executable({row.status for row in rows})
 
     report: dict[str, list] = {"enrolled": [], "graduated": [], "skipped": [], "failed": []}
 
-    for row in rows:
+    for index, row in enumerate(rows, start=1):
         if row.status == PromotionStatus.EXECUTED:
             report["skipped"].append(
                 {"student_id": str(row.student_id), "reason": "already executed"}
             )
-            continue
-        try:
-            _execute_one(row=row, tenant_id=tenant_id, actor_id=actor_id, report=report)
-        except Exception as exc:  # noqa: BLE001 — one student must not fail the batch
-            logger.warning("promotion execution failed for student %s", row.student_id)
-            report["failed"].append({"student_id": str(row.student_id), "error": str(exc)})
+        else:
+            try:
+                _execute_one(row=row, tenant_id=tenant_id, actor_id=actor_id, report=report)
+            except Exception as exc:  # noqa: BLE001 — one student must not fail the batch
+                logger.warning("promotion execution failed for student %s", row.student_id)
+                report["failed"].append({"student_id": str(row.student_id), "error": str(exc)})
+        if on_progress is not None:
+            on_progress(round(index / len(rows) * 100))
 
     return report
 
@@ -605,11 +750,39 @@ def _execute_one(*, row: StudentPromotion, tenant_id: uuid.UUID, actor_id: uuid.
     from core.tenancy.context import tenant_atomic
 
     with tenant_atomic(tenant_id):
+        # `execute_batch` iterates a snapshot read before the loop, deliberately
+        # (its docstring says why the batch is not one transaction), so by the
+        # time this row is reached a concurrent `:revert` may already have moved
+        # it. Re-reading it under a lock here narrows that window to the single
+        # row about to be written, without giving up the per-student isolation
+        # the snapshot buys.
+        current = (
+            StudentPromotion.objects.alive()
+            .select_for_update()
+            .filter(pk=row.pk)
+            .values_list("status", flat=True)
+            .first()
+        )
+        if current != PromotionStatus.APPROVED:
+            report["skipped"].append(
+                {
+                    "student_id": str(row.student_id),
+                    "reason": (
+                        f"no longer approved ({current})" if current else "no longer in the batch"
+                    ),
+                }
+            )
+            return
+
         if row.decision == PromotionDecision.GRADUATED:
             _close_source_enrollment(row, EnrollmentStatus.GRADUATED, actor_id)
             _mark_executed(row, actor_id)
             report["graduated"].append({"student_id": str(row.student_id)})
             return
+
+        assert_retention_keeps_the_class(
+            decision=row.decision, from_class_id=row.from_class_id, to_class_id=row.to_class_id
+        )
 
         if row.to_section_id is None:
             raise DomainRuleViolation(
@@ -679,3 +852,98 @@ def notify_allocation_changed(
             )
     except Exception:
         logger.exception("allocation-changed notification failed for %s", allocation.pk)
+
+
+def _promotion_approvers(tenant_id: uuid.UUID) -> set[uuid.UUID]:
+    """Everyone in this tenant who holds `academics.promotion.approve`.
+
+    §12 addresses this to the `principal`, but a role is only ever a bundle of
+    permission keys (auth-and-rbac.md) — a school that moved approval onto a
+    custom role would otherwise be told nothing. Resolved the same way
+    `core.rbac.permissions.effective_permission_keys` resolves it, so the people
+    notified are exactly the people the endpoint would let through.
+    """
+    from core.rbac.models import User
+
+    return set(
+        User.objects.filter(
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+            user_roles__deleted_at__isnull=True,
+            user_roles__role__permissions__key=PROMOTION_APPROVAL_KEY,
+        ).values_list("pk", flat=True)
+    )
+
+
+def notify_promotion_pending(*, rows: list[StudentPromotion], tenant_id: uuid.UUID) -> None:
+    """§12: a submitted batch tells the people who can approve it.
+
+    Same shape as `notify_allocation_changed` above — recipients resolved to a
+    set, nothing sent when it is empty, and the send savepointed and swallowed so
+    a template or transport fault cannot undo a transition that already
+    happened.
+    """
+    from core.notifications.services import Recipient, notify
+
+    # Preparers are subtracted rather than merely redundant: `approve_batch`
+    # refuses an approver who prepared the batch, so asking them to approve it
+    # would be an instruction the API is going to reject.
+    preparers = {row.created_by for row in rows if row.created_by}
+    recipients = _promotion_approvers(tenant_id) - preparers
+    if not recipients:
+        return
+
+    batch = rows[0]
+    try:
+        with transaction.atomic():
+            notify(
+                notifications.PROMOTION_PENDING,
+                tenant_id=tenant_id,
+                recipients=[Recipient(user_id=user_id) for user_id in sorted(recipients)],
+                context={
+                    "class.name": batch.from_class.name,
+                    "student.count": len(rows),
+                    "session.name": batch.to_academic_session.name,
+                },
+                source_type="student_promotion_batch",
+                source_id=batch.batch_id,
+            )
+    except Exception:
+        logger.exception("promotion-pending notification failed for batch %s", batch.batch_id)
+
+
+def notify_promotion_outcome(
+    *, rows: list[StudentPromotion], outcome: str, tenant_id: uuid.UUID
+) -> None:
+    """The approval decision, told back to whoever prepared the batch.
+
+    `created_by` is the same field `approve_batch` segregates duties against, so
+    the recipient cannot drift from the batch. See notifications.py's header for
+    why this trigger reads as a batch outcome rather than §12's per-student note
+    to guardians.
+    """
+    from core.notifications.services import Recipient, notify
+
+    recipients = {row.created_by for row in rows if row.created_by}
+    if not recipients:
+        return
+
+    batch = rows[0]
+    try:
+        with transaction.atomic():
+            notify(
+                notifications.PROMOTION_OUTCOME,
+                tenant_id=tenant_id,
+                recipients=[Recipient(user_id=user_id) for user_id in sorted(recipients)],
+                context={
+                    "class.name": batch.from_class.name,
+                    "student.count": len(rows),
+                    "decision": outcome,
+                    "session.name": batch.to_academic_session.name,
+                },
+                source_type="student_promotion_batch",
+                source_id=batch.batch_id,
+            )
+    except Exception:
+        logger.exception("promotion-outcome notification failed for batch %s", batch.batch_id)

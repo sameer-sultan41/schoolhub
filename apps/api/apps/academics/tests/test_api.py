@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
+from unittest import mock
+
+from django.utils import timezone
 from rest_framework import status
 
 from apps.academics.models import TeacherSubjectAllocation
@@ -12,6 +16,7 @@ from apps.academics.tests.factories import (
     SubjectFactory,
     TeacherAllocationFactory,
 )
+from apps.school_organization import services as school_services
 from apps.school_organization.models import ClassSubject, SessionStatus
 from apps.staff_management.models import EmploymentStatus, StaffType
 from core.tenancy.context import tenant_context
@@ -198,6 +203,106 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
+class CurriculumElectiveGroupTests(AcademicsAPITestCase):
+    """§11's "an elective group needs at least two options", on the *edit* path.
+
+    The rule was wired into `perform_destroy` only, so a PATCH could take the
+    last row out of a group by renaming its `elective_group` and shrink the group
+    with nothing noticing. The check cannot live in `CurriculumSerializer` —
+    what decides it is the siblings the row leaves behind, not the payload.
+    """
+
+    def _elective(self, group: str) -> ClassSubject:
+        with tenant_context(self.tenant.id):
+            return ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.school_class,
+                subject=SubjectFactory(tenant=self.tenant),
+                is_elective=True,
+                elective_group=group,
+            )
+
+    def test_a_patch_may_not_take_the_last_row_out_of_a_group(self) -> None:
+        self.allow("academics.curriculum.update")
+        sole = self._elective("Languages")
+
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{sole.pk}", {"elective_group": "Arts"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn(
+            "elective_group",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
+        with tenant_context(self.tenant.id):
+            sole.refresh_from_db()
+        self.assertEqual(sole.elective_group, "Languages", "the refused PATCH must not have saved")
+
+    def test_a_patch_that_leaves_the_group_populated_is_allowed(self) -> None:
+        self.allow("academics.curriculum.update")
+        moving = self._elective("Languages")
+        self._elective("Languages")
+
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{moving.pk}", {"elective_group": "Arts"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            moving.refresh_from_db()
+        self.assertEqual(moving.elective_group, "Arts")
+
+    def test_a_patch_that_leaves_the_group_alone_is_untouched_by_the_rule(self) -> None:
+        """A group of one is a group being built up — editing it is not removal."""
+        self.allow("academics.curriculum.update")
+        sole = self._elective("Languages")
+
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{sole.pk}", {"notes": "Set in period 6."}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+
+class CurriculumDeleteTests(AcademicsAPITestCase):
+    """`BlockingDestroyMixin`, which the move from school_organization dropped.
+
+    Nothing has a foreign key to `class_subjects` yet, so `_live_dependents` is
+    stubbed rather than a real dependent being built — the regression is the
+    missing *wiring*, and stubbing the one query it makes is what lets that be
+    asserted before the first module that adds the FK depends on it. `PROTECT`
+    is no backstop here either: `perform_destroy` is a soft delete, so the
+    database never sees a DELETE to refuse.
+    """
+
+    def test_a_row_with_live_dependents_is_refused_with_a_422(self) -> None:
+        self.allow("academics.curriculum.delete")
+
+        with mock.patch.object(
+            school_services, "_live_dependents", return_value=["timetable entries"]
+        ):
+            response = self.client.delete(f"/api/v1/class-subjects/{self.curriculum.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("timetable entries", response.json()["error"]["message"])
+        with tenant_context(self.tenant.id):
+            self.assertTrue(
+                ClassSubject.objects.alive().filter(pk=self.curriculum.pk).exists(),
+                "a refused delete must not have soft-deleted the row",
+            )
+
+    def test_a_row_nothing_points_at_still_deletes(self) -> None:
+        self.allow("academics.curriculum.delete")
+
+        response = self.client.delete(f"/api/v1/class-subjects/{self.curriculum.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(ClassSubject.objects.alive().filter(pk=self.curriculum.pk).exists())
+
+
 class CloneCurriculumTests(AcademicsAPITestCase):
     def test_clones_rows_into_the_target_session(self) -> None:
         self.allow("academics.curriculum.create")
@@ -372,6 +477,42 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
         )
 
         self.assertEqual(response.json()["data"][0]["weekly_periods"], 9)
+
+    def test_an_allocation_that_starts_next_term_does_not_count_yet(self) -> None:
+        """§11's load warning is about the load a teacher is carrying *now*.
+
+        `effective_to IS NULL` also matches an allocation that has not started,
+        so counting every open-ended row let next term's timetable inflate this
+        term's number and fire the over-norm warning on nobody's actual load.
+        """
+        self.allow("academics.teacher-allocation.create", "academics.teacher-allocation.view")
+        self.client.post("/api/v1/teacher-subject-allocations", self._payload(), format="json")
+        with tenant_context(self.tenant.id):
+            next_term_subject = SubjectFactory(tenant=self.tenant)
+            ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.school_class,
+                subject=next_term_subject,
+                weekly_periods=10,
+            )
+            TeacherAllocationFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.section,
+                subject=next_term_subject,
+                staff=self.teacher,
+                is_primary=False,
+                effective_from=timezone.localdate() + datetime.timedelta(days=30),
+            )
+
+        response = self.client.get(
+            f"/api/v1/teacher-subject-allocations/load-summary"
+            f"?academic_session_id={self.session.pk}"
+        )
+
+        # The 4 periods being taught, not 4 + the 10 that start next month.
+        self.assertEqual(response.json()["data"][0]["weekly_periods"], 4)
 
     def test_over_norm_allocations_warn_but_still_save(self) -> None:
         """Warnings, not a 422 — a grid mid-build has to be savable."""

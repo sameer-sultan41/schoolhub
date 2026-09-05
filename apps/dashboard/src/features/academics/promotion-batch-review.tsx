@@ -27,13 +27,15 @@ interface PromotionBatchReviewProps {
 const EMPTY = "—";
 
 /**
- * One batch's per-student decisions (§7.2's review step).
+ * One batch and its per-student decisions (§7.2's review step).
  *
- * There is no batch resource to fetch: `batch_id` is a logical grouping over
- * `student_promotions` rows (the entity doc settles this — "no separate batch
- * table"), and status moves batch-wide, so the batch's state is read off the rows
- * themselves. The first row is authoritative because every row in a batch
- * transitions together.
+ * `GET /student-promotions/{batch_id}` is a batch resource now, so the batch's
+ * status is read off the batch. There is still no `promotion_batches` table —
+ * `batch_id` is a grouping column and the serializer aggregates the rows — but
+ * that aggregation is exactly the point: it *groups on* status, so a batch whose
+ * rows ever disagreed surfaces as two entries rather than as whichever status
+ * `rows[0]` happened to carry. Reading the first row was only ever right while
+ * the two could not differ.
  *
  * Rows are editable only while the batch is `draft`: the viewset answers a PATCH
  * of anything further along with a 409, so offering the control would be a lie.
@@ -44,9 +46,8 @@ export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
   const classes = useClasses();
   const sections = useSections();
 
-  // One request for the batch and its decisions. This used to list decision
-  // rows filtered by `batch_id` and read the batch's status off `rows[0]`,
-  // because there was no batch resource — there is one now.
+  // One request for the batch and its decisions, where this used to list decision
+  // rows filtered by `batch_id`.
   const { data, isPending, error } = useQuery({
     queryKey: queryKeys.detail("academics", "student-promotions", batchId),
     queryFn: async () => {
@@ -66,7 +67,9 @@ export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
   );
 
   const rows = data?.decisions ?? [];
-  const status = rows[0]?.status;
+  // `PromotionBatchSerializer.status` is required, so this is undefined only
+  // while the batch itself has not arrived — no row-level fallback to reach for.
+  const status = data?.status;
   const isDraft = status === "draft";
 
   const columns: DataTableColumn<PromotionDecisionRecord>[] = [

@@ -2,6 +2,7 @@ import { ApiError } from "@schoolhub/api-client";
 import { env } from "@/env";
 import { expect, test } from "@/fixtures";
 import { createLiveSession } from "@/lib/live-api";
+import { awaitJobResult } from "@/lib/live-jobs";
 import { seedPromotionBatch } from "@/lib/live-promotion-batch";
 import { E2E_PRINCIPAL_EMAIL } from "@/lib/seed-constants";
 
@@ -117,9 +118,13 @@ test.describe("student promotions (live API)", () => {
 
     // Execution is `school_admin`'s step (§4); the worker admin holds every key, so it
     // stands in for one here — the *approval* is the step that needed a distinct person.
-    const executed = await liveApiClient.post(`/student-promotions/${batch.batchId}:execute`);
-    expect(executed.status).toBe(200);
-    const report = executed.data as ExecutionReport;
+    // 202, not 200: execution runs on a worker, so the response carries a job id
+    // and the report arrives through `GET /jobs/{id}` once it finishes.
+    const executed = await liveApiClient.post<{ job_id: string }>(
+      `/student-promotions/${batch.batchId}:execute`,
+    );
+    expect(executed.status).toBe(202);
+    const report = await awaitJobResult<ExecutionReport>(liveApiClient, executed.data.job_id);
     expect(report.enrolled.map((entry) => entry.student_id)).toEqual([batch.studentId]);
     expect(report.failed).toEqual([]);
 
@@ -142,12 +147,15 @@ test.describe("student promotions (live API)", () => {
     // the 24h replay cache would return the first response verbatim and prove nothing, so
     // this exercises the service's own per-row `executed` skip, which is what keeps a
     // re-run safe long after the replay window has closed.
-    const reExecuted = await liveApiClient.post(
+    const reExecuted = await liveApiClient.post<{ job_id: string }>(
       `/student-promotions/${batch.batchId}:execute`,
       undefined,
       { idempotencyKey: `e2e-re-execute-${batch.batchId}` },
     );
-    const secondReport = reExecuted.data as ExecutionReport;
+    const secondReport = await awaitJobResult<ExecutionReport>(
+      liveApiClient,
+      reExecuted.data.job_id,
+    );
     expect(secondReport.enrolled).toEqual([]);
     expect(secondReport.skipped[0]?.reason).toBe("already executed");
 

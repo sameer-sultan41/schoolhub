@@ -80,7 +80,7 @@ export function PromotionDecisionForm({ decision, studentLabel }: PromotionDecis
     resolver: zodResolver(promotionDecisionSchema),
     defaultValues: defaultValues(decision),
   });
-  const { handleSubmit, setError, reset, control } = form;
+  const { handleSubmit, setError, reset, control, setValue } = form;
 
   // useWatch, not form.watch(): the latter returns a fresh function each
   // render, which React Compiler refuses to memoize (it would risk stale UI).
@@ -88,6 +88,17 @@ export function PromotionDecisionForm({ decision, studentLabel }: PromotionDecis
   const selectedClassId = useWatch({ control, name: "to_class_id" });
   const sections = useSectionsForClass(selectedClassId || undefined);
   const isGraduating = selectedDecision === "graduated";
+
+  function clearTargetForGraduation() {
+    // Clearing, not just disabling. Every promoted row carries a target class —
+    // that is what the proposal fills in — and the schema requires a graduating
+    // row to carry none, so a form that only greyed the controls out left the
+    // reviewer holding an error against a control it had already taken away.
+    // `shouldValidate` is what retires that error rather than leaving it on
+    // screen beside a field there is now nothing to fix.
+    setValue("to_class_id", "", { shouldValidate: true });
+    setValue("to_section_id", "", { shouldValidate: true });
+  }
 
   const mutation = useMutation({
     mutationFn: async (values: PromotionDecisionFormValues) => {
@@ -131,7 +142,12 @@ export function PromotionDecisionForm({ decision, studentLabel }: PromotionDecis
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) reset(defaultValues(decision));
+        // Both edges, not just the close. `onSuccess` invalidates the whole
+        // academics module, so editing any other row in the batch re-fetches this
+        // one while this dialog is shut — and a form that only reset on close
+        // would then reopen showing the values it was mounted with and write
+        // them back over the fresh ones.
+        reset(defaultValues(decision));
       }}
     >
       <DialogTrigger asChild>
@@ -172,7 +188,13 @@ export function PromotionDecisionForm({ decision, studentLabel }: PromotionDecis
               render={({ field }) => (
                 <FormItem>
                   <FormLabel required>{t("promotions.columns.decision")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={(next) => {
+                      field.onChange(next);
+                      if (next === "graduated") clearTargetForGraduation();
+                    }}
+                  >
                     <FormControl required>
                       <SelectTrigger aria-label={t("promotions.columns.decision")}>
                         <SelectValue />

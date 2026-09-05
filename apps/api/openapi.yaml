@@ -3566,8 +3566,10 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          description: Per-student execution report.
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}. Poll
+            GET /jobs/{id}; the per-student execution report is the finished job''s
+            `result`.'
   /api/v1/student-promotions/{id}:reject:
     post:
       operationId: student_promotions_:reject_create

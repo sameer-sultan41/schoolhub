@@ -1,5 +1,5 @@
 import { ApiError, type ApiResult } from "@schoolhub/api-client";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import type { PromotionDecisionRecord } from "@/features/academics/academics-types";
 import { PromotionBatchReview } from "@/features/academics/promotion-batch-review";
 import { usePermission } from "@/hooks/use-session";
@@ -14,16 +14,27 @@ jest.mock("@/hooks/use-session", () => ({
   useAnyPermission: jest.fn(() => false),
 }));
 jest.mock("next/navigation", () => ({ usePathname: () => "/academics/promotions/batch-1" }));
+
+/** The class and section lists, in mutable bindings so one test can hold them in
+ * the `data: undefined` state the table paints before they arrive. */
+interface Option {
+  id: string;
+  name: string;
+  class_id?: string;
+}
+const CLASSES: Option[] = [
+  { id: "class8", name: "Grade 8" },
+  { id: "class9", name: "Grade 9" },
+];
+const SECTIONS: Option[] = [{ id: "sec9a", name: "A", class_id: "class9" }];
+let mockClasses: { data: Option[] | undefined } = { data: CLASSES };
+let mockSections: { data: Option[] | undefined } = { data: SECTIONS };
+
 jest.mock("@/features/students/use-reference-data", () => ({
-  useClasses: () => ({
-    data: [
-      { id: "class8", name: "Grade 8" },
-      { id: "class9", name: "Grade 9" },
-    ],
-  }),
+  useClasses: () => mockClasses,
 }));
 jest.mock("@/features/academics/use-academics-reference-data", () => ({
-  useSections: () => ({ data: [{ id: "sec9a", name: "A", class_id: "class9" }] }),
+  useSections: () => mockSections,
 }));
 // Both have their own specs; stubbing them keeps this one about the review table.
 jest.mock("@/features/academics/promotion-batch-actions", () => ({
@@ -61,6 +72,21 @@ const DRAFT_ROW: PromotionDecisionRecord = {
   updated_at: "2026-04-01T00:00:00Z",
 };
 
+/** A retained student: §6 re-enrols them in the class they were already in, so
+ * the target class is the source class rather than nothing. `graduated` is the
+ * only decision the model lets carry a null `to_class_id`
+ * (`promotions_target_class_matches_decision`), and the API now refuses a
+ * `retained` row that names any other class — so a null here was a row the
+ * database would not have held. Section and remarks are genuinely unset. */
+const RETAINED_ROW: PromotionDecisionRecord = {
+  ...DRAFT_ROW,
+  id: "dec2",
+  decision: "retained",
+  to_class_id: "class8",
+  to_section_id: null,
+  remarks: null,
+};
+
 /** `GET /student-promotions/{batch_id}` — the batch and its decisions inline. */
 function batch(decisions: unknown[], status = "draft"): ApiResult<unknown> {
   return {
@@ -84,6 +110,8 @@ describe("PromotionBatchReview", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockUsePermission.mockReturnValue(false);
+    mockClasses = { data: CLASSES };
+    mockSections = { data: SECTIONS };
   });
 
   it("lists the batch's rows by batch_id and resolves class and section names", async () => {
@@ -103,7 +131,7 @@ describe("PromotionBatchReview", () => {
     expect(mockGet.mock.calls[0]?.[0]).toBe("/student-promotions/batch-1");
   });
 
-  it("reads the batch state off the rows and hands it to the action bar", async () => {
+  it("reads the batch state off the batch and hands it to the action bar", async () => {
     mockGet.mockResolvedValue(batch([DRAFT_ROW]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
@@ -112,6 +140,24 @@ describe("PromotionBatchReview", () => {
     expect(actions).toHaveAttribute("data-status", "draft");
     expect(actions).toHaveAttribute("data-batch-id", "batch-1");
     expect(screen.getByText("Draft")).toBeInTheDocument();
+  });
+
+  it("takes the batch's own status, not its first row's", async () => {
+    /**
+     * The regression: status came from `rows[0]?.status`, which was only ever
+     * right because there was no batch resource for it to disagree with. There
+     * is one now, and the serializer *groups on* status precisely so that a
+     * batch whose rows diverged is visible rather than papered over by whichever
+     * row happened to sort first.
+     */
+    mockGet.mockResolvedValue(batch([{ ...DRAFT_ROW, status: "draft" }], "approved"));
+
+    renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
+
+    const actions = await screen.findByTestId("batch-actions");
+    expect(actions).toHaveAttribute("data-status", "approved");
+    expect(screen.getByText("Approved")).toBeInTheDocument();
+    expect(screen.queryByText("Draft")).not.toBeInTheDocument();
   });
 
   it("offers the per-row editor only while the batch is draft and the user may update", async () => {
@@ -142,13 +188,18 @@ describe("PromotionBatchReview", () => {
     expect(screen.queryByTestId("decision-form")).not.toBeInTheDocument();
   });
 
-  it("shows the empty state and no action bar for an unknown batch", async () => {
+  it("shows the empty state when a batch answers with no decisions", async () => {
+    // The action bar stays, and that is the point of reading status off the
+    // batch: the resource answered, so the batch exists and has a state, where
+    // before this the whole bar vanished the moment `rows[0]` did. A batch with
+    // no rows is a 404 from `retrieve` in practice (the ApiError case covers
+    // that), so this exercises the table's own empty branch.
     mockGet.mockResolvedValue(batch([]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
     expect(await screen.findByText("This batch has no decisions.")).toBeInTheDocument();
-    expect(screen.queryByTestId("batch-actions")).not.toBeInTheDocument();
+    expect(screen.getByTestId("batch-actions")).toBeInTheDocument();
   });
 
   it("renders the ApiError envelope instead of the table on failure", async () => {
@@ -180,5 +231,33 @@ describe("PromotionBatchReview", () => {
       "href",
       "/academics/promotions",
     );
+  });
+
+  it("shows a retained student staying in their own class, em-dashing what is unset", async () => {
+    mockGet.mockResolvedValue(batch([RETAINED_ROW]));
+
+    renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
+
+    const link = await screen.findByRole("link", { name: "stu-1" });
+    const row = link.closest("tr") as HTMLElement;
+    expect(within(row).getByText("Retained")).toBeInTheDocument();
+    // From class and target class, both Grade 8 — that is what retention means.
+    expect(within(row).getAllByText("Grade 8")).toHaveLength(2);
+    expect(within(row).getAllByText("—")).toHaveLength(2);
+  });
+
+  it("falls back to em dashes for the class and section names while the reference lists load", async () => {
+    mockClasses = { data: undefined };
+    mockSections = { data: undefined };
+    mockGet.mockResolvedValue(batch([DRAFT_ROW]));
+
+    renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
+
+    const link = await screen.findByRole("link", { name: "stu-1" });
+    const row = link.closest("tr") as HTMLElement;
+    // From class, target class and target section are all id lookups into lists
+    // that have not arrived; the remarks are on the row itself, so they still show.
+    expect(within(row).getAllByText("—")).toHaveLength(3);
+    expect(within(row).getByText("Borderline in maths.")).toBeInTheDocument();
   });
 });

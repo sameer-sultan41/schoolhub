@@ -7094,8 +7094,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Per-student execution report. */
-            200: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}}. Poll GET /jobs/{id}; the per-student execution report is the finished job's `result`. */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

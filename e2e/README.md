@@ -104,7 +104,8 @@ e2e/
 │       ├── live-api.ts             one real login per worker, wired into @schoolhub/api-client
 │       ├── live-crud-lifecycle.ts  the create/list/patch/delete shape every resource shares
 │       ├── live-promotion-batch.ts the prerequisite chain a promotion batch needs
-│       ├── live-timetable-grid.ts  the prerequisite chain a publishable week grid needs
+│       ├── live-timetable-grid.ts the prerequisite chain a publishable week grid needs
+│       ├── live-jobs.ts          polls GET /jobs/{id} for any 202 endpoint's result
 │       └── seed-constants.ts       identifiers mirrored from seed_e2e_data.py
 └── tests/{dashboard,website,live}/
     └── live/

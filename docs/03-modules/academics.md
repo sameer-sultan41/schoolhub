@@ -191,13 +191,17 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 >   `bulk_create` over a single session's rows — hundreds, not thousands. It
 >   honours `Idempotency-Key`, and the service skips rows the target already
 >   has, so it converges on a retry either way.
-> - **`:execute` returns `200` with a per-student report, not `202` + a job.**
->   Same reasoning: a class-sized batch completes inline. Re-execution is a
->   per-row no-op, so the operation stays idempotent beyond the 24h key window.
-> - **Not built yet:** `PATCH /student-promotions/{id}/decisions/{student_id}`
->   (decisions are patched by their own id at `/student-promotions/{id}`, since
->   `batch_id` is a grouping column rather than a resource) and
->   `POST /curriculum-imports`.
+> - **`:execute` returns `202` + a job**, as the contract below always said.
+>   It shipped synchronous on the argument that a class-sized batch completes
+>   inline; what that missed is that `execute_batch` commits each student
+>   separately on purpose, and `ATOMIC_REQUESTS` turns each of those commits
+>   into a savepoint — so an inline run held every row lock it took for the
+>   whole request and showed the caller nothing until it finished. The work is
+>   `apps.academics.tasks.execute_promotion_batch_task`; whether the batch is
+>   executable at all is still decided synchronously, so a draft batch is a
+>   `409` rather than a job that fails out of band. `Idempotency-Key` replays
+>   the job id, and re-execution stays a per-row no-op beyond the 24h window.
+> - **Not built yet:** `POST /curriculum-imports`.
 > - **The promotion proposal is level-based only.** §7.2 has it read published
 >   final results and attendance percentages; neither module exists yet, so
 >   `decision_basis` records `results_available: false` and

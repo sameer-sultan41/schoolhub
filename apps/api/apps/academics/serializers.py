@@ -225,6 +225,17 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"to_class_id": "A target class is required unless the student is graduating."}
             )
+
+        # §6's retention rule. Delegated rather than restated for the same reason
+        # `CurriculumSerializer` delegates the term-plan check: `_execute_one` is
+        # the gate that actually cannot be bypassed, and one of the two has to be
+        # the copy the other reads. It raises against `to_class_id`, so the
+        # decision editor still lands it on the target-class picker.
+        services.assert_retention_keeps_the_class(
+            decision=decision,
+            from_class_id=getattr(self.instance, "from_class_id", None),
+            to_class_id=to_class.pk if to_class is not None else None,
+        )
         return attrs
 
 

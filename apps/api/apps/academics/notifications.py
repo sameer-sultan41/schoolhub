@@ -1,7 +1,14 @@
 """Notification triggers and platform default templates — academics.md §12.
 
-Six rows in the module doc; four are wired here. The two that are not:
+Six rows in the module doc; four are registered here and three of those are
+emitted: `allocation-changed` from `services.create_allocation`,
+`promotion-pending` from `services.submit_batch`, and `promotion-outcome` from
+`services.approve_batch` and `services.reject_batch`. The three gaps are listed
+rather than silently omitted so they stay greppable:
 
+- `academics.curriculum-approved` has templates but no caller. §4 marks
+  `academics.curriculum.approve` a recommendation and there is no sign-off
+  action on the curriculum to hang the trigger on yet.
 - `academics.promotion-input-request` needs a task/inbox concept to be
   meaningful (§12 sends it to every affected class teacher when a batch opens),
   and there is no assignment surface for a class teacher to act on yet.
@@ -9,7 +16,11 @@ Six rows in the module doc; four are wired here. The two that are not:
   now, but the trigger is only useful once a session has a known start date
   being counted down to across tenants; it belongs with the coverage report.
 
-Both are listed here rather than silently omitted so the gap is greppable.
+`promotion-outcome` carries a **batch** outcome addressed to the preparer, not
+§12's per-student note to guardians. The approval decision is the only outcome
+this workflow currently produces — execution's per-student result report has no
+guardian-facing counterpart, and inventing a guardian resolution rule this
+module does not own would be worse than saying so here.
 """
 
 from core.notifications.catalog import registry as catalog
@@ -28,7 +39,7 @@ PROMOTION_OUTCOME = "academics.promotion-outcome"
 _ALLOCATION_VARS = {"teacher.first_name", "section.name", "subject.name", "session.name"}
 _CURRICULUM_VARS = {"session.name", "school.name"}
 _PENDING_VARS = {"class.name", "student.count", "session.name"}
-_OUTCOME_VARS = {"student.first_name", "decision", "session.name"}
+_OUTCOME_VARS = {"class.name", "student.count", "decision", "session.name"}
 
 
 catalog.register(
@@ -111,19 +122,25 @@ catalog.register(
     category=NotificationCategory.ACADEMIC,
     channels={NotificationChannel.EMAIL},
     variables=_OUTCOME_VARS,
-    description="A student's promotion outcome after a batch was executed.",
+    description="A promotion batch was approved, or sent back to its preparer.",
 )
 templates.register(
     PROMOTION_OUTCOME,
     channel=NotificationChannel.IN_APP,
-    subject="Promotion outcome for {{ session.name }}",
-    body="{{ student.first_name }}'s outcome for {{ session.name }}: {{ decision }}.",
+    subject="Promotion batch {{ decision }}",
+    body=(
+        "{{ class.name }}'s promotion batch for {{ session.name }} "
+        "({{ student.count }} students) was {{ decision }}."
+    ),
     variables=_OUTCOME_VARS,
 )
 templates.register(
     PROMOTION_OUTCOME,
     channel=NotificationChannel.EMAIL,
-    subject="Promotion outcome for {{ session.name }}",
-    body="{{ student.first_name }}'s outcome for {{ session.name }}: {{ decision }}.",
+    subject="Promotion batch {{ decision }} — {{ class.name }}",
+    body=(
+        "{{ class.name }}'s promotion batch for {{ session.name }} "
+        "({{ student.count }} students) was {{ decision }}."
+    ),
     variables=_OUTCOME_VARS,
 )

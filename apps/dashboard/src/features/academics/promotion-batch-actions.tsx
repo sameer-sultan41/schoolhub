@@ -3,7 +3,7 @@
 import { Alert, AlertDescription, Button, Card, CardContent } from "@schoolhub/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Can } from "@/components/can";
 import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import type {
@@ -12,6 +12,7 @@ import type {
   PromotionStatusValue,
 } from "@/features/academics/academics-types";
 import { newIdempotencyKey } from "@/features/academics/idempotency-key";
+import { useJobPolling } from "@/hooks/use-job-polling";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -29,17 +30,23 @@ interface PromotionBatchActionsProps {
  * `:approve` and `:reject` share `academics.promotion.approve`, and the server
  * additionally refuses an approver who prepared the batch (RBAC §2.4), which no
  * amount of client-side gating can know.
+ *
+ * `:execute` is the one action that does not answer with its own outcome: it
+ * returns `202` and a job id, because the server executes a class of students one
+ * commit at a time on a worker. The per-student report is the finished job's
+ * `result`, so this polls `GET /jobs/{id}` for it — and only then invalidates,
+ * since until the worker finishes the batch really is still `approved`.
  */
 export function PromotionBatchActions({ batchId, status }: PromotionBatchActionsProps) {
   const t = useTranslations("academics");
   const queryClient = useQueryClient();
 
   const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
-  const [report, setReport] = useState<PromotionExecutionReport | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
-  function invalidate() {
+  const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.module("academics") });
-  }
+  }, [queryClient]);
 
   const transition = useMutation({
     mutationFn: (action: "submit" | "approve" | "reject" | "revert") =>
@@ -49,7 +56,7 @@ export function PromotionBatchActions({ batchId, status }: PromotionBatchActions
 
   const execute = useMutation({
     mutationFn: async () => {
-      const result = await apiClient.post<PromotionExecutionReport>(
+      const result = await apiClient.post<{ job_id: string }>(
         `/student-promotions/${batchId}:execute`,
         undefined,
         { idempotencyKey },
@@ -57,15 +64,28 @@ export function PromotionBatchActions({ batchId, status }: PromotionBatchActions
       return result.data;
     },
     onSuccess: (result) => {
-      invalidate();
-      setReport(result);
-      // A completed execution is a spent intent: a later re-run (after fixing a
-      // failed row, say) is a new one and must not replay this response.
+      setJobId(result.job_id);
+      // Queueing spends the intent: a later re-run (after fixing a failed row,
+      // say) is a new one, and reusing this key would replay the old job id
+      // instead of starting the run the reviewer just asked for.
       setIdempotencyKey(newIdempotencyKey());
     },
   });
 
-  const isBusy = transition.isPending || execute.isPending;
+  const jobQuery = useJobPolling("academics", jobId);
+  const job = jobQuery.data;
+  const jobStatus = job?.status;
+  const isJobRunning = Boolean(jobId) && jobStatus !== "succeeded" && jobStatus !== "failed";
+  const report =
+    jobStatus === "succeeded" ? (job?.result as PromotionExecutionReport | null) : null;
+
+  useEffect(() => {
+    // The batch does not move to `executed` until the worker says so, so the
+    // badge and the action set have to wait for the job rather than for the 202.
+    if (jobStatus === "succeeded" || jobStatus === "failed") invalidate();
+  }, [jobStatus, invalidate]);
+
+  const isBusy = transition.isPending || execute.isPending || isJobRunning;
 
   return (
     <div className="space-y-3">
@@ -145,6 +165,18 @@ export function PromotionBatchActions({ batchId, status }: PromotionBatchActions
 
       <ApiErrorAlert error={transition.error} />
       <ApiErrorAlert error={execute.error} />
+
+      {isJobRunning ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          {t("promotions.report.running", { progress: job?.progress ?? 0 })}
+        </p>
+      ) : null}
+
+      {jobStatus === "failed" ? (
+        <Alert variant="danger">
+          <AlertDescription>{job?.error ?? t("promotions.report.jobFailed")}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {report ? <ExecutionReport report={report} /> : null}
     </div>

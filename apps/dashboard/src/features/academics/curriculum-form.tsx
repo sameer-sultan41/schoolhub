@@ -143,7 +143,11 @@ export function CurriculumForm({ mode, mapping }: CurriculumFormProps) {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) reset(defaultValues(mapping));
+        // Both edges, not just the close: this form's own `onSuccess` invalidates
+        // every academics query, so editing another row re-fetches this one while
+        // the dialog is shut. Resetting only on close would reopen with the
+        // stale values and submit them back.
+        reset(defaultValues(mapping));
       }}
     >
       <DialogTrigger asChild>

@@ -16,13 +16,30 @@ jest.mock("@/hooks/use-session", () => ({
   useAnyPermission: jest.fn(() => false),
 }));
 jest.mock("next/navigation", () => ({ usePathname: () => "/academics" }));
+
+/** The four reference lists, in mutable bindings so one test can hold them in
+ * the `data: undefined` state the grid paints before they arrive — every name in
+ * a row is an id lookup into one of them. */
+interface Option {
+  id: string;
+  name: string;
+}
+const SESSIONS: Option[] = [{ id: "sess1", name: "2026-27" }];
+const CLASSES: Option[] = [{ id: "class1", name: "Grade 7" }];
+const CAMPUSES: Option[] = [{ id: "camp1", name: "Main Campus" }];
+const SUBJECTS: Option[] = [{ id: "sub1", name: "Mathematics" }];
+let mockSessions: { data: Option[] | undefined } = { data: SESSIONS };
+let mockClasses: { data: Option[] | undefined } = { data: CLASSES };
+let mockCampuses: { data: Option[] | undefined } = { data: CAMPUSES };
+let mockSubjects: { data: Option[] | undefined } = { data: SUBJECTS };
+
 jest.mock("@/features/students/use-reference-data", () => ({
-  useAcademicSessions: () => ({ data: [{ id: "sess1", name: "2026-27" }] }),
-  useClasses: () => ({ data: [{ id: "class1", name: "Grade 7" }] }),
-  useCampuses: () => ({ data: [{ id: "camp1", name: "Main Campus" }] }),
+  useAcademicSessions: () => mockSessions,
+  useClasses: () => mockClasses,
+  useCampuses: () => mockCampuses,
 }));
 jest.mock("@/features/academics/use-academics-reference-data", () => ({
-  useSubjects: () => ({ data: [{ id: "sub1", name: "Mathematics" }] }),
+  useSubjects: () => mockSubjects,
 }));
 // The row-level editor and the clone wizard have their own specs; stubbing them
 // keeps this one about the grid, its filters and its delete confirmation.
@@ -78,6 +95,10 @@ describe("CurriculumScreen", () => {
     mockGet.mockReset();
     mockDelete.mockReset();
     mockUsePermission.mockReturnValue(false);
+    mockSessions = { data: SESSIONS };
+    mockClasses = { data: CLASSES };
+    mockCampuses = { data: CAMPUSES };
+    mockSubjects = { data: SUBJECTS };
   });
 
   it("shows skeleton rows while the first page loads", () => {
@@ -251,5 +272,94 @@ describe("CurriculumScreen", () => {
 
     expect(await screen.findByText(/isn't allowed right now/i)).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("falls back to em dashes for every name while the reference lists are still loading", async () => {
+    mockSessions = { data: undefined };
+    mockClasses = { data: undefined };
+    mockCampuses = { data: undefined };
+    mockSubjects = { data: undefined };
+    mockGet.mockResolvedValue(page([CORE_ROW]));
+    const user = userEvent.setup();
+
+    renderWithProviders(<CurriculumScreen />);
+
+    const cell = await screen.findByText("5");
+    const row = cell.closest("tr") as HTMLElement;
+    // Session, class, subject and campus are all id lookups into lists that have
+    // not arrived yet; the period count lives on the row itself.
+    expect(within(row).getAllByText("—")).toHaveLength(4);
+    expect(within(row).getByText("Core")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("combobox", { name: "Academic session" }));
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByRole("option", { name: "All" })).toBeInTheDocument();
+  });
+
+  it("names the subject with an em dash in the delete dialog when the subject list has not arrived", async () => {
+    mockSubjects = { data: undefined };
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue(page([CORE_ROW]));
+    const user = userEvent.setup();
+
+    renderWithProviders(<CurriculumScreen />);
+    await user.click(await screen.findByRole("button", { name: "Remove" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText(
+        "— will no longer be part of this class's curriculum for the session.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("labels an elective that belongs to no group as a plain elective", async () => {
+    mockGet.mockResolvedValue(page([{ ...ELECTIVE_ROW, elective_group: null }]));
+
+    renderWithProviders(<CurriculumScreen />);
+
+    expect(await screen.findByText("Elective")).toBeInTheDocument();
+    expect(screen.queryByText(/Elective ·/)).not.toBeInTheDocument();
+  });
+
+  it("filters by class and by campus", async () => {
+    mockGet.mockResolvedValue(page([CORE_ROW]));
+    const user = userEvent.setup();
+
+    renderWithProviders(<CurriculumScreen />);
+    await screen.findByText("Mathematics");
+
+    await user.click(screen.getByRole("combobox", { name: "Class" }));
+    await user.click(await screen.findByRole("option", { name: "Grade 7" }));
+
+    await waitFor(() => {
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query).toMatchObject({ class_id: "class1" });
+    });
+
+    await user.click(screen.getByRole("combobox", { name: "Campus" }));
+    await user.click(await screen.findByRole("option", { name: "Main Campus" }));
+
+    await waitFor(() => {
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query).toMatchObject({ campus_id: "camp1" });
+    });
+  });
+
+  it("steps back to the first page, where Previous is no longer offered", async () => {
+    mockGet.mockResolvedValueOnce(page([CORE_ROW], "cursor-2"));
+    mockGet.mockResolvedValueOnce(page([{ ...CORE_ROW, id: "cs9", weekly_periods: 9 }]));
+    mockGet.mockResolvedValue(page([CORE_ROW], "cursor-2"));
+
+    renderWithProviders(<CurriculumScreen />);
+    await screen.findByText("5");
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    // Await the second page's own row, not the request: Previous is guarded while
+    // a page is still in flight, so the click below has to land after it settles.
+    expect(await screen.findByText("9")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(await screen.findByText("5")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
   });
 });
