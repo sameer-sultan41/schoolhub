@@ -20,7 +20,6 @@ from apps.school_organization.models import (
     AcademicSession,
     Campus,
     Class,
-    ClassSubject,
     Department,
     House,
     Section,
@@ -272,53 +271,10 @@ class SubjectSerializer(serializers.ModelSerializer):
         return _normalize_code(value)
 
 
-class ClassSubjectSerializer(serializers.ModelSerializer):
-    """Curriculum mapping: this class studies this subject in this session."""
-
-    academic_session_id = _fk(AcademicSession, source="academic_session")
-    class_id = _fk(Class, source="school_class")
-    subject_id = _fk(Subject, source="subject")
-    campus_id = _fk(Campus, source="campus", required=False, allow_null=True)
-
-    class Meta:
-        model = ClassSubject
-        fields = (
-            "id",
-            "academic_session_id",
-            "class_id",
-            "subject_id",
-            "campus_id",
-            "is_elective",
-            "elective_group",
-            "weekly_periods",
-            "syllabus_file_id",
-            "term_plans",
-            "notes",
-            "created_at",
-            "updated_at",
-        )
-        read_only_fields = READ_ONLY_FIELDS
-
-    def validate_weekly_periods(self, value: int) -> int:
-        if value < 1:
-            raise serializers.ValidationError("weekly_periods must be at least 1.")
-        return value
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        session = attrs.get("academic_session") or getattr(self.instance, "academic_session", None)
-        if session is None:
-            raise serializers.ValidationError({"academic_session_id": "This field is required."})
-        services.assert_session_writable(session)
-
-        is_elective = attrs.get("is_elective")
-        if is_elective is None:
-            is_elective = getattr(self.instance, "is_elective", False)
-        group = attrs.get("elective_group") or getattr(self.instance, "elective_group", None)
-        if is_elective and not group:
-            raise serializers.ValidationError(
-                {"elective_group": "Required for an elective mapping so options can be grouped."}
-            )
-        return attrs
+# `ClassSubjectSerializer` lived here until `/class-subjects` moved to academics
+# in this PR. Nothing routed to it afterwards, so it is gone rather than left as
+# a second definition of the same wire shape for someone to edit by mistake.
+# `apps/academics/serializers.py::CurriculumSerializer` is the one.
 
 
 class HouseSerializer(serializers.ModelSerializer):

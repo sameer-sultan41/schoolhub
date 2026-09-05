@@ -77,6 +77,15 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_weekly_periods_below_one_is_rejected(self) -> None:
+        """400 with the field named, not the service's 422.
+
+        `map_subject_to_class` raises `DomainRuleViolation` for this too, but the
+        serializer's field validator runs first and never lets it get there — and
+        that is the better answer. `weekly_periods >= 1` is a constraint on the
+        value itself, needing no other state to decide, which is what separates a
+        400 from a 422 in the envelope contract. The form gets a field to
+        highlight rather than a bare message.
+        """
         self.allow("academics.curriculum.create")
         with tenant_context(self.tenant.id):
             other_subject = SubjectFactory(tenant=self.tenant)
@@ -88,6 +97,61 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
                 "class_id": str(self.school_class.pk),
                 "subject_id": str(other_subject.pk),
                 "weekly_periods": 0,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "weekly_periods",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
+
+    def test_an_elective_mapping_needs_a_group(self) -> None:
+        """400 with the field named, which the ownership move had quietly cost.
+
+        `map_subject_to_class` enforces this too, but with a bare string — so
+        once the endpoint moved here and the serializer stopped checking, the
+        form got a 422 on `non_field` where it used to get a 400 on
+        `elective_group`. The serializer checks again, which also covers the
+        PATCH path the service never sees.
+        """
+        self.allow("academics.curriculum.create")
+        with tenant_context(self.tenant.id):
+            other_subject = SubjectFactory(tenant=self.tenant)
+
+        response = self.client.post(
+            "/api/v1/class-subjects",
+            {
+                "academic_session_id": str(self.session.pk),
+                "class_id": str(self.school_class.pk),
+                "subject_id": str(other_subject.pk),
+                "weekly_periods": 4,
+                "is_elective": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "elective_group",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
+
+    def test_an_inactive_subject_cannot_be_mapped(self) -> None:
+        """422, unlike the two above: whether a subject is active is state on
+        another row, so it is a domain rule rather than a field constraint."""
+        self.allow("academics.curriculum.create")
+        with tenant_context(self.tenant.id):
+            other_subject = SubjectFactory(tenant=self.tenant, is_active=False)
+
+        response = self.client.post(
+            "/api/v1/class-subjects",
+            {
+                "academic_session_id": str(self.session.pk),
+                "class_id": str(self.school_class.pk),
+                "subject_id": str(other_subject.pk),
+                "weekly_periods": 4,
             },
             format="json",
         )

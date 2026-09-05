@@ -17,7 +17,6 @@ from apps.school_organization.tests.factories import (
     AcademicSessionFactory,
     CampusFactory,
     ClassFactory,
-    ClassSubjectFactory,
     DepartmentFactory,
     HouseFactory,
     SectionFactory,
@@ -32,9 +31,12 @@ from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
 
 # Resources that expose DELETE. Sessions and terms are closed, not deleted (§16).
-DELETABLE = frozenset(
-    {"campuses", "departments", "classes", "sections", "subjects", "class-subjects", "houses"}
-)
+#
+# `class-subjects` is absent although this module still owns the *table*: the
+# endpoint moved to academics in the same PR that added it, so its cross-tenant
+# sweep lives in `apps/academics/tests/test_cross_tenant.py` where the keys and
+# the feature flag it now needs are granted.
+DELETABLE = frozenset({"campuses", "departments", "classes", "sections", "subjects", "houses"})
 
 
 class CrossTenantAccessTests(APITestCase):
@@ -61,12 +63,6 @@ class CrossTenantAccessTests(APITestCase):
             grade = ClassFactory(tenant=tenant)
             section = SectionFactory(tenant=tenant, school_class=grade, campus=campus)
             subject = SubjectFactory(tenant=tenant, department=department)
-            class_subject = ClassSubjectFactory(
-                tenant=tenant,
-                academic_session=session,
-                school_class=grade,
-                subject=subject,
-            )
             house = HouseFactory(tenant=tenant)
 
         return {
@@ -77,7 +73,6 @@ class CrossTenantAccessTests(APITestCase):
             "classes": grade,
             "sections": section,
             "subjects": subject,
-            "class-subjects": class_subject,
             "houses": house,
         }
 
