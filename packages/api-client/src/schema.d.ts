@@ -268,20 +268,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         get: operations["class_subjects_list"];
         put?: never;
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         post: operations["class_subjects_create"];
         delete?: never;
         options?: never;
@@ -296,37 +286,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         get: operations["class_subjects_retrieve"];
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
-        put: operations["class_subjects_update"];
+        put?: never;
         post?: never;
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         delete: operations["class_subjects_destroy"];
         options?: never;
         head?: never;
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         patch: operations["class_subjects_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/class-subjects:clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clone a session's curriculum into another session
+         * @description `class_subjects` — the session curriculum grid (§5.1).
+         */
+        post: operations["class_subjects:clone_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/classes": {
@@ -1138,6 +1127,187 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/student-promotions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        get: operations["student_promotions_list"];
+        put?: never;
+        /**
+         * Create a promotion batch for one class
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        post: operations["student_promotions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        get: operations["student_promotions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        patch: operations["student_promotions_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a batch (approver must differ from preparer)
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        post: operations["student_promotions_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Execute an approved batch, creating next-session enrollments
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        post: operations["student_promotions_:execute_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a batch back to draft
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        post: operations["student_promotions_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert a batch before downstream activity exists
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        post: operations["student_promotions_:revert_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a draft batch for approval
+         * @description `student_promotions` — batch review and the §7.2 state machine.
+         *
+         *     No `create` here: a batch is created by `POST /student-promotions` with a
+         *     class and a session pair, not by posting a single decision, so that action
+         *     has its own handler below. Decisions are only ever edited, never added.
+         */
+        post: operations["student_promotions_:submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/student-transfers": {
         parameters: {
             query?: never;
@@ -1514,6 +1684,63 @@ export interface paths {
         patch: operations["subjects_partial_update"];
         trace?: never;
     };
+    "/api/v1/teacher-subject-allocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        get: operations["teacher_subject_allocations_list"];
+        put?: never;
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        post: operations["teacher_subject_allocations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teacher-subject-allocations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        get: operations["teacher_subject_allocations_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        delete: operations["teacher_subject_allocations_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        patch: operations["teacher_subject_allocations_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/teacher-subject-allocations/load-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-teacher weekly load against the tenant norm
+         * @description `teacher_subject_allocations` — who teaches what, to whom (§5.3).
+         */
+        get: operations["teacher_subject_allocations_load_summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terms": {
         parameters: {
             query?: never;
@@ -1651,8 +1878,27 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /** @description Curriculum mapping: this class studies this subject in this session. */
-        ClassSubject: {
+        CloneCurriculumRequest: {
+            /** Format: uuid */
+            source_academic_session_id: string;
+            /** Format: uuid */
+            target_academic_session_id: string;
+        };
+        CreatePromotionBatch: {
+            /** Format: uuid */
+            from_academic_session_id: string;
+            /** Format: uuid */
+            to_academic_session_id: string;
+            /** Format: uuid */
+            class_id: string;
+        };
+        /**
+         * @description `class_subjects` through the academics contract (§16).
+         *
+         *     The model lives in school_organization — see apps/academics/models.py's
+         *     header for why it stays there — but the validations are academics' §11.
+         */
+        Curriculum: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
@@ -1681,12 +1927,6 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /**
-         * @description * `verified` - verified
-         *     * `rejected` - rejected
-         * @enum {string}
-         */
-        DecisionEnum: "verified" | "rejected";
         Department: {
             /** Format: uuid */
             readonly id: string;
@@ -1727,8 +1967,14 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `verified` - verified
+         *     * `rejected` - rejected
+         * @enum {string}
+         */
+        DocumentVerificationDecisionEnum: "verified" | "rejected";
         DocumentVerifyRequest: {
-            decision: components["schemas"]["DecisionEnum"];
+            decision: components["schemas"]["DocumentVerificationDecisionEnum"];
         };
         EmergencyContact: {
             /** Format: uuid */
@@ -1927,8 +2173,8 @@ export interface components {
                 };
             };
         };
-        PaginatedClassSubjectList: {
-            data?: components["schemas"]["ClassSubject"][];
+        PaginatedCurriculumList: {
+            data?: components["schemas"]["Curriculum"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -1989,6 +2235,16 @@ export interface components {
         };
         PaginatedHouseList: {
             data?: components["schemas"]["House"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedPromotionDecisionList: {
+            data?: components["schemas"]["PromotionDecision"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -2087,6 +2343,16 @@ export interface components {
                 };
             };
         };
+        PaginatedTeacherAllocationList: {
+            data?: components["schemas"]["TeacherAllocation"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedTermList: {
             data?: components["schemas"]["Term"][];
             meta?: {
@@ -2148,8 +2414,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /** @description Curriculum mapping: this class studies this subject in this session. */
-        PatchedClassSubject: {
+        /**
+         * @description `class_subjects` through the academics contract (§16).
+         *
+         *     The model lives in school_organization — see apps/academics/models.py's
+         *     header for why it stays there — but the validations are academics' §11.
+         */
+        PatchedCurriculum: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
@@ -2252,6 +2523,55 @@ export interface components {
              */
             house_master_staff_id?: string | null;
             is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description A single student's row inside a batch.
+         *
+         *     Only the fields a reviewer edits are writable; everything that defines which
+         *     batch this is, and where the student came from, is fixed at batch creation.
+         */
+        PatchedPromotionDecision: {
+            /** Format: uuid */
+            readonly id?: string;
+            /**
+             * Format: uuid
+             * @description Logical batch grouping — one per class per rollover. No batch table.
+             */
+            readonly batch_id?: string;
+            /** Format: uuid */
+            readonly student_id?: string;
+            /** Format: uuid */
+            readonly from_enrollment_id?: string;
+            /** Format: uuid */
+            readonly from_academic_session_id?: string;
+            /** Format: uuid */
+            readonly to_academic_session_id?: string;
+            /** Format: uuid */
+            readonly from_class_id?: string;
+            /** Format: uuid */
+            to_class_id?: string | null;
+            /** Format: uuid */
+            to_section_id?: string | null;
+            decision?: components["schemas"]["PromotionDecisionEnum"];
+            /** @description Snapshot of result aggregates, attendance %, rule evaluation at proposal time. */
+            readonly decision_basis?: unknown;
+            /** @description Required when the decision deviates from the rule proposal. */
+            override_reason?: string | null;
+            remarks?: string | null;
+            readonly status?: components["schemas"]["PromotionDecisionStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) — must differ from the preparer.
+             */
+            readonly approved_by?: string | null;
+            /** Format: date-time */
+            readonly approved_at?: string | null;
+            /** Format: date-time */
+            readonly executed_at?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -2446,6 +2766,33 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedTeacherAllocation: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            academic_session_id?: string;
+            /** Format: uuid */
+            section_id?: string;
+            /** Format: uuid */
+            subject_id?: string;
+            /** Format: uuid */
+            staff_id?: string;
+            /** @description One primary per (section, subject); others are co-teachers. */
+            is_primary?: boolean;
+            /** @description Overrides class_subjects.weekly_periods for this allocation's load math. */
+            weekly_periods?: number | null;
+            /** Format: date */
+            effective_from?: string | null;
+            /**
+             * Format: date
+             * @description Null = current. Set rather than deleted on reassignment.
+             */
+            effective_to?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         PatchedTerm: {
             /** Format: uuid */
             readonly id?: string;
@@ -2463,6 +2810,72 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /**
+         * @description A single student's row inside a batch.
+         *
+         *     Only the fields a reviewer edits are writable; everything that defines which
+         *     batch this is, and where the student came from, is fixed at batch creation.
+         */
+        PromotionDecision: {
+            /** Format: uuid */
+            readonly id: string;
+            /**
+             * Format: uuid
+             * @description Logical batch grouping — one per class per rollover. No batch table.
+             */
+            readonly batch_id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            /** Format: uuid */
+            readonly from_enrollment_id: string;
+            /** Format: uuid */
+            readonly from_academic_session_id: string;
+            /** Format: uuid */
+            readonly to_academic_session_id: string;
+            /** Format: uuid */
+            readonly from_class_id: string;
+            /** Format: uuid */
+            to_class_id?: string | null;
+            /** Format: uuid */
+            to_section_id?: string | null;
+            decision: components["schemas"]["PromotionDecisionEnum"];
+            /** @description Snapshot of result aggregates, attendance %, rule evaluation at proposal time. */
+            readonly decision_basis: unknown;
+            /** @description Required when the decision deviates from the rule proposal. */
+            override_reason?: string | null;
+            remarks?: string | null;
+            readonly status: components["schemas"]["PromotionDecisionStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) — must differ from the preparer.
+             */
+            readonly approved_by: string | null;
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            /** Format: date-time */
+            readonly executed_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `promoted` - Promoted
+         *     * `retained` - Retained
+         *     * `promoted_on_trial` - Promoted on trial
+         *     * `graduated` - Graduated
+         * @enum {string}
+         */
+        PromotionDecisionEnum: "promoted" | "retained" | "promoted_on_trial" | "graduated";
+        /**
+         * @description * `draft` - Draft
+         *     * `pending_approval` - Pending approval
+         *     * `approved` - Approved
+         *     * `executed` - Executed
+         *     * `reverted` - Reverted
+         * @enum {string}
+         */
+        PromotionDecisionStatusEnum: "draft" | "pending_approval" | "approved" | "executed" | "reverted";
         /**
          * @description * `degree` - Degree
          *     * `diploma` - Diploma
@@ -2870,6 +3283,33 @@ export interface components {
          * @enum {string}
          */
         SubjectTypeEnum: "core" | "elective" | "co_curricular";
+        TeacherAllocation: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            academic_session_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: uuid */
+            staff_id: string;
+            /** @description One primary per (section, subject); others are co-teachers. */
+            is_primary?: boolean;
+            /** @description Overrides class_subjects.weekly_periods for this allocation's load math. */
+            weekly_periods?: number | null;
+            /** Format: date */
+            effective_from?: string | null;
+            /**
+             * Format: date
+             * @description Null = current. Set rather than deleted on reassignment.
+             */
+            effective_to?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         Term: {
             /** Format: uuid */
             readonly id: string;
@@ -2932,7 +3372,7 @@ export interface components {
          */
         VerificationStatusEnum: "pending" | "verified" | "rejected";
         VerifyRequest: {
-            decision: components["schemas"]["DecisionEnum"];
+            decision: components["schemas"]["DocumentVerificationDecisionEnum"];
         };
         /**
          * @description * `private` - Private
@@ -3466,7 +3906,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedClassSubjectList"];
+                    "application/json": components["schemas"]["PaginatedCurriculumList"];
                 };
             };
         };
@@ -3480,9 +3920,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ClassSubject"];
-                "application/x-www-form-urlencoded": components["schemas"]["ClassSubject"];
-                "multipart/form-data": components["schemas"]["ClassSubject"];
+                "application/json": components["schemas"]["Curriculum"];
+                "application/x-www-form-urlencoded": components["schemas"]["Curriculum"];
+                "multipart/form-data": components["schemas"]["Curriculum"];
             };
         };
         responses: {
@@ -3491,7 +3931,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClassSubject"];
+                    "application/json": components["schemas"]["Curriculum"];
                 };
             };
         };
@@ -3513,35 +3953,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClassSubject"];
-                };
-            };
-        };
-    };
-    class_subjects_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A UUID string identifying this class subject. */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClassSubject"];
-                "application/x-www-form-urlencoded": components["schemas"]["ClassSubject"];
-                "multipart/form-data": components["schemas"]["ClassSubject"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClassSubject"];
+                    "application/json": components["schemas"]["Curriculum"];
                 };
             };
         };
@@ -3579,9 +3991,9 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["PatchedClassSubject"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedClassSubject"];
-                "multipart/form-data": components["schemas"]["PatchedClassSubject"];
+                "application/json": components["schemas"]["PatchedCurriculum"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCurriculum"];
+                "multipart/form-data": components["schemas"]["PatchedCurriculum"];
             };
         };
         responses: {
@@ -3590,8 +4002,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClassSubject"];
+                    "application/json": components["schemas"]["Curriculum"];
                 };
+            };
+        };
+    };
+    "class_subjects:clone_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloneCurriculumRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CloneCurriculumRequest"];
+                "multipart/form-data": components["schemas"]["CloneCurriculumRequest"];
+            };
+        };
+        responses: {
+            /** @description Row counts created and skipped. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -5423,6 +5859,231 @@ export interface operations {
             };
         };
     };
+    student_promotions_list: {
+        parameters: {
+            query?: {
+                batch_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /**
+                 * @description * `promoted` - Promoted
+                 *     * `retained` - Retained
+                 *     * `promoted_on_trial` - Promoted on trial
+                 *     * `graduated` - Graduated
+                 */
+                decision?: "graduated" | "promoted" | "promoted_on_trial" | "retained";
+                from_academic_session_id?: string;
+                from_class_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `pending_approval` - Pending approval
+                 *     * `approved` - Approved
+                 *     * `executed` - Executed
+                 *     * `reverted` - Reverted
+                 */
+                status?: "approved" | "draft" | "executed" | "pending_approval" | "reverted";
+                student_id?: string;
+                to_academic_session_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPromotionDecisionList"];
+                };
+            };
+        };
+    };
+    student_promotions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePromotionBatch"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreatePromotionBatch"];
+                "multipart/form-data": components["schemas"]["CreatePromotionBatch"];
+            };
+        };
+        responses: {
+            /** @description The new batch id and its row count. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    student_promotions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student promotion. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionDecision"];
+                };
+            };
+        };
+    };
+    student_promotions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student promotion. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPromotionDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPromotionDecision"];
+                "multipart/form-data": components["schemas"]["PatchedPromotionDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionDecision"];
+                };
+            };
+        };
+    };
+    "student_promotions_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionDecision"];
+                };
+            };
+        };
+    };
+    "student_promotions_:execute_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-student execution report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "student_promotions_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionDecision"];
+                };
+            };
+        };
+    };
+    "student_promotions_:revert_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionDecision"];
+                };
+            };
+        };
+    };
+    "student_promotions_:submit_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     student_transfers_list: {
         parameters: {
             query?: {
@@ -6154,6 +6815,153 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Subject"];
                 };
+            };
+        };
+    };
+    teacher_subject_allocations_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_primary?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                section_id?: string;
+                staff_id?: string;
+                subject_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTeacherAllocationList"];
+                };
+            };
+        };
+    };
+    teacher_subject_allocations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeacherAllocation"];
+                "application/x-www-form-urlencoded": components["schemas"]["TeacherAllocation"];
+                "multipart/form-data": components["schemas"]["TeacherAllocation"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherAllocation"];
+                };
+            };
+        };
+    };
+    teacher_subject_allocations_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this teacher subject allocation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherAllocation"];
+                };
+            };
+        };
+    };
+    teacher_subject_allocations_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this teacher subject allocation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    teacher_subject_allocations_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this teacher subject allocation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedTeacherAllocation"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedTeacherAllocation"];
+                "multipart/form-data": components["schemas"]["PatchedTeacherAllocation"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherAllocation"];
+                };
+            };
+        };
+    };
+    teacher_subject_allocations_load_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregate load per teacher. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

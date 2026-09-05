@@ -15,7 +15,6 @@ from rest_framework.routers import SimpleRouter
 from apps.school_organization.views import (
     AcademicSessionViewSet,
     CampusViewSet,
-    ClassSubjectViewSet,
     ClassViewSet,
     DepartmentViewSet,
     HouseViewSet,
@@ -33,7 +32,6 @@ router.register("terms", TermViewSet, basename="terms")
 router.register("classes", ClassViewSet, basename="classes")
 router.register("sections", SectionViewSet, basename="sections")
 router.register("subjects", SubjectViewSet, basename="subjects")
-router.register("class-subjects", ClassSubjectViewSet, basename="class-subjects")
 router.register("houses", HouseViewSet, basename="houses")
 
 urlpatterns = [

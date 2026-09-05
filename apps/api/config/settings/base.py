@@ -71,6 +71,7 @@ MODULE_APPS = [
     "apps.school_organization",
     "apps.student_management",
     "apps.staff_management",
+    "apps.academics",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -198,6 +199,25 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/v1",
+    # Two unrelated choice sets are both called `decision`: the verified/rejected
+    # verdict on a student or staff document, and a student's promotion outcome.
+    # The two verification ones are identical and merge on their own; the
+    # promotion one has different values, which is the actual collision. Left
+    # unnamed it gets a hash suffix (`DecisionBb7Enum`) that churns the generated
+    # TypeScript client whenever the choices move.
+    "ENUM_NAME_OVERRIDES": {
+        "PromotionDecisionEnum": "apps.academics.models.PromotionDecision",
+        # A plain list of tuples, per drf-spectacular's own FAQ: the two document
+        # `decision` fields declare their choices inline in
+        # student_management/staff_management serializers, and neither module may
+        # import the other's serializers (that would invert the dependency
+        # direction docs/03-modules declares), so there is no shared symbol to
+        # point at.
+        "DocumentVerificationDecisionEnum": [
+            ("verified", "verified"),
+            ("rejected", "rejected"),
+        ],
+    },
 }
 
 CACHES = {

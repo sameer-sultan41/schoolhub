@@ -52,7 +52,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 3. **Department management** — academic and administrative departments with heads; used by staff-management and the website.
 4. **Academic sessions & terms** — session lifecycle (`planned → active → closed → archived`), term/semester breakdown, exactly one current session per tenant.
 5. **Class & section management** — ordered grade levels (`classes.level` drives the promotion ladder) and per-campus sections with capacity and class teacher.
-6. **Subject management** — subject catalog (core/elective/co-curricular) mapped to departments; curriculum mapping to classes lives in [`academics.md`](academics.md).
+6. **Subject management** — subject catalog (core/elective/co-curricular) mapped to departments; curriculum mapping to classes lives in [`academics.md`](academics.md). The `class_subjects` *model* and `services.map_subject_to_class` still live in this app (the session-clone wizard writes them), but `/api/v1/class-subjects` is served by `apps/academics` under `academics.curriculum.*` — it used to sit here borrowing `school.subject.*` keys.
 7. **Houses/groups** — configurable student groupings (houses, clubs modeled as houses with a type label) for sports, discipline, and points.
 8. **Academic configuration** — working weekdays, holiday calendar, timezone, locale(s), currency, date formats, session naming pattern; all tenant-configurable with no country assumed. Grading scales are configured in [`examinations.md`](examinations.md).
 

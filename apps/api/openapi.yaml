@@ -576,11 +576,7 @@ paths:
   /api/v1/class-subjects:
     get:
       operationId: class_subjects_list
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       parameters:
       - in: query
         name: academic_session_id
@@ -643,28 +639,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedClassSubjectList'
+                $ref: '#/components/schemas/PaginatedCurriculumList'
           description: ''
     post:
       operationId: class_subjects_create
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       tags:
       - class-subjects
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ClassSubject'
+              $ref: '#/components/schemas/Curriculum'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ClassSubject'
+              $ref: '#/components/schemas/Curriculum'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ClassSubject'
+              $ref: '#/components/schemas/Curriculum'
         required: true
       security:
       - jwtAuth: []
@@ -673,16 +665,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClassSubject'
+                $ref: '#/components/schemas/Curriculum'
           description: ''
   /api/v1/class-subjects/{id}:
     get:
       operationId: class_subjects_retrieve
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       parameters:
       - in: path
         name: id
@@ -700,53 +688,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClassSubject'
-          description: ''
-    put:
-      operationId: class_subjects_update
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this class subject.
-        required: true
-      tags:
-      - class-subjects
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ClassSubject'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ClassSubject'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ClassSubject'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ClassSubject'
+                $ref: '#/components/schemas/Curriculum'
           description: ''
     patch:
       operationId: class_subjects_partial_update
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       parameters:
       - in: path
         name: id
@@ -761,13 +707,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedClassSubject'
+              $ref: '#/components/schemas/PatchedCurriculum'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedClassSubject'
+              $ref: '#/components/schemas/PatchedCurriculum'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedClassSubject'
+              $ref: '#/components/schemas/PatchedCurriculum'
       security:
       - jwtAuth: []
       responses:
@@ -775,15 +721,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClassSubject'
+                $ref: '#/components/schemas/Curriculum'
           description: ''
     delete:
       operationId: class_subjects_destroy
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       parameters:
       - in: path
         name: id
@@ -799,6 +741,30 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/class-subjects:clone:
+    post:
+      operationId: class_subjects:clone_create
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
+      summary: Clone a session's curriculum into another session
+      tags:
+      - class-subjects:clone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloneCurriculumRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CloneCurriculumRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CloneCurriculumRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Row counts created and skipped.
   /api/v1/classes:
     get:
       operationId: classes_list
@@ -3006,6 +2972,332 @@ paths:
       responses:
         '202':
           description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+  /api/v1/student-promotions:
+    get:
+      operationId: student_promotions_list
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      parameters:
+      - in: query
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: decision
+        schema:
+          type: string
+          enum:
+          - graduated
+          - promoted
+          - promoted_on_trial
+          - retained
+        description: |-
+          * `promoted` - Promoted
+          * `retained` - Retained
+          * `promoted_on_trial` - Promoted on trial
+          * `graduated` - Graduated
+      - in: query
+        name: from_academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: from_class_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - approved
+          - draft
+          - executed
+          - pending_approval
+          - reverted
+        description: |-
+          * `draft` - Draft
+          * `pending_approval` - Pending approval
+          * `approved` - Approved
+          * `executed` - Executed
+          * `reverted` - Reverted
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: to_academic_session_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPromotionDecisionList'
+          description: ''
+    post:
+      operationId: student_promotions_create
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      summary: Create a promotion batch for one class
+      tags:
+      - student-promotions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePromotionBatch'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreatePromotionBatch'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreatePromotionBatch'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          description: The new batch id and its row count.
+  /api/v1/student-promotions/{id}:
+    get:
+      operationId: student_promotions_retrieve
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student promotion.
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionDecision'
+          description: ''
+    patch:
+      operationId: student_promotions_partial_update
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this student promotion.
+        required: true
+      tags:
+      - student-promotions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPromotionDecision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPromotionDecision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPromotionDecision'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionDecision'
+          description: ''
+  /api/v1/student-promotions/{id}:approve:
+    post:
+      operationId: student_promotions_:approve_create
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      summary: Approve a batch (approver must differ from preparer)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionDecision'
+          description: ''
+  /api/v1/student-promotions/{id}:execute:
+    post:
+      operationId: student_promotions_:execute_create
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      summary: Execute an approved batch, creating next-session enrollments
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Per-student execution report.
+  /api/v1/student-promotions/{id}:reject:
+    post:
+      operationId: student_promotions_:reject_create
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      summary: Send a batch back to draft
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionDecision'
+          description: ''
+  /api/v1/student-promotions/{id}:revert:
+    post:
+      operationId: student_promotions_:revert_create
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      summary: Revert a batch before downstream activity exists
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionDecision'
+          description: ''
+  /api/v1/student-promotions/{id}:submit:
+    post:
+      operationId: student_promotions_:submit_create
+      description: |-
+        `student_promotions` — batch review and the §7.2 state machine.
+
+        No `create` here: a batch is created by `POST /student-promotions` with a
+        class and a session pair, not by posting a single decision, so that action
+        has its own handler below. Decisions are only ever edited, never added.
+      summary: Submit a draft batch for approval
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/student-transfers:
     get:
       operationId: student_transfers_list
@@ -3986,6 +4278,182 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/teacher-subject-allocations:
+    get:
+      operationId: teacher_subject_allocations_list
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_primary
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: staff_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: subject_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - teacher-subject-allocations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTeacherAllocationList'
+          description: ''
+    post:
+      operationId: teacher_subject_allocations_create
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      tags:
+      - teacher-subject-allocations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeacherAllocation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeacherAllocation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TeacherAllocation'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherAllocation'
+          description: ''
+  /api/v1/teacher-subject-allocations/{id}:
+    get:
+      operationId: teacher_subject_allocations_retrieve
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teacher subject allocation.
+        required: true
+      tags:
+      - teacher-subject-allocations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherAllocation'
+          description: ''
+    patch:
+      operationId: teacher_subject_allocations_partial_update
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teacher subject allocation.
+        required: true
+      tags:
+      - teacher-subject-allocations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTeacherAllocation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTeacherAllocation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTeacherAllocation'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherAllocation'
+          description: ''
+    delete:
+      operationId: teacher_subject_allocations_destroy
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teacher subject allocation.
+        required: true
+      tags:
+      - teacher-subject-allocations
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/teacher-subject-allocations/load-summary:
+    get:
+      operationId: teacher_subject_allocations_load_summary_retrieve
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      summary: Per-teacher weekly load against the tenant norm
+      tags:
+      - teacher-subject-allocations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Aggregate load per teacher.
   /api/v1/terms:
     get:
       operationId: terms_list
@@ -4392,9 +4860,41 @@ components:
       - level
       - name
       - updated_at
-    ClassSubject:
+    CloneCurriculumRequest:
       type: object
-      description: 'Curriculum mapping: this class studies this subject in this session.'
+      properties:
+        source_academic_session_id:
+          type: string
+          format: uuid
+        target_academic_session_id:
+          type: string
+          format: uuid
+      required:
+      - source_academic_session_id
+      - target_academic_session_id
+    CreatePromotionBatch:
+      type: object
+      properties:
+        from_academic_session_id:
+          type: string
+          format: uuid
+        to_academic_session_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+      required:
+      - class_id
+      - from_academic_session_id
+      - to_academic_session_id
+    Curriculum:
+      type: object
+      description: |-
+        `class_subjects` through the academics contract (§16).
+
+        The model lives in school_organization — see apps/academics/models.py's
+        header for why it stays there — but the validations are academics' §11.
       properties:
         id:
           type: string
@@ -4453,14 +4953,6 @@ components:
       - id
       - subject_id
       - updated_at
-    DecisionEnum:
-      enum:
-      - verified
-      - rejected
-      type: string
-      description: |-
-        * `verified` - verified
-        * `rejected` - rejected
     Department:
       type: object
       properties:
@@ -4552,11 +5044,19 @@ components:
       - id
       - name
       - updated_at
+    DocumentVerificationDecisionEnum:
+      enum:
+      - verified
+      - rejected
+      type: string
+      description: |-
+        * `verified` - verified
+        * `rejected` - rejected
     DocumentVerifyRequest:
       type: object
       properties:
         decision:
-          $ref: '#/components/schemas/DecisionEnum'
+          $ref: '#/components/schemas/DocumentVerificationDecisionEnum'
       required:
       - decision
     EmergencyContact:
@@ -4999,13 +5499,13 @@ components:
                   nullable: true
                 page_size:
                   type: integer
-    PaginatedClassSubjectList:
+    PaginatedCurriculumList:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/ClassSubject'
+            $ref: '#/components/schemas/Curriculum'
         meta:
           type: object
           properties:
@@ -5132,6 +5632,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/House'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedPromotionDecisionList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionDecision'
         meta:
           type: object
           properties:
@@ -5335,6 +5856,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedTeacherAllocationList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeacherAllocation'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedTermList:
       type: object
       properties:
@@ -5466,9 +6008,13 @@ components:
           type: string
           format: date-time
           readOnly: true
-    PatchedClassSubject:
+    PatchedCurriculum:
       type: object
-      description: 'Curriculum mapping: this class studies this subject in this session.'
+      description: |-
+        `class_subjects` through the academics contract (§16).
+
+        The model lives in school_organization — see apps/academics/models.py's
+        header for why it stays there — but the validations are academics' §11.
       properties:
         id:
           type: string
@@ -5683,6 +6229,96 @@ components:
           description: staff(id).
         is_active:
           type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedPromotionDecision:
+      type: object
+      description: |-
+        A single student's row inside a batch.
+
+        Only the fields a reviewer edits are writable; everything that defines which
+        batch this is, and where the student came from, is fixed at batch creation.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        batch_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Logical batch grouping — one per class per rollover. No batch
+            table.
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_enrollment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_class_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_class_id:
+          type: string
+          format: uuid
+          nullable: true
+        to_section_id:
+          type: string
+          format: uuid
+          nullable: true
+        decision:
+          $ref: '#/components/schemas/PromotionDecisionEnum'
+        decision_basis:
+          readOnly: true
+          nullable: true
+          description: Snapshot of result aggregates, attendance %, rule evaluation
+            at proposal time.
+        override_reason:
+          type: string
+          nullable: true
+          description: Required when the decision deviates from the rule proposal.
+          maxLength: 500
+        remarks:
+          type: string
+          nullable: true
+          maxLength: 500
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PromotionDecisionStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id) — must differ from the preparer.
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        executed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -6068,6 +6704,52 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedTeacherAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        staff_id:
+          type: string
+          format: uuid
+        is_primary:
+          type: boolean
+          description: One primary per (section, subject); others are co-teachers.
+        weekly_periods:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          description: Overrides class_subjects.weekly_periods for this allocation's
+            load math.
+        effective_from:
+          type: string
+          format: date
+          nullable: true
+        effective_to:
+          type: string
+          format: date
+          nullable: true
+          description: Null = current. Set rather than deleted on reassignment.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedTerm:
       type: object
       properties:
@@ -6100,6 +6782,138 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PromotionDecision:
+      type: object
+      description: |-
+        A single student's row inside a batch.
+
+        Only the fields a reviewer edits are writable; everything that defines which
+        batch this is, and where the student came from, is fixed at batch creation.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        batch_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Logical batch grouping — one per class per rollover. No batch
+            table.
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_enrollment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_class_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_class_id:
+          type: string
+          format: uuid
+          nullable: true
+        to_section_id:
+          type: string
+          format: uuid
+          nullable: true
+        decision:
+          $ref: '#/components/schemas/PromotionDecisionEnum'
+        decision_basis:
+          readOnly: true
+          nullable: true
+          description: Snapshot of result aggregates, attendance %, rule evaluation
+            at proposal time.
+        override_reason:
+          type: string
+          nullable: true
+          description: Required when the decision deviates from the rule proposal.
+          maxLength: 500
+        remarks:
+          type: string
+          nullable: true
+          maxLength: 500
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PromotionDecisionStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id) — must differ from the preparer.
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        executed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approved_at
+      - approved_by
+      - batch_id
+      - created_at
+      - decision
+      - decision_basis
+      - executed_at
+      - from_academic_session_id
+      - from_class_id
+      - from_enrollment_id
+      - id
+      - status
+      - student_id
+      - to_academic_session_id
+      - updated_at
+    PromotionDecisionEnum:
+      enum:
+      - promoted
+      - retained
+      - promoted_on_trial
+      - graduated
+      type: string
+      description: |-
+        * `promoted` - Promoted
+        * `retained` - Retained
+        * `promoted_on_trial` - Promoted on trial
+        * `graduated` - Graduated
+    PromotionDecisionStatusEnum:
+      enum:
+      - draft
+      - pending_approval
+      - approved
+      - executed
+      - reverted
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `pending_approval` - Pending approval
+        * `approved` - Approved
+        * `executed` - Executed
+        * `reverted` - Reverted
     QualificationTypeEnum:
       enum:
       - degree
@@ -6951,6 +7765,60 @@ components:
         * `core` - Core
         * `elective` - Elective
         * `co_curricular` - Co-curricular
+    TeacherAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        staff_id:
+          type: string
+          format: uuid
+        is_primary:
+          type: boolean
+          description: One primary per (section, subject); others are co-teachers.
+        weekly_periods:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          description: Overrides class_subjects.weekly_periods for this allocation's
+            load math.
+        effective_from:
+          type: string
+          format: date
+          nullable: true
+        effective_to:
+          type: string
+          format: date
+          nullable: true
+          description: Null = current. Set rather than deleted on reassignment.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session_id
+      - created_at
+      - id
+      - section_id
+      - staff_id
+      - subject_id
+      - updated_at
     Term:
       type: object
       properties:
@@ -7092,7 +7960,7 @@ components:
       type: object
       properties:
         decision:
-          $ref: '#/components/schemas/DecisionEnum'
+          $ref: '#/components/schemas/DocumentVerificationDecisionEnum'
       required:
       - decision
     VisibilityEnum:

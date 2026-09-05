@@ -25,7 +25,6 @@ from apps.school_organization.filters import (
     AcademicSessionFilterSet,
     CampusFilterSet,
     ClassFilterSet,
-    ClassSubjectFilterSet,
     DepartmentFilterSet,
     HouseFilterSet,
     SectionFilterSet,
@@ -36,7 +35,6 @@ from apps.school_organization.models import (
     AcademicSession,
     Campus,
     Class,
-    ClassSubject,
     Department,
     House,
     Section,
@@ -47,7 +45,6 @@ from apps.school_organization.serializers import (
     AcademicSessionSerializer,
     CampusSerializer,
     ClassSerializer,
-    ClassSubjectSerializer,
     DepartmentSerializer,
     HouseSerializer,
     SchoolSettingsSerializer,
@@ -295,58 +292,6 @@ class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
 
     def get_queryset(self):
         return super().get_queryset().select_related("department")
-
-
-class ClassSubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
-    """Curriculum mapping of subjects onto classes for one session.
-
-    Shares the subject permission keys: mapping a subject to a class is subject
-    management, and §4 declares no separate key for it.
-    """
-
-    queryset = ClassSubject.objects
-    serializer_class = ClassSubjectSerializer
-    filterset_class = ClassSubjectFilterSet
-    search_fields = ["elective_group"]
-    ordering_fields = ["created_at"]
-    required_feature = "module.school"
-    required_permission = "school.subject.view"
-    required_permission_map = {
-        "create": "school.subject.create",
-        "update": "school.subject.update",
-        "partial_update": "school.subject.update",
-        "destroy": "school.subject.delete",
-    }
-
-    def get_queryset(self):
-        return (
-            super()
-            .get_queryset()
-            .select_related("academic_session", "school_class", "subject", "campus")
-        )
-
-    def perform_create(self, serializer) -> None:
-        """Delegate to the service so the wizard, the importer and the API agree.
-
-        The duplicate-mapping check has to live below the serializer: the bulk
-        importer never builds one.
-        """
-        data = serializer.validated_data
-        serializer.instance = services.map_subject_to_class(
-            session=data["academic_session"],
-            school_class=data["school_class"],
-            subject=data["subject"],
-            campus=data.get("campus"),
-            is_elective=data.get("is_elective", False),
-            elective_group=data.get("elective_group"),
-            weekly_periods=data.get("weekly_periods", 1),
-            syllabus_file_id=data.get("syllabus_file_id"),
-            term_plans=data.get("term_plans"),
-            notes=data.get("notes"),
-            actor_id=self.request.user.pk,
-            tenant_id=self.request.tenant.pk,
-        )
-        record_audit(self.request, "create", serializer.instance, after=serializer.data)
 
 
 class HouseViewSet(BlockingDestroyMixin, TenantModelViewSet):
