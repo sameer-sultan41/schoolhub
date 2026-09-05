@@ -1,5 +1,5 @@
 import { ApiError, type ApiResult } from "@schoolhub/api-client";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import type { PromotionDecisionRecord } from "@/features/academics/academics-types";
 import { PromotionBatchReview } from "@/features/academics/promotion-batch-review";
 import { usePermission } from "@/hooks/use-session";
@@ -14,16 +14,27 @@ jest.mock("@/hooks/use-session", () => ({
   useAnyPermission: jest.fn(() => false),
 }));
 jest.mock("next/navigation", () => ({ usePathname: () => "/academics/promotions/batch-1" }));
+
+/** The class and section lists, in mutable bindings so one test can hold them in
+ * the `data: undefined` state the table paints before they arrive. */
+interface Option {
+  id: string;
+  name: string;
+  class_id?: string;
+}
+const CLASSES: Option[] = [
+  { id: "class8", name: "Grade 8" },
+  { id: "class9", name: "Grade 9" },
+];
+const SECTIONS: Option[] = [{ id: "sec9a", name: "A", class_id: "class9" }];
+let mockClasses: { data: Option[] | undefined } = { data: CLASSES };
+let mockSections: { data: Option[] | undefined } = { data: SECTIONS };
+
 jest.mock("@/features/students/use-reference-data", () => ({
-  useClasses: () => ({
-    data: [
-      { id: "class8", name: "Grade 8" },
-      { id: "class9", name: "Grade 9" },
-    ],
-  }),
+  useClasses: () => mockClasses,
 }));
 jest.mock("@/features/academics/use-academics-reference-data", () => ({
-  useSections: () => ({ data: [{ id: "sec9a", name: "A", class_id: "class9" }] }),
+  useSections: () => mockSections,
 }));
 // Both have their own specs; stubbing them keeps this one about the review table.
 jest.mock("@/features/academics/promotion-batch-actions", () => ({
@@ -61,6 +72,17 @@ const DRAFT_ROW: PromotionDecisionRecord = {
   updated_at: "2026-04-01T00:00:00Z",
 };
 
+/** A retained student: staying put, so there is no target class, no target
+ * section, and nothing to remark on. */
+const RETAINED_ROW: PromotionDecisionRecord = {
+  ...DRAFT_ROW,
+  id: "dec2",
+  decision: "retained",
+  to_class_id: null,
+  to_section_id: null,
+  remarks: null,
+};
+
 /** `GET /student-promotions/{batch_id}` — the batch and its decisions inline. */
 function batch(decisions: unknown[], status = "draft"): ApiResult<unknown> {
   return {
@@ -84,6 +106,8 @@ describe("PromotionBatchReview", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockUsePermission.mockReturnValue(false);
+    mockClasses = { data: CLASSES };
+    mockSections = { data: SECTIONS };
   });
 
   it("lists the batch's rows by batch_id and resolves class and section names", async () => {
@@ -180,5 +204,32 @@ describe("PromotionBatchReview", () => {
       "href",
       "/academics/promotions",
     );
+  });
+
+  it("shows an em dash for the target class, section and remarks of a retained student", async () => {
+    mockGet.mockResolvedValue(batch([RETAINED_ROW]));
+
+    renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
+
+    const link = await screen.findByRole("link", { name: "stu-1" });
+    const row = link.closest("tr") as HTMLElement;
+    expect(within(row).getByText("Retained")).toBeInTheDocument();
+    expect(within(row).getByText("Grade 8")).toBeInTheDocument();
+    expect(within(row).getAllByText("—")).toHaveLength(3);
+  });
+
+  it("falls back to em dashes for the class and section names while the reference lists load", async () => {
+    mockClasses = { data: undefined };
+    mockSections = { data: undefined };
+    mockGet.mockResolvedValue(batch([DRAFT_ROW]));
+
+    renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
+
+    const link = await screen.findByRole("link", { name: "stu-1" });
+    const row = link.closest("tr") as HTMLElement;
+    // From class, target class and target section are all id lookups into lists
+    // that have not arrived; the remarks are on the row itself, so they still show.
+    expect(within(row).getAllByText("—")).toHaveLength(3);
+    expect(within(row).getByText("Borderline in maths.")).toBeInTheDocument();
   });
 });

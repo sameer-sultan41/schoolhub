@@ -10,14 +10,24 @@ const mockPush = jest.fn();
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn() }),
 }));
+
+/** The reference lists, held in mutable bindings so one test can put them back
+ * into the `data: undefined` state every screen paints before they arrive. */
+interface Option {
+  id: string;
+  name: string;
+}
+const SESSIONS: Option[] = [
+  { id: "sess1", name: "2025-26" },
+  { id: "sess2", name: "2026-27" },
+];
+const CLASSES: Option[] = [{ id: "class1", name: "Grade 8" }];
+let mockSessions: { data: Option[] | undefined } = { data: SESSIONS };
+let mockClasses: { data: Option[] | undefined } = { data: CLASSES };
+
 jest.mock("@/features/students/use-reference-data", () => ({
-  useAcademicSessions: () => ({
-    data: [
-      { id: "sess1", name: "2025-26" },
-      { id: "sess2", name: "2026-27" },
-    ],
-  }),
-  useClasses: () => ({ data: [{ id: "class1", name: "Grade 8" }] }),
+  useAcademicSessions: () => mockSessions,
+  useClasses: () => mockClasses,
 }));
 
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
@@ -43,6 +53,8 @@ describe("PromotionBatchForm", () => {
   beforeEach(() => {
     mockPost.mockReset();
     mockPush.mockReset();
+    mockSessions = { data: SESSIONS };
+    mockClasses = { data: CLASSES };
   });
 
   it("creates a batch and navigates to its review table", async () => {
@@ -129,5 +141,59 @@ describe("PromotionBatchForm", () => {
 
     expect(await screen.findByText(/conflicts with the current data/i)).toBeInTheDocument();
     expect(screen.getByText(/Reference: req-6/)).toBeInTheDocument();
+  });
+
+  it("empties the picked sessions and class when the dialog is dismissed", async () => {
+    const { user, dialog } = await openAndFill();
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "New batch" }));
+
+    const reopened = screen.getByRole("dialog");
+    expect(within(reopened).getByRole("combobox", { name: "From session" })).toHaveTextContent(
+      "Select a session",
+    );
+    expect(within(reopened).getByRole("combobox", { name: "To session" })).toHaveTextContent(
+      "Select a session",
+    );
+    expect(within(reopened).getByRole("combobox", { name: "Class" })).toHaveTextContent(
+      "Select a class",
+    );
+  });
+
+  it("offers no options while the session and class lists are still loading", async () => {
+    mockSessions = { data: undefined };
+    mockClasses = { data: undefined };
+    const user = userEvent.setup();
+
+    renderWithProviders(<PromotionBatchForm />);
+    await user.click(screen.getByRole("button", { name: "New batch" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("combobox", { name: "Class" })).toHaveTextContent(
+      "Select a class",
+    );
+
+    await user.click(within(dialog).getByRole("combobox", { name: "From session" }));
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
+  it("shows no message at all when the client rejects with something that is not an ApiError", async () => {
+    mockPost.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const { user, dialog } = await openAndFill();
+    await user.click(within(dialog).getByRole("button", { name: "New batch" }));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalled();
+    });
+    // The envelope is the only thing this form knows how to render, so a
+    // non-ApiError rejection leaves the dialog open and unannotated.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

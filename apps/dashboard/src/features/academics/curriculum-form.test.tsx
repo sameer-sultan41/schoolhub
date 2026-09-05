@@ -7,13 +7,29 @@ import { apiClient } from "@/lib/auth";
 import { renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({ apiClient: { post: jest.fn(), patch: jest.fn() } }));
+
+/** The four reference lists, in mutable bindings so one test can hold them in
+ * the `data: undefined` state the dialog paints before they arrive. */
+interface Option {
+  id: string;
+  name: string;
+}
+const SESSIONS: Option[] = [{ id: "sess1", name: "2026-27" }];
+const CLASSES: Option[] = [{ id: "class1", name: "Grade 7" }];
+const CAMPUSES: Option[] = [{ id: "camp1", name: "Main Campus" }];
+const SUBJECTS: Option[] = [{ id: "sub1", name: "Mathematics" }];
+let mockSessions: { data: Option[] | undefined } = { data: SESSIONS };
+let mockClasses: { data: Option[] | undefined } = { data: CLASSES };
+let mockCampuses: { data: Option[] | undefined } = { data: CAMPUSES };
+let mockSubjects: { data: Option[] | undefined } = { data: SUBJECTS };
+
 jest.mock("@/features/students/use-reference-data", () => ({
-  useAcademicSessions: () => ({ data: [{ id: "sess1", name: "2026-27" }] }),
-  useClasses: () => ({ data: [{ id: "class1", name: "Grade 7" }] }),
-  useCampuses: () => ({ data: [{ id: "camp1", name: "Main Campus" }] }),
+  useAcademicSessions: () => mockSessions,
+  useClasses: () => mockClasses,
+  useCampuses: () => mockCampuses,
 }));
 jest.mock("@/features/academics/use-academics-reference-data", () => ({
-  useSubjects: () => ({ data: [{ id: "sub1", name: "Mathematics" }] }),
+  useSubjects: () => mockSubjects,
 }));
 
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
@@ -37,6 +53,16 @@ const MAPPING: CurriculumRecord = {
   updated_at: "2026-04-01T00:00:00Z",
 };
 
+/** The other shape of a row: pinned to one campus, and part of an elective group. */
+const ELECTIVE_MAPPING: CurriculumRecord = {
+  ...MAPPING,
+  id: "cs2",
+  campus_id: "camp1",
+  is_elective: true,
+  elective_group: "Languages",
+  notes: null,
+};
+
 async function openCreateAndPickKeys() {
   const user = userEvent.setup();
   renderWithProviders(<CurriculumForm mode="create" />);
@@ -57,6 +83,10 @@ describe("CurriculumForm", () => {
   beforeEach(() => {
     mockPost.mockReset();
     mockPatch.mockReset();
+    mockSessions = { data: SESSIONS };
+    mockClasses = { data: CLASSES };
+    mockCampuses = { data: CAMPUSES };
+    mockSubjects = { data: SUBJECTS };
   });
 
   it("creates a core mapping, turning blank optional fields into nulls", async () => {
@@ -220,5 +250,101 @@ describe("CurriculumForm", () => {
 
     expect(await screen.findByText(/conflicts with the current data/i)).toBeInTheDocument();
     expect(screen.getByText(/Reference: req-7/)).toBeInTheDocument();
+  });
+
+  it("prefills and resends the campus and elective group of a campus-scoped elective", async () => {
+    mockPatch.mockResolvedValue({
+      data: ELECTIVE_MAPPING,
+      meta: undefined,
+      requestId: null,
+      status: 200,
+    });
+    const user = userEvent.setup();
+
+    renderWithProviders(<CurriculumForm mode="edit" mapping={ELECTIVE_MAPPING} />);
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("combobox", { name: "Campus" })).toHaveTextContent(
+      "Main Campus",
+    );
+    expect(within(dialog).getByLabelText(/Elective subject/)).toBeChecked();
+    expect(within(dialog).getByLabelText("Elective group")).toHaveValue("Languages");
+
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(mockPatch).toHaveBeenCalledWith(
+        "/class-subjects/cs2",
+        expect.objectContaining({
+          campus_id: "camp1",
+          is_elective: true,
+          elective_group: "Languages",
+        }),
+      );
+    });
+  });
+
+  it("restores the row's own values when a dismissed edit dialog is reopened", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<CurriculumForm mode="edit" mapping={MAPPING} />);
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const dialog = screen.getByRole("dialog");
+    const periods = within(dialog).getByLabelText(/Weekly periods/);
+    await user.clear(periods);
+    await user.type(periods, "9");
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const reopened = screen.getByRole("dialog");
+    expect(within(reopened).getByLabelText(/Weekly periods/)).toHaveValue(4);
+    expect(within(reopened).getByLabelText("Notes")).toHaveValue("Split across two terms.");
+    expect(mockPatch).not.toHaveBeenCalled();
+  });
+
+  it("offers no options in any select while the reference lists are still loading", async () => {
+    mockSessions = { data: undefined };
+    mockClasses = { data: undefined };
+    mockCampuses = { data: undefined };
+    mockSubjects = { data: undefined };
+    const user = userEvent.setup();
+
+    renderWithProviders(<CurriculumForm mode="create" />);
+    await user.click(screen.getByRole("button", { name: "Add subject" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("combobox", { name: "Class" })).toHaveTextContent(
+      "Select a class",
+    );
+    expect(within(dialog).getByRole("combobox", { name: "Subject" })).toHaveTextContent(
+      "Select a subject",
+    );
+    expect(within(dialog).getByRole("combobox", { name: "Campus" })).toHaveTextContent(
+      "All campuses",
+    );
+
+    await user.click(within(dialog).getByRole("combobox", { name: "Academic session" }));
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
+  it("shows no message at all when the client rejects with something that is not an ApiError", async () => {
+    mockPost.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const { user, dialog } = await openCreateAndPickKeys();
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalled();
+    });
+    // The API envelope is the only thing this form renders, so a non-ApiError
+    // rejection leaves the dialog open and unannotated.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
