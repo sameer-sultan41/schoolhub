@@ -114,6 +114,11 @@ class CampusViewSet(BlockingDestroyMixin, TenantModelViewSet):
 class DepartmentViewSet(BlockingDestroyMixin, TenantModelViewSet):
     """Academic and administrative departments (module doc §5.3)."""
 
+    # `departments.campus_id` is nullable and means "spans every campus"
+    # (models.py). Without this a campus-scoped principal loses exactly those
+    # shared departments from the list — silently, since NULL is simply not in
+    # an `IN (...)`.
+    scope_campus_allows_null = True
     queryset = Department.objects
     serializer_class = DepartmentSerializer
     filterset_class = DepartmentFilterSet
@@ -317,6 +322,9 @@ class ClassSubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
     management, and §4 declares no separate key for it.
     """
 
+    # `class_subjects.campus_id` is nullable and means "applies to every
+    # campus" — the shared curriculum row every campus teaches.
+    scope_campus_allows_null = True
     queryset = ClassSubject.objects
     serializer_class = ClassSubjectSerializer
     filterset_class = ClassSubjectFilterSet

@@ -269,6 +269,14 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   its own `id` instead. `tests/test_endpoint_contracts.py` walks the URL conf and
   fails on any viewset whose scope field does not resolve, so the next
   tenant-wide table is enrolled without anyone remembering to.
+  **A second, quieter half followed**: `departments.campus_id` and
+  `class_subjects.campus_id` are nullable and mean "every campus", and
+  `IN (...)` drops NULL — so a campus-scoped principal lost exactly the shared
+  rows that applied to them, with no error to report it. `periods` had the same
+  shape and had been handling it with a bespoke `get_queryset` union.
+  `scope_campus_allows_null` is the shared opt-in, and the tests assert the row
+  is visible rather than that the query merely does not crash — the distinction
+  the first round missed, since `.none()` is also a 200.
 - **`core.notifications` now exists** (PR 0) — the machinery every module doc's
   §12 table needs: the `notifications`/`delivery_logs` tables, the
   `ChannelAdapter` interface with working in-app and email adapters, a

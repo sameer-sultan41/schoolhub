@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.core.cache import cache
+from django.db.models import Q
 from rest_framework import permissions
 
 from core.rbac.models import RecordScope
@@ -119,6 +120,7 @@ def scope_queryset(
     *,
     own_field: str | None = None,
     campus_field: str | None = "campus_id",
+    campus_allows_null: bool = False,
 ):
     """Narrow a queryset by the user's record scope.
 
@@ -135,6 +137,9 @@ def scope_queryset(
 
     A model may define `filter_by_campus(queryset, campus_ids)` when one column
     cannot express the relationship; it takes precedence over `campus_field`.
+
+    `campus_allows_null=True` widens the match to include rows whose campus is
+    NULL, for the columns that use NULL to mean "every campus".
 
     **`campus_field=None` means the table has no campus dimension at all.** Classes,
     subjects and houses are defined once for a school and used by every campus —
@@ -166,7 +171,17 @@ def scope_queryset(
                 return by_campus(queryset, campus_ids)
             if campus_field is None:
                 return queryset
-            return queryset.filter(**{f"{campus_field}__in": campus_ids})
+            match = Q(**{f"{campus_field}__in": campus_ids})
+            if campus_allows_null:
+                # A nullable campus column that means "every campus" — the
+                # pattern is all over this schema (`departments`, `class_subjects`
+                # and `periods` all say so in their own help_text). `IN (...)`
+                # drops NULL, so without this a campus-scoped principal loses
+                # exactly the rows that *do* apply to them, and nothing errors:
+                # the tenant-wide department, the shared curriculum mapping and
+                # the lunch break simply are not in the list.
+                match |= Q(**{f"{campus_field.removesuffix('_id')}__isnull": True})
+            return queryset.filter(match)
     if RecordScope.OWN in scopes:
         owned = getattr(queryset.model, "filter_owned_by_user", None)
         if callable(owned):
