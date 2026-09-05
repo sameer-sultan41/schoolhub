@@ -108,9 +108,14 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         )
 
     def test_an_elective_mapping_needs_a_group(self) -> None:
-        """Moved from school_organization with the endpoint. The rule is
-        `map_subject_to_class`'s and the module still owns it; only the keys
-        guarding the route changed."""
+        """400 with the field named, which the ownership move had quietly cost.
+
+        `map_subject_to_class` enforces this too, but with a bare string — so
+        once the endpoint moved here and the serializer stopped checking, the
+        form got a 422 on `non_field` where it used to get a 400 on
+        `elective_group`. The serializer checks again, which also covers the
+        PATCH path the service never sees.
+        """
         self.allow("academics.curriculum.create")
         with tenant_context(self.tenant.id):
             other_subject = SubjectFactory(tenant=self.tenant)
@@ -128,6 +133,10 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "elective_group",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
 
     def test_an_inactive_subject_cannot_be_mapped(self) -> None:
         """422, unlike the two above: whether a subject is active is state on

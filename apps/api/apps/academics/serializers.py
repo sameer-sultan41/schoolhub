@@ -78,19 +78,36 @@ class CurriculumSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs: dict) -> dict:
-        """Only the rule school_organization does not already enforce.
+        """Term plans, plus the two rules a PATCH would otherwise slip past.
 
-        Session-writable, class/subject active, `weekly_periods >= 1`, elective
-        groups and duplicate rejection all live in
-        `school_organization.services.map_subject_to_class`, which the viewset
-        delegates creation to — duplicating them here would mean two places to
-        keep in step. Term plans are academics' own §11 rule and have no
-        counterpart there.
+        Session-writable, class/subject active and duplicate rejection all live
+        in `school_organization.services.map_subject_to_class`, which the viewset
+        delegates creation to — restating them here would mean two places to keep
+        in step, and each needs state the payload does not carry.
+
+        `elective_group` is different, for the same reason `weekly_periods` is:
+        an **update never reaches that service**. Without this check a
+        `PATCH {"is_elective": true}` on a row with no group saved happily, and
+        even on create the service's version raises with a bare string, so the
+        form got a 422 with `non_field` where it used to get a 400 naming the
+        field — behaviour this endpoint had before it moved here from
+        school_organization, and there is no reason for the move to have cost it.
+
+        Term plans are academics' own §11 rule and have no counterpart there.
         """
         session = attrs.get("academic_session") or getattr(self.instance, "academic_session", None)
         if session is not None and "term_plans" in attrs:
             services.assert_term_plans_reference_session_terms(
                 session=session, term_plans=attrs.get("term_plans")
+            )
+
+        is_elective = attrs.get("is_elective")
+        if is_elective is None:
+            is_elective = getattr(self.instance, "is_elective", False)
+        group = attrs.get("elective_group") or getattr(self.instance, "elective_group", None)
+        if is_elective and not group:
+            raise serializers.ValidationError(
+                {"elective_group": "Required for an elective mapping so options can be grouped."}
             )
         return attrs
 
