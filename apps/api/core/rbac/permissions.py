@@ -133,6 +133,9 @@ def scope_queryset(
     `student_guardians`. `own_field` stays as the fallback for the many models where
     "own" really is a single column.
 
+    A model may define `filter_by_campus(queryset, campus_ids)` when one column
+    cannot express the relationship; it takes precedence over `campus_field`.
+
     **`campus_field=None` means the table has no campus dimension at all.** Classes,
     subjects and houses are defined once for a school and used by every campus —
     there is no column to narrow on and no join that would invent one. Without this,
@@ -151,9 +154,18 @@ def scope_queryset(
         return queryset
     if RecordScope.CAMPUS in scopes:
         campus_ids = [ref for ref in scopes[RecordScope.CAMPUS] if ref]
-        if campus_ids and campus_field is None:
-            return queryset
         if campus_ids:
+            # A per-model hook first, for the same reason `own` and `assigned`
+            # have one: a single field path cannot express every campus
+            # relationship. A student transfer has `from_campus_id` *and*
+            # `to_campus_id`, and scoping on either alone hides half the queue —
+            # the destination campus could not see the incoming transfer it is
+            # the one expected to approve.
+            by_campus = getattr(queryset.model, "filter_by_campus", None)
+            if callable(by_campus):
+                return by_campus(queryset, campus_ids)
+            if campus_field is None:
+                return queryset
             return queryset.filter(**{f"{campus_field}__in": campus_ids})
     if RecordScope.OWN in scopes:
         owned = getattr(queryset.model, "filter_owned_by_user", None)
