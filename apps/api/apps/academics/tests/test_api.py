@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+from unittest import mock
 
 from django.utils import timezone
 from rest_framework import status
@@ -15,6 +16,7 @@ from apps.academics.tests.factories import (
     SubjectFactory,
     TeacherAllocationFactory,
 )
+from apps.school_organization import services as school_services
 from apps.school_organization.models import ClassSubject, SessionStatus
 from apps.staff_management.models import EmploymentStatus, StaffType
 from core.tenancy.context import tenant_context
@@ -262,6 +264,43 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+
+class CurriculumDeleteTests(AcademicsAPITestCase):
+    """`BlockingDestroyMixin`, which the move from school_organization dropped.
+
+    Nothing has a foreign key to `class_subjects` yet, so `_live_dependents` is
+    stubbed rather than a real dependent being built — the regression is the
+    missing *wiring*, and stubbing the one query it makes is what lets that be
+    asserted before the first module that adds the FK depends on it. `PROTECT`
+    is no backstop here either: `perform_destroy` is a soft delete, so the
+    database never sees a DELETE to refuse.
+    """
+
+    def test_a_row_with_live_dependents_is_refused_with_a_422(self) -> None:
+        self.allow("academics.curriculum.delete")
+
+        with mock.patch.object(
+            school_services, "_live_dependents", return_value=["timetable entries"]
+        ):
+            response = self.client.delete(f"/api/v1/class-subjects/{self.curriculum.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("timetable entries", response.json()["error"]["message"])
+        with tenant_context(self.tenant.id):
+            self.assertTrue(
+                ClassSubject.objects.alive().filter(pk=self.curriculum.pk).exists(),
+                "a refused delete must not have soft-deleted the row",
+            )
+
+    def test_a_row_nothing_points_at_still_deletes(self) -> None:
+        self.allow("academics.curriculum.delete")
+
+        response = self.client.delete(f"/api/v1/class-subjects/{self.curriculum.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(ClassSubject.objects.alive().filter(pk=self.curriculum.pk).exists())
 
 
 class CloneCurriculumTests(AcademicsAPITestCase):

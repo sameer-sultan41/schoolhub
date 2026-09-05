@@ -137,7 +137,11 @@ export interface PromotionReportEntry {
   error?: string;
 }
 
-/** `:execute` — services.execute_batch's per-student report. */
+/**
+ * `services.execute_batch`'s per-student report. Not the `:execute` response —
+ * that is a `202` carrying a job id — but the `result` of the job it queues, read
+ * back from `GET /jobs/{id}`.
+ */
 export interface PromotionExecutionReport {
   enrolled: PromotionReportEntry[];
   graduated: PromotionReportEntry[];

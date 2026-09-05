@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import date
 
 from django.db import transaction
@@ -551,6 +552,31 @@ def _proposed_decision(row: StudentPromotion) -> str:
     )
 
 
+def assert_retention_keeps_the_class(
+    *, decision: str | None, from_class_id: uuid.UUID | None, to_class_id: uuid.UUID | None
+) -> None:
+    """§6: "retained students re-enroll in the same class next session".
+
+    Retention is the one decision whose target class is not a choice — it is
+    dictated by where the student already is, and a `retained` row pointing at
+    another class is a promotion wearing the wrong label: the source enrollment
+    closes as `retained` while the new one lands a level up, and nothing
+    downstream would ever question it.
+
+    A plain function over three ids rather than a check on a row, because both
+    gates that need it hold different things: the serializer has a half-applied
+    payload over an instance, and `_execute_one` has the row. Living here rather
+    than only in the serializer is what makes it hold for the importer and any
+    later job that writes a decision.
+    """
+    if decision != PromotionDecision.RETAINED or to_class_id is None:
+        return
+    if to_class_id != from_class_id:
+        raise DomainRuleViolation(
+            {"to_class_id": "A retained student re-enrolls in the same class they were in."}
+        )
+
+
 @transaction.atomic
 def approve_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     """§7.2 / RBAC §2.4: the approver may not be the preparer.
@@ -641,7 +667,35 @@ def revert_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     )
 
 
-def execute_batch(*, batch_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: uuid.UUID) -> dict:
+def _assert_executable(statuses: set[str]) -> None:
+    if not statuses:
+        # 404 for the same reason `assert_batch_in_status` gives one.
+        raise Http404("No such promotion batch.")
+    if statuses - {PromotionStatus.APPROVED, PromotionStatus.EXECUTED}:
+        raise Conflict("Only an approved batch can be executed.")
+
+
+def assert_batch_executable(*, batch_id: uuid.UUID) -> None:
+    """The preconditions an `:execute` caller is entitled to hear synchronously.
+
+    `:execute` answers `202` and does the work on a worker, so without this the
+    only thing separating "queued" from "you asked to execute a draft batch" is
+    a job that fails out of band minutes later. Whether a batch is executable at
+    all is knowable at request time and does not need a queue to decide, so it
+    is decided here and the client keeps the 404/409 the endpoint always gave.
+    `execute_batch` re-checks under the worker's own read — this is a courtesy,
+    never the guarantee.
+    """
+    _assert_executable(set(batch_queryset(batch_id).values_list("status", flat=True)))
+
+
+def execute_batch(
+    *,
+    batch_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    on_progress: Callable[[int], None] | None = None,
+) -> dict:
     """Create next-session enrollments for an approved batch. Idempotent.
 
     Not `@transaction.atomic` around the whole batch, deliberately: this runs as
@@ -650,6 +704,13 @@ def execute_batch(*, batch_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: uuid.U
     must not discard the rest. Each student commits or fails on its own and the
     per-student outcome is reported, which is what §7.2's "per-student result
     report" means.
+
+    That per-student commit is the reason `apps/academics/tasks.py` exists and
+    the endpoint returns `202`. The `tenant_atomic` each student opens is only a
+    real, committing transaction when nothing else has one open; called inside a
+    DRF request it nests as a savepoint under `ATOMIC_REQUESTS`, so the isolation
+    survives but every row lock is held until the response is rendered and a
+    class of hundreds gets no visible progress before the gateway gives up.
 
     Re-execution is a no-op per row (§11: "re-execution attempts are no-ops"),
     which is what makes the `Idempotency-Key` on the endpoint meaningful beyond
@@ -663,26 +724,23 @@ def execute_batch(*, batch_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: uuid.U
                 "student", "from_enrollment", "to_academic_session", "to_class"
             )
         )
-    if not rows:
-        raise Http404("No such promotion batch.")
-
-    statuses = {row.status for row in rows}
-    if statuses - {PromotionStatus.APPROVED, PromotionStatus.EXECUTED}:
-        raise Conflict("Only an approved batch can be executed.")
+    _assert_executable({row.status for row in rows})
 
     report: dict[str, list] = {"enrolled": [], "graduated": [], "skipped": [], "failed": []}
 
-    for row in rows:
+    for index, row in enumerate(rows, start=1):
         if row.status == PromotionStatus.EXECUTED:
             report["skipped"].append(
                 {"student_id": str(row.student_id), "reason": "already executed"}
             )
-            continue
-        try:
-            _execute_one(row=row, tenant_id=tenant_id, actor_id=actor_id, report=report)
-        except Exception as exc:  # noqa: BLE001 — one student must not fail the batch
-            logger.warning("promotion execution failed for student %s", row.student_id)
-            report["failed"].append({"student_id": str(row.student_id), "error": str(exc)})
+        else:
+            try:
+                _execute_one(row=row, tenant_id=tenant_id, actor_id=actor_id, report=report)
+            except Exception as exc:  # noqa: BLE001 — one student must not fail the batch
+                logger.warning("promotion execution failed for student %s", row.student_id)
+                report["failed"].append({"student_id": str(row.student_id), "error": str(exc)})
+        if on_progress is not None:
+            on_progress(round(index / len(rows) * 100))
 
     return report
 
@@ -721,6 +779,10 @@ def _execute_one(*, row: StudentPromotion, tenant_id: uuid.UUID, actor_id: uuid.
             _mark_executed(row, actor_id)
             report["graduated"].append({"student_id": str(row.student_id)})
             return
+
+        assert_retention_keeps_the_class(
+            decision=row.decision, from_class_id=row.from_class_id, to_class_id=row.to_class_id
+        )
 
         if row.to_section_id is None:
             raise DomainRuleViolation(

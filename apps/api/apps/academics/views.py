@@ -10,7 +10,10 @@ used to own under `school.subject.*` keys. academics.md §4 declares
 `academics.curriculum.*` for it and school-organization.md §6 says curriculum
 mapping belongs here, so the endpoint moved and the old viewset was removed —
 one route, one key set. The *model* stayed put (apps/academics/models.py's
-header says why).
+header says why), and so did `BlockingDestroyMixin`, imported below: the mixin
+is a thin wrapper over `school_organization.services.assert_deletable`, which
+walks the model's own related objects, so it belongs beside the model rather
+than being copied to follow the route.
 """
 
 from __future__ import annotations
@@ -18,9 +21,11 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from django.db import transaction
 from django.db.models import Count, Min
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -44,20 +49,23 @@ from apps.academics.serializers import (
     PromotionDecisionSerializer,
     TeacherAllocationSerializer,
 )
+from apps.academics.tasks import execute_promotion_batch_task
 from apps.school_organization.models import AcademicSession, ClassSubject
 from apps.school_organization.services import map_subject_to_class
+from apps.school_organization.views import BlockingDestroyMixin
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
+from core.jobs.services import attach_celery_task_id, create_job
 from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey
 
 FEATURE = "module.academics"
 
 
-class CurriculumViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
     """`class_subjects` — the session curriculum grid (§5.1)."""
 
     queryset = ClassSubject.objects
@@ -151,6 +159,12 @@ class CurriculumViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
                 elective_group=instance.elective_group,
                 exclude_pk=instance.pk,
             )
+        # Through `BlockingDestroyMixin`, which the move from school_organization
+        # dropped along with its `assert_deletable` check. The base
+        # `perform_destroy` is a *soft* delete, so the PROTECT foreign keys never
+        # fire as a backstop and a curriculum row would simply vanish from under
+        # its dependents. Nothing points at `class_subjects` yet, which is exactly
+        # why the check has to be back before the first module that does.
         super().perform_destroy(instance)
 
     @extend_schema(
@@ -420,20 +434,52 @@ class PromotionBatchViewSet(
     @extend_schema(
         summary="Execute an approved batch, creating next-session enrollments",
         request=None,
-        responses={200: OpenApiResponse(description="Per-student execution report.")},
+        responses={
+            202: OpenApiResponse(
+                description=(
+                    "{'data': {'job_id': str, 'status': 'queued'}}. Poll GET /jobs/{id}; "
+                    "the per-student execution report is the finished job's `result`."
+                )
+            )
+        },
     )
     def execute(self, request: Request, pk: str) -> Response:
+        # `202` + a job, which is what §7.2 always specified and what shipping
+        # this synchronously deferred. Running it in the request was not merely
+        # slow: `execute_batch` commits each student separately on purpose, and
+        # `ATOMIC_REQUESTS` makes that impossible — the per-student
+        # `tenant_atomic` degrades to a savepoint, so a class of hundreds holds
+        # every row lock it takes until the response is rendered, and shows the
+        # caller nothing until then. On a worker the helper means what it says.
         batch_id = _batch_uuid(pk)
+        # Before the job, not inside it: a draft batch is refused at request time
+        # so the caller keeps the 409 rather than getting a job that fails out of
+        # band. `execute_batch` checks again on the worker.
+        services.assert_batch_executable(batch_id=batch_id)
 
         def run() -> Response:
-            report = services.execute_batch(
-                batch_id=batch_id, tenant_id=request.tenant.pk, actor_id=request.user.pk
+            job = create_job(
+                tenant_id=request.tenant.pk,
+                job_type="promotion.execute",
+                payload={"batch_id": str(batch_id)},
+                actor_id=request.user.pk,
             )
-            return ActionResponse.ok(report, message="Batch executed.")
+            result = execute_promotion_batch_task.delay(
+                tenant_id=str(request.tenant.pk),
+                job_id=str(job.pk),
+                actor_id=str(request.user.pk),
+            )
+            attach_celery_task_id(job=job, celery_task_id=result.id)
+            record_audit(
+                request, "execute", job, after={"job_id": str(job.pk), "batch_id": str(batch_id)}
+            )
+            return ActionResponse.accepted(str(job.pk), message="Batch execution queued.")
 
-        # §11: "re-execution attempts are no-ops". The Idempotency-Key replays a
-        # client retry within 24h; the service's own per-row `executed` skip is
-        # what makes a re-run safe after that window too.
+        # §11: "re-execution attempts are no-ops". The Idempotency-Key now
+        # replays the *job id* for a client retry within 24h, so a retried
+        # request rejoins the run already in flight instead of queueing a second
+        # one; the service's own per-row `executed` skip is what makes a re-run
+        # safe after that window too.
         return replay_or_execute(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
@@ -470,20 +516,71 @@ class PromotionDecisionViewSet(
     http_method_names = ["patch", "head", "options"]
 
     def get_object(self) -> StudentPromotion:
+        """Read under a row lock — every request this viewset serves is a write.
+
+        `http_method_names` is `patch` only, so there is no read path here whose
+        latency the lock costs, and taking it is what turns the `status` check in
+        `update` from a guess into a decision: `:submit` locks every row of the
+        batch (`services.assert_batch_in_status`), so a submit racing this edit
+        either lands first and is seen, or waits behind it.
+
+        `of=("self",)` because a campus-scoped user's queryset joins `students`
+        to reach `scope_campus_field`, and a bare `FOR UPDATE` would lock that
+        student's row too — blocking edits to the student record for the length
+        of a promotion PATCH, which nothing here needs.
+        """
         instance = get_object_or_404(
-            self.filter_queryset(self.get_queryset()),
+            self.filter_queryset(self.get_queryset()).select_for_update(of=("self",)),
             batch_id=_batch_uuid(self.kwargs["batch_pk"]),
             student_id=self.kwargs["student_pk"],
         )
         self.check_object_permissions(self.request, instance)
         return instance
 
+    @transaction.atomic
     def update(self, request: Request, *args, **kwargs) -> Response:
-        """Only a draft row is editable — everything after submit is under review."""
+        """Only a draft row is editable — everything after submit is under review.
+
+        Explicitly atomic rather than leaning on `ATOMIC_REQUESTS`: the lock
+        `get_object` takes is only a lock inside a transaction, and a settings
+        change that turned request-level atomicity off would otherwise make
+        `select_for_update` an error rather than a silent no-op — but it would
+        make it one here, at the exact line whose correctness depends on it.
+        """
         instance = self.get_object()
         if instance.status != PromotionStatus.DRAFT:
             raise Conflict(f"This decision is {instance.status} and can no longer be edited.")
         return super().update(request, *args, **kwargs)
+
+    def perform_update(self, serializer) -> None:
+        """Restate `draft` in the UPDATE's own WHERE, the way `_transition` does.
+
+        Not redundant with the check above for the reason that function's
+        docstring gives: the lock is what prevents the interleaving, and this is
+        what keeps the write safe if a later refactor drops the lock. Django's
+        `Model.save()` cannot express a precondition — it writes by primary key
+        and nothing else — so the write goes through the queryset instead, and
+        the instance is re-read afterwards because `serializer.data` renders from
+        it and would otherwise echo the values as they were before the UPDATE.
+        """
+        before = self.get_serializer(serializer.instance).data
+        updated = (
+            StudentPromotion.objects.alive()
+            .filter(pk=serializer.instance.pk, status=PromotionStatus.DRAFT)
+            .update(
+                updated_by=self.request.user.pk,
+                updated_at=timezone.now(),
+                **serializer.validated_data,
+            )
+        )
+        if not updated:
+            raise Conflict(
+                "This decision changed while the edit was running. Reload and try again."
+            )
+        serializer.instance.refresh_from_db()
+        record_audit(
+            self.request, "update", serializer.instance, before=before, after=serializer.data
+        )
 
 
 def _batch_uuid(value: str) -> uuid.UUID:

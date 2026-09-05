@@ -118,16 +118,72 @@ describe("PromotionDecisionForm", () => {
     expect(mockPatch).not.toHaveBeenCalled();
   });
 
-  it("rejects a graduating student that still names a target class", async () => {
-    const { user, dialog } = await open();
+  it("clears the target class and section when the decision is switched to graduated", async () => {
+    /**
+     * The regression: selecting Graduated disabled both controls without
+     * clearing them, while the schema requires a graduating row to carry
+     * neither. Every promoted row has a target class — that is what the proposal
+     * fills in — so switching one to Graduated produced a form that could never
+     * be saved, refusing on the strength of two fields it would not let the
+     * reviewer edit. This asserted the dead end as if it were the rule.
+     */
+    mockPatch.mockResolvedValue({
+      data: DECISION,
+      meta: undefined,
+      requestId: null,
+      status: 200,
+    });
+
+    const { user, dialog } = await open({ ...DECISION, to_section_id: "sec9a" });
     await user.click(within(dialog).getByRole("combobox", { name: "Decision" }));
     await user.click(await screen.findByRole("option", { name: "Graduated" }));
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(
-      await screen.findByText("A graduating student has no target class."),
-    ).toBeInTheDocument();
-    expect(mockPatch).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockPatch).toHaveBeenCalledWith("/student-promotions/batch-1/decisions/stu-1", {
+        decision: "graduated",
+        to_class_id: null,
+        to_section_id: null,
+        override_reason: null,
+        remarks: null,
+      });
+    });
+    expect(screen.queryByText("A graduating student has no target class.")).not.toBeInTheDocument();
+  });
+
+  it("leaves a decision switched back off graduated completable", async () => {
+    mockPatch.mockResolvedValue({
+      data: DECISION,
+      meta: undefined,
+      requestId: null,
+      status: 200,
+    });
+
+    const { user, dialog } = await open();
+    const decisionSelect = within(dialog).getByRole("combobox", { name: "Decision" });
+    await user.click(decisionSelect);
+    await user.click(await screen.findByRole("option", { name: "Graduated" }));
+    await user.click(decisionSelect);
+    await user.click(await screen.findByRole("option", { name: "Retained" }));
+
+    // The cleared target is the reviewer's to fill in again, and they can: the
+    // control is live again and the class list is there.
+    const targetClass = within(dialog).getByRole("combobox", { name: "Target class" });
+    expect(targetClass).toBeEnabled();
+    await user.click(targetClass);
+    // Retention keeps the student in the class they were in (§6) — `class8`.
+    await user.click(await screen.findByRole("option", { name: "Grade 8" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(mockPatch).toHaveBeenCalledWith("/student-promotions/batch-1/decisions/stu-1", {
+        decision: "retained",
+        to_class_id: "class8",
+        to_section_id: null,
+        override_reason: null,
+        remarks: null,
+      });
+    });
   });
 
   it("locks the target class and section once the decision is graduated", async () => {

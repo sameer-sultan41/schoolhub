@@ -72,13 +72,17 @@ const DRAFT_ROW: PromotionDecisionRecord = {
   updated_at: "2026-04-01T00:00:00Z",
 };
 
-/** A retained student: staying put, so there is no target class, no target
- * section, and nothing to remark on. */
+/** A retained student: §6 re-enrols them in the class they were already in, so
+ * the target class is the source class rather than nothing. `graduated` is the
+ * only decision the model lets carry a null `to_class_id`
+ * (`promotions_target_class_matches_decision`), and the API now refuses a
+ * `retained` row that names any other class — so a null here was a row the
+ * database would not have held. Section and remarks are genuinely unset. */
 const RETAINED_ROW: PromotionDecisionRecord = {
   ...DRAFT_ROW,
   id: "dec2",
   decision: "retained",
-  to_class_id: null,
+  to_class_id: "class8",
   to_section_id: null,
   remarks: null,
 };
@@ -127,7 +131,7 @@ describe("PromotionBatchReview", () => {
     expect(mockGet.mock.calls[0]?.[0]).toBe("/student-promotions/batch-1");
   });
 
-  it("reads the batch state off the rows and hands it to the action bar", async () => {
+  it("reads the batch state off the batch and hands it to the action bar", async () => {
     mockGet.mockResolvedValue(batch([DRAFT_ROW]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
@@ -136,6 +140,24 @@ describe("PromotionBatchReview", () => {
     expect(actions).toHaveAttribute("data-status", "draft");
     expect(actions).toHaveAttribute("data-batch-id", "batch-1");
     expect(screen.getByText("Draft")).toBeInTheDocument();
+  });
+
+  it("takes the batch's own status, not its first row's", async () => {
+    /**
+     * The regression: status came from `rows[0]?.status`, which was only ever
+     * right because there was no batch resource for it to disagree with. There
+     * is one now, and the serializer *groups on* status precisely so that a
+     * batch whose rows diverged is visible rather than papered over by whichever
+     * row happened to sort first.
+     */
+    mockGet.mockResolvedValue(batch([{ ...DRAFT_ROW, status: "draft" }], "approved"));
+
+    renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
+
+    const actions = await screen.findByTestId("batch-actions");
+    expect(actions).toHaveAttribute("data-status", "approved");
+    expect(screen.getByText("Approved")).toBeInTheDocument();
+    expect(screen.queryByText("Draft")).not.toBeInTheDocument();
   });
 
   it("offers the per-row editor only while the batch is draft and the user may update", async () => {
@@ -166,13 +188,18 @@ describe("PromotionBatchReview", () => {
     expect(screen.queryByTestId("decision-form")).not.toBeInTheDocument();
   });
 
-  it("shows the empty state and no action bar for an unknown batch", async () => {
+  it("shows the empty state when a batch answers with no decisions", async () => {
+    // The action bar stays, and that is the point of reading status off the
+    // batch: the resource answered, so the batch exists and has a state, where
+    // before this the whole bar vanished the moment `rows[0]` did. A batch with
+    // no rows is a 404 from `retrieve` in practice (the ApiError case covers
+    // that), so this exercises the table's own empty branch.
     mockGet.mockResolvedValue(batch([]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
     expect(await screen.findByText("This batch has no decisions.")).toBeInTheDocument();
-    expect(screen.queryByTestId("batch-actions")).not.toBeInTheDocument();
+    expect(screen.getByTestId("batch-actions")).toBeInTheDocument();
   });
 
   it("renders the ApiError envelope instead of the table on failure", async () => {
@@ -206,7 +233,7 @@ describe("PromotionBatchReview", () => {
     );
   });
 
-  it("shows an em dash for the target class, section and remarks of a retained student", async () => {
+  it("shows a retained student staying in their own class, em-dashing what is unset", async () => {
     mockGet.mockResolvedValue(batch([RETAINED_ROW]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
@@ -214,8 +241,9 @@ describe("PromotionBatchReview", () => {
     const link = await screen.findByRole("link", { name: "stu-1" });
     const row = link.closest("tr") as HTMLElement;
     expect(within(row).getByText("Retained")).toBeInTheDocument();
-    expect(within(row).getByText("Grade 8")).toBeInTheDocument();
-    expect(within(row).getAllByText("—")).toHaveLength(3);
+    // From class and target class, both Grade 8 — that is what retention means.
+    expect(within(row).getAllByText("Grade 8")).toHaveLength(2);
+    expect(within(row).getAllByText("—")).toHaveLength(2);
   });
 
   it("falls back to em dashes for the class and section names while the reference lists load", async () => {

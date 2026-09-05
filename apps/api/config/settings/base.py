@@ -242,6 +242,7 @@ CELERY_TASK_ROUTES = {
     # core.notifications does not exist yet (communication is a later tier) —
     # the routes docs/02-architecture/notifications.md describes land with
     # that module. Bulk, non-urgent background work routes to "bulk" for now.
+    "apps.academics.tasks.*": {"queue": "bulk"},
     "apps.student_management.tasks.*": {"queue": "bulk"},
     "apps.staff_management.tasks.*": {"queue": "bulk"},
     "core.idempotency.tasks.*": {"queue": "bulk"},

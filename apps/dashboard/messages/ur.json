@@ -651,6 +651,8 @@
       },
       "report": {
         "title": "نفاذ کی رپورٹ",
+        "running": "نفاذ جاری ہے — {progress}%",
+        "jobFailed": "نفاذ کا پس منظر کام ناکام ہو گیا۔",
         "enrolled": "اگلے سیشن میں داخل: {count}",
         "graduated": "فارغ التحصیل: {count}",
         "skipped": "چھوڑے گئے: {count}",

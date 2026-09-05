@@ -6,12 +6,14 @@ import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
 import { renderWithProviders } from "@/test-utils";
 
-jest.mock("@/lib/auth", () => ({ apiClient: { post: jest.fn() } }));
+jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 jest.mock("@/hooks/use-session", () => ({
   usePermission: jest.fn(() => false),
   useAnyPermission: jest.fn(() => false),
 }));
 
+// eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
+const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
 const mockPost = apiClient.post as jest.MockedFunction<typeof apiClient.post>;
 const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
@@ -20,8 +22,33 @@ function ok(data: unknown) {
   return { data, meta: undefined, requestId: null, status: 200 };
 }
 
+/** What `GET /jobs/{id}` answers with — `core.jobs.serializers.BackgroundJob`. */
+function job(overrides: Record<string, unknown>) {
+  return ok({
+    id: "job-1",
+    job_type: "promotion.execute",
+    status: "queued",
+    progress: 0,
+    result: null,
+    error: null,
+    started_at: null,
+    finished_at: null,
+    created_at: "2026-04-01T00:00:00Z",
+    updated_at: "2026-04-01T00:00:00Z",
+    ...overrides,
+  });
+}
+
+const REPORT = {
+  enrolled: [{ student_id: "stu-1" }],
+  graduated: [],
+  skipped: [{ student_id: "stu-2", reason: "already executed" }],
+  failed: [{ student_id: "stu-3", error: "No guardian on record." }],
+};
+
 describe("PromotionBatchActions", () => {
   beforeEach(() => {
+    mockGet.mockReset();
     mockPost.mockReset();
     mockUsePermission.mockReturnValue(true);
   });
@@ -73,15 +100,15 @@ describe("PromotionBatchActions", () => {
     });
   });
 
-  it("executes an approved batch with an idempotency key and renders the per-student report", async () => {
-    mockPost.mockResolvedValue(
-      ok({
-        enrolled: [{ student_id: "stu-1" }],
-        graduated: [],
-        skipped: [{ student_id: "stu-2", reason: "already executed" }],
-        failed: [{ student_id: "stu-3", error: "No guardian on record." }],
-      }),
-    );
+  it("queues execution with an idempotency key and polls the job for the report", async () => {
+    /**
+     * `:execute` answers `202` and a job id — the server runs a class of students
+     * one commit at a time on a worker. The per-student report only exists as the
+     * finished job's `result`, so awaiting the POST's own body (which this used
+     * to do) would have nothing in it to render.
+     */
+    mockPost.mockResolvedValue(ok({ job_id: "job-1", status: "queued" }));
+    mockGet.mockResolvedValue(job({ status: "succeeded", progress: 100, result: REPORT }));
     const user = userEvent.setup();
 
     renderWithProviders(<PromotionBatchActions batchId="batch-1" status="approved" />);
@@ -92,6 +119,9 @@ describe("PromotionBatchActions", () => {
         idempotencyKey: expect.any(String) as string,
       });
     });
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("/jobs/job-1");
+    });
 
     expect(await screen.findByText("Execution report")).toBeInTheDocument();
     expect(screen.getByText("Enrolled in the next session: 1")).toBeInTheDocument();
@@ -100,6 +130,36 @@ describe("PromotionBatchActions", () => {
     expect(screen.getByText("Failed: 1")).toBeInTheDocument();
     expect(screen.getByText("stu-2 — already executed")).toBeInTheDocument();
     expect(screen.getByText("stu-3 — No guardian on record.")).toBeInTheDocument();
+  });
+
+  it("shows progress and refuses a second run while the job is still going", async () => {
+    mockPost.mockResolvedValue(ok({ job_id: "job-1", status: "queued" }));
+    mockGet.mockResolvedValue(job({ status: "running", progress: 40 }));
+    const user = userEvent.setup();
+
+    const rendered = renderWithProviders(
+      <PromotionBatchActions batchId="batch-1" status="approved" />,
+    );
+    await user.click(screen.getByRole("button", { name: "Execute" }));
+
+    expect(await screen.findByText("Executing — 40%")).toBeInTheDocument();
+    expect(screen.queryByText("Execution report")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Execute" })).toBeDisabled();
+
+    // The poll re-runs on a timer for as long as anything is observing it.
+    rendered.unmount();
+  });
+
+  it("surfaces the job's own error when the batch fails on the worker", async () => {
+    mockPost.mockResolvedValue(ok({ job_id: "job-1", status: "queued" }));
+    mockGet.mockResolvedValue(job({ status: "failed", error: "No such promotion batch." }));
+    const user = userEvent.setup();
+
+    renderWithProviders(<PromotionBatchActions batchId="batch-1" status="approved" />);
+    await user.click(screen.getByRole("button", { name: "Execute" }));
+
+    expect(await screen.findByText("No such promotion batch.")).toBeInTheDocument();
+    expect(screen.queryByText("Execution report")).not.toBeInTheDocument();
   });
 
   it("offers Revert on an approved and on an executed batch", () => {
@@ -147,7 +207,9 @@ describe("PromotionBatchActions", () => {
     expect(screen.getByText(/Reference: req-10/)).toBeInTheDocument();
   });
 
-  it("renders the error envelope when execution itself fails", async () => {
+  it("renders the error envelope when execution is refused before it is queued", async () => {
+    // Whether a batch is executable at all is still decided synchronously, so
+    // this stays a 409 on the POST rather than a job that fails out of band.
     mockPost.mockRejectedValue(
       new ApiError({
         code: "conflict",
@@ -163,5 +225,6 @@ describe("PromotionBatchActions", () => {
 
     expect(await screen.findByText(/conflicts with the current data/i)).toBeInTheDocument();
     expect(screen.queryByText("Execution report")).not.toBeInTheDocument();
+    expect(mockGet).not.toHaveBeenCalled();
   });
 });

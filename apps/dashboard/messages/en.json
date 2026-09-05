@@ -651,6 +651,8 @@
       },
       "report": {
         "title": "Execution report",
+        "running": "Executing — {progress}%",
+        "jobFailed": "The execution job failed.",
         "enrolled": "Enrolled in the next session: {count}",
         "graduated": "Graduated: {count}",
         "skipped": "Skipped: {count}",
