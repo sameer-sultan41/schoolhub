@@ -8,6 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -31,23 +32,10 @@ S3_REGION_NAME = env("S3_REGION_NAME", default="us-east-1")
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
 
-# Server-side type/size whitelist per purpose (student-management.md §11: "type/size
-# whitelist, AV scan"). Sizes in bytes.
-FILE_UPLOAD_RULES = {
-    "student.photo": {
-        "mime_types": {"image/jpeg", "image/png"},
-        "max_size_bytes": 5 * 1024 * 1024,
-    },
-    "student.document": {
-        "mime_types": {"image/jpeg", "image/png", "application/pdf"},
-        "max_size_bytes": 10 * 1024 * 1024,
-    },
-    "guardian.photo": {
-        "mime_types": {"image/jpeg", "image/png"},
-        "max_size_bytes": 5 * 1024 * 1024,
-    },
-}
-
+# The per-purpose type/size whitelist (student-management.md §11: "type/size
+# whitelist, AV scan") lives in core/files/purposes.py, not here — each module
+# declares its own purposes in its uploads.py, the same way it declares
+# permission keys and feature flags. See that module's docstring for why.
 DJANGO_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -75,6 +63,7 @@ CORE_APPS = [
     "core.files",
     "core.idempotency",
     "core.jobs",
+    "core.notifications",
 ]
 
 # One app per module doc in docs/03-modules/.
@@ -218,6 +207,15 @@ CACHES = {
     },
 }
 
+# Outbound email goes through core.notifications' EmailAdapter, which is a thin
+# wrapper over whatever EMAIL_BACKEND points at — the console backend in dev, a
+# locmem one in tests, and a real provider (SES/Postmark) in prod by configuration
+# alone. `dev.py`/`test.py` set their own backend; the default here stays the
+# console so a misconfigured environment prints mail rather than silently
+# attempting an unauthenticated SMTP connection to localhost.
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@schoolhub.local")
+
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/1")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/2")
 CELERY_TASK_ROUTES = {
@@ -226,6 +224,47 @@ CELERY_TASK_ROUTES = {
     # that module. Bulk, non-urgent background work routes to "bulk" for now.
     "apps.student_management.tasks.*": {"queue": "bulk"},
     "apps.staff_management.tasks.*": {"queue": "bulk"},
+    "core.idempotency.tasks.*": {"queue": "bulk"},
+    "core.jobs.tasks.*": {"queue": "bulk"},
+    # notifications.md §5 names three lanes (emergency / transactional / bulk);
+    # `celery-worker` in infra/compose already consumes exactly those queue names,
+    # so this uses them rather than the doc's dotted `notify.*` spelling, which
+    # nothing listens to. One lane for now — separating them only buys something
+    # once each has its own worker pool and per-tenant rate shaping to protect,
+    # both of which arrive with the communication module.
+    "core.notifications.tasks.*": {"queue": "transactional"},
+}
+
+# The `celery-beat` service (infra/compose/docker-compose.yml, and its
+# singleton-guarded Terraform counterpart) has been running against an empty
+# schedule: nothing was ever declared here, so every "a cleanup job will prune
+# this" comment in core/ described work that had no runner. These two are the
+# jobs that already had an owner and no scheduler.
+#
+# A static dict rather than django-celery-beat's database schedule, deliberately.
+# Both entries are platform-level and identical for every tenant, so a DB-backed
+# schedule would add a dependency, its migrations and an admin surface to store
+# two rows that only ever change in a commit. The module that genuinely needs
+# dynamic, tenant-editable schedules is reporting-analytics (`report_schedules`,
+# Tier 7); it should bring django-celery-beat with it, driven by that real
+# requirement rather than in anticipation of it.
+#
+# Times are UTC (TIME_ZONE below). Both sweep tenant by tenant rather than doing
+# one cross-tenant delete — core/tenancy/maintenance.py explains why an unbound
+# delete would silently affect zero rows instead of failing.
+CELERY_BEAT_SCHEDULE = {
+    "prune-idempotency-records": {
+        "task": "core.idempotency.tasks.prune_idempotency_records",
+        # Hourly: the replay window is 24h, so rows fall out of it continuously
+        # and a daily tick would leave up to a day of dead weight behind.
+        "schedule": crontab(minute="17"),
+    },
+    "prune-background-jobs": {
+        "task": "core.jobs.tasks.prune_background_jobs",
+        # Daily, off-peak: 30-day retention needs no finer granularity, and these
+        # rows carry the base64 import payloads, so it is the heavier sweep.
+        "schedule": crontab(hour="3", minute="40"),
+    },
 }
 
 LANGUAGE_CODE = "en-us"

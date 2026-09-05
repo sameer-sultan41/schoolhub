@@ -156,6 +156,35 @@ class Student(TenantOwnedModel):
         return f"{self.first_name} {self.last_name} ({self.admission_number})"
 
     @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` (auth-and-rbac.md §2.3) — two distinct principals.
+
+        A `student` sees their own row (`students.user_id`). A `guardian` sees the
+        children they are actually linked to, joined through `student_guardians`,
+        which is the reading every module doc §4 means when it grants a guardian an
+        `own`-scoped view key. Before this hook existed, `scope_queryset` filtered
+        `user_id == user.pk` only, so a guardian's portal account matched no student
+        at all and the "own children" half of the scope was never enforced.
+
+        `has_portal_access` gates the link deliberately: revoking portal access
+        (`access_revoked_reason` on the same row) is the module's own mechanism for
+        cutting a guardian off from a child's record without deleting the link, and
+        it would be pointless if scoping ignored it.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+
+        return queryset.filter(
+            models.Q(user_id=user.pk)
+            | models.Q(
+                guardian_links__deleted_at__isnull=True,
+                guardian_links__has_portal_access=True,
+                guardian_links__guardian__deleted_at__isnull=True,
+                guardian_links__guardian__user_id=user.pk,
+            )
+        ).distinct()
+
+    @classmethod
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` (auth-and-rbac.md §2.3) for a class teacher.
 

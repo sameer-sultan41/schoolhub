@@ -20,6 +20,7 @@ from django.utils import timezone
 
 from apps.school_organization.models import Section
 from apps.school_organization.services import assert_section_capacity, assert_session_writable
+from apps.student_management import uploads
 from apps.student_management.models import (
     EmergencyContact,
     EnrollmentStatus,
@@ -304,7 +305,7 @@ def create_student(
     )
     checked_user_id = resolve_tenant_user_id(user_id=user_id, tenant_id=tenant_id)
     if photo_file is not None:
-        assert_file_usable(file=photo_file, purpose="student.photo")
+        assert_file_usable(file=photo_file, purpose=uploads.STUDENT_PHOTO.key)
 
     admission_number = allocate_admission_number(
         campus=campus, admission_date=admission_date, tenant_id=tenant_id
@@ -466,7 +467,7 @@ def add_student_document(
     tenant_id: uuid.UUID,
 ) -> StudentDocument:
     assert_document_type_allowed(document_type=document_type, tenant_id=tenant_id)
-    assert_file_usable(file=file, purpose="student.document")
+    assert_file_usable(file=file, purpose=uploads.STUDENT_DOCUMENT.key)
 
     return StudentDocument.objects.create(
         tenant_id=tenant_id,

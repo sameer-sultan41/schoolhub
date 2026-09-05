@@ -1,3 +1,4 @@
+import type * as ApiClientModule from "@schoolhub/api-client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -12,7 +13,13 @@ jest.mock("@/lib/auth", () => ({
 const mockRestoreSession = restoreSession as jest.MockedFunction<typeof restoreSession>;
 
 function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // `retry: false` is the client default, but `useSession` passes its own `retry`
+  // and so overrides it — `retryDelay: 0` is what keeps the retry it *does* do
+  // inside `waitFor`'s 1s budget, instead of waiting out TanStack Query's
+  // exponential backoff and failing on a timeout that says nothing useful.
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+  });
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
@@ -28,6 +35,38 @@ describe("useSession", () => {
     expect(result.current.isLoading).toBe(true);
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.user).toBeNull();
+  });
+
+  it("retries a transient failure rather than treating it as signed out", async () => {
+    // useSession passes the shared retry policy explicitly, which overrides the client
+    // default below — a throttled or unavailable refresh is exactly the case worth
+    // retrying, and reporting it as "no session" would drop the user at /login.
+    const { ApiError } = jest.requireActual<typeof ApiClientModule>("@schoolhub/api-client");
+    const user = makeUser();
+    mockRestoreSession
+      .mockRejectedValueOnce(
+        new ApiError({ code: "rate_limited", message: "slow down", status: 429, url: "/x" }),
+      )
+      .mockResolvedValueOnce(user);
+
+    const { result } = renderHook(() => useSession(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isAuthenticated).toBe(true);
+    });
+    expect(mockRestoreSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry when the session is genuinely over", async () => {
+    mockRestoreSession.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useSession(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+    expect(mockRestoreSession).toHaveBeenCalledTimes(1);
+    expect(result.current.isAuthenticated).toBe(false);
   });
 
   it("exposes the restored user once loaded", async () => {

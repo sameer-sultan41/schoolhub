@@ -11,35 +11,34 @@ can drive the same flow without going through HTTP.
 from __future__ import annotations
 
 import uuid
-from typing import cast
 
-from django.conf import settings
 from django.db import transaction
 
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.models import File, FileStatus
+from core.files.purposes import registry as upload_purposes
 from core.files.storage import NullPresigner, get_presigner, storage_key_for
 from core.tenancy.context import tenant_atomic
 
 
 def assert_upload_allowed(*, purpose: str, mime_type: str, size_bytes: int) -> None:
-    rules = settings.FILE_UPLOAD_RULES.get(purpose)
-    if rules is None:
+    """Check a client-driven upload against the purpose its module declared.
+
+    The registry (core/files/purposes.py), not a settings dict: a purpose used by
+    a module but declared nowhere is a deploy bug that used to surface only as a
+    422 on a real user's upload.
+    """
+    spec = upload_purposes.get(purpose)
+    if spec is None:
         raise DomainRuleViolation({"purpose": f"Unknown upload purpose '{purpose}'."})
 
-    # settings.FILE_UPLOAD_RULES is a plain dict (heterogeneous per-key value
-    # types), so mypy sees each value as `object` — narrow explicitly rather
-    # than silencing the checks.
-    mime_types = cast("set[str]", rules["mime_types"])
-    max_size_bytes = cast("int", rules["max_size_bytes"])
-
-    if mime_type not in mime_types:
+    if mime_type not in spec.mime_types:
         raise DomainRuleViolation(
             {"mime_type": f"'{mime_type}' is not allowed for '{purpose}' uploads."}
         )
-    if size_bytes > max_size_bytes:
+    if size_bytes > spec.max_size_bytes:
         raise DomainRuleViolation(
-            {"size_bytes": f"File exceeds the {max_size_bytes}-byte limit for '{purpose}'."}
+            {"size_bytes": f"File exceeds the {spec.max_size_bytes}-byte limit for '{purpose}'."}
         )
 
 

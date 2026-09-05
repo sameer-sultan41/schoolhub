@@ -57,6 +57,18 @@ export class ApiError extends Error {
     return this.status >= 500;
   }
 
+  /**
+   * The request failed for a reason that says nothing about the request itself:
+   * it never reached the server, the server was rate-limiting, or the server
+   * broke. Retrying may well succeed, and — crucially for the auth path — none of
+   * these means "this session is over".
+   *
+   * A 4xx other than 429 is an answer, not a blip, so it is deliberately excluded.
+   */
+  get isTransient(): boolean {
+    return this.status === 0 || this.isRateLimited || this.isServerError;
+  }
+
   /** Field path → issue, ready to feed straight into React Hook Form's `setError`. */
   fieldErrors(): Record<string, string> {
     const out: Record<string, string> = {};

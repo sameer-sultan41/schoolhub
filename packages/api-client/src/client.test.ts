@@ -178,6 +178,80 @@ describe("ApiClient", () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
+  it("propagates a refresh that could not resolve instead of signing the user out", async () => {
+    // The regression this pins: a 429 from AuthEndpointThrottle (or a 5xx, or a dropped
+    // connection) used to be swallowed into `null`, which reads as "session over" — the
+    // access token was cleared and the user bounced to /login with a still-valid refresh
+    // cookie. Reachable by reloading twice or opening a second tab under load.
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { error: { code: "authentication_failed", message: "nope", request_id: "r" } },
+          { status: 401 },
+        ),
+      );
+    const onUnauthorized = jest.fn();
+    const throttled = new ApiError({
+      code: "rate_limited",
+      message: "Too many requests.",
+      status: 429,
+      url: "/auth/refresh",
+    });
+    const client = new ApiClient({
+      baseUrl: "https://api.test/api/v1",
+      fetchImpl,
+      refreshAccessToken: () => Promise.reject(throttled),
+      onUnauthorized,
+    });
+
+    await expect(client.get("/students")).rejects.toBe(throttled);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("shares one failed refresh across concurrent 401s without reporting a logout", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { error: { code: "authentication_failed", message: "nope", request_id: "r" } },
+          { status: 401 },
+        ),
+      );
+    const onUnauthorized = jest.fn();
+    const refresh = jest.fn(
+      () =>
+        new Promise<string | null>((_resolve, reject) => {
+          setTimeout(() => {
+            reject(
+              new ApiError({
+                code: "server_error",
+                message: "down",
+                status: 503,
+                url: "/auth/refresh",
+              }),
+            );
+          }, 0);
+        }),
+    );
+    const client = new ApiClient({
+      baseUrl: "https://api.test/api/v1",
+      fetchImpl,
+      refreshAccessToken: refresh,
+      onUnauthorized,
+    });
+
+    const results = await Promise.allSettled([
+      client.get("/students"),
+      client.get("/staff"),
+      client.get("/classes"),
+    ]);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(results.every((r) => r.status === "rejected")).toBe(true);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
   it("returns undefined data for 204 responses", async () => {
     const fetchImpl = jest.fn().mockResolvedValue(new Response(null, { status: 204 }));
     const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });

@@ -17,7 +17,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.school_organization.models import AcademicSession, Campus, Class, House, Section
-from apps.student_management import services
+from apps.student_management import services, uploads
 from apps.student_management.models import (
     EmergencyContact,
     Guardian,
@@ -172,7 +172,7 @@ class GuardianSerializer(serializers.ModelSerializer):
         # needs its purpose and upload-confirmed status checked — the tenant-scoped
         # `_fk()` field only proves the id exists and belongs to this tenant.
         if value is not None:
-            services.assert_file_usable(file=value, purpose="guardian.photo")
+            services.assert_file_usable(file=value, purpose=uploads.GUARDIAN_PHOTO.key)
         return value
 
 

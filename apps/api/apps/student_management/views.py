@@ -374,6 +374,21 @@ class _NestedUnderStudentMixin:
     tenant-scoped, scope-narrowed manager is the same one `StudentViewSet`
     itself reads from, so a caller cannot see a nested resource under a
     student they could not otherwise see directly.
+
+    **The parent lookup is the authorization**, and `scoped_child_queryset`
+    below is what makes that true rather than merely stated. The child models
+    (`StudentGuardian`, `EmergencyContact`, `StudentDocument`) have no record
+    scope of their own — no `scope_own_field`, no `filter_owned_by_user` — so
+    running them through `scope_queryset` a second time drops an `own`-scoped
+    caller straight to `.none()`. A guardian could reach their child's record
+    and then find every tab under it empty: documents, emergency contacts,
+    guardian links, all silently blank rather than denied.
+
+    Re-scoping the child was never meaningful anyway. Every row under a student
+    belongs to that student by definition, so once `get_student()` has proved
+    the caller may see the parent, the children follow; campus scoping is
+    already applied at the parent, so a student outside the caller's campus
+    404s and the nested list is unreachable regardless.
     """
 
     # This mixin is only ever combined with a GenericAPIView subclass, which
@@ -386,6 +401,8 @@ class _NestedUnderStudentMixin:
     def get_student(self) -> Student:
         from core.rbac.permissions import scope_queryset
 
+        # `own_field` is the fallback only: `Student.filter_owned_by_user` takes
+        # precedence and is what resolves a guardian to their linked children.
         queryset = scope_queryset(Student.objects.alive(), self.request.user, own_field="user_id")
         try:
             return get_object_or_404(queryset, pk=self.kwargs["student_pk"])
@@ -393,6 +410,18 @@ class _NestedUnderStudentMixin:
             # A malformed UUID in the path is a 404, not a 500 — same
             # not-found story as a well-formed but nonexistent id.
             raise Http404 from exc
+
+    def scoped_child_queryset(self):
+        """Rows under the resolved parent, tenant-scoped and alive.
+
+        Deliberately skips `TenantScopedViewSetMixin.get_queryset`'s record-scope
+        pass — see this class's docstring for why applying it to a child is both
+        meaningless and actively wrong. Tenant scoping and soft-delete filtering
+        still apply, because they come from the manager rather than from record
+        scope.
+        """
+        model = self.serializer_class.Meta.model
+        return model.objects.alive().filter(student=self.get_student())
 
 
 class StudentGuardianLinkViewSet(
@@ -416,7 +445,7 @@ class StudentGuardianLinkViewSet(
     scope_campus_field = "student__campus_id"
 
     def get_queryset(self):
-        return super().get_queryset().filter(student=self.get_student())
+        return self.scoped_child_queryset()
 
     def perform_create(self, serializer) -> None:
         from core.audit.services import record_audit
@@ -461,7 +490,7 @@ class EmergencyContactLinkViewSet(
     ordering_fields = ["priority"]
 
     def get_queryset(self):
-        return super().get_queryset().filter(student=self.get_student())
+        return self.scoped_child_queryset()
 
     def perform_create(self, serializer) -> None:
         from core.audit.services import record_audit
@@ -498,7 +527,7 @@ class StudentDocumentLinkViewSet(
     scope_campus_field = "student__campus_id"
 
     def get_queryset(self):
-        return super().get_queryset().filter(student=self.get_student())
+        return self.scoped_child_queryset()
 
     def perform_create(self, serializer) -> None:
         from core.audit.services import record_audit

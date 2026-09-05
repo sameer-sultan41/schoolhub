@@ -45,7 +45,11 @@ export interface ApiClientConfig {
   /**
    * Obtains a fresh access token after a 401 (the refresh token is an HttpOnly cookie,
    * so this typically POSTs `/auth/refresh` with `credentials: "include"`).
-   * Return `null` to give up — the original 401 then propagates.
+   *
+   * Return `null` **only** when the session is genuinely over — the original 401 then
+   * propagates and `onUnauthorized` fires. **Throw** when the refresh could not be
+   * determined (rate-limited, server error, network failure): that error propagates to
+   * the caller untouched, `onUnauthorized` does not fire, and the session survives.
    */
   refreshAccessToken?: () => Promise<string | null>;
   /** Called when a request stays unauthenticated after a refresh attempt. */
@@ -115,7 +119,9 @@ export class ApiClient {
       return this.toResult<TData>(response, path);
     }
 
-    // 401 → refresh once, then replay the original request.
+    // 401 → refresh once, then replay the original request. A refresh that *fails to
+    // resolve* (throws) propagates from here rather than being downgraded to a logout —
+    // see refreshOnce.
     const refreshed = await this.refreshOnce();
     if (!refreshed) {
       const error = await this.toApiError(response, path);
@@ -200,12 +206,35 @@ export class ApiClient {
     }
   }
 
+  /**
+   * Run at most one refresh, shared by every concurrent 401.
+   *
+   * A thrown error is deliberately **not** caught. `refreshAccessToken` returns `null`
+   * only when the session is genuinely over, and throws when the refresh could not be
+   * determined at all — a 429 from the auth throttle, a 5xx, a dropped connection. The
+   * bare `catch { return null }` that used to sit here erased that distinction, so
+   * `request()` treated a rate-limited refresh as a dead session: it called
+   * `onUnauthorized`, which clears the access token and bounces to `/login`, while the
+   * user's refresh cookie was still perfectly good. Letting it propagate leaves the
+   * session intact and lets the caller's retry policy do its job.
+   */
+  /**
+   * Refresh through the shared single-flight promise.
+   *
+   * Public because the cold-load path needs it too: `restoreSession` used to
+   * call `refreshAccessToken` directly, so a page load could race an
+   * authenticated request's 401-triggered refresh and issue two at once —
+   * doubling load on precisely the endpoint whose throttle this client exists
+   * to handle gracefully.
+   */
+  async refresh(): Promise<string | null> {
+    return this.refreshOnce();
+  }
+
   private async refreshOnce(): Promise<string | null> {
     this.refreshInFlight ??= (async () => {
       try {
         return (await this.config.refreshAccessToken?.()) ?? null;
-      } catch {
-        return null;
       } finally {
         // Cleared on the next microtask so concurrent callers all observe this attempt.
         queueMicrotask(() => {

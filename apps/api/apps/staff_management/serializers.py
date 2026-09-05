@@ -17,7 +17,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.school_organization.models import Campus, Department
-from apps.staff_management import services
+from apps.staff_management import services, uploads
 from apps.staff_management.models import (
     Designation,
     EmploymentStatus,
@@ -180,7 +180,7 @@ class StaffQualificationSerializer(serializers.ModelSerializer):
 
     def validate_document_file_id(self, value: File | None) -> File | None:
         if value is not None:
-            services.assert_file_usable(file=value, purpose="staff.qualification")
+            services.assert_file_usable(file=value, purpose=uploads.STAFF_QUALIFICATION.key)
         return value
 
 
@@ -217,7 +217,7 @@ class StaffDocumentSerializer(serializers.ModelSerializer):
         return value
 
     def validate_file_id(self, value: File) -> File:
-        services.assert_file_usable(file=value, purpose="staff.document")
+        services.assert_file_usable(file=value, purpose=uploads.STAFF_DOCUMENT.key)
         return value
 
 

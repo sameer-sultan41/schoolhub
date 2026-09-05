@@ -118,6 +118,14 @@ def scope_queryset(queryset, user, *, own_field: str | None = None, campus_field
 
     Tenant scoping already happened (manager + RLS); this applies the *within-tenant*
     constraint from the role assignment.
+
+    Both `own` and `assigned` delegate to a per-model hook, because neither means one
+    thing platform-wide. `own` used to be hardcoded as `own_field == user.pk`, which
+    covers a student viewing themself but silently failed the other half of the same
+    scope: auth-and-rbac.md §2.3 and every module doc §4 that grants a `guardian` an
+    `own`-scoped view key mean "own children", and that needs a join through
+    `student_guardians`. `own_field` stays as the fallback for the many models where
+    "own" really is a single column.
     """
     scopes = user_scopes(user)
     if RecordScope.ALL in scopes:
@@ -126,14 +134,12 @@ def scope_queryset(queryset, user, *, own_field: str | None = None, campus_field
         campus_ids = [ref for ref in scopes[RecordScope.CAMPUS] if ref]
         if campus_ids:
             return queryset.filter(**{f"{campus_field}__in": campus_ids})
-    if RecordScope.OWN in scopes and own_field:
-        # TODO(guardian-scope): this only matches `own_field == user.pk` — a student
-        # viewing themself. It never joins through `StudentGuardian` to a guardian's
-        # linked children, so "a guardian can see only their own child's record" is not
-        # actually enforced today. Confirmed via `api/students-record-scope.spec.ts`,
-        # which deliberately proves the student self-view path instead; see
-        # docs/project-status.md's "Deliberately NOT done" section for the full citation.
-        return queryset.filter(**{own_field: user.pk})
+    if RecordScope.OWN in scopes:
+        owned = getattr(queryset.model, "filter_owned_by_user", None)
+        if callable(owned):
+            return owned(queryset, user)
+        if own_field:
+            return queryset.filter(**{own_field: user.pk})
     if RecordScope.ASSIGNED in scopes:
         # Each module defines what "assigned" means; it must override this hook.
         assigned = getattr(queryset.model, "filter_assigned_to_user", None)

@@ -35,6 +35,8 @@ describe("AppShell", () => {
       user: makeUser({ permissions: ["students.student.view"] }),
       isLoading: false,
       isAuthenticated: true,
+      isUnavailable: false,
+      error: null,
       refetch: jest.fn(),
     });
   });
@@ -73,6 +75,8 @@ describe("AppShell", () => {
       user: makeUser({ impersonated_by: "support-1" }),
       isLoading: false,
       isAuthenticated: true,
+      isUnavailable: false,
+      error: null,
       refetch: jest.fn(),
     });
 

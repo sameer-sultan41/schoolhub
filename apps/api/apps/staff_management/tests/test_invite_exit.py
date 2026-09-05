@@ -63,6 +63,68 @@ class InviteTests(StaffManagementAPITestCase):
         self.assertEqual(created_user.email, "new.hire@example.test")
         self.assertTrue(UserRole.objects.filter(user=created_user, role=role).exists())
 
+    def test_invite_puts_a_welcome_notification_in_the_new_accounts_inbox(self) -> None:
+        """The half of the `:invite` gap that core.notifications closes.
+
+        In-app only, deliberately: the account is still inactive with an unusable
+        password, so an email claiming it is ready would be untrue — see
+        `services.invite_staff` and `notifications.py`.
+        """
+        from core.notifications.models import (
+            DeliveryLog,
+            DeliveryStatus,
+            Notification,
+            NotificationChannel,
+        )
+
+        self.allow("staff.staff.update")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(
+                tenant=self.tenant, campus=self.campus, email="welcome@example.test"
+            )
+
+        response = self.client.post(f"/api/v1/staff/{staff.pk}:invite", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+            notification = Notification.objects.get(user_id=staff.user_id)
+            channels = set(
+                DeliveryLog.objects.filter(notification=notification).values_list(
+                    "channel", flat=True
+                )
+            )
+            in_app = DeliveryLog.objects.get(
+                notification=notification, channel=NotificationChannel.IN_APP
+            )
+
+        self.assertEqual(notification.event_key, "staff.invited")
+        self.assertEqual(notification.source_type, "staff")
+        self.assertEqual(notification.source_id, staff.pk)
+        self.assertIn(staff.first_name, notification.body)
+        # No email row at all: the trigger does not declare that channel yet.
+        self.assertEqual(channels, {NotificationChannel.IN_APP})
+        self.assertEqual(in_app.status, DeliveryStatus.QUEUED)
+
+    def test_a_notification_failure_never_undoes_the_invite(self) -> None:
+        """The account and its roles are the actual outcome of `:invite`."""
+        from unittest.mock import patch
+
+        self.allow("staff.staff.update")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="ok@example.test")
+
+        with patch(
+            "core.notifications.services.notify", side_effect=RuntimeError("template blew up")
+        ):
+            response = self.client.post(f"/api/v1/staff/{staff.pk}:invite", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+            self.assertIsNotNone(staff.user_id)
+            self.assertTrue(User.objects.filter(pk=staff.user_id).exists())
+
     def test_inviting_an_already_linked_staff_member_is_a_conflict(self) -> None:
         self.allow("staff.staff.update")
         with tenant_context(self.tenant.id):
