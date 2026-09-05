@@ -64,6 +64,19 @@ class CurriculumSerializer(serializers.ModelSerializer):
         )
         read_only_fields = READ_ONLY_FIELDS
 
+    def validate_weekly_periods(self, value: int) -> int:
+        """Guards the PATCH path specifically.
+
+        Creation delegates to `map_subject_to_class`, which enforces this — but
+        an update never reaches that service, so without this a
+        `PATCH {"weekly_periods": 0}` fell through to the
+        `class_subjects_weekly_periods_positive` database check and surfaced as a
+        409 with no field on it, instead of a field error the form can show.
+        """
+        if value < 1:
+            raise serializers.ValidationError("Weekly period targets must be at least 1.")
+        return value
+
     def validate(self, attrs: dict) -> dict:
         """Only the rule school_organization does not already enforce.
 
@@ -108,7 +121,10 @@ class TeacherAllocationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = READ_ONLY_FIELDS
+        # `effective_to` is set by PATCH, never on create: an allocation that
+        # arrives already ended is not a thing, and `create_allocation` would
+        # have dropped the value silently.
+        read_only_fields = (*READ_ONLY_FIELDS, "effective_to")
 
     def validate_weekly_periods(self, value: int | None) -> int | None:
         if value is not None and value < 1:
@@ -124,6 +140,10 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
     """
 
     student_id = serializers.UUIDField(source="student.id", read_only=True)
+    # Denormalised for the review screen: a reviewer scanning a batch needs the
+    # student, not a UUID, and the alternative is a lookup per row in the client.
+    student_name = serializers.SerializerMethodField()
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     to_class_id = _fk(Class, source="to_class", required=False, allow_null=True)
     to_section_id = _fk(Section, source="to_section", required=False, allow_null=True)
 
@@ -133,6 +153,8 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
             "id",
             "batch_id",
             "student_id",
+            "student_name",
+            "admission_number",
             "from_enrollment_id",
             "from_academic_session_id",
             "to_academic_session_id",
@@ -154,6 +176,8 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
             *READ_ONLY_FIELDS,
             "batch_id",
             "student_id",
+            "student_name",
+            "admission_number",
             "from_enrollment_id",
             "from_academic_session_id",
             "to_academic_session_id",
@@ -166,6 +190,9 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
             "approved_at",
             "executed_at",
         )
+
+    def get_student_name(self, obj) -> str:
+        return f"{obj.student.first_name} {obj.student.last_name}"
 
     def validate(self, attrs: dict) -> dict:
         decision = attrs.get("decision") or getattr(self.instance, "decision", None)

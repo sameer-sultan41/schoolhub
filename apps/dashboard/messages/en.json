@@ -462,6 +462,201 @@
       }
     }
   },
+  "academics": {
+    "nav": {
+      "label": "Academics sections",
+      "curriculum": "Curriculum",
+      "allocations": "Teacher allocation",
+      "promotions": "Promotions"
+    },
+    "common": {
+      "close": "Close"
+    },
+    "filters": {
+      "all": "All"
+    },
+    "fields": {
+      "academicSession": "Academic session",
+      "selectSession": "Select a session",
+      "class": "Class",
+      "selectClass": "Select a class",
+      "subject": "Subject",
+      "selectSubject": "Select a subject",
+      "campus": "Campus",
+      "allCampuses": "All campuses",
+      "weeklyPeriods": "Weekly periods",
+      "isElective": "Elective subject",
+      "electiveGroup": "Elective group",
+      "notes": "Notes",
+      "section": "Section",
+      "selectSection": "Select a section",
+      "teacher": "Teacher",
+      "selectTeacher": "Select a teacher",
+      "teacherHint": "Only active teaching staff can be allocated.",
+      "isPrimary": "Primary teacher",
+      "effectiveFrom": "Effective from",
+      "effectiveTo": "Effective to"
+    },
+    "curriculum": {
+      "title": "Curriculum",
+      "summary": "Which subjects each class studies in a session, and how many periods a week.",
+      "core": "Core",
+      "elective": "Elective",
+      "electiveWithGroup": "Elective · {group}",
+      "list": {
+        "caption": "Curriculum mappings",
+        "empty": "No curriculum mappings found."
+      },
+      "columns": {
+        "kind": "Type",
+        "actions": "Actions"
+      },
+      "actions": {
+        "create": "Add subject",
+        "edit": "Edit",
+        "delete": "Remove",
+        "clone": "Clone from another session"
+      },
+      "form": {
+        "createTitle": "Add a subject to a class",
+        "editTitle": "Edit curriculum mapping",
+        "description": "The session, class and subject together identify the mapping and cannot be changed afterwards."
+      },
+      "clone": {
+        "title": "Clone curriculum",
+        "description": "Copies every mapping from one session into another. Rows the target already has are skipped, so this is safe to run twice.",
+        "sourceSession": "Copy from",
+        "targetSession": "Copy into",
+        "result": "{created} mappings created, {skipped} already present."
+      },
+      "delete": {
+        "title": "Remove this subject",
+        "description": "{subject} will no longer be part of this class's curriculum for the session."
+      }
+    },
+    "allocations": {
+      "title": "Teacher allocation",
+      "summary": "Who teaches which subject to which section, and how heavy each teacher's week is.",
+      "primary": "Primary",
+      "coTeacher": "Co-teacher",
+      "current": "Current",
+      "endedOn": "Ended {date}",
+      "overNormWarning": "This teacher is now allocated {periods} periods a week, above the norm of {norm}. The allocation was saved.",
+      "list": {
+        "caption": "Teacher allocations",
+        "empty": "No allocations found."
+      },
+      "columns": {
+        "role": "Role",
+        "effective": "Effective",
+        "actions": "Actions"
+      },
+      "actions": {
+        "create": "Allocate a teacher",
+        "end": "End",
+        "delete": "Remove"
+      },
+      "form": {
+        "createTitle": "Allocate a teacher",
+        "description": "The subject must already be part of the section's class curriculum for this session.",
+        "weeklyPeriodsHint": "Leave blank to use the curriculum's own weekly period target.",
+        "isPrimaryHint": "One primary teacher per section and subject at a time; others are co-teachers."
+      },
+      "end": {
+        "title": "End this allocation",
+        "description": "End-dating preserves the history and frees the primary slot for a replacement."
+      },
+      "delete": {
+        "title": "Remove this allocation",
+        "description": "Use this only for an allocation entered by mistake. A real reassignment should be end-dated instead."
+      }
+    },
+    "loadSummary": {
+      "title": "Teacher load",
+      "normHint": "Weekly periods per teacher for the selected session, against a norm of {norm}.",
+      "empty": "No allocations in this session yet.",
+      "overNorm": "Over norm",
+      "withinNorm": "Within norm",
+      "pickSession": "Choose a single academic session to see per-teacher load.",
+      "columns": {
+        "allocations": "Allocations",
+        "weeklyPeriods": "Weekly periods",
+        "status": "Load"
+      }
+    },
+    "promotions": {
+      "title": "Promotions",
+      "summary": "Session-end promotion batches: propose, review, approve, then execute.",
+      "sessionPair": "{from} → {to}",
+      "list": {
+        "caption": "Promotion decisions",
+        "empty": "No promotion batches found."
+      },
+      "columns": {
+        "batch": "Batch",
+        "student": "Student",
+        "fromClass": "From class",
+        "sessions": "Sessions",
+        "decision": "Decision",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "fields": {
+        "fromSession": "From session",
+        "toSession": "To session",
+        "toClass": "Target class",
+        "toSection": "Target section",
+        "toSectionHint": "Required before the batch can be executed, unless the student is graduating.",
+        "overrideReason": "Override reason",
+        "overrideReasonHint": "Required wherever the decision differs from the proposed one.",
+        "remarks": "Remarks"
+      },
+      "decisionValue": {
+        "promoted": "Promoted",
+        "retained": "Retained",
+        "promoted_on_trial": "Promoted on trial",
+        "graduated": "Graduated"
+      },
+      "status": {
+        "draft": "Draft",
+        "pending_approval": "Pending approval",
+        "approved": "Approved",
+        "executed": "Executed",
+        "reverted": "Reverted"
+      },
+      "actions": {
+        "create": "New batch",
+        "submit": "Submit for approval",
+        "approve": "Approve",
+        "reject": "Reject",
+        "execute": "Execute",
+        "revert": "Revert",
+        "editDecision": "Edit",
+        "backToList": "All batches"
+      },
+      "form": {
+        "createTitle": "New promotion batch",
+        "description": "One batch per class per rollover. A decision is proposed for every actively enrolled student."
+      },
+      "decision": {
+        "title": "Edit decision",
+        "description": "Adjusting the draft decision for student {student}."
+      },
+      "review": {
+        "title": "Promotion batch",
+        "summary": "Review each student's decision, then submit the batch for approval.",
+        "caption": "Per-student promotion decisions",
+        "empty": "This batch has no decisions."
+      },
+      "report": {
+        "title": "Execution report",
+        "enrolled": "Enrolled in the next session: {count}",
+        "graduated": "Graduated: {count}",
+        "skipped": "Skipped: {count}",
+        "failed": "Failed: {count}"
+      }
+    }
+  },
   "common": {
     "loading": "Loading",
     "retry": "Try again",
