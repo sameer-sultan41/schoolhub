@@ -88,6 +88,26 @@ class EmailAdapterTests(SimpleTestCase):
         self.assertEqual(len(alternatives), 1)
         self.assertEqual(alternatives[0][1], "text/html")
 
+    def test_escapes_the_html_part_and_leaves_the_text_part_alone(self) -> None:
+        """The regression: both parts were built from the same escaped string, so
+        "Smith & Sons" reached plain-text clients as "Smith &amp; Sons"."""
+        EmailAdapter().send(
+            RenderedMessage(
+                channel=NotificationChannel.EMAIL,
+                recipient_address="parent@example.test",
+                subject="Subject",
+                body="Smith & <Sons>",
+                template_code="test.event",
+            )
+        )
+
+        sent = mail.outbox[0]
+        self.assertEqual(sent.body, "Smith & <Sons>")
+        html_part = sent.alternatives[0][0]
+        self.assertIn("&amp;", html_part)
+        self.assertIn("&lt;Sons&gt;", html_part)
+        self.assertNotIn("<Sons>", html_part)
+
     def test_bounce_webhooks_are_not_wired_up_yet(self) -> None:
         with self.assertRaises(ChannelUnavailable):
             EmailAdapter().parse_status_webhook({})

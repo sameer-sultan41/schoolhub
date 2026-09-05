@@ -4,6 +4,7 @@ import type { ApiClientConfig } from "@schoolhub/api-client";
 const mockPost = jest.fn();
 const mockGet = jest.fn();
 const mockRefreshAccessToken = jest.fn();
+const mockRefresh = jest.fn();
 const mockClientConfigs: ApiClientConfig[] = [];
 
 jest.mock("@schoolhub/api-client", () => {
@@ -12,7 +13,10 @@ jest.mock("@schoolhub/api-client", () => {
     ...actual,
     createApiClient: jest.fn((config: ApiClientConfig) => {
       mockClientConfigs.push(config);
-      return { post: mockPost, get: mockGet };
+      // `refresh` is the client's single-flight entry point; `restoreSession`
+      // goes through it rather than calling refreshAccessToken directly, so a
+      // cold load cannot race a 401-triggered refresh.
+      return { post: mockPost, get: mockGet, refresh: mockRefresh };
     }),
     refreshAccessToken: mockRefreshAccessToken,
   };
@@ -33,6 +37,7 @@ describe("auth", () => {
     mockPost.mockReset();
     mockGet.mockReset();
     mockRefreshAccessToken.mockReset();
+    mockRefresh.mockReset();
     mockClientConfigs.length = 0;
     document.cookie = "sh_session=; path=/; max-age=0";
   });
@@ -132,27 +137,27 @@ describe("auth", () => {
   describe("restoreSession", () => {
     it("returns null when the refresh cookie has nothing to offer", async () => {
       const { restoreSession } = await import("./auth");
-      mockRefreshAccessToken.mockResolvedValueOnce(null);
+      mockRefresh.mockResolvedValueOnce(null);
 
       await expect(restoreSession()).resolves.toBeNull();
       expect(mockGet).not.toHaveBeenCalled();
     });
 
     it("refreshes, then fetches the user, on a cold load", async () => {
-      const { restoreSession, accessTokenStore } = await import("./auth");
-      mockRefreshAccessToken.mockResolvedValueOnce({ accessToken: "at-2", expiresIn: 900 });
+      const { restoreSession } = await import("./auth");
+      mockRefresh.mockResolvedValueOnce("at-2");
       mockGet.mockResolvedValueOnce({ data: { id: "u2" } });
 
       const user = await restoreSession();
 
-      expect(accessTokenStore.get()).toBe("at-2");
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
       expect(user).toEqual({ id: "u2" });
       expect(document.cookie).toContain("sh_session=1");
     });
 
     it("clears state and returns null when the user fetch fails", async () => {
       const { restoreSession, accessTokenStore } = await import("./auth");
-      mockRefreshAccessToken.mockResolvedValueOnce({ accessToken: "at-3", expiresIn: 900 });
+      mockRefresh.mockResolvedValueOnce("at-3");
       mockGet.mockRejectedValueOnce(new Error("boom"));
 
       await expect(restoreSession()).resolves.toBeNull();
@@ -170,7 +175,7 @@ describe("auth", () => {
         status: 429,
         url: "/api/auth/refresh",
       });
-      mockRefreshAccessToken.mockRejectedValueOnce(throttled);
+      mockRefresh.mockRejectedValueOnce(throttled);
 
       await expect(restoreSession()).rejects.toBe(throttled);
       expect(mockGet).not.toHaveBeenCalled();
@@ -179,7 +184,8 @@ describe("auth", () => {
     it("rethrows a transient user-fetch failure and keeps the session intact", async () => {
       const { restoreSession, accessTokenStore } = await import("./auth");
       const { ApiError } = await importApiClient();
-      mockRefreshAccessToken.mockResolvedValueOnce({ accessToken: "at-8", expiresIn: 900 });
+      mockRefresh.mockResolvedValueOnce("at-8");
+      accessTokenStore.set("at-8", 900);
       mockGet.mockRejectedValueOnce(
         new ApiError({ code: "server_error", message: "down", status: 503, url: "/auth/me" }),
       );

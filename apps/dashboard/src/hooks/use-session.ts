@@ -1,5 +1,6 @@
 "use client";
 
+import { ApiError } from "@schoolhub/api-client";
 import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 import { useQuery } from "@tanstack/react-query";
 import { restoreSession } from "@/lib/auth";
@@ -27,10 +28,20 @@ export function useSession() {
     retry: shouldRetry,
   });
 
+  // `isAuthenticated: Boolean(data)` alone cannot tell "signed out" from
+  // "we could not find out" — once the retry budget is spent in a sustained
+  // outage it reads false, which is the very confusion this hook's retry policy
+  // exists to prevent, just delayed by two attempts. `isUnavailable` is the
+  // distinction, so a caller can show "we cannot reach the server" instead of
+  // bouncing someone to /login who was never signed out.
+  const isUnavailable = query.error instanceof ApiError && query.error.isTransient;
+
   return {
     user: query.data ?? null,
     isLoading: query.isPending,
     isAuthenticated: Boolean(query.data),
+    isUnavailable,
+    error: query.error,
     refetch: query.refetch,
   };
 }

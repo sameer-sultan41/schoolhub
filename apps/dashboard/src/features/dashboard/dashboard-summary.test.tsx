@@ -32,6 +32,8 @@ describe("DashboardSummary", () => {
       }),
       isLoading: false,
       isAuthenticated: true,
+      isUnavailable: false,
+      error: null,
       refetch: jest.fn(),
     });
   });
@@ -85,6 +87,8 @@ describe("DashboardSummary", () => {
       user: makeUser({ permissions: ["students.student.view"] }),
       isLoading: false,
       isAuthenticated: true,
+      isUnavailable: false,
+      error: null,
       refetch: jest.fn(),
     });
     mockGet.mockResolvedValue(

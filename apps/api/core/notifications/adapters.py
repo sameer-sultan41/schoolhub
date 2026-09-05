@@ -14,6 +14,7 @@ promised — the failure mode `core.files.FileStatus.QUARANTINED` is documented 
 
 from __future__ import annotations
 
+import html
 import logging
 from dataclasses import dataclass
 from typing import Protocol
@@ -89,9 +90,13 @@ class EmailAdapter:
     real provider (SES, Postmark) is configured by pointing `EMAIL_BACKEND` at it —
     no code change here, which is the point of the adapter layer.
 
-    Bodies are sent as both plain text and HTML: the renderer HTML-escapes email
-    bodies (templates.py), so the text alternative is the escaped source rather
-    than a second render, and a client that cannot show HTML still gets the words.
+    Bodies arrive as plain text and are sent as both parts: the text part
+    verbatim, the HTML alternative **escaped here**. Escaping is the adapter's
+    job, not the renderer's — "adapters own provider-specific formatting" (§1) —
+    and doing it upstream was wrong twice over: the escaping never actually ran
+    (the stored body is rendered once from the in-app template and reused by
+    every channel), and where it did, the plain-text part inherited the entities,
+    so "Smith & Sons" arrived as "Smith &amp; Sons" for any client showing text.
     """
 
     channel: str = NotificationChannel.EMAIL
@@ -104,7 +109,10 @@ class EmailAdapter:
             from_email=from_email,
             to=[message.recipient_address],
         )
-        mail.attach_alternative(f"<p>{message.body}</p>", "text/html")
+        # Escape at the point of building HTML, and only there. Newlines become
+        # breaks so a multi-line body does not collapse into one paragraph.
+        escaped = html.escape(message.body).replace("\n", "<br>")
+        mail.attach_alternative(f"<p>{escaped}</p>", "text/html")
         mail.send(fail_silently=False)
         return ProviderReceipt(provider=settings.EMAIL_BACKEND.rsplit(".", 1)[-1])
 

@@ -8,8 +8,14 @@ Retries: one Celery-level retry with backoff, deliberately short of §6's full
 1m/5m/30m/2h/6h schedule. That schedule pairs with provider status webhooks,
 circuit-breaking and dead-lettering, none of which exist until communication
 (Tier 4) — a five-stage retry with nothing reading the delivery receipts would be
-ceremony, not reliability. What matters now is that `attempts` and `error_message`
-are recorded honestly so the gap is visible.
+ceremony, not reliability.
+
+The retry has to be *taken*, not merely configured. `_attempt` previously caught
+every adapter exception and returned `False`, so `self.retry()` was never called
+and `max_retries`/`RETRY_BACKOFF_SECONDS` were decoration: a transient SMTP
+timeout was recorded `failed` on the first try and never tried again. The task
+now re-raises transient failures so Celery can retry the batch, and records
+`attempts` and `error_message` on the row either way so the gap stays visible.
 """
 
 from __future__ import annotations
@@ -50,16 +56,30 @@ def deliver_notifications(self, *, tenant_id: str, notification_ids: list[str]) 
         addresses = resolve_addresses([d.notification.user_id for d in deliveries])
 
     sent = failed = 0
+    retryable = False
     for delivery in deliveries:
-        if _attempt(tenant_uuid, delivery, addresses):
+        outcome = _attempt(tenant_uuid, delivery, addresses)
+        if outcome == "sent":
             sent += 1
-        else:
-            failed += 1
+            continue
+        failed += 1
+        retryable = retryable or outcome == "retry"
+
+    # Re-raise only after every delivery has had its attempt recorded, so a
+    # retry re-runs a strictly smaller set: anything that succeeded is no longer
+    # `queued` and the next pass skips it.
+    if retryable and self.request.retries < MAX_RETRIES:
+        raise self.retry(countdown=RETRY_BACKOFF_SECONDS)
 
     return {"sent": sent, "failed": failed}
 
 
-def _attempt(tenant_id: uuid.UUID, delivery: DeliveryLog, addresses: dict[uuid.UUID, str]) -> bool:
+def _attempt(tenant_id: uuid.UUID, delivery: DeliveryLog, addresses: dict[uuid.UUID, str]) -> str:
+    """Returns "sent", "retry" or "failed".
+
+    "retry" is reserved for a provider error, which is the only kind that might
+    succeed on a second attempt — a missing adapter never will.
+    """
     notification = delivery.notification
     address = addresses.get(notification.user_id) or str(notification.user_id)
 
@@ -78,8 +98,10 @@ def _attempt(tenant_id: uuid.UUID, delivery: DeliveryLog, addresses: dict[uuid.U
             )
         )
     except ChannelUnavailable as exc:
+        # Not retryable: a channel with no adapter will not grow one between now
+        # and sixty seconds from now.
         _record(tenant_id, delivery, status=DeliveryStatus.SKIPPED, error=str(exc))
-        return False
+        return "failed"
     except Exception as exc:  # noqa: BLE001 — any provider error must land on the row
         logger.warning(
             "notification delivery failed: channel=%s notification=%s",
@@ -87,7 +109,7 @@ def _attempt(tenant_id: uuid.UUID, delivery: DeliveryLog, addresses: dict[uuid.U
             notification.pk,
         )
         _record(tenant_id, delivery, status=DeliveryStatus.FAILED, error=str(exc))
-        return False
+        return "retry"
 
     # In-app goes straight to `delivered`: there is no provider hop between "we
     # sent it" and "it arrived" (§8), so leaving it at `sent` would imply a
@@ -100,7 +122,7 @@ def _attempt(tenant_id: uuid.UUID, delivery: DeliveryLog, addresses: dict[uuid.U
         provider=receipt.provider,
         provider_message_id=receipt.provider_message_id,
     )
-    return True
+    return "sent"
 
 
 def _record(

@@ -63,34 +63,28 @@ class RenderTests(SimpleTestCase):
         with self.assertRaises(TemplateError):
             template.render({})
 
-    def test_email_bodies_are_html_escaped(self) -> None:
-        local = _registry_with(
-            channel=NotificationChannel.EMAIL,
-            subject="Hi",
-            body="Name: {{ name }}",
-            variables={"name"},
-        )
-        template = local.get("demo.thing", NotificationChannel.EMAIL)
-        assert template is not None
+    def test_rendering_never_escapes_regardless_of_channel(self) -> None:
+        """Escaping belongs to the adapter, not here.
 
-        _, body = template.render({"name": "<script>alert(1)</script>"})
+        Doing it in the renderer was wrong twice: the stored body is rendered
+        once from the in-app template and reused by every channel, so it never
+        ran where intended — and where it did, EmailAdapter built the plain-text
+        MIME part from the escaped string. See adapters.EmailAdapter.
+        """
+        for channel in (NotificationChannel.EMAIL, NotificationChannel.IN_APP):
+            with self.subTest(channel=channel):
+                local = _registry_with(
+                    channel=channel,
+                    subject="Hi",
+                    body="Name: {{ name }}",
+                    variables={"name"},
+                )
+                template = local.get("demo.thing", channel)
+                assert template is not None
 
-        self.assertNotIn("<script>", body)
-        self.assertIn("&lt;script&gt;", body)
+                _, body = template.render({"name": "Ali & <Sons>"})
 
-    def test_plain_text_channels_are_not_escaped(self) -> None:
-        local = _registry_with(
-            channel=NotificationChannel.IN_APP,
-            subject="Hi",
-            body="{{ name }}",
-            variables={"name"},
-        )
-        template = local.get("demo.thing", NotificationChannel.IN_APP)
-        assert template is not None
-
-        _, body = template.render({"name": "Ali & Sons"})
-
-        self.assertEqual(body, "Ali & Sons")
+                self.assertEqual(body, "Name: Ali & <Sons>")
 
     def test_a_context_key_outside_the_whitelist_is_ignored_not_injected(self) -> None:
         """Extra context cannot introduce placeholders the template never declared."""

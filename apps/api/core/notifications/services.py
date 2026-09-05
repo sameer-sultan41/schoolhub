@@ -126,19 +126,19 @@ def notify(
     title, body = in_app.render(context)
     emails = resolve_addresses([r.user_id for r in recipients])
 
-    created = [
-        _persist(
-            trigger=trigger,
-            tenant_id=tenant_id,
-            recipient=recipient,
-            title=title,
-            body=body,
-            email=emails.get(recipient.user_id),
-            source_type=source_type,
-            source_id=source_id,
-        )
-        for recipient in recipients
-    ]
+    # Two bulk writes for the whole fan-out, not two per recipient. An absence
+    # alert to a class of forty guardians was eighty round trips; §5 explicitly
+    # expects one announcement to reach thousands.
+    created = _persist_many(
+        trigger=trigger,
+        tenant_id=tenant_id,
+        recipients=recipients,
+        title=title,
+        body=body,
+        emails=emails,
+        source_type=source_type,
+        source_id=source_id,
+    )
 
     if created:
         # on_commit, never inside the transaction: a worker that starts while these
@@ -149,28 +149,42 @@ def notify(
     return created
 
 
-def _persist(
+def _persist_many(
     *,
     trigger: Trigger,
     tenant_id: uuid.UUID,
-    recipient: Recipient,
+    recipients: list[Recipient],
     title: str,
     body: str,
-    email: str | None,
+    emails: dict[uuid.UUID, str],
     source_type: str | None,
     source_id: uuid.UUID | None,
-) -> Notification:
-    notification = Notification.objects.create(
-        tenant_id=tenant_id,
-        user_id=recipient.user_id,
-        event_key=trigger.event_key,
-        category=trigger.category,
-        priority=trigger.priority,
-        title=title,
-        body=body,
-        data={"source_type": source_type, "source_id": str(source_id)} if source_id else None,
-        source_type=source_type,
-        source_id=source_id,
+) -> list[Notification]:
+    """One `bulk_create` for the notifications, one for every delivery row.
+
+    `bulk_create` returns the instances with their primary keys populated on
+    PostgreSQL, which is what lets the delivery rows reference them without a
+    second read.
+    """
+    data = {"source_type": source_type, "source_id": str(source_id)} if source_id else None
+
+    notifications = Notification.objects.bulk_create(
+        [
+            Notification(
+                tenant_id=tenant_id,
+                user_id=recipient.user_id,
+                event_key=trigger.event_key,
+                category=trigger.category,
+                priority=trigger.priority,
+                title=title,
+                body=body,
+                data=data,
+                source_type=source_type,
+                source_id=source_id,
+            )
+            for recipient in recipients
+        ],
+        batch_size=500,
     )
 
     DeliveryLog.objects.bulk_create(
@@ -181,12 +195,14 @@ def _persist(
                 channel=channel,
                 trigger=trigger,
                 recipient=recipient,
-                email=email,
+                email=emails.get(recipient.user_id),
             )
+            for notification, recipient in zip(notifications, recipients, strict=True)
             for channel in sorted(trigger.channels)
-        ]
+        ],
+        batch_size=500,
     )
-    return notification
+    return notifications
 
 
 def _delivery_for(

@@ -153,12 +153,12 @@ export async function fetchCurrentUser(): Promise<AuthenticatedUser> {
  */
 export async function restoreSession(): Promise<AuthenticatedUser | null> {
   if (!accessTokenStore.isValid()) {
-    const refreshed = await refreshAccessToken({
-      baseUrl: AUTH_PROXY_BASE_URL,
-      path: "/refresh",
-    });
-    if (!refreshed) return null;
-    accessTokenStore.set(refreshed.accessToken, refreshed.expiresIn);
+    // Through the client's single-flight refresh, not a direct call: a cold load
+    // and an authenticated request's 401 can happen together, and two
+    // simultaneous refreshes against a 10/min throttle is how a throttle window
+    // becomes a sign-out.
+    const token = await apiClient.refresh();
+    if (!token) return null;
   }
 
   try {

@@ -50,6 +50,13 @@ jobs:
     services:
       # Tests run against real PostgreSQL: Row-Level Security is the isolation
       # mechanism and cannot be exercised on any other backend.
+      # `POSTGRES_USER` is a SUPERUSER — that is what the image makes it. Tests
+      # must not connect as it: a superuser bypasses Row-Level Security even
+      # with FORCE, so every cross-tenant assertion in the suite would pass on
+      # the Python-level TenantScopedManager alone and the database half of the
+      # isolation guarantee would never be exercised. This role is the bootstrap
+      # only; the "Create the non-superuser application role" step below makes
+      # the role the tests actually use.
       postgres:
         image: postgres:18-alpine
         env:
@@ -71,7 +78,11 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://schoolhub:schoolhub@localhost:5432/schoolhub_test
+      # schoolhub_app, never the bootstrap superuser — see the postgres service
+      # comment above, and infra/postgres/init/02-app-role.sql for the shape
+      # this mirrors.
+      DATABASE_URL: postgres://schoolhub_app:schoolhub_app@localhost:5432/schoolhub_test
+      BOOTSTRAP_DATABASE_URL: postgres://schoolhub:schoolhub@localhost:5432/schoolhub_test
       REDIS_URL: redis://localhost:6379/0
       DJANGO_SECRET_KEY: 7Qk2mVx9RbT4wYzA1sHf6JpLn0CdGeUiOa3ZtXrMvB8yNqEcWk5DgSjFhPuT2LiR
     steps:
@@ -89,6 +100,47 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0
+
+      # infra/postgres/init/02-app-role.sql is the production shape and calls
+      # itself "the most important file in this repository": RLS binds only to a
+      # role that is not a superuser, does not hold BYPASSRLS, and does not own
+      # the tables. Break any one and every policy silently becomes a no-op.
+      # This role matches that three-attribute invariant — NOSUPERUSER,
+      # NOBYPASSRLS, NOCREATEROLE — and `tests/test_rls_enforcement.py`'s
+      # `test_the_connecting_role_cannot_bypass_rls` is what actually enforces
+      # it, rather than trusting that these two hand-written copies stay in
+      # sync.
+      #
+      # It does NOT match production for table ownership or CREATE privileges,
+      # and both divergences are CI-only, deliberate, and unrelated to the
+      # invariant above:
+      #
+      # - Ownership: Django's test runner creates and migrates the test
+      #   database over the same connection it then runs tests on, so the
+      #   connecting role necessarily owns what it created. Production splits
+      #   this across `schoolhub_migrator` (owns everything) and
+      #   `schoolhub_app` (owns nothing). `FORCE ROW LEVEL SECURITY` — set on
+      #   every tenant-owned table by its `0002_rls_policies` migration — is
+      #   what makes the policy apply to the owner too, and
+      #   `test_tenant_owned_tables_force_rls_for_their_owner` asserts it.
+      # - CREATEDB and the schema-level GRANT ALL below: needed only so this
+      #   single CI role can self-provision the ephemeral test database and
+      #   the tables migrations create in it. Production's `schoolhub_app`
+      #   holds neither — it is NOCREATEDB with USAGE only on schema public
+      #   (infra/postgres/init/02-app-role.sql). A regression that grants
+      #   CREATE privileges to the production role would NOT be caught here,
+      #   since this role already has them unconditionally; reproducing
+      #   production's migrator/app split inside Django's single-connection
+      #   test runner is out of scope for this fix.
+      - name: Create the non-superuser application role
+        run: |
+          psql "$BOOTSTRAP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE schoolhub_app
+            LOGIN PASSWORD 'schoolhub_app'
+            NOSUPERUSER NOCREATEROLE NOBYPASSRLS CREATEDB INHERIT;
+          GRANT CONNECT, TEMPORARY ON DATABASE schoolhub_test TO schoolhub_app;
+          GRANT ALL ON SCHEMA public TO schoolhub_app;
+          SQL
 
       - name: Check for missing migrations
         run: uv run manage.py makemigrations --check --dry-run

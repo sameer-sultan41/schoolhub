@@ -14,16 +14,24 @@ Two rules from §2 that this module enforces rather than documents:
    but enforcing it now means the contract is already true when they can — and it
    turns a typo'd variable into a loud error at render time instead of an empty
    string in a parent's SMS.
-2. **Rendering escapes per channel.** Plain text for SMS/WhatsApp/in-app, HTML for
-   email. The renderer here is deliberately not Django's template engine: bodies
-   become tenant-editable input in Tier 4, and handing untrusted input to a full
+2. **Rendering produces plain text; escaping belongs to the adapter.** This used
+   to HTML-escape for the EMAIL channel, which was wrong twice over: the stored
+   `Notification.title`/`body` are rendered once from the in-app template and
+   reused by every channel, so the escaping never ran where it was meant to —
+   and where it did run, `EmailAdapter` built the *plain-text* MIME part from the
+   escaped string, so "Smith & Sons" reached plain-text clients as
+   "Smith &amp; Sons". `adapters.EmailAdapter` now escapes when it builds the
+   HTML alternative and nowhere else, which is what "adapters own
+   provider-specific formatting" (§1) already said.
+
+   The renderer is still deliberately not Django's template engine: bodies become
+   tenant-editable input in Tier 4, and handing untrusted input to a full
    template engine is how server-side template injection happens. A literal
    `{{ name }}` substitution over a declared variable set cannot execute anything.
 """
 
 from __future__ import annotations
 
-import html
 import re
 from dataclasses import dataclass, field
 
@@ -80,21 +88,15 @@ class NotificationTemplate:
 def _substitute(
     text: str, context: dict[str, object], allowed: frozenset[str], channel: str
 ) -> str:
-    escape = html.escape if channel == NotificationChannel.EMAIL else _identity
-
     def replace(match: re.Match[str]) -> str:
         name = match.group(1)
         if name not in allowed:
             raise TemplateError(f"Template variable {name!r} is not declared for this template.")
         if name not in context:
             raise TemplateError(f"Template variable {name!r} was not supplied.")
-        return escape(str(context[name]))
+        return str(context[name])
 
     return _PLACEHOLDER.sub(replace, text)
-
-
-def _identity(value: str) -> str:
-    return value
 
 
 class TemplateRegistry:

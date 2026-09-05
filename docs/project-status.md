@@ -79,6 +79,29 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 
 ## Deliberately NOT done
 
+- **RLS is now genuinely enforced in CI** — it was not before. `api.yml`
+  connected as the postgres image's `POSTGRES_USER`, which is a **superuser**,
+  and a superuser bypasses Row-Level Security even with `FORCE`. Every
+  cross-tenant test in the suite was therefore passing on
+  `TenantScopedManager` — the Python layer — alone, while
+  [`07-quality/testing-strategy.md`](07-quality/testing-strategy.md) §1.4
+  claimed the database mechanism was being exercised and `AGENTS.md`
+  invariant 1 claimed the app role had neither `BYPASSRLS` nor table ownership.
+  `tests/test_rls_coverage.py` did not catch it because it inspects the
+  *catalogue* (policy present, RLS enabled, FORCEd) rather than enforcement for
+  the connecting role. Tests now connect as a `NOSUPERUSER NOBYPASSRLS`
+  `schoolhub_app`, and `tests/test_rls_enforcement.py` asserts the outcome
+  through the unfiltered `all_tenants` manager, so only the database can be
+  what returns zero rows. Two conditions from
+  `infra/postgres/init/02-app-role.sql` are still unmet in CI, both accepted
+  and both unrelated to the RLS-bypass invariant itself: (1) the role owns the
+  tables it migrated, because Django's test runner creates and migrates over the
+  same connection it tests on — which is exactly what `FORCE ROW LEVEL SECURITY`
+  covers, and is itself asserted; (2) the role holds `CREATEDB` and `CREATE` on
+  schema `public` so it can self-provision the ephemeral test database, whereas
+  production's `schoolhub_app` is `NOCREATEDB` with `USAGE` only. A future
+  regression that grants CREATE privileges to the production role would not be
+  caught by this CI role, since it already has them unconditionally.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
