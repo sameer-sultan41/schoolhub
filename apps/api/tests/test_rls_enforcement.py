@@ -39,11 +39,21 @@ class ConnectingRoleTests(TestCase):
     """The preconditions. These fail loudly rather than letting the suite lie."""
 
     def test_the_connecting_role_cannot_bypass_rls(self) -> None:
+        """The single automated source of truth for the role-attribute invariant.
+
+        `.github/workflows/api.yml` and `infra/postgres/init/02-app-role.sql` each
+        hand-write `NOSUPERUSER NOCREATEROLE NOBYPASSRLS` for their own role —
+        there is no code shared between a YAML heredoc and a psql script that
+        could enforce it. This test is what actually enforces it: it inspects
+        the role CI connects as, so any drift in either file that weakens the
+        invariant fails here rather than going unnoticed.
+        """
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+                "SELECT rolsuper, rolbypassrls, rolcreaterole "
+                "FROM pg_roles WHERE rolname = current_user"
             )
-            is_superuser, can_bypass = cursor.fetchone()
+            is_superuser, can_bypass, can_create_role = cursor.fetchone()
 
         self.assertFalse(
             is_superuser,
@@ -56,6 +66,11 @@ class ConnectingRoleTests(TestCase):
             "The test role holds BYPASSRLS, so RLS is bypassed. See "
             "infra/postgres/init/02-app-role.sql.",
         )
+        self.assertFalse(
+            can_create_role,
+            "The test role holds CREATEROLE, which lets it grant itself "
+            "BYPASSRLS. See infra/postgres/init/02-app-role.sql.",
+        )
 
     def test_tenant_owned_tables_force_rls_for_their_owner(self) -> None:
         """FORCE is what covers the one condition CI cannot satisfy.
@@ -66,10 +81,17 @@ class ConnectingRoleTests(TestCase):
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT relrowsecurity, relforcerowsecurity "
-                "FROM pg_class WHERE relname = 'campuses'"
+                "FROM pg_class WHERE oid = to_regclass('public.campuses')"
             )
-            enabled, forced = cursor.fetchone()
+            row = cursor.fetchone()
 
+        self.assertIsNotNone(
+            row,
+            "public.campuses does not exist in this database — has it been "
+            "renamed or dropped? This test needs updating to point at a real "
+            "tenant-owned table.",
+        )
+        enabled, forced = row
         self.assertTrue(enabled, "RLS is not enabled on campuses")
         self.assertTrue(forced, "RLS is not FORCEd on campuses, so the owner bypasses it")
 

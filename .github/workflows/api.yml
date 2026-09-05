@@ -105,17 +105,33 @@ jobs:
       # itself "the most important file in this repository": RLS binds only to a
       # role that is not a superuser, does not hold BYPASSRLS, and does not own
       # the tables. Break any one and every policy silently becomes a no-op.
+      # This role matches that three-attribute invariant — NOSUPERUSER,
+      # NOBYPASSRLS, NOCREATEROLE — and `tests/test_rls_enforcement.py`'s
+      # `test_the_connecting_role_cannot_bypass_rls` is what actually enforces
+      # it, rather than trusting that these two hand-written copies stay in
+      # sync.
       #
-      # CI can honour two of the three. It cannot honour the third, because
-      # Django's test runner creates and migrates the test database over the
-      # same connection it then runs tests on, so the connecting role
-      # necessarily owns what it created. That is exactly the case
-      # `FORCE ROW LEVEL SECURITY` exists for — every tenant-owned table sets it
-      # in its `0002_rls_policies` migration, so the policy applies to the owner
-      # too. `tests/test_rls_enforcement.py` asserts the outcome rather than
-      # trusting this reasoning.
+      # It does NOT match production for table ownership or CREATE privileges,
+      # and both divergences are CI-only, deliberate, and unrelated to the
+      # invariant above:
       #
-      # CREATEDB is granted for that same reason and nothing else.
+      # - Ownership: Django's test runner creates and migrates the test
+      #   database over the same connection it then runs tests on, so the
+      #   connecting role necessarily owns what it created. Production splits
+      #   this across `schoolhub_migrator` (owns everything) and
+      #   `schoolhub_app` (owns nothing). `FORCE ROW LEVEL SECURITY` — set on
+      #   every tenant-owned table by its `0002_rls_policies` migration — is
+      #   what makes the policy apply to the owner too, and
+      #   `test_tenant_owned_tables_force_rls_for_their_owner` asserts it.
+      # - CREATEDB and the schema-level GRANT ALL below: needed only so this
+      #   single CI role can self-provision the ephemeral test database and
+      #   the tables migrations create in it. Production's `schoolhub_app`
+      #   holds neither — it is NOCREATEDB with USAGE only on schema public
+      #   (infra/postgres/init/02-app-role.sql). A regression that grants
+      #   CREATE privileges to the production role would NOT be caught here,
+      #   since this role already has them unconditionally; reproducing
+      #   production's migrator/app split inside Django's single-connection
+      #   test runner is out of scope for this fix.
       - name: Create the non-superuser application role
         run: |
           psql "$BOOTSTRAP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'

@@ -89,11 +89,16 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   the connecting role. Tests now connect as a `NOSUPERUSER NOBYPASSRLS`
   `schoolhub_app`, and `tests/test_rls_enforcement.py` asserts the outcome
   through the unfiltered `all_tenants` manager, so only the database can be
-  what returns zero rows. One condition from
-  `infra/postgres/init/02-app-role.sql` is still unmet in CI — the role owns the
+  what returns zero rows. Two conditions from
+  `infra/postgres/init/02-app-role.sql` are still unmet in CI, both accepted
+  and both unrelated to the RLS-bypass invariant itself: (1) the role owns the
   tables it migrated, because Django's test runner creates and migrates over the
   same connection it tests on — which is exactly what `FORCE ROW LEVEL SECURITY`
-  covers, and is itself asserted.
+  covers, and is itself asserted; (2) the role holds `CREATEDB` and `CREATE` on
+  schema `public` so it can self-provision the ephemeral test database, whereas
+  production's `schoolhub_app` is `NOCREATEDB` with `USAGE` only. A future
+  regression that grants CREATE privileges to the production role would not be
+  caught by this CI role, since it already has them unconditionally.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
