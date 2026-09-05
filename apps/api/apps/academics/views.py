@@ -18,6 +18,8 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from django.db.models import Count, Min
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
@@ -38,12 +40,14 @@ from apps.academics.serializers import (
     CloneCurriculumRequestSerializer,
     CreatePromotionBatchSerializer,
     CurriculumSerializer,
+    PromotionBatchSerializer,
     PromotionDecisionSerializer,
     TeacherAllocationSerializer,
 )
 from apps.school_organization.models import AcademicSession, ClassSubject
 from apps.school_organization.services import map_subject_to_class
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
@@ -248,18 +252,20 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return ActionResponse.ok(sorted(by_staff.values(), key=lambda e: e["name"]))
 
 
-class PromotionViewSet(
-    TenantScopedViewSetMixin,
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.UpdateModelMixin,
-    viewsets.GenericViewSet,
+class PromotionBatchViewSet(
+    TenantScopedViewSetMixin, mixins.ListModelMixin, viewsets.GenericViewSet
 ):
-    """`student_promotions` — batch review and the §7.2 state machine.
+    """`/student-promotions` — the batch resource (§16).
 
-    No `create` here: a batch is created by `POST /student-promotions` with a
-    class and a session pair, not by posting a single decision, so that action
-    has its own handler below. Decisions are only ever edited, never added.
+    Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+    and PATCH resolved a decision-row id while the colon-actions resolved a batch
+    id, so one path prefix carried two id spaces and a client could not tell
+    which it held. Decisions are now a sub-resource keyed by student, which is
+    also the shape §16 describes.
+
+    A batch has no table — it is aggregated from its rows (see
+    `PromotionBatchSerializer`), so this list is read-only and `create` is the
+    dedicated `create_batch` handler below.
     """
 
     permission_classes = [
@@ -269,15 +275,17 @@ class PromotionViewSet(
         DenyRestrictedPrincipals,
     ]
     queryset = StudentPromotion.objects
-    serializer_class = PromotionDecisionSerializer
+    serializer_class = PromotionBatchSerializer
     filterset_class = PromotionFilterSet
-    ordering_fields = ["created_at"]
+    # Offset pagination, allowed by api-architecture.md §2.4 "on small admin
+    # lists": a tenant creates roughly one batch per class per rollover, and a
+    # cursor cannot order a `values()` aggregate by the `-created_at` the default
+    # paginator wants anyway.
+    pagination_class = PageNumberPagination
     scope_campus_field = "student__campus_id"
     required_feature = FEATURE
     required_permission = "academics.promotion.view"
     required_permission_map = {
-        "update": "academics.promotion.update",
-        "partial_update": "academics.promotion.update",
         "create_batch": "academics.promotion.create",
         "submit": "academics.promotion.update",
         "approve": "academics.promotion.approve",
@@ -285,17 +293,53 @@ class PromotionViewSet(
         "execute": "academics.promotion.execute",
         "revert": "academics.promotion.update",
     }
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("student", "from_class", "to_class")
+        """One row per batch, aggregated. Two queries, never one per batch."""
+        return (
+            super()
+            .get_queryset()
+            .values(
+                "batch_id",
+                "from_academic_session_id",
+                "to_academic_session_id",
+                "from_class_id",
+                "status",
+            )
+            .annotate(students=Count("id"), started_at=Min("created_at"))
+            .order_by("-started_at")
+        )
 
-    def update(self, request: Request, *args, **kwargs) -> Response:
-        """Only a draft row is editable — everything after submit is under review."""
-        instance = self.get_object()
-        if instance.status != PromotionStatus.DRAFT:
-            raise Conflict(f"This decision is {instance.status} and can no longer be edited.")
-        return super().update(request, *args, **kwargs)
+    @extend_schema(
+        summary="One batch and every decision in it",
+        responses={200: OpenApiResponse(description="The batch plus its per-student rows.")},
+    )
+    def retrieve(self, request: Request, pk: str) -> Response:
+        batch_id = _batch_uuid(pk)
+        rows = list(
+            self.filter_queryset(super().get_queryset())
+            .filter(batch_id=batch_id)
+            .select_related("student", "from_class", "to_class")
+        )
+        if not rows:
+            raise Http404("No such promotion batch.")
+
+        summary = {
+            "batch_id": str(batch_id),
+            "from_academic_session_id": str(rows[0].from_academic_session_id),
+            "to_academic_session_id": str(rows[0].to_academic_session_id),
+            "from_class_id": str(rows[0].from_class_id),
+            "status": rows[0].status,
+            "students": len(rows),
+            "started_at": min(row.created_at for row in rows),
+        }
+        return ActionResponse.ok(
+            {
+                **PromotionBatchSerializer(summary).data,
+                "decisions": PromotionDecisionSerializer(rows, many=True).data,
+            }
+        )
 
     @extend_schema(
         summary="Create a promotion batch for one class",
@@ -322,22 +366,22 @@ class PromotionViewSet(
 
     @extend_schema(summary="Submit a draft batch for approval", request=None, responses={200: None})
     def submit(self, request: Request, pk: str) -> Response:
-        count = services.submit_batch(batch_id=uuid.UUID(pk), actor_id=request.user.pk)
+        count = services.submit_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
         return ActionResponse.ok({"updated": count}, message="Batch submitted for approval.")
 
     @extend_schema(summary="Approve a batch (approver must differ from preparer)", request=None)
     def approve(self, request: Request, pk: str) -> Response:
-        count = services.approve_batch(batch_id=uuid.UUID(pk), actor_id=request.user.pk)
+        count = services.approve_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
         return ActionResponse.ok({"updated": count}, message="Batch approved.")
 
     @extend_schema(summary="Send a batch back to draft", request=None)
     def reject(self, request: Request, pk: str) -> Response:
-        count = services.reject_batch(batch_id=uuid.UUID(pk), actor_id=request.user.pk)
+        count = services.reject_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
         return ActionResponse.ok({"updated": count}, message="Batch returned to draft.")
 
     @extend_schema(summary="Revert a batch before downstream activity exists", request=None)
     def revert(self, request: Request, pk: str) -> Response:
-        count = services.revert_batch(batch_id=uuid.UUID(pk), actor_id=request.user.pk)
+        count = services.revert_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
         return ActionResponse.ok({"updated": count}, message="Batch reverted.")
 
     @extend_schema(
@@ -346,7 +390,7 @@ class PromotionViewSet(
         responses={200: OpenApiResponse(description="Per-student execution report.")},
     )
     def execute(self, request: Request, pk: str) -> Response:
-        batch_id = uuid.UUID(pk)
+        batch_id = _batch_uuid(pk)
 
         def run() -> Response:
             report = services.execute_batch(
@@ -363,3 +407,60 @@ class PromotionViewSet(
             endpoint="student-promotions:execute",
             execute=run,
         )
+
+
+class PromotionDecisionViewSet(
+    TenantScopedViewSetMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet
+):
+    """`/student-promotions/{batch_id}/decisions/{student_id}` — §16's shape.
+
+    Addressed by *student* rather than by row id, because that is what a reviewer
+    working through a class actually has in hand, and it makes the URL say which
+    batch the edit belongs to instead of leaving it implicit in an opaque id.
+    """
+
+    permission_classes = [
+        IsAuthenticated,
+        RequiresModuleFeature,
+        HasPermissionKey,
+        DenyRestrictedPrincipals,
+    ]
+    queryset = StudentPromotion.objects
+    serializer_class = PromotionDecisionSerializer
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "academics.promotion.view"
+    required_permission_map = {
+        "update": "academics.promotion.update",
+        "partial_update": "academics.promotion.update",
+    }
+    http_method_names = ["patch", "head", "options"]
+
+    def get_object(self) -> StudentPromotion:
+        instance = get_object_or_404(
+            self.filter_queryset(self.get_queryset()),
+            batch_id=_batch_uuid(self.kwargs["batch_pk"]),
+            student_id=self.kwargs["student_pk"],
+        )
+        self.check_object_permissions(self.request, instance)
+        return instance
+
+    def update(self, request: Request, *args, **kwargs) -> Response:
+        """Only a draft row is editable — everything after submit is under review."""
+        instance = self.get_object()
+        if instance.status != PromotionStatus.DRAFT:
+            raise Conflict(f"This decision is {instance.status} and can no longer be edited.")
+        return super().update(request, *args, **kwargs)
+
+
+def _batch_uuid(value: str) -> uuid.UUID:
+    """A malformed batch id is a 404, not a 500.
+
+    Colon-action routes capture `<uuid:pk>` so Django rejects a malformed value
+    before this runs, but `retrieve` and the nested decision route take the same
+    id from paths that are reachable with anything.
+    """
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise Http404("No such promotion batch.") from exc

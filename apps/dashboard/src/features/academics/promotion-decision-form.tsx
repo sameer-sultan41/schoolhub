@@ -59,9 +59,10 @@ function defaultValues(record: PromotionDecisionRecord): PromotionDecisionFormVa
 /**
  * Adjust one student's draft decision (§7.2's review step).
  *
- * `PATCH /student-promotions/{id}` addresses the decision row directly — the row's
- * own id, not the batch's — and the viewset refuses anything that has left `draft`
- * with a 409, so this dialog is only rendered for draft rows.
+ * `PATCH /student-promotions/{batch_id}/decisions/{student_id}` — addressed by the
+ * student a reviewer actually has in hand rather than an opaque row id, which is
+ * also §16's shape. The viewset refuses anything that has left `draft` with a 409,
+ * so this dialog is only rendered for draft rows.
  *
  * The target section matters at execution: `services._execute_one` refuses a
  * non-graduating row with no `to_section_id`, so filling it in here is what makes
@@ -101,7 +102,7 @@ export function PromotionDecisionForm({ decision, studentLabel }: PromotionDecis
         remarks: values.remarks || null,
       };
       const result = await apiClient.patch<PromotionDecisionRecord>(
-        `/student-promotions/${decision.id}`,
+        `/student-promotions/${decision.batch_id}/decisions/${decision.student_id}`,
         payload,
       );
       return result.data;

@@ -100,7 +100,27 @@ export interface PromotionDecisionRecord {
   updated_at: string;
 }
 
-/** `POST /student-promotions` — views.PromotionViewSet.create_batch. */
+/**
+ * `GET /student-promotions` — one entry per batch, aggregated server-side.
+ * There is no `promotion_batches` table; a batch is derived from its rows, so
+ * this is read-only.
+ */
+export interface PromotionBatchRecord {
+  batch_id: string;
+  from_academic_session_id: string;
+  to_academic_session_id: string;
+  from_class_id: string;
+  status: PromotionStatusValue;
+  students: number;
+  started_at: string;
+}
+
+/** `GET /student-promotions/{batch_id}` — the batch plus its decisions. */
+export interface PromotionBatchDetail extends PromotionBatchRecord {
+  decisions: PromotionDecisionRecord[];
+}
+
+/** `POST /student-promotions` — views.PromotionBatchViewSet.create_batch. */
 export interface CreatePromotionBatchResult {
   batch_id: string;
   students: number;

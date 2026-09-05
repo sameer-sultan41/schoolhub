@@ -54,7 +54,7 @@ describe("PromotionDecisionForm", () => {
     mockPatch.mockReset();
   });
 
-  it("patches the decision row by its own id, nulling the blank optional fields", async () => {
+  it("patches the decision by batch and student, nulling the blank optional fields", async () => {
     mockPatch.mockResolvedValue({
       data: DECISION,
       meta: undefined,
@@ -68,7 +68,7 @@ describe("PromotionDecisionForm", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(mockPatch).toHaveBeenCalledWith("/student-promotions/dec1", {
+      expect(mockPatch).toHaveBeenCalledWith("/student-promotions/batch-1/decisions/stu-1", {
         decision: "promoted",
         to_class_id: "class9",
         to_section_id: "sec9a",
@@ -126,7 +126,7 @@ describe("PromotionDecisionForm", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(mockPatch).toHaveBeenCalledWith("/student-promotions/dec1", {
+      expect(mockPatch).toHaveBeenCalledWith("/student-promotions/batch-1/decisions/stu-1", {
         decision: "graduated",
         to_class_id: null,
         to_section_id: null,
@@ -142,7 +142,7 @@ describe("PromotionDecisionForm", () => {
         code: "validation_error",
         message: "Invalid.",
         status: 422,
-        url: "/student-promotions/dec1",
+        url: "/student-promotions/batch-1/decisions/stu-1",
         details: [{ field: "override_reason", issue: "An override reason is required." }],
       }),
     );
@@ -159,7 +159,7 @@ describe("PromotionDecisionForm", () => {
         code: "validation_error",
         message: "Invalid.",
         status: 422,
-        url: "/student-promotions/dec1",
+        url: "/student-promotions/batch-1/decisions/stu-1",
         details: [{ field: "status", issue: "This decision is approved." }],
       }),
     );
@@ -176,7 +176,7 @@ describe("PromotionDecisionForm", () => {
         code: "conflict",
         message: "This decision is approved and can no longer be edited.",
         status: 409,
-        url: "/student-promotions/dec1",
+        url: "/student-promotions/batch-1/decisions/stu-1",
         requestId: "req-4",
       }),
     );

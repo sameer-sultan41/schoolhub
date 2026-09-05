@@ -1,5 +1,5 @@
 import { ApiError, type ApiResult } from "@schoolhub/api-client";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import type { PromotionDecisionRecord } from "@/features/academics/academics-types";
 import { PromotionBatchReview } from "@/features/academics/promotion-batch-review";
 import { usePermission } from "@/hooks/use-session";
@@ -61,11 +61,21 @@ const DRAFT_ROW: PromotionDecisionRecord = {
   updated_at: "2026-04-01T00:00:00Z",
 };
 
-function page(items: unknown[], nextCursor: string | null = null): ApiResult<unknown> {
+/** `GET /student-promotions/{batch_id}` — the batch and its decisions inline. */
+function batch(decisions: unknown[], status = "draft"): ApiResult<unknown> {
   return {
-    data: items,
-    meta: { pagination: { next_cursor: nextCursor, previous_cursor: null, page_size: 25 } },
-    requestId: "req-list",
+    data: {
+      batch_id: "batch-1",
+      from_academic_session_id: "sess1",
+      to_academic_session_id: "sess2",
+      from_class_id: "class1",
+      status,
+      students: decisions.length,
+      started_at: "2026-04-01T00:00:00Z",
+      decisions,
+    },
+    meta: undefined,
+    requestId: null,
     status: 200,
   };
 }
@@ -77,7 +87,7 @@ describe("PromotionBatchReview", () => {
   });
 
   it("lists the batch's rows by batch_id and resolves class and section names", async () => {
-    mockGet.mockResolvedValue(page([DRAFT_ROW]));
+    mockGet.mockResolvedValue(batch([DRAFT_ROW]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
@@ -90,11 +100,11 @@ describe("PromotionBatchReview", () => {
     expect(screen.getByText("A")).toBeInTheDocument();
     expect(screen.getByText("Promoted")).toBeInTheDocument();
     expect(screen.getByText("Borderline in maths.")).toBeInTheDocument();
-    expect(mockGet.mock.calls[0]?.[1]?.query).toMatchObject({ batch_id: "batch-1" });
+    expect(mockGet.mock.calls[0]?.[0]).toBe("/student-promotions/batch-1");
   });
 
   it("reads the batch state off the rows and hands it to the action bar", async () => {
-    mockGet.mockResolvedValue(page([DRAFT_ROW]));
+    mockGet.mockResolvedValue(batch([DRAFT_ROW]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
@@ -106,7 +116,7 @@ describe("PromotionBatchReview", () => {
 
   it("offers the per-row editor only while the batch is draft and the user may update", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([DRAFT_ROW]));
+    mockGet.mockResolvedValue(batch([DRAFT_ROW]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
@@ -115,7 +125,7 @@ describe("PromotionBatchReview", () => {
 
   it("withdraws the per-row editor once the batch has left draft", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([{ ...DRAFT_ROW, status: "approved" }]));
+    mockGet.mockResolvedValue(batch([{ ...DRAFT_ROW, status: "approved" }], "approved"));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
@@ -124,7 +134,7 @@ describe("PromotionBatchReview", () => {
   });
 
   it("hides the per-row editor without the update permission", async () => {
-    mockGet.mockResolvedValue(page([DRAFT_ROW]));
+    mockGet.mockResolvedValue(batch([DRAFT_ROW]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
@@ -133,7 +143,7 @@ describe("PromotionBatchReview", () => {
   });
 
   it("shows the empty state and no action bar for an unknown batch", async () => {
-    mockGet.mockResolvedValue(page([]));
+    mockGet.mockResolvedValue(batch([]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
@@ -161,21 +171,8 @@ describe("PromotionBatchReview", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("pages forward by cursor", async () => {
-    mockGet.mockResolvedValue(page([DRAFT_ROW], "cursor-2"));
-
-    renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
-    await screen.findByText("Grade 8");
-
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    await waitFor(() => {
-      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.cursor).toBe("cursor-2");
-    });
-  });
-
   it("links back to the batch list", async () => {
-    mockGet.mockResolvedValue(page([DRAFT_ROW]));
+    mockGet.mockResolvedValue(batch([DRAFT_ROW]));
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 

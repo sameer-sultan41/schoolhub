@@ -93,7 +93,7 @@ describe("CurriculumForm", () => {
     });
 
     const { user, dialog } = await openCreateAndPickKeys();
-    const periods = within(dialog).getByLabelText("Weekly periods");
+    const periods = within(dialog).getByLabelText(/Weekly periods/);
     await user.clear(periods);
     await user.type(periods, "6");
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -105,7 +105,7 @@ describe("CurriculumForm", () => {
 
   it("blocks a weekly period target below 1 before it reaches the server", async () => {
     const { user, dialog } = await openCreateAndPickKeys();
-    const periods = within(dialog).getByLabelText("Weekly periods");
+    const periods = within(dialog).getByLabelText(/Weekly periods/);
     await user.clear(periods);
     await user.type(periods, "0");
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -118,7 +118,7 @@ describe("CurriculumForm", () => {
 
   it("requires a group name once the mapping is marked elective", async () => {
     const { user, dialog } = await openCreateAndPickKeys();
-    await user.click(within(dialog).getByLabelText("Elective subject"));
+    await user.click(within(dialog).getByLabelText(/Elective subject/));
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     expect(await screen.findByText("An elective needs a group name.")).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("CurriculumForm", () => {
     expect(within(dialog).getByRole("combobox", { name: "Academic session" })).toBeDisabled();
     expect(within(dialog).getByRole("combobox", { name: "Class" })).toBeDisabled();
     expect(within(dialog).getByRole("combobox", { name: "Subject" })).toBeDisabled();
-    expect(within(dialog).getByLabelText("Weekly periods")).toHaveValue(4);
+    expect(within(dialog).getByLabelText(/Weekly periods/)).toHaveValue(4);
 
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 

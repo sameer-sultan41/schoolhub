@@ -81,8 +81,9 @@ class AcademicsCrossTenantTests(AcademicsAPITestCase):
             row["id"]
             for row in self.client.get("/api/v1/teacher-subject-allocations").json()["data"]
         }
+        # Batches, not decision rows — one entry per batch_id.
         promotion_ids = {
-            row["id"] for row in self.client.get("/api/v1/student-promotions").json()["data"]
+            row["batch_id"] for row in self.client.get("/api/v1/student-promotions").json()["data"]
         }
 
         self.assertNotIn(str(self.other_curriculum.pk), curriculum_ids)

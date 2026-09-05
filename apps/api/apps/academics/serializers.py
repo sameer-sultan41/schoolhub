@@ -211,6 +211,30 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class PromotionBatchSerializer(serializers.Serializer):
+    """A batch, synthesised by aggregating its decision rows.
+
+    There is no `promotion_batches` table — `batch_id` is a grouping column and
+    status moves batch-wide, which entities/academics.md settles explicitly. So
+    a batch is read-only and derived: its existence, status and shape are
+    consequences of its rows rather than a parent record that can drift out of
+    sync with them.
+
+    `status` is grouped on rather than picked from a row. If a batch ever
+    contained mixed statuses it would surface here as two entries for one
+    `batch_id`, which is the honest rendering of a corrupt batch rather than a
+    silently chosen winner.
+    """
+
+    batch_id = serializers.UUIDField()
+    from_academic_session_id = serializers.UUIDField()
+    to_academic_session_id = serializers.UUIDField()
+    from_class_id = serializers.UUIDField()
+    status = serializers.CharField()
+    students = serializers.IntegerField()
+    started_at = serializers.DateTimeField()
+
+
 class CreatePromotionBatchSerializer(serializers.Serializer):
     from_academic_session_id = _fk(AcademicSession, source="from_session")
     to_academic_session_id = _fk(AcademicSession, source="to_session")

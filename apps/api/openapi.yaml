@@ -2976,23 +2976,23 @@ paths:
     get:
       operationId: student_promotions_list
       description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
+        `/student-promotions` — the batch resource (§16).
 
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
       parameters:
       - in: query
         name: batch_id
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: decision
         schema:
@@ -3023,6 +3023,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -3070,16 +3076,22 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedPromotionDecisionList'
+                $ref: '#/components/schemas/PaginatedPromotionBatchList'
           description: ''
     post:
       operationId: student_promotions_create
       description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
+        `/student-promotions` — the batch resource (§16).
 
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
       summary: Create a promotion batch for one class
       tags:
       - student-promotions
@@ -3100,49 +3112,27 @@ paths:
       responses:
         '201':
           description: The new batch id and its row count.
-  /api/v1/student-promotions/{id}:
-    get:
-      operationId: student_promotions_retrieve
-      description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
-
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this student promotion.
-        required: true
-      tags:
-      - student-promotions
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PromotionDecision'
-          description: ''
+  /api/v1/student-promotions/{batch_pk}/decisions/{student_pk}:
     patch:
-      operationId: student_promotions_partial_update
+      operationId: student_promotions_decisions_partial_update
       description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
+        `/student-promotions/{batch_id}/decisions/{student_id}` — §16's shape.
 
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
+        Addressed by *student* rather than by row id, because that is what a reviewer
+        working through a class actually has in hand, and it makes the URL say which
+        batch the edit belongs to instead of leaving it implicit in an opaque id.
       parameters:
       - in: path
-        name: id
+        name: batch_pk
         schema:
           type: string
           format: uuid
-        description: A UUID string identifying this student promotion.
+        required: true
+      - in: path
+        name: student_pk
+        schema:
+          type: string
+          format: uuid
         required: true
       tags:
       - student-promotions
@@ -3166,15 +3156,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/PromotionDecision'
           description: ''
+  /api/v1/student-promotions/{id}:
+    get:
+      operationId: student_promotions_retrieve
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      summary: One batch and every decision in it
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: The batch plus its per-student rows.
   /api/v1/student-promotions/{id}:approve:
     post:
       operationId: student_promotions_:approve_create
       description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
+        `/student-promotions` — the batch resource (§16).
 
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
       summary: Approve a batch (approver must differ from preparer)
       parameters:
       - in: path
@@ -3192,17 +3218,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionDecision'
+                $ref: '#/components/schemas/PromotionBatch'
           description: ''
   /api/v1/student-promotions/{id}:execute:
     post:
       operationId: student_promotions_:execute_create
       description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
+        `/student-promotions` — the batch resource (§16).
 
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
       summary: Execute an approved batch, creating next-session enrollments
       parameters:
       - in: path
@@ -3222,11 +3254,17 @@ paths:
     post:
       operationId: student_promotions_:reject_create
       description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
+        `/student-promotions` — the batch resource (§16).
 
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
       summary: Send a batch back to draft
       parameters:
       - in: path
@@ -3244,17 +3282,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionDecision'
+                $ref: '#/components/schemas/PromotionBatch'
           description: ''
   /api/v1/student-promotions/{id}:revert:
     post:
       operationId: student_promotions_:revert_create
       description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
+        `/student-promotions` — the batch resource (§16).
 
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
       summary: Revert a batch before downstream activity exists
       parameters:
       - in: path
@@ -3272,17 +3316,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionDecision'
+                $ref: '#/components/schemas/PromotionBatch'
           description: ''
   /api/v1/student-promotions/{id}:submit:
     post:
       operationId: student_promotions_:submit_create
       description: |-
-        `student_promotions` — batch review and the §7.2 state machine.
+        `/student-promotions` — the batch resource (§16).
 
-        No `create` here: a batch is created by `POST /student-promotions` with a
-        class and a session pair, not by posting a single decision, so that action
-        has its own handler below. Decisions are only ever edited, never added.
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
       summary: Submit a draft batch for approval
       parameters:
       - in: path
@@ -5646,27 +5696,29 @@ components:
                   nullable: true
                 page_size:
                   type: integer
-    PaginatedPromotionDecisionList:
+    PaginatedPromotionBatchList:
       type: object
+      required:
+      - count
+      - results
       properties:
-        data:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
           type: array
           items:
-            $ref: '#/components/schemas/PromotionDecision'
-        meta:
-          type: object
-          properties:
-            pagination:
-              type: object
-              properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
-                page_size:
-                  type: integer
+            $ref: '#/components/schemas/PromotionBatch'
     PaginatedSectionList:
       type: object
       properties:
@@ -6259,6 +6311,12 @@ components:
           type: string
           format: uuid
           readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
         from_enrollment_id:
           type: string
           format: uuid
@@ -6740,6 +6798,7 @@ components:
         effective_to:
           type: string
           format: date
+          readOnly: true
           nullable: true
           description: Null = current. Set rather than deleted on reassignment.
         created_at:
@@ -6782,6 +6841,49 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PromotionBatch:
+      type: object
+      description: |-
+        A batch, synthesised by aggregating its decision rows.
+
+        There is no `promotion_batches` table — `batch_id` is a grouping column and
+        status moves batch-wide, which entities/academics.md settles explicitly. So
+        a batch is read-only and derived: its existence, status and shape are
+        consequences of its rows rather than a parent record that can drift out of
+        sync with them.
+
+        `status` is grouped on rather than picked from a row. If a batch ever
+        contained mixed statuses it would surface here as two entries for one
+        `batch_id`, which is the honest rendering of a corrupt batch rather than a
+        silently chosen winner.
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        from_academic_session_id:
+          type: string
+          format: uuid
+        to_academic_session_id:
+          type: string
+          format: uuid
+        from_class_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        students:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+      required:
+      - batch_id
+      - from_academic_session_id
+      - from_class_id
+      - started_at
+      - status
+      - students
+      - to_academic_session_id
     PromotionDecision:
       type: object
       description: |-
@@ -6803,6 +6905,12 @@ components:
         student_id:
           type: string
           format: uuid
+          readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
           readOnly: true
         from_enrollment_id:
           type: string
@@ -6873,6 +6981,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - admission_number
       - approved_at
       - approved_by
       - batch_id
@@ -6886,6 +6995,7 @@ components:
       - id
       - status
       - student_id
+      - student_name
       - to_academic_session_id
       - updated_at
     PromotionDecisionEnum:
@@ -7801,6 +7911,7 @@ components:
         effective_to:
           type: string
           format: date
+          readOnly: true
           nullable: true
           description: Null = current. Set rather than deleted on reassignment.
         created_at:
@@ -7814,6 +7925,7 @@ components:
       required:
       - academic_session_id
       - created_at
+      - effective_to
       - id
       - section_id
       - staff_id

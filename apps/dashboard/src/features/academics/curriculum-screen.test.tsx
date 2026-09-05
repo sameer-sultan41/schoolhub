@@ -154,9 +154,12 @@ describe("CurriculumScreen", () => {
 
     renderWithProviders(<CurriculumScreen />);
 
-    expect(await screen.findByTestId("curriculum-form-create")).toBeInTheDocument();
+    // Await a *row* control, not a header one: the header renders before the
+    // query settles, so awaiting `curriculum-form-create` resolves immediately
+    // and the row assertions below race an empty table.
+    expect(await screen.findByTestId("curriculum-form-edit")).toBeInTheDocument();
+    expect(screen.getByTestId("curriculum-form-create")).toBeInTheDocument();
     expect(screen.getByTestId("clone-dialog")).toBeInTheDocument();
-    expect(screen.getByTestId("curriculum-form-edit")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove" })).toBeInTheDocument();
   });
 

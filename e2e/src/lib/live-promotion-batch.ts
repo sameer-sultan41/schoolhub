@@ -33,7 +33,8 @@ import { expect } from "@/fixtures";
 export interface PromotionBatchFixture {
   batchId: string;
   /** One row per enrolled student — exactly one here. */
-  rowIds: string[];
+  /** Decisions are addressed by student now, not by row id. */
+  studentIds: string[];
   studentId: string;
   fromSessionId: string;
   toSessionId: string;
@@ -104,18 +105,19 @@ export async function seedPromotionBatch(client: ApiClient): Promise<PromotionBa
   const batch = created.data as { batch_id: string; students: number };
   expect(batch.students).toBe(1);
 
-  const rows = await client.get<{ id: string }[]>("/student-promotions", {
-    query: { batch_id: batch.batch_id },
-  });
-  expect(rows.data).toHaveLength(1);
+  // The batch resource returns its decisions inline — no filtered row list.
+  const detail = await client.get<{ decisions: { student_id: string; id: string }[] }>(
+    `/student-promotions/${batch.batch_id}`,
+  );
+  expect(detail.data.decisions).toHaveLength(1);
 
-  for (const row of rows.data) {
+  for (const row of detail.data.decisions) {
     // `decision` is re-sent, not left alone: `create_promotion_batch` proposes
     // `graduated` (with a null target class) whenever nothing sits above this class on
     // the level ladder, and `PromotionDecisionSerializer.validate` refuses a graduating
     // row that carries a target class. Sending both together makes the row's shape
     // independent of whatever other classes happen to exist in the tenant.
-    await client.patch(`/student-promotions/${row.id}`, {
+    await client.patch(`/student-promotions/${batch.batch_id}/decisions/${row.student_id}`, {
       decision: "promoted",
       to_class_id: toClass.id,
       to_section_id: toSection.id,
@@ -124,7 +126,7 @@ export async function seedPromotionBatch(client: ApiClient): Promise<PromotionBa
 
   return {
     batchId: batch.batch_id,
-    rowIds: rows.data.map((row) => row.id),
+    studentIds: detail.data.decisions.map((row) => row.student_id),
     studentId: student.id,
     fromSessionId: fromSession.id,
     toSessionId: toSession.id,

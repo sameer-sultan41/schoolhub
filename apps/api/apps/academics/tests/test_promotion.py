@@ -135,6 +135,70 @@ class CreateBatchTests(PromotionTestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
 
+class BatchResourceTests(PromotionTestCase):
+    """`/student-promotions` is the batch resource — every `{id}` is a batch id.
+
+    Before this, GET and PATCH resolved a decision-row id while the colon-actions
+    resolved a batch id, so one prefix carried two id spaces.
+    """
+
+    def test_listing_returns_one_entry_per_batch_not_per_student(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        with tenant_context(self.tenant.id):
+            second = StudentFactory(tenant=self.tenant, campus=self.campus)
+            guardian = GuardianFactory(tenant=self.tenant)
+            StudentGuardianFactory(tenant=self.tenant, student=second, guardian=guardian)
+            EmergencyContactFactory(tenant=self.tenant, student=second)
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=second,
+                academic_session=self.session,
+                school_class=self.school_class,
+                section=self.section,
+            )
+        batch_id = self.create_batch()
+
+        rows = self.client.get("/api/v1/student-promotions").json()["data"]
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["batch_id"], batch_id)
+        self.assertEqual(rows[0]["students"], 2)
+        self.assertEqual(rows[0]["status"], PromotionStatus.DRAFT)
+
+    def test_retrieving_a_batch_returns_it_with_its_decisions(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+
+        response = self.client.get(f"/api/v1/student-promotions/{batch_id}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        body = response.json()["data"]
+        self.assertEqual(body["batch_id"], batch_id)
+        self.assertEqual(body["students"], 1)
+        self.assertEqual(len(body["decisions"]), 1)
+        # The review screen needs a person, not a UUID.
+        self.assertEqual(
+            body["decisions"][0]["student_name"],
+            f"{self.student.first_name} {self.student.last_name}",
+        )
+        self.assertEqual(body["decisions"][0]["admission_number"], self.student.admission_number)
+
+    def test_retrieving_an_unknown_batch_is_404(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        import uuid as _uuid
+
+        response = self.client.get(f"/api/v1/student-promotions/{_uuid.uuid4()}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_malformed_batch_id_is_404_not_500(self) -> None:
+        self.allow(*PREPARE_KEYS)
+
+        response = self.client.get("/api/v1/student-promotions/not-a-uuid")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
 class ApprovalTests(PromotionTestCase):
     def test_the_preparer_cannot_approve_their_own_batch(self) -> None:
         """RBAC §2.4 segregation of duties — the rule this workflow exists for."""
@@ -197,15 +261,45 @@ class ApprovalTests(PromotionTestCase):
     def test_a_submitted_decision_can_no_longer_be_edited(self) -> None:
         self.allow(*PREPARE_KEYS)
         batch_id = self.create_batch()
-        with tenant_context(self.tenant.id):
-            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
         self.client.post(f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json")
 
         response = self.client.patch(
-            f"/api/v1/student-promotions/{row.pk}", {"remarks": "late"}, format="json"
+            f"/api/v1/student-promotions/{batch_id}/decisions/{self.student.pk}",
+            {"remarks": "late"},
+            format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_a_draft_decision_is_editable_by_batch_and_student(self) -> None:
+        """§16's addressing: a reviewer has the student in hand, not a row id."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+
+        response = self.client.patch(
+            f"/api/v1/student-promotions/{batch_id}/decisions/{self.student.pk}",
+            {"remarks": "borderline"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.remarks, "borderline")
+
+    def test_editing_a_student_not_in_the_batch_is_404(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        with tenant_context(self.tenant.id):
+            stranger = StudentFactory(tenant=self.tenant, campus=self.campus)
+
+        response = self.client.patch(
+            f"/api/v1/student-promotions/{batch_id}/decisions/{stranger.pk}",
+            {"remarks": "x"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class ExecutionTests(PromotionTestCase):

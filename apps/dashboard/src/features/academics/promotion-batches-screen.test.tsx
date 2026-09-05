@@ -1,7 +1,7 @@
 import { ApiError, type ApiResult } from "@schoolhub/api-client";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { PromotionDecisionRecord } from "@/features/academics/academics-types";
+import type { PromotionBatchRecord } from "@/features/academics/academics-types";
 import { PromotionBatchesScreen } from "@/features/academics/promotion-batches-screen";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
@@ -34,26 +34,14 @@ jest.mock("@/features/academics/promotion-batch-form", () => ({
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
 
-const ROW: PromotionDecisionRecord = {
-  id: "dec1",
+const ROW: PromotionBatchRecord = {
   batch_id: "batch-1",
-  student_id: "stu-1",
-  from_enrollment_id: "enr-1",
   from_academic_session_id: "sess1",
   to_academic_session_id: "sess2",
   from_class_id: "class8",
-  to_class_id: null,
-  to_section_id: null,
-  decision: "graduated",
-  decision_basis: null,
-  override_reason: null,
-  remarks: null,
   status: "pending_approval",
-  approved_by: null,
-  approved_at: null,
-  executed_at: null,
-  created_at: "2026-04-01T00:00:00Z",
-  updated_at: "2026-04-01T00:00:00Z",
+  students: 30,
+  started_at: "2026-04-01T00:00:00Z",
 };
 
 function page(items: unknown[], nextCursor: string | null = null): ApiResult<unknown> {
@@ -72,7 +60,7 @@ describe("PromotionBatchesScreen", () => {
     mockUsePermission.mockReturnValue(false);
   });
 
-  it("renders a decision row with its batch, session pair, decision and status", async () => {
+  it("renders one row per batch, with its session pair, student count and status", async () => {
     mockGet.mockResolvedValue(page([ROW]));
 
     renderWithProviders(<PromotionBatchesScreen />);
@@ -80,7 +68,7 @@ describe("PromotionBatchesScreen", () => {
     expect(await screen.findByText("batch-1")).toBeInTheDocument();
     expect(screen.getByText("Grade 8")).toBeInTheDocument();
     expect(screen.getByText("2025-26 → 2026-27")).toBeInTheDocument();
-    expect(screen.getByText("Graduated")).toBeInTheDocument();
+    expect(screen.getByText("30")).toBeInTheDocument();
     expect(screen.getByText("Pending approval")).toBeInTheDocument();
   });
 

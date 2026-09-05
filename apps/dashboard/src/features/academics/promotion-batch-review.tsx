@@ -1,25 +1,22 @@
 "use client";
 
-import { fetchPage } from "@schoolhub/api-client";
 import { Badge, Button, Card, CardContent, DataTable, type DataTableColumn } from "@schoolhub/ui";
-import { isCursorPagination } from "@schoolhub/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useMemo } from "react";
 import { Can } from "@/components/can";
-import {
-  ACADEMICS_PAGE_SIZE,
-  PROMOTION_STATUS_BADGE,
-} from "@/features/academics/academics-constants";
+import { PROMOTION_STATUS_BADGE } from "@/features/academics/academics-constants";
 import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import { AcademicsNav } from "@/features/academics/academics-nav";
-import type { PromotionDecisionRecord } from "@/features/academics/academics-types";
+import type {
+  PromotionBatchDetail,
+  PromotionDecisionRecord,
+} from "@/features/academics/academics-types";
 import { PromotionBatchActions } from "@/features/academics/promotion-batch-actions";
 import { PromotionDecisionForm } from "@/features/academics/promotion-decision-form";
 import { useSections } from "@/features/academics/use-academics-reference-data";
 import { useClasses } from "@/features/students/use-reference-data";
-import { useCursorPager } from "@/hooks/use-cursor-pager";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -43,28 +40,19 @@ const EMPTY = "—";
  */
 export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
   const t = useTranslations("academics");
-  const tCommon = useTranslations("common");
-  const pager = useCursorPager();
 
   const classes = useClasses();
   const sections = useSections();
 
-  const filters = useMemo(() => ({ batch_id: batchId }), [batchId]);
-  pager.syncFilterKey(JSON.stringify(filters));
-
-  const { data, isPending, isFetching, error } = useQuery({
-    queryKey: queryKeys.list("academics", "student-promotions", {
-      ...filters,
-      cursor: pager.cursor,
-    }),
-    queryFn: () =>
-      fetchPage<PromotionDecisionRecord>(apiClient, "/student-promotions", {
-        query: {
-          ...filters,
-          ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: ACADEMICS_PAGE_SIZE,
-        },
-      }),
+  // One request for the batch and its decisions. This used to list decision
+  // rows filtered by `batch_id` and read the batch's status off `rows[0]`,
+  // because there was no batch resource — there is one now.
+  const { data, isPending, error } = useQuery({
+    queryKey: queryKeys.detail("academics", "student-promotions", batchId),
+    queryFn: async () => {
+      const result = await apiClient.get<PromotionBatchDetail>(`/student-promotions/${batchId}`);
+      return result.data;
+    },
     placeholderData: keepPreviousData,
   });
 
@@ -77,9 +65,7 @@ export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
     [sections.data],
   );
 
-  const rows = data?.items ?? [];
-  const pagination =
-    data?.pagination && isCursorPagination(data.pagination) ? data.pagination : undefined;
+  const rows = data?.decisions ?? [];
   const status = rows[0]?.status;
   const isDraft = status === "draft";
 
@@ -175,18 +161,9 @@ export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
           caption={t("promotions.review.caption")}
           isLoading={isPending}
           emptyState={t("promotions.review.empty")}
-          pagination={{
-            hasNext: Boolean(pagination?.next_cursor),
-            hasPrevious: pager.hasPrevious,
-            onNext: () => {
-              if (!isFetching) pager.onNext(pagination);
-            },
-            onPrevious: () => {
-              if (!isFetching) pager.onPrevious();
-            },
-            nextLabel: tCommon("next"),
-            previousLabel: tCommon("previous"),
-          }}
+          // No pagination: a batch is one class, and `GET /student-promotions/{id}`
+          // returns its decisions inline. Paging forty rows would cost a request
+          // per page to hide nothing.
         />
       )}
     </div>

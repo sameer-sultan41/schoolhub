@@ -25,7 +25,7 @@ import {
 } from "@/features/academics/academics-constants";
 import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import { AcademicsNav } from "@/features/academics/academics-nav";
-import type { PromotionDecisionRecord } from "@/features/academics/academics-types";
+import type { PromotionBatchRecord } from "@/features/academics/academics-types";
 import { PromotionBatchForm } from "@/features/academics/promotion-batch-form";
 import { useAcademicSessions, useClasses } from "@/features/students/use-reference-data";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
@@ -73,7 +73,9 @@ export function PromotionBatchesScreen() {
       cursor: pager.cursor,
     }),
     queryFn: () =>
-      fetchPage<PromotionDecisionRecord>(apiClient, "/student-promotions", {
+      // Batches, not decision rows: the server aggregates them, so the screen
+      // no longer reconstructs a batch by grouping rows client-side.
+      fetchPage<PromotionBatchRecord>(apiClient, "/student-promotions", {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
@@ -96,7 +98,7 @@ export function PromotionBatchesScreen() {
   const pagination =
     data?.pagination && isCursorPagination(data.pagination) ? data.pagination : undefined;
 
-  const columns: DataTableColumn<PromotionDecisionRecord>[] = [
+  const columns: DataTableColumn<PromotionBatchRecord>[] = [
     {
       id: "batch",
       header: t("promotions.columns.batch"),
@@ -118,9 +120,10 @@ export function PromotionBatchesScreen() {
         }),
     },
     {
-      id: "decision",
-      header: t("promotions.columns.decision"),
-      cell: (row) => t(`promotions.decisionValue.${row.decision}`),
+      id: "students",
+      header: t("promotions.columns.students"),
+      className: "tabular-nums",
+      cell: (row) => String(row.students),
     },
     {
       id: "status",
@@ -222,7 +225,7 @@ export function PromotionBatchesScreen() {
         <DataTable
           columns={columns}
           rows={rows}
-          getRowId={(row) => row.id}
+          getRowId={(row) => row.batch_id}
           caption={t("promotions.list.caption")}
           isLoading={isPending}
           emptyState={t("promotions.list.empty")}

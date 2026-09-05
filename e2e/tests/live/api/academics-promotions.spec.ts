@@ -9,11 +9,21 @@ interface PromotionRow {
   id: string;
   batch_id: string;
   student_id: string;
+  student_name: string;
+  admission_number: string;
   status: string;
   decision: string;
   approved_by: string | null;
   approved_at: string | null;
   executed_at: string | null;
+}
+
+/** `GET /student-promotions/{batch_id}` — the batch plus its decisions. */
+interface PromotionBatchDetail {
+  batch_id: string;
+  status: string;
+  students: number;
+  decisions: PromotionRow[];
 }
 
 /** One entry of `GET /students/{id}/history` — see `services.build_history`. */
@@ -61,10 +71,10 @@ test.describe("student promotions (live API)", () => {
     expect(submitted.data).toEqual({ updated: 1 });
     expect(submitted.meta?.message).toBe("Batch submitted for approval.");
 
-    const pending = await liveApiClient.get<PromotionRow[]>("/student-promotions", {
-      query: { batch_id: batch.batchId },
-    });
-    expect(pending.data[0]?.status).toBe("pending_approval");
+    const pending = await liveApiClient.get<PromotionBatchDetail>(
+      `/student-promotions/${batch.batchId}`,
+    );
+    expect(pending.data.status).toBe("pending_approval");
 
     // The preparer is this worker's own session — it created the batch, so its rows'
     // `created_by` is this user. `academics.promotion.approve` is held (the seeded admin
@@ -81,10 +91,10 @@ test.describe("student promotions (live API)", () => {
     // the segregation-of-duties refusal.
     expect((selfApproval as ApiError).message.toLowerCase()).toContain("cannot approve it");
 
-    const stillPending = await liveApiClient.get<PromotionRow[]>("/student-promotions", {
-      query: { batch_id: batch.batchId },
-    });
-    expect(stillPending.data[0]?.status).toBe("pending_approval");
+    const stillPending = await liveApiClient.get<PromotionBatchDetail>(
+      `/student-promotions/${batch.batchId}`,
+    );
+    expect(stillPending.data.status).toBe("pending_approval");
 
     // A real second identity: the seeded `principal`, who holds
     // `academics.promotion.approve` and deliberately not `.execute` (§4).
@@ -96,11 +106,11 @@ test.describe("student promotions (live API)", () => {
     expect(approved.status).toBe(200);
     expect(approved.data).toEqual({ updated: 1 });
 
-    const afterApproval = await liveApiClient.get<PromotionRow[]>("/student-promotions", {
-      query: { batch_id: batch.batchId },
-    });
-    const approvedRow = afterApproval.data[0];
-    if (!approvedRow) throw new Error("expected the batch's single row to still exist");
+    const afterApproval = await liveApiClient.get<PromotionBatchDetail>(
+      `/student-promotions/${batch.batchId}`,
+    );
+    const approvedRow = afterApproval.data.decisions[0];
+    if (!approvedRow) throw new Error("expected the batch's single decision to still exist");
     expect(approvedRow.status).toBe("approved");
     expect(approvedRow.approved_by).not.toBeNull();
     expect(approvedRow.approved_at).not.toBeNull();
