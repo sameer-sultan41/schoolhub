@@ -50,6 +50,13 @@ jobs:
     services:
       # Tests run against real PostgreSQL: Row-Level Security is the isolation
       # mechanism and cannot be exercised on any other backend.
+      # `POSTGRES_USER` is a SUPERUSER — that is what the image makes it. Tests
+      # must not connect as it: a superuser bypasses Row-Level Security even
+      # with FORCE, so every cross-tenant assertion in the suite would pass on
+      # the Python-level TenantScopedManager alone and the database half of the
+      # isolation guarantee would never be exercised. This role is the bootstrap
+      # only; the "Create the non-superuser application role" step below makes
+      # the role the tests actually use.
       postgres:
         image: postgres:18-alpine
         env:
@@ -71,7 +78,11 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://schoolhub:schoolhub@localhost:5432/schoolhub_test
+      # schoolhub_app, never the bootstrap superuser — see the postgres service
+      # comment above, and infra/postgres/init/02-app-role.sql for the shape
+      # this mirrors.
+      DATABASE_URL: postgres://schoolhub_app:schoolhub_app@localhost:5432/schoolhub_test
+      BOOTSTRAP_DATABASE_URL: postgres://schoolhub:schoolhub@localhost:5432/schoolhub_test
       REDIS_URL: redis://localhost:6379/0
       DJANGO_SECRET_KEY: 7Qk2mVx9RbT4wYzA1sHf6JpLn0CdGeUiOa3ZtXrMvB8yNqEcWk5DgSjFhPuT2LiR
     steps:
@@ -89,6 +100,31 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0
+
+      # infra/postgres/init/02-app-role.sql is the production shape and calls
+      # itself "the most important file in this repository": RLS binds only to a
+      # role that is not a superuser, does not hold BYPASSRLS, and does not own
+      # the tables. Break any one and every policy silently becomes a no-op.
+      #
+      # CI can honour two of the three. It cannot honour the third, because
+      # Django's test runner creates and migrates the test database over the
+      # same connection it then runs tests on, so the connecting role
+      # necessarily owns what it created. That is exactly the case
+      # `FORCE ROW LEVEL SECURITY` exists for — every tenant-owned table sets it
+      # in its `0002_rls_policies` migration, so the policy applies to the owner
+      # too. `tests/test_rls_enforcement.py` asserts the outcome rather than
+      # trusting this reasoning.
+      #
+      # CREATEDB is granted for that same reason and nothing else.
+      - name: Create the non-superuser application role
+        run: |
+          psql "$BOOTSTRAP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE schoolhub_app
+            LOGIN PASSWORD 'schoolhub_app'
+            NOSUPERUSER NOCREATEROLE NOBYPASSRLS CREATEDB INHERIT;
+          GRANT CONNECT, TEMPORARY ON DATABASE schoolhub_test TO schoolhub_app;
+          GRANT ALL ON SCHEMA public TO schoolhub_app;
+          SQL
 
       - name: Check for missing migrations
         run: uv run manage.py makemigrations --check --dry-run

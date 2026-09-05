@@ -38,6 +38,7 @@ codegen
 corsheaders
 crackable
 crawlable
+CREATEDB
 criticals
 cutover
 dataloaders
@@ -105,10 +106,12 @@ navs
 negotiables
 networkidle
 NOBYPASSRLS
+NOCREATEROLE
 noeviction
 noinput
 noout
 noreload
+NOSUPERUSER
 NOTIF
 Noto
 notschoolhub
