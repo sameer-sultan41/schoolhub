@@ -113,7 +113,13 @@ class DenyRestrictedPrincipals(permissions.BasePermission):
         return not user.user_roles.filter(role__is_restricted_principal=True).exists()
 
 
-def scope_queryset(queryset, user, *, own_field: str | None = None, campus_field="campus_id"):
+def scope_queryset(
+    queryset,
+    user,
+    *,
+    own_field: str | None = None,
+    campus_field: str | None = "campus_id",
+):
     """Narrow a queryset by the user's record scope.
 
     Tenant scoping already happened (manager + RLS); this applies the *within-tenant*
@@ -126,12 +132,27 @@ def scope_queryset(queryset, user, *, own_field: str | None = None, campus_field
     `own`-scoped view key mean "own children", and that needs a join through
     `student_guardians`. `own_field` stays as the fallback for the many models where
     "own" really is a single column.
+
+    **`campus_field=None` means the table has no campus dimension at all.** Classes,
+    subjects and houses are defined once for a school and used by every campus —
+    there is no column to narrow on and no join that would invent one. Without this,
+    the default `"campus_id"` produced a `FieldError` (a 500) the moment a
+    campus-scoped principal opened `/classes`, because the filter named a column that
+    does not exist. Returning `.none()` instead would be worse in a quieter way: a
+    campus admin who cannot see "Grade 6" cannot create a section in it.
+
+    So a campus scope over a tenant-wide table is *already satisfied* by tenant
+    scoping, and the queryset passes through. That is a narrowing decision, so it is
+    stated at the call site — each viewset opting out says so — rather than inferred
+    by catching FieldError, which would also swallow a genuine typo in a real path.
     """
     scopes = user_scopes(user)
     if RecordScope.ALL in scopes:
         return queryset
     if RecordScope.CAMPUS in scopes:
         campus_ids = [ref for ref in scopes[RecordScope.CAMPUS] if ref]
+        if campus_ids and campus_field is None:
+            return queryset
         if campus_ids:
             return queryset.filter(**{f"{campus_field}__in": campus_ids})
     if RecordScope.OWN in scopes:
