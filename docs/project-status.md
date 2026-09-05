@@ -92,24 +92,16 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   depend on backend endpoints that don't exist (`/public/tenants/by-host`,
   `/reports/dashboard-summary`). The corresponding `live` specs pin today's
   real degraded behavior instead and say what to replace once each ships.
-- **A real bug was found running the live lane against the real stack**:
-  `GET /api/v1/school-settings` 403s for every request
-  (`{"code":"permission_denied", ...}`, "This module is not enabled for your
-  school.") even for a real admin whose `module.school` feature flag resolves
-  `True` directly (`is_feature_enabled(...)` in a shell) — because
-  `SchoolSettingsView` is a plain `APIView`, not a `TenantScopedViewSetMixin`-
-  based viewset, it never gets `request.tenant` populated the way viewset
-  endpoints do, so `RequiresModuleFeature.has_permission`'s own
-  `if tenant is None: return False` guard denies it before the flag is ever
-  checked. `student-management`'s new `TenantMiddleware`
-  (`core/tenancy/middleware.py`) does not fix this: it runs as Django
-  middleware, before DRF's JWT authentication populates `request.user`, so its
-  own tenant-binding never fires for a JWT-authenticated API call either — it
-  only changed this endpoint's failure mode from a 500 (RLS violation writing
-  `TenantSettings` with no tenant bound) to a clean 403, by coincidence of
-  `RequiresModuleFeature` now running first. The School Settings feature is
-  still broken for every tenant today, not just in tests. `e2e/tests/live/
-  api/school-settings.spec.ts` pins this real behavior. Not fixed yet.
+- **The School Settings 403 is fixed** (`2de5c3c`). It was real: `GET
+  /api/v1/school-settings` 403'd for every request because `SchoolSettingsView`
+  was a plain `APIView` rather than a `TenantScopedViewSetMixin`-based viewset,
+  so it never got `request.tenant` and `RequiresModuleFeature`'s own
+  `if tenant is None: return False` denied it before the flag was ever checked.
+  Mixing in `TenantScopedViewSetMixin` — purely for its `initial()` tenant
+  binding, which runs after DRF authentication and inside the request
+  transaction, unlike `TenantMiddleware` — resolved it.
+  `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
+  patch→read journey rather than pinning the bug.
 - **Feature-flag enforcement and per-tenant number counters now exist**
   (`core.tenancy.features`, `core.tenancy.sequences`, PR 1) — built as
   `student-management` foundation, reusable by every later module.
@@ -127,8 +119,8 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   dashboard has no "unlink" UI to match.
 - **`core.idempotency` now exists** (PR 3): stores a colon-action's response
   per `(tenant, key, endpoint)` and replays it on a repeat `Idempotency-Key`
-  within 24h. No cleanup job prunes expired rows yet — no Celery beat exists
-  to run one.
+  within 24h. Expired rows are pruned hourly by
+  `core.idempotency.tasks.prune_idempotency_records` (PR 0).
 - **Withdrawal is a single audited action**, not initiate/approve — no
   `student_withdrawals` entity exists. Clearance checks (fees/library/
   transport) always return "clear" since none of those modules exist yet.
@@ -163,10 +155,13 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   ships. `TenantSettings` gained an `hr` JSON column (`employee_number_pattern`,
   `staff_document_types`) — a dedicated namespace next to `academic`/`branding`/
   `features`, since HR/leave and payroll (Tier 3/6) will need one too.
-  **`:invite` creates the linked `User` row but sends no email** —
-  `core.notifications` doesn't exist yet (communication is Tier 6); the
-  account is created inactive with an unusable password, a documented gap in
-  the same style as `core.files.File.av_scanned_at`.
+  **`:invite` now emits a `staff.invited` notification, in-app only** (PR 0):
+  `core.notifications` exists, but the account is still created inactive with
+  an unusable password because no set-password/SSO onboarding flow exists, so
+  an *email* saying "your account is ready" would be untrue. The remaining gap
+  is the onboarding flow, not the notification layer — adding
+  `NotificationChannel.EMAIL` to the trigger is a one-line change once it
+  lands. Documented in the same style as `core.files.File.av_scanned_at`.
   Two pre-existing gaps this module unblocks were also closed in the same PR:
   `Student.filter_assigned_to_user` now does the real
   `enrollments→section.class_teacher_staff_id→staff.user_id` join instead of
@@ -177,38 +172,62 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   of cross-tenant leak PR #25's review found in `student_management.user_id`.
   `core.rbac.permissions.DenyRestrictedPrincipals` (previously dead code, zero
   call sites) gets its first real use here on every staff endpoint.
-- **A real gap was found while adding student-management's Critical User
-  Journey e2e coverage**: `core/rbac/permissions.py`'s `scope_queryset` only
-  filters `RecordScope.OWN` on `Student.user_id == request.user.pk` (a
-  student viewing themself) — it never joins through `StudentGuardian` to a
-  guardian's own linked children, so "a guardian can see only their own
-  child's record" is not actually enforced today despite being the more
-  natural record-scope story for this module. The live-lane record-scope CUJ
-  (`api/students-record-scope.spec.ts`) proves the student self-view path
-  instead, which is real; the guardian-child scope join is not fixed here —
-  future work should grep this citation rather than re-diagnose it (a
-  `TODO(guardian-scope)` sits directly on the vulnerable line in
-  `core/rbac/permissions.py::scope_queryset`).
-- **Another real gap surfaced by the same e2e work**: `packages/api-client`'s
-  refresh path conflates "the refresh token is genuinely invalid" with "the
-  refresh call failed for an unrelated, possibly-transient reason." Both
-  `token-store.ts`'s `refreshAccessToken()` (any non-2xx, non-401/403 status —
-  a `429` from `AuthEndpointThrottle`, a `5xx`, etc. — falls through to the
-  same `null` return as an actually-invalid token) and `client.ts`'s
-  `refreshOnce()` (catches *any* thrown error from the refresh callback and
-  coerces it to `null` too) treat a rate-limited or momentarily-unavailable
-  refresh identically to "this session is over," clearing the access token
-  and bouncing the user to `/login` even though their refresh cookie is still
-  good. Reachable by a real user reloading or opening a second tab in quick
-  succession under load, not just by test tooling — observed once during a
-  live-lane spec run (`e2e/tests/live/students-admission-enrollment.spec.ts`'s
-  header comment has the specific incident), though the trigger wasn't
-  isolated to confirm it was this conflation rather than a coincidental
-  throttle window. Not fixed here: a proper fix touches the shared
-  `packages/api-client` refresh pipeline used by both `dashboard` and
-  `website`, which is a bigger, riskier change than this e2e-focused PR
-  should carry — needs its own PR with `packages/api-client`'s existing test
-  suite updated alongside it.
+- **The guardian record-scope gap is closed** (PR 0). `scope_queryset` used to
+  filter `RecordScope.OWN` as `own_field == user.pk` and nothing else, so a
+  guardian's portal account matched no student row at all — "a guardian can see
+  only their own child's record" was not enforced, it simply returned nothing
+  while looking like it worked. `own` now delegates to a `filter_owned_by_user`
+  model hook the way `assigned` already delegates to `filter_assigned_to_user`;
+  `Student`'s implementation unions the student's own row with the children
+  they hold a live, portal-enabled `student_guardians` link to. Every Tier 2+
+  module that grants a guardian an `own`-scoped view key depends on this, and
+  parent-portal (Tier 4) is built entirely on it.
+- **The api-client refresh conflation is fixed** (PR 0). Three layers collapsed
+  "the refresh token is invalid" into the same result as "the refresh call
+  failed for an unrelated reason": `token-store.ts`'s `refreshAccessToken()`
+  (any non-2xx returned `null`), `client.ts`'s `refreshOnce()` (a bare `catch`
+  swallowing every throw), and the dashboard's own `.catch(() => null)` in
+  `refreshViaProxy` — so a `429` from `AuthEndpointThrottle`, a `5xx`, or an
+  offline moment cleared a still-valid session and bounced the user to
+  `/login`. The two outcomes are now distinct: `null` means the session is
+  over, a thrown `ApiError` means the refresh could not be determined and the
+  session survives. `ApiError.isTransient` names the distinction once, and
+  `restoreSession`/`useSession` retry on it.
+- **Staff file uploads were dead and are now fixed** (PR 0) — a bug nothing had
+  flagged. `staff_management.services` called `assert_file_usable` with
+  `staff.photo`, `staff.qualification` and `staff.document`, but
+  `settings.FILE_UPLOAD_RULES` only ever listed the student/guardian purposes,
+  so `POST /api/v1/files` answered 422 ("Unknown upload purpose") for every
+  staff photo, qualification certificate and staff document since PR #30 — the
+  dashboard tabs existed and could not upload anything. Fixed structurally
+  rather than by lengthening the dict: upload purposes now live in a registry
+  (`core/files/purposes.py`) that each module populates from its own
+  `uploads.py`, exactly as it declares permission keys and feature flags, and
+  services reference the registered spec's `key` instead of retyping the string.
+  `settings.FILE_UPLOAD_RULES` is gone.
+- **Celery beat now has a schedule** (PR 0). The `celery-beat` service has
+  shipped in compose and Terraform since the infra PR but no
+  `CELERY_BEAT_SCHEDULE` was ever declared, so it started up and ran nothing.
+  Two prunes are wired (`core.idempotency`, `core.jobs`), both sweeping tenant
+  by tenant via `core.tenancy.maintenance.for_each_tenant` — an unbound
+  cross-tenant delete does not raise under RLS, it silently matches zero rows,
+  which is why the sweep shape matters. A static dict, not `django-celery-beat`:
+  reporting-analytics (Tier 7) is the module that genuinely needs tenant-editable
+  schedules and should bring that dependency with it.
+- **`core.notifications` now exists** (PR 0) — the machinery every module doc's
+  §12 table needs: the `notifications`/`delivery_logs` tables, the
+  `ChannelAdapter` interface with working in-app and email adapters, a
+  code-declared trigger catalog and platform template registry, and `notify()`,
+  which persists a row per recipient per channel *before* enqueuing. **Ownership
+  decision:** `entities/communication.md` lists both tables under the
+  communication module, but `notifications.md` §1/§10 puts the machinery in
+  `core/notifications/`; core owns the tables and delivery, communication (Tier
+  4) later adds announcements/notices/threads, tenant template overrides,
+  preferences, the delivery dashboard and the SMS/push/WhatsApp adapters — which
+  are registered here but raise, naming the module that will implement them.
+  Deliberately absent, all communication scope: preferences, quiet hours,
+  suppression lists, SMS quotas, provider status webhooks, the SSE badge stream,
+  and §6's full five-stage retry schedule.
 
 ---
 
@@ -244,10 +263,32 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
    allocate_number` (`employee_number`), `core.jobs`/`core.tenancy.tasks.
    TenantAwareTask`/`core.files.create_ready_file()` (import/export jobs).
    **Phase 2 Tier 1 ("People") is now done.**
-7. **Tier 2 is next**: attendance, academics, and timetable (per
-   `01-phases/phase-2-core-build.md`'s build order — all three depend on
-   `staff-management` for teacher/section assignment, now unblocked). No
-   scoping work has started on any of them yet.
+7. **PR 0 (platform hardening) is done** — three fixes and two new pieces of
+   platform infrastructure, all listed above: the upload-purpose registry, the
+   guardian record scope, the api-client refresh split, the Celery beat
+   schedule, and `core.notifications`. Every Tier 2 module consumes at least
+   two of them.
+8. **Tier 2 is next, in this order: `academics` → `timetable` → `attendance`.**
+   Not the order the tier table lists them in, and the difference is
+   load-bearing: `timetable` needs `academics`' `teacher_subject_allocations`
+   as its scheduling input, and `attendance`'s period-wise marking and
+   absent-teacher substitution feed need `timetable`. Building attendance last
+   means period mode ships natively instead of being retrofitted. One
+   full-stack PR each, matching PR #30's shape rather than students' four-PR
+   stack.
+9. **Two entity-ownership conflicts to settle before the modules that hit them.**
+   Both module docs claim the same tables, and only one app can ship the
+   migration:
+   - `attendance` §15 and `hr-leave` §15 both claim `leave_types`,
+     `leave_policies`, `leave_balances`, `leave_requests`, `leave_approvals`.
+     Resolution: **attendance owns the tables and the student-leave endpoints;
+     hr-leave (Tier 6) adds no tables** and layers the staff policy, accrual/
+     carry-forward and configurable multi-step approval engine on top — which
+     attendance §1 already says in prose. Record it in both docs when
+     attendance lands.
+   - `communication` §15 and `core/notifications` both cover `notifications`
+     and `delivery_logs` — already resolved in PR 0 (see above), still to be
+     written into `entities/communication.md`.
 
 ## Conventions worth re-reading before writing code
 

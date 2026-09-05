@@ -110,6 +110,8 @@ Relationships: referenced by `delivery_logs.template_code` (soft reference by co
 
 Per-recipient notification records — the in-app source of truth and the fan-out parent for channel deliveries.
 
+> **Owned by `core/notifications/`, not this module.** `notifications` and `delivery_logs` are the delivery *machinery*, and [`../../02-architecture/notifications.md`](../../02-architecture/notifications.md) §1 places the adapter interface in `core/notifications/` while §10 draws the line: module docs supply the trigger-catalog *content*, the architecture doc defines the machinery. Attendance (Tier 2) needs it long before communication (Tier 4) ships, so core owns these two tables plus the adapters, the platform default templates and `notify()`. This module still owns everything tenant-facing: `notification_templates` (tenant overrides), `notification_preferences`, announcements/notices/threads, the delivery dashboard, and the SMS/push/WhatsApp adapters.
+
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
 | user_id | uuid | NO | — | FK → `users.id` (recipient) |

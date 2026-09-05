@@ -9,6 +9,7 @@ layering exactly.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from collections.abc import Callable
@@ -17,7 +18,7 @@ from datetime import date
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.staff_management import uploads
+from apps.staff_management import notifications, uploads
 from apps.staff_management.models import (
     DEFAULT_DOCUMENT_TYPES,
     Designation,
@@ -31,6 +32,8 @@ from apps.staff_management.models import (
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.tenancy.context import tenant_atomic
 from core.tenancy.sequences import allocate_number
+
+logger = logging.getLogger(__name__)
 
 # Pattern tokens the employee-number template may use — same allowlist shape as
 # student_management's admission-number pattern.
@@ -457,16 +460,20 @@ def verify_document(
 def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor_id: uuid.UUID) -> Staff:
     """Create the tenant-scoped portal account and link + role-assign it.
 
-    No message is sent: ``core.notifications`` does not exist yet
-    (config/settings/base.py's own comment: "communication is a later tier"),
-    and the API/email backends are console/locmem only outside dev. This is a
-    documented gap — see docs/project-status.md — in the same honest style as
-    ``core.files.File.av_scanned_at``'s "no scanner is wired up yet".
+    Emits ``staff.invited`` through ``core.notifications``, which now exists —
+    but **in-app only**, and the remaining gap is worth stating precisely rather
+    than calling this done. The account is still inactive (``is_active=False``)
+    with an unusable password, because no set-password/SSO onboarding flow exists
+    yet; an *email* saying "your account is ready" would therefore be untrue, so
+    the trigger deliberately does not declare that channel (see
+    ``notifications.py``). The inbox entry is honest — it is waiting for the
+    recipient when they can first sign in.
 
-    The created account is inactive (``is_active=False``) with an unusable
-    password until a real onboarding flow (set-password link, SSO, ...) lands
-    with the communication tier; it exists so ``staff.user_id`` and RBAC role
-    assignment can be exercised end-to-end today.
+    What is still missing is the onboarding flow itself, not the notification
+    layer: an activation token endpoint plus the email that carries it. Adding
+    ``NotificationChannel.EMAIL`` to the trigger is the one-line change once it
+    lands. Documented in the same honest style as
+    ``core.files.File.av_scanned_at``'s "no scanner is wired up yet".
     """
     if staff.user_id is not None:
         raise Conflict("This staff member already has a linked account.")
@@ -515,7 +522,37 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor_id: uuid.UUID
     staff.user_id = user.pk
     staff.updated_by = actor_id
     staff.save(update_fields=["user_id", "updated_by", "updated_at"])
+
+    _notify_invited(staff=staff, user_id=user.pk)
     return staff
+
+
+def _notify_invited(*, staff: Staff, user_id: uuid.UUID) -> None:
+    """Emit `staff.invited`. Never lets a notification failure undo the invite.
+
+    The account and its role assignments are the actual outcome of `:invite`;
+    a template or transport problem must not roll those back, so this swallows
+    and logs rather than propagating — the same reasoning as
+    `core.audit.services.record_audit`, which is also savepointed for it.
+    """
+    from core.notifications.services import Recipient, notify
+    from core.tenancy.models import Tenant
+
+    try:
+        with transaction.atomic():
+            notify(
+                notifications.STAFF_INVITED,
+                tenant_id=staff.tenant_id,
+                recipients=[Recipient(user_id=user_id)],
+                context={
+                    "staff.first_name": staff.first_name,
+                    "school.name": Tenant.objects.get(pk=staff.tenant_id).name,
+                },
+                source_type="staff",
+                source_id=staff.pk,
+            )
+    except Exception:
+        logger.exception("staff.invited notification failed for staff %s", staff.pk)
 
 
 def is_sole_class_teacher(*, staff: Staff) -> bool:

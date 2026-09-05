@@ -63,6 +63,7 @@ CORE_APPS = [
     "core.files",
     "core.idempotency",
     "core.jobs",
+    "core.notifications",
 ]
 
 # One app per module doc in docs/03-modules/.
@@ -206,6 +207,15 @@ CACHES = {
     },
 }
 
+# Outbound email goes through core.notifications' EmailAdapter, which is a thin
+# wrapper over whatever EMAIL_BACKEND points at — the console backend in dev, a
+# locmem one in tests, and a real provider (SES/Postmark) in prod by configuration
+# alone. `dev.py`/`test.py` set their own backend; the default here stays the
+# console so a misconfigured environment prints mail rather than silently
+# attempting an unauthenticated SMTP connection to localhost.
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@schoolhub.local")
+
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/1")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/2")
 CELERY_TASK_ROUTES = {
@@ -216,6 +226,13 @@ CELERY_TASK_ROUTES = {
     "apps.staff_management.tasks.*": {"queue": "bulk"},
     "core.idempotency.tasks.*": {"queue": "bulk"},
     "core.jobs.tasks.*": {"queue": "bulk"},
+    # notifications.md §5 names three lanes (emergency / transactional / bulk);
+    # `celery-worker` in infra/compose already consumes exactly those queue names,
+    # so this uses them rather than the doc's dotted `notify.*` spelling, which
+    # nothing listens to. One lane for now — separating them only buys something
+    # once each has its own worker pool and per-tenant rate shaping to protect,
+    # both of which arrive with the communication module.
+    "core.notifications.tasks.*": {"queue": "transactional"},
 }
 
 # The `celery-beat` service (infra/compose/docker-compose.yml, and its
