@@ -174,6 +174,45 @@ Referenced (owned elsewhere): `classes`, `sections`, `subjects`, `academic_sessi
 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
+> **Implementation notes** (as shipped — read alongside the contract below).
+>
+> - **`class_subjects` is owned by this module's API but its model lives in
+>   `apps/school_organization`.** That app shipped the table first and its
+>   session-clone wizard writes it directly; moving a model between apps is
+>   migration risk with no runtime payoff, since the table name is unchanged.
+>   The endpoint previously sat there too, borrowing `school.subject.*` keys
+>   because §4 declared none for it — it now serves from `apps/academics` under
+>   `academics.curriculum.*` and `module.academics`, which is what
+>   [`school-organization.md`](school-organization.md) §6 ("curriculum mapping
+>   to classes lives in academics.md") always intended. Creation delegates to
+>   `school_organization.services.map_subject_to_class`, so the API, the wizard
+>   and the importer share one set of rules.
+> - **`:clone` is synchronous, not a background job.** A clone is one
+>   `bulk_create` over a single session's rows — hundreds, not thousands. It
+>   honours `Idempotency-Key`, and the service skips rows the target already
+>   has, so it converges on a retry either way.
+> - **`:execute` returns `202` + a job**, as the contract below always said.
+>   It shipped synchronous on the argument that a class-sized batch completes
+>   inline; what that missed is that `execute_batch` commits each student
+>   separately on purpose, and `ATOMIC_REQUESTS` turns each of those commits
+>   into a savepoint — so an inline run held every row lock it took for the
+>   whole request and showed the caller nothing until it finished. The work is
+>   `apps.academics.tasks.execute_promotion_batch_task`; whether the batch is
+>   executable at all is still decided synchronously, so a draft batch is a
+>   `409` rather than a job that fails out of band. `Idempotency-Key` replays
+>   the job id, and re-execution stays a per-row no-op beyond the 24h window.
+> - **Not built yet:** `POST /curriculum-imports`.
+> - **The promotion proposal is level-based only.** §7.2 has it read published
+>   final results and attendance percentages; neither module exists yet, so
+>   `decision_basis` records `results_available: false` and
+>   `attendance_available: false` rather than implying a judgement that was
+>   never made. Reviewers adjusting drafts is the step the workflow gates on, so
+>   the flow is usable — but the rule engine is a genuine gap, not a shortcut.
+> - **Two §12 notifications are deferred**, and say so in
+>   `apps/academics/notifications.py`: `promotion-input-request` needs a
+>   task/inbox surface for class teachers, and `coverage-gap` is a scheduled T-7
+>   sweep that belongs with the coverage report.
+
 - `GET/POST /api/v1/class-subjects` · `GET/PATCH/DELETE /api/v1/class-subjects/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `subject_id`, `is_elective`.
 - `POST /api/v1/class-subjects:clone` — clone curriculum between sessions (background job).
 - `GET/POST /api/v1/teacher-subject-allocations` · `PATCH/DELETE /api/v1/teacher-subject-allocations/{id}` — filters: `academic_session_id`, `section_id`, `subject_id`, `staff_id`; `GET /api/v1/teacher-subject-allocations/load-summary` (per-teacher aggregates).

@@ -9,6 +9,7 @@
     "staff": "Staff",
     "attendance": "Attendance",
     "academics": "Academics",
+    "timetable": "Timetable",
     "fees": "Fees & Finance",
     "admissions": "Admissions",
     "communication": "Communication",
@@ -460,6 +461,448 @@
         "field": "Field",
         "issue": "Issue"
       }
+    }
+  },
+  "academics": {
+    "nav": {
+      "label": "Academics sections",
+      "curriculum": "Curriculum",
+      "allocations": "Teacher allocation",
+      "promotions": "Promotions"
+    },
+    "common": {
+      "close": "Close"
+    },
+    "filters": {
+      "all": "All"
+    },
+    "fields": {
+      "academicSession": "Academic session",
+      "selectSession": "Select a session",
+      "class": "Class",
+      "selectClass": "Select a class",
+      "subject": "Subject",
+      "selectSubject": "Select a subject",
+      "campus": "Campus",
+      "allCampuses": "All campuses",
+      "weeklyPeriods": "Weekly periods",
+      "isElective": "Elective subject",
+      "electiveGroup": "Elective group",
+      "notes": "Notes",
+      "section": "Section",
+      "selectSection": "Select a section",
+      "teacher": "Teacher",
+      "selectTeacher": "Select a teacher",
+      "teacherHint": "Only active teaching staff can be allocated.",
+      "isPrimary": "Primary teacher",
+      "effectiveFrom": "Effective from",
+      "effectiveTo": "Effective to"
+    },
+    "curriculum": {
+      "title": "Curriculum",
+      "summary": "Which subjects each class studies in a session, and how many periods a week.",
+      "core": "Core",
+      "elective": "Elective",
+      "electiveWithGroup": "Elective · {group}",
+      "list": {
+        "caption": "Curriculum mappings",
+        "empty": "No curriculum mappings found."
+      },
+      "columns": {
+        "kind": "Type",
+        "actions": "Actions"
+      },
+      "actions": {
+        "create": "Add subject",
+        "edit": "Edit",
+        "delete": "Remove",
+        "clone": "Clone from another session"
+      },
+      "form": {
+        "createTitle": "Add a subject to a class",
+        "editTitle": "Edit curriculum mapping",
+        "description": "The session, class and subject together identify the mapping and cannot be changed afterwards."
+      },
+      "clone": {
+        "title": "Clone curriculum",
+        "description": "Copies every mapping from one session into another. Rows the target already has are skipped, so this is safe to run twice.",
+        "sourceSession": "Copy from",
+        "targetSession": "Copy into",
+        "result": "{created} mappings created, {skipped} already present."
+      },
+      "delete": {
+        "title": "Remove this subject",
+        "description": "{subject} will no longer be part of this class's curriculum for the session."
+      }
+    },
+    "allocations": {
+      "title": "Teacher allocation",
+      "summary": "Who teaches which subject to which section, and how heavy each teacher's week is.",
+      "primary": "Primary",
+      "coTeacher": "Co-teacher",
+      "current": "Current",
+      "endedOn": "Ended {date}",
+      "overNormWarning": "This teacher is now allocated {periods} periods a week, above the norm of {norm}. The allocation was saved.",
+      "list": {
+        "caption": "Teacher allocations",
+        "empty": "No allocations found."
+      },
+      "columns": {
+        "role": "Role",
+        "effective": "Effective",
+        "actions": "Actions"
+      },
+      "actions": {
+        "create": "Allocate a teacher",
+        "end": "End",
+        "delete": "Remove"
+      },
+      "form": {
+        "createTitle": "Allocate a teacher",
+        "description": "The subject must already be part of the section's class curriculum for this session.",
+        "weeklyPeriodsHint": "Leave blank to use the curriculum's own weekly period target.",
+        "isPrimaryHint": "One primary teacher per section and subject at a time; others are co-teachers."
+      },
+      "end": {
+        "title": "End this allocation",
+        "description": "End-dating preserves the history and frees the primary slot for a replacement."
+      },
+      "delete": {
+        "title": "Remove this allocation",
+        "description": "Use this only for an allocation entered by mistake. A real reassignment should be end-dated instead."
+      }
+    },
+    "loadSummary": {
+      "title": "Teacher load",
+      "normHint": "Weekly periods per teacher for the selected session, against a norm of {norm}.",
+      "empty": "No allocations in this session yet.",
+      "overNorm": "Over norm",
+      "withinNorm": "Within norm",
+      "pickSession": "Choose a single academic session to see per-teacher load.",
+      "columns": {
+        "allocations": "Allocations",
+        "weeklyPeriods": "Weekly periods",
+        "status": "Load"
+      }
+    },
+    "promotions": {
+      "title": "Promotions",
+      "summary": "Session-end promotion batches: propose, review, approve, then execute.",
+      "sessionPair": "{from} → {to}",
+      "list": {
+        "caption": "Promotion decisions",
+        "empty": "No promotion batches found."
+      },
+      "columns": {
+        "batch": "Batch",
+        "student": "Student",
+        "fromClass": "From class",
+        "sessions": "Sessions",
+        "students": "Students",
+        "decision": "Decision",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "fields": {
+        "fromSession": "From session",
+        "toSession": "To session",
+        "toClass": "Target class",
+        "toSection": "Target section",
+        "toSectionHint": "Required before the batch can be executed, unless the student is graduating.",
+        "overrideReason": "Override reason",
+        "overrideReasonHint": "Required wherever the decision differs from the proposed one.",
+        "remarks": "Remarks"
+      },
+      "decisionValue": {
+        "promoted": "Promoted",
+        "retained": "Retained",
+        "promoted_on_trial": "Promoted on trial",
+        "graduated": "Graduated"
+      },
+      "status": {
+        "draft": "Draft",
+        "pending_approval": "Pending approval",
+        "approved": "Approved",
+        "executed": "Executed",
+        "reverted": "Reverted"
+      },
+      "actions": {
+        "create": "New batch",
+        "submit": "Submit for approval",
+        "approve": "Approve",
+        "reject": "Reject",
+        "execute": "Execute",
+        "revert": "Revert",
+        "editDecision": "Edit",
+        "backToList": "All batches"
+      },
+      "form": {
+        "createTitle": "New promotion batch",
+        "description": "One batch per class per rollover. A decision is proposed for every actively enrolled student."
+      },
+      "decision": {
+        "title": "Edit decision",
+        "description": "Adjusting the draft decision for student {student}."
+      },
+      "review": {
+        "title": "Promotion batch",
+        "summary": "Review each student's decision, then submit the batch for approval.",
+        "caption": "Per-student promotion decisions",
+        "empty": "This batch has no decisions."
+      },
+      "report": {
+        "title": "Execution report",
+        "running": "Executing — {progress}%",
+        "jobFailed": "The execution job failed.",
+        "enrolled": "Enrolled in the next session: {count}",
+        "graduated": "Graduated: {count}",
+        "skipped": "Skipped: {count}",
+        "failed": "Failed: {count}"
+      }
+    }
+  },
+  "timetable": {
+    "nav": {
+      "label": "Timetable sections",
+      "grid": "Week grid",
+      "periods": "Periods",
+      "rooms": "Rooms",
+      "substitutions": "Substitutions",
+      "my": "My timetable"
+    },
+    "common": {
+      "close": "Close"
+    },
+    "filters": {
+      "all": "All"
+    },
+    "fields": {
+      "academicSession": "Academic session",
+      "selectSession": "Select a session",
+      "section": "Section",
+      "selectSection": "Select a section",
+      "subject": "Subject",
+      "selectSubject": "Select a subject",
+      "teacher": "Teacher",
+      "selectTeacher": "Select a teacher",
+      "room": "Room",
+      "selectRoom": "Select a room",
+      "campus": "Campus",
+      "selectCampus": "Select a campus",
+      "allCampuses": "All campuses",
+      "period": "Period",
+      "selectPeriod": "Select a period",
+      "name": "Name",
+      "code": "Code",
+      "sequence": "Daily order",
+      "startTime": "Starts",
+      "endTime": "Ends",
+      "isBreak": "This period is a break",
+      "weekdays": "Weekdays",
+      "roomType": "Room type",
+      "capacity": "Capacity",
+      "building": "Building",
+      "floor": "Floor",
+      "isActive": "In service",
+      "notes": "Note",
+      "date": "Date",
+      "absentTeacher": "Absent teacher",
+      "substituteTeacher": "Covering teacher",
+      "reason": "Reason",
+      "status": "Status",
+      "none": "None"
+    },
+    "weekdays": {
+      "0": "Monday",
+      "1": "Tuesday",
+      "2": "Wednesday",
+      "3": "Thursday",
+      "4": "Friday",
+      "5": "Saturday",
+      "6": "Sunday"
+    },
+    "weekdaysShort": {
+      "0": "Mon",
+      "1": "Tue",
+      "2": "Wed",
+      "3": "Thu",
+      "4": "Fri",
+      "5": "Sat",
+      "6": "Sun"
+    },
+    "actions": {
+      "validate": "Check for conflicts",
+      "publish": "Publish"
+    },
+    "grid": {
+      "title": "Timetable",
+      "summary": "Build a section's week, period by period, and publish it once it is clear of conflicts.",
+      "caption": "Weekly timetable grid",
+      "pickSection": "Pick an academic session and a section to build its week.",
+      "break": "Break",
+      "notScheduled": "Not scheduled",
+      "noSubject": "No subject",
+      "emptyCell": "Empty",
+      "editCell": "Edit {cell}",
+      "fillCell": "Fill {cell}",
+      "draft": "Draft",
+      "publishedBadge": "Published",
+      "published": "Published {count} periods.",
+      "noPeriods": "No periods have been set up yet. Add the bell schedule first."
+    },
+    "conflicts": {
+      "title": "Conflicts",
+      "none": "No conflicts found.",
+      "publishBlocked": "This timetable cannot be published until the blocking conflicts below are resolved.",
+      "severity": {
+        "hard": "Blocking",
+        "soft": "Warning"
+      },
+      "types": {
+        "section_double_booked": "This section already has a class in this period.",
+        "teacher_double_booked": "This teacher is already teaching in this period.",
+        "room_double_booked": "This room is already in use in this period.",
+        "teacher_not_allocated": "This teacher has no allocation for this section and subject. Allocate them in academics first.",
+        "period_is_break": "This period is a break and cannot be scheduled.",
+        "period_wrong_campus": "This period belongs to a different campus than the section.",
+        "period_not_on_weekday": "This period does not run on that weekday.",
+        "room_over_capacity": "This room is smaller than the section.",
+        "subject_repeated_in_day": "This subject appears more than once on one day.",
+        "consecutive_periods_over_threshold": "This teacher has more consecutive periods than the school allows."
+      }
+    },
+    "slot": {
+      "form": {
+        "createTitle": "Fill this period",
+        "editTitle": "Edit this period",
+        "subjectHint": "Leave empty for a homeroom or assembly period.",
+        "allocationHint": "This teacher must already be allocated to this section and subject.",
+        "notesHint": "A short per-cell note, such as “double period”."
+      },
+      "actions": {
+        "clear": "Clear this period"
+      }
+    },
+    "periods": {
+      "title": "Periods",
+      "summary": "The bell schedule every week grid is built on: teaching periods, breaks and their times.",
+      "break": "Break",
+      "teaching": "Teaching",
+      "everyWorkingDay": "Every working day",
+      "columns": {
+        "time": "Time",
+        "kind": "Kind",
+        "actions": "Actions"
+      },
+      "list": {
+        "caption": "Bell schedule periods",
+        "empty": "No periods found."
+      },
+      "actions": {
+        "create": "Add period",
+        "edit": "Edit",
+        "delete": "Remove"
+      },
+      "form": {
+        "createTitle": "Add a period",
+        "editTitle": "Edit this period",
+        "description": "Periods in one day template may not overlap.",
+        "sequenceHint": "The order this period runs in the day, starting at 1.",
+        "isBreakHint": "Breaks are never schedulable.",
+        "weekdaysHint": "Leave every box clear to run on the school's normal working days."
+      },
+      "delete": {
+        "title": "Remove this period",
+        "description": "A period already used by a timetable slot cannot be removed."
+      }
+    },
+    "rooms": {
+      "title": "Rooms",
+      "summary": "Rooms, their type and their capacity — what the conflict check reads when a section will not fit.",
+      "active": "In service",
+      "inactive": "Out of service",
+      "types": {
+        "classroom": "Classroom",
+        "lab": "Lab",
+        "library": "Library",
+        "auditorium": "Auditorium",
+        "sports": "Sports",
+        "office": "Office",
+        "other": "Other"
+      },
+      "columns": {
+        "location": "Location",
+        "actions": "Actions"
+      },
+      "list": {
+        "caption": "Rooms",
+        "empty": "No rooms found."
+      },
+      "actions": {
+        "create": "Add room",
+        "edit": "Edit",
+        "delete": "Remove"
+      },
+      "form": {
+        "createTitle": "Add a room",
+        "editTitle": "Edit this room",
+        "description": "A room code must be unique within its campus.",
+        "codeHint": "Short code shown in the week grid, such as L-12.",
+        "capacityHint": "A section larger than this raises a warning, not a block.",
+        "capacityBlankHint": "Leave blank when the room has no fixed seating.",
+        "isActiveHint": "A room out of service is not offered when filling the grid."
+      },
+      "delete": {
+        "title": "Remove this room",
+        "description": "A room already used by a timetable slot or a section cannot be removed. Take it out of service instead."
+      }
+    },
+    "substitutions": {
+      "title": "Substitutions",
+      "summary": "Cover for an absent teacher on a given date, without touching the published timetable.",
+      "status": {
+        "proposed": "Proposed",
+        "confirmed": "Confirmed",
+        "declined": "Declined",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "columns": {
+        "actions": "Actions"
+      },
+      "list": {
+        "caption": "Teacher substitutions",
+        "empty": "No substitutions found."
+      },
+      "filters": {
+        "from": "From",
+        "to": "To"
+      },
+      "actions": {
+        "create": "Propose a substitution",
+        "approve": "Approve",
+        "reject": "Reject"
+      },
+      "form": {
+        "createTitle": "Propose a substitution",
+        "description": "Only a published period can be covered, and only on a date it actually runs.",
+        "dateHint": "The date of the absence.",
+        "periodHint": "Only the periods this section holds on that weekday are offered.",
+        "substituteHint": "The covering teacher must be free in that period.",
+        "unknownTeacher": "Unknown teacher",
+        "pickPeriodFirst": "Pick a period first."
+      }
+    },
+    "my": {
+      "title": "My timetable",
+      "summary": "Your own week, with any cover for the date you choose.",
+      "caption": "My weekly timetable",
+      "dateLabel": "Show cover for",
+      "dateHint": "Leave the date empty for the normal week.",
+      "loading": "Loading your timetable…",
+      "empty": "You have no published timetable yet.",
+      "free": "Free",
+      "substituted": "Covered"
     }
   },
   "common": {

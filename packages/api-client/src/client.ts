@@ -290,6 +290,7 @@ export class ApiClient {
         url,
         details: envelope.details ?? [],
         requestId: envelope.request_id || requestId,
+        meta: envelope.meta,
       });
     }
 

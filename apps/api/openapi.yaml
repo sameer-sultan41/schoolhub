@@ -576,11 +576,7 @@ paths:
   /api/v1/class-subjects:
     get:
       operationId: class_subjects_list
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       parameters:
       - in: query
         name: academic_session_id
@@ -643,28 +639,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedClassSubjectList'
+                $ref: '#/components/schemas/PaginatedCurriculumList'
           description: ''
     post:
       operationId: class_subjects_create
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       tags:
       - class-subjects
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ClassSubject'
+              $ref: '#/components/schemas/Curriculum'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ClassSubject'
+              $ref: '#/components/schemas/Curriculum'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ClassSubject'
+              $ref: '#/components/schemas/Curriculum'
         required: true
       security:
       - jwtAuth: []
@@ -673,16 +665,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClassSubject'
+                $ref: '#/components/schemas/Curriculum'
           description: ''
   /api/v1/class-subjects/{id}:
     get:
       operationId: class_subjects_retrieve
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       parameters:
       - in: path
         name: id
@@ -700,53 +688,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClassSubject'
-          description: ''
-    put:
-      operationId: class_subjects_update
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        description: A UUID string identifying this class subject.
-        required: true
-      tags:
-      - class-subjects
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ClassSubject'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ClassSubject'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ClassSubject'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ClassSubject'
+                $ref: '#/components/schemas/Curriculum'
           description: ''
     patch:
       operationId: class_subjects_partial_update
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       parameters:
       - in: path
         name: id
@@ -761,13 +707,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedClassSubject'
+              $ref: '#/components/schemas/PatchedCurriculum'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedClassSubject'
+              $ref: '#/components/schemas/PatchedCurriculum'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedClassSubject'
+              $ref: '#/components/schemas/PatchedCurriculum'
       security:
       - jwtAuth: []
       responses:
@@ -775,15 +721,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClassSubject'
+                $ref: '#/components/schemas/Curriculum'
           description: ''
     delete:
       operationId: class_subjects_destroy
-      description: |-
-        Curriculum mapping of subjects onto classes for one session.
-
-        Shares the subject permission keys: mapping a subject to a class is subject
-        management, and §4 declares no separate key for it.
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
       parameters:
       - in: path
         name: id
@@ -799,6 +741,30 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/class-subjects:clone:
+    post:
+      operationId: class_subjects:clone_create
+      description: '`class_subjects` — the session curriculum grid (§5.1).'
+      summary: Clone a session's curriculum into another session
+      tags:
+      - class-subjects:clone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloneCurriculumRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CloneCurriculumRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CloneCurriculumRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Row counts created and skipped.
   /api/v1/classes:
     get:
       operationId: classes_list
@@ -1899,6 +1865,324 @@ paths:
               schema:
                 $ref: '#/components/schemas/BackgroundJob'
           description: ''
+  /api/v1/periods:
+    get:
+      operationId: periods_list
+      description: '`periods` — the bell schedule (§5.1).'
+      parameters:
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_break
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - periods
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPeriodList'
+          description: ''
+    post:
+      operationId: periods_create
+      description: '`periods` — the bell schedule (§5.1).'
+      tags:
+      - periods
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Period'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Period'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Period'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Period'
+          description: ''
+  /api/v1/periods/{id}:
+    get:
+      operationId: periods_retrieve
+      description: '`periods` — the bell schedule (§5.1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this period.
+        required: true
+      tags:
+      - periods
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Period'
+          description: ''
+    patch:
+      operationId: periods_partial_update
+      description: '`periods` — the bell schedule (§5.1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this period.
+        required: true
+      tags:
+      - periods
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPeriod'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPeriod'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPeriod'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Period'
+          description: ''
+    delete:
+      operationId: periods_destroy
+      description: '`periods` — the bell schedule (§5.1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this period.
+        required: true
+      tags:
+      - periods
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/rooms:
+    get:
+      operationId: rooms_list
+      description: '`rooms` — physical rooms, labs and halls (§5.4).'
+      parameters:
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: room_type
+        schema:
+          type: string
+          enum:
+          - auditorium
+          - classroom
+          - lab
+          - library
+          - office
+          - other
+          - sports
+        description: |-
+          * `classroom` - Classroom
+          * `lab` - Lab
+          * `library` - Library
+          * `auditorium` - Auditorium
+          * `sports` - Sports
+          * `office` - Office
+          * `other` - Other
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - rooms
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRoomList'
+          description: ''
+    post:
+      operationId: rooms_create
+      description: '`rooms` — physical rooms, labs and halls (§5.4).'
+      tags:
+      - rooms
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Room'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Room'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Room'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+  /api/v1/rooms/{id}:
+    get:
+      operationId: rooms_retrieve
+      description: '`rooms` — physical rooms, labs and halls (§5.4).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this room.
+        required: true
+      tags:
+      - rooms
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+    patch:
+      operationId: rooms_partial_update
+      description: '`rooms` — physical rooms, labs and halls (§5.4).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this room.
+        required: true
+      tags:
+      - rooms
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRoom'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRoom'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRoom'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+    delete:
+      operationId: rooms_destroy
+      description: '`rooms` — physical rooms, labs and halls (§5.4).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this room.
+        required: true
+      tags:
+      - rooms
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/school-settings:
     get:
       operationId: school_settings_retrieve
@@ -3006,6 +3290,384 @@ paths:
       responses:
         '202':
           description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+  /api/v1/student-promotions:
+    get:
+      operationId: student_promotions_list
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      parameters:
+      - in: query
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: decision
+        schema:
+          type: string
+          enum:
+          - graduated
+          - promoted
+          - promoted_on_trial
+          - retained
+        description: |-
+          * `promoted` - Promoted
+          * `retained` - Retained
+          * `promoted_on_trial` - Promoted on trial
+          * `graduated` - Graduated
+      - in: query
+        name: from_academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: from_class_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - approved
+          - draft
+          - executed
+          - pending_approval
+          - reverted
+        description: |-
+          * `draft` - Draft
+          * `pending_approval` - Pending approval
+          * `approved` - Approved
+          * `executed` - Executed
+          * `reverted` - Reverted
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: to_academic_session_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPromotionBatchList'
+          description: ''
+    post:
+      operationId: student_promotions_create
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      summary: Create a promotion batch for one class
+      tags:
+      - student-promotions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePromotionBatch'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreatePromotionBatch'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreatePromotionBatch'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          description: The new batch id and its row count.
+  /api/v1/student-promotions/{batch_pk}/decisions/{student_pk}:
+    patch:
+      operationId: student_promotions_decisions_partial_update
+      description: |-
+        `/student-promotions/{batch_id}/decisions/{student_id}` — §16's shape.
+
+        Addressed by *student* rather than by row id, because that is what a reviewer
+        working through a class actually has in hand, and it makes the URL say which
+        batch the edit belongs to instead of leaving it implicit in an opaque id.
+      parameters:
+      - in: path
+        name: batch_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: student_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPromotionDecision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPromotionDecision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPromotionDecision'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionDecision'
+          description: ''
+  /api/v1/student-promotions/{id}:
+    get:
+      operationId: student_promotions_retrieve
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      summary: One batch and every decision in it
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: The batch plus its per-student rows.
+  /api/v1/student-promotions/{id}:approve:
+    post:
+      operationId: student_promotions_:approve_create
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      summary: Approve a batch (approver must differ from preparer)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionBatch'
+          description: ''
+  /api/v1/student-promotions/{id}:execute:
+    post:
+      operationId: student_promotions_:execute_create
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      summary: Execute an approved batch, creating next-session enrollments
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}. Poll
+            GET /jobs/{id}; the per-student execution report is the finished job''s
+            `result`.'
+  /api/v1/student-promotions/{id}:reject:
+    post:
+      operationId: student_promotions_:reject_create
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      summary: Send a batch back to draft
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionBatch'
+          description: ''
+  /api/v1/student-promotions/{id}:revert:
+    post:
+      operationId: student_promotions_:revert_create
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      summary: Revert a batch before downstream activity exists
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionBatch'
+          description: ''
+  /api/v1/student-promotions/{id}:submit:
+    post:
+      operationId: student_promotions_:submit_create
+      description: |-
+        `/student-promotions` — the batch resource (§16).
+
+        Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+        and PATCH resolved a decision-row id while the colon-actions resolved a batch
+        id, so one path prefix carried two id spaces and a client could not tell
+        which it held. Decisions are now a sub-resource keyed by student, which is
+        also the shape §16 describes.
+
+        A batch has no table — it is aggregated from its rows (see
+        `PromotionBatchSerializer`), so this list is read-only and `create` is the
+        dedicated `create_batch` handler below.
+      summary: Submit a draft batch for approval
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-promotions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/student-transfers:
     get:
       operationId: student_transfers_list
@@ -3986,6 +4648,387 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/teacher-subject-allocations:
+    get:
+      operationId: teacher_subject_allocations_list
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_primary
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: staff_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: subject_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - teacher-subject-allocations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTeacherAllocationList'
+          description: ''
+    post:
+      operationId: teacher_subject_allocations_create
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      tags:
+      - teacher-subject-allocations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeacherAllocation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeacherAllocation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TeacherAllocation'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherAllocation'
+          description: ''
+  /api/v1/teacher-subject-allocations/{id}:
+    get:
+      operationId: teacher_subject_allocations_retrieve
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teacher subject allocation.
+        required: true
+      tags:
+      - teacher-subject-allocations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherAllocation'
+          description: ''
+    patch:
+      operationId: teacher_subject_allocations_partial_update
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teacher subject allocation.
+        required: true
+      tags:
+      - teacher-subject-allocations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTeacherAllocation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTeacherAllocation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTeacherAllocation'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherAllocation'
+          description: ''
+    delete:
+      operationId: teacher_subject_allocations_destroy
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teacher subject allocation.
+        required: true
+      tags:
+      - teacher-subject-allocations
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/teacher-subject-allocations/load-summary:
+    get:
+      operationId: teacher_subject_allocations_load_summary_retrieve
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      summary: Per-teacher weekly load against the tenant norm
+      tags:
+      - teacher-subject-allocations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Aggregate load per teacher.
+  /api/v1/teacher-substitutions:
+    get:
+      operationId: teacher_substitutions_list
+      description: |-
+        `teacher_substitutions` — dated teacher overrides (§7.2).
+
+        No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+        state is its approval, which moves through `:approve` / `:reject` so the
+        already-decided guard and the notification cannot be bypassed.
+      parameters:
+      - in: query
+        name: absent_staff_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: date
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date__lte
+        schema:
+          type: string
+          format: date
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - completed
+          - confirmed
+          - declined
+          - proposed
+        description: |-
+          * `proposed` - Proposed
+          * `confirmed` - Confirmed
+          * `declined` - Declined
+          * `completed` - Completed
+          * `cancelled` - Cancelled
+      - in: query
+        name: substitute_staff_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - teacher-substitutions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTeacherSubstitutionList'
+          description: ''
+    post:
+      operationId: teacher_substitutions_create
+      description: |-
+        `teacher_substitutions` — dated teacher overrides (§7.2).
+
+        No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+        state is its approval, which moves through `:approve` / `:reject` so the
+        already-decided guard and the notification cannot be bypassed.
+      summary: Propose a substitution for one published slot
+      tags:
+      - teacher-substitutions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeacherSubstitution'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeacherSubstitution'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TeacherSubstitution'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherSubstitution'
+          description: ''
+        '422':
+          description: '§11: wrong absentee, wrong weekday, or the substitute is not
+            free.'
+  /api/v1/teacher-substitutions/{id}:
+    get:
+      operationId: teacher_substitutions_retrieve
+      description: |-
+        `teacher_substitutions` — dated teacher overrides (§7.2).
+
+        No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+        state is its approval, which moves through `:approve` / `:reject` so the
+        already-decided guard and the notification cannot be bypassed.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teacher substitution.
+        required: true
+      tags:
+      - teacher-substitutions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherSubstitution'
+          description: ''
+  /api/v1/teacher-substitutions/{id}:approve:
+    post:
+      operationId: teacher_substitutions_:approve_create
+      description: |-
+        `teacher_substitutions` — dated teacher overrides (§7.2).
+
+        No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+        state is its approval, which moves through `:approve` / `:reject` so the
+        already-decided guard and the notification cannot be bypassed.
+      summary: Approve a proposed substitution
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - teacher-substitutions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherSubstitution'
+          description: ''
+  /api/v1/teacher-substitutions/{id}:reject:
+    post:
+      operationId: teacher_substitutions_:reject_create
+      description: |-
+        `teacher_substitutions` — dated teacher overrides (§7.2).
+
+        No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+        state is its approval, which moves through `:approve` / `:reject` so the
+        already-decided guard and the notification cannot be bypassed.
+      summary: Reject a proposed substitution
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - teacher-substitutions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherSubstitution'
+          description: ''
   /api/v1/terms:
     get:
       operationId: terms_list
@@ -4152,6 +5195,360 @@ paths:
               schema:
                 $ref: '#/components/schemas/Term'
           description: ''
+  /api/v1/timetable-slots:
+    get:
+      operationId: timetable_slots_list
+      description: |-
+        `timetable_slots` — the weekly grid, cell by cell (§5.2).
+
+        **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+        line at publish, not at save: hard conflicts block
+        `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+        an admin who cannot save an in-progress state cannot build a timetable at
+        all. The response carries the full machine-readable list §6 specifies so the
+        grid can highlight exactly the cells to fix.
+
+        Cursor paginated, per §16 — the project default (settings
+        ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: room_id
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - draft
+          - published
+        description: |-
+          * `draft` - Draft
+          * `published` - Published
+      - in: query
+        name: teacher_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: weekday
+        schema:
+          type: integer
+      tags:
+      - timetable-slots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTimetableSlotList'
+          description: ''
+    post:
+      operationId: timetable_slots_create
+      description: |-
+        `timetable_slots` — the weekly grid, cell by cell (§5.2).
+
+        **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+        line at publish, not at save: hard conflicts block
+        `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+        an admin who cannot save an in-progress state cannot build a timetable at
+        all. The response carries the full machine-readable list §6 specifies so the
+        grid can highlight exactly the cells to fix.
+
+        Cursor paginated, per §16 — the project default (settings
+        ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+      summary: Add a slot to a section's draft grid
+      tags:
+      - timetable-slots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimetableSlot'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TimetableSlot'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TimetableSlot'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimetableSlot'
+          description: The slot, plus `meta.conflicts` for the section (§16).
+  /api/v1/timetable-slots/{id}:
+    get:
+      operationId: timetable_slots_retrieve
+      description: |-
+        `timetable_slots` — the weekly grid, cell by cell (§5.2).
+
+        **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+        line at publish, not at save: hard conflicts block
+        `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+        an admin who cannot save an in-progress state cannot build a timetable at
+        all. The response carries the full machine-readable list §6 specifies so the
+        grid can highlight exactly the cells to fix.
+
+        Cursor paginated, per §16 — the project default (settings
+        ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this timetable slot.
+        required: true
+      tags:
+      - timetable-slots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimetableSlot'
+          description: ''
+    patch:
+      operationId: timetable_slots_partial_update
+      description: |-
+        `timetable_slots` — the weekly grid, cell by cell (§5.2).
+
+        **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+        line at publish, not at save: hard conflicts block
+        `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+        an admin who cannot save an in-progress state cannot build a timetable at
+        all. The response carries the full machine-readable list §6 specifies so the
+        grid can highlight exactly the cells to fix.
+
+        Cursor paginated, per §16 — the project default (settings
+        ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this timetable slot.
+        required: true
+      tags:
+      - timetable-slots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTimetableSlot'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTimetableSlot'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTimetableSlot'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimetableSlot'
+          description: ''
+    delete:
+      operationId: timetable_slots_destroy
+      description: |-
+        `timetable_slots` — the weekly grid, cell by cell (§5.2).
+
+        **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+        line at publish, not at save: hard conflicts block
+        `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+        an admin who cannot save an in-progress state cannot build a timetable at
+        all. The response carries the full machine-readable list §6 specifies so the
+        grid can highlight exactly the cells to fix.
+
+        Cursor paginated, per §16 — the project default (settings
+        ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+      summary: Remove a draft slot
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this timetable slot.
+        required: true
+      tags:
+      - timetable-slots
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: '`data` is null; `meta.conflicts` is the section''s remaining
+            list.'
+  /api/v1/timetables/{id}:publish:
+    post:
+      operationId: timetables_:publish_create
+      description: |-
+        The section-level actions: `:validate` and `:publish` (§16).
+
+        Both are colon-actions on a *section* id, addressed as `/timetables/{id}`
+        because what they act on is that section's timetable rather than any one row
+        of it. Neither is `@action`-decorated — the routes are explicit `path()`
+        entries in urls.py, placed before the routers so the verb is not parsed as a
+        primary key.
+      summary: Publish a section's draft timetable
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - timetables
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimetableSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TimetableSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TimetableSessionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Rows published and superseded, plus the accepted soft conflicts.
+        '422':
+          description: A hard conflict, a locked session, or no draft to publish.
+  /api/v1/timetables/{id}:validate:
+    post:
+      operationId: timetables_:validate_create
+      description: |-
+        The section-level actions: `:validate` and `:publish` (§16).
+
+        Both are colon-actions on a *section* id, addressed as `/timetables/{id}`
+        because what they act on is that section's timetable rather than any one row
+        of it. Neither is `@action`-decorated — the routes are explicit `path()`
+        entries in urls.py, placed before the routers so the verb is not parsed as a
+        primary key.
+      summary: Run the full conflict check over a section's timetable
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - timetables
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimetableSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TimetableSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TimetableSessionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: '`conflicts` is the machine-readable list `{type, severity,
+            slot_ids, message}` (§6); `has_hard_conflicts` says whether publish would
+            be refused.'
+  /api/v1/timetables/my:
+    get:
+      operationId: timetables_my_retrieve
+      description: |-
+        `GET /timetables/my` — the caller's own effective timetable (§16).
+
+        The **only** endpoint in this module a student or guardian reaches, and
+        therefore the only viewset here without ``DenyRestrictedPrincipals``. It
+        serves published rows exclusively (``services.effective_slots_for``), so
+        §5.7's "unpublished edits never leak" holds by construction rather than by a
+        filter someone has to remember.
+
+        Date-aware: a substitution overrides one cell for specific dates only (§7.2),
+        so asking without a date gives the base grid and asking with one gives what
+        actually happens that day.
+      summary: The caller's own effective timetable
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+        description: Defaults to the tenant's current session.
+      - in: query
+        name: date
+        schema:
+          type: string
+          format: date
+        description: Apply confirmed substitutions for this date. Omitted = the base
+          grid.
+      tags:
+      - timetables
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EffectiveSlot'
+          description: Published cells with confirmed substitutions applied for `?date=`.
+            `meta.audience` says which principal was resolved.
 components:
   schemas:
     AcademicSession:
@@ -4392,9 +5789,41 @@ components:
       - level
       - name
       - updated_at
-    ClassSubject:
+    CloneCurriculumRequest:
       type: object
-      description: 'Curriculum mapping: this class studies this subject in this session.'
+      properties:
+        source_academic_session_id:
+          type: string
+          format: uuid
+        target_academic_session_id:
+          type: string
+          format: uuid
+      required:
+      - source_academic_session_id
+      - target_academic_session_id
+    CreatePromotionBatch:
+      type: object
+      properties:
+        from_academic_session_id:
+          type: string
+          format: uuid
+        to_academic_session_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+      required:
+      - class_id
+      - from_academic_session_id
+      - to_academic_session_id
+    Curriculum:
+      type: object
+      description: |-
+        `class_subjects` through the academics contract (§16).
+
+        The model lives in school_organization — see apps/academics/models.py's
+        header for why it stays there — but the validations are academics' §11.
       properties:
         id:
           type: string
@@ -4453,14 +5882,6 @@ components:
       - id
       - subject_id
       - updated_at
-    DecisionEnum:
-      enum:
-      - verified
-      - rejected
-      type: string
-      description: |-
-        * `verified` - verified
-        * `rejected` - rejected
     Department:
       type: object
       properties:
@@ -4552,13 +5973,122 @@ components:
       - id
       - name
       - updated_at
+    DocumentVerificationDecisionEnum:
+      enum:
+      - verified
+      - rejected
+      type: string
+      description: |-
+        * `verified` - verified
+        * `rejected` - rejected
     DocumentVerifyRequest:
       type: object
       properties:
         decision:
-          $ref: '#/components/schemas/DecisionEnum'
+          $ref: '#/components/schemas/DocumentVerificationDecisionEnum'
       required:
       - decision
+    EffectiveSlot:
+      type: object
+      description: |-
+        One cell of the caller's effective timetable (§16 `GET /timetables/my`).
+
+        Denormalised deliberately: this is the one endpoint a student, a guardian and
+        a teacher all reach, on a phone, and the alternative to inlining the period
+        and subject names is four lookups per cell in the client.
+
+        `substitution` comes from the `overrides` map `services.effective_slots_for`
+        returns, passed in through the serializer context — never re-queried per row,
+        which on a forty-cell week would be forty round trips.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        day_of_week:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: 0-6; the week's start comes from tenant configuration.
+        period_id:
+          type: string
+          format: uuid
+          readOnly: true
+        period_name:
+          type: string
+          readOnly: true
+        period_sequence:
+          type: integer
+          readOnly: true
+        start_time:
+          type: string
+          format: time
+          readOnly: true
+        end_time:
+          type: string
+          format: time
+          readOnly: true
+        section_id:
+          type: string
+          format: uuid
+          readOnly: true
+        section_name:
+          type: string
+          readOnly: true
+        subject_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        subject_name:
+          type: string
+          readOnly: true
+          nullable: true
+        staff_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        staff_name:
+          type: string
+          nullable: true
+          readOnly: true
+        room_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        room_name:
+          type: string
+          readOnly: true
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+          description: Per-cell note, e.g. "double period".
+          maxLength: 200
+        substitution:
+          allOf:
+          - $ref: '#/components/schemas/SlotSubstitution'
+          nullable: true
+          readOnly: true
+      required:
+      - day_of_week
+      - end_time
+      - id
+      - period_id
+      - period_name
+      - period_sequence
+      - room_id
+      - room_name
+      - section_id
+      - section_name
+      - staff_id
+      - staff_name
+      - start_time
+      - subject_id
+      - subject_name
+      - substitution
     EmergencyContact:
       type: object
       properties:
@@ -4999,13 +6529,13 @@ components:
                   nullable: true
                 page_size:
                   type: integer
-    PaginatedClassSubjectList:
+    PaginatedCurriculumList:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/ClassSubject'
+            $ref: '#/components/schemas/Curriculum'
         meta:
           type: object
           properties:
@@ -5132,6 +6662,71 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/House'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedPeriodList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Period'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedPromotionBatchList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionBatch'
+    PaginatedRoomList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Room'
         meta:
           type: object
           properties:
@@ -5335,6 +6930,48 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedTeacherAllocationList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeacherAllocation'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedTeacherSubstitutionList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeacherSubstitution'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedTermList:
       type: object
       properties:
@@ -5342,6 +6979,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Term'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedTimetableSlotList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableSlot'
         meta:
           type: object
           properties:
@@ -5466,9 +7124,13 @@ components:
           type: string
           format: date-time
           readOnly: true
-    PatchedClassSubject:
+    PatchedCurriculum:
       type: object
-      description: 'Curriculum mapping: this class studies this subject in this session.'
+      description: |-
+        `class_subjects` through the academics contract (§16).
+
+        The model lives in school_organization — see apps/academics/models.py's
+        header for why it stays there — but the validations are academics' §11.
       properties:
         id:
           type: string
@@ -5681,6 +7343,191 @@ components:
           format: uuid
           nullable: true
           description: staff(id).
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedPeriod:
+      type: object
+      description: |-
+        `periods` — one slot of the bell schedule (§5.1).
+
+        `campus_id` is optional and null means "every campus" (models.py), which is
+        why it is `allow_null` rather than merely `required=False`: a client editing
+        a campus period back to tenant-wide has to be able to say so explicitly.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          description: e.g. "Period 1", "Recess".
+          maxLength: 50
+        sequence:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Daily order, 1-based.
+        start_time:
+          type: string
+          format: time
+          description: Local to the tenant/campus timezone.
+        end_time:
+          type: string
+          format: time
+        is_break:
+          type: boolean
+          description: Breaks are never schedulable (§5.1).
+        weekdays:
+          nullable: true
+          description: Applicable weekdays as 0-6; null = the tenant's working days.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedPromotionDecision:
+      type: object
+      description: |-
+        A single student's row inside a batch.
+
+        Only the fields a reviewer edits are writable; everything that defines which
+        batch this is, and where the student came from, is fixed at batch creation.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        batch_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Logical batch grouping — one per class per rollover. No batch
+            table.
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        from_enrollment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_class_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_class_id:
+          type: string
+          format: uuid
+          nullable: true
+        to_section_id:
+          type: string
+          format: uuid
+          nullable: true
+        decision:
+          $ref: '#/components/schemas/PromotionDecisionEnum'
+        decision_basis:
+          readOnly: true
+          nullable: true
+          description: Snapshot of result aggregates, attendance %, rule evaluation
+            at proposal time.
+        override_reason:
+          type: string
+          nullable: true
+          description: Required when the decision deviates from the rule proposal.
+          maxLength: 500
+        remarks:
+          type: string
+          nullable: true
+          maxLength: 500
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PromotionDecisionStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id) — must differ from the preparer.
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        executed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedRoom:
+      type: object
+      description: '`rooms` — physical rooms, labs and halls (§5.4).'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        campus_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 80
+        code:
+          type: string
+          maxLength: 20
+        room_type:
+          $ref: '#/components/schemas/RoomTypeEnum'
+        capacity:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        building:
+          type: string
+          nullable: true
+          maxLength: 80
+        floor:
+          type: string
+          nullable: true
+          maxLength: 20
         is_active:
           type: boolean
         created_at:
@@ -6068,6 +7915,53 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedTeacherAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        staff_id:
+          type: string
+          format: uuid
+        is_primary:
+          type: boolean
+          description: One primary per (section, subject); others are co-teachers.
+        weekly_periods:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          description: Overrides class_subjects.weekly_periods for this allocation's
+            load math.
+        effective_from:
+          type: string
+          format: date
+          nullable: true
+        effective_to:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          description: Null = current. Set rather than deleted on reassignment.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedTerm:
       type: object
       properties:
@@ -6100,6 +7994,314 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedTimetableSlot:
+      type: object
+      description: |-
+        `timetable_slots` — one cell of the weekly grid (§5.2).
+
+        `status` is read-only: a slot becomes published only through
+        `POST /timetables/{section_id}:publish`, never by a client writing the field.
+        `effective_from`/`effective_to` are read-only for the same reason — they are
+        the supersede bookkeeping `publish_section_timetable` writes, and a draft
+        that arrived already end-dated would be invisible to the publish it is
+        waiting for.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        day_of_week:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: 0-6; the week's start comes from tenant configuration.
+        period_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+          nullable: true
+        staff_id:
+          type: string
+          format: uuid
+          nullable: true
+        room_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TimetableSlotStatusEnum'
+          readOnly: true
+        effective_from:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        effective_to:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          description: Null = current. Set on a mid-session revision.
+        notes:
+          type: string
+          nullable: true
+          description: Per-cell note, e.g. "double period".
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    Period:
+      type: object
+      description: |-
+        `periods` — one slot of the bell schedule (§5.1).
+
+        `campus_id` is optional and null means "every campus" (models.py), which is
+        why it is `allow_null` rather than merely `required=False`: a client editing
+        a campus period back to tenant-wide has to be able to say so explicitly.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          description: e.g. "Period 1", "Recess".
+          maxLength: 50
+        sequence:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Daily order, 1-based.
+        start_time:
+          type: string
+          format: time
+          description: Local to the tenant/campus timezone.
+        end_time:
+          type: string
+          format: time
+        is_break:
+          type: boolean
+          description: Breaks are never schedulable (§5.1).
+        weekdays:
+          nullable: true
+          description: Applicable weekdays as 0-6; null = the tenant's working days.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - end_time
+      - id
+      - name
+      - sequence
+      - start_time
+      - updated_at
+    PromotionBatch:
+      type: object
+      description: |-
+        A batch, synthesised by aggregating its decision rows.
+
+        There is no `promotion_batches` table — `batch_id` is a grouping column and
+        status moves batch-wide, which entities/academics.md settles explicitly. So
+        a batch is read-only and derived: its existence, status and shape are
+        consequences of its rows rather than a parent record that can drift out of
+        sync with them.
+
+        `status` is grouped on rather than picked from a row. If a batch ever
+        contained mixed statuses it would surface here as two entries for one
+        `batch_id`, which is the honest rendering of a corrupt batch rather than a
+        silently chosen winner.
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        from_academic_session_id:
+          type: string
+          format: uuid
+        to_academic_session_id:
+          type: string
+          format: uuid
+        from_class_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        students:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+      required:
+      - batch_id
+      - from_academic_session_id
+      - from_class_id
+      - started_at
+      - status
+      - students
+      - to_academic_session_id
+    PromotionDecision:
+      type: object
+      description: |-
+        A single student's row inside a batch.
+
+        Only the fields a reviewer edits are writable; everything that defines which
+        batch this is, and where the student came from, is fixed at batch creation.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        batch_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Logical batch grouping — one per class per rollover. No batch
+            table.
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        from_enrollment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_academic_session_id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_class_id:
+          type: string
+          format: uuid
+          readOnly: true
+        to_class_id:
+          type: string
+          format: uuid
+          nullable: true
+        to_section_id:
+          type: string
+          format: uuid
+          nullable: true
+        decision:
+          $ref: '#/components/schemas/PromotionDecisionEnum'
+        decision_basis:
+          readOnly: true
+          nullable: true
+          description: Snapshot of result aggregates, attendance %, rule evaluation
+            at proposal time.
+        override_reason:
+          type: string
+          nullable: true
+          description: Required when the decision deviates from the rule proposal.
+          maxLength: 500
+        remarks:
+          type: string
+          nullable: true
+          maxLength: 500
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PromotionDecisionStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id) — must differ from the preparer.
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        executed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - admission_number
+      - approved_at
+      - approved_by
+      - batch_id
+      - created_at
+      - decision
+      - decision_basis
+      - executed_at
+      - from_academic_session_id
+      - from_class_id
+      - from_enrollment_id
+      - id
+      - status
+      - student_id
+      - student_name
+      - to_academic_session_id
+      - updated_at
+    PromotionDecisionEnum:
+      enum:
+      - promoted
+      - retained
+      - promoted_on_trial
+      - graduated
+      type: string
+      description: |-
+        * `promoted` - Promoted
+        * `retained` - Retained
+        * `promoted_on_trial` - Promoted on trial
+        * `graduated` - Graduated
+    PromotionDecisionStatusEnum:
+      enum:
+      - draft
+      - pending_approval
+      - approved
+      - executed
+      - reverted
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `pending_approval` - Pending approval
+        * `approved` - Approved
+        * `executed` - Executed
+        * `reverted` - Reverted
     QualificationTypeEnum:
       enum:
       - degree
@@ -6145,6 +8347,73 @@ components:
         * `grandparent` - Grandparent
         * `sibling` - Sibling
         * `legal_guardian` - Legal guardian
+        * `other` - Other
+    Room:
+      type: object
+      description: '`rooms` — physical rooms, labs and halls (§5.4).'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        campus_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 80
+        code:
+          type: string
+          maxLength: 20
+        room_type:
+          $ref: '#/components/schemas/RoomTypeEnum'
+        capacity:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+        building:
+          type: string
+          nullable: true
+          maxLength: 80
+        floor:
+          type: string
+          nullable: true
+          maxLength: 20
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - campus_id
+      - code
+      - created_at
+      - id
+      - name
+      - updated_at
+    RoomTypeEnum:
+      enum:
+      - classroom
+      - lab
+      - library
+      - auditorium
+      - sports
+      - office
+      - other
+      type: string
+      description: |-
+        * `classroom` - Classroom
+        * `lab` - Lab
+        * `library` - Library
+        * `auditorium` - Auditorium
+        * `sports` - Sports
+        * `office` - Office
         * `other` - Other
     SchoolSettings:
       type: object
@@ -6235,6 +8504,51 @@ components:
       - end_date
       - name
       - start_date
+    SlotSubstitution:
+      type: object
+      description: The substitution overlay on one cell of `GET /timetables/my`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+        absent_staff_id:
+          type: string
+          format: uuid
+          readOnly: true
+        substitute_staff_id:
+          type: string
+          format: uuid
+          readOnly: true
+        substitute_staff_name:
+          type: string
+          readOnly: true
+        room_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        room_name:
+          type: string
+          readOnly: true
+          nullable: true
+        reason:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - absent_staff_id
+      - date
+      - id
+      - reason
+      - room_id
+      - room_name
+      - substitute_staff_id
+      - substitute_staff_name
     Staff:
       type: object
       properties:
@@ -6951,6 +9265,145 @@ components:
         * `core` - Core
         * `elective` - Elective
         * `co_curricular` - Co-curricular
+    TeacherAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        staff_id:
+          type: string
+          format: uuid
+        is_primary:
+          type: boolean
+          description: One primary per (section, subject); others are co-teachers.
+        weekly_periods:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          description: Overrides class_subjects.weekly_periods for this allocation's
+            load math.
+        effective_from:
+          type: string
+          format: date
+          nullable: true
+        effective_to:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          description: Null = current. Set rather than deleted on reassignment.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session_id
+      - created_at
+      - effective_to
+      - id
+      - section_id
+      - staff_id
+      - subject_id
+      - updated_at
+    TeacherSubstitution:
+      type: object
+      description: |-
+        `teacher_substitutions` — a dated override of one slot's teacher (§7.2).
+
+        `status` is read-only: a proposal is confirmed or declined only through
+        `:approve` / `:reject`, which is where the notification and the
+        already-decided guard live.
+
+        `room_id` is optional and means "move this class for that date only" (§6).
+        Its clash check is in the service, not here, because being free depends on
+        the slot's period and the date — neither of which a field validator sees.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        timetable_slot_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+          description: Must fall on the slot's weekday and inside the session.
+        absent_staff_id:
+          type: string
+          format: uuid
+        substitute_staff_id:
+          type: string
+          format: uuid
+        room_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Ad-hoc room change for this date only. Omitted = keep the slot's
+            room.
+        reason:
+          type: string
+          nullable: true
+          maxLength: 200
+        leave_request_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: 'leave_requests(id) — a plain UUID, not an FK: the attendance
+            module that owns that table has not shipped yet.'
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TeacherSubstitutionStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - absent_staff_id
+      - created_at
+      - date
+      - id
+      - leave_request_id
+      - status
+      - substitute_staff_id
+      - timetable_slot_id
+      - updated_at
+    TeacherSubstitutionStatusEnum:
+      enum:
+      - proposed
+      - confirmed
+      - declined
+      - completed
+      - cancelled
+      type: string
+      description: |-
+        * `proposed` - Proposed
+        * `confirmed` - Confirmed
+        * `declined` - Declined
+        * `completed` - Completed
+        * `cancelled` - Cancelled
     Term:
       type: object
       properties:
@@ -6992,6 +9445,108 @@ components:
       - sequence
       - start_date
       - updated_at
+    TimetableSessionRequest:
+      type: object
+      description: |-
+        Body of `:validate` and `:publish`.
+
+        The session is optional: a school runs one current session at a time and the
+        grid UI has no reason to name it, so an omitted value resolves to the
+        tenant's `is_current` session (see `TimetableViewSet._resolve_session`).
+      properties:
+        academic_session_id:
+          type: string
+          format: uuid
+          description: Defaults to the tenant's current session.
+    TimetableSlot:
+      type: object
+      description: |-
+        `timetable_slots` — one cell of the weekly grid (§5.2).
+
+        `status` is read-only: a slot becomes published only through
+        `POST /timetables/{section_id}:publish`, never by a client writing the field.
+        `effective_from`/`effective_to` are read-only for the same reason — they are
+        the supersede bookkeeping `publish_section_timetable` writes, and a draft
+        that arrived already end-dated would be invisible to the publish it is
+        waiting for.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        day_of_week:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: 0-6; the week's start comes from tenant configuration.
+        period_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+          nullable: true
+        staff_id:
+          type: string
+          format: uuid
+          nullable: true
+        room_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TimetableSlotStatusEnum'
+          readOnly: true
+        effective_from:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        effective_to:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          description: Null = current. Set on a mid-session revision.
+        notes:
+          type: string
+          nullable: true
+          description: Per-cell note, e.g. "double period".
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session_id
+      - created_at
+      - day_of_week
+      - effective_from
+      - effective_to
+      - id
+      - period_id
+      - section_id
+      - status
+      - updated_at
+    TimetableSlotStatusEnum:
+      enum:
+      - draft
+      - published
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `published` - Published
     TransferCompleteRequest:
       type: object
       description: |-
@@ -7092,7 +9647,7 @@ components:
       type: object
       properties:
         decision:
-          $ref: '#/components/schemas/DecisionEnum'
+          $ref: '#/components/schemas/DocumentVerificationDecisionEnum'
       required:
       - decision
     VisibilityEnum:

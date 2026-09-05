@@ -35,11 +35,28 @@ _CODE_BY_STATUS = {
 
 
 class DomainRuleViolation(exceptions.APIException):
-    """A request that is well-formed but violates a business rule."""
+    """A request that is well-formed but violates a business rule.
+
+    `meta` carries machine-readable context that must survive intact.
+    `_flatten_details` deliberately shreds nested structures into flat
+    `{field, issue}` strings, which is right for field errors and wrong for a
+    payload a client has to act on: a timetable publish refusal returns the full
+    conflict list so the grid can highlight every clashing cell, and flattening
+    turned that into `conflicts[0].slot_ids` repeated once per id — of which
+    `ApiError.fieldErrors()` keeps only the first. The client would highlight one
+    side of a double booking and not the other.
+
+    Anything in `meta` is passed through as JSON, untouched. Use it only for
+    structured context; a human-readable reason still belongs in `detail`.
+    """
 
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     default_detail = "This action violates a business rule."
     default_code = "domain_rule_violation"
+
+    def __init__(self, detail=None, code=None, *, meta: dict | None = None) -> None:
+        super().__init__(detail, code)
+        self.meta = meta
 
 
 class Conflict(exceptions.APIException):
@@ -119,15 +136,21 @@ def envelope_exception_handler(exc, context):
     if response.status_code >= 500:
         logger.error("server error", exc_info=exc, extra={"request_id": request_id})
 
+    error: dict = {
+        "code": code,
+        "message": message,
+        "details": details,
+        "request_id": request_id,
+    }
+    # Only present when the raiser had structured context to hand back — see
+    # DomainRuleViolation. Absent everywhere else, so the common envelope is
+    # unchanged.
+    meta = getattr(exc, "meta", None)
+    if meta:
+        error["meta"] = meta
+
     return Response(
-        {
-            "error": {
-                "code": code,
-                "message": message,
-                "details": details,
-                "request_id": request_id,
-            }
-        },
+        {"error": error},
         status=response.status_code,
         headers=getattr(response, "headers", None),
     )

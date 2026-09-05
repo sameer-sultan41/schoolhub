@@ -268,20 +268,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         get: operations["class_subjects_list"];
         put?: never;
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         post: operations["class_subjects_create"];
         delete?: never;
         options?: never;
@@ -296,37 +286,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         get: operations["class_subjects_retrieve"];
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
-        put: operations["class_subjects_update"];
+        put?: never;
         post?: never;
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         delete: operations["class_subjects_destroy"];
         options?: never;
         head?: never;
-        /**
-         * @description Curriculum mapping of subjects onto classes for one session.
-         *
-         *     Shares the subject permission keys: mapping a subject to a class is subject
-         *     management, and §4 declares no separate key for it.
-         */
+        /** @description `class_subjects` — the session curriculum grid (§5.1). */
         patch: operations["class_subjects_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/class-subjects:clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clone a session's curriculum into another session
+         * @description `class_subjects` — the session curriculum grid (§5.1).
+         */
+        post: operations["class_subjects:clone_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/classes": {
@@ -686,6 +675,80 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `periods` — the bell schedule (§5.1). */
+        get: operations["periods_list"];
+        put?: never;
+        /** @description `periods` — the bell schedule (§5.1). */
+        post: operations["periods_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/periods/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `periods` — the bell schedule (§5.1). */
+        get: operations["periods_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `periods` — the bell schedule (§5.1). */
+        delete: operations["periods_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `periods` — the bell schedule (§5.1). */
+        patch: operations["periods_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `rooms` — physical rooms, labs and halls (§5.4). */
+        get: operations["rooms_list"];
+        put?: never;
+        /** @description `rooms` — physical rooms, labs and halls (§5.4). */
+        post: operations["rooms_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `rooms` — physical rooms, labs and halls (§5.4). */
+        get: operations["rooms_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `rooms` — physical rooms, labs and halls (§5.4). */
+        delete: operations["rooms_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `rooms` — physical rooms, labs and halls (§5.4). */
+        patch: operations["rooms_partial_update"];
         trace?: never;
     };
     "/api/v1/school-settings": {
@@ -1138,6 +1201,252 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/student-promotions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/student-promotions` — the batch resource (§16).
+         *
+         *     Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+         *     and PATCH resolved a decision-row id while the colon-actions resolved a batch
+         *     id, so one path prefix carried two id spaces and a client could not tell
+         *     which it held. Decisions are now a sub-resource keyed by student, which is
+         *     also the shape §16 describes.
+         *
+         *     A batch has no table — it is aggregated from its rows (see
+         *     `PromotionBatchSerializer`), so this list is read-only and `create` is the
+         *     dedicated `create_batch` handler below.
+         */
+        get: operations["student_promotions_list"];
+        put?: never;
+        /**
+         * Create a promotion batch for one class
+         * @description `/student-promotions` — the batch resource (§16).
+         *
+         *     Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+         *     and PATCH resolved a decision-row id while the colon-actions resolved a batch
+         *     id, so one path prefix carried two id spaces and a client could not tell
+         *     which it held. Decisions are now a sub-resource keyed by student, which is
+         *     also the shape §16 describes.
+         *
+         *     A batch has no table — it is aggregated from its rows (see
+         *     `PromotionBatchSerializer`), so this list is read-only and `create` is the
+         *     dedicated `create_batch` handler below.
+         */
+        post: operations["student_promotions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{batch_pk}/decisions/{student_pk}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description `/student-promotions/{batch_id}/decisions/{student_id}` — §16's shape.
+         *
+         *     Addressed by *student* rather than by row id, because that is what a reviewer
+         *     working through a class actually has in hand, and it makes the URL say which
+         *     batch the edit belongs to instead of leaving it implicit in an opaque id.
+         */
+        patch: operations["student_promotions_decisions_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One batch and every decision in it
+         * @description `/student-promotions` — the batch resource (§16).
+         *
+         *     Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+         *     and PATCH resolved a decision-row id while the colon-actions resolved a batch
+         *     id, so one path prefix carried two id spaces and a client could not tell
+         *     which it held. Decisions are now a sub-resource keyed by student, which is
+         *     also the shape §16 describes.
+         *
+         *     A batch has no table — it is aggregated from its rows (see
+         *     `PromotionBatchSerializer`), so this list is read-only and `create` is the
+         *     dedicated `create_batch` handler below.
+         */
+        get: operations["student_promotions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a batch (approver must differ from preparer)
+         * @description `/student-promotions` — the batch resource (§16).
+         *
+         *     Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+         *     and PATCH resolved a decision-row id while the colon-actions resolved a batch
+         *     id, so one path prefix carried two id spaces and a client could not tell
+         *     which it held. Decisions are now a sub-resource keyed by student, which is
+         *     also the shape §16 describes.
+         *
+         *     A batch has no table — it is aggregated from its rows (see
+         *     `PromotionBatchSerializer`), so this list is read-only and `create` is the
+         *     dedicated `create_batch` handler below.
+         */
+        post: operations["student_promotions_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Execute an approved batch, creating next-session enrollments
+         * @description `/student-promotions` — the batch resource (§16).
+         *
+         *     Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+         *     and PATCH resolved a decision-row id while the colon-actions resolved a batch
+         *     id, so one path prefix carried two id spaces and a client could not tell
+         *     which it held. Decisions are now a sub-resource keyed by student, which is
+         *     also the shape §16 describes.
+         *
+         *     A batch has no table — it is aggregated from its rows (see
+         *     `PromotionBatchSerializer`), so this list is read-only and `create` is the
+         *     dedicated `create_batch` handler below.
+         */
+        post: operations["student_promotions_:execute_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a batch back to draft
+         * @description `/student-promotions` — the batch resource (§16).
+         *
+         *     Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+         *     and PATCH resolved a decision-row id while the colon-actions resolved a batch
+         *     id, so one path prefix carried two id spaces and a client could not tell
+         *     which it held. Decisions are now a sub-resource keyed by student, which is
+         *     also the shape §16 describes.
+         *
+         *     A batch has no table — it is aggregated from its rows (see
+         *     `PromotionBatchSerializer`), so this list is read-only and `create` is the
+         *     dedicated `create_batch` handler below.
+         */
+        post: operations["student_promotions_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert a batch before downstream activity exists
+         * @description `/student-promotions` — the batch resource (§16).
+         *
+         *     Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+         *     and PATCH resolved a decision-row id while the colon-actions resolved a batch
+         *     id, so one path prefix carried two id spaces and a client could not tell
+         *     which it held. Decisions are now a sub-resource keyed by student, which is
+         *     also the shape §16 describes.
+         *
+         *     A batch has no table — it is aggregated from its rows (see
+         *     `PromotionBatchSerializer`), so this list is read-only and `create` is the
+         *     dedicated `create_batch` handler below.
+         */
+        post: operations["student_promotions_:revert_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-promotions/{id}:submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a draft batch for approval
+         * @description `/student-promotions` — the batch resource (§16).
+         *
+         *     Every `{id}` on this prefix is a **batch id**. That was not true before: GET
+         *     and PATCH resolved a decision-row id while the colon-actions resolved a batch
+         *     id, so one path prefix carried two id spaces and a client could not tell
+         *     which it held. Decisions are now a sub-resource keyed by student, which is
+         *     also the shape §16 describes.
+         *
+         *     A batch has no table — it is aggregated from its rows (see
+         *     `PromotionBatchSerializer`), so this list is read-only and `create` is the
+         *     dedicated `create_batch` handler below.
+         */
+        post: operations["student_promotions_:submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/student-transfers": {
         parameters: {
             query?: never;
@@ -1514,6 +1823,165 @@ export interface paths {
         patch: operations["subjects_partial_update"];
         trace?: never;
     };
+    "/api/v1/teacher-subject-allocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        get: operations["teacher_subject_allocations_list"];
+        put?: never;
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        post: operations["teacher_subject_allocations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teacher-subject-allocations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        get: operations["teacher_subject_allocations_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        delete: operations["teacher_subject_allocations_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        patch: operations["teacher_subject_allocations_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/teacher-subject-allocations/load-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-teacher weekly load against the tenant norm
+         * @description `teacher_subject_allocations` — who teaches what, to whom (§5.3).
+         */
+        get: operations["teacher_subject_allocations_load_summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teacher-substitutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `teacher_substitutions` — dated teacher overrides (§7.2).
+         *
+         *     No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+         *     state is its approval, which moves through `:approve` / `:reject` so the
+         *     already-decided guard and the notification cannot be bypassed.
+         */
+        get: operations["teacher_substitutions_list"];
+        put?: never;
+        /**
+         * Propose a substitution for one published slot
+         * @description `teacher_substitutions` — dated teacher overrides (§7.2).
+         *
+         *     No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+         *     state is its approval, which moves through `:approve` / `:reject` so the
+         *     already-decided guard and the notification cannot be bypassed.
+         */
+        post: operations["teacher_substitutions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teacher-substitutions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `teacher_substitutions` — dated teacher overrides (§7.2).
+         *
+         *     No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+         *     state is its approval, which moves through `:approve` / `:reject` so the
+         *     already-decided guard and the notification cannot be bypassed.
+         */
+        get: operations["teacher_substitutions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teacher-substitutions/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a proposed substitution
+         * @description `teacher_substitutions` — dated teacher overrides (§7.2).
+         *
+         *     No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+         *     state is its approval, which moves through `:approve` / `:reject` so the
+         *     already-decided guard and the notification cannot be bypassed.
+         */
+        post: operations["teacher_substitutions_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teacher-substitutions/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a proposed substitution
+         * @description `teacher_substitutions` — dated teacher overrides (§7.2).
+         *
+         *     No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+         *     state is its approval, which moves through `:approve` / `:reject` so the
+         *     already-decided guard and the notification cannot be bypassed.
+         */
+        post: operations["teacher_substitutions_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terms": {
         parameters: {
             query?: never;
@@ -1549,6 +2017,187 @@ export interface paths {
         head?: never;
         /** @description Terms of a session. Governed by the academic-session permission keys (§4). */
         patch: operations["terms_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/timetable-slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `timetable_slots` — the weekly grid, cell by cell (§5.2).
+         *
+         *     **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+         *     line at publish, not at save: hard conflicts block
+         *     `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+         *     an admin who cannot save an in-progress state cannot build a timetable at
+         *     all. The response carries the full machine-readable list §6 specifies so the
+         *     grid can highlight exactly the cells to fix.
+         *
+         *     Cursor paginated, per §16 — the project default (settings
+         *     ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+         */
+        get: operations["timetable_slots_list"];
+        put?: never;
+        /**
+         * Add a slot to a section's draft grid
+         * @description `timetable_slots` — the weekly grid, cell by cell (§5.2).
+         *
+         *     **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+         *     line at publish, not at save: hard conflicts block
+         *     `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+         *     an admin who cannot save an in-progress state cannot build a timetable at
+         *     all. The response carries the full machine-readable list §6 specifies so the
+         *     grid can highlight exactly the cells to fix.
+         *
+         *     Cursor paginated, per §16 — the project default (settings
+         *     ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+         */
+        post: operations["timetable_slots_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timetable-slots/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `timetable_slots` — the weekly grid, cell by cell (§5.2).
+         *
+         *     **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+         *     line at publish, not at save: hard conflicts block
+         *     `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+         *     an admin who cannot save an in-progress state cannot build a timetable at
+         *     all. The response carries the full machine-readable list §6 specifies so the
+         *     grid can highlight exactly the cells to fix.
+         *
+         *     Cursor paginated, per §16 — the project default (settings
+         *     ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+         */
+        get: operations["timetable_slots_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a draft slot
+         * @description `timetable_slots` — the weekly grid, cell by cell (§5.2).
+         *
+         *     **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+         *     line at publish, not at save: hard conflicts block
+         *     `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+         *     an admin who cannot save an in-progress state cannot build a timetable at
+         *     all. The response carries the full machine-readable list §6 specifies so the
+         *     grid can highlight exactly the cells to fix.
+         *
+         *     Cursor paginated, per §16 — the project default (settings
+         *     ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+         */
+        delete: operations["timetable_slots_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description `timetable_slots` — the weekly grid, cell by cell (§5.2).
+         *
+         *     **Every mutation returns `meta.conflicts` and still saves.** §5.5 draws the
+         *     line at publish, not at save: hard conflicts block
+         *     `:publish`, while a grid mid-build is allowed to be temporarily wrong —
+         *     an admin who cannot save an in-progress state cannot build a timetable at
+         *     all. The response carries the full machine-readable list §6 specifies so the
+         *     grid can highlight exactly the cells to fix.
+         *
+         *     Cursor paginated, per §16 — the project default (settings
+         *     ``DEFAULT_PAGINATION_CLASS``), so nothing is declared here.
+         */
+        patch: operations["timetable_slots_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/timetables/{id}:publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a section's draft timetable
+         * @description The section-level actions: `:validate` and `:publish` (§16).
+         *
+         *     Both are colon-actions on a *section* id, addressed as `/timetables/{id}`
+         *     because what they act on is that section's timetable rather than any one row
+         *     of it. Neither is `@action`-decorated — the routes are explicit `path()`
+         *     entries in urls.py, placed before the routers so the verb is not parsed as a
+         *     primary key.
+         */
+        post: operations["timetables_:publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timetables/{id}:validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the full conflict check over a section's timetable
+         * @description The section-level actions: `:validate` and `:publish` (§16).
+         *
+         *     Both are colon-actions on a *section* id, addressed as `/timetables/{id}`
+         *     because what they act on is that section's timetable rather than any one row
+         *     of it. Neither is `@action`-decorated — the routes are explicit `path()`
+         *     entries in urls.py, placed before the routers so the verb is not parsed as a
+         *     primary key.
+         */
+        post: operations["timetables_:validate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/timetables/my": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's own effective timetable
+         * @description `GET /timetables/my` — the caller's own effective timetable (§16).
+         *
+         *     The **only** endpoint in this module a student or guardian reaches, and
+         *     therefore the only viewset here without ``DenyRestrictedPrincipals``. It
+         *     serves published rows exclusively (``services.effective_slots_for``), so
+         *     §5.7's "unpublished edits never leak" holds by construction rather than by a
+         *     filter someone has to remember.
+         *
+         *     Date-aware: a substitution overrides one cell for specific dates only (§7.2),
+         *     so asking without a date gives the base grid and asking with one gives what
+         *     actually happens that day.
+         */
+        get: operations["timetables_my_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -1651,8 +2300,27 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /** @description Curriculum mapping: this class studies this subject in this session. */
-        ClassSubject: {
+        CloneCurriculumRequest: {
+            /** Format: uuid */
+            source_academic_session_id: string;
+            /** Format: uuid */
+            target_academic_session_id: string;
+        };
+        CreatePromotionBatch: {
+            /** Format: uuid */
+            from_academic_session_id: string;
+            /** Format: uuid */
+            to_academic_session_id: string;
+            /** Format: uuid */
+            class_id: string;
+        };
+        /**
+         * @description `class_subjects` through the academics contract (§16).
+         *
+         *     The model lives in school_organization — see apps/academics/models.py's
+         *     header for why it stays there — but the validations are academics' §11.
+         */
+        Curriculum: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
@@ -1681,12 +2349,6 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /**
-         * @description * `verified` - verified
-         *     * `rejected` - rejected
-         * @enum {string}
-         */
-        DecisionEnum: "verified" | "rejected";
         Department: {
             /** Format: uuid */
             readonly id: string;
@@ -1727,8 +2389,54 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `verified` - verified
+         *     * `rejected` - rejected
+         * @enum {string}
+         */
+        DocumentVerificationDecisionEnum: "verified" | "rejected";
         DocumentVerifyRequest: {
-            decision: components["schemas"]["DecisionEnum"];
+            decision: components["schemas"]["DocumentVerificationDecisionEnum"];
+        };
+        /**
+         * @description One cell of the caller's effective timetable (§16 `GET /timetables/my`).
+         *
+         *     Denormalised deliberately: this is the one endpoint a student, a guardian and
+         *     a teacher all reach, on a phone, and the alternative to inlining the period
+         *     and subject names is four lookups per cell in the client.
+         *
+         *     `substitution` comes from the `overrides` map `services.effective_slots_for`
+         *     returns, passed in through the serializer context — never re-queried per row,
+         *     which on a forty-cell week would be forty round trips.
+         */
+        EffectiveSlot: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description 0-6; the week's start comes from tenant configuration. */
+            day_of_week: number;
+            /** Format: uuid */
+            readonly period_id: string;
+            readonly period_name: string;
+            readonly period_sequence: number;
+            /** Format: time */
+            readonly start_time: string;
+            /** Format: time */
+            readonly end_time: string;
+            /** Format: uuid */
+            readonly section_id: string;
+            readonly section_name: string;
+            /** Format: uuid */
+            readonly subject_id: string | null;
+            readonly subject_name: string | null;
+            /** Format: uuid */
+            readonly staff_id: string | null;
+            readonly staff_name: string | null;
+            /** Format: uuid */
+            readonly room_id: string | null;
+            readonly room_name: string | null;
+            /** @description Per-cell note, e.g. "double period". */
+            notes?: string | null;
+            readonly substitution: components["schemas"]["SlotSubstitution"] | null;
         };
         EmergencyContact: {
             /** Format: uuid */
@@ -1927,8 +2635,8 @@ export interface components {
                 };
             };
         };
-        PaginatedClassSubjectList: {
-            data?: components["schemas"]["ClassSubject"][];
+        PaginatedCurriculumList: {
+            data?: components["schemas"]["Curriculum"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -1989,6 +2697,41 @@ export interface components {
         };
         PaginatedHouseList: {
             data?: components["schemas"]["House"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedPeriodList: {
+            data?: components["schemas"]["Period"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedPromotionBatchList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PromotionBatch"][];
+        };
+        PaginatedRoomList: {
+            data?: components["schemas"]["Room"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -2087,8 +2830,38 @@ export interface components {
                 };
             };
         };
+        PaginatedTeacherAllocationList: {
+            data?: components["schemas"]["TeacherAllocation"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedTeacherSubstitutionList: {
+            data?: components["schemas"]["TeacherSubstitution"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedTermList: {
             data?: components["schemas"]["Term"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedTimetableSlotList: {
+            data?: components["schemas"]["TimetableSlot"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -2148,8 +2921,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /** @description Curriculum mapping: this class studies this subject in this session. */
-        PatchedClassSubject: {
+        /**
+         * @description `class_subjects` through the academics contract (§16).
+         *
+         *     The model lives in school_organization — see apps/academics/models.py's
+         *     header for why it stays there — but the validations are academics' §11.
+         */
+        PatchedCurriculum: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
@@ -2251,6 +3029,107 @@ export interface components {
              * @description staff(id).
              */
             house_master_staff_id?: string | null;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description `periods` — one slot of the bell schedule (§5.1).
+         *
+         *     `campus_id` is optional and null means "every campus" (models.py), which is
+         *     why it is `allow_null` rather than merely `required=False`: a client editing
+         *     a campus period back to tenant-wide has to be able to say so explicitly.
+         */
+        PatchedPeriod: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            campus_id?: string | null;
+            /** @description e.g. "Period 1", "Recess". */
+            name?: string;
+            /** @description Daily order, 1-based. */
+            sequence?: number;
+            /**
+             * Format: time
+             * @description Local to the tenant/campus timezone.
+             */
+            start_time?: string;
+            /** Format: time */
+            end_time?: string;
+            /** @description Breaks are never schedulable (§5.1). */
+            is_break?: boolean;
+            /** @description Applicable weekdays as 0-6; null = the tenant's working days. */
+            weekdays?: unknown;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description A single student's row inside a batch.
+         *
+         *     Only the fields a reviewer edits are writable; everything that defines which
+         *     batch this is, and where the student came from, is fixed at batch creation.
+         */
+        PatchedPromotionDecision: {
+            /** Format: uuid */
+            readonly id?: string;
+            /**
+             * Format: uuid
+             * @description Logical batch grouping — one per class per rollover. No batch table.
+             */
+            readonly batch_id?: string;
+            /** Format: uuid */
+            readonly student_id?: string;
+            readonly student_name?: string;
+            readonly admission_number?: string;
+            /** Format: uuid */
+            readonly from_enrollment_id?: string;
+            /** Format: uuid */
+            readonly from_academic_session_id?: string;
+            /** Format: uuid */
+            readonly to_academic_session_id?: string;
+            /** Format: uuid */
+            readonly from_class_id?: string;
+            /** Format: uuid */
+            to_class_id?: string | null;
+            /** Format: uuid */
+            to_section_id?: string | null;
+            decision?: components["schemas"]["PromotionDecisionEnum"];
+            /** @description Snapshot of result aggregates, attendance %, rule evaluation at proposal time. */
+            readonly decision_basis?: unknown;
+            /** @description Required when the decision deviates from the rule proposal. */
+            override_reason?: string | null;
+            remarks?: string | null;
+            readonly status?: components["schemas"]["PromotionDecisionStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) — must differ from the preparer.
+             */
+            readonly approved_by?: string | null;
+            /** Format: date-time */
+            readonly approved_at?: string | null;
+            /** Format: date-time */
+            readonly executed_at?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /** @description `rooms` — physical rooms, labs and halls (§5.4). */
+        PatchedRoom: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            campus_id?: string;
+            name?: string;
+            code?: string;
+            room_type?: components["schemas"]["RoomTypeEnum"];
+            capacity?: number | null;
+            building?: string | null;
+            floor?: string | null;
             is_active?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
@@ -2446,6 +3325,33 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedTeacherAllocation: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            academic_session_id?: string;
+            /** Format: uuid */
+            section_id?: string;
+            /** Format: uuid */
+            subject_id?: string;
+            /** Format: uuid */
+            staff_id?: string;
+            /** @description One primary per (section, subject); others are co-teachers. */
+            is_primary?: boolean;
+            /** @description Overrides class_subjects.weekly_periods for this allocation's load math. */
+            weekly_periods?: number | null;
+            /** Format: date */
+            effective_from?: string | null;
+            /**
+             * Format: date
+             * @description Null = current. Set rather than deleted on reassignment.
+             */
+            readonly effective_to?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         PatchedTerm: {
             /** Format: uuid */
             readonly id?: string;
@@ -2463,6 +3369,176 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /**
+         * @description `timetable_slots` — one cell of the weekly grid (§5.2).
+         *
+         *     `status` is read-only: a slot becomes published only through
+         *     `POST /timetables/{section_id}:publish`, never by a client writing the field.
+         *     `effective_from`/`effective_to` are read-only for the same reason — they are
+         *     the supersede bookkeeping `publish_section_timetable` writes, and a draft
+         *     that arrived already end-dated would be invisible to the publish it is
+         *     waiting for.
+         */
+        PatchedTimetableSlot: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            academic_session_id?: string;
+            /** Format: uuid */
+            section_id?: string;
+            /** @description 0-6; the week's start comes from tenant configuration. */
+            day_of_week?: number;
+            /** Format: uuid */
+            period_id?: string;
+            /** Format: uuid */
+            subject_id?: string | null;
+            /** Format: uuid */
+            staff_id?: string | null;
+            /** Format: uuid */
+            room_id?: string | null;
+            readonly status?: components["schemas"]["TimetableSlotStatusEnum"];
+            /** Format: date */
+            readonly effective_from?: string | null;
+            /**
+             * Format: date
+             * @description Null = current. Set on a mid-session revision.
+             */
+            readonly effective_to?: string | null;
+            /** @description Per-cell note, e.g. "double period". */
+            notes?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description `periods` — one slot of the bell schedule (§5.1).
+         *
+         *     `campus_id` is optional and null means "every campus" (models.py), which is
+         *     why it is `allow_null` rather than merely `required=False`: a client editing
+         *     a campus period back to tenant-wide has to be able to say so explicitly.
+         */
+        Period: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            campus_id?: string | null;
+            /** @description e.g. "Period 1", "Recess". */
+            name: string;
+            /** @description Daily order, 1-based. */
+            sequence: number;
+            /**
+             * Format: time
+             * @description Local to the tenant/campus timezone.
+             */
+            start_time: string;
+            /** Format: time */
+            end_time: string;
+            /** @description Breaks are never schedulable (§5.1). */
+            is_break?: boolean;
+            /** @description Applicable weekdays as 0-6; null = the tenant's working days. */
+            weekdays?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description A batch, synthesised by aggregating its decision rows.
+         *
+         *     There is no `promotion_batches` table — `batch_id` is a grouping column and
+         *     status moves batch-wide, which entities/academics.md settles explicitly. So
+         *     a batch is read-only and derived: its existence, status and shape are
+         *     consequences of its rows rather than a parent record that can drift out of
+         *     sync with them.
+         *
+         *     `status` is grouped on rather than picked from a row. If a batch ever
+         *     contained mixed statuses it would surface here as two entries for one
+         *     `batch_id`, which is the honest rendering of a corrupt batch rather than a
+         *     silently chosen winner.
+         */
+        PromotionBatch: {
+            /** Format: uuid */
+            batch_id: string;
+            /** Format: uuid */
+            from_academic_session_id: string;
+            /** Format: uuid */
+            to_academic_session_id: string;
+            /** Format: uuid */
+            from_class_id: string;
+            status: string;
+            students: number;
+            /** Format: date-time */
+            started_at: string;
+        };
+        /**
+         * @description A single student's row inside a batch.
+         *
+         *     Only the fields a reviewer edits are writable; everything that defines which
+         *     batch this is, and where the student came from, is fixed at batch creation.
+         */
+        PromotionDecision: {
+            /** Format: uuid */
+            readonly id: string;
+            /**
+             * Format: uuid
+             * @description Logical batch grouping — one per class per rollover. No batch table.
+             */
+            readonly batch_id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
+            /** Format: uuid */
+            readonly from_enrollment_id: string;
+            /** Format: uuid */
+            readonly from_academic_session_id: string;
+            /** Format: uuid */
+            readonly to_academic_session_id: string;
+            /** Format: uuid */
+            readonly from_class_id: string;
+            /** Format: uuid */
+            to_class_id?: string | null;
+            /** Format: uuid */
+            to_section_id?: string | null;
+            decision: components["schemas"]["PromotionDecisionEnum"];
+            /** @description Snapshot of result aggregates, attendance %, rule evaluation at proposal time. */
+            readonly decision_basis: unknown;
+            /** @description Required when the decision deviates from the rule proposal. */
+            override_reason?: string | null;
+            remarks?: string | null;
+            readonly status: components["schemas"]["PromotionDecisionStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) — must differ from the preparer.
+             */
+            readonly approved_by: string | null;
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            /** Format: date-time */
+            readonly executed_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `promoted` - Promoted
+         *     * `retained` - Retained
+         *     * `promoted_on_trial` - Promoted on trial
+         *     * `graduated` - Graduated
+         * @enum {string}
+         */
+        PromotionDecisionEnum: "promoted" | "retained" | "promoted_on_trial" | "graduated";
+        /**
+         * @description * `draft` - Draft
+         *     * `pending_approval` - Pending approval
+         *     * `approved` - Approved
+         *     * `executed` - Executed
+         *     * `reverted` - Reverted
+         * @enum {string}
+         */
+        PromotionDecisionStatusEnum: "draft" | "pending_approval" | "approved" | "executed" | "reverted";
         /**
          * @description * `degree` - Degree
          *     * `diploma` - Diploma
@@ -2493,6 +3569,35 @@ export interface components {
          * @enum {string}
          */
         RelationshipEnum: "father" | "mother" | "grandparent" | "sibling" | "legal_guardian" | "other";
+        /** @description `rooms` — physical rooms, labs and halls (§5.4). */
+        Room: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            campus_id: string;
+            name: string;
+            code: string;
+            room_type?: components["schemas"]["RoomTypeEnum"];
+            capacity?: number | null;
+            building?: string | null;
+            floor?: string | null;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `classroom` - Classroom
+         *     * `lab` - Lab
+         *     * `library` - Library
+         *     * `auditorium` - Auditorium
+         *     * `sports` - Sports
+         *     * `office` - Office
+         *     * `other` - Other
+         * @enum {string}
+         */
+        RoomTypeEnum: "classroom" | "lab" | "library" | "auditorium" | "sports" | "office" | "other";
         /**
          * @description School profile and academic configuration (module doc §16, singleton resource).
          *
@@ -2541,6 +3646,22 @@ export interface components {
             start_date: string;
             /** Format: date */
             end_date: string;
+        };
+        /** @description The substitution overlay on one cell of `GET /timetables/my`. */
+        SlotSubstitution: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date */
+            readonly date: string;
+            /** Format: uuid */
+            readonly absent_staff_id: string;
+            /** Format: uuid */
+            readonly substitute_staff_id: string;
+            readonly substitute_staff_name: string;
+            /** Format: uuid */
+            readonly room_id: string | null;
+            readonly room_name: string | null;
+            readonly reason: string | null;
         };
         Staff: {
             /** Format: uuid */
@@ -2870,6 +3991,84 @@ export interface components {
          * @enum {string}
          */
         SubjectTypeEnum: "core" | "elective" | "co_curricular";
+        TeacherAllocation: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            academic_session_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: uuid */
+            staff_id: string;
+            /** @description One primary per (section, subject); others are co-teachers. */
+            is_primary?: boolean;
+            /** @description Overrides class_subjects.weekly_periods for this allocation's load math. */
+            weekly_periods?: number | null;
+            /** Format: date */
+            effective_from?: string | null;
+            /**
+             * Format: date
+             * @description Null = current. Set rather than deleted on reassignment.
+             */
+            readonly effective_to: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description `teacher_substitutions` — a dated override of one slot's teacher (§7.2).
+         *
+         *     `status` is read-only: a proposal is confirmed or declined only through
+         *     `:approve` / `:reject`, which is where the notification and the
+         *     already-decided guard live.
+         *
+         *     `room_id` is optional and means "move this class for that date only" (§6).
+         *     Its clash check is in the service, not here, because being free depends on
+         *     the slot's period and the date — neither of which a field validator sees.
+         */
+        TeacherSubstitution: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            timetable_slot_id: string;
+            /**
+             * Format: date
+             * @description Must fall on the slot's weekday and inside the session.
+             */
+            date: string;
+            /** Format: uuid */
+            absent_staff_id: string;
+            /** Format: uuid */
+            substitute_staff_id: string;
+            /**
+             * Format: uuid
+             * @description Ad-hoc room change for this date only. Omitted = keep the slot's room.
+             */
+            room_id?: string | null;
+            reason?: string | null;
+            /**
+             * Format: uuid
+             * @description leave_requests(id) — a plain UUID, not an FK: the attendance module that owns that table has not shipped yet.
+             */
+            readonly leave_request_id: string | null;
+            readonly status: components["schemas"]["TeacherSubstitutionStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `proposed` - Proposed
+         *     * `confirmed` - Confirmed
+         *     * `declined` - Declined
+         *     * `completed` - Completed
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        TeacherSubstitutionStatusEnum: "proposed" | "confirmed" | "declined" | "completed" | "cancelled";
         Term: {
             /** Format: uuid */
             readonly id: string;
@@ -2887,6 +4086,68 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description Body of `:validate` and `:publish`.
+         *
+         *     The session is optional: a school runs one current session at a time and the
+         *     grid UI has no reason to name it, so an omitted value resolves to the
+         *     tenant's `is_current` session (see `TimetableViewSet._resolve_session`).
+         */
+        TimetableSessionRequest: {
+            /**
+             * Format: uuid
+             * @description Defaults to the tenant's current session.
+             */
+            academic_session_id?: string;
+        };
+        /**
+         * @description `timetable_slots` — one cell of the weekly grid (§5.2).
+         *
+         *     `status` is read-only: a slot becomes published only through
+         *     `POST /timetables/{section_id}:publish`, never by a client writing the field.
+         *     `effective_from`/`effective_to` are read-only for the same reason — they are
+         *     the supersede bookkeeping `publish_section_timetable` writes, and a draft
+         *     that arrived already end-dated would be invisible to the publish it is
+         *     waiting for.
+         */
+        TimetableSlot: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            academic_session_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /** @description 0-6; the week's start comes from tenant configuration. */
+            day_of_week: number;
+            /** Format: uuid */
+            period_id: string;
+            /** Format: uuid */
+            subject_id?: string | null;
+            /** Format: uuid */
+            staff_id?: string | null;
+            /** Format: uuid */
+            room_id?: string | null;
+            readonly status: components["schemas"]["TimetableSlotStatusEnum"];
+            /** Format: date */
+            readonly effective_from: string | null;
+            /**
+             * Format: date
+             * @description Null = current. Set on a mid-session revision.
+             */
+            readonly effective_to: string | null;
+            /** @description Per-cell note, e.g. "double period". */
+            notes?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `published` - Published
+         * @enum {string}
+         */
+        TimetableSlotStatusEnum: "draft" | "published";
         /**
          * @description `section_id` is required only for an inter-campus transfer — see
          *
@@ -2932,7 +4193,7 @@ export interface components {
          */
         VerificationStatusEnum: "pending" | "verified" | "rejected";
         VerifyRequest: {
-            decision: components["schemas"]["DecisionEnum"];
+            decision: components["schemas"]["DocumentVerificationDecisionEnum"];
         };
         /**
          * @description * `private` - Private
@@ -3466,7 +4727,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedClassSubjectList"];
+                    "application/json": components["schemas"]["PaginatedCurriculumList"];
                 };
             };
         };
@@ -3480,9 +4741,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ClassSubject"];
-                "application/x-www-form-urlencoded": components["schemas"]["ClassSubject"];
-                "multipart/form-data": components["schemas"]["ClassSubject"];
+                "application/json": components["schemas"]["Curriculum"];
+                "application/x-www-form-urlencoded": components["schemas"]["Curriculum"];
+                "multipart/form-data": components["schemas"]["Curriculum"];
             };
         };
         responses: {
@@ -3491,7 +4752,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClassSubject"];
+                    "application/json": components["schemas"]["Curriculum"];
                 };
             };
         };
@@ -3513,35 +4774,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClassSubject"];
-                };
-            };
-        };
-    };
-    class_subjects_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A UUID string identifying this class subject. */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClassSubject"];
-                "application/x-www-form-urlencoded": components["schemas"]["ClassSubject"];
-                "multipart/form-data": components["schemas"]["ClassSubject"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClassSubject"];
+                    "application/json": components["schemas"]["Curriculum"];
                 };
             };
         };
@@ -3579,9 +4812,9 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["PatchedClassSubject"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedClassSubject"];
-                "multipart/form-data": components["schemas"]["PatchedClassSubject"];
+                "application/json": components["schemas"]["PatchedCurriculum"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCurriculum"];
+                "multipart/form-data": components["schemas"]["PatchedCurriculum"];
             };
         };
         responses: {
@@ -3590,8 +4823,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClassSubject"];
+                    "application/json": components["schemas"]["Curriculum"];
                 };
+            };
+        };
+    };
+    "class_subjects:clone_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloneCurriculumRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CloneCurriculumRequest"];
+                "multipart/form-data": components["schemas"]["CloneCurriculumRequest"];
+            };
+        };
+        responses: {
+            /** @description Row counts created and skipped. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4494,6 +5751,268 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BackgroundJob"];
+                };
+            };
+        };
+    };
+    periods_list: {
+        parameters: {
+            query?: {
+                campus_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_break?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPeriodList"];
+                };
+            };
+        };
+    };
+    periods_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Period"];
+                "application/x-www-form-urlencoded": components["schemas"]["Period"];
+                "multipart/form-data": components["schemas"]["Period"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Period"];
+                };
+            };
+        };
+    };
+    periods_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this period. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Period"];
+                };
+            };
+        };
+    };
+    periods_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this period. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    periods_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this period. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPeriod"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPeriod"];
+                "multipart/form-data": components["schemas"]["PatchedPeriod"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Period"];
+                };
+            };
+        };
+    };
+    rooms_list: {
+        parameters: {
+            query?: {
+                campus_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `classroom` - Classroom
+                 *     * `lab` - Lab
+                 *     * `library` - Library
+                 *     * `auditorium` - Auditorium
+                 *     * `sports` - Sports
+                 *     * `office` - Office
+                 *     * `other` - Other
+                 */
+                room_type?: "auditorium" | "classroom" | "lab" | "library" | "office" | "other" | "sports";
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRoomList"];
+                };
+            };
+        };
+    };
+    rooms_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Room"];
+                "application/x-www-form-urlencoded": components["schemas"]["Room"];
+                "multipart/form-data": components["schemas"]["Room"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    rooms_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this room. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    rooms_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this room. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rooms_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this room. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedRoom"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedRoom"];
+                "multipart/form-data": components["schemas"]["PatchedRoom"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
                 };
             };
         };
@@ -5423,6 +6942,229 @@ export interface operations {
             };
         };
     };
+    student_promotions_list: {
+        parameters: {
+            query?: {
+                batch_id?: string;
+                /**
+                 * @description * `promoted` - Promoted
+                 *     * `retained` - Retained
+                 *     * `promoted_on_trial` - Promoted on trial
+                 *     * `graduated` - Graduated
+                 */
+                decision?: "graduated" | "promoted" | "promoted_on_trial" | "retained";
+                from_academic_session_id?: string;
+                from_class_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `pending_approval` - Pending approval
+                 *     * `approved` - Approved
+                 *     * `executed` - Executed
+                 *     * `reverted` - Reverted
+                 */
+                status?: "approved" | "draft" | "executed" | "pending_approval" | "reverted";
+                student_id?: string;
+                to_academic_session_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPromotionBatchList"];
+                };
+            };
+        };
+    };
+    student_promotions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePromotionBatch"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreatePromotionBatch"];
+                "multipart/form-data": components["schemas"]["CreatePromotionBatch"];
+            };
+        };
+        responses: {
+            /** @description The new batch id and its row count. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    student_promotions_decisions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_pk: string;
+                student_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPromotionDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPromotionDecision"];
+                "multipart/form-data": components["schemas"]["PatchedPromotionDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionDecision"];
+                };
+            };
+        };
+    };
+    student_promotions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The batch plus its per-student rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "student_promotions_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionBatch"];
+                };
+            };
+        };
+    };
+    "student_promotions_:execute_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}}. Poll GET /jobs/{id}; the per-student execution report is the finished job's `result`. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "student_promotions_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionBatch"];
+                };
+            };
+        };
+    };
+    "student_promotions_:revert_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromotionBatch"];
+                };
+            };
+        };
+    };
+    "student_promotions_:submit_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     student_transfers_list: {
         parameters: {
             query?: {
@@ -6157,6 +7899,290 @@ export interface operations {
             };
         };
     };
+    teacher_subject_allocations_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_primary?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                section_id?: string;
+                staff_id?: string;
+                subject_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTeacherAllocationList"];
+                };
+            };
+        };
+    };
+    teacher_subject_allocations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeacherAllocation"];
+                "application/x-www-form-urlencoded": components["schemas"]["TeacherAllocation"];
+                "multipart/form-data": components["schemas"]["TeacherAllocation"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherAllocation"];
+                };
+            };
+        };
+    };
+    teacher_subject_allocations_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this teacher subject allocation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherAllocation"];
+                };
+            };
+        };
+    };
+    teacher_subject_allocations_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this teacher subject allocation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    teacher_subject_allocations_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this teacher subject allocation. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedTeacherAllocation"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedTeacherAllocation"];
+                "multipart/form-data": components["schemas"]["PatchedTeacherAllocation"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherAllocation"];
+                };
+            };
+        };
+    };
+    teacher_subject_allocations_load_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregate load per teacher. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    teacher_substitutions_list: {
+        parameters: {
+            query?: {
+                absent_staff_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                date?: string;
+                date__gte?: string;
+                date__lte?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `proposed` - Proposed
+                 *     * `confirmed` - Confirmed
+                 *     * `declined` - Declined
+                 *     * `completed` - Completed
+                 *     * `cancelled` - Cancelled
+                 */
+                status?: "cancelled" | "completed" | "confirmed" | "declined" | "proposed";
+                substitute_staff_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTeacherSubstitutionList"];
+                };
+            };
+        };
+    };
+    teacher_substitutions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeacherSubstitution"];
+                "application/x-www-form-urlencoded": components["schemas"]["TeacherSubstitution"];
+                "multipart/form-data": components["schemas"]["TeacherSubstitution"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherSubstitution"];
+                };
+            };
+            /** @description §11: wrong absentee, wrong weekday, or the substitute is not free. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    teacher_substitutions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this teacher substitution. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherSubstitution"];
+                };
+            };
+        };
+    };
+    "teacher_substitutions_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherSubstitution"];
+                };
+            };
+        };
+    };
+    "teacher_substitutions_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherSubstitution"];
+                };
+            };
+        };
+    };
     terms_list: {
         parameters: {
             query?: {
@@ -6285,6 +8311,225 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Term"];
+                };
+            };
+        };
+    };
+    timetable_slots_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                room_id?: string;
+                /** @description A search term. */
+                search?: string;
+                section_id?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `published` - Published
+                 */
+                status?: "draft" | "published";
+                teacher_id?: string;
+                weekday?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTimetableSlotList"];
+                };
+            };
+        };
+    };
+    timetable_slots_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimetableSlot"];
+                "application/x-www-form-urlencoded": components["schemas"]["TimetableSlot"];
+                "multipart/form-data": components["schemas"]["TimetableSlot"];
+            };
+        };
+        responses: {
+            /** @description The slot, plus `meta.conflicts` for the section (§16). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimetableSlot"];
+                };
+            };
+        };
+    };
+    timetable_slots_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this timetable slot. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimetableSlot"];
+                };
+            };
+        };
+    };
+    timetable_slots_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this timetable slot. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `data` is null; `meta.conflicts` is the section's remaining list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    timetable_slots_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this timetable slot. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedTimetableSlot"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedTimetableSlot"];
+                "multipart/form-data": components["schemas"]["PatchedTimetableSlot"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimetableSlot"];
+                };
+            };
+        };
+    };
+    "timetables_:publish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TimetableSessionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TimetableSessionRequest"];
+                "multipart/form-data": components["schemas"]["TimetableSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Rows published and superseded, plus the accepted soft conflicts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A hard conflict, a locked session, or no draft to publish. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "timetables_:validate_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TimetableSessionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TimetableSessionRequest"];
+                "multipart/form-data": components["schemas"]["TimetableSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description `conflicts` is the machine-readable list `{type, severity, slot_ids, message}` (§6); `has_hard_conflicts` says whether publish would be refused. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    timetables_my_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Defaults to the tenant's current session. */
+                academic_session_id?: string;
+                /** @description Apply confirmed substitutions for this date. Omitted = the base grid. */
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published cells with confirmed substitutions applied for `?date=`. `meta.audience` says which principal was resolved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveSlot"][];
                 };
             };
         };

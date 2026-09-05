@@ -33,9 +33,10 @@ export interface LiveCredentials {
  *
  * `credentials` defaults to the primary admin (`env.LIVE_ADMIN_*`) but is overridable —
  * a record-scope spec needs a real, narrower identity logged in on its own, not the
- * worker-shared admin session, and `campuses.spec.ts`'s cross-tenant test already
- * hand-rolls this exact login sequence once for its own second identity; a second
- * hand-rolled copy is exactly the duplication this parameter avoids.
+ * worker-shared admin session. Two fixtures are built on it (`liveApiClient` and
+ * `liveOtherTenantApiClient`, both worker-scoped); a spec calling it directly is paying
+ * one login per *test*, so that stays for identities only one spec needs — a `student`
+ * proving record scope, a `principal` proving an approval it alone can give.
  */
 export async function createLiveSession(credentials?: LiveCredentials): Promise<ApiClient> {
   let accessToken: string | null = null;

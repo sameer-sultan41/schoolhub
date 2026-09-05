@@ -1,18 +1,21 @@
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect, type BrowserContext, type Page } from "@playwright/test";
 import type { ApiClient } from "@schoolhub/api-client";
-import type { AuthenticatedUser } from "@schoolhub/types";
+import type { AuthenticatedUser, LoginCredentials } from "@schoolhub/types";
 import { SESSION_COOKIE_NAME } from "@/constants";
 import { buildUser } from "@/data/factories";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
+import { E2E_OTHER_ADMIN_EMAIL } from "@/lib/seed-constants";
 import { MockApi, authModule, reportingModule, tenantModule } from "@/mocks";
 import {
   DashboardPage,
   LoginPage,
+  PromotionBatchPage,
   PublicSitePage,
   StaffPage,
   StudentDetailPage,
   StudentFormPage,
+  WeekGridPage,
 } from "@/pages";
 
 /**
@@ -34,6 +37,16 @@ export interface E2EOptions {
   authUser: AuthenticatedUser;
 }
 
+/**
+ * A second browser identity, signed in on its own context — page plus the page objects a
+ * two-actor journey drives. Extend it as more such journeys need more screens.
+ */
+export interface SecondIdentity {
+  page: Page;
+  dashboardPage: DashboardPage;
+  promotionBatchPage: PromotionBatchPage;
+}
+
 export interface E2EFixtures {
   /** Stub router for browser-side API traffic. Already installed on `page`. */
   mockApi: MockApi;
@@ -48,6 +61,23 @@ export interface E2EFixtures {
   publicSitePage: PublicSitePage;
   studentFormPage: StudentFormPage;
   studentDetailPage: StudentDetailPage;
+  promotionBatchPage: PromotionBatchPage;
+  weekGridPage: WeekGridPage;
+  /**
+   * Signs a **second** identity in, on its own browser context, and hands back that
+   * context's page objects.
+   *
+   * Approval workflows are two-actor by design — academics.md §7.2's approver may not be
+   * the preparer, and the same shape recurs in student transfers and HR leave — so a
+   * journey has to hold two authenticated sessions at once. Two contexts rather than
+   * sign-out/sign-in in one: the first identity stays signed in while the second acts, so
+   * the journey costs two real logins instead of three (`AuthEndpointThrottle` allows 10
+   * requests/minute per IP across login/refresh/logout — see e2e/AGENTS.md).
+   *
+   * The context starts with no storage state, so it never inherits the `live` project's
+   * `storageState` file, and it is closed when the test ends.
+   */
+  signInAsSecondIdentity: (credentials: LoginCredentials) => Promise<SecondIdentity>;
 }
 
 export interface E2EWorkerFixtures {
@@ -58,6 +88,17 @@ export interface E2EWorkerFixtures {
    * this instead of authenticating themselves.
    */
   liveApiClient: ApiClient;
+  /**
+   * The same, authenticated as the **other** tenant's real admin
+   * (`E2E_OTHER_ADMIN_EMAIL`) — the second identity every cross-tenant isolation probe
+   * needs to prove a real row is 404 rather than 403.
+   *
+   * Worker-scoped for the same reason `liveApiClient` is: each spec file that probes
+   * isolation would otherwise burn its own login out of the 10/min budget, and there are
+   * now three of them (campuses, academics curriculum, academics allocations). Lazy —
+   * a worker that never destructures it never logs in.
+   */
+  liveOtherTenantApiClient: ApiClient;
 }
 
 export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
@@ -136,6 +177,43 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
     await use(new StudentDetailPage(page));
   },
 
+  promotionBatchPage: async ({ page }, use) => {
+    await use(new PromotionBatchPage(page));
+  },
+
+  weekGridPage: async ({ page }, use) => {
+    await use(new WeekGridPage(page));
+  },
+
+  signInAsSecondIdentity: async ({ browser }, use) => {
+    const contexts: BrowserContext[] = [];
+
+    await use(async (credentials) => {
+      // `baseURL` is a project `use` option applied by Playwright's own `context`
+      // fixture, not by `browser.newContext()` — a context created here has none unless
+      // it is passed explicitly, and every relative `page.goto` would then throw.
+      const context = await browser.newContext({
+        baseURL: env.DASHBOARD_URL,
+        storageState: { cookies: [], origins: [] },
+      });
+      contexts.push(context);
+
+      const page = await context.newPage();
+      const loginPage = new LoginPage(page);
+      await loginPage.goto();
+      await loginPage.signIn(credentials);
+      return {
+        page,
+        dashboardPage: new DashboardPage(page),
+        promotionBatchPage: new PromotionBatchPage(page),
+      };
+    });
+
+    for (const context of contexts) {
+      await context.close();
+    }
+  },
+
   liveApiClient: [
     // Playwright parses this function's source to learn which fixtures it depends on, so
     // the first parameter must literally be an (empty) destructuring pattern — a named
@@ -143,6 +221,20 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
       const client = await createLiveSession();
+      await use(client);
+    },
+    { scope: "worker" },
+  ],
+
+  liveOtherTenantApiClient: [
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      const client = await createLiveSession({
+        identifier: E2E_OTHER_ADMIN_EMAIL,
+        // Both seeded admins share one password — seed_e2e_data.py sets both from
+        // E2E_LIVE_ADMIN_PASSWORD, the same env var `env.LIVE_ADMIN_PASSWORD` reads.
+        password: env.LIVE_ADMIN_PASSWORD,
+      });
       await use(client);
     },
     { scope: "worker" },

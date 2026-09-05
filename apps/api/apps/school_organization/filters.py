@@ -17,7 +17,6 @@ from apps.school_organization.models import (
     AcademicSession,
     Campus,
     Class,
-    ClassSubject,
     Department,
     House,
     Section,
@@ -75,24 +74,6 @@ class SubjectFilterSet(django_filters.FilterSet):
     class Meta:
         model = Subject
         fields = ["department_id", "subject_type", "is_active"]
-
-
-class ClassSubjectFilterSet(django_filters.FilterSet):
-    academic_session_id = django_filters.UUIDFilter(field_name="academic_session_id")
-    class_id = django_filters.UUIDFilter(field_name="school_class_id")
-    subject_id = django_filters.UUIDFilter(field_name="subject_id")
-    campus_id = django_filters.UUIDFilter(field_name="campus_id")
-
-    class Meta:
-        model = ClassSubject
-        fields = [
-            "academic_session_id",
-            "class_id",
-            "subject_id",
-            "campus_id",
-            "is_elective",
-            "elective_group",
-        ]
 
 
 class HouseFilterSet(django_filters.FilterSet):

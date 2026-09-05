@@ -78,6 +78,7 @@ greenvalley
 greppable
 healthcheck
 healthz
+homeroom
 hotspots
 hrefs
 htmlcov
@@ -119,6 +120,8 @@ NOTIF
 Noto
 notschoolhub
 nspname
+officedocument
+openxmlformats
 overdues
 permissioned
 pgbouncer
@@ -201,6 +204,7 @@ triaging
 tsvector
 TTFB
 Turbopack
+unallocated
 undoable
 ungated
 unindexed
@@ -227,4 +231,5 @@ weightage
 weightages
 wildcarded
 wireframes
+wordprocessingml
 xact
