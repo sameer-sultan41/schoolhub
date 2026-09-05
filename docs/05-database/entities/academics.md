@@ -289,12 +289,13 @@ Dated substitution of the scheduled teacher for one slot (typically triggered by
 | date | date | no | — | Must fall on the slot's weekday and within the session |
 | absent_staff_id | uuid | no | — | FK → staff(id); the scheduled teacher |
 | substitute_staff_id | uuid | no | — | FK → staff(id); ≠ absent_staff_id; must be free that period (service-enforced) |
+| room_id | uuid | yes | null | FK → rooms(id); ad-hoc room change for this date only, null = keep the slot's room. Must be free that period (service-enforced) |
 | reason | varchar(200) | yes | null | e.g. approved leave reference |
 | leave_request_id | uuid | yes | null | FK → leave_requests(id) (see `attendance.md`) |
 | status | varchar(20) | no | `'proposed'` | Enum: `proposed` \| `confirmed` \| `declined` \| `completed` \| `cancelled` |
 
-Indexes: unique (tenant_id, timetable_slot_id, date); (tenant_id, substitute_staff_id, date); (tenant_id, absent_staff_id, date).
-Relationships: N:1 → timetable_slots, staff (absent/substitute), leave_requests.
+Indexes: unique (tenant_id, timetable_slot_id, date); (tenant_id, substitute_staff_id, date); (tenant_id, absent_staff_id, date); (tenant_id, room_id, date).
+Relationships: N:1 → timetable_slots, staff (absent/substitute), rooms, leave_requests.
 
 ## Relationship Overview
 

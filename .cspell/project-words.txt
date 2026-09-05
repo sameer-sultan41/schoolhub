@@ -76,6 +76,7 @@ greenvalley
 greppable
 healthcheck
 healthz
+homeroom
 hotspots
 hrefs
 htmlcov
@@ -196,6 +197,7 @@ triaging
 tsvector
 TTFB
 Turbopack
+unallocated
 undoable
 ungated
 unindexed

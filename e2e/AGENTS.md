@@ -45,11 +45,14 @@ moment `tests/live/` grows past a handful of specs, so don't do that either — 
 - So: **every live browser spec does its own real login**, guest context —
   `test.use({ storageState: { cookies: [], origins: [] } })` at the top of the file, then
   `loginPage.signIn(...)` — the same pattern `login.spec.ts`, `session.spec.ts`,
-  `dashboard-summary.spec.ts` and `tenant-isolation.spec.ts` all use. That's ~8 real
+  `dashboard-summary.spec.ts` and `tenant-isolation.spec.ts` all use. That's ~9 real
   logins per full run today (the two admission-journey tests and the two-identity
-  promotion journey each carry more than one), plus a refresh per cold navigation, which
-  counts against the same 10/min budget. Re-check that math before adding another one —
-  and prefer spending an existing session over opening a new one.
+  promotion journey each carry more than one; the timetable build-and-publish journey
+  carries exactly one), plus a refresh per cold navigation, which counts against the
+  same 10/min budget. Re-check that math before adding another one — and prefer spending
+  an existing session over opening a new one. Reaching a screen through a nav-link click
+  rather than `page.goto` costs no refresh at all, which is the cheapest saving
+  available.
 - A **two-actor** journey (an approval workflow: promotions today, transfers and leave
   later) needs two authenticated sessions at once. Use the `signInAsSecondIdentity`
   fixture, which signs the second identity into its own browser context: the first stays

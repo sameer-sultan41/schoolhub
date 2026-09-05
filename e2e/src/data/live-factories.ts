@@ -76,6 +76,54 @@ export function buildLiveSubject(overrides: Partial<{ name: string; code: string
   };
 }
 
+export function buildLiveRoom(
+  overrides: Partial<{ name: string; code: string; room_type: string; capacity: number }> = {},
+) {
+  const tag = uniqueTag();
+  return {
+    name: `E2E Room ${tag}`,
+    code: `E2E${tag}`.slice(0, 20),
+    room_type: "classroom",
+    // Comfortably above any section this suite builds, so `room_over_capacity` — the
+    // one soft finding a room can produce — never fires for a reason a spec did not ask
+    // for. `RoomSerializer.validate_capacity` refuses anything below 1.
+    capacity: 40,
+    is_active: true,
+    ...overrides,
+  };
+}
+
+/**
+ * A period on the caller's *own* campus, in the evening.
+ *
+ * The evening window is the load-bearing part. `assert_period_does_not_overlap` compares
+ * a new period against the campus's own rows **and** every tenant-wide one, and
+ * `seed_e2e_data` seeds the bell schedule tenant-wide across 08:00-11:20 — so a morning
+ * fixture here would be refused with a 422 that has nothing to do with the spec.
+ *
+ * `index` separates two periods created on the *same* campus within one test: the
+ * sequence is unique per (campus, sequence) and the times must not overlap each other
+ * either. Across tests it does not need to vary, because every test builds its own
+ * run-unique campus.
+ */
+export function buildLivePeriod(
+  index = 0,
+  overrides: Partial<{ name: string; sequence: number; is_break: boolean }> = {},
+) {
+  const tag = uniqueTag();
+  const startHour = 18 + index;
+  return {
+    name: `E2E Period ${tag}`,
+    // Well clear of the seeded schedule's 1-5 so a spec reading the bell schedule back
+    // can tell the two apart by sequence alone.
+    sequence: 90 + index,
+    start_time: `${String(startHour).padStart(2, "0")}:00:00`,
+    end_time: `${String(startHour).padStart(2, "0")}:45:00`,
+    is_break: false,
+    ...overrides,
+  };
+}
+
 export function buildLiveHouse(overrides: Partial<{ name: string; code: string }> = {}) {
   const tag = uniqueTag();
   return {

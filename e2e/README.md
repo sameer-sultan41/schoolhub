@@ -60,7 +60,12 @@ seeds what the academics lane cannot create for itself: the `module.academics` /
 `module.academics` on **both** tenants so a cross-tenant probe answers 404 rather than
 being turned away by the feature gate first), one active teaching staff member, a
 subject and a curriculum row, and a `principal` identity — approvals need a second
-person by design. Set
+person by design. The timetable lane adds `module.timetable` (again on both tenants), a
+**tenant-wide** bell schedule — periods cannot be duplicated per test without tripping
+§11's non-overlap rule, and a campus-bound one would be `period_wrong_campus` against a
+section on any other campus — three rooms, a published week for the baseline section
+with the teacher allocation that makes it publishable, a second teaching staff member,
+and one substitution left in `proposed` so an approval has something to act on. Set
 `E2E_LIVE_ADMIN_PASSWORD` before running the script if you want a non-default password;
 it must then match what you export for `pnpm e2e:live` too.
 
@@ -99,6 +104,7 @@ e2e/
 │       ├── live-api.ts             one real login per worker, wired into @schoolhub/api-client
 │       ├── live-crud-lifecycle.ts  the create/list/patch/delete shape every resource shares
 │       ├── live-promotion-batch.ts the prerequisite chain a promotion batch needs
+│       ├── live-timetable-grid.ts  the prerequisite chain a publishable week grid needs
 │       └── seed-constants.ts       identifiers mirrored from seed_e2e_data.py
 └── tests/{dashboard,website,live}/
     └── live/

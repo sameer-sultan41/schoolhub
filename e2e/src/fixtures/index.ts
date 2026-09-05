@@ -15,6 +15,7 @@ import {
   StaffPage,
   StudentDetailPage,
   StudentFormPage,
+  WeekGridPage,
 } from "@/pages";
 
 /**
@@ -61,6 +62,7 @@ export interface E2EFixtures {
   studentFormPage: StudentFormPage;
   studentDetailPage: StudentDetailPage;
   promotionBatchPage: PromotionBatchPage;
+  weekGridPage: WeekGridPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
    * context's page objects.
@@ -177,6 +179,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   promotionBatchPage: async ({ page }, use) => {
     await use(new PromotionBatchPage(page));
+  },
+
+  weekGridPage: async ({ page }, use) => {
+    await use(new WeekGridPage(page));
   },
 
   signInAsSecondIdentity: async ({ browser }, use) => {

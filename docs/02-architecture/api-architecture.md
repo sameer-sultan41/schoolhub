@@ -39,6 +39,9 @@
 // error (RFC 9457 problem-details style)
 { "error": { "code": "validation_error", "message": "…", "details": [{ "field": "email", "issue": "…" }], "request_id": "…" } }
 ```
+
+`error.meta` is an optional fifth key, present only when a failure carries context a client has to *act* on rather than display. `details` is a flat list of `{field, issue}` strings and the handler flattens any nested value into it one leaf at a time — right for field errors, destructive for anything with shape. A timetable publish refusal returns every clashing cell so the grid can highlight both sides of a double booking; as `details` that arrived as `conflicts[0].slot_ids` repeated once per id, of which a client keeping the first issue per field name retains only one. Raise `DomainRuleViolation(detail, meta={...})` to use it; the payload passes through as JSON untouched, and its shape belongs to the endpoint, not the envelope.
+
 - Status codes: 200/201/204 success; 400 validation; 401 unauthenticated; 403 permission/tenant denial; 404 not-found **and** cross-tenant access (never reveal existence); 409 conflict; 422 domain-rule violation; 429 rate-limited; 5xx server.
 - Every response carries `X-Request-ID` for log correlation.
 

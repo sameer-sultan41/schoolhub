@@ -60,6 +60,20 @@ export interface ApiErrorBody {
   message: string;
   details?: ApiErrorDetail[];
   request_id: string;
+  /**
+   * Structured context for failures a client has to act on rather than merely
+   * display — present only when the server had some, absent on ordinary
+   * validation errors.
+   *
+   * It exists because `details` is a flat list of `{field, issue}` strings, and
+   * flattening destroys anything with shape: a timetable publish refusal hands
+   * back every clashing cell so the grid can highlight both sides of a double
+   * booking, and as `details` that arrived as `conflicts[0].slot_ids` repeated
+   * once per id, of which `fieldErrors()` keeps only the first.
+   *
+   * Untyped on purpose — the shape is the endpoint's, not the envelope's.
+   */
+  meta?: Record<string, unknown>;
 }
 
 export interface ApiErrorEnvelope {

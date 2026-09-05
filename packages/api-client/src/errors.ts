@@ -8,6 +8,12 @@ export class ApiError extends Error {
   readonly code: string;
   readonly details: ApiErrorDetail[];
   readonly requestId: string | null;
+  /**
+   * Structured context the server attached to this failure, verbatim — see
+   * `ApiErrorBody.meta`. Empty for every error that carried none, so a caller
+   * reads it without a presence check.
+   */
+  readonly meta: Record<string, unknown>;
   /** HTTP status, or 0 when the request never reached the server. */
   readonly status: number;
   readonly url: string;
@@ -19,6 +25,7 @@ export class ApiError extends Error {
     url: string;
     details?: ApiErrorDetail[];
     requestId?: string | null;
+    meta?: Record<string, unknown>;
     cause?: unknown;
   }) {
     super(init.message, init.cause === undefined ? undefined : { cause: init.cause });
@@ -28,6 +35,7 @@ export class ApiError extends Error {
     this.url = init.url;
     this.details = init.details ?? [];
     this.requestId = init.requestId ?? null;
+    this.meta = init.meta ?? {};
   }
 
   /** 401 — no valid credentials. Triggers the refresh-then-retry path once. */
@@ -108,6 +116,10 @@ export function parseErrorEnvelope(payload: unknown): ApiErrorBody | null {
     message: error.message,
     details,
     request_id: typeof error.request_id === "string" ? error.request_id : "",
+    // Passed through as-is: its shape belongs to the endpoint that sent it, and
+    // the whole point of `meta` is that nothing between the raiser and the
+    // caller reshapes it.
+    ...(isRecord(error.meta) ? { meta: error.meta } : {}),
   };
 }
 

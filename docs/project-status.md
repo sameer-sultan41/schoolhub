@@ -18,7 +18,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | ---- | ------- | ------ |
 | 0 — Foundation | tenancy, auth/RBAC, [`school-organization`](03-modules/school-organization.md) | Done in substance — tenancy/RBAC/audit/API plumbing in `apps/api/core/`, `school_organization` Django app shipped and merged |
 | 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **Both full-stack complete** — `student-management` (PRs 1-4) and `staff-management` (this PR), see the per-module matrix below |
-| 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **In progress.** `academics` backend shipped (this PR); `timetable` and `attendance` not started. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
+| 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **In progress.** `academics` shipped; `timetable` shipped (this PR); `attendance` not started. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
 | 3–7 | examinations, fees-finance, communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started (fees-finance has a spec-only PR: voucher/receipt/birthday-card docs) |
 
 ## Per-module implementation matrix
@@ -29,6 +29,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | student-management | done (CRUD, guardians/documents/files, enrollment lifecycle/transfers, import/export/ID cards) | done (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs, import wizard, ID-card batch action) | — | done |
 | staff-management | done (CRUD, designations, qualifications/documents with verification, invite/exit, import/export) | done (list/detail/create/edit + Qualifications/Documents tabs, import wizard) | — | done |
 | academics | done (curriculum CRUD + `:clone`, teacher allocation + load summary, the promotion batch state machine with segregation of duties and idempotent execution) | — | live-lane API journeys + one promotion browser CUJ | done |
+| timetable | done (rooms/periods CRUD, draft slot grid with `meta.conflicts` on every edit, `:validate` / `:publish` with supersede-by-end-dating, `GET /timetables/my` for teacher/student/guardian, substitutions + `:approve`/`:reject`) | done (week grid editor, conflict panel, publish action, My timetable, substitutions queue) | live-lane API journeys + one build-and-publish browser CUJ | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
 | everything else (13 modules) | — | — | — | done (spec exists; nothing implemented) |
 
@@ -81,12 +82,11 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
-  staff-management.** Fees, attendance, academics, timetable, examinations,
+  staff-management + timetable.** Fees, attendance, academics, examinations,
   communication, parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
-- **No Tier 2+ backend module.** `apps/api/apps/` has `school_organization`,
-  `student_management`, and `staff_management` only — Tier 1 ("People") is
-  now complete.
+- **Tier 2 is two modules in.** `apps/api/apps/` now also has `academics` and
+  `timetable`; `attendance` is the tier's remaining module.
 - **`e2e`'s `live` project is opt-in only** — needs the real docker-compose
   stack, not part of the PR gate. Trigger it via `.github/workflows/e2e-live.yml`
   (`workflow_dispatch` or the nightly schedule).
@@ -104,6 +104,26 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
+- **`timetable`'s gaps are named, not hidden.** `POST
+  /timetables/{section_id}:generate-draft` is **not built**: it is AI-TTB-01,
+  Phase 3 work that has to go through the `core/ai` gateway (AGENTS.md hard
+  rule 6), and that package does not exist — a 202 pointing at a job nothing
+  runs would be worse than the omission. Also absent, each lacking a §16
+  endpoint to hang it on: §13's five reports, §6's copy-from-previous-session
+  and bulk-clear, AI-TTB-03 substitute ranking, and PDF/Excel/iCal export —
+  `timetable.timetable.export` is registered as §4 declares it but no route
+  exercises it, the same deliberate shape as `staff.performance-review.*`.
+  Two of §12's five notification triggers are deferred to the communication
+  module, which owns the recipient rules for resolving a whole section's
+  families. `services._slot_weekday` is correct only while a tenant starts its
+  week on Monday; the real conversion belongs with the tenant week-start
+  setting, which does not exist yet.
+- **`teacher_substitutions.room_id` was added to the locked entity map.**
+  `timetable.md` §6 and §15 both promise "ad-hoc room change supported on the
+  substitution" while `entities/academics.md`'s column list omitted the column.
+  The column and its clash guard shipped and the entity doc now agrees — an
+  override that could double-book a room would have been the one booking path
+  nothing checked.
 - **Feature-flag enforcement and per-tenant number counters now exist**
   (`core.tenancy.features`, `core.tenancy.sequences`, PR 1) — built as
   `student-management` foundation, reusable by every later module.

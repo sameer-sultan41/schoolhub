@@ -90,3 +90,65 @@ class ErrorCodeContractTests(APITestCase):
             set(),
             "codes the client expects that the server never emits",
         )
+
+
+class ErrorMetaEnvelopeTests(APITestCase):
+    """`error.meta` — structured context that must survive the handler intact.
+
+    `_flatten_details` walks any nested value in `detail` into a flat
+    `[{field, issue}]` list. That is right for field errors and destructive for
+    anything with shape: a list of objects arrives as one string per leaf, and a
+    client keeping the first issue per field name silently drops the rest. The
+    timetable publish refusal is the case that surfaced it — it hands back every
+    clashing cell so the grid can highlight both sides of a double booking, and
+    flattening reduced that to one.
+
+    These pin the envelope itself rather than any one endpoint, because the next
+    module to need it (attendance's per-row bulk-mark failures) will reach for
+    the same key.
+    """
+
+    def render(self, exc):
+        from rest_framework.test import APIRequestFactory
+
+        from core.api.exceptions import envelope_exception_handler
+
+        request = APIRequestFactory().post("/api/v1/anything")
+        return envelope_exception_handler(exc, {"request": request})
+
+    def test_structured_meta_passes_through_as_json(self):
+        from core.api.exceptions import DomainRuleViolation
+
+        payload = {"conflicts": [{"type": "teacher_double_booked", "slot_ids": ["a", "b"]}]}
+
+        response = self.render(DomainRuleViolation({"non_field": "Nope."}, meta=payload))
+
+        self.assertEqual(response.data["error"]["meta"], payload)
+
+    def test_meta_is_absent_when_the_raiser_supplied_none(self):
+        """The common envelope is unchanged — this is an optional fifth key, not
+        a new required one."""
+        from core.api.exceptions import DomainRuleViolation
+
+        response = self.render(DomainRuleViolation({"email": "Already taken."}))
+
+        self.assertNotIn("meta", response.data["error"])
+
+    def test_details_still_flattens_the_human_readable_half(self):
+        """`meta` does not replace `details`; a caller with no special handling
+        still gets a sentence to show."""
+        from core.api.exceptions import DomainRuleViolation
+
+        response = self.render(DomainRuleViolation({"non_field": "Nope."}, meta={"conflicts": []}))
+
+        self.assertEqual(
+            response.data["error"]["details"], [{"field": "non_field", "issue": "Nope."}]
+        )
+
+    def test_a_plain_drf_error_is_unaffected(self):
+        from rest_framework import exceptions
+
+        response = self.render(exceptions.NotFound())
+
+        self.assertNotIn("meta", response.data["error"])
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

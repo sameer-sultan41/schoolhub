@@ -16,6 +16,7 @@ export const NAV_ITEMS: {
   { key: "staff", href: "/staff", module: "staff" },
   { key: "attendance", href: "/attendance", module: "attendance" },
   { key: "academics", href: "/academics", module: "academics" },
+  { key: "timetable", href: "/timetable", module: "timetable" },
   { key: "fees", href: "/fees", module: "fees" },
   { key: "admissions", href: "/admissions", module: "admissions" },
   { key: "communication", href: "/communication", module: "communication" },

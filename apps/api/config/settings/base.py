@@ -72,6 +72,7 @@ MODULE_APPS = [
     "apps.student_management",
     "apps.staff_management",
     "apps.academics",
+    "apps.timetable",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
