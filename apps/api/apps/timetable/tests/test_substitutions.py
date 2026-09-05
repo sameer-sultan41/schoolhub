@@ -453,7 +453,7 @@ class RoomOverrideTests(SubstitutionTestCase):
         response = self.propose(room_id=str(self.lab.pk))
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("room_id", response.json()["error"]["details"])
+        self.assertIn("room_id", {row["field"] for row in response.json()["error"]["details"]})
 
     def test_two_substitutions_cannot_move_into_the_same_room_and_period(self) -> None:
         with tenant_context(self.tenant.id):
@@ -480,7 +480,7 @@ class RoomOverrideTests(SubstitutionTestCase):
         response = self.propose(room_id=str(self.lab.pk))
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("room_id", response.json()["error"]["details"])
+        self.assertIn("room_id", {row["field"] for row in response.json()["error"]["details"]})
 
     def test_naming_the_slots_own_room_is_not_a_clash_with_itself(self) -> None:
         """Restating the room the class is already in is a no-op, not a booking

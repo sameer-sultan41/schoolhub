@@ -705,12 +705,16 @@ class MyTimetableTests(TimetableAPITestCase):
     def test_a_teacher_sees_only_the_periods_they_hold(self) -> None:
         with tenant_context(self.tenant.id):
             colleague = StaffFactory(tenant=self.tenant, campus=self.campus)
+            # Not primary: the base fixture's allocation already holds that for
+            # this (section, subject), and `tsa_one_primary_per_section_subject`
+            # allows exactly one. A colleague sharing the cell is a secondary.
             TeacherAllocationFactory(
                 tenant=self.tenant,
                 academic_session=self.session,
                 section=self.section,
                 subject=self.subject,
                 staff=colleague,
+                is_primary=False,
             )
         mine = self.publish(self.make_slot())
         self.publish(self.make_slot(period=self.periods[1], staff=colleague))
