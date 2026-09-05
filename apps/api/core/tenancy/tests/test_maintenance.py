@@ -84,25 +84,13 @@ class ForEachTenantTests(TestCase):
         self.assertEqual(summary["affected"], (summary["tenants"] - 1) * 2)
 
     def test_the_default_manager_sees_nothing_without_a_bound_tenant(self) -> None:
-        """Why for_each_tenant binds per tenant instead of sweeping cross-tenant once.
+        """Layer 1 of why for_each_tenant binds per tenant rather than sweeping once.
 
         Two layers stop an unbound sweep, and neither of them *errors* — they
         return zero rows, which is the failure mode a maintenance job must not
-        have: it would look like a successful sweep forever while pruning nothing.
-
-        1. `TenantScopedManager` returns `.none()` when no tenant is bound. That
-           is what this test asserts, and it holds everywhere.
-        2. The RLS policy resolves `current_setting('app.tenant_id', true)` to
-           NULL when unbound, so `tenant_id = NULL` is NULL and no row matches.
-           **That layer is deliberately not asserted here**, because CI cannot
-           demonstrate it: `.github/workflows/api.yml` connects as `schoolhub`,
-           the postgres image's `POSTGRES_USER`, which is a superuser *and* owns
-           the tables — and a superuser bypasses RLS even with FORCE. The compose
-           stack and Terraform both use the non-owning, non-BYPASSRLS
-           `schoolhub_app` role (`infra/postgres/init/02-app-role.sql`); CI does
-           not. Asserting layer 2 here would pass or fail on the runner's role
-           rather than on the policy, so it stays a code comment until CI runs as
-           a non-superuser. See docs/project-status.md.
+        have: it would look like a successful sweep forever while pruning
+        nothing. This asserts the first, `TenantScopedManager` returning
+        `.none()` with no tenant bound; the test below asserts the second.
         """
         set_database_tenant(None)
 
@@ -114,3 +102,43 @@ class ForEachTenantTests(TestCase):
 
         set_database_tenant(None)
         self.assertEqual(BackgroundJob.objects.count(), 0)
+
+    def test_rls_itself_hides_the_rows_from_an_unbound_sweep(self) -> None:
+        """Layer 2: the database, not the Python manager.
+
+        This assertion could not be made until CI stopped connecting as a
+        superuser. `.github/workflows/api.yml` used to use `schoolhub`, the
+        postgres image's `POSTGRES_USER`, which both owns the tables and
+        bypasses RLS even with FORCE set — so the test would have passed on the
+        Python manager alone and proved nothing about the policy. CI now creates
+        and connects as the non-owning, NOBYPASSRLS `schoolhub_app` role, which
+        is what the compose stack and Terraform have always used, so the two
+        layers can finally be told apart.
+
+        Kept separate from `tests/test_rls_enforcement.py`, which asserts the
+        same mechanism platform-wide, because the two answer different
+        questions: that one pins that RLS works at all, this one pins *why
+        `for_each_tenant` is shaped the way it is*. Delete this and the helper's
+        design rationale has no executable counterpart — a later refactor to a
+        single cross-tenant sweep would pass the platform test and silently prune
+        nothing.
+
+        `all_tenants` is the point: it deliberately skips the Python scoping, so
+        the only thing left standing between the query and the rows is the RLS
+        policy. `current_setting('app.tenant_id', true)` resolves to NULL when
+        nothing is bound, `tenant_id = NULL` is NULL rather than true, and no row
+        matches — quietly, which is exactly why `for_each_tenant` exists.
+        """
+        with tenant_context(self.first.pk):
+            BackgroundJobFactory(tenant=self.first)
+            self.assertEqual(BackgroundJob.all_tenants.count(), 1)
+
+        set_database_tenant(None)
+
+        self.assertEqual(
+            BackgroundJob.all_tenants.count(),
+            0,
+            "the unscoped manager still saw rows — RLS is not being enforced for "
+            "this connection, so every cross-tenant test in the suite is only "
+            "testing the Python manager",
+        )

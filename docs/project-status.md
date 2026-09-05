@@ -237,24 +237,23 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   which is why the sweep shape matters. A static dict, not `django-celery-beat`:
   reporting-analytics (Tier 7) is the module that genuinely needs tenant-editable
   schedules and should bring that dependency with it.
-- **RLS is not actually exercised in CI, despite what the testing strategy
-  claims** (found in PR 0, **not fixed** — it needs its own PR).
-  `07-quality/testing-strategy.md` §1.4 states the backend test database has
-  "RLS enabled with the non-bypass app role, so isolation tests exercise the
-  real mechanism, not a mock", and `AGENTS.md` invariant 1 says the app role has
-  "neither `BYPASSRLS` nor table ownership". Both are true of the compose stack
-  and Terraform, which connect as `schoolhub_app`
-  (`infra/postgres/init/02-app-role.sql`). Neither is true of CI:
-  `.github/workflows/api.yml` sets `POSTGRES_USER: schoolhub` and connects as
-  it, and the postgres image makes `POSTGRES_USER` a **superuser** that also
-  owns every table — a superuser bypasses RLS even with `FORCE ROW LEVEL
-  SECURITY`. So every cross-tenant test in the suite currently passes on
-  `TenantScopedManager` (the Python layer) alone; the database layer is never
-  demonstrated. `tests/test_rls_coverage.py` does not catch this because it
-  inspects the catalog (policy present, RLS enabled, forced) rather than
-  enforcement for the connecting role. Fix: provision a non-superuser,
-  non-owning role in the CI service and connect as it, plus a test that asserts
-  a bound-tenant-less query really returns nothing at the database level.
+- **RLS is exercised in CI now** (found in PR 0, fixed in PR #34 — see
+  "Deliberately NOT done" above for the full account). CI creates a
+  `NOSUPERUSER NOCREATEROLE NOBYPASSRLS` `schoolhub_app` role and connects as
+  it, and `apps/api/tests/test_rls_enforcement.py` asserts both that the
+  connecting role cannot bypass and that the policy actually hides rows.
+  **The parity is on RLS enforcement only, not on the role generally** — the
+  workflow's own comment says so and this doc should too. CI's role still holds
+  `CREATEDB`, and it owns the tables it creates, because one role both creates
+  the test database and runs against it. Production splits that across
+  `schoolhub_migrator` (owns everything) and `schoolhub_app` (owns nothing,
+  `NOCREATEDB`, `USAGE` only on schema public). `FORCE ROW LEVEL SECURITY` is
+  what makes the ownership difference stop mattering for isolation — an owner
+  would otherwise bypass its own policies — which is why the enforcement claim
+  holds while the general parity claim does not.
+  `core/tenancy/tests/test_maintenance.py` asserts the unbound case through
+  `all_tenants` — the assertion it had been carrying as a code comment because
+  a superuser connection could not have demonstrated it.
 - **Campus record scope was a 500 on every tenant-wide table.**
   `TenantScopedViewSetMixin` defaults `scope_campus_field` to `"campus_id"`, and
   seven viewsets serve tables that have no such column — `/classes`,
