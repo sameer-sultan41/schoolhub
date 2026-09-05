@@ -236,6 +236,22 @@ class StudentPromotion(TenantOwnedModel):
                 ),
                 name="promotions_approval_fields_together",
             ),
+            # One live batch per student per session pair. The batch itself
+            # cannot be made unique — this table holds one row per student, so
+            # (from_session, to_session, from_class) repeats by design — but a
+            # student sitting in two live batches for the same rollover is
+            # exactly the corruption a duplicate batch causes, and *that* is
+            # indexable. `create_promotion_batch` still checks first so the
+            # ordinary case gets a sentence explaining itself; this is what holds
+            # when two creates race past that unlocked `.exists()`, and the
+            # loser reaches the client as the same 409 through
+            # core/api/exceptions.py's IntegrityError translation. `reverted` is
+            # excluded so a withdrawn batch can be proposed again.
+            models.UniqueConstraint(
+                fields=["tenant", "student", "from_academic_session", "to_academic_session"],
+                name="promotions_student_live_once",
+                condition=models.Q(deleted_at__isnull=True) & ~models.Q(status="reverted"),
+            ),
         ]
         indexes = [
             models.Index(fields=["tenant", "batch_id", "status"], name="promotions_batch_idx"),

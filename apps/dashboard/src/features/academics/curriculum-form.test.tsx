@@ -308,6 +308,38 @@ describe("CurriculumForm", () => {
     expect(mockPatch).not.toHaveBeenCalled();
   });
 
+  it("shows the refreshed row, not the one it was mounted with, when reopened", async () => {
+    /**
+     * The regression: `reset` used to run only on the dialog's *close* edge, so
+     * the form kept its mount-time values for as long as it stayed mounted.
+     * `onSuccess` invalidates every academics query, so editing any other row
+     * re-fetches this one while this dialog is shut — and reopening would show
+     * the stale weekly target and PATCH it back over the fresh one.
+     */
+    const user = userEvent.setup();
+    const { rerender } = renderWithProviders(<CurriculumForm mode="edit" mapping={MAPPING} />);
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(within(screen.getByRole("dialog")).getByLabelText(/Weekly periods/)).toHaveValue(4);
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    // The row changed underneath while the dialog was shut.
+    rerender(
+      <CurriculumForm
+        mode="edit"
+        mapping={{ ...MAPPING, weekly_periods: 7, notes: "Rebalanced for the new term." }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const reopened = screen.getByRole("dialog");
+    expect(within(reopened).getByLabelText(/Weekly periods/)).toHaveValue(7);
+    expect(within(reopened).getByLabelText("Notes")).toHaveValue("Rebalanced for the new term.");
+  });
+
   it("offers no options in any select while the reference lists are still loading", async () => {
     mockSessions = { data: undefined };
     mockClasses = { data: undefined };

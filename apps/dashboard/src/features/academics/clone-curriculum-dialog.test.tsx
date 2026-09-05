@@ -16,6 +16,9 @@ interface Option {
 const SESSIONS: Option[] = [
   { id: "sess1", name: "2025-26" },
   { id: "sess2", name: "2026-27" },
+  // A third target, so a second clone without closing the dialog can aim
+  // somewhere the first one did not.
+  { id: "sess3", name: "2027-28" },
 ];
 let mockSessions: { data: Option[] | undefined } = { data: SESSIONS };
 
@@ -163,6 +166,34 @@ describe("CloneCurriculumDialog", () => {
 
     // A reopened dialog is a second intent, not a retry of the first, so it must
     // not replay the first clone's key.
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledTimes(2);
+    });
+    const firstKey = mockPost.mock.calls[0]?.[2]?.idempotencyKey;
+    expect(firstKey).toEqual(expect.any(String));
+    expect(mockPost.mock.calls[1]?.[2]?.idempotencyKey).not.toBe(firstKey);
+  });
+
+  it("mints a new idempotency key for a second clone without closing the dialog", async () => {
+    mockPost.mockResolvedValue({
+      data: { created: 12, skipped: 3 },
+      meta: undefined,
+      requestId: null,
+      status: 200,
+    });
+
+    const { user, dialog } = await openAndPick("2025-26", "2026-27");
+    await user.click(within(dialog).getByRole("button", { name: "Clone from another session" }));
+    expect(await screen.findByText("12 mappings created, 3 already present.")).toBeInTheDocument();
+
+    // Same dialog, different target. The server replays strictly on
+    // (tenant, key, endpoint) with no body hash, so reusing the first key here
+    // would return the first clone's counts and copy nothing into 2027-28 —
+    // silently, with a success message naming rows it never wrote.
+    await user.click(within(dialog).getByRole("combobox", { name: "Copy into" }));
+    await user.click(await screen.findByRole("option", { name: "2027-28" }));
+    await user.click(within(dialog).getByRole("button", { name: "Clone from another session" }));
+
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledTimes(2);
     });

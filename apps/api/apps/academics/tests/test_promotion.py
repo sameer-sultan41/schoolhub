@@ -7,8 +7,14 @@ out from under them.
 
 from __future__ import annotations
 
+import uuid
+from unittest import mock
+
+from django.db import connection, transaction
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
+from apps.academics import services
 from apps.academics.models import PromotionDecision, PromotionStatus, StudentPromotion
 from apps.academics.tests.base import AcademicsAPITestCase
 from apps.academics.tests.factories import (
@@ -25,6 +31,8 @@ from apps.student_management.tests.factories import (
     StudentFactory,
     StudentGuardianFactory,
 )
+from core.api.exceptions import Conflict
+from core.notifications.models import Notification
 from core.tenancy.context import tenant_context
 
 PREPARE_KEYS = (
@@ -467,3 +475,184 @@ class ExecutionTests(PromotionTestCase):
         with tenant_context(self.tenant.id):
             row = StudentPromotion.objects.alive().get(batch_id=batch_id)
         self.assertEqual(row.status, PromotionStatus.REVERTED)
+
+
+class BatchRaceTests(PromotionTestCase):
+    """The state machine with two callers in it at once (§7.2).
+
+    A batch's status moves batch-wide, so an interleaved pair of transitions is
+    not a partial write to reconcile afterwards — it is a batch in a state the
+    workflow has no name for. Both layers are asserted: the lock the status check
+    takes, and the status the UPDATE itself re-states.
+    """
+
+    def _pending_batch(self) -> str:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.client.post(f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json")
+        return batch_id
+
+    def test_the_status_check_reads_its_rows_under_a_lock(self) -> None:
+        batch_id = self._pending_batch()
+
+        with (
+            tenant_context(self.tenant.id),
+            transaction.atomic(),
+            CaptureQueriesContext(connection) as captured,
+        ):
+            services.assert_batch_in_status(
+                batch_id=uuid.UUID(batch_id), expected=PromotionStatus.PENDING_APPROVAL
+            )
+
+        self.assertTrue(
+            any("FOR UPDATE" in query["sql"] for query in captured.captured_queries),
+            "rows a transition is about to rewrite must be locked while it decides",
+        )
+
+    def test_a_transition_whose_rows_moved_first_is_a_conflict_not_a_half_write(self) -> None:
+        """The losing half of a simultaneous `:approve` and `:reject`.
+
+        With the status only checked and never re-stated in the UPDATE, both
+        writes land and the batch ends up rejected with an approver's name on it
+        — which `promotions_approval_fields_together` permits, because it only
+        couples `approved_by` with `approved_at`.
+        """
+        batch_id = self._pending_batch()
+        approver = self.second_user("academics.promotion.approve")
+        checked = services.assert_batch_in_status
+
+        def reject_between_the_check_and_the_write(*, batch_id, expected):
+            rows = checked(batch_id=batch_id, expected=expected)
+            services.batch_queryset(batch_id).update(status=PromotionStatus.DRAFT)
+            return rows
+
+        with (
+            tenant_context(self.tenant.id),
+            mock.patch.object(
+                services, "assert_batch_in_status", reject_between_the_check_and_the_write
+            ),
+            self.assertRaises(Conflict),
+        ):
+            services.approve_batch(batch_id=uuid.UUID(batch_id), actor_id=approver.pk)
+
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertIsNone(row.approved_by, "a refused approval must leave no approval trail")
+
+    def test_execution_skips_a_row_reverted_after_the_snapshot_was_taken(self) -> None:
+        """The window `execute_batch`'s deliberate per-student commits leave open.
+
+        The row list is read once, outside any lock, so a `:revert` landing
+        mid-loop used to leave execution creating enrollments for every student
+        still in that snapshot.
+        """
+        self.allow(*PREPARE_KEYS, "academics.promotion.execute")
+        with tenant_context(self.tenant.id):
+            classmate = StudentFactory(tenant=self.tenant, campus=self.campus)
+            guardian = GuardianFactory(tenant=self.tenant)
+            StudentGuardianFactory(tenant=self.tenant, student=classmate, guardian=guardian)
+            EmergencyContactFactory(tenant=self.tenant, student=classmate)
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=classmate,
+                academic_session=self.session,
+                school_class=self.school_class,
+                section=self.section,
+            )
+        batch_id = self.create_batch()
+        with tenant_context(self.tenant.id):
+            StudentPromotion.objects.alive().filter(batch_id=batch_id).update(
+                to_section_id=self.next_section.pk
+            )
+        self.client.post(f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json")
+        approver = self.second_user("academics.promotion.approve")
+        authenticate(self.client, approver)
+        self.client.post(f"/api/v1/student-promotions/{batch_id}:approve", {}, format="json")
+        authenticate(self.client, self.user)
+
+        execute_one = services._execute_one
+        reverted: list[str] = []
+
+        def revert_the_rest_after_the_first_student(**kwargs) -> None:
+            execute_one(**kwargs)
+            if not reverted:
+                reverted.append("done")
+                services.batch_queryset(kwargs["row"].batch_id).exclude(
+                    status=PromotionStatus.EXECUTED
+                ).update(status=PromotionStatus.REVERTED)
+
+        with (
+            tenant_context(self.tenant.id),
+            mock.patch.object(services, "_execute_one", revert_the_rest_after_the_first_student),
+        ):
+            report = services.execute_batch(
+                batch_id=uuid.UUID(batch_id), tenant_id=self.tenant.pk, actor_id=self.user.pk
+            )
+
+        self.assertEqual(len(report["enrolled"]), 1)
+        self.assertEqual(len(report["skipped"]), 1)
+        self.assertIn("no longer approved", report["skipped"][0]["reason"])
+        with tenant_context(self.tenant.id):
+            created = (
+                StudentEnrollment.objects.alive().filter(academic_session=self.next_session).count()
+            )
+        self.assertEqual(created, 1, "the reverted half of the batch must not be enrolled")
+
+
+class PromotionNotificationTests(PromotionTestCase):
+    """§12's two promotion triggers, registered since the module shipped but,
+    until now, never emitted."""
+
+    def _notifications(self, event_key: str) -> list[Notification]:
+        with tenant_context(self.tenant.id):
+            return list(Notification.objects.filter(event_key=event_key))
+
+    def test_submitting_a_batch_tells_everyone_who_can_approve_it(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        approver = self.second_user("academics.promotion.approve")
+        batch_id = self.create_batch()
+
+        response = self.client.post(
+            f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        pending = self._notifications("academics.promotion-pending")
+        self.assertEqual([row.user_id for row in pending], [approver.pk])
+        self.assertIn(self.school_class.name, pending[0].body)
+
+    def test_the_preparer_is_never_asked_to_approve_their_own_batch(self) -> None:
+        """Asking them would be an instruction `approve_batch` then refuses."""
+        self.allow(*PREPARE_KEYS, "academics.promotion.approve")
+        batch_id = self.create_batch()
+
+        self.client.post(f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json")
+
+        self.assertEqual(self._notifications("academics.promotion-pending"), [])
+
+    def test_approving_tells_the_preparer_the_outcome(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.client.post(f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json")
+        approver = self.second_user("academics.promotion.approve")
+        authenticate(self.client, approver)
+
+        self.client.post(f"/api/v1/student-promotions/{batch_id}:approve", {}, format="json")
+
+        outcome = self._notifications("academics.promotion-outcome")
+        self.assertEqual([row.user_id for row in outcome], [self.user.pk])
+        self.assertIn("approved", outcome[0].body)
+
+    def test_rejecting_tells_the_preparer_too(self) -> None:
+        """The reviewer who has to act on a rejection is the one who prepared it."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.client.post(f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json")
+        approver = self.second_user("academics.promotion.approve")
+        authenticate(self.client, approver)
+
+        self.client.post(f"/api/v1/student-promotions/{batch_id}:reject", {}, format="json")
+
+        outcome = self._notifications("academics.promotion-outcome")
+        self.assertEqual([row.user_id for row in outcome], [self.user.pk])
+        self.assertIn("returned to draft", outcome[0].body)

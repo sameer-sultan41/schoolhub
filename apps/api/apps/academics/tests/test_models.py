@@ -204,6 +204,26 @@ class PromotionConstraintTests(TestCase):
             row = self._promotion(decision=PromotionDecision.GRADUATED, to_class=None)
         self.assertIsNone(row.to_class_id)
 
+    def test_a_student_cannot_sit_in_two_live_batches_for_one_session_pair(self) -> None:
+        """What survives two `create_promotion_batch` calls racing each other.
+
+        The batch itself cannot carry a unique index — one row per student means
+        (from_session, to_session, from_class) repeats by design — so the
+        enforceable half of "one batch per class per rollover" is per student.
+        """
+        with tenant_context(self.tenant.id):
+            self._promotion(batch_id=uuid.uuid4())
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                self._promotion(batch_id=uuid.uuid4())
+
+    def test_a_reverted_batch_frees_its_students_to_be_proposed_again(self) -> None:
+        """Otherwise a withdrawn rollover would block the corrected one."""
+        with tenant_context(self.tenant.id):
+            self._promotion(batch_id=uuid.uuid4(), status=PromotionStatus.REVERTED)
+            again = self._promotion(batch_id=uuid.uuid4())
+
+        self.assertEqual(again.status, PromotionStatus.DRAFT)
+
     def test_approval_fields_move_together(self) -> None:
         """An approver with no timestamp, or a timestamp with no approver, is a
         half-written approval trail — the audit question is "who and when"."""

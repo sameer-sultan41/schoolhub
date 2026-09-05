@@ -262,6 +262,43 @@ describe("PromotionDecisionForm", () => {
     expect(mockPatch).not.toHaveBeenCalled();
   });
 
+  it("shows the refreshed row, not the one it was mounted with, when reopened", async () => {
+    /**
+     * The regression: `reset` used to run only on the dialog's *close* edge, so
+     * the form kept the values it was mounted with for as long as it stayed
+     * mounted. This form's own `onSuccess` invalidates every academics query, so
+     * editing any other row in the batch re-fetches this one while this dialog is
+     * shut — and reopening would then show the stale decision and write it back
+     * over the fresh one.
+     */
+    const user = userEvent.setup();
+    const { rerender } = renderWithProviders(
+      <PromotionDecisionForm decision={DECISION} studentLabel="stu-1" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(
+      within(screen.getByRole("dialog")).getByRole("combobox", { name: "Decision" }),
+    ).toHaveTextContent("Promoted");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    // The row changed underneath while the dialog was shut.
+    rerender(
+      <PromotionDecisionForm
+        decision={{ ...DECISION, decision: "retained", to_class_id: "class8" }}
+        studentLabel="stu-1"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(
+      within(screen.getByRole("dialog")).getByRole("combobox", { name: "Decision" }),
+    ).toHaveTextContent("Retained");
+  });
+
   it("offers no classes to promote into while the class list is still loading", async () => {
     mockClasses = { data: undefined };
     mockSections = { data: undefined };

@@ -131,7 +131,12 @@ export function PromotionDecisionForm({ decision, studentLabel }: PromotionDecis
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) reset(defaultValues(decision));
+        // Both edges, not just the close. `onSuccess` invalidates the whole
+        // academics module, so editing any other row in the batch re-fetches this
+        // one while this dialog is shut — and a form that only reset on close
+        // would then reopen showing the values it was mounted with and write
+        // them back over the fresh ones.
+        reset(defaultValues(decision));
       }}
     >
       <DialogTrigger asChild>

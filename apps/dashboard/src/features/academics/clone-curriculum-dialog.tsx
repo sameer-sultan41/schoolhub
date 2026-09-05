@@ -48,11 +48,11 @@ const EMPTY_VALUES: CloneCurriculumFormValues = {
 /**
  * §7.1's first step: seed a new session's curriculum from the previous one.
  *
- * The endpoint is idempotency-keyed server-side, so the key is minted once when
- * the dialog opens rather than per submit — a second click after a timeout has
- * to carry the first click's key to replay instead of cloning twice. The service
- * also skips rows the target already has, so a clone converges even when the key
- * is gone.
+ * The endpoint is idempotency-keyed server-side, so the key is minted per
+ * *intent* rather than per submit — a second click after a timeout has to carry
+ * the first click's key to replay instead of cloning twice. The service also
+ * skips rows the target already has, so a clone converges even when the key is
+ * gone.
  */
 export function CloneCurriculumDialog() {
   const t = useTranslations("academics");
@@ -81,6 +81,12 @@ export function CloneCurriculumDialog() {
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.module("academics") });
       setSummary(result);
+      // A clone that landed ends the intent the key belongs to. Without this, a
+      // user who stays in the dialog, picks a different target session and
+      // clones again resends the first key — and the server replays strictly on
+      // (tenant, key, endpoint) with no body hash, so the second clone silently
+      // returns the first one's counts and copies nothing.
+      setIdempotencyKey(newIdempotencyKey());
     },
     onError: (error: unknown) => {
       if (!(error instanceof ApiError)) return;

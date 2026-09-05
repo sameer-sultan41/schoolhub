@@ -109,6 +109,39 @@ class CurriculumViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         serializer.instance = instance
         record_audit(self.request, "create", instance, after=serializer.data)
 
+    def perform_update(self, serializer) -> None:
+        """The same §11 elective rule the delete path has, for the edit path.
+
+        A PATCH can take a row out of a group just as surely as a DELETE can —
+        by renaming its `elective_group`, or by moving the row to another class
+        or session — and the group it leaves behind shrinks either way.
+
+        Not in `CurriculumSerializer.validate()`: the rule is about the state the
+        *old* group is left in, which needs the row's identity and its siblings
+        rather than the payload, and a serializer that reached out for both would
+        be doing the viewset's job. Raising here rolls the update back, since
+        `ATOMIC_REQUESTS` puts the whole request in one transaction.
+        """
+        instance = serializer.instance
+        data = serializer.validated_data
+        moved_out_of = (
+            instance.academic_session_id,
+            instance.school_class_id,
+            instance.elective_group,
+        ) != (
+            data.get("academic_session", instance.academic_session).pk,
+            data.get("school_class", instance.school_class).pk,
+            data.get("elective_group", instance.elective_group),
+        )
+        if instance.elective_group and moved_out_of:
+            services.assert_elective_group_has_options(
+                session=instance.academic_session,
+                school_class=instance.school_class,
+                elective_group=instance.elective_group,
+                exclude_pk=instance.pk,
+            )
+        super().perform_update(serializer)
+
     def perform_destroy(self, instance) -> None:
         """An elective group must not be left with a single option (§11)."""
         if instance.elective_group:
