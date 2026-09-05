@@ -391,65 +391,12 @@ class TermEndpointTests(SchoolOrganizationAPITestCase):
         self.assertEqual(len(response.json()["data"]), 1)
 
 
-class ClassSubjectEndpointTests(SchoolOrganizationAPITestCase):
-    def setUp(self) -> None:
-        super().setUp()
-        with tenant_context(self.tenant.id):
-            self.session = AcademicSessionFactory(tenant=self.tenant)
-            self.grade = ClassFactory(tenant=self.tenant)
-            self.subject = SubjectFactory(tenant=self.tenant)
-
-    def _payload(self, **overrides) -> dict:
-        payload = {
-            "academic_session_id": str(self.session.pk),
-            "class_id": str(self.grade.pk),
-            "subject_id": str(self.subject.pk),
-            "weekly_periods": 4,
-        }
-        payload.update(overrides)
-        return payload
-
-    def test_mapping_a_subject_to_a_class(self) -> None:
-        self.allow("school.subject.view", "school.subject.create")
-        response = self.client.post("/api/v1/class-subjects", self._payload(), format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-    def test_an_elective_mapping_needs_a_group(self) -> None:
-        self.allow("school.subject.view", "school.subject.create")
-        response = self.client.post(
-            "/api/v1/class-subjects", self._payload(is_elective=True), format="json"
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_mapping_the_same_subject_twice_is_a_conflict(self) -> None:
-        self.allow("school.subject.view", "school.subject.create")
-        self.client.post("/api/v1/class-subjects", self._payload(), format="json")
-
-        response = self.client.post("/api/v1/class-subjects", self._payload(), format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-
-    def test_an_inactive_subject_cannot_be_mapped(self) -> None:
-        self.allow("school.subject.view", "school.subject.create")
-        with tenant_context(self.tenant.id):
-            self.subject.is_active = False
-            self.subject.save(update_fields=["is_active"])
-
-        response = self.client.post("/api/v1/class-subjects", self._payload(), format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-    def test_a_closed_session_rejects_new_curriculum_rows(self) -> None:
-        self.allow("school.subject.view", "school.subject.create")
-        with tenant_context(self.tenant.id):
-            self.session.status = SessionStatus.CLOSED
-            self.session.save(update_fields=["status"])
-
-        response = self.client.post("/api/v1/class-subjects", self._payload(), format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+# `/class-subjects` moved to academics in this PR — the route is unchanged but
+# the keys and the feature flag are not, so its endpoint tests moved with it to
+# `apps/academics/tests/test_api.py::CurriculumEndpointTests`. What stays here is
+# the *model* and `map_subject_to_class`, which school_organization still owns
+# (see the ownership note in academics/views.py). Testing an endpoint from the
+# module that no longer guards it means granting keys this module does not own.
 
 
 class SchoolSettingsEndpointTests(SchoolOrganizationAPITestCase):

@@ -207,10 +207,29 @@ class PromotionConstraintTests(TestCase):
     def test_approval_fields_move_together(self) -> None:
         """An approver with no timestamp, or a timestamp with no approver, is a
         half-written approval trail — the audit question is "who and when"."""
+        from django.db import transaction
         from django.utils import timezone
 
-        with tenant_context(self.tenant.id), self.assertRaises(IntegrityError):
-            self._promotion(approved_by=uuid.uuid4(), approved_at=None)
-
-        with tenant_context(self.tenant.id), self.assertRaises(IntegrityError):
-            self._promotion(approved_by=None, approved_at=timezone.now())
+        # Each half needs its own `atomic` block. A constraint violation marks
+        # the surrounding transaction unusable, so without one the second
+        # assertion never reaches the database — it fails with
+        # TransactionManagementError and would pass for the wrong reason if the
+        # constraint were dropped.
+        for fields in (
+            {"approved_by": uuid.uuid4(), "approved_at": None},
+            {"approved_by": None, "approved_at": timezone.now()},
+        ):
+            with (
+                self.subTest(**{k: v is not None for k, v in fields.items()}),
+                # tenant_context outermost: its `SET LOCAL app.tenant_id` must
+                # be set before the savepoint, or rolling the savepoint back
+                # would unbind the tenant for whatever runs next.
+                tenant_context(self.tenant.id),
+                # assertRaises outside atomic, so atomic sees the exception,
+                # rolls the savepoint back and re-raises. The other order lets
+                # assertRaises swallow it and atomic then tries to commit a
+                # transaction the database has already marked unusable.
+                self.assertRaises(IntegrityError),
+                transaction.atomic(),
+            ):
+                self._promotion(**fields)
