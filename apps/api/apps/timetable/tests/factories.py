@@ -110,6 +110,12 @@ class TeacherSubstitutionFactory(factory.django.DjangoModelFactory):
 
     date = MONDAY
     status = SubstitutionStatus.PROPOSED
+    # Derived, never passed: `period` is a copy of the slot's own period (models.py
+    # argues for the column), so a fixture free to set it independently could
+    # write a row `create_substitution` can never produce — and the two occupancy
+    # constraints would then look wrong in a test that is really lying about its
+    # data.
+    period = factory.LazyAttribute(lambda o: o.timetable_slot.period)
 
 
 def enable_feature(tenant, key: str) -> None:

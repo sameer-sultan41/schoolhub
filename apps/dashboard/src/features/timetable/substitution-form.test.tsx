@@ -88,6 +88,22 @@ describe("SubstitutionForm", () => {
     });
   });
 
+  it("never offers a period that was superseded by a republish", async () => {
+    // `status=published` and end-dated are not exclusive: a republish retires
+    // the row it replaces rather than deleting it. Proposing cover against one
+    // would be cover for a class that no longer meets.
+    mockGet.mockResolvedValue(
+      page([{ ...PUBLISHED_SLOT, id: "slot0", effective_to: "2026-08-31" }, PUBLISHED_SLOT]),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SubstitutionForm />);
+    await openAndNarrow(user);
+
+    await user.click(screen.getByRole("combobox", { name: "Period" }));
+
+    expect(await screen.findAllByRole("option", { name: /Period 1/ })).toHaveLength(1);
+  });
+
   it("derives the absent teacher from the chosen period rather than asking for it", async () => {
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionForm />);

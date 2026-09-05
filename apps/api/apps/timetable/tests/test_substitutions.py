@@ -13,6 +13,7 @@ import uuid
 from rest_framework import status
 
 from apps.staff_management.models import EmploymentStatus, StaffType
+from apps.timetable import services
 from apps.timetable.models import SubstitutionStatus, TeacherSubstitution
 from apps.timetable.tests.base import TimetableAPITestCase
 from apps.timetable.tests.factories import (
@@ -29,6 +30,7 @@ from apps.timetable.tests.factories import (
     authenticate,
     grant,
 )
+from core.api.exceptions import Conflict
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -298,6 +300,28 @@ class DecideSubstitutionTests(SubstitutionTestCase):
         self.decide("approve")
 
         self.assertEqual(self.decide("reject").status_code, status.HTTP_409_CONFLICT)
+
+    def test_a_decision_taken_on_a_stale_row_is_refused(self) -> None:
+        """The guard has to outlive the read that precedes it.
+
+        `decide_substitution` used to test the status of whatever row its caller
+        had already fetched, so two decisions arriving together both saw
+        `proposed`, both passed, and the second quietly overwrote the first — the
+        losing approver was told their decision stuck. Holding a row from before
+        someone else decided is the same situation without the thread, and it is
+        the one a test can actually reach.
+        """
+        self.allow("timetable.substitution.approve", "timetable.timetable.view")
+        with tenant_context(self.tenant.id):
+            stale = TeacherSubstitution.objects.alive().get(pk=self.substitution.pk)
+        self.decide("approve")
+
+        with tenant_context(self.tenant.id), self.assertRaises(Conflict):
+            services.decide_substitution(substitution=stale, approve=False, actor_id=self.user.pk)
+
+        with tenant_context(self.tenant.id):
+            self.substitution.refresh_from_db()
+        self.assertEqual(self.substitution.status, SubstitutionStatus.CONFIRMED)
 
     def test_a_rejected_substitution_cannot_be_revived_by_approving(self) -> None:
         self.allow("timetable.substitution.approve", "timetable.timetable.view")

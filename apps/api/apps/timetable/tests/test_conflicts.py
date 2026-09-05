@@ -360,6 +360,39 @@ class ConflictScopeTests(ConflictEngineTestCase):
 
         self.assertIn("section_double_booked", self.types(self.run_engine()))
 
+    def test_a_draft_does_not_clash_with_the_cell_it_replaces(self) -> None:
+        """§5.7 edits a live cell by drafting over it and republishing, so a draft
+        and a published row in one cell are two versions of it, not two classes at
+        once. Judged against each other they are a section clash — and, since a
+        revision usually keeps the teacher and the room, a teacher and a room
+        clash too, all three hard. `:publish` would then refuse the single edit
+        the draft/publish flow exists to make.
+        """
+        self.publish(self.make_slot())
+        self.make_slot()
+
+        self.assertEqual(self.run_engine(), [])
+
+    def test_replacing_one_cell_does_not_excuse_another_section(self) -> None:
+        """Only the cell being replaced drops out of the comparison. A teacher
+        published elsewhere in that period is still double-booked by the draft."""
+        with tenant_context(self.tenant.id):
+            TeacherAllocationFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.other_section,
+                subject=self.subject,
+                staff=self.teacher,
+            )
+        # The replaced cell holds no teacher of its own, so the only teacher in
+        # play is the draft's — otherwise the two published rows would be the
+        # double booking and the assertion would pass without the draft.
+        self.publish(self.make_slot(staff=None, room=None))
+        self.publish(self.make_slot(section=self.other_section, room=None))
+        self.make_slot()
+
+        self.assertIn("teacher_double_booked", self.types(self.run_engine()))
+
     def test_an_end_dated_slot_is_out_of_scope(self) -> None:
         """A superseded version must not block its own replacement."""
         self.make_slot(status=SlotStatus.PUBLISHED, effective_to=self.session.start_date)

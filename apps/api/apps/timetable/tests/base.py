@@ -114,6 +114,21 @@ class TimetableAPITestCase(APITestCase):
         with tenant_context(self.tenant.id):
             return TimetableSlotFactory(**fields)
 
+    def sign_in_as_teacher(self, staff, *keys: str):
+        """Swap the client onto the user behind ``staff``.
+
+        A teacher's `/timetables/my` resolves through `staff.user_id`, so reading
+        it means changing principal — granting the fixture's admin another key
+        would still answer as a learner with no enrollments.
+        """
+        user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            staff.user_id = user.pk
+            staff.save(update_fields=["user_id"])
+        grant(user, *(keys or ("timetable.timetable.view",)))
+        authenticate(self.client, user)
+        return user
+
     def publish(self, slot) -> None:
         """Promote one slot in place, bypassing the publish action.
 

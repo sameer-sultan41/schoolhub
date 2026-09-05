@@ -8,10 +8,13 @@ apply the same checks. The conflict engine itself is `conflicts.py`.
 from __future__ import annotations
 
 import logging
+import operator
 import uuid
 from datetime import date
+from functools import reduce
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.school_organization.models import AcademicSession, Section
@@ -47,8 +50,6 @@ def assert_period_does_not_overlap(
     too — checking only the campus's own rows would let a campus period sit
     inside the tenant's lunch break.
     """
-    from django.db.models import Q
-
     siblings = Period.objects.alive().filter(Q(campus_id=campus_id) | Q(campus_id__isnull=True))
     if exclude_pk is not None:
         siblings = siblings.exclude(pk=exclude_pk)
@@ -97,7 +98,7 @@ def conflicts_for(*, session: AcademicSession, section: Section | None = None) -
 def publish_section_timetable(
     *, session: AcademicSession, section: Section, actor_id: uuid.UUID
 ) -> dict:
-    """Promote a section's draft to published, superseding the current version.
+    """Promote a section's draft to published, superseding the cells it replaces.
 
     Refuses on any hard conflict (§11), and returns the conflict list so the
     caller can render exactly what to fix rather than a bare failure.
@@ -106,6 +107,22 @@ def publish_section_timetable(
     deleted, so a mid-session revision keeps the history of what was actually in
     force when — which is what attendance and examinations will be reconciled
     against later.
+
+    **Cell by cell, not version by version.** §5.7 and §7.1 describe a whole-grid
+    "version n+1", which would make the draft set a complete week and justify
+    end-dating everything the section has live. Nothing materialises that full
+    draft grid: the builder drafts one row per edited cell, so retiring every
+    live row would take Tuesday through Friday down because Monday's first period
+    changed. A published cell is therefore end-dated only where a draft exists to
+    take its place.
+
+    **The consequence: a published cell cannot be removed.** Deletion was only
+    ever expressible as "the next version omits it", and this makes publish
+    incremental rather than a whole-version swap, so an omission now means "leave
+    it alone" instead. There is no other way to clear a live cell — `:publish`
+    will not do it and `DELETE /timetable-slots/{id}` refuses a published row
+    (`assert_slot_writable`). Closing that needs a decision about what removal
+    means, not a filter change here; docs/project-status.md records it.
     """
     assert_session_writable(session)
 
@@ -139,9 +156,22 @@ def publish_section_timetable(
         )
 
     now = timezone.now()
+    # One OR'd predicate built from the drafts already in memory, not a lookup
+    # per cell: a section's week is forty-odd rows and this runs on every
+    # publish. `day_of_week__in=... , period__in=...` would be the cross product
+    # and would retire (Mon, p2) because the drafts happened to cover (Mon, p1)
+    # and (Tue, p2).
+    replaced = reduce(
+        operator.or_,
+        (
+            Q(day_of_week=day_of_week, period_id=period_id)
+            for day_of_week, period_id in {(d.day_of_week, d.period_id) for d in drafts}
+        ),
+    )
     superseded = (
         TimetableSlot.objects.alive()
         .filter(
+            replaced,
             academic_session=session,
             section=section,
             status=SlotStatus.PUBLISHED,
@@ -250,6 +280,12 @@ def _assert_substitute_is_free(
 
     Two ways to be busy: their own published slot in that cell, or another
     substitution already covering that cell on that date.
+
+    The second half is also `subs_substitute_one_per_period`, which is what
+    actually holds when two proposals race; this check is the friendly half,
+    naming the field and the reason instead of answering a bare 409. The first
+    half spans two tables and no index can express it, so a substitute whose own
+    class is published in that period is caught here or nowhere.
     """
     own_class = (
         TimetableSlot.objects.alive()
@@ -273,7 +309,7 @@ def _assert_substitute_is_free(
         .filter(
             substitute_staff=substitute_staff,
             date=on_date,
-            timetable_slot__period=slot.period,
+            period=slot.period,
             status__in=(SubstitutionStatus.PROPOSED, SubstitutionStatus.CONFIRMED),
         )
         .exists()
@@ -298,6 +334,10 @@ def _assert_room_is_free(*, slot: TimetableSlot, on_date: date, room: Room) -> N
 
     A substitution that stays in the slot's own room is not a move, so the slot
     it belongs to never counts against itself.
+
+    As with the substitute check, the substitution-versus-substitution half is
+    backed by `subs_room_one_per_period` for the racing case; the published-slot
+    half crosses tables and lives only here.
     """
     occupied = (
         TimetableSlot.objects.alive()
@@ -320,7 +360,7 @@ def _assert_room_is_free(*, slot: TimetableSlot, on_date: date, room: Room) -> N
         .filter(
             room=room,
             date=on_date,
-            timetable_slot__period=slot.period,
+            period=slot.period,
             status__in=(SubstitutionStatus.PROPOSED, SubstitutionStatus.CONFIRMED),
         )
         .exclude(timetable_slot=slot)
@@ -357,6 +397,7 @@ def create_substitution(
     substitution = TeacherSubstitution.objects.create(
         tenant_id=tenant_id,
         timetable_slot=slot,
+        period_id=slot.period_id,
         date=on_date,
         absent_staff=absent_staff,
         substitute_staff=substitute_staff,
@@ -399,14 +440,35 @@ def _notify_substitute(*, substitution: TeacherSubstitution, tenant_id: uuid.UUI
 def decide_substitution(
     *, substitution: TeacherSubstitution, approve: bool, actor_id: uuid.UUID
 ) -> TeacherSubstitution:
-    """§7.2's approval step. Only a proposal is decidable."""
-    if substitution.status != SubstitutionStatus.PROPOSED:
-        raise Conflict(f"This substitution is {substitution.status} and cannot be decided again.")
+    """§7.2's approval step. Only a proposal is decidable.
 
-    substitution.status = SubstitutionStatus.CONFIRMED if approve else SubstitutionStatus.DECLINED
-    substitution.updated_by = actor_id
-    substitution.save(update_fields=["status", "updated_by", "updated_at"])
+    Re-read under `select_for_update` rather than trusting the row the view
+    already fetched: two `:approve`/`:reject` calls arriving together would both
+    read `proposed`, both clear the guard, and race to overwrite each other's
+    decision — the loser's approver would be told their decision stuck when it
+    did not. The lock makes the second call wait and then see the real status.
 
+    The expected status is restated in the UPDATE's own WHERE as well. The lock
+    is what serialises, but the conditional write is what *decides*: it is the
+    one statement whose row count can prove no one else got there first, and it
+    keeps this correct if a later caller reaches the service without holding the
+    lock. Same shape as `academics.services.assert_batch_in_status` guarding its
+    batch UPDATE.
+    """
+    locked = TeacherSubstitution.objects.alive().select_for_update().get(pk=substitution.pk)
+    if locked.status != SubstitutionStatus.PROPOSED:
+        raise Conflict(f"This substitution is {locked.status} and cannot be decided again.")
+
+    decision = SubstitutionStatus.CONFIRMED if approve else SubstitutionStatus.DECLINED
+    decided = (
+        TeacherSubstitution.objects.alive()
+        .filter(pk=locked.pk, status=SubstitutionStatus.PROPOSED)
+        .update(status=decision, updated_by=actor_id, updated_at=timezone.now())
+    )
+    if not decided:
+        raise Conflict("This substitution was decided by someone else while you were deciding.")
+
+    substitution.refresh_from_db()
     _notify_decision(substitution=substitution)
     return substitution
 
@@ -456,8 +518,6 @@ def slot_version_window(on_date: date | None):
     back for a past date — version-blindness moved one layer up rather than
     fixed.
     """
-    from django.db.models import Q
-
     if on_date is None:
         return Q(effective_to__isnull=True)
     return Q(Q(effective_from__isnull=True) | Q(effective_from__lte=on_date)) & Q(

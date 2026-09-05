@@ -136,7 +136,14 @@ export function SubstitutionForm() {
     [staff.data],
   );
 
-  const slotOptions = candidateSlots.data ?? [];
+  // `status=published` alone is not "in force": a republish end-dates the row it
+  // replaces rather than deleting it, and `effective_to` is what says so — the
+  // same guard `week-grid-screen.tsx` puts on its cell index. Publish supersedes
+  // only the cells a draft actually replaces, so retired rows accumulate beside
+  // live ones as the year goes on, and offering one here would propose cover for
+  // a class that no longer meets. The API has no `effective_to` filter to push
+  // this down to; §16 names the five it does.
+  const slotOptions = (candidateSlots.data ?? []).filter((slot) => !slot.effective_to);
   const selectedSlot = slotOptions.find((slot) => slot.id === timetableSlotId);
   // The absent teacher IS the slot's teacher — §11 requires them to match, so
   // this is shown, not chosen.

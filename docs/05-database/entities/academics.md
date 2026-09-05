@@ -286,6 +286,7 @@ Dated substitution of the scheduled teacher for one slot (typically triggered by
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
 | timetable_slot_id | uuid | no | — | FK → timetable_slots(id) |
+| period_id | uuid | no | — | FK → periods(id); a copy of the slot's period, so the occupancy uniques below can be indexes — a unique index cannot reach through the join. Set from the slot on create; neither end moves afterwards (no PATCH on the row, and a published slot is immutable in place) |
 | date | date | no | — | Must fall on the slot's weekday and within the session |
 | absent_staff_id | uuid | no | — | FK → staff(id); the scheduled teacher |
 | substitute_staff_id | uuid | no | — | FK → staff(id); ≠ absent_staff_id; must be free that period (service-enforced) |
@@ -294,8 +295,10 @@ Dated substitution of the scheduled teacher for one slot (typically triggered by
 | leave_request_id | uuid | yes | null | FK → leave_requests(id) (see `attendance.md`) |
 | status | varchar(20) | no | `'proposed'` | Enum: `proposed` \| `confirmed` \| `declined` \| `completed` \| `cancelled` |
 
-Indexes: unique (tenant_id, timetable_slot_id, date); (tenant_id, substitute_staff_id, date); (tenant_id, absent_staff_id, date); (tenant_id, room_id, date).
-Relationships: N:1 → timetable_slots, staff (absent/substitute), rooms, leave_requests.
+Indexes: unique (tenant_id, timetable_slot_id, date); unique (tenant_id, substitute_staff_id, date, period_id) where status in ('proposed','confirmed') (substitute clash guard); unique (tenant_id, room_id, date, period_id) where status in ('proposed','confirmed') and room_id not null (ad-hoc room clash guard); (tenant_id, substitute_staff_id, date); (tenant_id, absent_staff_id, date); (tenant_id, room_id, date).
+Relationships: N:1 → timetable_slots, periods, staff (absent/substitute), rooms, leave_requests.
+
+`completed` and `cancelled` are reserved: no workflow reaches either yet. `completed` waits on attendance to signal that the covered period ran; `cancelled` waits on a `:cancel` action, which `timetable.md` §16 does not declare.
 
 ## Relationship Overview
 
@@ -316,6 +319,7 @@ erDiagram
     periods ||--o{ timetable_slots : "at"
     rooms ||--o{ timetable_slots : "in"
     timetable_slots ||--o{ teacher_substitutions : "substituted on"
+    periods ||--o{ teacher_substitutions : "occupies"
 ```
 
 ## Open Items

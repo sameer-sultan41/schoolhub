@@ -141,12 +141,48 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   families. `services._slot_weekday` is correct only while a tenant starts its
   week on Monday; the real conversion belongs with the tenant week-start
   setting, which does not exist yet.
+- **A published timetable cell cannot be removed.** `:publish` now supersedes
+  cell by cell — a live row is end-dated only where a draft exists to replace
+  it. Before, it end-dated every live row in the section, and since the builder
+  drafts one row per edited cell rather than a whole week, editing Monday's
+  first period retired Tuesday through Friday and students opened a nearly empty
+  timetable. §5.7 and §7.1 describe a whole-grid "version n+1" that would have
+  made the old behavior correct, but nothing materialises that full draft grid,
+  so the doc and the code disagreed and the code lost data. The cost of the fix
+  is that **removal now has no way to be expressed**: it was only ever "the next
+  version omits this cell", and publish is incremental, so an omission means
+  "leave it alone". `DELETE /timetable-slots/{id}` refuses a published row (§5.7 — a live
+  cell is edited by drafting over it), and §16 declares nothing else. Closing
+  this needs a decision about what removing a live cell means — a tombstone
+  draft, an explicit whole-grid publish mode, or a `:clear-cell` action — not a
+  filter change. No deletion flow was invented in the meantime.
+- **`SubstitutionStatus.completed` and `.cancelled` are reserved and
+  unreachable.** Both are in the locked entity map's enum;
+  `decide_substitution` only ever produces `confirmed` or `declined`, and §16
+  declares no endpoint that reaches either. `completed` waits on the attendance
+  module to signal that a covered period actually ran — nothing in `timetable`
+  knows a period happened. `cancelled` waits on a `:cancel` action for the case
+  §7.2's flowchart stops short of: the absent teacher returns and confirmed
+  cover has to be released. That one has a real cost — a confirmed substitution
+  holds `subs_substitute_one_per_period` for its (date, period), so the
+  substitute cannot be assigned elsewhere and nothing can let them go — but
+  building it means inventing an endpoint §16 does not list and a notification
+  §12 does not list, so it waits on the module doc rather than being
+  half-built. `models.py` carries the same note beside the enum.
 - **`teacher_substitutions.room_id` was added to the locked entity map.**
   `timetable.md` §6 and §15 both promise "ad-hoc room change supported on the
   substitution" while `entities/academics.md`'s column list omitted the column.
   The column and its clash guard shipped and the entity doc now agrees — an
   override that could double-book a room would have been the one booking path
-  nothing checked.
+  nothing checked. **`period_id` joined it** for a different reason: §11's two
+  occupancy rules are per period on a date, the service checked them with an
+  unlocked `.exists()`, and a unique index cannot reach through
+  `timetable_slot` to get the period — so the column carries a copy and
+  `subs_substitute_one_per_period` / `subs_room_one_per_period` are what hold
+  when two proposals race. The copy is safe because neither end moves: a
+  substitution's slot is fixed at creation and a published slot is immutable in
+  place. The other half of each rule — the substitute's own published class,
+  a published slot already in the room — crosses tables and stays service-only.
 - **Feature-flag enforcement and per-tenant number counters now exist**
   (`core.tenancy.features`, `core.tenancy.sequences`, PR 1) — built as
   `student-management` foundation, reusable by every later module.

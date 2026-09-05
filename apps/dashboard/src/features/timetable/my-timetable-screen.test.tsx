@@ -33,8 +33,14 @@ const MATHS = {
   room_id: "room1",
   room_name: "L-12",
   notes: null,
+  substitution: null,
 };
 
+// The wire shape `EffectiveSlotSerializer.get_substitution` actually returns: a
+// nested overlay or null, never flat `substitute_*` columns on the slot. A
+// fixture that invented flat ones let the screen read a field the API has never
+// sent, and every assertion below passed against a cell that renders the absent
+// teacher in production.
 const COVERED_SCIENCE = {
   ...MATHS,
   id: "slot2",
@@ -46,8 +52,16 @@ const COVERED_SCIENCE = {
   end_time: "09:25",
   subject_id: "sub2",
   subject_name: "Science",
-  substitute_staff_id: "staff9",
-  substitute_staff_name: "Sana Iqbal",
+  substitution: {
+    id: "sub-1",
+    date: "2026-09-08",
+    absent_staff_id: "staff1",
+    substitute_staff_id: "staff9",
+    substitute_staff_name: "Sana Iqbal",
+    room_id: "room9",
+    room_name: "Lab 2",
+    reason: "Sick leave",
+  },
 };
 
 function answer(slots: unknown[], date: string | null = null) {
@@ -106,6 +120,37 @@ describe("MyTimetableScreen", () => {
     expect(within(row).getByText("Sana Iqbal")).toBeInTheDocument();
     expect(within(row).queryByText("Bilal Ahmed")).not.toBeInTheDocument();
     expect(within(row).getByText("Covered")).toBeInTheDocument();
+  });
+
+  // §6's ad-hoc room change lives on the overlay, so a covered cell read against
+  // the base row sends the student to a room the class is not in.
+  it("sends the student to the room the cover moved the class to", async () => {
+    mockGet.mockResolvedValue(answer([MATHS, COVERED_SCIENCE], "2026-09-08"));
+    renderWithProviders(<MyTimetableScreen />);
+
+    await screen.findByText("Science");
+    const row = screen.getByRole("row", { name: /Period 2/ });
+    expect(within(row).getByText("Lab 2")).toBeInTheDocument();
+    expect(within(row).queryByText("L-12")).not.toBeInTheDocument();
+  });
+
+  it("keeps the slot's own room when the cover did not move the class", async () => {
+    mockGet.mockResolvedValue(
+      answer(
+        [
+          {
+            ...COVERED_SCIENCE,
+            substitution: { ...COVERED_SCIENCE.substitution, room_id: null, room_name: null },
+          },
+        ],
+        "2026-09-08",
+      ),
+    );
+    renderWithProviders(<MyTimetableScreen />);
+
+    await screen.findByText("Science");
+    const row = screen.getByRole("row", { name: /Period 2/ });
+    expect(within(row).getByText("L-12")).toBeInTheDocument();
   });
 
   it("marks the cells with nothing scheduled as free", async () => {

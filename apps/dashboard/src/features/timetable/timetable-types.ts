@@ -130,10 +130,10 @@ export interface SubstitutionRecord {
  * `services.effective_slots_for`'s `select_related("period", "subject", "staff",
  * "room", "section")` is already fetching.
  *
- * The substitution fields are populated only when a *confirmed* substitution
- * covers this slot on the requested date (§7.2 — a substitution overrides one
- * cell for specific dates only). Asking without a date gives the base grid, so
- * they are absent; that is why they are optional rather than nullable.
+ * `substitution` is a nested overlay, not a set of flat `substitute_*` columns —
+ * `EffectiveSlotSerializer.get_substitution` returns the object or null, and a
+ * client reading a flat field reads `undefined` on every cell, including the
+ * covered ones.
  */
 export interface MyTimetableSlot {
   id: string;
@@ -152,8 +152,29 @@ export interface MyTimetableSlot {
   room_id: string | null;
   room_name: string | null;
   notes: string | null;
-  substitute_staff_id?: string | null;
-  substitute_staff_name?: string | null;
+  substitution: MyTimetableSubstitution | null;
+}
+
+/**
+ * The substitution overlay on one cell — apps.timetable.serializers'
+ * `SlotSubstitutionSerializer`.
+ *
+ * Present only when a *confirmed* substitution covers this cell on the requested
+ * date (§7.2 — a substitution overrides one cell for specific dates only), so it
+ * is null on the base grid. It carries the room as well as the teacher: §6's
+ * ad-hoc room change moves the class for that date, and a client that renders
+ * the slot's own room sends the student somewhere the class is not. A null
+ * `room_id` here means "keep the slot's room", not "no room".
+ */
+export interface MyTimetableSubstitution {
+  id: string;
+  date: string;
+  absent_staff_id: string;
+  substitute_staff_id: string;
+  substitute_staff_name: string;
+  room_id: string | null;
+  room_name: string | null;
+  reason: string | null;
 }
 
 /** `GET /timetables/my` — the caller's effective week. `date` echoes the query

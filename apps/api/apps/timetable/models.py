@@ -38,6 +38,29 @@ class SlotStatus(models.TextChoices):
 
 
 class SubstitutionStatus(models.TextChoices):
+    """`completed` and `cancelled` are declared and **unreachable today.**
+
+    Both are in the locked entity map's enum, so dropping them would put the
+    column out of step with the spec for a column that costs nothing to keep
+    wide. But `decide_substitution` only ever produces `confirmed` or
+    `declined`, and §16 declares no endpoint that could produce either of these
+    — so they are reserved, not implemented, and this says so rather than
+    leaving a reader to infer a workflow from an enum.
+
+    What each is waiting on:
+
+    - `completed` needs a signal that the covered period actually ran, which is
+      the attendance module's to give (§7.2 has the absence feed arriving from
+      there). Nothing in this module knows a period happened.
+    - `cancelled` needs a `:cancel` action for the case §7.2's flowchart stops
+      short of — the absent teacher returns and confirmed cover must be
+      released. That is a real gap with a real cost: a confirmed substitution
+      holds `subs_substitute_one_per_period` for that (date, period), so the
+      substitute cannot be assigned elsewhere and nothing can let them go.
+      Building it means inventing an endpoint §16 does not list and a
+      notification §12 does not list, so it waits on the module doc.
+    """
+
     PROPOSED = "proposed", "Proposed"
     CONFIRMED = "confirmed", "Confirmed"
     DECLINED = "declined", "Declined"
@@ -255,10 +278,25 @@ class TeacherSubstitution(TenantOwnedModel):
     feature is named twice in the module doc, a substitute teacher genuinely does
     get moved to a free lab, and a nullable FK costs nothing when unused. The
     entity doc is updated in the same commit rather than left to disagree.
+
+    `period` is a copy of `timetable_slot.period_id`, and it is here for the same
+    reason `timetable_slots` carries its three partial unique indexes: the two
+    occupancy rules below are per *period* on a date, and a unique index cannot
+    reach through a join to get one. The copy is safe to trust because neither
+    end of it moves — a substitution's slot is fixed at creation (§16 declares no
+    PATCH), and the slot it points at is published, which §5.7 makes immutable in
+    place. `services.create_substitution` is the single writer and sets it from
+    the slot.
     """
 
     timetable_slot = models.ForeignKey(
         TimetableSlot, on_delete=models.PROTECT, related_name="substitutions"
+    )
+    period = models.ForeignKey(
+        Period,
+        on_delete=models.PROTECT,
+        related_name="substitutions",
+        help_text="Copied from the slot; see the class docstring for why it is denormalised.",
     )
     date = models.DateField(help_text="Must fall on the slot's weekday and inside the session.")
     absent_staff = models.ForeignKey(
@@ -305,14 +343,37 @@ class TeacherSubstitution(TenantOwnedModel):
                 condition=~models.Q(substitute_staff=models.F("absent_staff")),
                 name="substitutions_substitute_differs_from_absentee",
             ),
+            # The occupancy half of §11's substitution rules, at the database for
+            # the reason `timetable_slots`' indexes are: `services` checks with an
+            # unlocked `.exists()`, so two proposals raised in the same second
+            # both see a free teacher, or a free room, and both insert.
+            #
+            # Scoped to `proposed` and `confirmed` because only those hold the
+            # slot — a declined proposal occupies nobody, and the same teacher
+            # must stay available for cover after one is turned down.
+            models.UniqueConstraint(
+                fields=["tenant", "substitute_staff", "date", "period"],
+                name="subs_substitute_one_per_period",
+                condition=models.Q(deleted_at__isnull=True, status__in=("proposed", "confirmed")),
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "room", "date", "period"],
+                name="subs_room_one_per_period",
+                condition=models.Q(
+                    deleted_at__isnull=True,
+                    status__in=("proposed", "confirmed"),
+                    room__isnull=False,
+                ),
+            ),
         ]
         indexes = [
             models.Index(
                 fields=["tenant", "substitute_staff", "date"], name="subs_substitute_date_idx"
             ),
             models.Index(fields=["tenant", "absent_staff", "date"], name="subs_absent_date_idx"),
-            # Backs the room-clash check in `services._assert_room_is_free`, which
-            # runs on every proposal that names a room.
+            # Narrower than the room constraint above, which covers only
+            # proposed/confirmed rows: §13's substitution report and the
+            # filterset read declined ones too.
             models.Index(fields=["tenant", "room", "date"], name="subs_room_date_idx"),
         ]
 

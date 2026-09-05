@@ -624,11 +624,16 @@ class ValidateAndPublishTests(TimetableAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_republishing_supersedes_rather_than_replaces(self) -> None:
-        """§7.1 — history of what was in force when is what attendance reconciles against."""
+        """§7.1 — history of what was in force when is what attendance reconciles against.
+
+        The replacement is drafted into the *same* cell, which is what makes the
+        outgoing row an outgoing version of something rather than an unrelated
+        row that happened to be live.
+        """
         self.allow("timetable.timetable.publish")
         first = self.make_slot()
         self.client.post(f"/api/v1/timetables/{self.section.pk}:publish", {}, format="json")
-        self.make_slot(period=self.periods[1])
+        self.make_slot(notes="revised")
 
         response = self.client.post(
             f"/api/v1/timetables/{self.section.pk}:publish", {}, format="json"
@@ -639,6 +644,42 @@ class ValidateAndPublishTests(TimetableAPITestCase):
         with tenant_context(self.tenant.id):
             first.refresh_from_db()
         self.assertIsNotNone(first.effective_to, "the outgoing version should be end-dated")
+
+    def test_republishing_leaves_the_cells_the_draft_does_not_touch(self) -> None:
+        """The regression that emptied live timetables.
+
+        Nothing materialises §5.7's whole-grid "version n+1": the builder drafts
+        one row per edited cell, so end-dating every live row on publish retired
+        Tuesday because Monday changed, and the section's students opened a
+        nearly empty week. A published cell is superseded only where a draft
+        exists to take its place.
+        """
+        self.allow("timetable.timetable.publish")
+        monday = self.make_slot(day_of_week=0)
+        tuesday = self.make_slot(day_of_week=1)
+        self.client.post(f"/api/v1/timetables/{self.section.pk}:publish", {}, format="json")
+        self.make_slot(day_of_week=0, notes="moved to the lab")
+
+        response = self.client.post(
+            f"/api/v1/timetables/{self.section.pk}:publish", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        body = response.json()["data"]
+        self.assertEqual((body["published"], body["superseded"]), (1, 1))
+        with tenant_context(self.tenant.id):
+            monday.refresh_from_db()
+            tuesday.refresh_from_db()
+        self.assertIsNotNone(monday.effective_to, "the replaced cell is the one that retires")
+        self.assertEqual(tuesday.status, SlotStatus.PUBLISHED)
+        self.assertIsNone(tuesday.effective_to, "an untouched cell stays current")
+
+        # Still live where it counts: the read every teacher and student makes
+        # takes `effective_to IS NULL`, so a wrongly end-dated cell simply
+        # vanishes from the week rather than failing anything loudly.
+        self.sign_in_as_teacher(self.teacher)
+        live = self.client.get("/api/v1/timetables/my").json()["data"]
+        self.assertIn(str(tuesday.pk), [row["id"] for row in live])
 
     def test_publishing_into_a_closed_session_is_refused(self) -> None:
         """§11: publishing requires an active session."""
@@ -682,13 +723,7 @@ class MyTimetableTests(TimetableAPITestCase):
     """`GET /timetables/my` — the module's only endpoint a learner reaches."""
 
     def _teacher_client(self, staff):
-        user = UserFactory(tenant=self.tenant)
-        with tenant_context(self.tenant.id):
-            staff.user_id = user.pk
-            staff.save(update_fields=["user_id"])
-        grant(user, "timetable.timetable.view")
-        authenticate(self.client, user)
-        return user
+        return self.sign_in_as_teacher(staff)
 
     def _enrolled_student(self, section=None):
         with tenant_context(self.tenant.id):
@@ -1051,12 +1086,7 @@ class EffectiveVersionTests(TimetableAPITestCase):
         self._as_teacher()
 
     def _as_teacher(self) -> None:
-        user = UserFactory(tenant=self.tenant)
-        with tenant_context(self.tenant.id):
-            self.teacher.user_id = user.pk
-            self.teacher.save(update_fields=["user_id"])
-        grant(user, "timetable.timetable.view")
-        authenticate(self.client, user)
+        self.sign_in_as_teacher(self.teacher)
 
     def ids_on(self, on_date) -> list[str]:
         response = self.client.get(f"/api/v1/timetables/my?date={on_date.isoformat()}")

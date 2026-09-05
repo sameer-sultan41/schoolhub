@@ -881,6 +881,7 @@ class Command(BaseCommand):
         TeacherSubstitution.objects.create(
             tenant=tenant,
             timetable_slot=slot,
+            period_id=slot.period_id,
             date=today + timedelta(days=(7 - today.weekday()) % 7 or 7),
             absent_staff=absent_staff,
             substitute_staff=substitute_staff,

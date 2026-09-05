@@ -60,15 +60,18 @@ export function SubstitutionsScreen() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // §16 names the substitution endpoints but not their filters. `status` is a
-  // model field and unambiguous; the date bounds follow the `date_from`/`date_to`
-  // spelling this API uses elsewhere for a DateField range. If the serializer
-  // lands on different names these two keys are the only thing to change.
+  // `date__gte` / `date__lte`, not `date_from` / `date_to`: those are the names
+  // django-filter derives from `TeacherSubstitutionFilterSet`'s
+  // `"date": ["exact", "gte", "lte"]`, and it drops query parameters it does not
+  // recognise without a word — so the wrong spelling did not fail, it silently
+  // returned the unfiltered list while the two date inputs looked like they
+  // worked. §13's substitution report is a date range, so this is the filter
+  // that has to be right.
   const filters = useMemo(
     () => ({
       ...(status !== ALL ? { status } : {}),
-      ...(dateFrom ? { date_from: dateFrom } : {}),
-      ...(dateTo ? { date_to: dateTo } : {}),
+      ...(dateFrom ? { date__gte: dateFrom } : {}),
+      ...(dateTo ? { date__lte: dateTo } : {}),
     }),
     [status, dateFrom, dateTo],
   );

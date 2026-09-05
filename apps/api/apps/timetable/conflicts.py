@@ -98,10 +98,12 @@ def collect_scope(*, session, section=None) -> Scope:
     from apps.student_management.models import EnrollmentStatus, StudentEnrollment
     from apps.timetable.models import Period, Room, TimetableSlot
 
-    slots = list(
-        TimetableSlot.objects.alive()
-        .filter(academic_session=session, effective_to__isnull=True)
-        .select_related("period")
+    slots = _without_replaced_cells(
+        list(
+            TimetableSlot.objects.alive()
+            .filter(academic_session=session, effective_to__isnull=True)
+            .select_related("period")
+        )
     )
 
     allocations = set(
@@ -139,6 +141,38 @@ def collect_scope(*, session, section=None) -> Scope:
             row["id"]: row["capacity"] for row in Room.objects.alive().values("id", "capacity")
         },
     )
+
+
+def _without_replaced_cells(slots: list) -> list:
+    """Drop each published row that a draft in the same section cell replaces.
+
+    §5.7 has a live cell edited by drafting over it and republishing, so a draft
+    and a published row in the same (section, weekday, period) are two versions
+    of one cell, not two classes at once. Compared against each other they report
+    a section clash, and — since a replacement usually keeps the teacher and the
+    room — a teacher and a room clash too, all three hard. `:publish` would then
+    refuse the single edit the whole draft/publish flow exists to make: the only
+    grids that could ever be republished would be ones whose changes all landed
+    on cells that were previously empty.
+
+    What the detectors must judge is the grid as it will stand *after* publish,
+    which is exactly what `publish_section_timetable` supersedes cell by cell.
+    Filtered here rather than in each detector so §6's three callers cannot drift
+    apart on it.
+    """
+    from apps.timetable.models import SlotStatus
+
+    drafted = {
+        (slot.section_id, slot.day_of_week, slot.period_id)
+        for slot in slots
+        if slot.status == SlotStatus.DRAFT
+    }
+    return [
+        slot
+        for slot in slots
+        if slot.status != SlotStatus.PUBLISHED
+        or (slot.section_id, slot.day_of_week, slot.period_id) not in drafted
+    ]
 
 
 def detect_conflicts(*, session, section=None, thresholds: Thresholds | None = None) -> list[dict]:

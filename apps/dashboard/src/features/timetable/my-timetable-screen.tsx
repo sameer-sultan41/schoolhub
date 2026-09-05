@@ -140,26 +140,28 @@ export function MyTimetableScreen() {
                       );
                     }
 
-                    const substituted = Boolean(slot.substitute_staff_id);
+                    // The overlay wins the whole cell, not just the name: §6's
+                    // ad-hoc room change moves the class for that date, so a
+                    // covered period read against the base row would send the
+                    // student to the wrong room. A substitution that keeps the
+                    // slot's own room carries a null `room_id`, which is why the
+                    // fallback is the slot's room rather than an em dash.
+                    const cover = slot.substitution;
                     return (
                       <td key={day} className="border border-border px-3 py-2 align-top">
                         <span className="block font-medium text-foreground">
                           {slot.subject_name ?? t("grid.noSubject")}
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          {substituted
-                            ? (slot.substitute_staff_name ?? EMPTY)
-                            : (slot.staff_name ?? EMPTY)}
+                          {cover ? cover.substitute_staff_name : (slot.staff_name ?? EMPTY)}
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          {slot.room_name ?? EMPTY}
+                          {cover?.room_name ?? slot.room_name ?? EMPTY}
                         </span>
                         <span className="block text-xs text-muted-foreground">
                           {slot.section_name}
                         </span>
-                        {substituted ? (
-                          <Badge variant="warning">{t("my.substituted")}</Badge>
-                        ) : null}
+                        {cover ? <Badge variant="warning">{t("my.substituted")}</Badge> : null}
                       </td>
                     );
                   })}

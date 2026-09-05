@@ -95,7 +95,12 @@ describe("SubstitutionsScreen", () => {
     });
   });
 
-  it("filters by a date range", async () => {
+  // The names have to be django-filter's own, derived from
+  // `TeacherSubstitutionFilterSet`'s `"date": ["exact", "gte", "lte"]`. Anything
+  // else is dropped in silence — the request succeeds and answers with the
+  // unfiltered list, so a `toMatchObject` on the wrong keys was the only thing
+  // holding the range up.
+  it("filters by a date range on the parameter names the backend derives", async () => {
     mockGet.mockResolvedValue(page([PROPOSED]));
     renderWithProviders(<SubstitutionsScreen />);
     await screen.findByText("Bilal Ahmed");
@@ -105,10 +110,12 @@ describe("SubstitutionsScreen", () => {
 
     await waitFor(() => {
       expect(mockGet.mock.calls.at(-1)?.[1]?.query).toMatchObject({
-        date_from: "2026-09-01",
-        date_to: "2026-09-30",
+        date__gte: "2026-09-01",
+        date__lte: "2026-09-30",
       });
     });
+    expect(mockGet.mock.calls.at(-1)?.[1]?.query).not.toHaveProperty("date_from");
+    expect(mockGet.mock.calls.at(-1)?.[1]?.query).not.toHaveProperty("date_to");
   });
 
   it("pages forward by cursor", async () => {
