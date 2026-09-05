@@ -8,14 +8,17 @@
 # Adding a word here is the right fix when cspell flags a genuine term. Adding one to
 # silence a real typo is not.
 ACMR
+Adeel
 AIGW
 allkeys
 Amina
+Amna
 ANAME
 appautoscaling
 appendonly
 approvable
 appuser
+Areeba
 ASVS
 authid
 AWSCURRENT
@@ -78,6 +81,7 @@ greenvalley
 greppable
 healthcheck
 healthz
+Hira
 homeroom
 hotspots
 hrefs
@@ -85,18 +89,24 @@ htmlcov
 iban
 idcards
 idempot
+Imran
 interceptable
+Iqra
 isready
 JazzCash
+Kashif
 Keyspace
+Laiba
 Laravel
 launchable
 libgdk
 libpango
 libpangocairo
 libpq
+Mahnoor
 Mailpit
 manylinux
+Mariam
 maxmemory
 Meilisearch
 messageformat
@@ -113,6 +123,7 @@ NOCREATEDB
 NOCREATEROLE
 noeviction
 noinput
+Noor
 noout
 noreload
 NOSUPERUSER
@@ -149,7 +160,9 @@ PYTHONDONTWRITEBYTECODE
 PYTHONUNBUFFERED
 pyupgrade
 querysets
+Qureshi
 Rahman
+Raza
 readyz
 recomputable
 recreatable
@@ -168,12 +181,14 @@ repoint
 resends
 retriable
 RFID
+Rimsha
 rolbypassrls
 rolcreaterole
 rollouts
 rolname
 rolpassword
 rolsuper
+Sadia
 Savepointed
 schedulable
 schemaname
@@ -191,6 +206,7 @@ subprocessor
 subprocessors
 tablename
 tableowner
+Talha
 telematics
 tfvars
 timestamptz
@@ -218,6 +234,7 @@ unvalidated
 upsell
 upsells
 upserts
+Usman
 varchar
 viewset
 viewset's
@@ -226,6 +243,7 @@ waitlist
 waitlisted
 waitlists
 waivable
+Waqas
 WCAG
 weightage
 weightages
@@ -233,3 +251,5 @@ wildcarded
 wireframes
 wordprocessingml
 xact
+Zain
+Zainab
