@@ -47,7 +47,7 @@ The monorepo skeleton is in place and structurally complete.
 | `packages/config` | Shared ESLint flat config (ESLint 9, typescript-eslint) |
 | `apps/dashboard` | Auth-guard proxy, tenant-subdomain login (own subdomain namespace, auth cookies via a same-origin proxy), in-memory access token + refresh, TanStack Query client + key factory, `hasPermission`/`<Can>`, `(auth)/login` (RHF + Zod), `(app)` shell with permission-filtered nav + collapsible sidebar + tenant theming, dashboard page, `/api/health`, next-intl (`en` + `ur`, RTL) |
 | `apps/website` | Host→tenant proxy, cached tenant resolution, read-only content layer, ISR rendering of `website_pages`/`page_sections`, theme registry + 12 section components, per-tenant sitemap/robots, HMAC-signed revalidate webhook |
-| `e2e` | Playwright suite with `dashboard` and `website` projects run in the PR gate against mocked routes. `live` (real compose stack, seeded by `manage.py seed_e2e_data`) is opt-in via `.github/workflows/e2e-live.yml` (`workflow_dispatch` + nightly, not the PR gate) — real-browser journeys for login/logout/session/dashboard-summary/tenant-resolution, plus API-only journeys for every `school_organization` resource (no dashboard UI exists for that module yet). `AuthEndpointThrottle` allows only 10 requests/minute, and refresh tokens rotate, so a shared browser session can safely serve at most one cold-navigation test — every live browser spec logs in for itself instead (`e2e/AGENTS.md` has the confirmed reasoning); the `live-setup` project stays wired up for a future spec that's actually safe to share, but nothing uses it today. Live API specs (`tests/live/api/`) share one real login per worker via a worker-scoped fixture instead, which has no rotation problem |
+| `e2e` | Playwright suite with `dashboard` and `website` projects run in the PR gate against mocked routes. `live` (real compose stack, seeded by `manage.py seed_e2e_data`) is opt-in via `.github/workflows/e2e-live.yml` (`workflow_dispatch` + nightly, not the PR gate) — real-browser journeys for login/logout/session/dashboard-summary/tenant-resolution, plus API-only journeys for every `school_organization` resource (no dashboard UI exists for that module yet). `AuthEndpointThrottle` allows only 10 requests/minute, and refresh tokens rotate, so a shared browser session can safely serve at most one cold-navigation test — every live browser spec logs in for itself instead (`e2e/AGENTS.md` has the confirmed reasoning); the `live-setup` project stays wired up for a future spec that's actually safe to share, but nothing uses it today. Live API specs (`tests/live/api/`) share one real login per worker via a worker-scoped fixture instead, which has no rotation problem. `student-management`'s first two Critical User Journeys now have real coverage too: `students-admission-enrollment.spec.ts` (real browser, a minimally-privileged seeded `school_admin` identity — not the all-permissions `school_owner` — walks create student → link guardian → add emergency contact → enroll, plus the real duplicate-admission rejection) and `api/students-record-scope.spec.ts` (a seeded `student`-role identity, `RecordScope.OWN`, proves it sees only its own `Student` row and gets 404 — never 403 — on another's) |
 | `infra` | Local dev stack (Docker: Postgres/Redis/MinIO/PgBouncer/Mailpit) |
 
 Both apps (`dashboard`, `website`) were generated with `create-next-app` (Next 16,
@@ -150,7 +150,7 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   `BackgroundJob.error` tripped it on every successful `GET /jobs/{id}`.
 - **`student-management` full-stack is now complete** (PRs 1-4) — this was
   the whole of Phase 2 Tier 1's first module.
-- **`staff-management` full-stack is now complete** (this PR) — Tier 1's
+- **`staff-management` full-stack is now complete** (PR #30) — Tier 1's
   second and final module, closing out "People". `staff`, `designations`,
   `staff_qualifications`, `staff_documents` (module doc §15's owned entities);
   onboarding link (`:invite`), exit with clearance checks (`:exit`),
@@ -177,6 +177,38 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   of cross-tenant leak PR #25's review found in `student_management.user_id`.
   `core.rbac.permissions.DenyRestrictedPrincipals` (previously dead code, zero
   call sites) gets its first real use here on every staff endpoint.
+- **A real gap was found while adding student-management's Critical User
+  Journey e2e coverage**: `core/rbac/permissions.py`'s `scope_queryset` only
+  filters `RecordScope.OWN` on `Student.user_id == request.user.pk` (a
+  student viewing themself) — it never joins through `StudentGuardian` to a
+  guardian's own linked children, so "a guardian can see only their own
+  child's record" is not actually enforced today despite being the more
+  natural record-scope story for this module. The live-lane record-scope CUJ
+  (`api/students-record-scope.spec.ts`) proves the student self-view path
+  instead, which is real; the guardian-child scope join is not fixed here —
+  future work should grep this citation rather than re-diagnose it (a
+  `TODO(guardian-scope)` sits directly on the vulnerable line in
+  `core/rbac/permissions.py::scope_queryset`).
+- **Another real gap surfaced by the same e2e work**: `packages/api-client`'s
+  refresh path conflates "the refresh token is genuinely invalid" with "the
+  refresh call failed for an unrelated, possibly-transient reason." Both
+  `token-store.ts`'s `refreshAccessToken()` (any non-2xx, non-401/403 status —
+  a `429` from `AuthEndpointThrottle`, a `5xx`, etc. — falls through to the
+  same `null` return as an actually-invalid token) and `client.ts`'s
+  `refreshOnce()` (catches *any* thrown error from the refresh callback and
+  coerces it to `null` too) treat a rate-limited or momentarily-unavailable
+  refresh identically to "this session is over," clearing the access token
+  and bouncing the user to `/login` even though their refresh cookie is still
+  good. Reachable by a real user reloading or opening a second tab in quick
+  succession under load, not just by test tooling — observed once during a
+  live-lane spec run (`e2e/tests/live/students-admission-enrollment.spec.ts`'s
+  header comment has the specific incident), though the trigger wasn't
+  isolated to confirm it was this conflation rather than a coincidental
+  throttle window. Not fixed here: a proper fix touches the shared
+  `packages/api-client` refresh pipeline used by both `dashboard` and
+  `website`, which is a bigger, riskier change than this e2e-focused PR
+  should carry — needs its own PR with `packages/api-client`'s existing test
+  suite updated alongside it.
 
 ---
 

@@ -13,6 +13,11 @@ function refreshCookieFrom(response: Response): string | null {
   return setCookie.split(";")[0] ?? null;
 }
 
+export interface LiveCredentials {
+  identifier: string;
+  password: string;
+}
+
 /**
  * One real login for the lifetime of a worker.
  *
@@ -25,8 +30,14 @@ function refreshCookieFrom(response: Response): string | null {
  * Uses raw `fetch`, not a browser context: the real `RefreshView` reads the `sh_refresh`
  * cookie directly off the request (`request.COOKIES`), so the refresh token just needs to
  * be resent as a `Cookie` header — no browser cookie jar required.
+ *
+ * `credentials` defaults to the primary admin (`env.LIVE_ADMIN_*`) but is overridable —
+ * a record-scope spec needs a real, narrower identity logged in on its own, not the
+ * worker-shared admin session, and `campuses.spec.ts`'s cross-tenant test already
+ * hand-rolls this exact login sequence once for its own second identity; a second
+ * hand-rolled copy is exactly the duplication this parameter avoids.
  */
-export async function createLiveSession(): Promise<ApiClient> {
+export async function createLiveSession(credentials?: LiveCredentials): Promise<ApiClient> {
   let accessToken: string | null = null;
   let refreshCookie: string | null = null;
 
@@ -58,10 +69,12 @@ export async function createLiveSession(): Promise<ApiClient> {
   const login = await fetch(`${env.API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      identifier: env.LIVE_ADMIN_IDENTIFIER,
-      password: env.LIVE_ADMIN_PASSWORD,
-    }),
+    body: JSON.stringify(
+      credentials ?? {
+        identifier: env.LIVE_ADMIN_IDENTIFIER,
+        password: env.LIVE_ADMIN_PASSWORD,
+      },
+    ),
   });
   if (!login.ok) {
     throw new Error(`live API login failed: ${login.status} ${await login.text()}`);
