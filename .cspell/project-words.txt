@@ -39,6 +39,8 @@ codegen
 corsheaders
 crackable
 crawlable
+CREATEDB
+CREATEROLE
 criticals
 cutover
 dataloaders
@@ -106,10 +108,13 @@ navs
 negotiables
 networkidle
 NOBYPASSRLS
+NOCREATEDB
+NOCREATEROLE
 noeviction
 noinput
 noout
 noreload
+NOSUPERUSER
 NOTIF
 Noto
 notschoolhub
@@ -148,6 +153,7 @@ recreatable
 rediss
 refetched
 refspecs
+regclass
 regenerable
 regionalized
 relforcerowsecurity
@@ -160,6 +166,7 @@ resends
 retriable
 RFID
 rolbypassrls
+rolcreaterole
 rollouts
 rolname
 rolpassword
