@@ -579,3 +579,22 @@ class StudentTransfer(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.student_id} transfer ({self.transfer_type}, {self.status})"
+
+    @classmethod
+    def filter_by_campus(cls, queryset, campus_ids):
+        """A transfer is visible from **both** ends, not just the one it left.
+
+        There is no single `campus_id` here — a transfer names a `from_campus`
+        and a `to_campus`, and both are principals in it. Scoping on the origin
+        alone would hide every *incoming* transfer from the campus that is
+        expected to approve it, which is the one action the destination has;
+        scoping on the destination alone would hide the request from the campus
+        the student is actually leaving.
+
+        A cross-campus transfer therefore appears in two queues by design. The
+        `:approve` / `:reject` / `:complete` guards in `services` are what decide
+        who may act, not this.
+        """
+        return queryset.filter(
+            models.Q(from_campus_id__in=campus_ids) | models.Q(to_campus_id__in=campus_ids)
+        )

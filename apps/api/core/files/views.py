@@ -26,6 +26,10 @@ class FileViewSet(
     uploading a new file, not mutating this one.
     """
 
+    # No campus dimension: a File is referenced from several modules under
+    # different names, each with related_name="+", so there is no reverse join
+    # to hang a campus scope on. See the get_queryset override below.
+    scope_campus_field = None
     queryset = File.objects
     serializer_class = FileSerializer
     required_permission = "platform.file.view"
