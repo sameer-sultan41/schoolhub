@@ -204,7 +204,11 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # Load warnings ride in `meta`, never as a 422 — §11 calls them warnings,
         # and a grid being built up mid-way has to be savable while over norm.
         warnings = services.load_warnings(staff=data["staff"], session=data["academic_session"])
-        return ActionResponse.ok({"data": body, "meta": {"warnings": warnings}}, status=201)
+        # A bare Response, not ActionResponse.ok: that helper wraps its argument
+        # in {"data": ...}, so handing it an already-enveloped payload nests the
+        # envelope twice. EnvelopeJSONRenderer passes a pre-shaped
+        # {"data", "meta"} dict through untouched and injects request_id.
+        return Response({"data": body, "meta": {"warnings": warnings}}, status=201)
 
     @extend_schema(
         summary="Per-teacher weekly load against the tenant norm",

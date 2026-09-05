@@ -12,9 +12,19 @@ interface Subject {
  * Live API lane — no browser, no UI. See campuses.spec.ts's header comment for the shared
  * rationale (real HTTP contract only; field validation stays at the Django unit level).
  *
- * Subjects and class-subjects share one file: `ClassSubjectViewSet` shares the
- * `subject.*` permission keys with `SubjectViewSet` (§4 declares no separate key), so
- * they're one permission surface, not two.
+ * Subjects only. `/class-subjects` used to live here because school_organization's
+ * `ClassSubjectViewSet` shared the `school.subject.*` keys with `SubjectViewSet` — one
+ * permission surface, one file. That is no longer true: academics.md §4 declares
+ * `academics.curriculum.*` for curriculum mapping and school-organization.md §6 says the
+ * mapping belongs to that module, so the endpoint moved to
+ * `academics.CurriculumViewSet` — different keys, and behind `module.academics` rather
+ * than `module.school`. The endpoint's own coverage moved with it, to
+ * `academics-curriculum.spec.ts`.
+ *
+ * What stays here is the one thing the move itself is about: the *subject catalog* is
+ * still school_organization's, under `school.subject.*`. The remaining class-subject test
+ * below is the seam between the two modules — a subject created through this module's
+ * endpoint is immediately mappable through the other's.
  */
 test.describe("subjects (live API)", () => {
   test("supports the full create/read/update/delete lifecycle", async ({ liveApiClient }) => {
@@ -30,7 +40,7 @@ test.describe("subjects (live API)", () => {
   });
 });
 
-test.describe("class-subjects (live API)", () => {
+test.describe("class-subjects — the school_organization seam (live API)", () => {
   test("maps a subject to a class for a session, and rejects a duplicate mapping", async ({
     liveApiClient,
   }) => {
@@ -52,9 +62,14 @@ test.describe("class-subjects (live API)", () => {
         weekly_periods: 4,
       };
 
-      // Exercises ClassSubjectViewSet.perform_create's delegation to
-      // services.map_subject_to_class end-to-end — the one place a raw serializer test
-      // would not catch a wiring mistake between the view and the service.
+      // Exercises `academics.CurriculumViewSet.perform_create`'s delegation *back* to
+      // school_organization's `services.map_subject_to_class` end-to-end — the one place
+      // a raw serializer test would not catch a wiring mistake between the view and the
+      // service, and the reason the duplicate below is a 409 from that service rather
+      // than a 400 from the serializer. The endpoint is academics' now
+      // (`academics.curriculum.*` + `module.academics`, not `school.subject.*` +
+      // `module.school`), so a caller holding only the old keys is refused — see
+      // `academics-curriculum.spec.ts` for the rest of its behaviour.
       const created = await liveApiClient.post("/class-subjects", mapping);
       expect(created.status).toBe(201);
       const classSubject = created.data as {

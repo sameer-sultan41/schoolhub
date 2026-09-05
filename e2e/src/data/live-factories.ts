@@ -87,6 +87,46 @@ export function buildLiveHouse(overrides: Partial<{ name: string; code: string }
 }
 
 /**
+ * A student the promotion lane can enroll and then promote.
+ *
+ * `last_name` carries the unique tag, not `first_name`: `services.assert_not_duplicate`
+ * rejects an exact first-name + last-name + date-of-birth match (student-management §11),
+ * so a fixed name would make the *second* run of any promotion spec fail as a duplicate
+ * admission rather than for anything to do with promotion.
+ */
+export function buildLiveStudent(overrides: Partial<{ first_name: string }> = {}) {
+  const tag = uniqueTag();
+  return {
+    first_name: "E2E",
+    last_name: `Rollover ${tag}`,
+    date_of_birth: "2015-05-05",
+    gender: "unspecified",
+    admission_date: "2026-01-01",
+    ...overrides,
+  };
+}
+
+/** A guardian — `enroll_student` refuses a student with no guardian link (§11). */
+export function buildLiveGuardian() {
+  const tag = uniqueTag();
+  return {
+    first_name: "E2E",
+    last_name: `Guardian ${tag}`,
+    phone: "+15551234567",
+  };
+}
+
+/** An emergency contact — the other half of `assert_enrollment_prerequisites`. */
+export function buildLiveEmergencyContact() {
+  const tag = uniqueTag();
+  return {
+    name: `E2E Contact ${tag}`,
+    relationship: "Mother",
+    phone: "+15551234567",
+  };
+}
+
+/**
  * A date window far enough from the seeded baseline session (roughly the current year)
  * to trivially avoid `assert_no_session_overlap` without reading the baseline's own dates
  * — and far enough from *every other call's* window, in this run or an earlier one, to

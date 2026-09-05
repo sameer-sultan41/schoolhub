@@ -45,9 +45,16 @@ moment `tests/live/` grows past a handful of specs, so don't do that either — 
 - So: **every live browser spec does its own real login**, guest context —
   `test.use({ storageState: { cookies: [], origins: [] } })` at the top of the file, then
   `loginPage.signIn(...)` — the same pattern `login.spec.ts`, `session.spec.ts`,
-  `dashboard-summary.spec.ts` and `tenant-isolation.spec.ts` all use. That's ~5-6 real
-  logins per full run today, comfortably under the 10/min budget; re-check that math
-  before adding another one.
+  `dashboard-summary.spec.ts` and `tenant-isolation.spec.ts` all use. That's ~8 real
+  logins per full run today (the two admission-journey tests and the two-identity
+  promotion journey each carry more than one), plus a refresh per cold navigation, which
+  counts against the same 10/min budget. Re-check that math before adding another one —
+  and prefer spending an existing session over opening a new one.
+- A **two-actor** journey (an approval workflow: promotions today, transfers and leave
+  later) needs two authenticated sessions at once. Use the `signInAsSecondIdentity`
+  fixture, which signs the second identity into its own browser context: the first stays
+  signed in while the second acts, so the journey costs two logins rather than the three
+  a sign-out/sign-in-again shuffle would.
 - `live.setup.ts`/`playwright.config.ts`'s `live-setup` project stays wired up for a
   future spec that is genuinely safe to share (one that never triggers its own refresh),
   but nothing uses it today — read `live.setup.ts`'s own header before reaching for it.
@@ -55,6 +62,11 @@ moment `tests/live/` grows past a handful of specs, so don't do that either — 
   (`src/fixtures/index.ts`, wired to `src/lib/live-api.ts`) — one real login per worker,
   not per test or per file. This one has no rotation problem: it's a raw `fetch`-based
   session, not a browser `storageState`, so nothing else tries to reuse its cookie.
+  `liveOtherTenantApiClient` is the same thing for the *other* tenant's admin: every
+  cross-tenant isolation probe shares it, so the third such spec costs no extra login.
+  A narrower identity a single spec needs (a `student`, a `principal`) still calls
+  `createLiveSession(credentials)` itself — that's one login per test, so keep those to
+  one test per file.
 
 ## Mirrored values
 

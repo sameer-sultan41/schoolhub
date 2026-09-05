@@ -13,6 +13,7 @@ import uuid
 from datetime import date
 
 from django.db import transaction
+from django.http import Http404
 from django.utils import timezone
 
 from apps.academics import notifications
@@ -427,7 +428,11 @@ def batch_queryset(batch_id: uuid.UUID):
 def assert_batch_in_status(*, batch_id: uuid.UUID, expected: str) -> list[StudentPromotion]:
     rows = list(batch_queryset(batch_id))
     if not rows:
-        raise DomainRuleViolation({"batch_id": "No such promotion batch."})
+        # 404, not 422: a batch id names a resource, and an id belonging to
+        # another tenant must be indistinguishable from one that never existed
+        # (AGENTS.md invariant 2). `batch_queryset` is tenant-scoped, so both
+        # land here identically.
+        raise Http404("No such promotion batch.")
     actual = {row.status for row in rows}
     if actual != {expected}:
         raise Conflict(
@@ -527,7 +532,7 @@ def revert_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     """
     rows = list(batch_queryset(batch_id))
     if not rows:
-        raise DomainRuleViolation({"batch_id": "No such promotion batch."})
+        raise Http404("No such promotion batch.")
 
     statuses = {row.status for row in rows}
     if statuses == {PromotionStatus.REVERTED}:
@@ -572,7 +577,7 @@ def execute_batch(*, batch_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: uuid.U
             )
         )
     if not rows:
-        raise DomainRuleViolation({"batch_id": "No such promotion batch."})
+        raise Http404("No such promotion batch.")
 
     statuses = {row.status for row in rows}
     if statuses - {PromotionStatus.APPROVED, PromotionStatus.EXECUTED}:
