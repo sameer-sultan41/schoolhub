@@ -13,7 +13,13 @@ jest.mock("@/lib/auth", () => ({
 const mockRestoreSession = restoreSession as jest.MockedFunction<typeof restoreSession>;
 
 function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // `retry: false` is the client default, but `useSession` passes its own `retry`
+  // and so overrides it — `retryDelay: 0` is what keeps the retry it *does* do
+  // inside `waitFor`'s 1s budget, instead of waiting out TanStack Query's
+  // exponential backoff and failing on a timeout that says nothing useful.
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+  });
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 

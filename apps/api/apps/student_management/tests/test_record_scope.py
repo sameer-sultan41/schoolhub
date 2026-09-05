@@ -41,15 +41,26 @@ class StudentOwnScopeTests(APITestCase):
             self.own_child = StudentFactory(tenant=self.tenant, campus=self.campus)
             self.other_child = StudentFactory(tenant=self.tenant, campus=self.campus)
 
-    def _link_guardian(self, user, student, *, has_portal_access: bool = True) -> None:
+    def _guardian_for(self, user):
+        """One `Guardian` row per user, reused across links.
+
+        `guardians_unique_user_per_tenant` allows a user exactly one guardian
+        record per tenant — which is the real shape: one guardian *person* who
+        may be linked to several children, not one guardian row per child.
+        """
         with tenant_context(self.tenant.id):
-            guardian = GuardianFactory(tenant=self.tenant, user_id=user.pk)
+            return GuardianFactory(tenant=self.tenant, user_id=user.pk)
+
+    def _link_guardian(self, user, student, *, has_portal_access: bool = True, guardian=None):
+        guardian = guardian or self._guardian_for(user)
+        with tenant_context(self.tenant.id):
             StudentGuardianFactory(
                 tenant=self.tenant,
                 student=student,
                 guardian=guardian,
                 has_portal_access=has_portal_access,
             )
+        return guardian
 
     def _own_scoped_client(self, user):
         authenticate(self.client, user)
@@ -87,8 +98,8 @@ class StudentOwnScopeTests(APITestCase):
 
     def test_a_guardian_linked_to_two_children_sees_each_once(self) -> None:
         guardian_user = UserFactory(tenant=self.tenant)
-        self._link_guardian(guardian_user, self.own_child)
-        self._link_guardian(guardian_user, self.other_child)
+        guardian = self._link_guardian(guardian_user, self.own_child)
+        self._link_guardian(guardian_user, self.other_child, guardian=guardian)
         self._own_scoped_client(guardian_user)
 
         rows = self.client.get("/api/v1/students").json()["data"]

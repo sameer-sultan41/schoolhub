@@ -15,7 +15,7 @@ from django.test import TestCase
 from apps.school_organization.tests.factories import TenantFactory
 from core.jobs.models import BackgroundJob
 from core.jobs.tests.factories import BackgroundJobFactory
-from core.tenancy.context import tenant_context
+from core.tenancy.context import set_database_tenant, tenant_context
 from core.tenancy.maintenance import active_tenant_ids, for_each_tenant
 
 
@@ -88,12 +88,21 @@ class ForEachTenantTests(TestCase):
 
         RLS resolves `current_setting('app.tenant_id', true)` to NULL when nothing
         is bound, so `tenant_id = NULL` is NULL and no row matches. The unbound
-        query below does not error — it just quietly reports zero, which is
-        exactly the failure mode a maintenance job must not have.
+        query below does not error — it quietly reports zero, which is exactly the
+        failure mode a maintenance job must not have: it would look like a
+        successful sweep forever.
+
+        The GUC has to be cleared explicitly rather than just left alone.
+        `tenant_context` binds with `SET LOCAL`, which lasts to the end of the
+        *transaction* — and `TestCase` wraps the whole test in one, so the value
+        set inside the `with` block above is still in effect after it exits. In
+        production each request or task gets a fresh transaction and starts
+        genuinely unbound; here that has to be reproduced.
         """
         with tenant_context(self.first.pk):
             BackgroundJobFactory(tenant=self.first)
 
+        set_database_tenant(None)
         self.assertEqual(BackgroundJob.all_tenants.count(), 0)
 
         with tenant_context(self.first.pk):
