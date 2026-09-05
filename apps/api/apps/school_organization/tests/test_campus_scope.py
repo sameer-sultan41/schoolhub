@@ -16,6 +16,12 @@ mean one thing:
   "Grade 6" cannot create a section in it.
 - **`/campuses` itself** — the row *is* the campus, so the dimension is its own
   primary key and the principal sees the campuses they hold, not all of them.
+- **Nullable campus columns** — departments and curriculum mappings *do* have a
+  campus, and it is nullable to mean "every campus". `IN (...)` drops NULL, so
+  narrowing on it alone loses exactly the shared rows that apply to the
+  principal, and nothing errors: the list is simply short. `scope_campus_allows_null`
+  widens the match, and the tests below assert the row is visible rather than
+  merely that the query does not crash.
 """
 
 from __future__ import annotations
@@ -24,11 +30,15 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.school_organization.tests.factories import (
+    AcademicSessionFactory,
     CampusFactory,
     ClassFactory,
+    ClassSubjectFactory,
+    DepartmentFactory,
     HouseFactory,
     SubjectFactory,
     TenantFactory,
+    TermFactory,
     UserFactory,
     authenticate,
     grant,
@@ -55,11 +65,25 @@ class CampusScopedPrincipalTests(APITestCase):
         grant(self.user, *keys, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
 
     def test_tenant_wide_lists_do_not_500_and_are_not_empty(self) -> None:
-        """The regression itself. Each of these used to raise FieldError."""
+        """The regression itself, across every viewset that claimed the fix.
+
+        Each of these raised FieldError before. Asserting the row is *there*
+        rather than just that the response is 200 is the point: returning
+        `.none()` would also have been a 200, and a campus admin who cannot see
+        "Grade 6" cannot create a section in it.
+        """
+        with tenant_context(self.tenant.id):
+            session = AcademicSessionFactory(tenant=self.tenant)
+            TermFactory(tenant=self.tenant, academic_session=session)
+
         for path, key in (
             ("/api/v1/classes", "school.class.view"),
             ("/api/v1/subjects", "school.subject.view"),
             ("/api/v1/houses", "school.house.view"),
+            ("/api/v1/academic-sessions", "school.academic-session.view"),
+            # Terms have no key of their own — §4 folds them into the session
+            # key, whose description says "academic sessions and terms".
+            ("/api/v1/terms", "school.academic-session.view"),
         ):
             with self.subTest(path=path):
                 user = UserFactory(tenant=self.tenant)
@@ -69,7 +93,7 @@ class CampusScopedPrincipalTests(APITestCase):
                 response = self.client.get(path)
 
                 self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-                self.assertEqual(
+                self.assertGreaterEqual(
                     len(response.json()["data"]),
                     1,
                     "a tenant-wide row must stay visible to a campus-scoped principal",
@@ -105,3 +129,111 @@ class CampusScopedPrincipalTests(APITestCase):
         response = self.client.get(f"/api/v1/campuses/{self.campus.pk}")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+
+
+class NullableCampusTests(APITestCase):
+    """Columns where NULL means "every campus" — the quieter half of the bug.
+
+    `departments.campus_id` and `class_subjects.campus_id` are nullable and say
+    so in their own `help_text`. Narrowing to `campus_id IN (...)` drops those
+    rows, and nothing errors — the shared department and the shared curriculum
+    mapping are simply absent from a campus-scoped principal's list. That is
+    worse than the 500, because a crash gets reported and a short list does not.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        with tenant_context(self.tenant.id):
+            self.campus = CampusFactory(tenant=self.tenant)
+            self.other_campus = CampusFactory(tenant=self.tenant)
+            self.session = AcademicSessionFactory(tenant=self.tenant)
+            self.grade = ClassFactory(tenant=self.tenant, level=6)
+            self.subject = SubjectFactory(tenant=self.tenant)
+
+            # One shared row, one on this campus, one on the other.
+            self.shared_department = DepartmentFactory(tenant=self.tenant, campus=None)
+            self.mine_department = DepartmentFactory(tenant=self.tenant, campus=self.campus)
+            self.foreign_department = DepartmentFactory(
+                tenant=self.tenant, campus=self.other_campus
+            )
+
+            self.shared_mapping = ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.grade,
+                subject=self.subject,
+                campus=None,
+            )
+            # A second subject, not the same one pinned to another campus: the
+            # unique constraint treats (…, campus) as the key, so reusing
+            # `self.subject` here would read as a campus override of the shared
+            # mapping above rather than the unrelated foreign row this is meant
+            # to be.
+            self.foreign_mapping = ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.grade,
+                subject=SubjectFactory(tenant=self.tenant),
+                campus=self.other_campus,
+            )
+
+        self.user = UserFactory(tenant=self.tenant)
+        authenticate(self.client, self.user)
+
+    def test_a_tenant_wide_department_stays_visible_to_a_campus_principal(self) -> None:
+        grant(
+            self.user,
+            "school.department.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        ids = {row["id"] for row in self.client.get("/api/v1/departments").json()["data"]}
+
+        self.assertIn(str(self.shared_department.pk), ids, "the shared department vanished")
+        self.assertIn(str(self.mine_department.pk), ids)
+
+    def test_another_campuses_department_is_still_excluded(self) -> None:
+        """The positive control's other half — widening for NULL must not widen
+        for everything."""
+        grant(
+            self.user,
+            "school.department.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        ids = {row["id"] for row in self.client.get("/api/v1/departments").json()["data"]}
+
+        self.assertNotIn(str(self.foreign_department.pk), ids)
+
+    def test_a_tenant_wide_curriculum_mapping_stays_visible(self) -> None:
+        grant(
+            self.user,
+            "school.subject.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        ids = {row["id"] for row in self.client.get("/api/v1/class-subjects").json()["data"]}
+
+        self.assertIn(str(self.shared_mapping.pk), ids, "the shared curriculum row vanished")
+
+    def test_another_campuses_curriculum_mapping_is_still_excluded(self) -> None:
+        """The same other half the department pair has.
+
+        Without this, "the shared row is visible" is equally satisfied by a
+        widening that returns everything — which is the failure a scope test
+        exists to catch, and the one this table was missing.
+        """
+        grant(
+            self.user,
+            "school.subject.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        ids = {row["id"] for row in self.client.get("/api/v1/class-subjects").json()["data"]}
+
+        self.assertNotIn(str(self.foreign_mapping.pk), ids)
