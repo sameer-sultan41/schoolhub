@@ -31,23 +31,10 @@ S3_REGION_NAME = env("S3_REGION_NAME", default="us-east-1")
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
 
-# Server-side type/size whitelist per purpose (student-management.md §11: "type/size
-# whitelist, AV scan"). Sizes in bytes.
-FILE_UPLOAD_RULES = {
-    "student.photo": {
-        "mime_types": {"image/jpeg", "image/png"},
-        "max_size_bytes": 5 * 1024 * 1024,
-    },
-    "student.document": {
-        "mime_types": {"image/jpeg", "image/png", "application/pdf"},
-        "max_size_bytes": 10 * 1024 * 1024,
-    },
-    "guardian.photo": {
-        "mime_types": {"image/jpeg", "image/png"},
-        "max_size_bytes": 5 * 1024 * 1024,
-    },
-}
-
+# The per-purpose type/size whitelist (student-management.md §11: "type/size
+# whitelist, AV scan") lives in core/files/purposes.py, not here — each module
+# declares its own purposes in its uploads.py, the same way it declares
+# permission keys and feature flags. See that module's docstring for why.
 DJANGO_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",

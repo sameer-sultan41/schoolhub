@@ -26,7 +26,7 @@ from apps.school_organization.models import (
     Subject,
     Term,
 )
-from core.rbac.models import Permission, Role, RolePermission, User, UserRole
+from core.rbac.models import Permission, RecordScope, Role, RolePermission, User, UserRole
 from core.tenancy.models import Tenant, TenantStatus
 
 TEST_PASSWORD = "test-password-12345"
@@ -142,17 +142,31 @@ class HouseFactory(factory.django.DjangoModelFactory):
     name = factory.Sequence(lambda n: f"House {n}")
 
 
-def grant(user: User, *permission_keys: str) -> Role:
+def grant(
+    user: User,
+    *permission_keys: str,
+    scope: str = RecordScope.ALL,
+    scope_ref: uuid.UUID | None = None,
+    is_restricted_principal: bool = False,
+) -> Role:
     """Give ``user`` a role holding exactly ``permission_keys``.
 
     Built row by row rather than through a seed fixture so each test states the
     exact permissions it depends on — a test that passes only because the seed is
     generous proves nothing about the endpoint's own check.
+
+    ``scope``/``scope_ref`` narrow the assignment the way a real one does, so a
+    record-scope test does not have to hand-build ``Role``/``Permission``/
+    ``UserRole`` rows itself. Both caches keyed on the user are evicted, not just
+    the permission-key one — ``user_scopes`` has its own (core/rbac/permissions.py),
+    and a stale entry there is exactly what makes a scope test pass for the wrong
+    reason.
     """
     role = Role.objects.create(
         tenant=user.tenant,
         slug=f"test-role-{uuid.uuid4().hex[:8]}",
         name="Test role",
+        is_restricted_principal=is_restricted_principal,
     )
     for key in permission_keys:
         module, resource, action = key.split(".")
@@ -162,8 +176,11 @@ def grant(user: User, *permission_keys: str) -> Role:
         )
         RolePermission.objects.create(role=role, permission=permission)
 
-    UserRole.objects.create(user=user, role=role, tenant=user.tenant)
+    UserRole.objects.create(
+        user=user, role=role, tenant=user.tenant, scope=scope, scope_ref=scope_ref
+    )
     cache.delete(f"perm-keys:{user.pk}")
+    cache.delete(f"scopes:{user.pk}")
     return role
 
 

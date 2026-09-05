@@ -27,13 +27,19 @@ class TenantScopedViewSetMixin:
         required_feature = "module.students"   # optional; None means "core, ungated"
         required_permission = "students.student.view"
         required_permission_map = {"create": "students.student.create", ...}
-        scope_own_field = "user_id"      # optional, enables the `own` record scope
+        scope_own_field = "user_id"      # optional, the simple `own` record scope
         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
 
     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
     ahead of the feature-level (permission-key) check, and DRF evaluates
     ``permission_classes`` in list order.
+
+    ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+    means more than one column — a guardian's own children, say — the model
+    declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+    it, the same way ``filter_assigned_to_user`` already works for
+    ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
 
     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
     resource in a module tends to have — a child table (a student's guardians,

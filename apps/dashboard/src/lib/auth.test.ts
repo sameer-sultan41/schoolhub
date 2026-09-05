@@ -158,6 +158,35 @@ describe("auth", () => {
       await expect(restoreSession()).resolves.toBeNull();
       expect(accessTokenStore.get()).toBeNull();
     });
+
+    it("rethrows a throttled refresh instead of reporting a signed-out session", async () => {
+      // Returning null here reads as "signed out" all the way up to the app shell, so a
+      // cold load during a throttle window used to drop a still-valid session at /login.
+      const { restoreSession } = await import("./auth");
+      const { ApiError } = await importApiClient();
+      const throttled = new ApiError({
+        code: "rate_limited",
+        message: "Too many requests.",
+        status: 429,
+        url: "/api/auth/refresh",
+      });
+      mockRefreshAccessToken.mockRejectedValueOnce(throttled);
+
+      await expect(restoreSession()).rejects.toBe(throttled);
+      expect(mockGet).not.toHaveBeenCalled();
+    });
+
+    it("rethrows a transient user-fetch failure and keeps the session intact", async () => {
+      const { restoreSession, accessTokenStore } = await import("./auth");
+      const { ApiError } = await importApiClient();
+      mockRefreshAccessToken.mockResolvedValueOnce({ accessToken: "at-8", expiresIn: 900 });
+      mockGet.mockRejectedValueOnce(
+        new ApiError({ code: "server_error", message: "down", status: 503, url: "/auth/me" }),
+      );
+
+      await expect(restoreSession()).rejects.toBeInstanceOf(ApiError);
+      expect(accessTokenStore.get()).toBe("at-8");
+    });
   });
 
   describe("setUnauthorizedHandler", () => {
@@ -219,6 +248,26 @@ describe("auth", () => {
 
       await expect(directClientConfig?.refreshAccessToken?.()).resolves.toBe("at-7");
       expect(accessTokenStore.get()).toBe("at-7");
+    });
+
+    it("refreshAccessToken lets a transient failure through with the token untouched", async () => {
+      // The `.catch(() => null)` that used to wrap this call turned a throttled or
+      // unreachable refresh into "session over", clearing a perfectly good session.
+      const { accessTokenStore } = await import("./auth");
+      const { ApiError } = await importApiClient();
+      const directClientConfig = mockClientConfigs[0];
+      accessTokenStore.set("still-good", 900);
+      mockRefreshAccessToken.mockRejectedValueOnce(
+        new ApiError({
+          code: "rate_limited",
+          message: "Too many requests.",
+          status: 429,
+          url: "/api/auth/refresh",
+        }),
+      );
+
+      await expect(directClientConfig?.refreshAccessToken?.()).rejects.toBeInstanceOf(ApiError);
+      expect(accessTokenStore.get()).toBe("still-good");
     });
   });
 

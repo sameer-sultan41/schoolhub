@@ -8,11 +8,9 @@ import { DEFAULT_QUERY_GC_TIME_MS, DEFAULT_QUERY_STALE_TIME_MS } from "@/lib/con
  * Retry policy is deliberate: a 4xx from the API is an answer, not a blip — retrying a 403 or
  * a 422 just delays the error the user needs to see. Only transport failures and 5xx retry.
  */
-function shouldRetry(failureCount: number, error: unknown): boolean {
+export function shouldRetry(failureCount: number, error: unknown): boolean {
   if (failureCount >= 2) return false;
-  if (error instanceof ApiError) {
-    return error.status === 0 || error.isServerError || error.isRateLimited;
-  }
+  if (error instanceof ApiError) return error.isTransient;
   return false;
 }
 

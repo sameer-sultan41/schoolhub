@@ -18,7 +18,9 @@ import { env } from "./env";
  *   and logout go through this app's own `/api/auth/*` proxy (see AUTH_PROXY_BASE_URL below)
  *   rather than calling the API directly, so the cookie is always same-origin.
  * - A 401 triggers exactly one refresh, shared across concurrent requests, then the original
- *   request replays. If the refresh fails we clear state and bounce to /login.
+ *   request replays. A refresh that comes back 401/403 means the session is over: clear
+ *   state and bounce to /login. A refresh that is throttled, 5xx or unreachable means
+ *   nothing of the sort — that error propagates and the session is left intact.
  *
  * The same endpoints serve future mobile clients with secure storage instead of a cookie —
  * no web-only shortcut is introduced here.
@@ -69,15 +71,22 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
  */
 const AUTH_PROXY_BASE_URL = "/api/auth";
 
-async function refreshViaProxy(): Promise<{ accessToken: string; expiresIn: number } | null> {
-  return refreshAccessToken({ baseUrl: AUTH_PROXY_BASE_URL, path: "/refresh" }).catch(() => null);
-}
-
 export const apiClient: ApiClient = createApiClient({
   baseUrl: env.NEXT_PUBLIC_API_BASE_URL,
   getAccessToken: () => accessTokenStore.get(),
+  /**
+   * No `.catch(() => null)` here, deliberately. `refreshAccessToken` returns `null` only
+   * for a spent session and throws when the refresh could not be determined (a 429 from
+   * `AuthEndpointThrottle`, a 5xx, a dropped connection). Swallowing the throw used to
+   * clear a perfectly good session — reachable by a real user reloading twice or opening
+   * a second tab under load, not just by test tooling. Letting it propagate keeps the
+   * in-memory token, leaves the refresh cookie alone, and surfaces the real error.
+   */
   refreshAccessToken: async () => {
-    const refreshed = await refreshViaProxy();
+    const refreshed = await refreshAccessToken({
+      baseUrl: AUTH_PROXY_BASE_URL,
+      path: "/refresh",
+    });
     if (!refreshed) {
       accessTokenStore.clear();
       return null;
@@ -134,11 +143,20 @@ export async function fetchCurrentUser(): Promise<AuthenticatedUser> {
 
 /**
  * Restore a session on a cold page load: there is no access token in memory yet, but the
- * refresh cookie may still be valid. Returns null when the user must sign in again.
+ * refresh cookie may still be valid.
+ *
+ * Returns `null` only when the user must genuinely sign in again. A **transient** failure
+ * — the auth throttle, a 5xx, an offline moment — is rethrown instead, because returning
+ * `null` here reads as "signed out" all the way up to the app shell. `useSession` retries
+ * it under the shared policy rather than dropping a still-valid session at `/login`; a
+ * cold load during a blip is exactly when this used to bite.
  */
 export async function restoreSession(): Promise<AuthenticatedUser | null> {
   if (!accessTokenStore.isValid()) {
-    const refreshed = await refreshViaProxy();
+    const refreshed = await refreshAccessToken({
+      baseUrl: AUTH_PROXY_BASE_URL,
+      path: "/refresh",
+    });
     if (!refreshed) return null;
     accessTokenStore.set(refreshed.accessToken, refreshed.expiresIn);
   }
@@ -150,7 +168,8 @@ export async function restoreSession(): Promise<AuthenticatedUser | null> {
     // cleared independently, or this is the first visit since this code shipped).
     setSessionCookie();
     return user;
-  } catch {
+  } catch (error) {
+    if (error instanceof ApiError && error.isTransient) throw error;
     accessTokenStore.clear();
     clearSessionCookie();
     return null;

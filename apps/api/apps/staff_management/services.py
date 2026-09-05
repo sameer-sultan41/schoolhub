@@ -17,6 +17,7 @@ from datetime import date
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from apps.staff_management import uploads
 from apps.staff_management.models import (
     DEFAULT_DOCUMENT_TYPES,
     Designation,
@@ -307,7 +308,7 @@ def create_staff(
         assert_national_id_available(tenant_id=tenant_id, national_id=national_id, instance=None)
     checked_user_id = resolve_tenant_user_id(user_id=user_id, tenant_id=tenant_id)
     if photo_file is not None:
-        assert_file_usable(file=photo_file, purpose="staff.photo")
+        assert_file_usable(file=photo_file, purpose=uploads.STAFF_PHOTO.key)
 
     employee_number = allocate_employee_number(
         campus=campus, joining_date=joining_date, tenant_id=tenant_id
@@ -357,7 +358,7 @@ def add_staff_qualification(
     if year_awarded is not None:
         assert_year_not_future(year_awarded)
     if document_file is not None:
-        assert_file_usable(file=document_file, purpose="staff.qualification")
+        assert_file_usable(file=document_file, purpose=uploads.STAFF_QUALIFICATION.key)
 
     return StaffQualification.objects.create(
         tenant_id=tenant_id,
@@ -427,7 +428,7 @@ def add_staff_document(
     tenant_id: uuid.UUID,
 ) -> StaffDocument:
     assert_document_type_allowed(document_type=document_type, tenant_id=tenant_id)
-    assert_file_usable(file=file, purpose="staff.document")
+    assert_file_usable(file=file, purpose=uploads.STAFF_DOCUMENT.key)
 
     return StaffDocument.objects.create(
         tenant_id=tenant_id,

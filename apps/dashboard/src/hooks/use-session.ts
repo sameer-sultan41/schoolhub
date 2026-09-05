@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { restoreSession } from "@/lib/auth";
 import { SESSION_QUERY_STALE_TIME_MS } from "@/lib/constants";
 import { hasAnyPermission, hasPermission } from "@/lib/permissions";
-import { queryKeys } from "@/lib/query-client";
+import { queryKeys, shouldRetry } from "@/lib/query-client";
 
 /**
  * The signed-in user and their effective permissions.
@@ -13,13 +13,18 @@ import { queryKeys } from "@/lib/query-client";
  * On a cold load there is no access token in memory, so this first exchanges the HttpOnly
  * refresh cookie for one. Returns `null` (not an error) when the session is over — the
  * proxy has already routed anonymous visitors to /login.
+ *
+ * `retry: false` would be right if every rejection meant "signed out", but it does not:
+ * `restoreSession` now rethrows a throttled or unavailable refresh instead of reporting
+ * it as a dead session, and that is precisely the case worth retrying. The shared policy
+ * retries only transient failures, so a real 401 still resolves to `null` immediately.
  */
 export function useSession() {
   const query = useQuery<AuthenticatedUser | null>({
     queryKey: queryKeys.session(),
     queryFn: restoreSession,
     staleTime: SESSION_QUERY_STALE_TIME_MS,
-    retry: false,
+    retry: shouldRetry,
   });
 
   return {
