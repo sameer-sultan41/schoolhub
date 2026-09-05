@@ -165,6 +165,18 @@ class NullableCampusTests(APITestCase):
                 subject=self.subject,
                 campus=None,
             )
+            # A second subject, not the same one pinned to another campus: the
+            # unique constraint treats (…, campus) as the key, so reusing
+            # `self.subject` here would read as a campus override of the shared
+            # mapping above rather than the unrelated foreign row this is meant
+            # to be.
+            self.foreign_mapping = ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.grade,
+                subject=SubjectFactory(tenant=self.tenant),
+                campus=self.other_campus,
+            )
 
         self.user = UserFactory(tenant=self.tenant)
         authenticate(self.client, self.user)
@@ -207,3 +219,21 @@ class NullableCampusTests(APITestCase):
         ids = {row["id"] for row in self.client.get("/api/v1/class-subjects").json()["data"]}
 
         self.assertIn(str(self.shared_mapping.pk), ids, "the shared curriculum row vanished")
+
+    def test_another_campuses_curriculum_mapping_is_still_excluded(self) -> None:
+        """The same other half the department pair has.
+
+        Without this, "the shared row is visible" is equally satisfied by a
+        widening that returns everything — which is the failure a scope test
+        exists to catch, and the one this table was missing.
+        """
+        grant(
+            self.user,
+            "school.subject.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        ids = {row["id"] for row in self.client.get("/api/v1/class-subjects").json()["data"]}
+
+        self.assertNotIn(str(self.foreign_mapping.pk), ids)

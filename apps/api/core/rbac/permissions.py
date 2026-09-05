@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q
 from rest_framework import permissions
 
@@ -139,7 +140,10 @@ def scope_queryset(
     cannot express the relationship; it takes precedence over `campus_field`.
 
     `campus_allows_null=True` widens the match to include rows whose campus is
-    NULL, for the columns that use NULL to mean "every campus".
+    NULL, for the columns that use NULL to mean "every campus". It is mutually
+    exclusive with `filter_by_campus`, which owns the whole predicate and so
+    cannot be widened from out here — asking for both raises rather than
+    quietly returning the narrow result.
 
     **`campus_field=None` means the table has no campus dimension at all.** Classes,
     subjects and houses are defined once for a school and used by every campus —
@@ -168,6 +172,17 @@ def scope_queryset(
             # the one expected to approve.
             by_campus = getattr(queryset.model, "filter_by_campus", None)
             if callable(by_campus):
+                # The hook owns the *whole* campus predicate, so the NULL widening
+                # below never runs for it. Asking for both is a contradiction, and
+                # the way it would fail — the widening silently doing nothing — is
+                # the exact silent row-loss this function exists to stop. Say so
+                # instead of letting the next model discover it in production.
+                if campus_allows_null:
+                    raise ImproperlyConfigured(
+                        f"{queryset.model.__name__} defines filter_by_campus and also asks "
+                        "for campus_allows_null, which filter_by_campus cannot honour. "
+                        "Express the nullable-campus case inside the hook."
+                    )
                 return by_campus(queryset, campus_ids)
             if campus_field is None:
                 return queryset
@@ -180,7 +195,12 @@ def scope_queryset(
                 # exactly the rows that *do* apply to them, and nothing errors:
                 # the tenant-wide department, the shared curriculum mapping and
                 # the lunch break simply are not in the list.
-                match |= Q(**{f"{campus_field.removesuffix('_id')}__isnull": True})
+                #
+                # `campus_field` verbatim, not stripped of its `_id`: Django
+                # resolves `campus_id__isnull` and `campus__isnull` to the same
+                # SQL for a ForeignKey, while stripping would turn a plain
+                # non-FK `*_id` column (`staff.user_id` is one) into a FieldError.
+                match |= Q(**{f"{campus_field}__isnull": True})
             return queryset.filter(match)
     if RecordScope.OWN in scopes:
         owned = getattr(queryset.model, "filter_owned_by_user", None)
