@@ -1,10 +1,10 @@
-import { ApiError, type ApiResult } from "@schoolhub/api-client";
+import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { usePermission } from "@/hooks/use-session";
 import { WeekGridScreen } from "@/features/timetable/week-grid-screen";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { cursorPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() },
@@ -103,15 +103,6 @@ const MONDAY_MATHS = {
   updated_at: "2026-04-01T00:00:00Z",
 };
 
-function page(items: unknown[]): ApiResult<unknown> {
-  return {
-    data: items,
-    meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-    requestId: "req-list",
-    status: 200,
-  };
-}
-
 /** Pick a session and a section — the grid query is disabled until both are set. */
 async function chooseSectionAndSession(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("combobox", { name: "Academic session" }));
@@ -125,7 +116,7 @@ describe("WeekGridScreen", () => {
     mockGet.mockReset();
     mockPost.mockReset();
     mockUsePermission.mockReturnValue(false);
-    mockGet.mockResolvedValue(page([MONDAY_MATHS]));
+    mockGet.mockResolvedValue(cursorPage([MONDAY_MATHS]));
   });
 
   it("asks for a session and a section before fetching anything", () => {
