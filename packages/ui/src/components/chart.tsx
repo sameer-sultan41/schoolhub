@@ -304,10 +304,11 @@ export function ChartTooltipContent({
                         </span>
                       </div>
                       {item.value != null && (
-                        // tabular-nums in the body face, not shadcn's font-mono: figures
-                        // need to align in a column, which is what tabular figures are
-                        // for. A second typeface for small data labels is decoration.
-                        <span className="font-medium text-foreground tabular-nums">
+                        // The numeric face, with tabular figures. Readings in a
+                        // tooltip are compared down a column, so they have to align
+                        // on the decimal; this is the one place a second typeface
+                        // earns its keep rather than decorating.
+                        <span className="font-numeric font-medium text-foreground tabular-nums">
                           {formatValue(item.value, valueFormatter)}
                         </span>
                       )}

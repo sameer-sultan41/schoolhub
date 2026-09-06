@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { Fraunces, Inter, Noto_Nastaliq_Urdu } from "next/font/google";
+import { Fraunces, Inter, JetBrains_Mono, Noto_Nastaliq_Urdu } from "next/font/google";
 import type { ReactNode } from "react";
 import { AppProviders } from "@/components/providers";
 import { PLATFORM_NAME } from "@/lib/constants";
@@ -32,6 +32,15 @@ const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", dis
 // character fallback for Urdu glyphs, so preloading it would fetch it on the critical
 // path of every all-Latin page too. It's still resolved and served the moment Urdu text
 // appears, exactly as before — only the eager fetch on unrelated pages is removed.
+// The face every figure wears (--sh-font-numeric). Latin subset only: it is
+// reached solely by digits and the odd currency symbol, and Urdu glyphs inside a
+// formatted value fall through to Nastaliq per-character, exactly as they do in
+// the body stack.
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 const notoNastaliqUrdu = Noto_Nastaliq_Urdu({
   subsets: ["arabic"],
   variable: "--font-noto-nastaliq-urdu",
@@ -72,7 +81,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       lang={locale}
       dir={directionFor(locale)}
       suppressHydrationWarning
-      className={`h-full ${inter.variable} ${fraunces.variable} ${notoNastaliqUrdu.variable}`}
+      className={`h-full ${inter.variable} ${fraunces.variable} ${jetBrainsMono.variable} ${notoNastaliqUrdu.variable}`}
       // Layout preferences ride on <html> because that is the only element every CSS rule
       // below can reach — the preset stylesheets key off [data-theme-preset], and the
       // shell reads the rest through `[html[data-…]_&]` variants.
