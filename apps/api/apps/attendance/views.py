@@ -358,11 +358,14 @@ class LeaveTypeViewSet(
     module doc declares — the thing `timetable/views.py`'s docstring explicitly
     refuses to do. So the split is by *what §4 can key*:
 
-    - **Reading** the catalogue is part of submitting a request, so this list
-      takes `attendance.leave-request.create`. That is exactly the move
+    - **Reading** the catalogue is part of working with leave requests, so this
+      list takes `attendance.leave-request.view`. That is exactly the move
       `timetable` makes for `/periods` and `/rooms`, which §4 there also leaves
       unkeyed: reading the scaffolding falls under the key for the thing it is
-      scaffolding for.
+      scaffolding for. `.view` rather than `.create`, because §4 grants `.view`
+      to requesters *and* approvers — an approver reading a request needs the
+      type's name, and a key only requesters hold would have hidden it from the
+      one person who has to decide.
     - **Writing** leave types, and the whole of `/leave-policies` and
       `/leave-balances`, is HR configuration and ships with hr-leave (Tier 6),
       which "adds no tables" precisely because this module's migration created
@@ -383,8 +386,27 @@ class LeaveTypeViewSet(
     # this raises FieldError for every campus-scoped caller.
     scope_campus_field = None
     required_feature = FEATURE
-    required_permission = "attendance.leave-request.create"
+    required_permission = "attendance.leave-request.view"
     http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        """Reference data has no owner, so record scope does not apply to it.
+
+        `scope_queryset` falls through to `.none()` for an `own`-scoped principal
+        when the model defines no `filter_owned_by_user` — which is right for a
+        *record* and wrong for a *catalogue*. A guardian holds
+        `attendance.leave-request.view` at `RecordScope.OWN`, and narrowing the
+        list of leave types by ownership returned nothing at all: the submission
+        form had no types to choose from, and nothing errored.
+
+        Same reasoning `scope_campus_field = None` already carries one line up —
+        a scope over a table with no such dimension is already satisfied by
+        tenant scoping — extended to `own`. Stated here rather than solved by
+        giving `LeaveType` a `filter_owned_by_user` that returns everything,
+        which would be the same decision written as if it were a rule about
+        ownership.
+        """
+        return self.queryset.alive()
 
 
 class LeaveRequestViewSet(

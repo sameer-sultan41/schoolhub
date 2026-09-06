@@ -107,6 +107,9 @@ class LeaveRequestEndpointTests(LeaveAPITestCase):
         self.assertEqual(len(response.data["data"]["approvals"]), 1)
 
     def test_a_guardian_cannot_submit_for_someone_elses_child(self) -> None:
+        """422, not 404: the student is in the caller's own tenant, so there is
+        no cross-tenant existence to hide (AGENTS.md invariant 2 is about tenant
+        boundaries). Naming the rule is more use to a portal than a bare 404."""
         authenticate(self.client, self.guardian_user)
 
         response = self.client.post(
@@ -115,7 +118,7 @@ class LeaveRequestEndpointTests(LeaveAPITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_days_count_is_the_servers_answer_not_the_clients(self) -> None:
         authenticate(self.client, self.guardian_user)
@@ -258,9 +261,9 @@ class LeaveRequestEndpointTests(LeaveAPITestCase):
 
 class LeaveTypeEndpointTests(LeaveAPITestCase):
     def test_a_requester_can_read_the_catalogue(self) -> None:
-        """Reading the types is part of submitting a request, which is why the
-        list takes `attendance.leave-request.create` — §4 keys no leave-type
-        permission at all. See views.py for the full reasoning."""
+        """Reading the types takes `attendance.leave-request.view` — §4 keys no
+        leave-type permission at all, and `.view` is the nearest key §4 grants to
+        requesters *and* approvers alike. See views.py for the full reasoning."""
         authenticate(self.client, self.guardian_user)
 
         response = self.client.get(LEAVE_TYPES)
@@ -286,7 +289,7 @@ class LeaveTypeEndpointTests(LeaveAPITestCase):
         authenticate(self.client, campus_admin)
         grant(
             campus_admin,
-            "attendance.leave-request.create",
+            "attendance.leave-request.view",
             scope=RecordScope.CAMPUS,
             scope_ref=self.campus.pk,
         )
@@ -294,6 +297,17 @@ class LeaveTypeEndpointTests(LeaveAPITestCase):
         response = self.client.get(LEAVE_TYPES)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["data"]), 1)
+
+    def test_an_own_scoped_requester_sees_the_whole_catalogue(self) -> None:
+        """Reference data has no owner. `scope_queryset` falls through to
+        `.none()` for an `own`-scoped principal with no `filter_owned_by_user`,
+        which is right for a record and wrong for a catalogue — the submission
+        form had no types to choose from, and nothing errored."""
+        authenticate(self.client, self.guardian_user)
+
+        response = self.client.get(LEAVE_TYPES)
+
         self.assertEqual(len(response.data["data"]), 1)
 
 
