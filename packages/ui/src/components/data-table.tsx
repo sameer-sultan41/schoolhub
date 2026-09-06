@@ -505,11 +505,13 @@ export function DataTable<TRow>({
           become a bare string again. */}
       {showEmpty ? <div className="border-t border-border p-4">{emptyState}</div> : null}
 
-      {/* No footer under an empty state. A lone disabled "1" and a rows-per-page control
-          sit beneath a panel that has just said there is nothing here — and there is
-          nothing to page through and no rows to size. `total_pages` is 1 for an empty
-          result, not 0, so the pager cannot work this out on its own. */}
-      {pagination && !showEmpty ? (
+      {/* Rendered even when the page came back empty, deliberately. A page beyond the
+          last one — a hand-edited `?page=`, or a filter that shortened the list under a
+          shared link — is an empty result WITH somewhere to go, and hiding the pager
+          there leaves the reader on a dead end whose only exit is the URL bar. The
+          "1–0 of 0" that prompted this is the caller's summary, and the callers already
+          decline to compute a range over no rows. */}
+      {pagination ? (
         // Summary and rows-per-page lead, the pager trails. Wraps rather than scrolls:
         // on a phone the two stack instead of pushing the pager off the edge of the one
         // row a reader needs to reach.

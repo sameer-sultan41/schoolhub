@@ -208,31 +208,19 @@ describe("DataTable", () => {
       expect(sectionsOf(cardOf(container))).toHaveLength(1);
     });
 
-    it("drops the whole footer under an empty state, pager and page size together", () => {
-      // `total_pages` is 1 for an empty result, not 0, so the pager cannot work this
-      // out for itself — it would render a lone disabled "1" beneath a panel that has
-      // just said there is nothing here, beside a control for sizing rows there are
-      // none of.
-      const { container } = renderTable({
+    it("keeps the pager when the page came back empty, so a stray ?page= is not a dead end", async () => {
+      // An empty result is not always an empty list: page 9 of a list that just shrank
+      // to 3 pages renders no rows and still has somewhere to go. Hiding the pager here
+      // leaves the reader on a dead end whose only exit is the URL bar.
+      const onPageChange = jest.fn();
+      renderTable({
         rows: [],
-        pagination: pagesPagination({
-          page: 1,
-          totalPages: 1,
-          pageSize: {
-            value: 25,
-            options: [25, 50, 100],
-            onChange: jest.fn(),
-            label: "Rows per page",
-          },
-          summary: <span>0 of 0</span>,
-        }),
+        pagination: pagesPagination({ page: 9, totalPages: 3, onPageChange }),
       });
 
-      expect(screen.queryByRole("navigation", { name: "Pagination" })).not.toBeInTheDocument();
-      expect(screen.queryByLabelText("Rows per page")).not.toBeInTheDocument();
-      expect(screen.queryByText("0 of 0")).not.toBeInTheDocument();
-      // Header, then the empty state. Nothing after it.
-      expect(sectionsOf(cardOf(container))).toHaveLength(2);
+      await userEvent.click(screen.getByRole("button", { name: "Go to page 1" }));
+
+      expect(onPageChange).toHaveBeenCalledWith(1);
     });
 
     it("puts the empty state under the header rather than instead of the table", () => {
