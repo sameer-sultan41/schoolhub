@@ -41,6 +41,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.38.0",
     "react-hook-form": "^7.64.0",
+    "recharts": "^3.10.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.4.0"
   },

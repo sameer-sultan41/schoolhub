@@ -25,6 +25,21 @@ export {
 } from "./components/card";
 export type { CardHeaderProps, CardProps } from "./components/card";
 
+export {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "./components/chart";
+export type {
+  ChartConfig,
+  ChartContainerProps,
+  ChartLegendContentProps,
+  ChartSlot,
+  ChartTooltipContentProps,
+} from "./components/chart";
+
 export { DataTable } from "./components/data-table";
 export type { DataTableColumn, DataTableProps } from "./components/data-table";
 
