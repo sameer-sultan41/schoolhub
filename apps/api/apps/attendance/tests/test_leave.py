@@ -36,6 +36,7 @@ from apps.attendance.tests.factories import (
     TenantFactory,
     UserFactory,
     configure_academic,
+    grant,
     holiday,
     open_all_week,
 )
@@ -451,3 +452,167 @@ class CancellationTests(LeaveTestCase):
 
             with self.assertRaises(Conflict):
                 services.cancel_leave_request(request=request, actor_id=self.guardian_user.pk)
+
+
+class LeaveWritePathRaceTests(LeaveTestCase):
+    """The two directions the register and the leave module can collide."""
+
+    def test_a_teacher_cannot_mark_over_an_approved_leave_day(self) -> None:
+        """The guard in the direction that was missing. `apply_approved_leave`
+        already refuses to overwrite a teacher's mark; without this, marking
+        silently overwrote an approved-leave day and left `leave_request`
+        pointing at a request whose dates the row no longer reflected."""
+        from apps.attendance import services as attendance_services
+        from apps.attendance.models import AttendanceStatus
+
+        monday = next_monday()
+        with tenant_context(self.tenant.id):
+            request = self.submit(start_date=monday, end_date=monday)
+            services.decide_leave_step(request=request, approve=True, approver_id=self.approver.pk)
+
+            with self.assertRaises(DomainRuleViolation) as raised:
+                attendance_services.bulk_mark_student_attendance(
+                    section=self.section,
+                    session=self.session,
+                    on_date=monday,
+                    period=None,
+                    entries=[{"student_id": self.student.pk, "status": AttendanceStatus.PRESENT}],
+                    actor_id=self.approver.pk,
+                )
+
+            self.assertIn("approved leave", str(raised.exception.meta["rows"]))
+            row = StudentAttendance.objects.alive().get(student=self.student)
+            self.assertEqual(row.status, AttendanceStatus.ON_LEAVE)
+            self.assertEqual(row.leave_request_id, request.pk)
+
+    def test_auto_marked_rows_record_the_system_as_their_source(self) -> None:
+        """They said `manual`, which was untrue — no person marked them — so
+        §13's reports had no way to tell a teacher's mark from the leave
+        module's."""
+        from apps.attendance.models import AttendanceSource
+
+        with tenant_context(self.tenant.id):
+            request = self.submit()
+            services.decide_leave_step(request=request, approve=True, approver_id=self.approver.pk)
+
+            sources = set(
+                StudentAttendance.objects.alive()
+                .filter(leave_request=request)
+                .values_list("source", flat=True)
+            )
+            self.assertEqual(sources, {AttendanceSource.SYSTEM})
+
+    def test_a_teacher_marking_mid_approval_does_not_roll_back_the_approval(self) -> None:
+        """The race the savepoint exists for. Without it an IntegrityError from
+        the auto-mark rolled back **the approval decision itself** and 500'd the
+        approver — the leave refused because someone took a register."""
+        from unittest import mock
+
+        from apps.attendance.models import AttendanceStatus
+
+        monday = next_monday()
+        with tenant_context(self.tenant.id):
+            request = self.submit(start_date=monday, end_date=monday)
+
+            real_filter = StudentAttendance.objects.alive
+            calls = {"n": 0}
+
+            def blind_first(*args, **kwargs):
+                """Report "nothing marked yet" once, then tell the truth."""
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    StudentAttendanceFactory(
+                        tenant=self.tenant,
+                        student=self.student,
+                        section=self.section,
+                        academic_session=self.session,
+                        attendance_date=monday,
+                        status=AttendanceStatus.PRESENT,
+                        marked_by=self.approver.pk,
+                    )
+                    return real_filter().none()
+                return real_filter(*args, **kwargs)
+
+            with mock.patch.object(StudentAttendance.objects, "alive", side_effect=blind_first):
+                decided = services.decide_leave_step(
+                    request=request, approve=True, approver_id=self.approver.pk
+                )
+
+            self.assertEqual(decided.status, LeaveStatus.APPROVED)
+            # The teacher's row stands; the auto-mark added nothing over it.
+            row = StudentAttendance.objects.alive().get(student=self.student)
+            self.assertEqual(row.status, AttendanceStatus.PRESENT)
+
+
+class EscalationScopeTests(LeaveTestCase):
+    def test_level_two_needs_an_approver_who_can_see_wider(self) -> None:
+        """ "Two different people" was not enough: §4 grants the approve key to
+        class_teacher, vice_principal and principal alike, so two assigned-scoped
+        class teachers could decide both levels — and a request that escalated
+        *because it was long* would be settled entirely inside the scope that
+        raised it."""
+        from core.rbac.models import RecordScope
+
+        monday = next_monday()
+        narrow_approver = UserFactory(tenant=self.tenant)
+        grant(
+            narrow_approver,
+            "attendance.leave-request.approve",
+            scope=RecordScope.ASSIGNED,
+        )
+
+        with tenant_context(self.tenant.id):
+            request = self.submit(start_date=monday, end_date=monday + datetime.timedelta(days=13))
+            after_first = services.decide_leave_step(
+                request=request, approve=True, approver_id=self.approver.pk
+            )
+
+            with self.assertRaises(DomainRuleViolation):
+                services.decide_leave_step(
+                    request=after_first, approve=True, approver_id=narrow_approver.pk
+                )
+
+    def test_a_campus_scoped_approver_satisfies_level_two(self) -> None:
+        from core.rbac.models import RecordScope
+
+        monday = next_monday()
+        wide_approver = UserFactory(tenant=self.tenant)
+        grant(
+            wide_approver,
+            "attendance.leave-request.approve",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        with tenant_context(self.tenant.id):
+            request = self.submit(start_date=monday, end_date=monday + datetime.timedelta(days=13))
+            after_first = services.decide_leave_step(
+                request=request, approve=True, approver_id=self.approver.pk
+            )
+
+            decided = services.decide_leave_step(
+                request=after_first, approve=True, approver_id=wide_approver.pk
+            )
+
+        self.assertEqual(decided.status, LeaveStatus.APPROVED)
+
+    def test_level_one_is_unaffected_by_the_scope_rule(self) -> None:
+        """A short request has one level and must stay decidable by a class
+        teacher — the rule is about escalation, not about approving at all."""
+        from core.rbac.models import RecordScope
+
+        narrow_approver = UserFactory(tenant=self.tenant)
+        grant(
+            narrow_approver,
+            "attendance.leave-request.approve",
+            scope=RecordScope.ASSIGNED,
+        )
+
+        with tenant_context(self.tenant.id):
+            request = self.submit()
+
+            decided = services.decide_leave_step(
+                request=request, approve=True, approver_id=narrow_approver.pk
+            )
+
+        self.assertEqual(decided.status, LeaveStatus.APPROVED)

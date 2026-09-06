@@ -6642,11 +6642,13 @@ components:
     AttendanceSourceEnum:
       enum:
       - manual
+      - system
       - import
       - device
       type: string
       description: |-
         * `manual` - Manual
+        * `system` - System
         * `import` - Import
         * `device` - Device
     AttendanceStatusEnum:

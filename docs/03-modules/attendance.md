@@ -299,9 +299,13 @@ registry the day hr-leave ships its own `permissions.py` (duplicate key), and
 inventing `attendance.leave-type.*` would put keys in the registry that no module
 doc declares. So the split is by what §4 here *can* key:
 
-- **Reading** the catalogue is part of submitting a request, so `GET /leave-types`
-  takes `attendance.leave-request.create` — the same move `timetable` makes for
-  `/periods` and `/rooms`, which its §4 also leaves unkeyed.
+- **Reading** the catalogue is part of working with leave requests, so
+  `GET /leave-types` takes `attendance.leave-request.view` — the same move
+  `timetable` makes for `/periods` and `/rooms`, which its §4 also leaves
+  unkeyed. `.view` rather than `.create`, because §4 grants `.view` to
+  requesters *and* approvers: an approver reading a request needs the type's
+  name, and a key only requesters hold would hide it from the one person who has
+  to decide.
 - **Writing** leave types, and all of `/leave-policies` and `/leave-balances`, is
   HR configuration and ships with hr-leave (Tier 6).
 

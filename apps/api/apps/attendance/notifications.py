@@ -21,6 +21,8 @@ safeguarding case §2 names, and a guardian waiting on a leave decision has no
 other way to learn of it.
 """
 
+import logging
+
 from core.notifications.catalog import registry as catalog
 from core.notifications.models import (
     NotificationCategory,
@@ -28,6 +30,8 @@ from core.notifications.models import (
     NotificationPriority,
 )
 from core.notifications.templates import registry as templates
+
+logger = logging.getLogger(__name__)
 
 ABSENCE_ALERT = "attendance.absence-alert"
 LATE_ALERT = "attendance.late-alert"
@@ -151,6 +155,16 @@ def notify_leave_submitted(*, request) -> None:
         .values_list("user_id", flat=True)
     )
     if not user_ids:
+        # Documented behaviour that was a silent `return`. A school with nobody
+        # holding the step's key has a configuration problem the *approver queue*
+        # will never show — the request sits pending and no one is told — so the
+        # log line is the only place it surfaces.
+        logger.warning(
+            "leave request %s has no eligible approver for %r at level %s",
+            request.pk,
+            step.required_permission,
+            step.level,
+        )
         return
 
     notify(

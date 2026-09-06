@@ -60,6 +60,7 @@ class AttendanceSource(models.TextChoices):
     """
 
     MANUAL = "manual", "Manual"
+    SYSTEM = "system", "System"
     IMPORT = "import", "Import"
     DEVICE = "device", "Device"
 

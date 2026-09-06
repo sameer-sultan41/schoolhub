@@ -406,6 +406,34 @@ def bulk_mark_student_attendance(
             "Some of these records are locked and must be changed through a correction request.",
         )
 
+    # The guard in the *other* direction. `apply_approved_leave` already refuses
+    # to overwrite a date a teacher has marked; without this, marking silently
+    # overwrote an approved-leave day — leaving `leave_request` pointing at a
+    # request whose dates the row no longer reflects, so the leave module had a
+    # row it believed it owned and would withdraw on cancellation, showing a
+    # status nobody had asked it to hold.
+    #
+    # Refused rather than reconciled: the two possible reconciliations are
+    # "clear the link" (which loses the fact that leave was approved) and
+    # "cancel the leave" (which is a decision, not a side effect of taking a
+    # register). Naming the request lets the teacher do the second deliberately.
+    on_leave = [
+        {
+            "student_id": str(student_id),
+            "issue": (
+                "This student has approved leave on this date; cancel the leave "
+                "request before marking them."
+            ),
+        }
+        for student_id, row in existing.items()
+        if row.status == AttendanceStatus.ON_LEAVE
+    ]
+    if on_leave:
+        raise DomainRuleViolation(
+            {"entries": "Some students are on approved leave; the register was not saved."},
+            meta={"rows": on_leave},
+        )
+
     created, updated, transitioned = _apply_register(
         entries=entries,
         existing=existing,
@@ -901,6 +929,7 @@ def decide_leave_step(
                 )
             }
         )
+    _assert_escalation_reaches_wider(step=step, user_id=approver_id)
 
     now = timezone.now()
     step.decision = ApprovalDecision.APPROVED if approve else ApprovalDecision.REJECTED
@@ -934,6 +963,41 @@ def decide_leave_step(
         _notify_leave_decision(request=request)
 
     return request
+
+
+def _assert_escalation_reaches_wider(*, step: LeaveApproval, user_id: uuid.UUID) -> None:
+    """Level 2 needs someone who can see more than level 1 could.
+
+    "Two different people" was not enough on its own. §4 grants the approve key
+    to `class_teacher`, `vice_principal` and `principal` alike, so two
+    `assigned`-scoped class teachers with overlapping sections could take a
+    level and a level — and a request that escalated *because it was long* would
+    be decided entirely inside the scope that raised it, without the wider view
+    §7.2 escalates to a vice principal precisely to obtain.
+
+    So the second level requires a `campus` or `all` scope. Expressed as scope
+    rather than as a role because roles are tenant-editable and scope is what
+    actually determines what an approver can see — the same reason
+    `student_leave_chain` keys both levels the same and lets scope separate them.
+    """
+    if step.level < 2:
+        return
+
+    from core.rbac.models import User
+
+    reviewer = User.objects.filter(pk=user_id).first()
+    scopes = user_scopes(reviewer) if reviewer is not None else {}
+    if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
+        return
+
+    raise DomainRuleViolation(
+        {
+            "approver_id": (
+                "This request escalated past the threshold and needs an approver "
+                "with campus-wide or school-wide scope."
+            )
+        }
+    )
 
 
 @transaction.atomic
@@ -1014,25 +1078,46 @@ def apply_approved_leave(*, request: LeaveRequest, actor_id: uuid.UUID) -> int:
         .values_list("attendance_date", flat=True)
     )
 
-    rows = [
-        StudentAttendance(
-            tenant_id=request.tenant_id,
-            student=request.student,
-            section=enrollment.section,
-            academic_session=session,
-            attendance_date=day,
-            status=AttendanceStatus.ON_LEAVE,
-            leave_request=request,
-            source=AttendanceSource.MANUAL,
-            marked_by=actor_id,
-            created_by=actor_id,
-            updated_by=actor_id,
+    def _rows_for(dates: list[datetime.date]) -> list[StudentAttendance]:
+        return [
+            StudentAttendance(
+                tenant_id=request.tenant_id,
+                student=request.student,
+                section=enrollment.section,
+                academic_session=session,
+                attendance_date=day,
+                status=AttendanceStatus.ON_LEAVE,
+                leave_request=request,
+                source=AttendanceSource.SYSTEM,
+                marked_by=actor_id,
+                created_by=actor_id,
+                updated_by=actor_id,
+            )
+            for day in dates
+        ]
+
+    pending = [day for day in working if day not in already]
+    try:
+        with transaction.atomic():
+            StudentAttendance.objects.bulk_create(_rows_for(pending))
+    except IntegrityError:
+        # A teacher marked one of these dates between our read and our insert.
+        # Without the savepoint this rolled back **the approval decision itself**
+        # and 500'd the approver — the leave was refused because someone took a
+        # register, which is not a relationship either action should have.
+        #
+        # The recovery is deliberately *not* an upsert: a date a teacher has
+        # already marked is theirs, exactly as the read above already decided.
+        # The retry narrows to what is still genuinely missing.
+        already = set(
+            StudentAttendance.objects.alive()
+            .filter(student=request.student, attendance_date__in=working, period__isnull=True)
+            .values_list("attendance_date", flat=True)
         )
-        for day in working
-        if day not in already
-    ]
-    StudentAttendance.objects.bulk_create(rows)
-    return len(rows)
+        pending = [day for day in working if day not in already]
+        StudentAttendance.objects.bulk_create(_rows_for(pending))
+
+    return len(pending)
 
 
 def _withdraw_auto_marked_rows(*, request: LeaveRequest, actor_id: uuid.UUID) -> int:

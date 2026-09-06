@@ -2823,11 +2823,12 @@ export interface components {
         AttendanceCorrectionSubjectTypeEnum: "student" | "staff";
         /**
          * @description * `manual` - Manual
+         *     * `system` - System
          *     * `import` - Import
          *     * `device` - Device
          * @enum {string}
          */
-        AttendanceSourceEnum: "manual" | "import" | "device";
+        AttendanceSourceEnum: "manual" | "system" | "import" | "device";
         /**
          * @description * `present` - Present
          *     * `absent` - Absent
