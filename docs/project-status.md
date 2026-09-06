@@ -46,7 +46,7 @@ The monorepo skeleton is in place and structurally complete.
 | `apps/api` | Django 6.1 + DRF 3.18, managed by `uv`. `core/tenancy` (Tenant/TenantSettings, RLS via `SET LOCAL` + `rls_operations`), `core/rbac` (User/Role/Permission, code-defined permission registry seeded via `post_migrate`), `core/audit` (append-only audit log), `core/api` (envelope renderer, pagination, exception handling, base viewsets). One Django app: `apps/school_organization` (campuses, departments, academic sessions, terms, classes, sections, subjects, houses) — the reference module every later app copies |
 | `packages/types` | API envelope `{data, meta}` / `{error:{code,message,details,request_id}}`, cursor + offset pagination, job resource, auth/RBAC types (`PermissionKey = module.resource.action`), tenant + branding, website CMS content types |
 | `packages/api-client` | Hand-written transport core: envelope unwrapping, bearer auth, single-flight refresh-on-401 + replay, `ApiError` normalization, cursor pagination helpers. The resource layer (`schema.d.ts`) is REGENERATED from `apps/api/openapi.yaml` and CI fails if it's stale |
-| `packages/ui` | shadcn/ui (`new-york` style, Radix + lucide-react + sonner + tw-animate-css) in active use — button, card, data-table, tabs, sheet, label, tooltip, alert, avatar, dialog, badge, sidebar, table, separator, dropdown-menu, select, textarea, input, skeleton, form. `--sh-*` Tailwind v4 token layer; default platform brand is **Navy & Gold** |
+| `packages/ui` | shadcn/ui (`new-york` style, Radix + lucide-react + sonner + tw-animate-css) in active use — button, card, data-table, tabs, sheet, label, tooltip, alert, avatar, dialog, badge, sidebar, table, separator, dropdown-menu, select, textarea, input, skeleton, form. `--sh-*` Tailwind v4 token layer; default platform brand is **Ink & Brass**. The token layer now carries three surface planes (`surface-sunken`/`surface`/`surface-raised`), three brand-tinted elevation steps, an `info` hue, one named gradient (`bg-spotlight`), and a validated six-slot chart ramp — and the `dark` variant answers to both a `.dark` class (the dashboard's toggle) and `prefers-color-scheme` (the website, which has no toggle) |
 | `packages/config` | Shared ESLint flat config (ESLint 9, typescript-eslint) |
 | `apps/dashboard` | Auth-guard proxy, tenant-subdomain login (own subdomain namespace, auth cookies via a same-origin proxy), in-memory access token + refresh, TanStack Query client + key factory, `hasPermission`/`<Can>`, `(auth)/login` (RHF + Zod), `(app)` shell with permission-filtered nav + collapsible sidebar + tenant theming, dashboard page, `/api/health`, next-intl (`en` + `ur`, RTL) |
 | `apps/website` | Host→tenant proxy, cached tenant resolution, read-only content layer, ISR rendering of `website_pages`/`page_sections`, theme registry + 12 section components, per-tenant sitemap/robots, HMAC-signed revalidate webhook |
@@ -421,9 +421,16 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 - Components resolve colour through `--sh-*` custom properties only — no literal hex, no
   `blue-600`. Tenant branding is the only thing that may override a `--sh-color-*`/
   `--sh-font-*`/`--sh-radius` value at runtime; the default is SchoolHub's own
-  "Navy & Gold" platform brand — see the doc comment at the top of
+  "Ink & Brass" platform brand — see the doc comment at the top of
   `packages/ui/src/styles/theme.css`. A `--sh-platform-*` tier is separate and
   never tenant-overridable at all.
+- Chart colour comes from `--sh-color-chart-1..6` in fixed slot order, never cycled and
+  never by rank. Bars/lines/stacks may use all six; scatter, bubble and small-multiples
+  are capped at the first three (slot 4 collapses against slot 2 under protanopia). Status
+  is never carried by a chart colour — it takes success/warning/danger with an icon and a
+  label. The reasoning and the measured separations are in `theme.css`'s own header.
+- `bg-spotlight` is allowed **once per screen**, on that screen's hero element. It is a
+  named utility rather than an inline gradient specifically so a second use is greppable.
 - Permission-aware UI is UX, never enforcement — the API enforces.
 - `apps/website` must never gain a write path.
 - Every new env var goes into `.env.example` with a dummy value and a comment.

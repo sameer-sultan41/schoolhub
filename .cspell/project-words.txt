@@ -51,6 +51,7 @@ dblink
 dbname
 deactivatable
 destructures
+deuteranopia
 diffable
 disableable
 DMARC
@@ -153,6 +154,7 @@ preflights
 prefs
 presign
 presigning
+protanopia
 pseudonymization
 pseudonymized
 pseudonymizes
@@ -164,6 +166,7 @@ Qureshi
 Rahman
 Raza
 readyz
+recharts
 recomputable
 recreatable
 rediss
