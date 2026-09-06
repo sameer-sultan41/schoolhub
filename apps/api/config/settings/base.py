@@ -256,6 +256,15 @@ CELERY_TASK_ROUTES = {
     "apps.academics.tasks.*": {"queue": "bulk"},
     "apps.student_management.tasks.*": {"queue": "bulk"},
     "apps.staff_management.tasks.*": {"queue": "bulk"},
+    # Not "bulk": §2 measures this module by whether a guardian hears about an
+    # unexplained absence the same morning, and the bulk lane is rate-shaped.
+    # notifications.md §5 puts absence alerts in the transactional lane by name.
+    # "transactional", not the doc's dotted `notify.transactional` — see the note
+    # below `core.notifications.tasks.*`: compose's `celery-worker` consumes the
+    # plain names, and the dotted spelling is a queue nothing listens to.
+    "apps.attendance.tasks.send_attendance_alerts": {"queue": "transactional"},
+    # The nightly lock sweep is the opposite: nobody is waiting on it.
+    "apps.attendance.tasks.lock_expired_attendance": {"queue": "bulk"},
     "core.idempotency.tasks.*": {"queue": "bulk"},
     "core.jobs.tasks.*": {"queue": "bulk"},
     # notifications.md §5 names three lanes (emergency / transactional / bulk);
@@ -296,6 +305,14 @@ CELERY_BEAT_SCHEDULE = {
         # Daily, off-peak: 30-day retention needs no finer granularity, and these
         # rows carry the base64 import payloads, so it is the heavier sweep.
         "schedule": crontab(hour="3", minute="40"),
+    },
+    "lock-expired-attendance": {
+        "task": "apps.attendance.tasks.lock_expired_attendance",
+        # Daily, after the two prunes and well clear of any school day in any
+        # timezone this platform serves. `is_locked` is a rendering hint that the
+        # marking service never trusts on its own (it recomputes from the date),
+        # so a late or skipped tick degrades what a client shows, never the rule.
+        "schedule": crontab(hour="4", minute="10"),
     },
 }
 

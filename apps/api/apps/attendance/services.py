@@ -338,12 +338,34 @@ def bulk_mark_student_attendance(
 
     rows = [*created, *updated]
     alerts = [row for row in rows if row.status in ALERT_STATUSES]
+    if alerts:
+        _queue_alerts(tenant_id=section.tenant_id, rows=alerts)
+
     return {
         "marked": len(created),
         "updated": len(updated),
         "rows": rows,
         "alerts": alerts,
     }
+
+
+def _queue_alerts(*, tenant_id: uuid.UUID, rows: list[StudentAttendance]) -> None:
+    """Fan §12's guardian alerts out after the register commits, never before.
+
+    ``on_commit``, not an inline call: the register is the outcome the teacher
+    asked for, and a broker that is down must not roll it back. It also means no
+    alert is ever sent for a register that failed a later row check and rolled
+    back — which an inline enqueue would do, since Celery has no transaction to
+    take part in.
+    """
+    from apps.attendance.tasks import send_attendance_alerts
+
+    attendance_ids = [str(row.pk) for row in rows]
+    transaction.on_commit(
+        lambda: send_attendance_alerts.delay(
+            tenant_id=str(tenant_id), attendance_ids=attendance_ids
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
