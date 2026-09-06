@@ -973,7 +973,16 @@ def apply_approved_leave(*, request: LeaveRequest, actor_id: uuid.UUID) -> int:
 
     Daily rows only, never per-period: the request is for whole dates, and
     fabricating a row per period would invent marks nobody made.
+
+    Staff requests return early. `leave_requests` holds both kinds and
+    `student` is therefore nullable; there is no staff register to write to
+    until PR 3 ships `staff_attendance`, and mypy is right that reaching for
+    `request.student.campus_id` on a staff row would crash. Guarded rather than
+    cast, because the guard is also the honest description of what this does.
     """
+    if request.student is None:
+        return 0
+
     session = AcademicSession.objects.alive().filter(is_current=True).first()
     if session is None:
         # An approved request with nowhere to record it. Loud rather than silent:
