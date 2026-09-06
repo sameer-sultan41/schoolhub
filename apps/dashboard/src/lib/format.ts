@@ -48,6 +48,11 @@ export function formatTime(wireTime: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
+    // h23, not the locale's own preference. Without it `en` renders "08:00 AM", which
+    // is four characters of noise in place of the four this function exists to remove,
+    // and the periods column is set in tabular figures precisely so a bell schedule
+    // lines up down the page — an AM/PM suffix of varying width defeats that.
+    hourCycle: "h23",
     timeZone: "UTC",
   }).format(parsed);
 }

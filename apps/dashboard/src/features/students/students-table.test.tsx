@@ -14,8 +14,22 @@ jest.mock("@/hooks/use-session", () => ({
   useAnyPermission: jest.fn(() => false),
 }));
 const mockPush = jest.fn();
+/**
+ * The router has to ROUND-TRIP, not swallow the write.
+ *
+ * Filters, sort and page live in the URL now (`useTableParams` -> `useSearchParam`), so
+ * `replace` is what applies a page click and `useSearchParams` is where the next render
+ * reads it back from. A `replace: jest.fn()` that stored nothing would leave the screen
+ * on page one forever, and every pager assertion below would pass against a table that
+ * never moved.
+ */
+let mockSearchParams = new URLSearchParams();
+const mockReplace = jest.fn((url: string) => {
+  mockSearchParams = new URLSearchParams(url.split("?")[1] ?? "");
+});
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, prefetch: jest.fn() }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 // apiClient.get's static type comes from the real ApiClient class (the mock
@@ -48,6 +62,10 @@ describe("StudentsTable", () => {
     mockGet.mockReset();
     mockPost.mockReset();
     mockPush.mockReset();
+    // The URL is state now, and it survives a render — reset it or the page a previous
+    // test navigated to leaks into the next one.
+    mockReplace.mockClear();
+    mockSearchParams = new URLSearchParams();
     mockUsePermission.mockReturnValue(false);
   });
 

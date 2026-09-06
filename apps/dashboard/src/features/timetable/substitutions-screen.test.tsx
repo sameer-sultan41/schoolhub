@@ -1,10 +1,11 @@
-import { ApiError, type ApiResult } from "@schoolhub/api-client";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@schoolhub/api-client";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SubstitutionsScreen } from "@/features/timetable/substitutions-screen";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { formatDate } from "@/lib/format";
+import { offsetPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() },
@@ -13,7 +14,27 @@ jest.mock("@/hooks/use-session", () => ({
   usePermission: jest.fn(() => false),
   useAnyPermission: jest.fn(() => false),
 }));
-jest.mock("next/navigation", () => ({ usePathname: () => "/timetable/substitutions" }));
+
+/**
+ * The router has to ROUND-TRIP, not swallow the write.
+ *
+ * Filters, sort and page live in the URL now (`useTableParams` → `useSearchParam`), so
+ * `replace` is what applies a page click and `useSearchParams` is where the next render
+ * reads it back from. A `replace: jest.fn()` that stores nothing would leave the screen
+ * on page one forever, and the pager assertions below would pass against a table that
+ * never moved. `usePathname` is still here for `TimetableNav`.
+ */
+let mockSearchParams = new URLSearchParams();
+const mockReplace = jest.fn((url: string) => {
+  mockSearchParams = new URLSearchParams(url.split("?")[1] ?? "");
+});
+const mockRouter = { replace: mockReplace, push: jest.fn(), prefetch: jest.fn() };
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/timetable/substitutions",
+  useRouter: () => mockRouter,
+  useSearchParams: () => mockSearchParams,
+}));
+
 jest.mock("@/features/timetable/use-timetable-reference-data", () => ({
   useTeachingStaffOptions: () => ({
     data: [
@@ -47,46 +68,48 @@ const PROPOSED = {
 
 const CONFIRMED = { ...PROPOSED, id: "sub2", status: "confirmed" as const, reason: null };
 
-function page(items: unknown[], nextCursor: string | null = null): ApiResult<unknown> {
-  return {
-    data: items,
-    meta: { pagination: { next_cursor: nextCursor, previous_cursor: null, page_size: 25 } },
-    requestId: "req-list",
-    status: 200,
-  };
-}
-
 describe("SubstitutionsScreen", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockPost.mockReset();
     mockUsePermission.mockReturnValue(false);
+    mockSearchParams = new URLSearchParams();
   });
 
   it("resolves both teachers by name and shows the status", async () => {
-    mockGet.mockResolvedValue(page([PROPOSED]));
+    mockGet.mockResolvedValue(offsetPage([PROPOSED]));
     renderWithProviders(<SubstitutionsScreen />);
 
-    expect(await screen.findByText("Bilal Ahmed")).toBeInTheDocument();
-    expect(screen.getByText("Sana Iqbal")).toBeInTheDocument();
-    expect(screen.getByText("2026-09-08")).toBeInTheDocument();
-    expect(screen.getByText("Medical leave")).toBeInTheDocument();
-    expect(screen.getByText("Proposed")).toBeInTheDocument();
+    const row = await screen.findByRole("row", { name: /Bilal Ahmed/ });
+    expect(within(row).getByText("Bilal Ahmed")).toBeInTheDocument();
+    expect(within(row).getByText("Sana Iqbal")).toBeInTheDocument();
+    expect(within(row).getByText("Medical leave")).toBeInTheDocument();
+    expect(within(row).getByText("Proposed")).toBeInTheDocument();
+    // Localized, not the wire value. Composed through `formatDate` rather than spelled
+    // out because "Sep 8, 2026" is only what a UTC+n runner would render — a machine
+    // behind UTC formats the same instant as the day before.
+    expect(within(row).getByText(formatDate(PROPOSED.date, "en"))).toBeInTheDocument();
+    expect(screen.queryByText("2026-09-08")).not.toBeInTheDocument();
   });
 
   it("shows the translated empty state", async () => {
-    mockGet.mockResolvedValue(page([]));
+    mockGet.mockResolvedValue(offsetPage([]));
     renderWithProviders(<SubstitutionsScreen />);
 
     expect(await screen.findByText("No substitutions yet")).toBeInTheDocument();
+    // The row range is suppressed on an empty result: "0–0 of 0" beneath an empty state
+    // that has already said there is nothing here is noise.
+    expect(screen.queryByText("0–0 of 0")).not.toBeInTheDocument();
   });
 
   it("filters by status", async () => {
-    mockGet.mockResolvedValue(page([PROPOSED]));
+    mockGet.mockResolvedValue(offsetPage([PROPOSED]));
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionsScreen />);
     await screen.findByText("Bilal Ahmed");
 
+    // The filter row sits inside the table's card now, but the select is still named by
+    // its label, so the reader reaches it exactly as before.
     await user.click(screen.getByRole("combobox", { name: "Status" }));
     await user.click(await screen.findByRole("option", { name: "Confirmed" }));
 
@@ -101,7 +124,7 @@ describe("SubstitutionsScreen", () => {
   // unfiltered list, so a `toMatchObject` on the wrong keys was the only thing
   // holding the range up.
   it("filters by a date range on the parameter names the backend derives", async () => {
-    mockGet.mockResolvedValue(page([PROPOSED]));
+    mockGet.mockResolvedValue(offsetPage([PROPOSED]));
     renderWithProviders(<SubstitutionsScreen />);
     await screen.findByText("Bilal Ahmed");
 
@@ -118,20 +141,26 @@ describe("SubstitutionsScreen", () => {
     expect(mockGet.mock.calls.at(-1)?.[1]?.query).not.toHaveProperty("date_to");
   });
 
-  it("pages forward by cursor", async () => {
-    mockGet.mockResolvedValue(page([PROPOSED], "cursor-2"));
+  it("clicking a page number asks the server for that page", async () => {
+    // Two pages' worth: the pager only renders numbers when there is somewhere to go.
+    mockGet.mockResolvedValue(offsetPage([PROPOSED], { total_count: 30, page_size: 25 }));
     renderWithProviders(<SubstitutionsScreen />);
     await screen.findByText("Bilal Ahmed");
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    // With a page number on screen, where the reader is in the list is finally a fact
+    // the summary can state — it said nothing at all under cursor paging.
+    expect(screen.getByText("1–25 of 30")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
 
     await waitFor(() => {
-      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.cursor).toBe("cursor-2");
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
     });
   });
 
   it("hides the proposal form and the decision buttons without permission", async () => {
-    mockGet.mockResolvedValue(page([PROPOSED]));
+    mockGet.mockResolvedValue(offsetPage([PROPOSED]));
     renderWithProviders(<SubstitutionsScreen />);
 
     await screen.findByText("Bilal Ahmed");
@@ -141,7 +170,7 @@ describe("SubstitutionsScreen", () => {
 
   it("offers a decision only on a proposal", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([CONFIRMED]));
+    mockGet.mockResolvedValue(offsetPage([CONFIRMED]));
     renderWithProviders(<SubstitutionsScreen />);
 
     await screen.findByText("Confirmed");
@@ -151,7 +180,7 @@ describe("SubstitutionsScreen", () => {
 
   it("approves a proposal", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([PROPOSED]));
+    mockGet.mockResolvedValue(offsetPage([PROPOSED]));
     mockPost.mockResolvedValue({ data: {}, meta: undefined, requestId: null, status: 200 });
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionsScreen />);
@@ -165,7 +194,7 @@ describe("SubstitutionsScreen", () => {
 
   it("rejects a proposal", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([PROPOSED]));
+    mockGet.mockResolvedValue(offsetPage([PROPOSED]));
     mockPost.mockResolvedValue({ data: {}, meta: undefined, requestId: null, status: 200 });
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionsScreen />);
@@ -179,7 +208,7 @@ describe("SubstitutionsScreen", () => {
 
   it("renders the envelope when a decision is refused as already made", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([PROPOSED]));
+    mockGet.mockResolvedValue(offsetPage([PROPOSED]));
     mockPost.mockRejectedValue(
       new ApiError({
         code: "conflict",
