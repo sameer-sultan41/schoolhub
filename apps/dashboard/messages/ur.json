@@ -24,6 +24,21 @@
       "light": "روشن",
       "dark": "تاریک",
       "system": "سسٹم کے مطابق"
+    },
+    "groups": {
+      "overview": "جائزہ",
+      "people": "افراد",
+      "teaching": "تدریس",
+      "operations": "انتظامی امور"
+    },
+    "planned": "جلد",
+    "plannedHint": "{module} ابھی تیار نہیں ہے۔",
+    "breadcrumb": "راستہ",
+    "account": "اکاؤنٹ",
+    "locale": {
+      "label": "زبان",
+      "en": "English",
+      "ur": "اردو"
     }
   },
   "auth": {
@@ -41,7 +56,8 @@
     "session": {
       "expiredTitle": "آپ کا سیشن ختم ہو گیا",
       "expiredBody": "جاری رکھنے کے لیے دوبارہ سائن اِن کریں۔",
-      "impersonating": "آپ یہ اکاؤنٹ بطور سپورٹ عملہ دیکھ رہے ہیں۔ ہر عمل کا آڈٹ ہوتا ہے۔"
+      "impersonating": "آپ یہ اکاؤنٹ بطور سپورٹ عملہ دیکھ رہے ہیں۔ ہر عمل کا آڈٹ ہوتا ہے۔",
+      "impersonatingLabel": "نمائندگی کی اطلاع"
     }
   },
   "dashboard": {
@@ -919,7 +935,11 @@
     "next": "اگلا",
     "previous": "پچھلا",
     "noResults": "کوئی ریکارڈ نہیں ملا۔",
-    "requiredField": "یہ خانہ ضروری ہے۔"
+    "requiredField": "یہ خانہ ضروری ہے۔",
+    "details": "تفصیلات",
+    "new": "نیا",
+    "edit": "ترمیم",
+    "import": "درآمد"
   },
   "errors": {
     "validation_error": "براہ کرم نشان زد خانوں کو درست کریں۔",

@@ -24,6 +24,21 @@
       "light": "Light",
       "dark": "Dark",
       "system": "Match system"
+    },
+    "groups": {
+      "overview": "Overview",
+      "people": "People",
+      "teaching": "Teaching",
+      "operations": "Operations"
+    },
+    "planned": "Soon",
+    "plannedHint": "{module} is not built yet.",
+    "breadcrumb": "Breadcrumb",
+    "account": "Account",
+    "locale": {
+      "label": "Language",
+      "en": "English",
+      "ur": "اردو"
     }
   },
   "auth": {
@@ -41,7 +56,8 @@
     "session": {
       "expiredTitle": "Your session expired",
       "expiredBody": "Sign in again to continue.",
-      "impersonating": "You are viewing this account as support staff. Every action is audited."
+      "impersonating": "You are viewing this account as support staff. Every action is audited.",
+      "impersonatingLabel": "Impersonation notice"
     }
   },
   "dashboard": {
@@ -919,7 +935,11 @@
     "next": "Next",
     "previous": "Previous",
     "noResults": "No records found.",
-    "requiredField": "This field is required."
+    "requiredField": "This field is required.",
+    "details": "Details",
+    "new": "New",
+    "edit": "Edit",
+    "import": "Import"
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",

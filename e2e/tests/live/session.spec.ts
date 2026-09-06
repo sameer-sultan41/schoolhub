@@ -44,7 +44,8 @@ test.describe("session (real API)", () => {
     if (!refreshCookie) throw new Error("expected a real sh_refresh cookie before signing out");
     if (!sessionCookie) throw new Error("expected a real sh_session cookie before signing out");
 
-    await dashboardPage.signOut.click();
+    const signOut = await dashboardPage.openUserMenu();
+    await signOut.click();
     await expect(page).toHaveURL("/login");
 
     // The strongest proof a stub cannot make honestly: replay those leftover cookies in a

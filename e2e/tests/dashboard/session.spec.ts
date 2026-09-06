@@ -25,7 +25,8 @@ test.describe("session restore", () => {
     await dashboardPage.goto();
     await expect(dashboardPage.nav).toBeVisible();
 
-    await dashboardPage.signOut.click();
+    const signOut = await dashboardPage.openUserMenu();
+    await signOut.click();
 
     // The proxy routes on the session cookie, so this only passes if logout actually
     // cleared it — otherwise /login redirects straight back into the app.
