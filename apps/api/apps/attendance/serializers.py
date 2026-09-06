@@ -20,11 +20,15 @@ from apps.attendance import services
 from apps.attendance.models import (
     AttendanceCorrection,
     AttendanceStatus,
+    LeaveApproval,
+    LeaveRequest,
+    LeaveType,
     StudentAttendance,
 )
 from apps.school_organization.models import AcademicSession, Section
 from apps.student_management.models import Student
 from apps.timetable.models import Period
+from core.files.models import File
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
 
@@ -45,6 +49,7 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
     section_id = _fk(Section, source="section")
     academic_session_id = _fk(AcademicSession, source="academic_session")
     period_id = _fk(Period, source="period", allow_null=True, required=False)
+    leave_request_id = serializers.PrimaryKeyRelatedField(source="leave_request", read_only=True)
     is_locked = serializers.SerializerMethodField()
 
     class Meta:
@@ -216,3 +221,101 @@ class CorrectionDecisionSerializer(serializers.Serializer):
     """
 
     review_note = serializers.CharField(max_length=500, required=False, allow_null=True)
+
+
+class LeaveTypeSerializer(serializers.ModelSerializer):
+    """`leave_types` — read-only here. See views.py for why writes are hr-leave's."""
+
+    class Meta:
+        model = LeaveType
+        fields = (
+            "id",
+            "name",
+            "code",
+            "applies_to",
+            "is_paid",
+            "requires_attachment",
+            "max_consecutive_days",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class LeaveApprovalSerializer(serializers.ModelSerializer):
+    """One step of §7.2's chain, nested on the request it belongs to."""
+
+    class Meta:
+        model = LeaveApproval
+        fields = (
+            "id",
+            "level",
+            "required_permission",
+            "approver_id",
+            "decision",
+            "decided_at",
+            "note",
+        )
+        read_only_fields = fields
+
+
+class LeaveRequestSerializer(serializers.ModelSerializer):
+    """`leave_requests` — the student half (§16).
+
+    `days_count` is read-only because §11 computes it net of holidays, and
+    `status`/`current_approval_level`/`decided_at` because they move only through
+    the colon-actions. A writable `days_count` would let a client understate a
+    fortnight to duck the escalation threshold.
+
+    The chain is nested rather than fetched separately: a requester's first
+    question is "how many people have to say yes", and §16 declares no
+    `/leave-requests/{id}/approvals` sub-resource to ask it with.
+    """
+
+    student_id = _fk(Student, source="student")
+    leave_type_id = _fk(LeaveType, source="leave_type")
+    attachment_file_id = _fk(File, source="attachment_file", required=False, allow_null=True)
+    approvals = LeaveApprovalSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = LeaveRequest
+        fields = (
+            "id",
+            "requester_type",
+            "student_id",
+            "submitted_by",
+            "leave_type_id",
+            "start_date",
+            "end_date",
+            "day_part",
+            "days_count",
+            "reason",
+            "attachment_file_id",
+            "status",
+            "current_approval_level",
+            "decided_at",
+            "approvals",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            *READ_ONLY_FIELDS,
+            "requester_type",
+            "submitted_by",
+            "days_count",
+            "status",
+            "current_approval_level",
+            "decided_at",
+        )
+
+
+class LeaveDecisionSerializer(serializers.Serializer):
+    """Body for `:approve` / `:reject` — an optional note, nothing else.
+
+    The decision is the route rather than a field, for the reason
+    `CorrectionDecisionSerializer` gives: one endpoint taking `{"approve": bool}`
+    could not be permission-gated differently for the two outcomes.
+    """
+
+    note = serializers.CharField(max_length=500, required=False, allow_null=True)

@@ -16,7 +16,12 @@ from __future__ import annotations
 
 import django_filters
 
-from apps.attendance.models import AttendanceCorrection, StudentAttendance
+from apps.attendance.models import (
+    AttendanceCorrection,
+    LeaveRequest,
+    LeaveType,
+    StudentAttendance,
+)
 
 
 class StudentAttendanceFilterSet(django_filters.FilterSet):
@@ -48,3 +53,28 @@ class AttendanceCorrectionFilterSet(django_filters.FilterSet):
     class Meta:
         model = AttendanceCorrection
         fields = {"status": ["exact"], "subject_type": ["exact"]}
+
+
+class LeaveRequestFilterSet(django_filters.FilterSet):
+    """§16 names no filters for `/leave-requests`.
+
+    Status is what an approver's morning queue narrows on and is already indexed
+    (`leave_req_status_idx`); student and date range are what a guardian's own
+    history needs. Both are exposed rather than leaving a client to fetch every
+    request the tenant has ever raised and filter in the browser.
+    """
+
+    student_id = django_filters.UUIDFilter(field_name="student_id")
+    leave_type_id = django_filters.UUIDFilter(field_name="leave_type_id")
+    date__gte = django_filters.DateFilter(field_name="start_date", lookup_expr="gte")
+    date__lte = django_filters.DateFilter(field_name="end_date", lookup_expr="lte")
+
+    class Meta:
+        model = LeaveRequest
+        fields = {"status": ["exact"], "requester_type": ["exact"]}
+
+
+class LeaveTypeFilterSet(django_filters.FilterSet):
+    class Meta:
+        model = LeaveType
+        fields = {"applies_to": ["exact"], "is_active": ["exact"]}
