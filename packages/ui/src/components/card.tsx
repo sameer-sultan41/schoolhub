@@ -1,18 +1,46 @@
+import { type VariantProps, cva } from "class-variance-authority";
 import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "../lib/cn";
 
-export type CardProps = HTMLAttributes<HTMLDivElement>;
+/**
+ * Colours and depth come from theme tokens only. Tailwind's own `shadow-sm`/`shadow-md`
+ * are deliberately unused: that scale is neutral black at a fixed opacity, and a grey
+ * shadow under a blue-tinted surface reads as two materials rather than one — the
+ * commonest tell of an unmodified component kit. `--sh-elevation-*` carries the brand hue
+ * in light mode and falls back to depth-of-black in dark, where a tinted shadow is
+ * invisible anyway.
+ */
+const cardVariants = cva("rounded-[var(--sh-radius)] border text-surface-foreground", {
+  variants: {
+    elevation: {
+      /**
+       * Sits ON the page — the default, and what every existing card gets. Visually
+       * the same weight as the `shadow-sm` this replaces, so nothing already built
+       * changes; the difference is that the shadow now carries the brand hue instead
+       * of neutral black.
+       */
+      flat: "border-border bg-surface shadow-elevation-1",
+      /** Sits ABOVE the page — a stat tile, a panel that should read as its own object. */
+      raised: "border-border bg-surface-raised shadow-elevation-2",
+      /** Floats — a popover, a dragged item, a card that has been picked up. */
+      floating: "border-transparent bg-surface-raised shadow-elevation-3",
+    },
+    tone: {
+      surface: "",
+      /**
+       * The one gradient in the system. Allowed ONCE PER SCREEN, on that screen's hero
+       * element, and never as decoration — see theme.css's `--sh-gradient-spotlight`.
+       */
+      spotlight: "border-transparent bg-spotlight text-primary-foreground",
+    },
+  },
+  defaultVariants: { elevation: "flat", tone: "surface" },
+});
 
-export function Card({ className, ...props }: CardProps) {
-  return (
-    <div
-      className={cn(
-        "rounded-[var(--sh-radius)] border border-border bg-surface text-surface-foreground shadow-sm",
-        className,
-      )}
-      {...props}
-    />
-  );
+export type CardProps = HTMLAttributes<HTMLDivElement> & VariantProps<typeof cardVariants>;
+
+export function Card({ className, elevation, tone, ...props }: CardProps) {
+  return <div className={cn(cardVariants({ elevation, tone }), className)} {...props} />;
 }
 
 export interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {
