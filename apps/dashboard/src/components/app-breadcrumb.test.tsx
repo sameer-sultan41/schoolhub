@@ -21,6 +21,16 @@ function crumbLabels(): string[] {
 }
 
 describe("AppBreadcrumb", () => {
+  it("renders no trail for a module that is not built yet", () => {
+    // Attendance is `status: "planned"` — the sidebar shows it disabled. If a stub page
+    // ever appears under /attendance, the breadcrumb must not become the one surface that
+    // presents it as a working module.
+    mockPathname = "/attendance/today";
+    const { container } = renderWithProviders(<AppBreadcrumb />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("renders nothing on a module's own landing page", () => {
     mockPathname = "/students";
     const { container } = renderWithProviders(<AppBreadcrumb />);

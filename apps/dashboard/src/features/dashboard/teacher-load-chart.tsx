@@ -83,7 +83,7 @@ export function toTeacherLoadRows(rows: TeacherLoadSummaryRow[]): TeacherLoadRow
       right.weekly_periods - left.weekly_periods || left.name.localeCompare(right.name),
   );
 
-  const visible = ordered.slice(0, DASHBOARD_MAX_ROWS).map<LoadDatum>((row) => ({
+  const toDatum = (row: TeacherLoadSummaryRow): LoadDatum => ({
     key: row.staff_id,
     name: row.name,
     load: row.weekly_periods,
@@ -91,11 +91,20 @@ export function toTeacherLoadRows(rows: TeacherLoadSummaryRow[]): TeacherLoadRow
     // Slot 1 for the series and slot 5 for the exception — fixed slots, assigned by
     // meaning, never cycled and never by rank.
     fill: row.over_norm ? "var(--color-overNorm)" : "var(--color-load)",
-  }));
+  });
+
+  const visible = ordered.slice(0, DASHBOARD_MAX_ROWS).map(toDatum);
 
   return {
     visible,
-    overNorm: visible.filter((row) => row.overNorm),
+    // Filtered from EVERY row, not from the visible slice.
+    //
+    // The cut is ordered by load, and over-norm is not the same thing as heaviest — a
+    // teacher can be over their own norm on 14 periods while eight colleagues sit above
+    // them on 20. Filtering the slice dropped exactly those people from the callout, so
+    // the panel would have promised "a status is never left to a hue" and then silently
+    // said nothing about them. The whole point of the callout is that it survives the cut.
+    overNorm: ordered.filter((row) => row.over_norm).map(toDatum),
     remainder: ordered.length - visible.length,
   };
 }

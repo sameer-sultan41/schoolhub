@@ -1,6 +1,12 @@
 import type { MyTimetableSlot, PeriodRecord } from "@/features/timetable/timetable-types";
 import { markerPercent, timeToMinutes, toIsoDate, toSchoolDay, weekdayOf } from "./use-school-day";
 
+// Only the pure exports are under test here, but importing the module pulls in the hook,
+// and through it `@/lib/auth`, which builds a real ApiClient at module scope — and that
+// binds `globalThis.fetch`, which jsdom does not provide. Mocking the module keeps this
+// suite about the time arithmetic rather than about the transport.
+jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn() } }));
+
 /** Wednesday 2026-09-09, 10:20 local — mid-morning, inside the third period below. */
 const WEDNESDAY_MID_MORNING = new Date(2026, 8, 9, 10, 20);
 /** `day_of_week` is Monday-based (Python's `date.weekday()`), so Wednesday is 2. */

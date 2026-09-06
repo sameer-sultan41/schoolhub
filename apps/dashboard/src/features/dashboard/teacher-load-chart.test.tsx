@@ -218,6 +218,33 @@ describe("TeacherLoadChart", () => {
  * hands that decision to this function, so this is the layer that can.
  */
 describe("toTeacherLoadRows", () => {
+  it("names an over-norm teacher who ranks below the cut", () => {
+    // The regression this exists for: `overNorm` was filtered from the VISIBLE slice, so
+    // a teacher over their own norm on a light load — ranked below eight colleagues on
+    // heavier ones — vanished from the callout entirely. The panel would have promised
+    // that a status is never left to a hue, and then said nothing at all about them.
+    const heavy = Array.from({ length: 8 }, (_, index) =>
+      makeRow({
+        staff_id: `heavy-${String(index)}`,
+        name: `Heavy ${String(index)}`,
+        weekly_periods: 30 - index,
+        over_norm: false,
+      }),
+    );
+    const lightButOver = makeRow({
+      staff_id: "light",
+      name: "Sara Malik",
+      weekly_periods: 14,
+      over_norm: true,
+    });
+
+    const { visible, overNorm, remainder } = toTeacherLoadRows([...heavy, lightButOver]);
+
+    expect(visible.map((row) => row.key)).not.toContain("light");
+    expect(remainder).toBe(1);
+    expect(overNorm.map((row) => row.name)).toEqual(["Sara Malik"]);
+  });
+
   it("orders by load, heaviest first, and breaks ties on name so the order is stable", () => {
     const { visible } = toTeacherLoadRows([
       makeRow({ staff_id: "a", name: "Ayesha Khan", weekly_periods: 18 }),

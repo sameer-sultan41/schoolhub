@@ -42,7 +42,13 @@ export function AppBreadcrumb() {
   const pathname = usePathname();
 
   const segments = pathname.split("/").filter(Boolean);
-  const moduleItem = NAV_ITEMS.find((item) => item.href === `/${segments[0] ?? ""}`);
+  // `status === "ready"` as well as the href: a module still marked planned has no route
+  // today, but the moment a stub page appears under one this would render a live link to
+  // it — ahead of the sidebar, which still shows the same module disabled with a "Soon"
+  // badge. One of the two would be lying about whether the module is usable.
+  const moduleItem = NAV_ITEMS.find(
+    (item) => item.href === `/${segments[0] ?? ""}` && item.status === "ready",
+  );
 
   // A single segment is the module's own landing page; an unknown first segment is a route
   // that no nav entry claims, and inventing a label for it would be a guess.
