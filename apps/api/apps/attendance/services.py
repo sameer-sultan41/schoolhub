@@ -560,11 +560,11 @@ def decide_correction(
     row and recomputed `late_minutes`. That is exactly the audit-trail guarantee
     §6 asks this row to carry, so the lock belongs on the row that carries it.
     """
-    correction = (
-        AttendanceCorrection.objects.select_for_update()
-        .select_related("student_attendance")
-        .get(pk=correction.pk)
-    )
+    # No `select_related` here: `student_attendance` is nullable, so Django joins
+    # it with a LEFT OUTER JOIN and PostgreSQL refuses `FOR UPDATE` on the
+    # nullable side of one. The target is fetched — and separately locked — by
+    # `_apply_correction`, which is the only place that needs it.
+    correction = AttendanceCorrection.objects.select_for_update().get(pk=correction.pk)
     if correction.status != CorrectionStatus.PENDING:
         raise Conflict(f"This correction was already {correction.status}.")
     if correction.requested_by == reviewer_id:
