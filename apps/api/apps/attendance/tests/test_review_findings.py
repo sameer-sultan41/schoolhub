@@ -10,7 +10,6 @@ from __future__ import annotations
 import datetime
 from unittest import mock
 
-from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
@@ -162,15 +161,13 @@ class SectionOfRecordTests(MarkingTestBase):
             new_section = SectionFactory(
                 tenant=self.tenant, school_class=self.school_class, campus=self.campus
             )
-            StudentEnrollmentFactory(
-                tenant=self.tenant,
-                student=self.student,
-                academic_session=self.session,
-                school_class=self.school_class,
-                section=new_section,
-            )
-            # The old enrollment is what `_enrolled_student_ids` would otherwise
-            # match; both are active, which is the state a transfer produces.
+            # A section change *moves* the existing enrollment; it does not add a
+            # second one — `student_enrollments_unique_per_session` allows exactly
+            # one per (student, session), which is what `change_section` does.
+            enrollment = self.student.enrollments.get(academic_session=self.session)
+            enrollment.section = new_section
+            enrollment.save(update_fields=["section", "updated_at"])
+
             self.mark(section=new_section, status_value=AttendanceStatus.ABSENT)
 
             row = StudentAttendance.objects.alive().get(student=self.student)
@@ -212,26 +209,38 @@ class ConcurrentFirstInsertTests(MarkingTestBase):
         Simulated by failing the first `bulk_create` the way the database would,
         which is the only way to exercise the retry deterministically.
         """
-        real_bulk_create = StudentAttendance.objects.bulk_create
-        calls = {"n": 0}
+        real_lookup = services._lock_existing_rows
+        lookups = {"n": 0}
 
-        def flaky(rows, *args, **kwargs):
-            calls["n"] += 1
-            if calls["n"] == 1:
-                # Land the row the "other" transaction would have written, then
-                # fail this insert exactly as the index would.
-                real_bulk_create(rows)
-                raise IntegrityError("duplicate key value violates unique constraint")
-            return real_bulk_create(rows, *args, **kwargs)
+        def blind_first(**kwargs):
+            """Answer "no row yet" once, then tell the truth.
+
+            This is the race, faithfully: the other transaction's row is
+            *committed* before ours inserts, so ours sees nothing, collides on
+            the real partial unique index, and has to recover. Simulating it by
+            inserting inside our own transaction does not work — the savepoint
+            that catches the IntegrityError rolls that insert back too, which is
+            exactly what the first version of this test got wrong.
+            """
+            lookups["n"] += 1
+            if lookups["n"] == 1:
+                return {}
+            return real_lookup(**kwargs)
 
         with tenant_context(self.tenant.id):
-            with mock.patch.object(StudentAttendance.objects, "bulk_create", side_effect=flaky):
+            # The row the "other" submission already committed.
+            self.mark(status_value=AttendanceStatus.PRESENT)
+
+            with mock.patch.object(services, "_lock_existing_rows", side_effect=blind_first):
                 result = self.mark(status_value=AttendanceStatus.ABSENT)
 
-            self.assertEqual(calls["n"], 1)
-            self.assertEqual(result["updated"], 1)
+            self.assertEqual(lookups["n"], 2, "the retry must re-read after the collision")
             self.assertEqual(result["marked"], 0)
+            self.assertEqual(result["updated"], 1)
             self.assertEqual(StudentAttendance.objects.alive().count(), 1)
+            self.assertEqual(
+                StudentAttendance.objects.alive().get().status, AttendanceStatus.ABSENT
+            )
 
 
 class CorrectionValueTests(AttendanceAPITestCase):
@@ -393,7 +402,7 @@ class EffectiveLockStateTests(AttendanceAPITestCase):
 
         response = self.client.get(f"/api/v1/student-attendance/{row.pk}")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertTrue(response.data["data"]["is_locked"])
 
     def test_a_row_inside_the_window_still_reports_unlocked(self) -> None:
@@ -409,4 +418,5 @@ class EffectiveLockStateTests(AttendanceAPITestCase):
 
         response = self.client.get(f"/api/v1/student-attendance/{row.pk}")
 
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertFalse(response.data["data"]["is_locked"])
