@@ -234,8 +234,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             mobileCloseLabel={t("closeMenu")}
           >
             <SidebarHeader>
-              <span className="px-2 py-2 font-heading text-base font-semibold text-foreground">
+              {/* Two renderings of the same name, because the rail is 3rem wide: the full
+                  name would simply overflow it, which is what it did the moment `icon`
+                  became a selectable collapse mode. The initial keeps the collapsed rail
+                  identifiable — a school with two campuses open in two tabs still needs to
+                  tell them apart — and is aria-hidden because the name is already the
+                  accessible name of the drawer and of the nav landmark beneath it. */}
+              <span className="px-2 py-2 font-heading text-base font-semibold text-foreground group-data-[collapsible=icon]:hidden">
                 {tenantLabel}
+              </span>
+              <span
+                aria-hidden="true"
+                className="hidden size-8 shrink-0 items-center justify-center rounded-[var(--sh-radius)] bg-primary font-heading text-sm font-semibold text-primary-foreground group-data-[collapsible=icon]:flex"
+              >
+                {tenantLabel.slice(0, 1)}
               </span>
             </SidebarHeader>
             <SidebarContent>
