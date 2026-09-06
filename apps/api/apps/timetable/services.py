@@ -383,7 +383,11 @@ def create_substitution(
     tenant_id: uuid.UUID,
     actor_id: uuid.UUID,
     room: Room | None = None,
+    leave_request_id: uuid.UUID | None = None,
 ) -> TeacherSubstitution:
+    """`leave_request_id` is set only by the absent-teacher feed, never by a
+    client: §7.2 has the signal arriving *from* attendance, so a hand-created
+    substitution naming one would assert a link nothing checked."""
     if slot.status != SlotStatus.PUBLISHED:
         raise DomainRuleViolation(
             {"timetable_slot_id": "Only a published slot can be substituted."}
@@ -403,6 +407,7 @@ def create_substitution(
         substitute_staff=substitute_staff,
         room=room,
         reason=reason,
+        leave_request_id=leave_request_id,
         status=SubstitutionStatus.PROPOSED,
         created_by=actor_id,
         updated_by=actor_id,
@@ -568,3 +573,126 @@ def effective_slots_for(*, session: AcademicSession, section_ids: list, on_date:
         .select_related("substitute_staff", "room")
     }
     return slots, overrides
+
+
+# ---------------------------------------------------------------------------
+# The absent-teacher feed from attendance (§7.2, §18)
+# ---------------------------------------------------------------------------
+
+
+def slots_needing_cover(*, staff: Staff, on_date: date) -> list[TimetableSlot]:
+    """The published, currently-in-force slots this teacher holds on this date.
+
+    Published only, and current only: a draft cell is not a class anyone is
+    expecting, and an end-dated one was superseded. Breaks are excluded because
+    `Period.is_break` marks them unschedulable (§5.1) — nobody covers a recess.
+    """
+    return list(
+        TimetableSlot.objects.alive()
+        .filter(
+            staff=staff,
+            status=SlotStatus.PUBLISHED,
+            effective_to__isnull=True,
+            day_of_week=on_date.weekday(),
+            period__is_break=False,
+            academic_session__start_date__lte=on_date,
+            academic_session__end_date__gte=on_date,
+        )
+        .select_related("period", "section", "academic_session")
+    )
+
+
+def propose_substitutions_for_absence(
+    *,
+    staff: Staff,
+    on_date: date,
+    actor_id: uuid.UUID,
+    leave_request_id: uuid.UUID | None = None,
+) -> list[TeacherSubstitution]:
+    """Propose cover for every class an absent teacher was due to take.
+
+    §18 declares attendance outbound to timetable, and this is that edge —
+    `SubstitutionStatus.completed`'s docstring has named it as the missing piece
+    since the timetable PR. It lives here, not in attendance, because the rules a
+    proposal must satisfy are this module's: `assert_substitution_valid` and the
+    two occupancy constraints.
+
+    **Proposals, never confirmations.** §7.2 has a human approve cover, so this
+    fills the queue rather than deciding it. A slot that already has a
+    substitution for the date is skipped — the unique constraint says one per
+    (slot, date), and re-marking an absence must not raise a second proposal.
+
+    **A slot with no free substitute is skipped, not failed.** Every eligible
+    teacher already teaching that period is an ordinary state in a small school,
+    and refusing the whole batch because one period cannot be covered would leave
+    the coverable ones uncovered too. The caller logs the shortfall.
+    """
+    proposed: list[TeacherSubstitution] = []
+
+    for slot in slots_needing_cover(staff=staff, on_date=on_date):
+        already = TeacherSubstitution.objects.alive().filter(timetable_slot=slot, date=on_date)
+        if already.exists():
+            continue
+
+        substitute = _first_free_substitute(slot=slot, on_date=on_date, absent_staff=staff)
+        if substitute is None:
+            logger.info(
+                "no free substitute for slot %s on %s; leaving it uncovered", slot.pk, on_date
+            )
+            continue
+
+        try:
+            with transaction.atomic():
+                proposed.append(
+                    create_substitution(
+                        slot=slot,
+                        on_date=on_date,
+                        absent_staff=staff,
+                        substitute_staff=substitute,
+                        reason="Automatically proposed: the scheduled teacher is absent.",
+                        tenant_id=staff.tenant_id,
+                        actor_id=actor_id,
+                        leave_request_id=leave_request_id,
+                    )
+                )
+        except DomainRuleViolation, Conflict:
+            # A race against another proposal, or a rule this candidate fails on
+            # closer inspection. One slot's failure must not cost the rest their
+            # cover, and the queue is advisory until a human approves it.
+            logger.info("could not propose cover for slot %s on %s", slot.pk, on_date)
+
+    return proposed
+
+
+def _first_free_substitute(
+    *, slot: TimetableSlot, on_date: date, absent_staff: Staff
+) -> Staff | None:
+    """An active teacher who is free for this slot's period on this date.
+
+    Deliberately *first free*, not *best*: §14's AI-TTB-03 is the ranked
+    suggestion (workload balance, subject match) and it is Phase 3 work behind
+    the AI gateway that does not exist. Picking arbitrarily and letting a human
+    approve is honest; inventing a ranking here would be a worse version of a
+    feature the module doc already specifies properly.
+
+    Ordered by `pk` so the choice is at least stable across runs — an arbitrary
+    pick that changes between two identical calls is harder to reason about than
+    an arbitrary pick that does not.
+    """
+    candidates = (
+        Staff.objects.alive()
+        .filter(
+            employment_status=EmploymentStatus.ACTIVE,
+            staff_type=StaffType.TEACHING,
+        )
+        .exclude(pk=absent_staff.pk)
+        .order_by("pk")
+    )
+
+    for candidate in candidates:
+        try:
+            _assert_substitute_is_free(slot=slot, on_date=on_date, substitute_staff=candidate)
+        except DomainRuleViolation:
+            continue
+        return candidate
+    return None

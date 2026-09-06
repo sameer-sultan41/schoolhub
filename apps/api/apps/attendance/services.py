@@ -35,6 +35,9 @@ from apps.attendance.models import (
     LeaveStatus,
     LeaveType,
     RequesterType,
+    StaffAttendance,
+    StaffAttendanceSource,
+    StaffAttendanceStatus,
     StudentAttendance,
 )
 from apps.school_organization import calendar
@@ -51,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from apps.school_organization.models import Section
+    from apps.staff_management.models import Staff
     from apps.timetable.models import Period
 
 # §19: "lock window: end of marking day (recommendation; tenant-configurable
@@ -1158,3 +1162,166 @@ def _notify_leave_decision(*, request: LeaveRequest) -> None:
             notifications.notify_leave_decision(request=request)
     except Exception:
         logger.exception("leave-decision notification failed for request %s", request.pk)
+
+
+# ---------------------------------------------------------------------------
+# Staff attendance (§5.2, §5.3)
+# ---------------------------------------------------------------------------
+
+# The statuses that mean "this teacher is not taking their classes today", and so
+# should offer cover. `holiday` is not one of them: the school is shut, there are
+# no classes to cover. Neither is `half_day` — §7.2 has no notion of covering part
+# of a day, and proposing whole-day cover for someone who is in for the morning
+# would be worse than proposing none.
+ABSENT_STAFF_STATUSES = frozenset({StaffAttendanceStatus.ABSENT, StaffAttendanceStatus.ON_LEAVE})
+
+
+def _staff_campus_id(staff: Staff) -> uuid.UUID | None:
+    return staff.campus_id
+
+
+@transaction.atomic
+def mark_staff_attendance(
+    *,
+    staff: Staff,
+    on_date: datetime.date,
+    status: str,
+    check_in_time: datetime.time | None = None,
+    check_out_time: datetime.time | None = None,
+    remarks: str | None = None,
+    source: str = StaffAttendanceSource.MANUAL,
+    actor_id: uuid.UUID,
+) -> StaffAttendance:
+    """§5.2 — one row per staff member per date. Upsert, like the student register.
+
+    `late_minutes` and `early_departure_minutes` are computed here and a
+    client-supplied value is discarded, for the reason §11 gives and the student
+    path already follows: §13's punctuality report is a payroll input, and it is
+    only worth reading if every row was measured the same way.
+
+    Marking a teacher absent emits the substitution signal §18 declares — see
+    `_propose_cover_for_absence`. On commit, never inline: cover is timetable's to
+    decide, and a conflict there must not roll back the attendance record, which
+    is the fact of the matter either way.
+    """
+    assert_markable_date(on_date=on_date, campus_id=_staff_campus_id(staff))
+
+    if check_in_time and check_out_time and check_out_time <= check_in_time:
+        raise DomainRuleViolation(
+            {"check_out_time": "Check-out must be later than check-in (§11)."}
+        )
+    if status == StaffAttendanceStatus.ON_LEAVE:
+        # The mirror of the student rule: `on_leave` means an approved leave
+        # request exists, and hr-leave's approval writes it with the back-link.
+        raise DomainRuleViolation(
+            {"status": "'on_leave' is written by an approved leave request, not marked."}
+        )
+
+    campus_id = _staff_campus_id(staff)
+    row = (
+        StaffAttendance.objects.alive()
+        .filter(staff=staff, attendance_date=on_date)
+        .select_for_update()
+        .first()
+    )
+    if row is not None and (row.is_locked or is_locked(row.attendance_date)):
+        raise Conflict("This record is locked and must be changed through a correction request.")
+
+    values = {
+        "status": status,
+        "check_in_time": check_in_time,
+        "check_out_time": check_out_time,
+        "late_minutes": (
+            calendar.late_minutes(check_in_time, campus_id=campus_id)
+            if status == StaffAttendanceStatus.LATE and check_in_time is not None
+            else None
+        ),
+        "early_departure_minutes": (
+            calendar.early_departure_minutes(check_out_time, campus_id=campus_id)
+            if check_out_time is not None
+            else None
+        ),
+        "remarks": remarks,
+        "source": source,
+        "marked_by": actor_id,
+        "updated_by": actor_id,
+    }
+
+    was_absent = row is not None and row.status in ABSENT_STAFF_STATUSES
+    if row is None:
+        row = StaffAttendance.objects.create(
+            tenant_id=staff.tenant_id,
+            staff=staff,
+            attendance_date=on_date,
+            created_by=actor_id,
+            **values,
+        )
+    else:
+        for field, value in values.items():
+            setattr(row, field, value)
+        row.save(update_fields=[*values, "updated_at"])
+
+    # Only on a transition into absence, for the same reason the guardian alerts
+    # are: re-recording an absence must not propose a second round of cover.
+    if status in ABSENT_STAFF_STATUSES and not was_absent:
+        _queue_cover_proposals(staff=staff, on_date=on_date, actor_id=actor_id)
+
+    return row
+
+
+@transaction.atomic
+def check_out_staff(
+    *, row: StaffAttendance, check_out_time: datetime.time, actor_id: uuid.UUID
+) -> StaffAttendance:
+    """§16's `POST /staff-attendance/{id}:check-out`.
+
+    Its own action rather than a PATCH because §5.3 makes leaving a distinct
+    event with its own time, and because the early-departure minutes it implies
+    are computed, not sent.
+    """
+    if row.check_in_time is None:
+        raise DomainRuleViolation(
+            {"check_out_time": "This record has no check-in to check out from."}
+        )
+    if check_out_time <= row.check_in_time:
+        raise DomainRuleViolation(
+            {"check_out_time": "Check-out must be later than check-in (§11)."}
+        )
+    if row.is_locked or is_locked(row.attendance_date):
+        raise Conflict("This record is locked and must be changed through a correction.")
+
+    row.check_out_time = check_out_time
+    row.early_departure_minutes = calendar.early_departure_minutes(
+        check_out_time, campus_id=_staff_campus_id(row.staff)
+    )
+    row.updated_by = actor_id
+    row.save(
+        update_fields=[
+            "check_out_time",
+            "early_departure_minutes",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+    return row
+
+
+def _queue_cover_proposals(*, staff: Staff, on_date: datetime.date, actor_id: uuid.UUID) -> None:
+    """§18's outbound signal: an absent teacher's classes need cover.
+
+    `on_commit`, and swallowed on failure by the task itself. Proposing cover is
+    `timetable`'s decision and its rules can legitimately refuse — every eligible
+    substitute may already be teaching — and none of that should undo the
+    attendance record, which is the fact of the matter regardless of whether
+    anyone can cover.
+    """
+    from apps.attendance.tasks import propose_cover_for_absence
+
+    transaction.on_commit(
+        lambda: propose_cover_for_absence.delay(
+            tenant_id=str(staff.tenant_id),
+            staff_id=str(staff.pk),
+            on_date=on_date.isoformat(),
+            actor_id=str(actor_id),
+        )
+    )

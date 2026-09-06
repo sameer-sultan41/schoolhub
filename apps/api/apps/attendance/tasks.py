@@ -132,3 +132,41 @@ def lock_expired_attendance() -> dict[str, int]:
     rows, so the sweep shape is what makes this do anything at all.
     """
     return for_each_tenant(lock_tenant_attendance, job="attendance-lock")
+
+
+@shared_task(base=TenantAwareTask)
+def propose_cover_for_absence(
+    *, tenant_id: str, staff_id: str, on_date: str, actor_id: str
+) -> dict[str, int]:
+    """§18's outbound edge: an absent teacher's classes need cover.
+
+    Asynchronous because it walks a whole day's grid and asks timetable's
+    conflict rules about each candidate, which is not work an HR clerk recording
+    an absence should wait on — and because a proposal failing must not undo the
+    attendance record, which is the fact of the matter either way.
+
+    Swallowed and logged rather than retried: `propose_substitutions_for_absence`
+    is already idempotent per (slot, date) — the unique constraint says one
+    substitution each — so a re-run after a partial failure proposes only what is
+    still missing, and a human is going to approve the queue regardless.
+    """
+    import datetime as _datetime
+
+    from apps.staff_management.models import Staff
+    from apps.timetable.services import propose_substitutions_for_absence
+    from core.tenancy.context import tenant_atomic
+
+    try:
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            staff = Staff.objects.alive().filter(pk=staff_id).first()
+            if staff is None:
+                return {"proposed": 0}
+            proposed = propose_substitutions_for_absence(
+                staff=staff,
+                on_date=_datetime.date.fromisoformat(on_date),
+                actor_id=uuid.UUID(actor_id),
+            )
+        return {"proposed": len(proposed)}
+    except Exception:
+        logger.exception("cover proposal failed for staff %s on %s", staff_id, on_date)
+        return {"proposed": 0}

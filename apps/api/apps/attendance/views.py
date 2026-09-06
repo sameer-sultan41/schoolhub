@@ -53,6 +53,7 @@ from apps.attendance.filters import (
     AttendanceCorrectionFilterSet,
     LeaveRequestFilterSet,
     LeaveTypeFilterSet,
+    StaffAttendanceFilterSet,
     StudentAttendanceFilterSet,
 )
 from apps.attendance.models import (
@@ -61,6 +62,7 @@ from apps.attendance.models import (
     LeaveRequest,
     LeaveType,
     RequesterType,
+    StaffAttendance,
     StudentAttendance,
 )
 from apps.attendance.serializers import (
@@ -70,6 +72,8 @@ from apps.attendance.serializers import (
     LeaveDecisionSerializer,
     LeaveRequestSerializer,
     LeaveTypeSerializer,
+    StaffAttendanceSerializer,
+    StaffCheckOutSerializer,
     StudentAttendanceSerializer,
 )
 from apps.school_organization.models import AcademicSession
@@ -548,3 +552,107 @@ class LeaveRequestViewSet(
             {"data": after, "meta": {"auto_marked_days": marked}},
             status=200,
         )
+
+
+class StaffAttendanceViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+
+    `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+    grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+    no restricted principal at all. A student has no business reading a teacher's
+    arrival time.
+
+    That "every staff role (own)" is the widest `own` grant on the platform, and
+    it is why `POST` is keyed separately: reading your own punctuality and
+    recording someone else's are different acts, and §4 keys the second to
+    `hr_staff`/`school_admin`.
+
+    **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+    staff member to record their own arrival, which no student may do; recording
+    it as `manual` would make §13's report unable to tell a self-report from an
+    HR-verified one.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = StaffAttendance.objects
+    serializer_class = StaffAttendanceSerializer
+    filterset_class = StaffAttendanceFilterSet
+    search_fields = ["remarks"]
+    ordering_fields = ["attendance_date", "created_at"]
+    # `own` is a join through `staff.user_id`, not a column here — the model hook
+    # owns it and takes precedence over this fallback.
+    scope_own_field = None
+    scope_campus_field = "staff__campus_id"
+    required_feature = FEATURE
+    required_permission = "attendance.staff-attendance.view"
+    required_permission_map = {
+        "create": "attendance.staff-attendance.mark",
+        "check_out": "attendance.staff-attendance.mark",
+    }
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("staff")
+
+    @extend_schema(
+        summary="Record a staff member's attendance for a date",
+        responses={201: StaffAttendanceSerializer},
+    )
+    def create(self, request: Request, *args, **kwargs) -> Response:
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        row = services.mark_staff_attendance(
+            staff=data["staff"],
+            on_date=data["attendance_date"],
+            status=data["status"],
+            check_in_time=data.get("check_in_time"),
+            check_out_time=data.get("check_out_time"),
+            remarks=data.get("remarks"),
+            source=self._source_for(request, staff=data["staff"]),
+            actor_id=request.user.pk,
+        )
+        body = self.get_serializer(row).data
+        record_audit(request, "mark", row, after=body)
+        return Response({"data": body}, status=201)
+
+    @extend_schema(
+        summary="Record a staff member's departure",
+        request=StaffCheckOutSerializer,
+        responses={200: StaffAttendanceSerializer},
+    )
+    def check_out(self, request: Request, pk) -> Response:
+        row = get_object_or_404(self.get_queryset(), pk=pk)
+        body = StaffCheckOutSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+
+        before = self.get_serializer(row).data
+        updated = services.check_out_staff(
+            row=row,
+            check_out_time=body.validated_data["check_out_time"],
+            actor_id=request.user.pk,
+        )
+        after = self.get_serializer(updated).data
+        record_audit(request, "update", updated, before=before, after=after)
+        return ActionResponse.ok(after, message="Check-out recorded.")
+
+    @staticmethod
+    def _source_for(request: Request, *, staff) -> str:
+        """`self` when the caller is the staff member, `manual` otherwise (§5.2).
+
+        Derived rather than accepted from the body: a client that could name its
+        own source could record an HR-verified arrival as a self check-in, or the
+        reverse, and §13's punctuality report is a payroll input.
+        """
+        from apps.attendance.models import StaffAttendanceSource
+
+        if staff.user_id and staff.user_id == request.user.pk:
+            return StaffAttendanceSource.SELF
+        return StaffAttendanceSource.MANUAL
