@@ -25,6 +25,41 @@
       "dark": "Dark",
       "system": "Match system"
     },
+    "preferences": {
+      "trigger": "Preferences",
+      "title": "Preferences",
+      "description": "How this dashboard is laid out for you.",
+      "reset": "Reset to defaults",
+      "preset": {
+        "label": "Colours",
+        "tenant": "School colours",
+        "ink-brass": "Ink & Brass",
+        "tangerine": "Tangerine",
+        "soft-pop": "Soft Pop",
+        "brutalist": "Brutalist"
+      },
+      "sidebarVariant": {
+        "label": "Sidebar",
+        "sidebar": "Flush",
+        "inset": "Inset",
+        "floating": "Floating"
+      },
+      "sidebarCollapse": {
+        "label": "When collapsed",
+        "icon": "Icons",
+        "offcanvas": "Hidden"
+      },
+      "contentLayout": {
+        "label": "Content width",
+        "full-width": "Full width",
+        "centered": "Centred"
+      },
+      "navbarStyle": {
+        "label": "Header",
+        "sticky": "Stays put",
+        "scroll": "Scrolls away"
+      }
+    },
     "groups": {
       "overview": "Overview",
       "people": "People",

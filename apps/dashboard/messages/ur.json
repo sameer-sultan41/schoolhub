@@ -25,6 +25,41 @@
       "dark": "تاریک",
       "system": "سسٹم کے مطابق"
     },
+    "preferences": {
+      "trigger": "ترجیحات",
+      "title": "ترجیحات",
+      "description": "یہ ڈیش بورڈ آپ کے لیے کس ترتیب میں دکھایا جائے۔",
+      "reset": "طے شدہ ترتیب پر واپس لائیں",
+      "preset": {
+        "label": "رنگ",
+        "tenant": "اسکول کے رنگ",
+        "ink-brass": "انک اینڈ برَاس",
+        "tangerine": "ٹینجرین",
+        "soft-pop": "سافٹ پاپ",
+        "brutalist": "بروٹالسٹ"
+      },
+      "sidebarVariant": {
+        "label": "سائیڈ بار",
+        "sidebar": "کنارے سے ملا ہوا",
+        "inset": "اندر کی جانب",
+        "floating": "تیرتا ہوا"
+      },
+      "sidebarCollapse": {
+        "label": "سکڑنے پر",
+        "icon": "آئیکن",
+        "offcanvas": "پوشیدہ"
+      },
+      "contentLayout": {
+        "label": "مواد کی چوڑائی",
+        "full-width": "پوری چوڑائی",
+        "centered": "درمیان میں"
+      },
+      "navbarStyle": {
+        "label": "ہیڈر",
+        "sticky": "قائم رہے",
+        "scroll": "اسکرول ہو جائے"
+      }
+    },
     "groups": {
       "overview": "جائزہ",
       "people": "افراد",
