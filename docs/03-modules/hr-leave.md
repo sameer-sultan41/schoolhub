@@ -161,7 +161,17 @@ Cross-referenced to [`ai-features.md`](../04-ai/ai-features.md); advisory only �
 
 ## 15. Database Entities
 
-This module owns the leave tables; their full column specs live with the attendance domain in [`../05-database/entities/attendance.md`](../05-database/entities/attendance.md) (all tenant-scoped, implicit audit/soft-delete columns).
+~~This module owns the leave tables~~ — **settled the other way when `attendance`
+shipped.** `attendance.md` §15 claims the same five tables and only one Django app can
+ship the migration; attendance ships first, so **it owns them and this module adds no
+tables at all**. What hr-leave adds is the behaviour on top: staff policy semantics,
+accrual and carry-forward jobs, balance maintenance, the configurable multi-step approval
+engine, and the `hr.*`-keyed endpoints for `/leave-types` (writes), `/leave-policies` and
+`/leave-balances` — none of which attendance builds, because its own §4 keys none of them.
+`leave_policies` and `leave_balances` already exist, created and unread, waiting for this
+module.
+
+Full column specs live with the attendance domain in [`../05-database/entities/attendance.md`](../05-database/entities/attendance.md) (all tenant-scoped, implicit audit/soft-delete columns).
 
 | Table | Purpose |
 | ----- | ------- |
