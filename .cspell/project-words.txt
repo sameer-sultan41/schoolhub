@@ -9,6 +9,7 @@
 # silence a real typo is not.
 ACMR
 Adeel
+ah
 AIGW
 allkeys
 Amina
@@ -33,6 +34,7 @@ blockable
 bonafide
 bursty
 BYPASSRLS
+Chandni
 chartable
 choosable
 cityschool
@@ -62,6 +64,7 @@ Dramatiq
 Easypaisa
 edoburu
 EICAR
+ellipsize
 encashment
 evals
 evilschoolhub
@@ -96,6 +99,7 @@ interceptable
 Iqra
 isready
 JazzCash
+Jumu
 Kashif
 Keyspace
 Laiba
@@ -233,6 +237,7 @@ unmoderated
 unparseable
 unpermitted
 Unrestorable
+unstubbed
 unsubmitted
 unvalidated
 upsell

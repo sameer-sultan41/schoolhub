@@ -31,7 +31,13 @@ const cardVariants = cva("rounded-[var(--sh-radius)] border text-surface-foregro
        * The one gradient in the system. Allowed ONCE PER SCREEN, on that screen's hero
        * element, and never as decoration — see theme.css's `--sh-gradient-spotlight`.
        */
-      spotlight: "border-transparent bg-spotlight text-primary-foreground",
+      /*
+       * `text-spotlight-foreground`, NOT `text-primary-foreground`: that one flips to
+       * near-black in dark mode, because dark-mode `primary` is a light violet. The
+       * band is a fixed dark surface in both schemes, so its text is fixed light in
+       * both. Found by looking at the running app in dark mode, not by a test.
+       */
+      spotlight: "border-transparent bg-spotlight text-spotlight-foreground",
     },
   },
   defaultVariants: { elevation: "flat", tone: "surface" },

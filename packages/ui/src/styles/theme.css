@@ -119,6 +119,7 @@
    * audit is not a rule.
    */
   --background-image-spotlight: var(--sh-gradient-spotlight);
+  --color-spotlight-foreground: var(--sh-color-spotlight-foreground);
 
   /*
    * Categorical chart ramp. Generates `fill-chart-N`, `stroke-chart-N`, `text-chart-N`,
@@ -319,12 +320,28 @@
    * Ink violet 278° -> 302°, a 24° sweep rather than a hue jump, so it reads as one
    * colour deepening rather than two colours meeting. White text clears 9.16:1 at the
    * far end and 9.92:1 at the near end, so the band is legible across its whole width.
+   *
+   * Follows the tenant's own primary in LIGHT mode; the dark blocks pin the start stop
+   * back to this file's light-mode value. See the dark block for why.
    */
   --sh-gradient-spotlight: linear-gradient(
     135deg,
     var(--sh-color-primary) 0%,
     oklch(0.42 0.155 302) 100%
   );
+
+  /*
+   * The spotlight band's own text colour, and deliberately NOT
+   * --sh-color-primary-foreground.
+   *
+   * That token flips to near-black in dark mode, because in dark mode `primary` is a
+   * LIGHT violet and text on it has to be dark. The band is the opposite case: it stays a
+   * dark, saturated surface in both schemes, so its text stays light in both. Reusing the
+   * flipping token put near-black-on-... no: it put white text on a light violet band the
+   * first time this was rendered in dark mode, which is exactly the
+   * light-treatment-on-a-dark-surface failure --sh-color-overlay's own comment describes.
+   */
+  --sh-color-spotlight-foreground: oklch(1 0 0);
 
   /*
    * Categorical chart ramp — indigo, brass, cyan, olive, rose, blue, in that FIXED
@@ -435,6 +452,20 @@
        5.56:1 on surface-raised. */
     --sh-color-info: oklch(0.702 0.106 218);
     --sh-color-info-foreground: oklch(0.194 0.034 267.6);
+    /* The gradient's start stop follows --sh-color-primary, which LIGHTENS in dark mode —
+     so left unpinned the hero band inverted from a dark surface with light text into a
+     LIGHT surface with light text. The band is a fixed dark surface by design, in both
+     schemes, so its start stop is pinned to this file's light-mode primary here. Same
+     reasoning as --sh-color-overlay, which is declared once and never redefined. */
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.395 0.148 278) 0%,
+      oklch(0.42 0.155 302) 100%
+    );
+    /* The gradient's start stop follows --sh-color-primary, which LIGHTENS in dark mode —
+       so left unpinned the hero band inverted from a dark surface with light text into a
+       LIGHT surface with light text. The band is a fixed dark surface by design, in both
+       schemes, so its start stop is pinned to this file's light-mode primary here. Same
     /* Depth of black, not brand tint — a violet-tinted shadow over a violet-tinted dark
        surface is invisible, so the light-mode elevation values would render as nothing. */
     --sh-elevation-1: 0 1px 2px -1px oklch(0 0 0 / 0.4), 0 1px 3px oklch(0 0 0 / 0.3);
@@ -476,6 +507,16 @@
   --sh-color-danger-foreground: oklch(0.194 0.034 267.6);
   --sh-color-info: oklch(0.702 0.106 218);
   --sh-color-info-foreground: oklch(0.194 0.034 267.6);
+  /* The gradient's start stop follows --sh-color-primary, which LIGHTENS in dark mode —
+     so left unpinned the hero band inverted from a dark surface with light text into a
+     LIGHT surface with light text. The band is a fixed dark surface by design, in both
+     schemes, so its start stop is pinned to this file's light-mode primary here. Same
+     reasoning as --sh-color-overlay, which is declared once and never redefined. */
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.395 0.148 278) 0%,
+    oklch(0.42 0.155 302) 100%
+  );
   --sh-elevation-1: 0 1px 2px -1px oklch(0 0 0 / 0.4), 0 1px 3px oklch(0 0 0 / 0.3);
   --sh-elevation-2: 0 2px 4px -2px oklch(0 0 0 / 0.45), 0 6px 12px -4px oklch(0 0 0 / 0.35);
   --sh-elevation-3: 0 8px 16px -6px oklch(0 0 0 / 0.5), 0 20px 32px -12px oklch(0 0 0 / 0.4);

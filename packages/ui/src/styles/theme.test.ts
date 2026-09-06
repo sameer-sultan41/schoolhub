@@ -26,6 +26,7 @@ const REQUIRED_TOKENS = [
   "--sh-elevation-2",
   "--sh-elevation-3",
   "--sh-gradient-spotlight",
+  "--sh-color-spotlight-foreground",
   ...CHART_SLOTS.map((slot) => `--sh-color-chart-${slot}`),
 ];
 
@@ -62,6 +63,20 @@ describe("theme.css", () => {
 
   it.each(CHART_SLOTS)("gives chart slot %i a dark-mode step", (slot) => {
     expect(darkBlock).toContain(`--sh-color-chart-${slot}:`);
+  });
+
+  it("pins the spotlight gradient in dark mode rather than letting it follow primary", () => {
+    // primary LIGHTENS in dark mode, so a gradient that follows it turns the hero band
+    // from a dark surface with light text into a light surface with light text. Caught by
+    // looking at the running app, not by any assertion that existed at the time.
+    expect(darkBlock).toContain("--sh-gradient-spotlight:");
+    expect(darkBlock).not.toMatch(/--sh-gradient-spotlight:[^;]*var\(--sh-color-primary\)/);
+  });
+
+  it("keeps the spotlight foreground out of the dark-mode flip", () => {
+    // It is declared once, in :root, and never redefined — the same discipline
+    // --sh-color-overlay follows, and for the same reason.
+    expect(darkBlock).not.toContain("--sh-color-spotlight-foreground:");
   });
 
   it("re-steps primary and the surface planes for the dark ground", () => {
