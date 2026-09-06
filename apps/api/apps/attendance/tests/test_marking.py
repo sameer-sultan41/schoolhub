@@ -363,13 +363,16 @@ class CorrectionTests(MarkingTestCase):
         with tenant_context(self.tenant.id):
             correction = self.request()
 
-            services.decide_correction(
+            # The return value, not the argument: `decide_correction` re-reads the
+            # row under a lock, so the caller's handle is deliberately not the
+            # one that was written. The viewset already uses the return value.
+            decided = services.decide_correction(
                 correction=correction, approve=False, reviewer_id=self.approver.pk, note="No."
             )
 
             self.row.refresh_from_db()
             self.assertEqual(self.row.status, AttendanceStatus.ABSENT)
-            self.assertEqual(correction.review_note, "No.")
+            self.assertEqual(decided.review_note, "No.")
 
     def test_a_decided_correction_cannot_be_decided_again(self) -> None:
         with tenant_context(self.tenant.id):

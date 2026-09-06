@@ -467,9 +467,11 @@ class CorrectionDecisionLockingTests(AttendanceAPITestCase):
         """Both callers hold a *stale* in-memory row, which is the shape the race
         produces: the second must re-read under the lock and see the first's
         outcome rather than overwrite it."""
-        stale = AttendanceCorrection.objects.get(pk=self.correction.pk)
-
         with tenant_context(self.tenant.id):
+            # Fetched inside the context: the manager is tenant-scoped, so a read
+            # outside one matches nothing.
+            stale = AttendanceCorrection.objects.get(pk=self.correction.pk)
+
             services.decide_correction(
                 correction=self.correction, approve=True, reviewer_id=self.approver.pk
             )
