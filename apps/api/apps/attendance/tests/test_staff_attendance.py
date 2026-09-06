@@ -151,25 +151,32 @@ class CoverProposalTests(TestCase):
             self.campus = CampusFactory(tenant=self.tenant)
             self.staff = StaffFactory(tenant=self.tenant, campus=self.campus)
 
+    def mark(self, status_value) -> None:
+        services.mark_staff_attendance(
+            staff=self.staff,
+            on_date=MARKING_DATE,
+            status=status_value,
+            actor_id=self.user.pk,
+        )
+
     def test_marking_absent_queues_the_cover_proposal_once(self) -> None:
         """Only on a *transition* into absence: re-recording it must not raise a
-        second round of proposals."""
+        second round of proposals.
+
+        `captureOnCommitCallbacks(execute=True)` because the enqueue is deferred
+        to commit — deliberately, so a broker outage cannot roll back the
+        attendance record — and a `TestCase` never commits, so without this the
+        callback simply never runs and the assertion would pass for the wrong
+        reason.
+        """
         with (
             tenant_context(self.tenant.id),
             mock.patch("apps.attendance.tasks.propose_cover_for_absence.delay") as queued,
         ):
-            services.mark_staff_attendance(
-                staff=self.staff,
-                on_date=MARKING_DATE,
-                status=StaffAttendanceStatus.ABSENT,
-                actor_id=self.user.pk,
-            )
-            services.mark_staff_attendance(
-                staff=self.staff,
-                on_date=MARKING_DATE,
-                status=StaffAttendanceStatus.ABSENT,
-                actor_id=self.user.pk,
-            )
+            with self.captureOnCommitCallbacks(execute=True):
+                self.mark(StaffAttendanceStatus.ABSENT)
+            with self.captureOnCommitCallbacks(execute=True):
+                self.mark(StaffAttendanceStatus.ABSENT)
 
         self.assertEqual(queued.call_count, 1)
 
@@ -177,13 +184,9 @@ class CoverProposalTests(TestCase):
         with (
             tenant_context(self.tenant.id),
             mock.patch("apps.attendance.tasks.propose_cover_for_absence.delay") as queued,
+            self.captureOnCommitCallbacks(execute=True),
         ):
-            services.mark_staff_attendance(
-                staff=self.staff,
-                on_date=MARKING_DATE,
-                status=StaffAttendanceStatus.PRESENT,
-                actor_id=self.user.pk,
-            )
+            self.mark(StaffAttendanceStatus.PRESENT)
 
         queued.assert_not_called()
 
@@ -194,13 +197,9 @@ class CoverProposalTests(TestCase):
         with (
             tenant_context(self.tenant.id),
             mock.patch("apps.attendance.tasks.propose_cover_for_absence.delay") as queued,
+            self.captureOnCommitCallbacks(execute=True),
         ):
-            services.mark_staff_attendance(
-                staff=self.staff,
-                on_date=MARKING_DATE,
-                status=StaffAttendanceStatus.HOLIDAY,
-                actor_id=self.user.pk,
-            )
+            self.mark(StaffAttendanceStatus.HOLIDAY)
 
         queued.assert_not_called()
 

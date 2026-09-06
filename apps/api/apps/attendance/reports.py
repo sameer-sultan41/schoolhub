@@ -72,7 +72,7 @@ def daily_register(queryset: QuerySet[StudentAttendance], *, on_date: datetime.d
             "check_in_time",
             "late_minutes",
             "remarks",
-            student_id=F("student__id"),
+            "student_id",
             first_name=F("student__first_name"),
             last_name=F("student__last_name"),
             admission_number=F("student__admission_number"),
@@ -98,7 +98,7 @@ def student_summary(
     grouped = (
         queryset.filter(attendance_date__gte=start_date, attendance_date__lte=end_date)
         .values(
-            student_id=F("student__id"),
+            "student_id",
             first_name=F("student__first_name"),
             last_name=F("student__last_name"),
             admission_number=F("student__admission_number"),
@@ -159,7 +159,7 @@ def student_late_arrivals(
             status=AttendanceStatus.LATE,
         )
         .values(
-            student_id=F("student__id"),
+            "student_id",
             first_name=F("student__first_name"),
             last_name=F("student__last_name"),
             admission_number=F("student__admission_number"),
@@ -192,7 +192,7 @@ def staff_punctuality(
         )
         .exclude(status=StaffAttendanceStatus.HOLIDAY)
         .values(
-            staff_id=F("staff__id"),
+            "staff_id",
             first_name=F("staff__first_name"),
             last_name=F("staff__last_name"),
             employee_number=F("staff__employee_number"),
@@ -243,7 +243,7 @@ def leave_report(
             "end_date",
             "days_count",
             "day_part",
-            student_id=F("student__id"),
+            "student_id",
             first_name=F("student__first_name"),
             last_name=F("student__last_name"),
             leave_type_name=F("leave_type__name"),
