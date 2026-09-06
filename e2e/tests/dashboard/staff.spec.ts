@@ -14,7 +14,10 @@ test.describe("staff list", () => {
     await staffPage.goto();
 
     await expect(staffPage.table).toBeVisible();
-    await expect(page.getByText("No staff found.")).toBeVisible();
+    await expect(page.getByText("No staff yet")).toBeVisible();
+    await expect(
+      page.getByText("Add your first staff member, or import the list you already keep."),
+    ).toBeVisible();
   });
 
   test("lists an existing staff member and navigates to their detail page", async ({

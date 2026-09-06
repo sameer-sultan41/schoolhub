@@ -23,7 +23,7 @@ describe("TeacherLoadSummary", () => {
 
     renderWithProviders(<TeacherLoadSummary academicSessionId="sess1" />);
 
-    expect(await screen.findByText("No allocations in this session yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No teaching load in this session")).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledWith("/teacher-subject-allocations/load-summary", {
       query: { academic_session_id: "sess1" },
     });
@@ -71,7 +71,7 @@ describe("TeacherLoadSummary", () => {
     expect(screen.getByText("18")).toBeInTheDocument();
   });
 
-  it("renders the error envelope instead of the table on failure", async () => {
+  it("renders the error envelope in the table's error slot on failure", async () => {
     mockGet.mockRejectedValue(
       new ApiError({
         code: "domain_rule_violation",
@@ -86,6 +86,9 @@ describe("TeacherLoadSummary", () => {
 
     expect(await screen.findByText(/isn't allowed right now/i)).toBeInTheDocument();
     expect(screen.getByText(/Reference: req-8/)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // The table stays put — the envelope now goes into its own error slot — but the
+    // empty state must NOT appear: a failed request is not an empty result set, and
+    // saying so would tell the reader something untrue about their own school.
+    expect(screen.queryByText("No teaching load in this session")).not.toBeInTheDocument();
   });
 });

@@ -38,4 +38,34 @@ if (typeof window !== "undefined") {
   window.HTMLElement.prototype.setPointerCapture ??= () => undefined;
   window.HTMLElement.prototype.releasePointerCapture ??= () => undefined;
   window.HTMLElement.prototype.scrollIntoView ??= () => undefined;
+
+  // Recharts sizes every chart from ResizeObserver plus getBoundingClientRect, and jsdom
+  // has neither (the first is absent, the second always returns zeroes). A chart in a
+  // zero-size container renders no marks at all, so without these a chart test fails for
+  // a reason that has nothing to do with the chart. This is a jsdom gap, not an assertion.
+  globalThis.ResizeObserver ??= class {
+    observe() {
+      // No layout in jsdom, so nothing to report.
+    }
+    unobserve() {
+      // See observe().
+    }
+    disconnect() {
+      // See observe().
+    }
+  };
+
+  window.HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+    return {
+      width: 640,
+      height: 320,
+      top: 0,
+      left: 0,
+      bottom: 320,
+      right: 640,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
+  };
 }

@@ -56,9 +56,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const messages = await getMessages();
 
   return (
+    // suppressHydrationWarning is required by next-themes, not a workaround for a bug of
+    // ours: its inline script writes the theme class onto <html> BEFORE React hydrates
+    // (that is what prevents a flash of the wrong theme), so the server markup and the
+    // client's first read of this element differ by design. Scoped to <html> only, so a
+    // genuine mismatch anywhere inside the app still surfaces.
     <html
       lang={locale}
       dir={directionFor(locale)}
+      suppressHydrationWarning
       className={`h-full ${inter.variable} ${fraunces.variable} ${notoNastaliqUrdu.variable}`}
     >
       <body className="min-h-full font-sans">

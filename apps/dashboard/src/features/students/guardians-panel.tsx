@@ -26,14 +26,15 @@ import {
 } from "@schoolhub/ui";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Can } from "@/components/can";
 import type {
   GuardianRecord,
   GuardianRelationship,
   StudentGuardianLink,
 } from "@/features/students/family-types";
-import { GUARDIAN_RELATIONSHIPS, SEARCH_DEBOUNCE_MS } from "@/features/students/student-constants";
+import { GUARDIAN_RELATIONSHIPS } from "@/features/students/student-constants";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -176,35 +177,28 @@ function LinkGuardianDialog({ studentId }: { studentId: string }) {
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"search" | "create">("search");
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  // Same debounce as every list screen's filter row, on the same window — this is a dialog
+  // rather than a FilterBar, so it shares the hook and not the component.
+  const search = useDebouncedValue();
   const [selectedGuardianId, setSelectedGuardianId] = useState<string | null>(null);
   const [relationship, setRelationship] = useState<GuardianRelationship>("father");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
 
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function onSearchChange(value: string) {
-    setSearch(value);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => {
-      setDebouncedSearch(value);
-    }, SEARCH_DEBOUNCE_MS);
-  }
-
   const searchQuery = useQuery({
-    queryKey: queryKeys.list("students", "guardians", { search: debouncedSearch }),
+    queryKey: queryKeys.list("students", "guardians", { search: search.settled }),
     queryFn: async () =>
-      (await apiClient.get<GuardianRecord[]>("/guardians", { query: { search: debouncedSearch } }))
+      (await apiClient.get<GuardianRecord[]>("/guardians", { query: { search: search.settled } }))
         .data,
-    enabled: open && tab === "search" && debouncedSearch.length > 0,
+    enabled: open && tab === "search" && search.settled.length > 0,
   });
 
   function reset() {
     setTab("search");
-    setSearch("");
-    setDebouncedSearch("");
+    // `set` rather than two setters: it also drops a pending settle, which would otherwise
+    // land after the dialog had closed and put the last term back into the query key.
+    search.set("");
     setSelectedGuardianId(null);
     setRelationship("father");
     setFirstName("");
@@ -299,9 +293,9 @@ function LinkGuardianDialog({ studentId }: { studentId: string }) {
         {tab === "search" ? (
           <div className="space-y-2">
             <Input
-              value={search}
+              value={search.draft}
               onChange={(event) => {
-                onSearchChange(event.target.value);
+                search.onDraftChange(event.target.value);
               }}
               placeholder={t("guardians.searchPlaceholder")}
             />

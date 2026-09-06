@@ -5,8 +5,10 @@
     // No `rootDir` — see packages/api-client/tsconfig.json for why.
     // `@testing-library/jest-dom` and `jest-axe` are listed so their matchers
     // (toBeDisabled, toHaveAttribute, toHaveNoViolations…) type-check: jest.setup.ts
-    // imports them at runtime but sits outside `include`.
-    "types": ["jest", "@testing-library/jest-dom", "jest-axe"],
+    // imports them at runtime but sits outside `include`. `node` is here for
+    // styles/theme.test.ts, which reads theme.css off disk — the token layer is CSS,
+    // and jest maps every `.css` import to a stub that cannot tell you what it declares.
+    "types": ["jest", "node", "@testing-library/jest-dom", "jest-axe"],
     "paths": {
       "@schoolhub/types": ["../types/src/index.ts"]
     }

@@ -1,29 +1,22 @@
 "use client";
 
 import { fetchPage } from "@schoolhub/api-client";
-import {
-  Badge,
-  DataTable,
-  type DataTableColumn,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@schoolhub/ui";
+import { Badge, DataTable, type DataTableColumn, EmptyState } from "@schoolhub/ui";
 import { isCursorPagination } from "@schoolhub/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { TrendingUp } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
+import { FilterBar } from "@/components/filter-bar";
 import {
   ACADEMICS_PAGE_SIZE,
   ALL,
   PROMOTION_STATUSES,
   PROMOTION_STATUS_BADGE,
 } from "@/features/academics/academics-constants";
-import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import { AcademicsNav } from "@/features/academics/academics-nav";
 import type { PromotionBatchRecord } from "@/features/academics/academics-types";
 import { PromotionBatchForm } from "@/features/academics/promotion-batch-form";
@@ -146,106 +139,103 @@ export function PromotionBatchesScreen() {
         </Can>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-44 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t("promotions.fields.fromSession")}
-          </span>
-          <Select value={fromSessionId} onValueChange={setFromSessionId}>
-            <SelectTrigger aria-label={t("promotions.fields.fromSession")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(sessions.data ?? []).map((session) => (
-                <SelectItem key={session.id} value={session.id}>
-                  {session.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-44 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t("promotions.fields.toSession")}
-          </span>
-          <Select value={toSessionId} onValueChange={setToSessionId}>
-            <SelectTrigger aria-label={t("promotions.fields.toSession")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(sessions.data ?? []).map((session) => (
-                <SelectItem key={session.id} value={session.id}>
-                  {session.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("fields.class")}</span>
-          <Select value={classId} onValueChange={setClassId}>
-            <SelectTrigger aria-label={t("fields.class")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(classes.data ?? []).map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  {option.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t("promotions.columns.status")}
-          </span>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger aria-label={t("promotions.columns.status")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {PROMOTION_STATUSES.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {t(`promotions.status.${value}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <FilterBar
+        selects={[
+          {
+            id: "fromSession",
+            label: t("promotions.fields.fromSession"),
+            value: fromSessionId,
+            onChange: setFromSessionId,
+            options: (sessions.data ?? []).map((session) => ({
+              value: session.id,
+              label: session.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+            className: "w-44",
+          },
+          {
+            id: "toSession",
+            label: t("promotions.fields.toSession"),
+            value: toSessionId,
+            onChange: setToSessionId,
+            options: (sessions.data ?? []).map((session) => ({
+              value: session.id,
+              label: session.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+            className: "w-44",
+          },
+          {
+            id: "class",
+            label: t("fields.class"),
+            value: classId,
+            onChange: setClassId,
+            options: (classes.data ?? []).map((option) => ({
+              value: option.id,
+              label: option.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+          {
+            id: "status",
+            label: t("promotions.columns.status"),
+            value: status,
+            onChange: setStatus,
+            options: PROMOTION_STATUSES.map((value) => ({
+              value,
+              label: t(`promotions.status.${value}`),
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+        ]}
+        clearLabel={tCommon("clearFilters")}
+        onClear={() => {
+          setFromSessionId(ALL);
+          setToSessionId(ALL);
+          setClassId(ALL);
+          setStatus(ALL);
+        }}
+      />
 
-      {error ? (
-        <ApiErrorAlert error={error} />
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          getRowId={(row) => row.batch_id}
-          caption={t("promotions.list.caption")}
-          isLoading={isPending}
-          emptyState={t("promotions.list.empty")}
-          onRowClick={(row) => {
-            router.push(`/academics/promotions/${row.batch_id}`);
-          }}
-          pagination={{
-            hasNext: Boolean(pagination?.next_cursor),
-            hasPrevious: pager.hasPrevious,
-            onNext: () => {
-              if (!isFetching) pager.onNext(pagination);
-            },
-            onPrevious: () => {
-              if (!isFetching) pager.onPrevious();
-            },
-            nextLabel: tCommon("next"),
-            previousLabel: tCommon("previous"),
-          }}
-        />
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.batch_id}
+        caption={t("promotions.list.caption")}
+        isLoading={isPending}
+        error={error ? <ApiErrorAlert error={error} /> : undefined}
+        emptyState={
+          <EmptyState
+            icon={TrendingUp}
+            title={t("promotions.list.emptyTitle")}
+            description={t("promotions.list.emptyDescription")}
+            action={
+              <Can permission="academics.promotion.create">
+                <PromotionBatchForm />
+              </Can>
+            }
+          />
+        }
+        onRowClick={(row) => {
+          router.push(`/academics/promotions/${row.batch_id}`);
+        }}
+        pagination={{
+          hasNext: Boolean(pagination?.next_cursor),
+          hasPrevious: pager.hasPrevious,
+          onNext: () => {
+            if (!isFetching) pager.onNext(pagination);
+          },
+          onPrevious: () => {
+            if (!isFetching) pager.onPrevious();
+          },
+          nextLabel: tCommon("next"),
+          previousLabel: tCommon("previous"),
+        }}
+      />
     </div>
   );
 }

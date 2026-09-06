@@ -100,10 +100,10 @@ describe("PromotionBatchesScreen", () => {
 
     renderWithProviders(<PromotionBatchesScreen />);
 
-    expect(await screen.findByText("No promotion batches found.")).toBeInTheDocument();
+    expect(await screen.findByText("No promotion batches yet")).toBeInTheDocument();
   });
 
-  it("renders the ApiError envelope instead of the table on failure", async () => {
+  it("renders the ApiError envelope in the table's error slot on failure", async () => {
     mockGet.mockRejectedValue(
       new ApiError({
         code: "permission_denied",
@@ -118,7 +118,10 @@ describe("PromotionBatchesScreen", () => {
 
     expect(await screen.findByText(/You do not have permission to do that\./)).toBeInTheDocument();
     expect(screen.getByText(/Reference: req-12/)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // The table stays put — the envelope now goes into its own error slot — but the
+    // empty state must NOT appear: a failed request is not an empty result set, and
+    // saying so would tell the reader something untrue about their own school.
+    expect(screen.queryByText("No promotion batches yet")).not.toBeInTheDocument();
   });
 
   it("hides the create-batch control without the create permission", async () => {

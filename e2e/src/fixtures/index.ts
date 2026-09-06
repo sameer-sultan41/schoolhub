@@ -6,7 +6,7 @@ import { buildUser } from "@/data/factories";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
 import { E2E_OTHER_ADMIN_EMAIL } from "@/lib/seed-constants";
-import { MockApi, authModule, reportingModule, tenantModule } from "@/mocks";
+import { MockApi, authModule, dashboardHomeModule, tenantModule } from "@/mocks";
 import {
   DashboardPage,
   LoginPage,
@@ -140,10 +140,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
   },
 
   signedIn: async ({ page, mockApi, authUser }, use) => {
-    // tenant + reporting: every authenticated page fetches both as chrome
-    // (AppShell branding, the dashboard's summary tiles) regardless of which
-    // specific screen a test is exercising.
-    mockApi.use(authModule({ user: authUser }), tenantModule(), reportingModule());
+    // tenant + dashboard home: every authenticated page fetches the tenant as chrome
+    // (AppShell branding), and any test that lands on /dashboard fetches the home
+    // screen's own reads, regardless of which specific screen it is exercising.
+    mockApi.use(authModule({ user: authUser }), tenantModule(), dashboardHomeModule());
     // Set directly rather than through a login round-trip: these tests start already
     // authenticated, so no /auth/login response exists for the side effect to hang off.
     // The cookie is presence-only — the dashboard proxy reads nothing out of it.

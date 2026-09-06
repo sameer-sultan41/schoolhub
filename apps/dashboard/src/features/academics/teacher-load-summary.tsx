@@ -1,10 +1,18 @@
 "use client";
 
-import { Badge, Card, CardContent, DataTable, type DataTableColumn } from "@schoolhub/ui";
+import {
+  Badge,
+  Card,
+  CardContent,
+  DataTable,
+  type DataTableColumn,
+  EmptyState,
+} from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
+import { Gauge } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { DEFAULT_WEEKLY_PERIOD_NORM } from "@/features/academics/academics-constants";
-import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import type { TeacherLoadSummaryRow } from "@/features/academics/academics-types";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
@@ -73,18 +81,21 @@ export function TeacherLoadSummary({ academicSessionId }: TeacherLoadSummaryProp
           </p>
         </div>
 
-        <ApiErrorAlert error={error} />
-
-        {error ? null : (
-          <DataTable
-            columns={columns}
-            rows={data ?? []}
-            getRowId={(row) => row.staff_id}
-            caption={t("loadSummary.title")}
-            isLoading={isPending}
-            emptyState={t("loadSummary.empty")}
-          />
-        )}
+        <DataTable
+          columns={columns}
+          rows={data ?? []}
+          getRowId={(row) => row.staff_id}
+          caption={t("loadSummary.title")}
+          isLoading={isPending}
+          error={error ? <ApiErrorAlert error={error} /> : undefined}
+          emptyState={
+            <EmptyState
+              icon={Gauge}
+              title={t("loadSummary.emptyTitle")}
+              description={t("loadSummary.emptyDescription")}
+            />
+          }
+        />
       </CardContent>
     </Card>
   );

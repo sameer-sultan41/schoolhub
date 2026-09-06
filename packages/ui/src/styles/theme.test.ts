@@ -1,0 +1,147 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * The theme layer is CSS, so it is read as text rather than imported — jest maps every
+ * `.css` import to a stub (jest.config.mjs), and a stub cannot tell you whether a token
+ * exists. Nothing else in the build fails when a component references a `--sh-*` variable
+ * that was never declared: the utility silently resolves to nothing and the element
+ * renders transparent. This file is that missing check.
+ *
+ * The colour literals below are the one place in this repo where they are legal — this
+ * IS the file that owns them.
+ */
+const css = readFileSync(join(__dirname, "theme.css"), "utf8");
+const branding = readFileSync(join(__dirname, "..", "lib", "branding.ts"), "utf8");
+
+const CHART_SLOTS = [1, 2, 3, 4, 5, 6] as const;
+
+/** Every token a component may reference. Adding one here before declaring it fails. */
+const REQUIRED_TOKENS = [
+  "--sh-color-surface-raised",
+  "--sh-color-surface-sunken",
+  "--sh-color-info",
+  "--sh-color-info-foreground",
+  "--sh-elevation-1",
+  "--sh-elevation-2",
+  "--sh-elevation-3",
+  "--sh-gradient-spotlight",
+  "--sh-color-spotlight-foreground",
+  ...CHART_SLOTS.map((slot) => `--sh-color-chart-${slot}`),
+];
+
+const DARK_BLOCK_MARKER = "/* dark-mode token block */";
+
+/**
+ * The dark half of the file, which must redeclare everything that flips. Sliced from an
+ * explicit marker rather than from the first `@media` rule — the `@custom-variant` block
+ * higher up also matches `prefers-color-scheme`. A missing marker throws here rather than
+ * yielding `slice(-1)`, which would leave every assertion below passing against one
+ * character of noise.
+ */
+const markerIndex = css.indexOf(DARK_BLOCK_MARKER);
+if (markerIndex < 0) {
+  throw new Error(`theme.css no longer contains the marker ${DARK_BLOCK_MARKER}`);
+}
+const darkBlock = css.slice(markerIndex);
+
+describe("theme.css", () => {
+  it.each(REQUIRED_TOKENS)("declares %s", (token) => {
+    expect(css).toContain(`${token}:`);
+  });
+
+  it.each(REQUIRED_TOKENS)("aliases %s into a Tailwind utility", (token) => {
+    expect(css).toContain(`var(${token})`);
+  });
+
+  it("marks where the dark-mode token block begins", () => {
+    // Redundant with the throw above by design: this is the assertion that NAMES the
+    // failure, so a rename reads as "the marker moved" rather than as a module that
+    // would not import.
+    expect(css).toContain(DARK_BLOCK_MARKER);
+  });
+
+  it.each(CHART_SLOTS)("gives chart slot %i a dark-mode step", (slot) => {
+    expect(darkBlock).toContain(`--sh-color-chart-${slot}:`);
+  });
+
+  it("pins the spotlight gradient in dark mode rather than letting it follow primary", () => {
+    // primary LIGHTENS in dark mode, so a gradient that follows it turns the hero band
+    // from a dark surface with light text into a light surface with light text. Caught by
+    // looking at the running app, not by any assertion that existed at the time.
+    expect(darkBlock).toContain("--sh-gradient-spotlight:");
+    expect(darkBlock).not.toMatch(/--sh-gradient-spotlight:[^;]*var\(--sh-color-primary\)/);
+  });
+
+  it("keeps the spotlight foreground out of the dark-mode flip", () => {
+    // It is declared once, in :root, and never redefined — the same discipline
+    // --sh-color-overlay follows, and for the same reason.
+    expect(darkBlock).not.toContain("--sh-color-spotlight-foreground:");
+  });
+
+  it("re-steps primary and the surface planes for the dark ground", () => {
+    for (const token of [
+      "--sh-color-primary",
+      "--sh-color-surface-raised",
+      "--sh-color-surface-sunken",
+      "--sh-color-info",
+    ]) {
+      expect(darkBlock).toContain(`${token}:`);
+    }
+  });
+
+  it("defines the dark variant for both a class and the OS preference", () => {
+    // apps/website has no theme toggle and relies on prefers-color-scheme; apps/dashboard
+    // writes a class. A variant covering only one of the two leaves the other app
+    // rendering light treatments on a dark surface.
+    expect(css).toContain("@custom-variant dark");
+    expect(css).toContain("prefers-color-scheme: dark");
+    expect(css).toMatch(/\.dark/);
+  });
+
+  it("declares identical values in both dark-mode arms", () => {
+    // The dark tokens are written twice — once under prefers-color-scheme for
+    // apps/website (which has no toggle) and once under `.dark` for the dashboard's.
+    // A divergence between them is invisible until someone toggles, which is exactly
+    // the kind of bug nothing else here would catch.
+    const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const read = (pattern: RegExp): Record<string, string> => {
+      const body = pattern.exec(withoutComments)?.[1] ?? "";
+      const declarations: Record<string, string> = {};
+      // Indexed rather than destructured: tsconfig.base sets noUncheckedIndexedAccess,
+      // which types every capture group as `string | undefined`.
+      for (const match of body.matchAll(/(--sh-[\w-]+)\s*:\s*([^;]+);/g)) {
+        const token = match[1];
+        const value = match[2];
+        if (token && value) declarations[token] = value.split(/\s+/).join(" ").trim();
+      }
+      return declarations;
+    };
+
+    const mediaArm = read(/:root:not\(\.light\)\s*\{([\s\S]*?)\n {2}\}/);
+    const classArm = read(/:root\.dark\s*\{([\s\S]*?)\n\}/);
+
+    expect(Object.keys(mediaArm).length).toBeGreaterThan(0);
+    expect(classArm).toEqual(mediaArm);
+  });
+
+  it("keeps status colours out of the tenant-overridable branding contract", () => {
+    // project-status.md: success/warning/danger are product semantics, not branding.
+    // A tenant that could repaint "danger" could make a destructive action look safe.
+    for (const token of ["--sh-color-success", "--sh-color-warning", "--sh-color-danger"]) {
+      expect(branding).not.toContain(token);
+    }
+  });
+
+  it("keeps the chart ramp out of the tenant-overridable branding contract", () => {
+    // The slot order is the colour-blindness safety mechanism (see theme.css's own
+    // header). A tenant overriding one slot would break the validated separation.
+    for (const slot of CHART_SLOTS) {
+      expect(branding).not.toContain(`--sh-color-chart-${slot}`);
+    }
+  });
+
+  it("never adds the platform tier to the branding contract", () => {
+    expect(branding).not.toContain("--sh-platform-");
+  });
+});

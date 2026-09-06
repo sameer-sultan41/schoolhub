@@ -18,7 +18,43 @@
     "signOut": "Sign out",
     "skipToContent": "Skip to main content",
     "primary": "Primary navigation",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "theme": {
+      "label": "Change theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "Match system"
+    },
+    "groups": {
+      "overview": "Overview",
+      "people": "People",
+      "teaching": "Teaching",
+      "operations": "Operations"
+    },
+    "planned": "Soon",
+    "plannedHint": "{module} is not built yet.",
+    "breadcrumb": "Breadcrumb",
+    "account": "Account",
+    "locale": {
+      "label": "Language",
+      "en": "English",
+      "ur": "اردو"
+    },
+    "command": {
+      "trigger": "Search",
+      "shortcut": "⌘K",
+      "title": "Search and go",
+      "placeholder": "Search screens and actions",
+      "description": "Jump to a screen, or start something you have permission to do.",
+      "empty": "Nothing matches that.",
+      "close": "Close search",
+      "actions": "Actions",
+      "action": {
+        "newStudent": "New student",
+        "newStaff": "New staff member",
+        "importStudents": "Import students"
+      }
+    }
   },
   "auth": {
     "login": {
@@ -35,28 +71,90 @@
     "session": {
       "expiredTitle": "Your session expired",
       "expiredBody": "Sign in again to continue.",
-      "impersonating": "You are viewing this account as support staff. Every action is audited."
+      "impersonating": "You are viewing this account as support staff. Every action is audited.",
+      "impersonatingLabel": "Impersonation notice"
     }
   },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Welcome back, {name}",
     "summary": "Today at a glance",
-    "cards": {
-      "students": "Enrolled students",
-      "attendanceToday": "Attendance today",
-      "feesOutstanding": "Outstanding fees",
-      "openAdmissions": "Open admission enquiries"
+    "empty": "Nothing to show yet.",
+    "nowBand": {
+      "scheduleLabel": "Today's schedule",
+      "now": "Now",
+      "free": "No class this period",
+      "break": "Break",
+      "substituted": "Covered by another teacher",
+      "between": "Between periods right now.",
+      "emptyTitle": "Nothing scheduled today",
+      "emptyDescription": "There are no periods on your timetable for today. Open your timetable to see the rest of the week.",
+      "viewTimetable": "Open my timetable"
     },
-    "empty": "Nothing to show yet."
+    "teacherLoad": {
+      "title": "Teaching load this week",
+      "description": "Weekly periods per teacher, heaviest first.",
+      "periodsLabel": "{count, plural, one {period} other {periods}}",
+      "overNorm": "Over norm",
+      "remainder": "{count, plural, one {# more teacher not shown.} other {# more teachers not shown.}}",
+      "emptyTitle": "No teaching load yet",
+      "emptyDescription": "Allocate teachers to sections and subjects, and each teacher's weekly load appears here.",
+      "noSessionTitle": "No current academic session",
+      "noSessionDescription": "Teaching load is counted per session. Activate an academic session to see it here."
+    },
+    "capacity": {
+      "title": "Places by class",
+      "description": "Total section capacity per class — places the school offers, not students enrolled.",
+      "axisLabel": "Capacity, in places",
+      "placesLabel": "{count, plural, one {place} other {places}}",
+      "sections": "{count, plural, one {# section} other {# sections}}",
+      "remainder": "{count, plural, one {# more class not shown.} other {# more classes not shown.}}",
+      "emptyTitle": "No capacity recorded",
+      "emptyDescription": "Set a capacity on your sections and the places each class offers appear here."
+    },
+    "shape": {
+      "title": "Your school at a glance",
+      "classes": "Classes",
+      "sections": "Sections",
+      "subjects": "Subjects",
+      "rooms": "Rooms",
+      "houses": "Houses",
+      "campuses": "Campuses",
+      "students": "Students",
+      "staff": "Staff",
+      "unavailable": "Not counted yet",
+      "unavailableNote": "This list is paged without a total.",
+      "unknown": "Unavailable right now"
+    },
+    "pending": {
+      "title": "Waiting on you",
+      "substitutions": "Substitutions to approve",
+      "substitutionOn": "Cover on {date}",
+      "noReason": "No reason given",
+      "promotions": "Promotion batches awaiting approval",
+      "promotionStudents": "{count, plural, one {# student} other {# students}}",
+      "allSubstitutions": "All substitutions",
+      "allPromotions": "All promotion batches",
+      "emptyTitle": "Nothing waiting on you",
+      "emptyDescription": "Substitutions to approve and promotion batches in progress will show up here."
+    },
+    "actions": {
+      "title": "Quick actions",
+      "newStudent": "New student",
+      "newStaff": "New staff member",
+      "importStudents": "Import students",
+      "buildTimetable": "Build timetable",
+      "reviewPromotions": "Review promotions"
+    }
   },
   "students": {
     "title": "Students",
     "summary": "Student profiles, guardians, and enrollment.",
     "list": {
       "caption": "Students",
-      "empty": "No students found.",
-      "searchPlaceholder": "Search by name or admission number"
+      "searchPlaceholder": "Search by name or admission number",
+      "emptyTitle": "No students yet",
+      "emptyDescription": "Add your first student, or import a class list."
     },
     "columns": {
       "admissionNumber": "Admission #",
@@ -302,8 +400,9 @@
     "summary": "Staff profiles, designations, qualifications, and documents.",
     "list": {
       "caption": "Staff",
-      "empty": "No staff found.",
-      "searchPlaceholder": "Search by name, employee number, email, or phone"
+      "searchPlaceholder": "Search by name, employee number, email, or phone",
+      "emptyTitle": "No staff yet",
+      "emptyDescription": "Add your first staff member, or import the list you already keep."
     },
     "columns": {
       "employeeNumber": "Employee #",
@@ -506,7 +605,8 @@
       "electiveWithGroup": "Elective · {group}",
       "list": {
         "caption": "Curriculum mappings",
-        "empty": "No curriculum mappings found."
+        "emptyTitle": "No subjects mapped yet",
+        "emptyDescription": "Add a subject to a class, or clone last session's curriculum."
       },
       "columns": {
         "kind": "Type",
@@ -545,7 +645,8 @@
       "overNormWarning": "This teacher is now allocated {periods} periods a week, above the norm of {norm}. The allocation was saved.",
       "list": {
         "caption": "Teacher allocations",
-        "empty": "No allocations found."
+        "emptyTitle": "No teachers allocated yet",
+        "emptyDescription": "Give a section's subject a teacher, and their weekly load starts counting here."
       },
       "columns": {
         "role": "Role",
@@ -575,7 +676,6 @@
     "loadSummary": {
       "title": "Teacher load",
       "normHint": "Weekly periods per teacher for the selected session, against a norm of {norm}.",
-      "empty": "No allocations in this session yet.",
       "overNorm": "Over norm",
       "withinNorm": "Within norm",
       "pickSession": "Choose a single academic session to see per-teacher load.",
@@ -583,7 +683,9 @@
         "allocations": "Allocations",
         "weeklyPeriods": "Weekly periods",
         "status": "Load"
-      }
+      },
+      "emptyTitle": "No teaching load in this session",
+      "emptyDescription": "Allocate a teacher to a section's subject and their weekly periods appear here."
     },
     "promotions": {
       "title": "Promotions",
@@ -591,7 +693,8 @@
       "sessionPair": "{from} → {to}",
       "list": {
         "caption": "Promotion decisions",
-        "empty": "No promotion batches found."
+        "emptyTitle": "No promotion batches yet",
+        "emptyDescription": "Start a batch to move a class into next session, then review each student's decision."
       },
       "columns": {
         "batch": "Batch",
@@ -648,7 +751,8 @@
         "title": "Promotion batch",
         "summary": "Review each student's decision, then submit the batch for approval.",
         "caption": "Per-student promotion decisions",
-        "empty": "This batch has no decisions."
+        "emptyTitle": "This batch has no decisions",
+        "emptyDescription": "Every student was left out of the batch. Create a new one to start again."
       },
       "report": {
         "title": "Execution report",
@@ -796,7 +900,8 @@
       },
       "list": {
         "caption": "Bell schedule periods",
-        "empty": "No periods found."
+        "emptyTitle": "No bell schedule yet",
+        "emptyDescription": "Add the periods your day runs on — every week grid is built from these."
       },
       "actions": {
         "create": "Add period",
@@ -836,7 +941,8 @@
       },
       "list": {
         "caption": "Rooms",
-        "empty": "No rooms found."
+        "emptyTitle": "No rooms yet",
+        "emptyDescription": "Add the rooms your school teaches in, so the conflict check knows what fits where."
       },
       "actions": {
         "create": "Add room",
@@ -872,7 +978,8 @@
       },
       "list": {
         "caption": "Teacher substitutions",
-        "empty": "No substitutions found."
+        "emptyTitle": "No substitutions yet",
+        "emptyDescription": "Propose cover when a teacher is away, and it appears here for approval."
       },
       "filters": {
         "from": "From",
@@ -900,9 +1007,10 @@
       "dateLabel": "Show cover for",
       "dateHint": "Leave the date empty for the normal week.",
       "loading": "Loading your timetable…",
-      "empty": "You have no published timetable yet.",
       "free": "Free",
-      "substituted": "Covered"
+      "substituted": "Covered",
+      "emptyTitle": "No timetable published yet",
+      "emptyDescription": "Once your school publishes the week, your periods appear here."
     }
   },
   "common": {
@@ -913,7 +1021,12 @@
     "next": "Next",
     "previous": "Previous",
     "noResults": "No records found.",
-    "requiredField": "This field is required."
+    "requiredField": "This field is required.",
+    "details": "Details",
+    "new": "New",
+    "edit": "Edit",
+    "import": "Import",
+    "clearFilters": "Clear filters"
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",

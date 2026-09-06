@@ -1,12 +1,10 @@
 import { ApiError, type ApiResult } from "@schoolhub/api-client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NextIntlClientProvider } from "next-intl";
-import messages from "../../../messages/en.json";
 import { StaffTable } from "@/features/staff/staff-table";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
+import { renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 // StaffTable never calls useSession itself — it renders <Can>, which reads
@@ -43,15 +41,6 @@ jest.mock("next/navigation", () => ({
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
-
-function renderWithProviders(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-    </NextIntlClientProvider>,
-  );
-}
 
 const STAFF_MEMBER = {
   id: "st1",
@@ -115,7 +104,7 @@ describe("StaffTable", () => {
 
     renderWithProviders(<StaffTable />);
 
-    expect(await screen.findByText("No staff found.")).toBeInTheDocument();
+    expect(await screen.findByText("No staff yet")).toBeInTheDocument();
   });
 
   it("renders the ApiError envelope on a request failure", async () => {
@@ -370,7 +359,7 @@ describe("StaffTable", () => {
 
     renderWithProviders(<StaffTable />);
 
-    await screen.findByText("No staff found.");
+    await screen.findByText("No staff yet");
     expect(screen.queryByRole("link", { name: "New staff member" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Import" })).not.toBeInTheDocument();
   });

@@ -1,13 +1,22 @@
 "use client";
 
-import { Badge, Button, Card, CardContent, DataTable, type DataTableColumn } from "@schoolhub/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  DataTable,
+  type DataTableColumn,
+  EmptyState,
+} from "@schoolhub/ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { ListChecks } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useMemo } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { PROMOTION_STATUS_BADGE } from "@/features/academics/academics-constants";
-import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import { AcademicsNav } from "@/features/academics/academics-nav";
 import type {
   PromotionBatchDetail,
@@ -146,8 +155,6 @@ export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
         </Button>
       </div>
 
-      {error ? <ApiErrorAlert error={error} /> : null}
-
       {status ? (
         <Card>
           <CardContent className="pt-6">
@@ -156,19 +163,24 @@ export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
         </Card>
       ) : null}
 
-      {error ? null : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          getRowId={(row) => row.id}
-          caption={t("promotions.review.caption")}
-          isLoading={isPending}
-          emptyState={t("promotions.review.empty")}
-          // No pagination: a batch is one class, and `GET /student-promotions/{id}`
-          // returns its decisions inline. Paging forty rows would cost a request
-          // per page to hide nothing.
-        />
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        caption={t("promotions.review.caption")}
+        isLoading={isPending}
+        error={error ? <ApiErrorAlert error={error} /> : undefined}
+        emptyState={
+          <EmptyState
+            icon={ListChecks}
+            title={t("promotions.review.emptyTitle")}
+            description={t("promotions.review.emptyDescription")}
+          />
+        }
+        // No pagination: a batch is one class, and `GET /student-promotions/{id}`
+        // returns its decisions inline. Paging forty rows would cost a request
+        // per page to hide nothing.
+      />
     </div>
   );
 }

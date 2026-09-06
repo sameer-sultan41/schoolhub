@@ -6,6 +6,14 @@ offset pagination degrades and can skip or repeat rows under concurrent writes.
 Offset pagination is available for small admin lists that need page numbers.
 
 See docs/02-architecture/api-architecture.md §2.4.
+
+`total_count` is opt-in, per endpoint, via `CountedCursorPagination`. Cursor pagination
+gets its cheapness precisely by never counting, so emitting a total everywhere would put
+a `COUNT(*)` over the whole filtered set on every page of every list in the product —
+including the append-heavy tables this class exists to serve. The client contract has
+always allowed for that (`packages/types`' `CursorPagination.total_count` is optional and
+documented as "only present on endpoints cheap enough to count"); this is the mechanism
+that makes it true rather than aspirational.
 """
 
 from collections import OrderedDict
@@ -22,6 +30,19 @@ class CursorPagination(DRFCursorPagination):
     page_size_query_param = "page_size"
     cursor_query_param = "cursor"
     ordering = "-created_at"
+
+    #: Emit `meta.pagination.total_count`. Off here, on in `CountedCursorPagination`.
+    count_total = False
+    #: Set by `paginate_queryset`; `None` means this endpoint does not report a total.
+    _total_count: int | None = None
+
+    def paginate_queryset(self, queryset, request, view=None):
+        # Counted BEFORE super(), on the queryset as the caller narrowed it — tenant
+        # scope, record scope and filters all applied — and never on the sliced page.
+        # `.count()` on an already-evaluated queryset uses its result cache, so on a
+        # counted endpoint this is one extra COUNT per request, not a second full fetch.
+        self._total_count = queryset.count() if self.count_total else None
+        return super().paginate_queryset(queryset, request, view)
 
     def _cursor_token(self, link: str | None) -> str | None:
         """Return the bare cursor from one of DRF's absolute links.
@@ -45,19 +66,34 @@ class CursorPagination(DRFCursorPagination):
                     ("data", data),
                     (
                         "meta",
-                        {
-                            "pagination": {
-                                "next_cursor": self._cursor_token(self.get_next_link()),
-                                "previous_cursor": self._cursor_token(self.get_previous_link()),
-                                "page_size": self.get_page_size(self.request),
-                            }
-                        },
+                        {"pagination": self._pagination_meta()},
                     ),
                 ]
             )
         )
 
+    def _pagination_meta(self) -> dict[str, object]:
+        meta: dict[str, object] = {
+            "next_cursor": self._cursor_token(self.get_next_link()),
+            "previous_cursor": self._cursor_token(self.get_previous_link()),
+            "page_size": self.get_page_size(self.request),
+        }
+        # Absent, not null, when this endpoint does not count — the client distinguishes
+        # "this endpoint does not report a total" from "the total is unknown", and a null
+        # would collapse the two.
+        if self._total_count is not None:
+            meta["total_count"] = self._total_count
+        return meta
+
     def get_paginated_response_schema(self, schema):
+        pagination_properties: dict[str, object] = {
+            "next_cursor": {"type": "string", "nullable": True},
+            "previous_cursor": {"type": "string", "nullable": True},
+            "page_size": {"type": "integer"},
+        }
+        if self.count_total:
+            pagination_properties["total_count"] = {"type": "integer"}
+
         return {
             "type": "object",
             "properties": {
@@ -67,16 +103,25 @@ class CursorPagination(DRFCursorPagination):
                     "properties": {
                         "pagination": {
                             "type": "object",
-                            "properties": {
-                                "next_cursor": {"type": "string", "nullable": True},
-                                "previous_cursor": {"type": "string", "nullable": True},
-                                "page_size": {"type": "integer"},
-                            },
+                            "properties": pagination_properties,
                         }
                     },
                 },
             },
         }
+
+
+class CountedCursorPagination(CursorPagination):
+    """Cursor pagination that also reports `total_count`.
+
+    For lists a person needs a total of and that are bounded by one school's size —
+    students, staff. Deliberately NOT the default: the tables cursor pagination exists
+    for (attendance marks, ledger entries, notification deliveries) grow without bound,
+    and a `COUNT(*)` over one of those on every page is exactly the cost this pagination
+    class is chosen to avoid.
+    """
+
+    count_total = True
 
 
 class PageNumberPagination(DRFPageNumberPagination):

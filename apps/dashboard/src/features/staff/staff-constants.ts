@@ -1,7 +1,3 @@
-/** Debounce window for the staff-list search input — mirrors
- * student-constants.ts's SEARCH_DEBOUNCE_MS. */
-export const SEARCH_DEBOUNCE_MS = 300;
-
 /** Page size sent to `GET /api/v1/staff` — mirrors the API's own default
  * (core.api.pagination.CursorPagination), kept explicit here rather than relying
  * on the server's default so the UI's row count is a deliberate choice. */

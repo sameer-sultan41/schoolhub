@@ -222,6 +222,57 @@ class MedicalNotesVisibilityTests(StudentManagementAPITestCase):
         self.assertNotIn("medical_notes", response.json()["data"])
 
 
+class StudentListTotalCountTests(StudentManagementAPITestCase):
+    """`/students` opts into `CountedCursorPagination` (core/api/pagination.py).
+
+    Cursor pagination does not count by default, and that is the whole reason it is cheap
+    on the append-heavy tables it exists for. Students are the opposite case: a bounded
+    roll that staff, and the dashboard, ask the size of constantly. These tests pin the
+    two things that make the total worth having — that it is the size of the WHOLE
+    narrowed set rather than of the page, and that it narrows with the same filters and
+    scopes the rows do.
+    """
+
+    def test_the_total_is_the_whole_set_not_the_page(self) -> None:
+        self.allow("students.student.view")
+        with tenant_context(self.tenant.id):
+            for _ in range(5):
+                StudentFactory(tenant=self.tenant, campus=self.campus)
+
+        response = self.client.get("/api/v1/students?page_size=2")
+
+        body = response.json()
+        self.assertEqual(len(body["data"]), 2)
+        self.assertEqual(body["meta"]["pagination"]["total_count"], 5)
+
+    def test_the_total_narrows_with_the_filters(self) -> None:
+        """A count that ignores the filters is worse than no count — it contradicts the
+        rows the reader is looking at."""
+        self.allow("students.student.view")
+        with tenant_context(self.tenant.id):
+            other_campus = CampusFactory(tenant=self.tenant)
+            StudentFactory(tenant=self.tenant, campus=self.campus)
+            for _ in range(3):
+                StudentFactory(tenant=self.tenant, campus=other_campus)
+
+        response = self.client.get(f"/api/v1/students?campus_id={other_campus.pk}")
+
+        self.assertEqual(response.json()["meta"]["pagination"]["total_count"], 3)
+
+    def test_soft_deleted_students_are_not_counted(self) -> None:
+        self.allow("students.student.view", "students.student.delete")
+        with tenant_context(self.tenant.id):
+            kept = StudentFactory(tenant=self.tenant, campus=self.campus)
+            removed = StudentFactory(tenant=self.tenant, campus=self.campus)
+
+        self.client.delete(f"/api/v1/students/{removed.pk}")
+        response = self.client.get("/api/v1/students")
+
+        body = response.json()
+        self.assertEqual(body["meta"]["pagination"]["total_count"], 1)
+        self.assertEqual({row["id"] for row in body["data"]}, {str(kept.pk)})
+
+
 class StudentListTests(StudentManagementAPITestCase):
     def test_soft_deleted_students_are_excluded(self) -> None:
         self.allow("students.student.view", "students.student.delete")

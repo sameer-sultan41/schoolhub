@@ -1,12 +1,10 @@
 import { ApiError } from "@schoolhub/api-client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NextIntlClientProvider } from "next-intl";
-import messages from "../../../messages/en.json";
 import { StudentsTable } from "@/features/students/students-table";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
+import { renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 // StudentsTable never calls useSession itself — it renders <Can>, which reads
@@ -29,15 +27,6 @@ const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
 const mockPost = apiClient.post as jest.MockedFunction<typeof apiClient.post>;
 const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
-
-function renderWithProviders(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-    </NextIntlClientProvider>,
-  );
-}
 
 const STUDENT = {
   id: "s1",
@@ -87,7 +76,7 @@ describe("StudentsTable", () => {
 
     renderWithProviders(<StudentsTable />);
 
-    expect(await screen.findByText("No students found.")).toBeInTheDocument();
+    expect(await screen.findByText("No students yet")).toBeInTheDocument();
   });
 
   it("renders the ApiError envelope on a request failure", async () => {
@@ -356,5 +345,77 @@ describe("StudentsTable", () => {
     await user.click(await screen.findByRole("button", { name: "Dismiss" }));
 
     expect(screen.getByRole("button", { name: "Generate ID cards (0)" })).toBeDisabled();
+  });
+
+  it("offers the create action from inside the empty state, not just the header", async () => {
+    mockUsePermission.mockReturnValue(true);
+    mockGet.mockResolvedValue({
+      data: [],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    renderWithProviders(<StudentsTable />);
+
+    await screen.findByText("No students yet");
+    expect(screen.getByText("Add your first student, or import a class list.")).toBeInTheDocument();
+    // One in the header's action row, one inside the empty state — an empty screen is an
+    // invitation to act, so the action is where the reader is already looking.
+    expect(screen.getAllByRole("link", { name: "New student" })).toHaveLength(2);
+  });
+
+  it("offers no clear control until a filter is actually set", async () => {
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    renderWithProviders(<StudentsTable />);
+
+    await screen.findByText("2026-0001");
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+  });
+
+  it("clearing the filters drops the status from the request", async () => {
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<StudentsTable />);
+    await screen.findByText("2026-0001");
+
+    await user.click(screen.getByRole("combobox", { name: "Status" }));
+    await user.click(await screen.findByRole("option", { name: "Suspended" }));
+    await waitFor(() => {
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.status).toBe("suspended");
+    });
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    await waitFor(() => {
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.status).toBeUndefined();
+    });
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+  });
+
+  it("tightens the row height on this table, which is scanned rather than read", async () => {
+    mockGet.mockResolvedValue({
+      data: [STUDENT],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
+      requestId: "req-list",
+      status: 200,
+    });
+
+    renderWithProviders(<StudentsTable />);
+
+    const cell = await screen.findByText("2026-0001");
+    expect(cell.closest("td")).toHaveClass("py-2");
   });
 });

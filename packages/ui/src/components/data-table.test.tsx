@@ -18,7 +18,12 @@ const columns = [{ id: "name", header: "Name", cell: (row: Row) => row.name }];
 describe("DataTable", () => {
   it("renders one row per item, keyed by getRowId", () => {
     render(
-      <DataTable columns={columns} rows={rows} getRowId={(row) => row.id} emptyState="Empty" />,
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        emptyState={<span>Empty</span>}
+      />,
     );
 
     expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
@@ -32,7 +37,7 @@ describe("DataTable", () => {
         columns={columns}
         rows={[]}
         getRowId={(row) => row.id}
-        emptyState="Koi record nahi mila."
+        emptyState={<span>Koi record nahi mila.</span>}
       />,
     );
     expect(screen.getByText("Koi record nahi mila.")).toBeInTheDocument();
@@ -45,7 +50,7 @@ describe("DataTable", () => {
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}
-        emptyState="Empty"
+        emptyState={<span>Empty</span>}
         onRowClick={onRowClick}
       />,
     );
@@ -64,7 +69,7 @@ describe("DataTable", () => {
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}
-        emptyState="Empty"
+        emptyState={<span>Empty</span>}
         caption="People"
       />,
     );

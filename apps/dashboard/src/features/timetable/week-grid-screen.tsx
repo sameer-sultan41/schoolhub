@@ -13,12 +13,12 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { CellConflicts, ConflictList, conflictsBySlot } from "@/features/timetable/conflict-list";
 import { conflictsFromError } from "@/features/timetable/publish-conflicts";
 import { SlotEditorDialog } from "@/features/timetable/slot-form";
 import { DEFAULT_VISIBLE_WEEKDAYS, WEEKDAYS } from "@/features/timetable/timetable-constants";
-import { ApiErrorAlert } from "@/features/timetable/timetable-error-alert";
 import { TimetableNav } from "@/features/timetable/timetable-nav";
 import {
   readConflicts,

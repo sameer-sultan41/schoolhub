@@ -14,19 +14,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  EmptyState,
 } from "@schoolhub/ui";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Clock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
+import { FilterBar } from "@/components/filter-bar";
 import { PeriodForm } from "@/features/timetable/period-form";
 import { ALL, TIMETABLE_PAGE_SIZE } from "@/features/timetable/timetable-constants";
-import { ApiErrorAlert } from "@/features/timetable/timetable-error-alert";
 import { TimetableNav } from "@/features/timetable/timetable-nav";
 import type { PeriodRecord } from "@/features/timetable/timetable-types";
 import { useCampusOptions } from "@/features/timetable/use-timetable-reference-data";
@@ -138,49 +136,60 @@ export function PeriodsScreen() {
         </Can>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-48 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("fields.campus")}</span>
-          <Select value={campusId} onValueChange={setCampusId}>
-            <SelectTrigger aria-label={t("fields.campus")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(campuses.data ?? []).map((campus) => (
-                <SelectItem key={campus.id} value={campus.id}>
-                  {campus.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <FilterBar
+        selects={[
+          {
+            id: "campus",
+            label: t("fields.campus"),
+            value: campusId,
+            onChange: setCampusId,
+            options: (campuses.data ?? []).map((campus) => ({
+              value: campus.id,
+              label: campus.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+            className: "w-48",
+          },
+        ]}
+        clearLabel={tCommon("clearFilters")}
+        onClear={() => {
+          setCampusId(ALL);
+        }}
+      />
 
-      {error ? (
-        <ApiErrorAlert error={error} />
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          getRowId={(row) => row.id}
-          caption={t("periods.list.caption")}
-          isLoading={isPending}
-          emptyState={t("periods.list.empty")}
-          pagination={{
-            hasNext: Boolean(pagination?.next_cursor),
-            hasPrevious: pager.hasPrevious,
-            onNext: () => {
-              if (!isFetching) pager.onNext(pagination);
-            },
-            onPrevious: () => {
-              if (!isFetching) pager.onPrevious();
-            },
-            nextLabel: tCommon("next"),
-            previousLabel: tCommon("previous"),
-          }}
-        />
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        caption={t("periods.list.caption")}
+        isLoading={isPending}
+        error={error ? <ApiErrorAlert error={error} /> : undefined}
+        emptyState={
+          <EmptyState
+            icon={Clock}
+            title={t("periods.list.emptyTitle")}
+            description={t("periods.list.emptyDescription")}
+            action={
+              <Can permission="timetable.period.create">
+                <PeriodForm />
+              </Can>
+            }
+          />
+        }
+        pagination={{
+          hasNext: Boolean(pagination?.next_cursor),
+          hasPrevious: pager.hasPrevious,
+          onNext: () => {
+            if (!isFetching) pager.onNext(pagination);
+          },
+          onPrevious: () => {
+            if (!isFetching) pager.onPrevious();
+          },
+          nextLabel: tCommon("next"),
+          previousLabel: tCommon("previous"),
+        }}
+      />
     </div>
   );
 }

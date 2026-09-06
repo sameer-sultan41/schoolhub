@@ -47,6 +47,7 @@
 
 ### 2.4 Pagination, Filtering, Sorting
 - Cursor pagination default (`?cursor=…&page_size=25`, max 100); offset pagination allowed only on small admin lists.
+- `meta.pagination.total_count` is **opt-in per endpoint** (`CountedCursorPagination`), not a default. Cursor pagination is chosen precisely because it never counts, so emitting a total everywhere would put a `COUNT(*)` over the whole filtered set on every page of the append-heavy tables it exists to serve. Endpoints opt in only where the set is bounded by one school's size and a person genuinely asks its total — `/students` and `/staff` today. An endpoint that does not count **omits** the key rather than sending null, so a client can tell "this endpoint reports no total" from "the total is unknown".
 - Filtering: `?field=value`, `?field__gte=…`, `?search=` for text; each endpoint whitelists its filterable fields (documented in the module's §16).
 - Sorting: `?ordering=-created_at,name`, whitelisted per endpoint.
 

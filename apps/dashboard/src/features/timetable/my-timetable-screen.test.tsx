@@ -175,7 +175,7 @@ describe("MyTimetableScreen", () => {
     mockGet.mockResolvedValue(answer([]));
     renderWithProviders(<MyTimetableScreen />);
 
-    expect(await screen.findByText("You have no published timetable yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No timetable published yet")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 

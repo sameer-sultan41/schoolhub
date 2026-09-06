@@ -1,9 +1,8 @@
 "use client";
 
-import { ApiError } from "@schoolhub/api-client";
-import { Alert, AlertDescription, Skeleton } from "@schoolhub/ui";
+import { Skeleton } from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { StaffForm } from "@/features/staff/staff-form";
 import type { StaffRecord } from "@/features/staff/staff-types";
 import { apiClient } from "@/lib/auth";
@@ -17,8 +16,6 @@ interface EditStaffFormProps {
  * page itself can stay an async server component (chrome only). Mirrors
  * edit-student-form.tsx exactly. */
 export function EditStaffForm({ staffId }: EditStaffFormProps) {
-  const tErrors = useTranslations("errors");
-
   const {
     data: staff,
     isPending,
@@ -28,18 +25,17 @@ export function EditStaffForm({ staffId }: EditStaffFormProps) {
     queryFn: async () => (await apiClient.get<StaffRecord>(`/staff/${staffId}`)).data,
   });
 
-  if (error instanceof ApiError) {
-    return (
-      <Alert variant="danger">
-        <AlertDescription>
-          {tErrors.has(error.code) ? tErrors(error.code) : error.message}
-          {error.requestId ? ` ${tErrors("requestId", { requestId: error.requestId })}` : ""}
-        </AlertDescription>
-      </Alert>
-    );
+  // One copy of the envelope, shared with every other screen — see
+  // components/api-error-alert.tsx.
+  if (error) {
+    return <ApiErrorAlert error={error} />;
   }
 
-  if (isPending || !staff) {
+  // `isPending` alone: TanStack Query's result is a discriminated union, so once the
+  // error branch above has returned, not-pending means status "success" and `data` is
+  // non-undefined. The `!data` half was load-bearing only while the error check was
+  // `error instanceof ApiError`, which did not narrow the union at all.
+  if (isPending) {
     return <Skeleton className="h-96 w-full" />;
   }
 

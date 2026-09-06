@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { DEFAULT_SKELETON_ROW_COUNT, INTERACTIVE_ELEMENT_SELECTOR } from "../lib/constants";
 import { cn } from "../lib/cn";
 import { Button } from "./button";
@@ -33,11 +33,33 @@ export interface DataTableProps<TRow> {
   caption?: string;
   isLoading?: boolean;
   /**
-   * Rendered instead of rows when the (loaded) result set is empty. Required, not
-   * defaulted to an English string — this package has no i18n of its own, so a silent
-   * fallback here would always ship untranslated. Callers pass `t("common.noResults")`.
+   * Rendered instead of rows when the (loaded) result set is empty.
+   *
+   * Required, not defaulted to an English string — this package has no i18n of its own,
+   * so a silent fallback here would always ship untranslated.
+   *
+   * `ReactElement`, not `ReactNode`: this component deliberately renders it unwrapped, so
+   * a bare string would land as unstyled text where every other list shows an
+   * `<EmptyState>` — an icon, a heading, what to do next, and the action if the viewer
+   * holds it. Requiring an element makes that a compile error rather than a screen
+   * someone notices later.
    */
-  emptyState: ReactNode;
+  emptyState: ReactElement;
+  /**
+   * Rendered above the table when the query failed. Optional: a table with an error has
+   * nothing to show, but the caller owns the error envelope (`error.code`, `details`) and
+   * how it reads, so this is a slot rather than an error object.
+   *
+   * Before this existed every screen hand-rolled the same `<Alert variant="danger">`
+   * block above its own table — three copies of it, and none of them reachable from here.
+   */
+  error?: ReactNode;
+  /**
+   * `comfortable` (the default) is today's spacing. `compact` tightens the row height for
+   * wide tables — students, staff, allocations — where the reader is scanning down one
+   * column rather than reading each row.
+   */
+  density?: "comfortable" | "compact";
   onRowClick?: (row: TRow) => void;
   /**
    * Cursor pagination controls (api-architecture.md §2.4). Omit for non-paginated tables.
@@ -68,14 +90,22 @@ export function DataTable<TRow>({
   caption,
   isLoading = false,
   emptyState,
+  error,
+  density = "comfortable",
   onRowClick,
   pagination,
   className,
 }: DataTableProps<TRow>) {
-  const showEmpty = !isLoading && rows.length === 0;
+  // An error and an empty result are not the same thing, and a table that shows "No
+  // students found." when the request actually failed is telling the reader something
+  // untrue about their own school.
+  const showEmpty = !isLoading && !error && rows.length === 0;
+  const cellPadding = density === "compact" ? "py-2" : undefined;
 
   return (
     <div className={cn("w-full space-y-4", className)}>
+      {error}
+
       <Table aria-busy={isLoading || undefined}>
         {caption ? <TableCaption className="sr-only">{caption}</TableCaption> : null}
         <TableHeader>
@@ -140,7 +170,7 @@ export function DataTable<TRow>({
                   }
                 >
                   {columns.map((column) => (
-                    <TableCell key={column.id} className={column.className}>
+                    <TableCell key={column.id} className={cn(cellPadding, column.className)}>
                       {column.cell(row)}
                     </TableCell>
                   ))}
@@ -149,11 +179,12 @@ export function DataTable<TRow>({
         </TableBody>
       </Table>
 
-      {showEmpty ? (
-        <div className="rounded-[var(--sh-radius)] border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-          {emptyState}
-        </div>
-      ) : null}
+      {/* Rendered unwrapped. `emptyState` used to be a string this component boxed in its
+          own dashed border, which is why every list screen said one flat sentence and
+          nothing else. The presentation belongs to the caller now — in this repo, always
+          an <EmptyState> — and the prop type requires an element so it cannot quietly
+          become a bare string again. */}
+      {showEmpty ? emptyState : null}
 
       {pagination ? (
         <div className="flex items-center justify-end gap-2">

@@ -29,8 +29,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { ApiErrorAlert, unhandledEnvelopeError } from "@/components/api-error-alert";
 import { PROMOTION_DECISIONS } from "@/features/academics/academics-constants";
-import { ApiErrorAlert, unhandledEnvelopeError } from "@/features/academics/academics-error-alert";
 import type { PromotionDecisionRecord } from "@/features/academics/academics-types";
 import { mapPromotionDecisionFieldErrors } from "@/features/academics/promotion-map-field-errors";
 import {

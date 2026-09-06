@@ -9,6 +9,8 @@
 # silence a real typo is not.
 ACMR
 Adeel
+Adnan
+ah
 AIGW
 allkeys
 Amina
@@ -33,10 +35,12 @@ blockable
 bonafide
 bursty
 BYPASSRLS
+Chandni
 chartable
 choosable
 cityschool
 CLDR
+cmdk
 CNIC
 codegen
 corsheaders
@@ -51,6 +55,7 @@ dblink
 dbname
 deactivatable
 destructures
+deuteranopia
 diffable
 disableable
 DMARC
@@ -60,6 +65,7 @@ Dramatiq
 Easypaisa
 edoburu
 EICAR
+ellipsize
 encashment
 evals
 evilschoolhub
@@ -94,6 +100,7 @@ interceptable
 Iqra
 isready
 JazzCash
+Jumu
 Kashif
 Keyspace
 Laiba
@@ -153,6 +160,7 @@ preflights
 prefs
 presign
 presigning
+protanopia
 pseudonymization
 pseudonymized
 pseudonymizes
@@ -164,6 +172,7 @@ Qureshi
 Rahman
 Raza
 readyz
+recharts
 recomputable
 recreatable
 rediss
@@ -195,6 +204,7 @@ schemaname
 schoolhub
 schummar
 sess
+Sethi
 Shoulds
 signups
 simplejwt
@@ -229,6 +239,7 @@ unmoderated
 unparseable
 unpermitted
 Unrestorable
+unstubbed
 unsubmitted
 unvalidated
 upsell
@@ -253,3 +264,4 @@ wordprocessingml
 xact
 Zain
 Zainab
+اردو

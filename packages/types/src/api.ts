@@ -14,7 +14,16 @@ export interface CursorPagination {
   previous_cursor: string | null;
   /** Page size the server actually applied (may be clamped to the 100 max). */
   page_size: number;
-  /** Total count — only present on endpoints cheap enough to count. */
+  /**
+   * Total across the whole narrowed set — filters, tenant scope and record scope all
+   * applied — not the page.
+   *
+   * Optional because counting is opt-in per endpoint server-side
+   * (`CountedCursorPagination`): cursor pagination earns its cheapness by never
+   * counting, so only bounded lists a person actually asks the size of turn it on.
+   * An endpoint that does not count omits the key rather than sending null — absent
+   * means "no total is reported here", which is a different fact from "unknown".
+   */
   total_count?: number;
 }
 

@@ -141,10 +141,10 @@ describe("AllocationsScreen", () => {
 
     renderWithProviders(<AllocationsScreen />);
 
-    expect(await screen.findByText("No allocations found.")).toBeInTheDocument();
+    expect(await screen.findByText("No teachers allocated yet")).toBeInTheDocument();
   });
 
-  it("renders the ApiError envelope instead of the table on failure", async () => {
+  it("renders the ApiError envelope in the table's error slot on failure", async () => {
     mockGet.mockRejectedValue(
       new ApiError({
         code: "server_error",
@@ -159,7 +159,10 @@ describe("AllocationsScreen", () => {
 
     expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
     expect(screen.getByText(/Reference: req-2/)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // The table stays put — the envelope now goes into its own error slot — but the
+    // empty state must NOT appear: a failed request is not an empty result set, and
+    // saying so would tell the reader something untrue about their own school.
+    expect(screen.queryByText("No teachers allocated yet")).not.toBeInTheDocument();
   });
 
   it("hides the create, end and remove controls without permission", async () => {

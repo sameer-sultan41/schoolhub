@@ -54,6 +54,17 @@ class PaginationEnvelopeTests(APITestCase):
         pagination = response.json()["meta"]["pagination"]
         self.assertEqual(set(pagination), {"next_cursor", "previous_cursor", "page_size"})
 
+    def test_an_uncounted_endpoint_omits_total_count_rather_than_nulling_it(self):
+        """Absent and null mean different things to the client.
+
+        `packages/types` declares `total_count` optional — "only present on endpoints
+        cheap enough to count". A null would collapse "this endpoint does not report a
+        total" into "the total is unknown", and the dashboard renders those differently.
+        """
+        pagination = self.client.get("/api/v1/campuses?page_size=2").json()["meta"]["pagination"]
+
+        self.assertNotIn("total_count", pagination)
+
     def test_next_cursor_is_a_token_the_client_can_send_back(self):
         """A URL here would be unusable: the contract is `?cursor=<token>`."""
         first = self.client.get("/api/v1/campuses?page_size=2").json()

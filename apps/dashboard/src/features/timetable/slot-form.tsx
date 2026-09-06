@@ -28,11 +28,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { ApiErrorAlert, unhandledEnvelopeError } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { mapSlotFieldErrors } from "@/features/timetable/slot-map-field-errors";
 import { slotSchema, type SlotFormValues } from "@/features/timetable/slot-schema";
 import { NONE } from "@/features/timetable/timetable-constants";
-import { ApiErrorAlert, unhandledEnvelopeError } from "@/features/timetable/timetable-error-alert";
 import {
   readConflicts,
   type TimetableConflict,

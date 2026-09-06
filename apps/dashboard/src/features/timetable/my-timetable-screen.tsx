@@ -1,11 +1,12 @@
 "use client";
 
-import { Badge, Input, Label } from "@schoolhub/ui";
+import { Badge, EmptyState, Input, Label } from "@schoolhub/ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { CalendarDays } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { DEFAULT_VISIBLE_WEEKDAYS, WEEKDAYS } from "@/features/timetable/timetable-constants";
-import { ApiErrorAlert } from "@/features/timetable/timetable-error-alert";
 import { TimetableNav } from "@/features/timetable/timetable-nav";
 import type { MyTimetable, MyTimetableSlot } from "@/features/timetable/timetable-types";
 import { apiClient } from "@/lib/auth";
@@ -99,9 +100,14 @@ export function MyTimetableScreen() {
       ) : isPending ? (
         <p className="text-sm text-muted-foreground">{t("my.loading")}</p>
       ) : slots.length === 0 ? (
-        <p className="rounded-[var(--sh-radius)] border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-          {t("my.empty")}
-        </p>
+        // No action: the viewer of this screen is a student, guardian or teacher, and
+        // publishing a timetable is not a thing any of them can do. An empty state that
+        // offered a button here would be pointing at a door they cannot open.
+        <EmptyState
+          icon={CalendarDays}
+          title={t("my.emptyTitle")}
+          description={t("my.emptyDescription")}
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[48rem] border-collapse text-sm">

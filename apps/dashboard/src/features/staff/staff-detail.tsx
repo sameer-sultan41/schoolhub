@@ -1,9 +1,6 @@
 "use client";
 
-import { ApiError } from "@schoolhub/api-client";
 import {
-  Alert,
-  AlertDescription,
   Badge,
   Button,
   Card,
@@ -17,6 +14,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { DocumentsPanel } from "@/features/staff/documents-panel";
 import { QualificationsPanel } from "@/features/staff/qualifications-panel";
@@ -35,7 +33,6 @@ const EMPTY = "—";
 
 export function StaffDetail({ staffId }: StaffDetailProps) {
   const t = useTranslations("staff");
-  const tErrors = useTranslations("errors");
   const locale = useLocale();
 
   const {
@@ -47,18 +44,17 @@ export function StaffDetail({ staffId }: StaffDetailProps) {
     queryFn: async () => (await apiClient.get<StaffRecord>(`/staff/${staffId}`)).data,
   });
 
-  if (error instanceof ApiError) {
-    return (
-      <Alert variant="danger">
-        <AlertDescription>
-          {tErrors.has(error.code) ? tErrors(error.code) : error.message}
-          {error.requestId ? ` ${tErrors("requestId", { requestId: error.requestId })}` : ""}
-        </AlertDescription>
-      </Alert>
-    );
+  // One copy of the envelope, shared with every other screen — see
+  // components/api-error-alert.tsx.
+  if (error) {
+    return <ApiErrorAlert error={error} />;
   }
 
-  if (isPending || !staff) {
+  // `isPending` alone: TanStack Query's result is a discriminated union, so once the
+  // error branch above has returned, not-pending means status "success" and `data` is
+  // non-undefined. The `!data` half was load-bearing only while the error check was
+  // `error instanceof ApiError`, which did not narrow the union at all.
+  if (isPending) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
