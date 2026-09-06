@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { DEFAULT_SKELETON_ROW_COUNT, INTERACTIVE_ELEMENT_SELECTOR } from "../lib/constants";
 import { cn } from "../lib/cn";
 import { Button } from "./button";
@@ -33,11 +33,18 @@ export interface DataTableProps<TRow> {
   caption?: string;
   isLoading?: boolean;
   /**
-   * Rendered instead of rows when the (loaded) result set is empty. Required, not
-   * defaulted to an English string — this package has no i18n of its own, so a silent
-   * fallback here would always ship untranslated. Callers pass `t("common.noResults")`.
+   * Rendered instead of rows when the (loaded) result set is empty.
+   *
+   * Required, not defaulted to an English string — this package has no i18n of its own,
+   * so a silent fallback here would always ship untranslated.
+   *
+   * `ReactElement`, not `ReactNode`: this component deliberately renders it unwrapped, so
+   * a bare string would land as unstyled text where every other list shows an
+   * `<EmptyState>` — an icon, a heading, what to do next, and the action if the viewer
+   * holds it. Requiring an element makes that a compile error rather than a screen
+   * someone notices later.
    */
-  emptyState: ReactNode;
+  emptyState: ReactElement;
   /**
    * Rendered above the table when the query failed. Optional: a table with an error has
    * nothing to show, but the caller owns the error envelope (`error.code`, `details`) and
@@ -172,12 +179,12 @@ export function DataTable<TRow>({
         </TableBody>
       </Table>
 
-      {/* A bare node, not a bespoke dashed box. `emptyState` used to be a string this
-          component wrapped in its own styling, which is why every list screen said one
-          flat sentence and nothing else. Callers now pass an <EmptyState> — icon,
-          heading, what to do next, and the action if they hold the permission — and a
-          plain string still renders fine for the tables that genuinely need only that. */}
-      {showEmpty ? <div className="text-sm text-muted-foreground">{emptyState}</div> : null}
+      {/* Rendered unwrapped. `emptyState` used to be a string this component boxed in its
+          own dashed border, which is why every list screen said one flat sentence and
+          nothing else. The presentation belongs to the caller now — in this repo, always
+          an <EmptyState> — and the prop type requires an element so it cannot quietly
+          become a bare string again. */}
+      {showEmpty ? emptyState : null}
 
       {pagination ? (
         <div className="flex items-center justify-end gap-2">
