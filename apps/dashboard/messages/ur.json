@@ -195,7 +195,8 @@
     "columns": {
       "admissionNumber": "داخلہ نمبر",
       "name": "نام",
-      "status": "حیثیت"
+      "status": "حیثیت",
+      "admissionDate": "داخلے کی تاریخ"
     },
     "filters": {
       "search": "تلاش",
@@ -444,7 +445,8 @@
       "employeeNumber": "ملازم نمبر",
       "name": "نام",
       "staffType": "قسم",
-      "employmentStatus": "حیثیت"
+      "employmentStatus": "حیثیت",
+      "email": "ای میل"
     },
     "filters": {
       "search": "تلاش",
@@ -740,7 +742,8 @@
         "students": "طلبہ",
         "decision": "فیصلہ",
         "status": "حیثیت",
-        "actions": "اقدامات"
+        "actions": "اقدامات",
+        "startedAt": "شروع ہوا"
       },
       "fields": {
         "fromSession": "کس سیشن سے",
@@ -1067,7 +1070,15 @@
     "sortDescending": "{column} کے حساب سے ترتیب دیں، ی سے الف",
     "rowsPerPage": "فی صفحہ قطاریں",
     "pageOf": "صفحہ {page} از {pages}",
-    "totalRows": "کل {count}"
+    "totalRows": "کل {count}",
+    "pageRange": "{count} میں سے {from}–{to}",
+    "pagination": "صفحہ بندی",
+    "previousPage": "پچھلا صفحہ",
+    "nextPage": "اگلا صفحہ",
+    "goToPage": "صفحہ {page} پر جائیں",
+    "morePages": "مزید صفحات",
+    "columns": "کالم",
+    "toggleColumns": "کالم دکھائیں یا چھپائیں"
   },
   "errors": {
     "validation_error": "براہ کرم نشان زد خانوں کو درست کریں۔",

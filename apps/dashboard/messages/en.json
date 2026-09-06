@@ -195,7 +195,8 @@
     "columns": {
       "admissionNumber": "Admission #",
       "name": "Name",
-      "status": "Status"
+      "status": "Status",
+      "admissionDate": "Admitted"
     },
     "filters": {
       "search": "Search",
@@ -444,7 +445,8 @@
       "employeeNumber": "Employee #",
       "name": "Name",
       "staffType": "Type",
-      "employmentStatus": "Status"
+      "employmentStatus": "Status",
+      "email": "Email"
     },
     "filters": {
       "search": "Search",
@@ -740,7 +742,8 @@
         "students": "Students",
         "decision": "Decision",
         "status": "Status",
-        "actions": "Actions"
+        "actions": "Actions",
+        "startedAt": "Started"
       },
       "fields": {
         "fromSession": "From session",
@@ -1067,7 +1070,15 @@
     "sortDescending": "Sort by {column}, Z to A",
     "rowsPerPage": "Rows per page",
     "pageOf": "Page {page} of {pages}",
-    "totalRows": "{count} in total"
+    "totalRows": "{count} in total",
+    "pageRange": "{from}–{to} of {count}",
+    "pagination": "Pagination",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "goToPage": "Go to page {page}",
+    "morePages": "More pages",
+    "columns": "Columns",
+    "toggleColumns": "Show or hide columns"
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",

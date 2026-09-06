@@ -19,22 +19,10 @@ import { useRouter } from "next/navigation";
 import { logout } from "@/lib/auth";
 import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
 import { SUPPORTED_LOCALES } from "@/lib/env";
+import { initialsFor } from "@/lib/names";
 
 // The cookie is written from JS on whichever host the browser is already on, for the same
 // reason `lib/auth.ts` sets the session cookie that way rather than having the API do it.
-
-/**
- * "Ayesha Khan" → "AK". First and last only: a middle initial in a 32px circle is noise,
- * and a single-word name still gets one letter rather than an empty disc.
- */
-function initialsFor(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  const first = parts[0] ?? "";
-  const last = parts.length > 1 ? parts[parts.length - 1] : undefined;
-  // charAt rather than [0]: it returns "" past the end instead of undefined, so an empty
-  // name produces an empty disc rather than a broken one.
-  return `${first.charAt(0)}${last?.charAt(0) ?? ""}`.toUpperCase();
-}
 
 /**
  * Identity, language and sign-out, collapsed into the one control people already look for

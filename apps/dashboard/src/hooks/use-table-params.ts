@@ -61,6 +61,18 @@ export function useTableParams<TFilter extends string>({
   const sortBy = searchParams.get("sort_by");
   const sortType = searchParams.get("sort_type") === "desc" ? "desc" : "asc";
   const pageSize = Number(searchParams.get("page_size")) || defaultPageSize;
+  const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const hiddenColumns = (searchParams.get("hidden") ?? "").split(",").filter(Boolean);
+
+  /**
+   * Anything that changes WHICH rows are in the list sends the reader back to page 1.
+   *
+   * Filtering a 12-page list down to 3 while sitting on page 9 leaves an empty table
+   * and a pager that says there is nothing here — the rows did not vanish, the page
+   * number just outlived the result set it described. Page size counts too: halving it
+   * doubles the page count and the old index no longer points where it did.
+   */
+  const resetPage = { page: null };
 
   // Read into a plain record so `query` below depends on a value, not on the
   // searchParams object, whose identity changes on every navigation.
@@ -75,15 +87,16 @@ export function useTableParams<TFilter extends string>({
     if (search) params.search = search;
     if (sortBy) params.ordering = sortType === "desc" ? `-${sortBy}` : sortBy;
     params.page_size = pageSize;
+    if (page > 1) params.page = page;
     return params;
-  }, [filterValues, search, sortBy, sortType, pageSize]);
+  }, [filterValues, search, sortBy, sortType, pageSize, page]);
 
   return {
     /** Current value of one filter, or the "all" sentinel when it is not applied. */
     filter: (key: TFilter) => searchParams.get(key) ?? ALL_FILTER_VALUE,
     /** Writes a filter; the "all" sentinel removes the key rather than sending it. */
     setFilter: (key: TFilter, value: string) => {
-      updateParams({ [key]: value === ALL_FILTER_VALUE ? null : value });
+      updateParams({ [key]: value === ALL_FILTER_VALUE ? null : value, ...resetPage });
     },
     /**
      * A free-text filter's raw value — a date bound, say — where "" means unset.
@@ -92,11 +105,11 @@ export function useTableParams<TFilter extends string>({
      */
     text: (key: TFilter) => searchParams.get(key) ?? "",
     setText: (key: TFilter, value: string) => {
-      updateParams({ [key]: value || null });
+      updateParams({ [key]: value || null, ...resetPage });
     },
     search,
     setSearch: (value: string) => {
-      updateParams({ search: value || null });
+      updateParams({ search: value || null, ...resetPage });
     },
     /** Ready to hand straight to `DataTable`, or undefined when this list cannot sort. */
     sort: sortLabels
@@ -104,7 +117,7 @@ export function useTableParams<TFilter extends string>({
           activeKey: sortBy,
           direction: sortType,
           onChange: (key, direction) => {
-            updateParams({ sort_by: key, sort_type: direction });
+            updateParams({ sort_by: key, sort_type: direction, ...resetPage });
           },
           sortAscendingLabel: sortLabels.ascending,
           sortDescendingLabel: sortLabels.descending,
@@ -112,7 +125,18 @@ export function useTableParams<TFilter extends string>({
       : undefined,
     pageSize,
     setPageSize: (size: number) => {
-      updateParams({ page_size: String(size) });
+      updateParams({ page_size: String(size), ...resetPage });
+    },
+    page,
+    setPage: (next: number) => {
+      // Page 1 is the absence of the key, not `page=1` — a link to the first page of a
+      // filtered list should read the same as the list itself.
+      updateParams({ page: next > 1 ? String(next) : null });
+    },
+    /** Column ids the reader has hidden. Empty when they have hidden none. */
+    hiddenColumns,
+    setHiddenColumns: (next: string[]) => {
+      updateParams({ hidden: next.length > 0 ? next.join(",") : null });
     },
     /**
      * Clears filters and search, and the sort with them — a reader pressing "Clear
@@ -125,6 +149,7 @@ export function useTableParams<TFilter extends string>({
         search: null,
         sort_by: null,
         sort_type: null,
+        ...resetPage,
       });
     },
     /** Request params: active filters + search + `ordering` + `page_size`. */

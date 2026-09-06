@@ -29,3 +29,73 @@ export function formatDate(isoDate: string, locale: string): string {
   if (Number.isNaN(parsed.getTime())) return isoDate;
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(parsed);
 }
+
+/**
+ * Formats a wire time (`"08:00:00"`) for display, e.g. `formatTime("08:00:00", "en")` ->
+ * "08:00".
+ *
+ * DRF serialises a `TimeField` with seconds. A bell schedule never has any, so rendering
+ * them puts four characters of noise in every row of the periods table and pushes the
+ * numbers that differ further apart. Returns the raw string unchanged if it is not a
+ * parseable time, for the same reason `formatDate` does.
+ */
+export function formatTime(wireTime: string, locale: string): string {
+  const match = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(wireTime.trim());
+  if (!match) return wireTime;
+  // A time alone has no date to attach it to; any date works because only the clock
+  // fields are read back out. UTC so the local zone cannot shift the hour.
+  const parsed = new Date(Date.UTC(2000, 0, 1, Number(match[1]), Number(match[2])));
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+  }).format(parsed);
+}
+
+/**
+ * Formats an ISO timestamp as a localized date and time, e.g. "1 Apr 2026, 14:30".
+ *
+ * For a moment the reader needs to place exactly — an audit entry, a batch that started.
+ * Where "how long ago" is the more useful reading, pair `formatRelativeTime` in the cell
+ * with this in a tooltip.
+ */
+export function formatDateTime(isoTimestamp: string, locale: string): string {
+  const parsed = new Date(isoTimestamp);
+  if (Number.isNaN(parsed.getTime())) return isoTimestamp;
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
+    parsed,
+  );
+}
+
+/**
+ * Formats an ISO timestamp as time elapsed, e.g. "3 days ago".
+ *
+ * Coarsest unit that still says something true: a batch started "2 months ago" is more
+ * use at a glance than its date, and the date stays available in a tooltip beside it.
+ *
+ * `now` is a parameter rather than a `Date.now()` call so a test can pin it — the same
+ * reason `test-utils.tsx` fixes next-intl's clock.
+ */
+export function formatRelativeTime(isoTimestamp: string, locale: string, now = new Date()): string {
+  const parsed = new Date(isoTimestamp);
+  if (Number.isNaN(parsed.getTime())) return isoTimestamp;
+
+  const seconds = Math.round((parsed.getTime() - now.getTime()) / 1000);
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ["year", 60 * 60 * 24 * 365],
+    ["month", 60 * 60 * 24 * 30],
+    ["day", 60 * 60 * 24],
+    ["hour", 60 * 60],
+    ["minute", 60],
+  ];
+
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  for (const [unit, secondsPerUnit] of units) {
+    if (Math.abs(seconds) >= secondsPerUnit) {
+      return formatter.format(Math.round(seconds / secondsPerUnit), unit);
+    }
+  }
+  // Under a minute. "now" reads better than "in 0 seconds", which is what the formatter
+  // would produce for a timestamp a few hundred milliseconds old.
+  return formatter.format(0, "second");
+}

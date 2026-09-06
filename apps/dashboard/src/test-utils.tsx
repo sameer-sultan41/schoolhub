@@ -1,5 +1,5 @@
 import type { ApiResult } from "@schoolhub/api-client";
-import type { AuthenticatedUser } from "@schoolhub/types";
+import type { AuthenticatedUser, CursorPagination, OffsetPagination } from "@schoolhub/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
@@ -95,5 +95,85 @@ export function makeUser(overrides: Partial<AuthenticatedUser> = {}): Authentica
     roles: [],
     permissions: [],
     ...overrides,
+  };
+}
+
+/**
+ * Pagination envelopes for tests.
+ *
+ * Every table test used to spell `meta: { pagination: { next_cursor: null,
+ * previous_cursor: null, page_size: 25 } }` out by hand, once per mocked response —
+ * dozens of literals across eight files, all describing a shape none of those endpoints
+ * returns any more. Moving admin lists to page numbers meant editing every one of them,
+ * which is the argument for this file: the shape is written once, and the next change to
+ * it is one edit rather than a search.
+ *
+ * The two builders are separate rather than one with a mode, because a test asserting
+ * page-number behaviour against a cursor envelope is a test that cannot fail for the
+ * right reason. Picking the wrong builder is a type error at the call site instead.
+ */
+
+interface Envelope<TItem, TPagination> {
+  data: TItem[];
+  meta: { pagination: TPagination };
+  requestId: string;
+  status: number;
+}
+
+/**
+ * A page-number response — what every admin list returns now.
+ *
+ * `total_count` and `total_pages` default to describing a single complete page of the
+ * items given, which is what most tests want and none of them should have to state.
+ * Override them to test a pager that has somewhere to go.
+ */
+export function offsetPage<TItem>(
+  items: TItem[],
+  overrides: Partial<OffsetPagination> = {},
+  requestId = "req-test",
+): Envelope<TItem, OffsetPagination> {
+  const pageSize = overrides.page_size ?? 25;
+  const totalCount = overrides.total_count ?? items.length;
+  return {
+    data: items,
+    meta: {
+      pagination: {
+        page: 1,
+        page_size: pageSize,
+        total_count: totalCount,
+        total_pages: Math.max(1, Math.ceil(totalCount / pageSize)),
+        ...overrides,
+      },
+    },
+    requestId,
+    status: 200,
+  };
+}
+
+/**
+ * A cursor response — for the endpoints that kept one (academic sessions, guardians,
+ * timetable slots, documents, transfers).
+ *
+ * `total_count` is deliberately absent unless asked for: on a cursor endpoint it is
+ * opt-in server-side, and a fixture that always supplied one would let a component
+ * depending on it pass here and fail against the real API.
+ */
+export function cursorPage<TItem>(
+  items: TItem[],
+  overrides: Partial<CursorPagination> = {},
+  requestId = "req-test",
+): Envelope<TItem, CursorPagination> {
+  return {
+    data: items,
+    meta: {
+      pagination: {
+        next_cursor: null,
+        previous_cursor: null,
+        page_size: 25,
+        ...overrides,
+      },
+    },
+    requestId,
+    status: 200,
   };
 }
