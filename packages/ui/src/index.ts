@@ -102,6 +102,9 @@ export type { InputProps } from "./components/input";
 
 export { Label } from "./components/label";
 
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./components/popover";
+export type { PopoverContentProps } from "./components/popover";
+
 export {
   Select,
   SelectContent,
@@ -175,6 +178,9 @@ export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/tabs";
 
 export { Textarea } from "./components/textarea";
 export type { TextareaProps } from "./components/textarea";
+
+export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";
+export type { ToggleGroupItemProps, ToggleGroupProps } from "./components/toggle-group";
 
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip";
 
