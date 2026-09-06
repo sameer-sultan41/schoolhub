@@ -37,6 +37,7 @@ chartable
 choosable
 cityschool
 CLDR
+cmdk
 CNIC
 codegen
 corsheaders

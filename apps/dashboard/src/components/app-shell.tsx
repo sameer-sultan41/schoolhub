@@ -23,6 +23,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
+import { CommandPalette } from "@/components/command-palette";
 import { TenantTheme } from "@/components/tenant-theme";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
@@ -220,6 +221,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <SidebarTrigger className="md:hidden" toggleLabel={t("primary")} />
               <AppBreadcrumb />
               <div className="flex-1" />
+              <CommandPalette />
               <ThemeToggle />
               <UserMenu user={user} />
             </header>

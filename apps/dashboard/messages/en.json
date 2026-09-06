@@ -39,6 +39,21 @@
       "label": "Language",
       "en": "English",
       "ur": "اردو"
+    },
+    "command": {
+      "trigger": "Search",
+      "shortcut": "⌘K",
+      "title": "Search and go",
+      "placeholder": "Search screens and actions",
+      "description": "Jump to a screen, or start something you have permission to do.",
+      "empty": "Nothing matches that.",
+      "close": "Close search",
+      "actions": "Actions",
+      "action": {
+        "newStudent": "New student",
+        "newStaff": "New staff member",
+        "importStudents": "Import students"
+      }
     }
   },
   "auth": {
@@ -64,13 +79,73 @@
     "title": "Dashboard",
     "welcome": "Welcome back, {name}",
     "summary": "Today at a glance",
-    "cards": {
-      "students": "Enrolled students",
-      "attendanceToday": "Attendance today",
-      "feesOutstanding": "Outstanding fees",
-      "openAdmissions": "Open admission enquiries"
+    "empty": "Nothing to show yet.",
+    "nowBand": {
+      "scheduleLabel": "Today's schedule",
+      "now": "Now",
+      "free": "No class this period",
+      "break": "Break",
+      "substituted": "Covered by another teacher",
+      "between": "Between periods right now.",
+      "emptyTitle": "Nothing scheduled today",
+      "emptyDescription": "There are no periods on your timetable for today. Open your timetable to see the rest of the week.",
+      "viewTimetable": "Open my timetable"
     },
-    "empty": "Nothing to show yet."
+    "teacherLoad": {
+      "title": "Teaching load this week",
+      "description": "Weekly periods per teacher, heaviest first.",
+      "periodsLabel": "{count, plural, one {period} other {periods}}",
+      "overNorm": "Over norm",
+      "remainder": "{count, plural, one {# more teacher not shown.} other {# more teachers not shown.}}",
+      "emptyTitle": "No teaching load yet",
+      "emptyDescription": "Allocate teachers to sections and subjects, and each teacher's weekly load appears here.",
+      "noSessionTitle": "No current academic session",
+      "noSessionDescription": "Teaching load is counted per session. Activate an academic session to see it here."
+    },
+    "capacity": {
+      "title": "Places by class",
+      "description": "Total section capacity per class — places the school offers, not students enrolled.",
+      "axisLabel": "Capacity, in places",
+      "placesLabel": "{count, plural, one {place} other {places}}",
+      "sections": "{count, plural, one {# section} other {# sections}}",
+      "remainder": "{count, plural, one {# more class not shown.} other {# more classes not shown.}}",
+      "emptyTitle": "No capacity recorded",
+      "emptyDescription": "Set a capacity on your sections and the places each class offers appear here."
+    },
+    "shape": {
+      "title": "Your school at a glance",
+      "classes": "Classes",
+      "sections": "Sections",
+      "subjects": "Subjects",
+      "rooms": "Rooms",
+      "houses": "Houses",
+      "campuses": "Campuses",
+      "students": "Students",
+      "staff": "Staff",
+      "unavailable": "Not counted yet",
+      "unavailableNote": "This list is paged without a total.",
+      "unknown": "Unavailable right now"
+    },
+    "pending": {
+      "title": "Waiting on you",
+      "substitutions": "Substitutions to approve",
+      "substitutionOn": "Cover on {date}",
+      "noReason": "No reason given",
+      "promotions": "Promotion batches awaiting approval",
+      "promotionStudents": "{count, plural, one {# student} other {# students}}",
+      "allSubstitutions": "All substitutions",
+      "allPromotions": "All promotion batches",
+      "emptyTitle": "Nothing waiting on you",
+      "emptyDescription": "Substitutions to approve and promotion batches in progress will show up here."
+    },
+    "actions": {
+      "title": "Quick actions",
+      "newStudent": "New student",
+      "newStaff": "New staff member",
+      "importStudents": "Import students",
+      "buildTimetable": "Build timetable",
+      "reviewPromotions": "Review promotions"
+    }
   },
   "students": {
     "title": "Students",

@@ -39,6 +39,21 @@
       "label": "زبان",
       "en": "English",
       "ur": "اردو"
+    },
+    "command": {
+      "trigger": "تلاش",
+      "shortcut": "⌘K",
+      "title": "تلاش کریں اور جائیں",
+      "placeholder": "اسکرین اور اقدامات تلاش کریں",
+      "description": "کسی اسکرین پر جائیں، یا وہ کام شروع کریں جس کی آپ کو اجازت ہے۔",
+      "empty": "اس سے کچھ نہیں ملا۔",
+      "close": "تلاش بند کریں",
+      "actions": "اقدامات",
+      "action": {
+        "newStudent": "نیا طالبِ علم",
+        "newStaff": "نیا رکنِ عملہ",
+        "importStudents": "طلبہ درآمد کریں"
+      }
     }
   },
   "auth": {
@@ -64,13 +79,73 @@
     "title": "ڈیش بورڈ",
     "welcome": "خوش آمدید، {name}",
     "summary": "آج کی جھلک",
-    "cards": {
-      "students": "داخل شدہ طلبہ",
-      "attendanceToday": "آج کی حاضری",
-      "feesOutstanding": "واجب الادا فیس",
-      "openAdmissions": "زیرِ التوا داخلہ درخواستیں"
+    "empty": "ابھی دکھانے کو کچھ نہیں۔",
+    "nowBand": {
+      "scheduleLabel": "آج کا شیڈول",
+      "now": "ابھی",
+      "free": "اس پیریڈ میں کوئی کلاس نہیں",
+      "break": "وقفہ",
+      "substituted": "کسی اور استاد کے سپرد",
+      "between": "اس وقت دو پیریڈ کے درمیان۔",
+      "emptyTitle": "آج کچھ طے نہیں",
+      "emptyDescription": "آج آپ کے ٹائم ٹیبل پر کوئی پیریڈ نہیں۔ باقی ہفتہ دیکھنے کے لیے اپنا ٹائم ٹیبل کھولیں۔",
+      "viewTimetable": "میرا ٹائم ٹیبل کھولیں"
     },
-    "empty": "ابھی دکھانے کو کچھ نہیں۔"
+    "teacherLoad": {
+      "title": "اس ہفتے تدریسی بوجھ",
+      "description": "فی استاد ہفتہ وار پیریڈ، سب سے زیادہ پہلے۔",
+      "periodsLabel": "{count, plural, one {پیریڈ} other {پیریڈ}}",
+      "overNorm": "حد سے زیادہ",
+      "remainder": "{count, plural, one {# مزید استاد نہیں دکھایا گیا۔} other {# مزید اساتذہ نہیں دکھائے گئے۔}}",
+      "emptyTitle": "ابھی کوئی تدریسی بوجھ نہیں",
+      "emptyDescription": "اساتذہ کو سیکشن اور مضامین سونپیں، اور ہر استاد کا ہفتہ وار بوجھ یہاں نظر آئے گا۔",
+      "noSessionTitle": "کوئی موجودہ تعلیمی سیشن نہیں",
+      "noSessionDescription": "تدریسی بوجھ فی سیشن گنا جاتا ہے۔ اسے دیکھنے کے لیے کوئی تعلیمی سیشن فعال کریں۔"
+    },
+    "capacity": {
+      "title": "فی کلاس نشستیں",
+      "description": "فی کلاس کل سیکشن گنجائش — اسکول کی پیش کردہ نشستیں، داخل شدہ طلبہ نہیں۔",
+      "axisLabel": "گنجائش، نشستوں میں",
+      "placesLabel": "{count, plural, one {نشست} other {نشستیں}}",
+      "sections": "{count, plural, one {# سیکشن} other {# سیکشن}}",
+      "remainder": "{count, plural, one {# مزید کلاس نہیں دکھائی گئی۔} other {# مزید کلاسیں نہیں دکھائی گئیں۔}}",
+      "emptyTitle": "کوئی گنجائش درج نہیں",
+      "emptyDescription": "اپنے سیکشنز پر گنجائش مقرر کریں اور ہر کلاس کی نشستیں یہاں نظر آئیں گی۔"
+    },
+    "shape": {
+      "title": "ایک نظر میں آپ کا اسکول",
+      "classes": "کلاسیں",
+      "sections": "سیکشن",
+      "subjects": "مضامین",
+      "rooms": "کمرے",
+      "houses": "ہاؤس",
+      "campuses": "کیمپس",
+      "students": "طلبہ",
+      "staff": "عملہ",
+      "unavailable": "ابھی شمار نہیں",
+      "unavailableNote": "یہ فہرست کل تعداد کے بغیر صفحہ بہ صفحہ آتی ہے۔",
+      "unknown": "اس وقت دستیاب نہیں"
+    },
+    "pending": {
+      "title": "آپ کے منتظر",
+      "substitutions": "منظوری کے لیے متبادل",
+      "substitutionOn": "{date} کو متبادل",
+      "noReason": "کوئی وجہ نہیں دی گئی",
+      "promotions": "منظوری کے منتظر ترقی بیچ",
+      "promotionStudents": "{count, plural, one {# طالبِ علم} other {# طلبہ}}",
+      "allSubstitutions": "تمام متبادل",
+      "allPromotions": "تمام ترقی بیچ",
+      "emptyTitle": "آپ کے منتظر کچھ نہیں",
+      "emptyDescription": "منظوری کے لیے متبادل اور جاری ترقی بیچ یہاں نظر آئیں گے۔"
+    },
+    "actions": {
+      "title": "فوری اقدامات",
+      "newStudent": "نیا طالبِ علم",
+      "newStaff": "نیا رکنِ عملہ",
+      "importStudents": "طلبہ درآمد کریں",
+      "buildTimetable": "ٹائم ٹیبل بنائیں",
+      "reviewPromotions": "ترقیوں کا جائزہ"
+    }
   },
   "students": {
     "title": "طلبہ",

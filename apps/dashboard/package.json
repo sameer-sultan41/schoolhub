@@ -21,6 +21,7 @@
     "@schoolhub/types": "workspace:*",
     "@schoolhub/ui": "workspace:*",
     "@tanstack/react-query": "^5.90.2",
+    "cmdk": "^1.1.1",
     "lucide-react": "^1.38.0",
     "motion": "^13.2.0",
     "next": "16.3.1",
@@ -29,6 +30,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hook-form": "^7.64.0",
+    "recharts": "^3.10.1",
     "zod": "^4.4.3",
     "zustand": "^5.0.8"
   },

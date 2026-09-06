@@ -13,6 +13,10 @@ const badgeVariants = cva(
         success: "border-transparent bg-success text-success-foreground",
         warning: "border-transparent bg-warning text-warning-foreground",
         danger: "border-transparent bg-danger text-danger-foreground",
+        // Neutral state, not a status: a draft timetable, a covered period, a record
+        // waiting on someone. Reads its own token pair rather than borrowing
+        // `secondary`, which is a pale brand tint and therefore says "brand".
+        info: "border-transparent bg-info text-info-foreground",
       },
     },
     defaultVariants: { variant: "secondary" },
