@@ -46,13 +46,20 @@ export function StudentsTable() {
   // debounce that turns one into the other — this is what lands in the query key.
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Only the three fields StudentViewSet declares in `ordering_fields`; asking for
+  // anything else is silently ignored by DRF, which would look like a broken control.
+  const [sort, setSort] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+  const [pageSize, setPageSize] = useState(STUDENTS_PAGE_SIZE);
 
   const filters = useMemo(
     () => ({
       ...(status !== ALL_STATUSES ? { status } : {}),
       ...(search ? { search } : {}),
+      // DRF's OrderingFilter spelling: a leading "-" is descending.
+      ...(sort ? { ordering: sort.direction === "desc" ? `-${sort.key}` : sort.key } : {}),
+      page_size: pageSize,
     }),
-    [status, search],
+    [status, search, sort, pageSize],
   );
   pager.syncFilterKey(JSON.stringify(filters));
 
@@ -63,7 +70,6 @@ export function StudentsTable() {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: STUDENTS_PAGE_SIZE,
         },
       }),
     placeholderData: keepPreviousData,
@@ -128,6 +134,12 @@ export function StudentsTable() {
     {
       id: "name",
       header: t("columns.name"),
+      // Sorts on last_name, which is what the endpoint offers — the cell shows a
+      // preferred name when there is one, so the order can look off for a student
+      // whose preferred name starts differently; sorting on the displayed string is
+      // not on offer, and a
+      // control that silently did nothing would be worse.
+      sortKey: "last_name",
       cell: (row) => row.preferred_name || `${row.first_name} ${row.last_name}`,
     },
     {
@@ -220,6 +232,15 @@ export function StudentsTable() {
         onRowClick={(row) => {
           router.push(`/students/${row.id}`);
         }}
+        sort={{
+          activeKey: sort?.key ?? null,
+          direction: sort?.direction ?? "asc",
+          onChange: (key, direction) => {
+            setSort({ key, direction });
+          },
+          sortAscendingLabel: (column) => tCommon("sortAscending", { column }),
+          sortDescendingLabel: (column) => tCommon("sortDescending", { column }),
+        }}
         pagination={{
           hasNext: Boolean(pagination?.next_cursor),
           hasPrevious: pager.hasPrevious,
@@ -231,6 +252,19 @@ export function StudentsTable() {
           },
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
+          pageSize: {
+            value: pageSize,
+            options: [25, 50, 100],
+            onChange: setPageSize,
+            label: tCommon("rowsPerPage"),
+          },
+          // /students is one of the two endpoints on CountedCursorPagination, so a
+          // total is real here. There is no page NUMBER to show — a cursor pager does
+          // not know where it is — so the count is the summary, not "page 2 of 12".
+          summary:
+            pagination?.total_count !== undefined
+              ? tCommon("totalRows", { count: pagination.total_count })
+              : null,
         }}
       />
     </div>

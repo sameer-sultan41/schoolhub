@@ -1062,7 +1062,12 @@
     "new": "New",
     "edit": "Edit",
     "import": "Import",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "sortAscending": "Sort by {column}, A to Z",
+    "sortDescending": "Sort by {column}, Z to A",
+    "rowsPerPage": "Rows per page",
+    "pageOf": "Page {page} of {pages}",
+    "totalRows": "{count} in total"
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",

@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { DEFAULT_SKELETON_ROW_COUNT, INTERACTIVE_ELEMENT_SELECTOR } from "../lib/constants";
 import { cn } from "../lib/cn";
@@ -39,8 +40,110 @@ export interface DataTableColumn<TRow> {
    * Urdu with no second rule.
    */
   numeric?: "measure" | "identifier";
+  /**
+   * The field name this column sorts by, as the API spells it in `?ordering=`.
+   *
+   * Presence is what makes the header a sort control, so a column is sortable exactly
+   * when the endpoint declares it in `ordering_fields` — the UI cannot offer a sort the
+   * server will ignore. Sorting is server-side by necessity: only the current page is in
+   * the browser, and reordering 25 of 400 students would look like a sort and be a lie.
+   */
+  sortKey?: string;
   /** Column header for screen readers when `header` is an icon. */
   srLabel?: string;
+}
+
+/**
+ * Rows per page.
+ *
+ * A native <select> rather than the Radix one used elsewhere: it sits at the very foot
+ * of a scrolling page, where a portalled listbox has to decide whether to open upward,
+ * and the platform control already gets that right on every device. Six options at most,
+ * all short — none of what Radix buys us is in play here.
+ */
+function PageSizeControl({ pageSize }: { pageSize: DataTablePageSize }) {
+  return (
+    <label className="flex items-center gap-2">
+      <span>{pageSize.label}</span>
+      <select
+        value={pageSize.value}
+        onChange={(event) => {
+          pageSize.onChange(Number(event.target.value));
+        }}
+        className={cn(
+          "h-8 rounded-[var(--sh-radius)] border border-border bg-background px-2",
+          "text-sm text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        )}
+      >
+        {pageSize.options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * `aria-sort` goes on the header CELL, not on the button inside it — the property
+ * describes the column, and a screen reader reads it from the cell as it enters.
+ */
+function ariaSort<TRow>(
+  column: DataTableColumn<TRow>,
+  sort: DataTableSort | undefined,
+): "ascending" | "descending" | "none" | undefined {
+  if (!sort || !column.sortKey) return undefined;
+  if (sort.activeKey !== column.sortKey) return "none";
+  return sort.direction === "asc" ? "ascending" : "descending";
+}
+
+/**
+ * A header that sorts. Pressing the active column flips its direction; pressing any
+ * other starts it ascending, which is what a first click on a name or a date is taken
+ * to mean.
+ *
+ * The accessible name says what pressing will DO, not what the state is: `aria-sort` on
+ * the cell already carries the state, and a button that announces "sorted ascending"
+ * leaves the reader to guess what happens if they press it.
+ */
+function SortButton<TRow>({
+  column,
+  sort,
+}: {
+  column: DataTableColumn<TRow>;
+  sort: DataTableSort;
+}) {
+  const isActive = sort.activeKey === column.sortKey;
+  const nextDirection: "asc" | "desc" = isActive && sort.direction === "asc" ? "desc" : "asc";
+  const name = typeof column.header === "string" ? column.header : (column.srLabel ?? column.id);
+  const SortIcon = !isActive ? ArrowUpDown : sort.direction === "asc" ? ArrowUp : ArrowDown;
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (column.sortKey) sort.onChange(column.sortKey, nextDirection);
+      }}
+      aria-label={
+        nextDirection === "asc" ? sort.sortAscendingLabel(name) : sort.sortDescendingLabel(name)
+      }
+      className={cn(
+        "-mx-2 inline-flex items-center gap-1.5 rounded-[var(--sh-radius)] px-2 py-1",
+        "hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        isActive && "text-foreground",
+      )}
+    >
+      {column.header}
+      {/* Directional once active, so the current order is legible without reading the
+          rows. aria-sort on the cell says the same thing to a screen reader; the
+          neutral double arrow marks a column as sortable before it has been used. */}
+      <SortIcon
+        aria-hidden="true"
+        className={cn("size-3.5 shrink-0", isActive ? "opacity-100" : "opacity-40")}
+      />
+    </button>
+  );
 }
 
 /**
@@ -58,6 +161,28 @@ function numericHeaderClasses<TRow>(column: DataTableColumn<TRow>): string | und
 function numericCellClasses<TRow>(column: DataTableColumn<TRow>): string | undefined {
   if (!column.numeric) return undefined;
   return cn("font-numeric tabular-nums", column.numeric === "measure" && "text-end");
+}
+
+export interface DataTableSort {
+  /** The `sortKey` currently applied, or null when the list is in its default order. */
+  activeKey: string | null;
+  direction: "asc" | "desc";
+  /** Called with the next key and direction; the caller puts them in its query. */
+  onChange: (key: string, direction: "asc" | "desc") => void;
+  /**
+   * Announced on the header button so the control says what pressing it will do.
+   * Required — no i18n in this package. Both take the column name as `{column}`.
+   */
+  sortAscendingLabel: (column: string) => string;
+  sortDescendingLabel: (column: string) => string;
+}
+
+export interface DataTablePageSize {
+  value: number;
+  options: number[];
+  onChange: (size: number) => void;
+  /** Labels the control. Required — no i18n in this package. */
+  label: string;
 }
 
 export interface DataTableProps<TRow> {
@@ -90,6 +215,13 @@ export interface DataTableProps<TRow> {
    */
   error?: ReactNode;
   /**
+   * Server-side sorting. Omit and the headers stay plain text.
+   *
+   * The table renders the control and reports the intent; it never reorders `rows`
+   * itself. See `DataTableColumn.sortKey`.
+   */
+  sort?: DataTableSort;
+  /**
    * `comfortable` (the default) is today's spacing. `compact` tightens the row height for
    * wide tables — students, staff, allocations — where the reader is scanning down one
    * column rather than reading each row.
@@ -108,6 +240,16 @@ export interface DataTableProps<TRow> {
     onPrevious: () => void;
     nextLabel: string;
     previousLabel: string;
+    /**
+     * Rendered at the start of the pagination row — "Page 2 of 12", "284 students".
+     *
+     * A slot rather than numbers, because the caller is the only one that can compute
+     * them: a total is opt-in per endpoint here (CountedCursorPagination), so a table
+     * that assumed one would print "of NaN" on every list that does not count.
+     */
+    summary?: ReactNode;
+    /** Rows per page. Omit and the control is not rendered. */
+    pageSize?: DataTablePageSize;
   };
   className?: string;
 }
@@ -129,6 +271,7 @@ export function DataTable<TRow>({
   density = "comfortable",
   onRowClick,
   pagination,
+  sort,
   className,
 }: DataTableProps<TRow>) {
   // An error and an empty result are not the same thing, and a table that shows "No
@@ -149,8 +292,15 @@ export function DataTable<TRow>({
               <TableHead
                 key={column.id}
                 className={cn(numericHeaderClasses(column), column.className)}
+                aria-sort={ariaSort(column, sort)}
               >
-                {column.srLabel ? <span className="sr-only">{column.srLabel}</span> : column.header}
+                {column.srLabel ? (
+                  <span className="sr-only">{column.srLabel}</span>
+                ) : sort && column.sortKey ? (
+                  <SortButton column={column} sort={sort} />
+                ) : (
+                  column.header
+                )}
               </TableHead>
             ))}
           </TableRow>
@@ -228,23 +378,32 @@ export function DataTable<TRow>({
       {showEmpty ? emptyState : null}
 
       {pagination ? (
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={pagination.onPrevious}
-            disabled={!pagination.hasPrevious || isLoading}
-          >
-            {pagination.previousLabel}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={pagination.onNext}
-            disabled={!pagination.hasNext || isLoading}
-          >
-            {pagination.nextLabel}
-          </Button>
+        // Summary and rows-per-page lead, the buttons trail. Wraps rather than
+        // scrolls: on a phone the two controls stack instead of pushing the Next
+        // button off the edge of the one row a reader needs to reach.
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+            {pagination.pageSize ? <PageSizeControl pageSize={pagination.pageSize} /> : null}
+            {pagination.summary ?? null}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={pagination.onPrevious}
+              disabled={!pagination.hasPrevious || isLoading}
+            >
+              {pagination.previousLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={pagination.onNext}
+              disabled={!pagination.hasNext || isLoading}
+            >
+              {pagination.nextLabel}
+            </Button>
+          </div>
         </div>
       ) : null}
     </div>

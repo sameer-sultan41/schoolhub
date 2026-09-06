@@ -1062,7 +1062,12 @@
     "new": "نیا",
     "edit": "ترمیم",
     "import": "درآمد",
-    "clearFilters": "فلٹر ہٹائیں"
+    "clearFilters": "فلٹر ہٹائیں",
+    "sortAscending": "{column} کے حساب سے ترتیب دیں، الف سے ی",
+    "sortDescending": "{column} کے حساب سے ترتیب دیں، ی سے الف",
+    "rowsPerPage": "فی صفحہ قطاریں",
+    "pageOf": "صفحہ {page} از {pages}",
+    "totalRows": "کل {count}"
   },
   "errors": {
     "validation_error": "براہ کرم نشان زد خانوں کو درست کریں۔",
