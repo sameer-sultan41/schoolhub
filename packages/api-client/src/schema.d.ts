@@ -135,6 +135,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attendance-corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        get: operations["attendance_corrections_list"];
+        put?: never;
+        /**
+         * Request a correction to a locked attendance record
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        post: operations["attendance_corrections_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance-corrections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        get: operations["attendance_corrections_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance-corrections/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a correction request
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        post: operations["attendance_corrections_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance-corrections/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a correction request
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        post: operations["attendance_corrections_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -593,6 +695,68 @@ export interface paths {
          *     hard removal is a retention operation, not documented as an API action.
          */
         patch: operations["guardians_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/holiday-calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` — §16's declared calendar resource.
+         *
+         *     A projection of ``tenant_settings.academic``, not its own table: see
+         *     ``apps/school_organization/calendar.py``'s header for why the calendar is
+         *     JSONB configuration rather than an entity. It exists as a route separate from
+         *     ``/school-settings`` because §16 declares it separately, and because
+         *     ``it_admin`` adjusting an unplanned closure mid-year (§8) is a different and
+         *     far more frequent act than editing the school profile. It shares the settings
+         *     permission keys, which §4 already describes as covering "academic
+         *     configuration (calendar, timezone, locale, currency)" — inventing
+         *     ``school.holiday-calendar.*`` would put keys in the registry that no module
+         *     doc declares and no seeded role holds.
+         *
+         *     PUT rather than PATCH, and §16 says PUT: each list named in the body is
+         *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
+         *     holiday, which is exactly what a cancelled closure needs.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
+         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
+         *     plain ``APIView``, so without it ``request.tenant`` is never set and
+         *     ``RequiresModuleFeature`` fails closed on every request.
+         */
+        get: operations["holiday_calendar_retrieve"];
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` — §16's declared calendar resource.
+         *
+         *     A projection of ``tenant_settings.academic``, not its own table: see
+         *     ``apps/school_organization/calendar.py``'s header for why the calendar is
+         *     JSONB configuration rather than an entity. It exists as a route separate from
+         *     ``/school-settings`` because §16 declares it separately, and because
+         *     ``it_admin`` adjusting an unplanned closure mid-year (§8) is a different and
+         *     far more frequent act than editing the school profile. It shares the settings
+         *     permission keys, which §4 already describes as covering "academic
+         *     configuration (calendar, timezone, locale, currency)" — inventing
+         *     ``school.holiday-calendar.*`` would put keys in the registry that no module
+         *     doc declares and no seeded role holds.
+         *
+         *     PUT rather than PATCH, and §16 says PUT: each list named in the body is
+         *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
+         *     holiday, which is exactly what a cancelled closure needs.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
+         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
+         *     plain ``APIView``, so without it ``request.tenant`` is never set and
+         *     ``RequiresModuleFeature`` fails closed on every request.
+         */
+        put: operations["holiday_calendar_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/houses": {
@@ -1058,6 +1222,82 @@ export interface paths {
         put?: never;
         /** @description `GET/POST /staff/{staff_pk}/qualifications`. */
         post: operations["staff_qualifications_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `student_attendance` — the register (§5.1), read here and written by `:bulk-mark`.
+         *
+         *     Cursor paginated, per §16 — the project default
+         *     (``DEFAULT_PAGINATION_CLASS``), so nothing is declared here. No
+         *     ``CountedCursorPagination``: this is the append-heavy table cursor pagination
+         *     exists to serve (core/api/pagination.py names it), and a `COUNT(*)` over a
+         *     term of registers on every page is exactly the cost it was chosen to avoid.
+         */
+        get: operations["student_attendance_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `student_attendance` — the register (§5.1), read here and written by `:bulk-mark`.
+         *
+         *     Cursor paginated, per §16 — the project default
+         *     (``DEFAULT_PAGINATION_CLASS``), so nothing is declared here. No
+         *     ``CountedCursorPagination``: this is the append-heavy table cursor pagination
+         *     exists to serve (core/api/pagination.py names it), and a `COUNT(*)` over a
+         *     term of registers on every page is exactly the cost it was chosen to avoid.
+         */
+        get: operations["student_attendance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance:bulk-mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a section's register for one date
+         * @description `POST /student-attendance:bulk-mark` (§16).
+         *
+         *     Wrapped in ``replay_or_execute`` because §6's "offline-tolerant
+         *     re-submission" is precisely what ``Idempotency-Key`` is for: a teacher's
+         *     phone that times out and retries gets the first response back rather than
+         *     re-running the upsert. The upsert makes the retry safe either way — this
+         *     makes it *identical*, which is what a client comparing counts needs.
+         */
+        post: operations["student_attendance:bulk_mark_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2228,6 +2468,69 @@ export interface components {
          * @enum {string}
          */
         AcademicSessionStatusEnum: "planned" | "active" | "closed" | "archived";
+        /** @description `attendance_corrections` — the request half. Decisions are colon-actions. */
+        AttendanceCorrection: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly subject_type: components["schemas"]["AttendanceCorrectionSubjectTypeEnum"];
+            /** Format: uuid */
+            student_attendance_id: string;
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly requested_by: string;
+            /** @description Status and times before the change. */
+            readonly old_values: unknown;
+            /** @description Proposed status and times. */
+            new_values: unknown;
+            /** @description Mandatory justification (§6). */
+            reason: string;
+            readonly status: components["schemas"]["AttendanceCorrectionStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id); must differ from requested_by (§11).
+             */
+            readonly reviewed_by: string | null;
+            /** Format: date-time */
+            readonly reviewed_at: string | null;
+            readonly review_note: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `pending` - Pending
+         *     * `approved` - Approved
+         *     * `rejected` - Rejected
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        AttendanceCorrectionStatusEnum: "pending" | "approved" | "rejected" | "cancelled";
+        /**
+         * @description * `student` - Student
+         *     * `staff` - Staff
+         * @enum {string}
+         */
+        AttendanceCorrectionSubjectTypeEnum: "student" | "staff";
+        /**
+         * @description * `manual` - Manual
+         *     * `import` - Import
+         *     * `device` - Device
+         * @enum {string}
+         */
+        AttendanceSourceEnum: "manual" | "import" | "device";
+        /**
+         * @description * `present` - Present
+         *     * `absent` - Absent
+         *     * `late` - Late
+         *     * `half_day` - Half day
+         *     * `excused` - Excused
+         *     * `on_leave` - On leave
+         * @enum {string}
+         */
+        AttendanceStatusEnum: "present" | "absent" | "late" | "half_day" | "excused" | "on_leave";
         BackgroundJob: {
             /** Format: uuid */
             readonly id: string;
@@ -2255,6 +2558,42 @@ export interface components {
          * @enum {string}
          */
         BackgroundJobStatusEnum: "queued" | "running" | "succeeded" | "failed";
+        /**
+         * @description `POST /student-attendance:bulk-mark` — one section, one date, one period.
+         *
+         *     `academic_session_id` is optional and falls back to the tenant's current
+         *     session: a school runs one at a time and the register UI has no reason to
+         *     carry its id around. `period_id` omitted means daily mode, which is §19's
+         *     recommended default.
+         */
+        BulkMark: {
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            academic_session_id?: string;
+            /** Format: uuid */
+            period_id?: string | null;
+            /** Format: date */
+            attendance_date: string;
+            entries: components["schemas"]["BulkMarkEntry"][];
+        };
+        /**
+         * @description One student's row in a submitted register.
+         *
+         *     `late_minutes` is deliberately **absent** rather than read-only: a client
+         *     sending it should not have it silently accepted-and-ignored under a name it
+         *     recognises. §11 computes it, and `services._resolve_times` is where.
+         */
+        BulkMarkEntry: {
+            /** Format: uuid */
+            student_id: string;
+            status: components["schemas"]["AttendanceStatusEnum"];
+            /** Format: time */
+            check_in_time?: string | null;
+            /** Format: time */
+            check_out_time?: string | null;
+            remarks?: string | null;
+        };
         Campus: {
             /** Format: uuid */
             readonly id: string;
@@ -2305,6 +2644,16 @@ export interface components {
             source_academic_session_id: string;
             /** Format: uuid */
             target_academic_session_id: string;
+        };
+        /**
+         * @description Body for `:approve` / `:reject` — an optional note, nothing else.
+         *
+         *     The decision itself is the route, not a field: a single endpoint taking
+         *     `{"approve": bool}` would make the permission check unable to tell the two
+         *     apart, and §4 grants them together only by coincidence.
+         */
+        CorrectionDecision: {
+            review_note?: string | null;
         };
         CreatePromotionBatch: {
             /** Format: uuid */
@@ -2562,6 +2911,43 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` (§16).
+         *
+         *     PUT replaces each list it names wholesale, which is why this is a PUT and not
+         *     a PATCH: merging entry by entry would leave no way to *remove* a holiday, and
+         *     removing one is exactly what a cancelled closure needs.
+         */
+        HolidayCalendar: {
+            /** @description 0=Monday. Omit to leave the configured week unchanged. */
+            working_days?: number[];
+            holidays?: components["schemas"]["HolidayEntry"][];
+        };
+        /**
+         * @description One holiday or holiday range — module doc §5.8.
+         *
+         *     ``campus_id`` is a plain ``UUIDField`` rather than a ``PrimaryKeyRelatedField``
+         *     because these entries live inside JSONB, where there is no foreign key to do
+         *     the ownership check for us. ``validate_campus_id`` does it explicitly, or a
+         *     smuggled foreign id would be stored unchallenged and then silently ignored by
+         *     ``calendar.holiday_name`` — a closure an admin believes they configured and
+         *     which never takes effect.
+         *
+         *     ``start_date``/``end_date`` rather than §16's filter names ``from``/``to``:
+         *     ``from`` is a Python keyword, so it can be neither a serializer attribute nor
+         *     a comfortable key for any Python that later reads the stored entry. §16 uses
+         *     ``from``/``to`` for *query parameters*, which is a different namespace, and
+         *     those filters are not built (the resource is a singleton document).
+         */
+        HolidayEntry: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date?: string;
+            name: string;
+            /** Format: uuid */
+            campus_id?: string | null;
+        };
         House: {
             /** Format: uuid */
             readonly id: string;
@@ -2607,6 +2993,16 @@ export interface components {
         };
         PaginatedAcademicSessionList: {
             data?: components["schemas"]["AcademicSession"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedAttendanceCorrectionList: {
+            data?: components["schemas"]["AttendanceCorrection"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -2773,6 +3169,16 @@ export interface components {
         };
         PaginatedStaffQualificationList: {
             data?: components["schemas"]["StaffQualification"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStudentAttendanceList: {
+            data?: components["schemas"]["StudentAttendance"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -3317,7 +3723,7 @@ export interface components {
             readonly id?: string;
             name?: string;
             code?: string;
-            subject_type?: components["schemas"]["SubjectTypeEnum"];
+            subject_type?: components["schemas"]["SubjectSubjectTypeEnum"];
             /** Format: uuid */
             department_id?: string | null;
             description?: string | null;
@@ -3816,6 +4222,63 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description `student_attendance` — read shape. Rows are written by `:bulk-mark`. */
+        StudentAttendance: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            student_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            academic_session_id: string;
+            /** Format: uuid */
+            period_id?: string | null;
+            /**
+             * Format: date
+             * @description Calendar date in the tenant's timezone.
+             */
+            attendance_date: string;
+            status: components["schemas"]["AttendanceStatusEnum"];
+            /**
+             * Format: time
+             * @description Set for a late arrival.
+             */
+            check_in_time?: string | null;
+            /**
+             * Format: time
+             * @description Set for an early departure or a half day.
+             */
+            check_out_time?: string | null;
+            /** @description Computed server-side from the tenant day window (§11); never client-supplied. */
+            readonly late_minutes: number | null;
+            /**
+             * Format: uuid
+             * @description leave_requests(id) — a plain UUID, not an FK: the table ships in this module's second PR. Becomes a real foreign key there.
+             */
+            readonly leave_request_id: string | null;
+            readonly source: components["schemas"]["AttendanceSourceEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) — the marking actor.
+             */
+            readonly marked_by: string;
+            /**
+             * @description The *effective* lock state, not the persisted column.
+             *
+             *     `is_locked` is swept nightly, so between the window passing and the sweep
+             *     running the column says False while every write path answers 409 — the
+             *     service checks `row.is_locked or is_locked(row.attendance_date)`. A client
+             *     rendering the column alone offered an edit that could not succeed. Same
+             *     expression, one source.
+             */
+            readonly is_locked: boolean;
+            remarks?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         StudentDocument: {
             /** Format: uuid */
             readonly id: string;
@@ -3976,7 +4439,7 @@ export interface components {
             readonly id: string;
             name: string;
             code: string;
-            subject_type?: components["schemas"]["SubjectTypeEnum"];
+            subject_type?: components["schemas"]["SubjectSubjectTypeEnum"];
             /** Format: uuid */
             department_id?: string | null;
             description?: string | null;
@@ -3992,7 +4455,7 @@ export interface components {
          *     * `co_curricular` - Co-curricular
          * @enum {string}
          */
-        SubjectTypeEnum: "core" | "elective" | "co_curricular";
+        SubjectSubjectTypeEnum: "core" | "elective" | "co_curricular";
         TeacherAllocation: {
             /** Format: uuid */
             readonly id: string;
@@ -4438,6 +4901,148 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    attendance_corrections_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `pending` - Pending
+                 *     * `approved` - Approved
+                 *     * `rejected` - Rejected
+                 *     * `cancelled` - Cancelled
+                 */
+                status?: "approved" | "cancelled" | "pending" | "rejected";
+                student_attendance_id?: string;
+                /**
+                 * @description * `student` - Student
+                 *     * `staff` - Staff
+                 */
+                subject_type?: "staff" | "student";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAttendanceCorrectionList"];
+                };
+            };
+        };
+    };
+    attendance_corrections_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceCorrection"];
+                "application/x-www-form-urlencoded": components["schemas"]["AttendanceCorrection"];
+                "multipart/form-data": components["schemas"]["AttendanceCorrection"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCorrection"];
+                };
+            };
+        };
+    };
+    attendance_corrections_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this attendance correction. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCorrection"];
+                };
+            };
+        };
+    };
+    "attendance_corrections_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CorrectionDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["CorrectionDecision"];
+                "multipart/form-data": components["schemas"]["CorrectionDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCorrection"];
+                };
+            };
+        };
+    };
+    "attendance_corrections_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CorrectionDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["CorrectionDecision"];
+                "multipart/form-data": components["schemas"]["CorrectionDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCorrection"];
+                };
             };
         };
     };
@@ -5554,6 +6159,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Guardian"];
+                };
+            };
+        };
+    };
+    holiday_calendar_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
+                };
+            };
+        };
+    };
+    holiday_calendar_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HolidayCalendar"];
+                "application/x-www-form-urlencoded": components["schemas"]["HolidayCalendar"];
+                "multipart/form-data": components["schemas"]["HolidayCalendar"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
                 };
             };
         };
@@ -6745,6 +7394,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StaffQualification"];
+                };
+            };
+        };
+    };
+    student_attendance_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                date?: string;
+                date__gte?: string;
+                date__lte?: string;
+                is_locked?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                period_id?: string;
+                /** @description A search term. */
+                search?: string;
+                section_id?: string;
+                /**
+                 * @description * `present` - Present
+                 *     * `absent` - Absent
+                 *     * `late` - Late
+                 *     * `half_day` - Half day
+                 *     * `excused` - Excused
+                 *     * `on_leave` - On leave
+                 */
+                status?: "absent" | "excused" | "half_day" | "late" | "on_leave" | "present";
+                student_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStudentAttendanceList"];
+                };
+            };
+        };
+    };
+    student_attendance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student attendance. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentAttendance"];
+                };
+            };
+        };
+    };
+    "student_attendance:bulk_mark_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkMark"];
+                "application/x-www-form-urlencoded": components["schemas"]["BulkMark"];
+                "multipart/form-data": components["schemas"]["BulkMark"];
+            };
+        };
+        responses: {
+            /** @description The marked rows, plus `meta.marked`/`meta.updated` counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStudentAttendanceList"];
                 };
             };
         };

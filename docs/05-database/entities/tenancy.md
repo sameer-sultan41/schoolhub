@@ -44,6 +44,13 @@ Per-tenant configuration and branding; exactly one row per tenant (multi-tenancy
 Indexes: unique(tenant_id).
 Relationships: 1:1 `tenants`; referenced by website-cms and all modules for branding/workflow config.
 
+The implementation splits the spec's single `settings` column into named namespaces on the same
+row — `branding`, `academic`, `features` and `hr` — so each module reads a key it owns rather than
+one shared bag. `academic` carries the school calendar: `working_days` (weekday numbers, 0=Monday),
+`holidays` (`[{start_date, end_date, name, campus_id}]`, null `campus_id` = every campus) and `day_window`
+(`{start, end, grace_minutes}`). `apps/school_organization/calendar.py` is the only reader;
+`attendance` refuses to mark on a non-working day and computes `late_minutes` from the window.
+
 ### plans
 **Platform scope — no `tenant_id`.** Subscription tier catalog controlling modules and limits (multi-tenancy §6).
 

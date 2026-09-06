@@ -218,3 +218,94 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - Period-wise vs daily student attendance default: **daily**, with period mode as a tenant setting (recommendation).
 - Lock window for corrections: end of marking day (recommendation; tenant-configurable 0–7 days).
 - Whether students may self-submit leave (vs guardian-only) should be a tenant policy toggle (recommendation). Biometric attendance is out of initial scope; the schema reserves `source` for it (recommendation).
+
+## 20. Implementation status
+
+Built as three stacked PRs; this section is updated by each. **Marking (PR 1 of 3)
+has landed.**
+
+### Built
+
+| Area | State |
+| ---- | ----- |
+| Entities | `student_attendance`, `attendance_corrections` — both tenant-owned with RLS policies (`0002_rls_policies.py`) |
+| §16 endpoints | `GET /student-attendance` (filters: `date`, `date__gte`, `date__lte`, `section_id`, `student_id`, `period_id`, `status`; cursor paginated), `POST /student-attendance:bulk-mark` (accepts `Idempotency-Key`), `GET/POST /attendance-corrections`, `POST /attendance-corrections/{id}:approve` · `:reject` |
+| §4 permissions | All ten keys registered. `mark` was already in `core/rbac/registry.py`'s `EXTRA_ACTIONS` |
+| §11 validations | Not future-dated · not a weekend or holiday (via `school_organization.calendar`) · one row per student per date/period, enforced by two partial unique indexes · marker holds `assigned` scope for the section unless `all`-scoped · `late_minutes` computed server-side and a client value discarded · corrections need a locked target, a changed value, and an approver who is not the requester |
+| §12 notifications | `attendance.absence-alert` and `attendance.late-alert`, fanned out on commit to guardians holding a live, portal-enabled link |
+| §5.5 lock window | `tenant_settings.academic.attendance_lock_window_days`, clamped to §19's 0–7. Persisted nightly by `apps.attendance.tasks.lock_expired_attendance`; the service recomputes from the date and never trusts the column alone |
+| Feature flag | `module.attendance`, `default_enabled=False` |
+| Tests | Django: models, marking, API, cross-tenant, notifications. E2E: `e2e/tests/live/api/attendance-marking.spec.ts` (live lane) |
+
+### Corrected in review
+
+Ten findings, worth recording because three of them describe rules the module now
+depends on:
+
+- **`:bulk-mark` keeps `DenyRestrictedPrincipals`; the reads drop it.** A
+  viewset-wide portal exemption covered the write action too. Marking writes a
+  whole section's register, and `assert_marker_may_mark_section` returns early
+  for `all`/`campus` scope — correctly, since many admin users have no `Staff`
+  row — so the principal check has to sit in front of it, not inside it.
+- **A correction cannot set `on_leave`,** and its times are validated when the
+  correction is *raised* rather than when approved days later. Approving a
+  correction now **recomputes `late_minutes`**, which is not a correctable field
+  and was previously carried over stale — a row corrected from absent to late
+  reported zero minutes late and §13's punctuality report summed those zeros.
+- **Alerts fire on a status *transition*, not on current status.** §6 requires
+  retries to be safe, so alerting on current status meant the module's own
+  idempotency promise re-sent every guardian the same message on every retry.
+- A re-mark after a mid-session section change now moves the row's
+  `section`/`academic_session` to the section it was marked in; a soft-deleted
+  student is no longer markable; a genuinely simultaneous first insert is merged
+  rather than 409'd; and `is_locked` on the wire is the *effective* lock the
+  write path enforces, not the nightly-swept column.
+
+### Two design decisions worth carrying forward
+
+- **Marking is an upsert, not an insert.** §6 requires idempotency per (student,
+  date, period), so `POST :bulk-mark` updates rows that already exist rather than
+  failing on the unique index. A rejected row rejects the *whole* submission and
+  is reported through `error.meta.rows` — partial commit is never the outcome.
+- **`student` and `guardian` hold real permission keys here**, which makes this
+  the first module whose viewsets are not uniformly behind
+  `DenyRestrictedPrincipals`. The *record scope*, not the key, keeps a guardian to
+  their own children: `StudentAttendance.filter_owned_by_user` delegates to
+  `Student.filter_owned_by_user` rather than restating the portal-enabled
+  guardian join.
+
+### Deliberately not built (marking PR)
+
+- **The leave system** — §15's five leave tables, §16's `/leave-requests`,
+  `/leave-types`, `/leave-policies`, `/leave-balances`, and §7.2's approval chain.
+  PR 2 of 3. Approved leave auto-marking `on_leave` lands with it, which is why
+  `on_leave` is refused at the register today (a status meaning "there is an
+  approved leave request" must not be settable without one) and why
+  `student_attendance.leave_request_id` is still a plain UUID rather than an FK.
+- **Staff attendance** — §5.2, `staff_attendance`, `POST /staff-attendance` and
+  `:check-out`. PR 3 of 3. `attendance_corrections` therefore has no
+  `staff_attendance_id` column yet and its CHECK asserts the one target that
+  exists; the staff PR widens both.
+- **§13's six reports and their exports**, and `GET /reports/attendance-summary`.
+  PR 3 of 3. `attendance.chronic-absence` (§12) waits on the same threshold query
+  — a trigger with no way to detect its own condition is a catalog row, not a
+  notification.
+- **`attendance.correction-decision`** (§12). The correction flow ships here, but
+  its recipient is a member of staff working inside the dashboard, with no
+  off-platform channel to reach; it waits on the in-app inbox surface rather than
+  on any backend piece. Persisting rows nothing renders would be worse than the
+  omission.
+- **§9's historical-attendance CSV import.** §9 names
+  `attendance.student-attendance.import` as a *recommendation* and §4's table does
+  not declare it, and §16 declares no endpoint — building it means inventing both.
+  `AttendanceSource.IMPORT` is reserved for it.
+- **`AttendanceSource.DEVICE`** — §6 and §21 reserve it for biometric/RFID so it
+  arrives without a schema change. Nothing writes it.
+- **§14's four AI capabilities.** `core/ai` does not exist, and AGENTS.md hard
+  rule 6 forbids reaching a provider SDK directly. Phase 3 work, the same shape as
+  `timetable`'s `:generate-draft`.
+- **Period mode is supported by the schema but has no tenant switch.** §19 makes
+  daily the default with period mode "a tenant setting"; `period_id` is accepted
+  per submission and the two indexes make both shapes coexist, but nothing yet
+  *decides* which a school runs. That decision belongs with the section-level UI,
+  not the API.

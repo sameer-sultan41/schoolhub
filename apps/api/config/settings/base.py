@@ -73,6 +73,7 @@ MODULE_APPS = [
     "apps.staff_management",
     "apps.academics",
     "apps.timetable",
+    "apps.attendance",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -218,6 +219,15 @@ SPECTACULAR_SETTINGS = {
             ("verified", "verified"),
             ("rejected", "rejected"),
         ],
+        # `status` is the most reused field name on the platform, and attendance
+        # adds two more sets of choices to it. Named here rather than left to
+        # drf-spectacular's hash suffix (`StatusEdcEnum`), which changes whenever
+        # any *other* module's status choices move and churns the generated
+        # TypeScript client for a diff that has nothing to do with it.
+        "AttendanceStatusEnum": "apps.attendance.models.AttendanceStatus",
+        "AttendanceCorrectionStatusEnum": "apps.attendance.models.CorrectionStatus",
+        "AttendanceSourceEnum": "apps.attendance.models.AttendanceSource",
+        "AttendanceCorrectionSubjectTypeEnum": "apps.attendance.models.CorrectionSubjectType",
     },
 }
 
@@ -246,6 +256,15 @@ CELERY_TASK_ROUTES = {
     "apps.academics.tasks.*": {"queue": "bulk"},
     "apps.student_management.tasks.*": {"queue": "bulk"},
     "apps.staff_management.tasks.*": {"queue": "bulk"},
+    # Not "bulk": §2 measures this module by whether a guardian hears about an
+    # unexplained absence the same morning, and the bulk lane is rate-shaped.
+    # notifications.md §5 puts absence alerts in the transactional lane by name.
+    # "transactional", not the doc's dotted `notify.transactional` — see the note
+    # below `core.notifications.tasks.*`: compose's `celery-worker` consumes the
+    # plain names, and the dotted spelling is a queue nothing listens to.
+    "apps.attendance.tasks.send_attendance_alerts": {"queue": "transactional"},
+    # The nightly lock sweep is the opposite: nobody is waiting on it.
+    "apps.attendance.tasks.lock_expired_attendance": {"queue": "bulk"},
     "core.idempotency.tasks.*": {"queue": "bulk"},
     "core.jobs.tasks.*": {"queue": "bulk"},
     # notifications.md §5 names three lanes (emergency / transactional / bulk);
@@ -286,6 +305,14 @@ CELERY_BEAT_SCHEDULE = {
         # Daily, off-peak: 30-day retention needs no finer granularity, and these
         # rows carry the base64 import payloads, so it is the heavier sweep.
         "schedule": crontab(hour="3", minute="40"),
+    },
+    "lock-expired-attendance": {
+        "task": "apps.attendance.tasks.lock_expired_attendance",
+        # Daily, after the two prunes and well clear of any school day in any
+        # timezone this platform serves. `is_locked` is a rendering hint that the
+        # marking service never trusts on its own (it recomputes from the date),
+        # so a late or skipped tick degrades what a client shows, never the rule.
+        "schedule": crontab(hour="4", minute="10"),
     },
 }
 

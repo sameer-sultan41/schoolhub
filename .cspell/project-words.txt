@@ -231,9 +231,11 @@ tsvector
 TTFB
 Turbopack
 unallocated
+unconfigured
 undoable
 ungated
 unindexed
+unmarkable
 unmetered
 unmoderated
 unparseable
