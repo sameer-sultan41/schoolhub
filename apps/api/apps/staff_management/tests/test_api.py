@@ -6,6 +6,8 @@ school_organization/tests/test_api.py's identical convention).
 
 from __future__ import annotations
 
+import datetime
+
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -248,6 +250,90 @@ class StaffListTests(StaffManagementAPITestCase):
         self.assertNotIn(str(active.pk), ids)
 
 
+class StaffOrderingTests(StaffManagementAPITestCase):
+    """`?ordering=` on `/staff`, one case per thing the roll can be sorted by.
+
+    Ordering is an allowlist (`StaffViewSet.ordering_fields`), so these tests
+    cover both halves of that: the columns that are on it sort, and a column that
+    is not is dropped rather than answered with an error.
+    """
+
+    def _staff(self, **overrides):
+        with tenant_context(self.tenant.id):
+            return StaffFactory(tenant=self.tenant, campus=self.campus, **overrides)
+
+    def _last_names(self, query: str) -> list[str]:
+        response = self.client.get(f"/api/v1/staff{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["last_name"] for row in response.json()["data"]]
+
+    def test_orders_by_last_name_ascending(self) -> None:
+        self.allow("staff.staff.view")
+        self._staff(last_name="Yusuf")
+        self._staff(last_name="Ahmed")
+        self._staff(last_name="Malik")
+
+        self.assertEqual(self._last_names("?ordering=last_name"), ["Ahmed", "Malik", "Yusuf"])
+
+    def test_orders_by_last_name_descending(self) -> None:
+        self.allow("staff.staff.view")
+        self._staff(last_name="Yusuf")
+        self._staff(last_name="Ahmed")
+        self._staff(last_name="Malik")
+
+        self.assertEqual(self._last_names("?ordering=-last_name"), ["Yusuf", "Malik", "Ahmed"])
+
+    def test_orders_by_joining_date(self) -> None:
+        """Unindexed, and sortable anyway — the roll is bounded by one payroll."""
+        self.allow("staff.staff.view")
+        self._staff(last_name="Newest", joining_date=datetime.date(2026, 9, 1))
+        self._staff(last_name="Oldest", joining_date=datetime.date(2020, 1, 15))
+
+        self.assertEqual(self._last_names("?ordering=joining_date"), ["Oldest", "Newest"])
+        self.assertEqual(self._last_names("?ordering=-joining_date"), ["Newest", "Oldest"])
+
+    def test_orders_by_the_designation_it_belongs_to(self) -> None:
+        """The annotated related sort — `designation_name`, never `designation__name`."""
+        self.allow("staff.staff.view")
+        with tenant_context(self.tenant.id):
+            alpha = DesignationFactory(tenant=self.tenant, name="Alpha")
+            mike = DesignationFactory(tenant=self.tenant, name="Mike")
+            zulu = DesignationFactory(tenant=self.tenant, name="Zulu")
+        self._staff(last_name="Third", designation=zulu)
+        self._staff(last_name="First", designation=alpha)
+        self._staff(last_name="Second", designation=mike)
+
+        self.assertEqual(
+            self._last_names("?ordering=designation_name"), ["First", "Second", "Third"]
+        )
+        self.assertEqual(
+            self._last_names("?ordering=-designation_name"), ["Third", "Second", "First"]
+        )
+
+    def test_orders_by_the_campus_it_belongs_to(self) -> None:
+        self.allow("staff.staff.view")
+        with tenant_context(self.tenant.id):
+            north = CampusFactory(tenant=self.tenant, name="North")
+            south = CampusFactory(tenant=self.tenant, name="South")
+            StaffFactory(tenant=self.tenant, campus=south, last_name="Later")
+            StaffFactory(tenant=self.tenant, campus=north, last_name="Earlier")
+
+        self.assertEqual(self._last_names("?ordering=campus_name"), ["Earlier", "Later"])
+
+    def test_an_undeclared_ordering_field_is_ignored_rather_than_an_error(self) -> None:
+        """`phone` is on the serializer, so DRF would have taken it with no allowlist.
+
+        With one, the parameter is dropped and the model's own ordering stands —
+        a 200 in the default order, never a 400.
+        """
+        self.allow("staff.staff.view")
+        self._staff(last_name="Ahmed", phone="+923009999999")
+        self._staff(last_name="Yusuf", phone="+923000000001")
+
+        # Staff.Meta.ordering, not the descending-phone order the parameter asked for.
+        self.assertEqual(self._last_names("?ordering=phone"), ["Ahmed", "Yusuf"])
+
+
 class DesignationCrudTests(StaffManagementAPITestCase):
     def test_create_a_designation(self) -> None:
         self.allow("staff.designation.create", "staff.designation.view")
@@ -299,6 +385,70 @@ class DesignationCrudTests(StaffManagementAPITestCase):
         response = self.client.delete(f"/api/v1/designations/{designation.pk}")
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
+class DesignationOrderingTests(StaffManagementAPITestCase):
+    """`/designations` declared no `ordering_fields` at all until this suite.
+
+    That is not "unsorted": `OrderingFilter` is a project-wide default and falls
+    back to every serializer field when a view names none, so `?ordering=level`
+    was already live on an unindexed nullable column and `?ordering=description`
+    on one nobody would ever want to sort by. These tests pin both sides of the
+    allowlist that closed it.
+    """
+
+    def _catalog(self) -> None:
+        """Three rows whose name, code, level and description orders all differ.
+
+        Deliberately: a sort assertion only proves something if the column under
+        test is the one that could have produced that sequence.
+        """
+        with tenant_context(self.tenant.id):
+            DesignationFactory(
+                tenant=self.tenant, name="Coordinator", code="C", level=3, description="A"
+            )
+            DesignationFactory(
+                tenant=self.tenant, name="Assistant", code="A", level=9, description="B"
+            )
+            DesignationFactory(tenant=self.tenant, name="Head", code="B", level=1, description="C")
+
+    def _names(self, query: str) -> list[str]:
+        response = self.client.get(f"/api/v1/designations{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["name"] for row in response.json()["data"]]
+
+    def test_orders_by_level_ascending(self) -> None:
+        self.allow("staff.designation.view")
+        self._catalog()
+
+        self.assertEqual(self._names("?ordering=level"), ["Head", "Coordinator", "Assistant"])
+
+    def test_orders_by_level_descending(self) -> None:
+        self.allow("staff.designation.view")
+        self._catalog()
+
+        self.assertEqual(self._names("?ordering=-level"), ["Assistant", "Coordinator", "Head"])
+
+    def test_orders_by_code(self) -> None:
+        self.allow("staff.designation.view")
+        self._catalog()
+
+        self.assertEqual(self._names("?ordering=code"), ["Assistant", "Head", "Coordinator"])
+        self.assertEqual(self._names("?ordering=-code"), ["Coordinator", "Head", "Assistant"])
+
+    def test_orders_by_name(self) -> None:
+        self.allow("staff.designation.view")
+        self._catalog()
+
+        self.assertEqual(self._names("?ordering=-name"), ["Head", "Coordinator", "Assistant"])
+
+    def test_an_undeclared_ordering_field_is_ignored_rather_than_an_error(self) -> None:
+        """`description` is on the serializer, so this used to be an accepted sort."""
+        self.allow("staff.designation.view")
+        self._catalog()
+
+        # Designation.Meta.ordering by name, not anything `description` implies.
+        self.assertEqual(self._names("?ordering=description"), ["Assistant", "Coordinator", "Head"])
 
 
 class OwnScopeTests(StaffManagementAPITestCase):

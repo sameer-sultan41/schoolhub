@@ -14,6 +14,7 @@ frozen empty because no tenant context exists at import.
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import F
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -87,7 +88,16 @@ class CampusViewSet(BlockingDestroyMixin, TenantModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
-    ordering_fields = ["name", "code", "created_at"]
+    ordering = ["name"]
+    # Everything the dashboard's campus table renders. Index-backed: `code`
+    # (campuses_unique_code_per_tenant) and `created_at` (its own index).
+    # Table scans: `name`, `is_active` and `is_primary` — no index covers any of
+    # them, so each is a sequential scan of the tenant's campuses plus a sort.
+    # `campuses_one_primary_per_tenant` does not help `is_primary`: it indexes
+    # only the single `is_primary=true` row, not the ordering of the rest.
+    # Allowed because this list is bounded by one school's branch count; on a
+    # big table these would each want an index first.
+    ordering_fields = ["name", "code", "is_active", "is_primary", "created_at"]
     required_feature = "module.school"
     required_permission = "school.campus.view"
     required_permission_map = {
@@ -127,7 +137,21 @@ class DepartmentViewSet(BlockingDestroyMixin, TenantModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
-    ordering_fields = ["name", "code", "created_at"]
+    ordering = ["name"]
+    # `campus_name` is the annotation added in `get_queryset`, never
+    # `campus__name`: `scope_queryset` hands an OWN/ASSIGNED principal a
+    # `.distinct()` queryset, and Postgres rejects `SELECT DISTINCT` ordered by
+    # a joined column that is not in the select list. An annotation is in the
+    # select list, so it sorts for every principal instead of 500-ing for some.
+    # Index-backed: `code` (departments_unique_code_per_tenant),
+    # `department_type` (departments_tenant_type_idx), `created_at`.
+    # Table scans: `name`, and `campus_name`, which sorts a left join —
+    # `campus_id` is nullable ("spans every campus"), so those rows sort last
+    # ascending and first descending.
+    ordering_fields = ["name", "code", "department_type", "campus_name", "created_at"]
+    #: Entries in ordering_fields that are annotations from get_queryset, not model
+    #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
+    ordering_annotations = ("campus_name",)
     required_feature = "module.school"
     required_permission = "school.department.view"
     required_permission_map = {
@@ -138,7 +162,11 @@ class DepartmentViewSet(BlockingDestroyMixin, TenantModelViewSet):
     }
 
     def get_queryset(self):
-        return super().get_queryset().select_related("campus")
+        # select_related keeps the list off one campus fetch per row; the
+        # annotation is what `?ordering=campus_name` actually sorts on.
+        return (
+            super().get_queryset().select_related("campus").annotate(campus_name=F("campus__name"))
+        )
 
 
 class AcademicSessionViewSet(
@@ -267,7 +295,12 @@ class ClassViewSet(BlockingDestroyMixin, TenantModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
-    ordering_fields = ["level", "name", "created_at"]
+    ordering = ["level"]
+    # `level` and `name` each ride a partial unique on (tenant, <col>), and
+    # `created_at` has its own index. `code` is nullable and
+    # classes_unique_code_per_tenant excludes NULL rows, so an unfiltered
+    # `?ordering=code` cannot use it — that one is a table scan plus a sort.
+    ordering_fields = ["level", "name", "code", "created_at"]
     required_feature = "module.school"
     required_permission = "school.class.view"
     required_permission_map = {
@@ -288,7 +321,17 @@ class SectionViewSet(BlockingDestroyMixin, TenantModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
-    ordering_fields = ["name", "created_at"]
+    ordering = ["school_class_id", "name"]
+    # `class_name`/`campus_name` are the annotations from `get_queryset`, not
+    # `school_class__name`/`campus__name` — see DepartmentViewSet for why a `__`
+    # traversal here is a 500 for scoped principals.
+    # Only `created_at` is index-backed. sections_unique_name_per_class_campus
+    # leads with (tenant, class, campus), so it does nothing for a sort on
+    # `name` alone, and nothing indexes `capacity` (nullable — "unlimited" sorts
+    # last ascending). So `name`, `capacity`, `class_name` and `campus_name` are
+    # all a table scan plus a sort, with a join first for the annotated two.
+    ordering_fields = ["name", "capacity", "class_name", "campus_name", "created_at"]
+    ordering_annotations = ("class_name", "campus_name")
     required_feature = "module.school"
     required_permission = "school.section.view"
     required_permission_map = {
@@ -299,7 +342,14 @@ class SectionViewSet(BlockingDestroyMixin, TenantModelViewSet):
     }
 
     def get_queryset(self):
-        return super().get_queryset().select_related("school_class", "campus")
+        # select_related keeps the list off a class/campus fetch per row; the
+        # annotations are what `?ordering=class_name|campus_name` sort on.
+        return (
+            super()
+            .get_queryset()
+            .select_related("school_class", "campus")
+            .annotate(class_name=F("school_class__name"), campus_name=F("campus__name"))
+        )
 
 
 class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
@@ -314,7 +364,14 @@ class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
-    ordering_fields = ["name", "code", "created_at"]
+    ordering = ["name"]
+    # `department_name` is the annotation from `get_queryset`, not
+    # `department__name` — see DepartmentViewSet.
+    # Index-backed: `name` and `code` (each a partial unique on (tenant, <col>))
+    # and `created_at`. Table scan: `department_name`, a sort over a left join;
+    # `department_id` is nullable, so unassigned subjects sort last ascending.
+    ordering_fields = ["name", "code", "department_name", "created_at"]
+    ordering_annotations = ("department_name",)
     required_feature = "module.school"
     required_permission = "school.subject.view"
     required_permission_map = {
@@ -325,7 +382,14 @@ class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
     }
 
     def get_queryset(self):
-        return super().get_queryset().select_related("department")
+        # select_related keeps the list off one department fetch per row; the
+        # annotation is what `?ordering=department_name` sorts on.
+        return (
+            super()
+            .get_queryset()
+            .select_related("department")
+            .annotate(department_name=F("department__name"))
+        )
 
 
 class HouseViewSet(BlockingDestroyMixin, TenantModelViewSet):
@@ -340,7 +404,11 @@ class HouseViewSet(BlockingDestroyMixin, TenantModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
-    ordering_fields = ["name", "created_at"]
+    ordering = ["name"]
+    # `name` rides houses_unique_name_per_tenant and `created_at` its own index.
+    # `code` is nullable and houses_unique_code_per_tenant excludes NULL, so
+    # sorting by it is a table scan plus a sort.
+    ordering_fields = ["name", "code", "created_at"]
     required_feature = "module.school"
     required_permission = "school.house.view"
     required_permission_map = {

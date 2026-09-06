@@ -18,6 +18,7 @@ from apps.school_organization.models import (
     ClassSubject,
     Section,
     SessionStatus,
+    SubjectType,
 )
 from apps.school_organization.tests.factories import (
     SESSION_END,
@@ -25,6 +26,8 @@ from apps.school_organization.tests.factories import (
     AcademicSessionFactory,
     CampusFactory,
     ClassFactory,
+    DepartmentFactory,
+    HouseFactory,
     SectionFactory,
     SubjectFactory,
     TenantFactory,
@@ -389,6 +392,295 @@ class TermEndpointTests(SchoolOrganizationAPITestCase):
         response = self.client.get(f"/api/v1/terms?academic_session_id={self.session.pk}")
 
         self.assertEqual(len(response.json()["data"]), 1)
+
+
+class ListOrderingTests(SchoolOrganizationAPITestCase):
+    """`?ordering=` on the six structural lists the dashboard renders.
+
+    Every case creates its rows in an order that disagrees with the ordering it
+    asserts, so a passing test proves the sort ran rather than that insertion order
+    happened to match. `StableOrderingFilter` appends `pk`, so ties resolve by a
+    random UUID — no case here leaves two rows tied on the column it sorts by.
+
+    The undeclared-field cases carry as much weight as the sorts. `ordering_fields`
+    is an allowlist and DRF drops anything outside it *silently*, so the only way to
+    tell an ignored parameter from an honoured one is to give the undeclared column
+    values that would visibly reorder the list. `campus__name` is in here
+    deliberately: a `__` traversal must be dropped rather than honoured, because
+    `scope_queryset` hands OWN/ASSIGNED principals a `.distinct()` queryset and
+    Postgres rejects `SELECT DISTINCT` ordered by a joined column.
+    """
+
+    def _ids(self, url: str) -> list[str]:
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["id"] for row in response.json()["data"]]
+
+    # ------------------------------------------------------------------ campuses
+
+    def test_campuses_sort_by_name(self) -> None:
+        self.allow("school.campus.view")
+        with tenant_context(self.tenant.id):
+            north = CampusFactory(tenant=self.tenant, name="North", code="NORTH")
+            east = CampusFactory(tenant=self.tenant, name="East", code="EAST")
+            south = CampusFactory(tenant=self.tenant, name="South", code="SOUTH")
+
+        ascending = [str(east.pk), str(north.pk), str(south.pk)]
+
+        self.assertEqual(self._ids("/api/v1/campuses?ordering=name"), ascending)
+        self.assertEqual(self._ids("/api/v1/campuses?ordering=-name"), ascending[::-1])
+
+    def test_campuses_sort_by_the_flag_columns(self) -> None:
+        self.allow("school.campus.view")
+        with tenant_context(self.tenant.id):
+            flagship = CampusFactory(
+                tenant=self.tenant, name="Flagship", code="FLAG", is_primary=True
+            )
+            closed = CampusFactory(
+                tenant=self.tenant, name="Closed", code="CLOSED", is_active=False
+            )
+
+        # false sorts before true, so ascending `is_active` leads with the closed
+        # campus and descending `is_primary` leads with the flagship.
+        self.assertEqual(
+            self._ids("/api/v1/campuses?ordering=is_active"), [str(closed.pk), str(flagship.pk)]
+        )
+        self.assertEqual(
+            self._ids("/api/v1/campuses?ordering=-is_primary"), [str(flagship.pk), str(closed.pk)]
+        )
+
+    def test_campuses_ignore_an_undeclared_ordering_field(self) -> None:
+        self.allow("school.campus.view")
+        with tenant_context(self.tenant.id):
+            north = CampusFactory(tenant=self.tenant, name="North", code="N", timezone="Asia/Aden")
+            east = CampusFactory(tenant=self.tenant, name="East", code="E", timezone="Europe/Rome")
+
+        # `timezone` is a real column and would put North first if it sorted. It is
+        # not in `ordering_fields`, so the list stays in the view's default `name`
+        # order — a 200 in the wrong order is the failure this guards against, not
+        # a 400.
+        self.assertEqual(
+            self._ids("/api/v1/campuses?ordering=timezone"), [str(east.pk), str(north.pk)]
+        )
+
+    # ---------------------------------------------------------------- departments
+
+    def test_departments_sort_by_the_annotated_campus_name(self) -> None:
+        self.allow("school.department.view")
+        with tenant_context(self.tenant.id):
+            north = CampusFactory(tenant=self.tenant, name="North", code="NORTH")
+            east = CampusFactory(tenant=self.tenant, name="East", code="EAST")
+            arts = DepartmentFactory(tenant=self.tenant, name="Arts", code="ART", campus=north)
+            science = DepartmentFactory(tenant=self.tenant, name="Science", code="SCI", campus=east)
+            shared = DepartmentFactory(tenant=self.tenant, name="Admin", code="ADM")
+
+        # `campus_name` is the annotation, not `campus__name`. Campus order (East,
+        # North) is the opposite of the departments' own name order, and `shared`
+        # spans every campus — a NULL, which Postgres sorts last ascending and
+        # first descending.
+        self.assertEqual(
+            self._ids("/api/v1/departments?ordering=campus_name"),
+            [str(science.pk), str(arts.pk), str(shared.pk)],
+        )
+        self.assertEqual(
+            self._ids("/api/v1/departments?ordering=-campus_name"),
+            [str(shared.pk), str(arts.pk), str(science.pk)],
+        )
+
+    def test_departments_ignore_an_undeclared_or_traversing_ordering_field(self) -> None:
+        self.allow("school.department.view")
+        with tenant_context(self.tenant.id):
+            north = CampusFactory(tenant=self.tenant, name="North", code="NORTH")
+            east = CampusFactory(tenant=self.tenant, name="East", code="EAST")
+            arts = DepartmentFactory(
+                tenant=self.tenant, name="Arts", code="ART", campus=north, description="Zulu"
+            )
+            science = DepartmentFactory(
+                tenant=self.tenant, name="Science", code="SCI", campus=east, description="Alpha"
+            )
+
+        by_name = [str(arts.pk), str(science.pk)]
+
+        # Both would lead with Science if they sorted: `description` is a real
+        # column outside the allowlist, and `campus__name` is the relation
+        # traversal `ordering_fields` must never contain. Dropping the traversal is
+        # what keeps a scoped principal's `SELECT DISTINCT` from raising
+        # ProgrammingError.
+        self.assertEqual(self._ids("/api/v1/departments?ordering=description"), by_name)
+        self.assertEqual(self._ids("/api/v1/departments?ordering=campus__name"), by_name)
+
+    # ------------------------------------------------------------------- classes
+
+    def test_classes_sort_by_level_and_name(self) -> None:
+        self.allow("school.class.view")
+        with tenant_context(self.tenant.id):
+            ten = ClassFactory(tenant=self.tenant, name="Grade 10", code="G10", level=10)
+            two = ClassFactory(tenant=self.tenant, name="Grade 2", code="G2", level=2)
+
+        # `level` is the promotion ladder and sorts numerically; `name` is a string,
+        # so it puts "Grade 10" before "Grade 2". Both are offered because the table
+        # renders both, and they are not the same order.
+        self.assertEqual(self._ids("/api/v1/classes?ordering=level"), [str(two.pk), str(ten.pk)])
+        self.assertEqual(self._ids("/api/v1/classes?ordering=-level"), [str(ten.pk), str(two.pk)])
+        self.assertEqual(self._ids("/api/v1/classes?ordering=name"), [str(ten.pk), str(two.pk)])
+        self.assertEqual(self._ids("/api/v1/classes?ordering=-code"), [str(two.pk), str(ten.pk)])
+
+    def test_classes_ignore_an_undeclared_ordering_field(self) -> None:
+        self.allow("school.class.view")
+        with tenant_context(self.tenant.id):
+            ten = ClassFactory(tenant=self.tenant, name="Grade 10", level=10, is_active=False)
+            two = ClassFactory(tenant=self.tenant, name="Grade 2", level=2)
+
+        # `is_active` filters this endpoint but does not sort it; honoured, false
+        # first would lead with Grade 10 instead of the default `level` order.
+        self.assertEqual(
+            self._ids("/api/v1/classes?ordering=is_active"), [str(two.pk), str(ten.pk)]
+        )
+
+    # ------------------------------------------------------------------ sections
+
+    def test_sections_sort_by_the_annotated_class_and_campus_names(self) -> None:
+        self.allow("school.section.view")
+        with tenant_context(self.tenant.id):
+            north = CampusFactory(tenant=self.tenant, name="North", code="NORTH")
+            east = CampusFactory(tenant=self.tenant, name="East", code="EAST")
+            ten = ClassFactory(tenant=self.tenant, name="Grade 10", level=10)
+            two = ClassFactory(tenant=self.tenant, name="Grade 2", level=2)
+            north_ten = SectionFactory(tenant=self.tenant, campus=north, school_class=ten, name="A")
+            east_two = SectionFactory(tenant=self.tenant, campus=east, school_class=two, name="B")
+
+        # The two annotations resolve opposite orders — "Grade 10" < "Grade 2" but
+        # "East" < "North" — so an alias wired to the wrong join fails here.
+        self.assertEqual(
+            self._ids("/api/v1/sections?ordering=class_name"),
+            [str(north_ten.pk), str(east_two.pk)],
+        )
+        self.assertEqual(
+            self._ids("/api/v1/sections?ordering=-class_name"),
+            [str(east_two.pk), str(north_ten.pk)],
+        )
+        self.assertEqual(
+            self._ids("/api/v1/sections?ordering=campus_name"),
+            [str(east_two.pk), str(north_ten.pk)],
+        )
+
+    def test_sections_sort_by_capacity_with_unlimited_last(self) -> None:
+        self.allow("school.section.view")
+        with tenant_context(self.tenant.id):
+            campus = CampusFactory(tenant=self.tenant, name="North", code="NORTH")
+            grade = ClassFactory(tenant=self.tenant, name="Grade 1", level=1)
+            small = SectionFactory(
+                tenant=self.tenant, campus=campus, school_class=grade, name="A", capacity=20
+            )
+            large = SectionFactory(
+                tenant=self.tenant, campus=campus, school_class=grade, name="B", capacity=40
+            )
+            unlimited = SectionFactory(
+                tenant=self.tenant, campus=campus, school_class=grade, name="C", capacity=None
+            )
+
+        # `capacity` is nullable and NULL means unlimited, so the unbounded section
+        # bookends the list: last ascending, first descending.
+        self.assertEqual(
+            self._ids("/api/v1/sections?ordering=capacity"),
+            [str(small.pk), str(large.pk), str(unlimited.pk)],
+        )
+        self.assertEqual(
+            self._ids("/api/v1/sections?ordering=-capacity"),
+            [str(unlimited.pk), str(large.pk), str(small.pk)],
+        )
+
+    def test_sections_ignore_an_undeclared_ordering_field(self) -> None:
+        self.allow("school.section.view")
+        with tenant_context(self.tenant.id):
+            campus = CampusFactory(tenant=self.tenant, name="North", code="NORTH")
+            grade = ClassFactory(tenant=self.tenant, name="Grade 1", level=1)
+            first = SectionFactory(tenant=self.tenant, campus=campus, school_class=grade, name="A")
+            second = SectionFactory(
+                tenant=self.tenant,
+                campus=campus,
+                school_class=grade,
+                name="B",
+                is_active=False,
+            )
+
+        # One class, so the view default reduces to `name`. `is_active` would lead
+        # with B if it sorted.
+        self.assertEqual(
+            self._ids("/api/v1/sections?ordering=is_active"), [str(first.pk), str(second.pk)]
+        )
+
+    # ------------------------------------------------------------------ subjects
+
+    def test_subjects_sort_by_the_annotated_department_name(self) -> None:
+        self.allow("school.subject.view")
+        with tenant_context(self.tenant.id):
+            science = DepartmentFactory(tenant=self.tenant, name="Science", code="SCI")
+            arts = DepartmentFactory(tenant=self.tenant, name="Arts", code="ART")
+            algebra = SubjectFactory(
+                tenant=self.tenant, name="Algebra", code="ALG", department=science
+            )
+            drawing = SubjectFactory(
+                tenant=self.tenant, name="Drawing", code="DRW", department=arts
+            )
+
+        # Arts before Science, the opposite of the subjects' own name order.
+        self.assertEqual(
+            self._ids("/api/v1/subjects?ordering=department_name"),
+            [str(drawing.pk), str(algebra.pk)],
+        )
+        self.assertEqual(
+            self._ids("/api/v1/subjects?ordering=-department_name"),
+            [str(algebra.pk), str(drawing.pk)],
+        )
+
+    def test_subjects_ignore_an_undeclared_ordering_field(self) -> None:
+        self.allow("school.subject.view")
+        with tenant_context(self.tenant.id):
+            algebra = SubjectFactory(
+                tenant=self.tenant,
+                name="Algebra",
+                code="ALG",
+                subject_type=SubjectType.ELECTIVE,
+            )
+            drawing = SubjectFactory(
+                tenant=self.tenant, name="Drawing", code="DRW", subject_type=SubjectType.CORE
+            )
+
+        # `subject_type` filters but does not sort; honoured, "core" < "elective"
+        # would lead with Drawing.
+        self.assertEqual(
+            self._ids("/api/v1/subjects?ordering=subject_type"),
+            [str(algebra.pk), str(drawing.pk)],
+        )
+
+    # -------------------------------------------------------------------- houses
+
+    def test_houses_sort_by_code(self) -> None:
+        self.allow("school.house.view")
+        with tenant_context(self.tenant.id):
+            falcon = HouseFactory(tenant=self.tenant, name="Falcon", code="RED")
+            heron = HouseFactory(tenant=self.tenant, name="Heron", code="BLU")
+
+        # `code` inverts the `name` order, so this fails if the parameter is dropped.
+        self.assertEqual(self._ids("/api/v1/houses?ordering=code"), [str(heron.pk), str(falcon.pk)])
+        self.assertEqual(
+            self._ids("/api/v1/houses?ordering=-code"), [str(falcon.pk), str(heron.pk)]
+        )
+        self.assertEqual(self._ids("/api/v1/houses?ordering=name"), [str(falcon.pk), str(heron.pk)])
+
+    def test_houses_ignore_an_undeclared_ordering_field(self) -> None:
+        self.allow("school.house.view")
+        with tenant_context(self.tenant.id):
+            falcon = HouseFactory(tenant=self.tenant, name="Falcon", code="RED", color="red")
+            heron = HouseFactory(tenant=self.tenant, name="Heron", code="BLU", color="blue")
+
+        by_name = [str(falcon.pk), str(heron.pk)]
+
+        # A real-but-undeclared column and a column that does not exist at all are
+        # both dropped: 200 in the default order, never a 400 and never a 500.
+        self.assertEqual(self._ids("/api/v1/houses?ordering=color"), by_name)
+        self.assertEqual(self._ids("/api/v1/houses?ordering=not_a_column"), by_name)
 
 
 # `/class-subjects` moved to academics in this PR — the route is unchanged but

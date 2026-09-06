@@ -38,6 +38,11 @@ class FileViewSet(
     scope_campus_field = None
     queryset = File.objects
     serializer_class = FileSerializer
+    # Explicit rather than left to DRF's serializer fallback: without an allowlist an
+    # ?ordering= could reach any field the serializer exposes, on a table every module
+    # writes to. Upload time is the only order this list is ever read in.
+    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
     required_permission = "platform.file.view"
     required_permission_map = {"create": "platform.file.create", "confirm": "platform.file.create"}
 

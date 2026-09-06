@@ -1,24 +1,27 @@
-"""API-level tests for curriculum and teacher allocation."""
+"""API-level tests for curriculum, teacher allocation and promotion-batch listing."""
 
 from __future__ import annotations
 
 import datetime
+import uuid
 from unittest import mock
 
 from django.utils import timezone
 from rest_framework import status
 
-from apps.academics.models import TeacherSubjectAllocation
+from apps.academics.models import PromotionStatus, StudentPromotion, TeacherSubjectAllocation
 from apps.academics.tests.base import AcademicsAPITestCase
 from apps.academics.tests.factories import (
     ClassSubjectFactory,
     StaffFactory,
+    StudentPromotionFactory,
     SubjectFactory,
     TeacherAllocationFactory,
 )
 from apps.school_organization import services as school_services
-from apps.school_organization.models import ClassSubject, SessionStatus
+from apps.school_organization.models import ClassSubject, SessionStatus, Subject
 from apps.staff_management.models import EmploymentStatus, StaffType
+from apps.student_management.tests.factories import StudentEnrollmentFactory, StudentFactory
 from core.tenancy.context import tenant_context
 
 
@@ -542,3 +545,336 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
         warnings = response.json()["meta"]["warnings"]
         self.assertEqual(warnings[0]["code"], "teacher_over_norm")
+
+
+class CurriculumOrderingTests(AcademicsAPITestCase):
+    """`?ordering=` on `/class-subjects`, one case per column the grid renders.
+
+    Ordering is an allowlist (`CurriculumViewSet.ordering_fields`), so these cover
+    both halves of it: what is on it sorts, what is not is dropped rather than
+    answered with an error.
+    """
+
+    def _grid(self) -> None:
+        """Four rows whose subject-name and weekly-period orders differ.
+
+        Deliberately different: a sort assertion only proves something if the
+        column under test is the one that could have produced that sequence.
+        """
+        with tenant_context(self.tenant.id):
+            # base.py already made one row; both of its sort keys are pinned here
+            # so nothing below leans on a factory sequence number to decide where
+            # that row lands.
+            Subject.objects.filter(pk=self.subject.pk).update(name="Physics")
+            ClassSubject.objects.filter(pk=self.curriculum.pk).update(weekly_periods=4)
+            for subject_name, periods in (("Zoology", 5), ("Algebra", 7), ("Music", 2)):
+                subject = SubjectFactory(tenant=self.tenant, name=subject_name)
+                ClassSubjectFactory(
+                    tenant=self.tenant,
+                    academic_session=self.session,
+                    school_class=self.school_class,
+                    subject=subject,
+                    weekly_periods=periods,
+                )
+
+    def _periods(self, query: str) -> list[int]:
+        response = self.client.get(f"/api/v1/class-subjects{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["weekly_periods"] for row in response.json()["data"]]
+
+    def test_orders_by_weekly_periods_ascending(self) -> None:
+        self.allow("academics.curriculum.view")
+        self._grid()
+
+        self.assertEqual(self._periods("?ordering=weekly_periods"), [2, 4, 5, 7])
+
+    def test_orders_by_weekly_periods_descending(self) -> None:
+        self.allow("academics.curriculum.view")
+        self._grid()
+
+        self.assertEqual(self._periods("?ordering=-weekly_periods"), [7, 5, 4, 2])
+
+    def test_orders_by_the_subject_it_maps(self) -> None:
+        """The annotated related sort — `subject_name`, never `subject__name`."""
+        self.allow("academics.curriculum.view")
+        self._grid()
+
+        # Algebra(7), Music(2), Physics(4), Zoology(5).
+        self.assertEqual(self._periods("?ordering=subject_name"), [7, 2, 4, 5])
+        self.assertEqual(self._periods("?ordering=-subject_name"), [5, 4, 2, 7])
+
+    def test_an_undeclared_ordering_field_is_ignored_rather_than_an_error(self) -> None:
+        """`notes` is on the serializer, so DRF would take it with no allowlist.
+
+        Asserted against an unordered request rather than a literal sequence:
+        `ClassSubject.Meta.ordering` ends in `subject_id`, and those are UUIDs, so
+        the default order is stable per run but not writable down.
+        """
+        self.allow("academics.curriculum.view")
+        self._grid()
+
+        baseline = self.client.get("/api/v1/class-subjects")
+        ignored = self.client.get("/api/v1/class-subjects?ordering=notes")
+
+        self.assertEqual(ignored.status_code, status.HTTP_200_OK, ignored.json())
+        self.assertEqual(
+            [row["id"] for row in ignored.json()["data"]],
+            [row["id"] for row in baseline.json()["data"]],
+        )
+
+
+class TeacherAllocationOrderingTests(AcademicsAPITestCase):
+    """`?ordering=` on `/teacher-subject-allocations`.
+
+    `staff_last_name` is the case that matters most here: it is annotated in
+    `get_queryset` rather than traversed, because this is the one list in the
+    module a teacher reaches on the `own` record scope.
+    """
+
+    def _allocations(self) -> None:
+        with tenant_context(self.tenant.id):
+            rows = (
+                ("Yusuf", "Zoology", datetime.date(2026, 4, 1), 5),
+                ("Ahmed", "Algebra", datetime.date(2026, 4, 2), 9),
+                ("Malik", "Music", datetime.date(2026, 4, 3), 3),
+            )
+            for last_name, subject_name, effective_from, weekly_periods in rows:
+                subject = SubjectFactory(tenant=self.tenant, name=subject_name)
+                staff = StaffFactory(tenant=self.tenant, campus=self.campus, last_name=last_name)
+                TeacherAllocationFactory(
+                    tenant=self.tenant,
+                    academic_session=self.session,
+                    section=self.section,
+                    subject=subject,
+                    staff=staff,
+                    effective_from=effective_from,
+                    weekly_periods=weekly_periods,
+                )
+
+    def _effective_from(self, query: str) -> list[str]:
+        response = self.client.get(f"/api/v1/teacher-subject-allocations{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["effective_from"] for row in response.json()["data"]]
+
+    def test_orders_by_effective_from_ascending(self) -> None:
+        self.allow("academics.teacher-allocation.view")
+        self._allocations()
+
+        self.assertEqual(
+            self._effective_from("?ordering=effective_from"),
+            ["2026-04-01", "2026-04-02", "2026-04-03"],
+        )
+
+    def test_orders_by_effective_from_descending(self) -> None:
+        self.allow("academics.teacher-allocation.view")
+        self._allocations()
+
+        self.assertEqual(
+            self._effective_from("?ordering=-effective_from"),
+            ["2026-04-03", "2026-04-02", "2026-04-01"],
+        )
+
+    def test_orders_by_weekly_periods(self) -> None:
+        self.allow("academics.teacher-allocation.view")
+        self._allocations()
+
+        # Malik(3), Yusuf(5), Ahmed(9).
+        self.assertEqual(
+            self._effective_from("?ordering=weekly_periods"),
+            ["2026-04-03", "2026-04-01", "2026-04-02"],
+        )
+
+    def test_orders_by_the_teacher_it_belongs_to(self) -> None:
+        """The annotated related sort — `staff_last_name`, never `staff__last_name`."""
+        self.allow("academics.teacher-allocation.view")
+        self._allocations()
+
+        # Ahmed, Malik, Yusuf.
+        self.assertEqual(
+            self._effective_from("?ordering=staff_last_name"),
+            ["2026-04-02", "2026-04-03", "2026-04-01"],
+        )
+        self.assertEqual(
+            self._effective_from("?ordering=-staff_last_name"),
+            ["2026-04-01", "2026-04-03", "2026-04-02"],
+        )
+
+    def test_an_undeclared_ordering_field_is_ignored_rather_than_an_error(self) -> None:
+        """`academic_session_id` is on the serializer but not on the allowlist.
+
+        Compared against an unordered request for the same reason the curriculum
+        test is: `TeacherSubjectAllocation.Meta.ordering` is over UUID columns.
+        """
+        self.allow("academics.teacher-allocation.view")
+        self._allocations()
+
+        baseline = self.client.get("/api/v1/teacher-subject-allocations")
+        ignored = self.client.get(
+            "/api/v1/teacher-subject-allocations?ordering=academic_session_id"
+        )
+
+        self.assertEqual(ignored.status_code, status.HTTP_200_OK, ignored.json())
+        self.assertEqual(
+            [row["id"] for row in ignored.json()["data"]],
+            [row["id"] for row in baseline.json()["data"]],
+        )
+
+
+class PromotionBatchOrderingTests(AcademicsAPITestCase):
+    """`?ordering=` on `/student-promotions`, which is an aggregate, not a table.
+
+    Two things are being protected here. The obvious one is that the batch list
+    declared no `ordering_fields` at all, so DRF accepted a sort on any serializer
+    field. The subtle one is that this queryset is a `.values(...).annotate(...)`,
+    where an ordering column that is not already selected joins the GROUP BY — the
+    list then silently returns one row per *student*, each claiming `students: 1`,
+    with a 200 and no error anywhere. Every test below therefore asserts the
+    counts as well as the sequence.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        now = timezone.now()
+        # Deliberately not in `started_at` order, so the default ordering below is
+        # asserting something.
+        self.approved = self._batch(
+            PromotionStatus.APPROVED, students=3, started_at=now - datetime.timedelta(days=2)
+        )
+        self.pending = self._batch(
+            PromotionStatus.PENDING_APPROVAL,
+            students=1,
+            started_at=now - datetime.timedelta(days=3),
+        )
+        self.draft = self._batch(
+            PromotionStatus.DRAFT, students=2, started_at=now - datetime.timedelta(days=1)
+        )
+
+    def _batch(self, batch_status: str, *, students: int, started_at) -> str:
+        """One batch of `students` rows, written through the factories.
+
+        Not through `POST /student-promotions`: that service builds a batch from
+        whatever the class currently enrolls, and these tests need a specific
+        row count, status and age per batch.
+        """
+        batch_id = uuid.uuid4()
+        with tenant_context(self.tenant.id):
+            for _ in range(students):
+                student = StudentFactory(tenant=self.tenant, campus=self.campus)
+                enrollment = StudentEnrollmentFactory(
+                    tenant=self.tenant,
+                    student=student,
+                    academic_session=self.session,
+                    school_class=self.school_class,
+                    section=self.section,
+                )
+                StudentPromotionFactory(
+                    tenant=self.tenant,
+                    batch_id=batch_id,
+                    student=student,
+                    from_enrollment=enrollment,
+                    from_academic_session=self.session,
+                    to_academic_session=self.next_session,
+                    from_class=self.school_class,
+                    to_class=self.next_class,
+                    status=batch_status,
+                )
+            # `created_at` is auto_now_add, so it can only be moved after the fact;
+            # `started_at` is its Min over the batch.
+            StudentPromotion.objects.filter(batch_id=batch_id).update(created_at=started_at)
+        return str(batch_id)
+
+    def _rows(self, query: str = "") -> list[tuple[str, int]]:
+        """(batch_id, students) per row — the sequence and the grouping together."""
+        response = self.client.get(f"/api/v1/student-promotions{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [(row["batch_id"], row["students"]) for row in response.json()["data"]]
+
+    def test_the_default_order_is_newest_batch_first(self) -> None:
+        """`get_queryset`'s own `-started_at`, untouched when no `?ordering=` arrives."""
+        self.allow("academics.promotion.view")
+
+        self.assertEqual(
+            self._rows(),
+            [(self.draft, 2), (self.approved, 3), (self.pending, 1)],
+        )
+
+    def test_orders_by_status_ascending(self) -> None:
+        self.allow("academics.promotion.view")
+
+        # approved, draft, pending_approval — and still one row per batch.
+        self.assertEqual(
+            self._rows("?ordering=status"),
+            [(self.approved, 3), (self.draft, 2), (self.pending, 1)],
+        )
+
+    def test_orders_by_status_descending(self) -> None:
+        self.allow("academics.promotion.view")
+
+        self.assertEqual(
+            self._rows("?ordering=-status"),
+            [(self.pending, 1), (self.draft, 2), (self.approved, 3)],
+        )
+
+    def test_orders_by_the_student_count_annotation(self) -> None:
+        self.allow("academics.promotion.view")
+
+        self.assertEqual(
+            self._rows("?ordering=students"),
+            [(self.pending, 1), (self.draft, 2), (self.approved, 3)],
+        )
+        self.assertEqual(
+            self._rows("?ordering=-students"),
+            [(self.approved, 3), (self.draft, 2), (self.pending, 1)],
+        )
+
+    def test_orders_by_the_started_at_annotation(self) -> None:
+        self.allow("academics.promotion.view")
+
+        self.assertEqual(
+            self._rows("?ordering=started_at"),
+            [(self.pending, 1), (self.approved, 3), (self.draft, 2)],
+        )
+
+    def test_ordering_does_not_regroup_the_aggregate(self) -> None:
+        """The regression this endpoint's ordering allowlist exists for.
+
+        A sort column that is not in the `values()` set is added to the GROUP BY,
+        and on Postgres a primary key there collapses the grouping to one row per
+        promotion row. The symptom is not an error: it is three batches becoming
+        six rows, each reporting a single student. Asserting the counts is what
+        makes any of these tests notice.
+        """
+        self.allow("academics.promotion.view")
+
+        rows = self._rows("?ordering=status")
+
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(sorted(count for _, count in rows), [1, 2, 3])
+
+    def test_an_undeclared_ordering_field_is_ignored_rather_than_an_error(self) -> None:
+        """`created_at` is exactly the field that would un-group this list.
+
+        It is on the model and on every other list in this module, which is what
+        makes it worth pinning: dropped here, the default `-started_at` stands and
+        the batches stay batches.
+        """
+        self.allow("academics.promotion.view")
+
+        self.assertEqual(
+            self._rows("?ordering=created_at"),
+            [(self.draft, 2), (self.approved, 3), (self.pending, 1)],
+        )
+
+    def test_a_batch_detail_ignores_an_ordering_only_the_list_can_serve(self) -> None:
+        """`retrieve` runs the same backend over the un-aggregated decision rows.
+
+        `students` is on the allowlist because the *list* is an aggregate. The
+        detail route's queryset has no such column, so ordering by it there is a
+        FieldError — a 500 off a query parameter rather than a batch.
+        """
+        self.allow("academics.promotion.view")
+
+        response = self.client.get(f"/api/v1/student-promotions/{self.approved}?ordering=students")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["students"], 3)

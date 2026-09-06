@@ -19,6 +19,7 @@ from apps.timetable.models import (
 from apps.timetable.tests.base import TimetableAPITestCase
 from apps.timetable.tests.factories import (
     MONDAY,
+    TUESDAY,
     AcademicSessionFactory,
     CampusFactory,
     GuardianFactory,
@@ -36,6 +37,7 @@ from apps.timetable.tests.factories import (
     grant,
     period_window,
 )
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 from core.tenancy.models import TenantFeatureOverride
 
@@ -1114,3 +1116,305 @@ class EffectiveVersionTests(TimetableAPITestCase):
         response = self.client.get("/api/v1/timetables/my")
 
         self.assertEqual([row["id"] for row in response.json()["data"]], [str(self.new_slot.pk)])
+
+
+class RoomOrderingTests(TimetableAPITestCase):
+    """`?ordering=` on `/rooms` — the sorts the room table's own headers issue.
+
+    Every row is built on a campus of its own and read back through `?campus_id=`, so
+    the base fixture's room — whose factory-sequenced code is not predictable — cannot
+    land in the middle of an expected order.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("timetable.timetable.view")
+        with tenant_context(self.tenant.id):
+            self.wing = CampusFactory(tenant=self.tenant, name="North Wing")
+            self.lab = RoomFactory(
+                tenant=self.tenant,
+                campus=self.wing,
+                code="A-1",
+                name="Zoology Lab",
+                room_type="lab",
+                capacity=24,
+                floor="3",
+                is_active=True,
+            )
+            self.classroom = RoomFactory(
+                tenant=self.tenant,
+                campus=self.wing,
+                code="B-2",
+                name="Maths Room",
+                room_type="classroom",
+                capacity=None,
+                floor="2",
+                is_active=False,
+            )
+            self.hall = RoomFactory(
+                tenant=self.tenant,
+                campus=self.wing,
+                code="C-3",
+                name="Assembly Hall",
+                room_type="auditorium",
+                capacity=300,
+                floor="1",
+                is_active=True,
+            )
+
+    def ids(self, query: str) -> list[str]:
+        response = self.client.get(f"/api/v1/rooms?campus_id={self.wing.pk}&{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["id"] for row in response.json()["data"]]
+
+    def ascending(self) -> dict[str, tuple]:
+        return {
+            "code": (self.lab, self.classroom, self.hall),
+            "name": (self.hall, self.classroom, self.lab),
+            "room_type": (self.hall, self.classroom, self.lab),
+            # 24, then 300, then the room with no capacity recorded at all: `capacity`
+            # is nullable and Postgres sorts NULL last ascending.
+            "capacity": (self.lab, self.hall, self.classroom),
+        }
+
+    def test_each_column_the_table_renders_sorts_ascending(self) -> None:
+        for field, rooms in self.ascending().items():
+            with self.subTest(field=field):
+                self.assertEqual(self.ids(f"ordering={field}"), [str(r.pk) for r in rooms])
+
+    def test_the_same_columns_sort_descending(self) -> None:
+        for field, rooms in self.ascending().items():
+            with self.subTest(field=field):
+                self.assertEqual(
+                    self.ids(f"ordering=-{field}"), [str(r.pk) for r in reversed(rooms)]
+                )
+
+    def test_is_active_sorts_the_closed_room_to_either_end(self) -> None:
+        """Two rooms share `True` and `StableOrderingFilter`'s pk tiebreak decides
+        between them, so this pins the one position that is unambiguous."""
+        self.assertEqual(self.ids("ordering=is_active")[0], str(self.classroom.pk))
+        self.assertEqual(self.ids("ordering=-is_active")[-1], str(self.classroom.pk))
+
+    def test_it_sorts_by_the_annotated_campus_name(self) -> None:
+        """`campus__name` in `ordering_fields` would be the `__` traversal that
+        `SELECT DISTINCT` cannot order by; the annotation is in the select list."""
+        with tenant_context(self.tenant.id):
+            west = CampusFactory(tenant=self.tenant, name="West Campus")
+            east = CampusFactory(tenant=self.tenant, name="East Campus")
+            in_west = RoomFactory(tenant=self.tenant, campus=west, room_type="library")
+            in_east = RoomFactory(tenant=self.tenant, campus=east, room_type="library")
+
+        response = self.client.get("/api/v1/rooms?room_type=library&ordering=campus_name")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(
+            [row["id"] for row in response.json()["data"]],
+            [str(in_east.pk), str(in_west.pk)],
+        )
+
+    def test_an_undeclared_column_is_ignored_rather_than_an_error(self) -> None:
+        """`floor` is a real column deliberately left out of the allowlist — the client
+        joins it with `building` into one display string, so sorting on it alone would
+        order the rows by something other than what the header names. Sorting on it
+        would put the hall first; the answer is the view's own default instead."""
+        self.assertEqual(
+            self.ids("ordering=floor"),
+            [str(self.lab.pk), str(self.classroom.pk), str(self.hall.pk)],
+        )
+
+
+class PeriodOrderingTests(TimetableAPITestCase):
+    """`?ordering=` on `/periods`.
+
+    The bell schedule is this module's worst case for the no-`__` rule: `get_queryset`
+    hands a campus-scoped principal `(scoped | tenant_wide).distinct()`, and Postgres
+    refuses `SELECT DISTINCT` with an `ORDER BY` on a joined column that is not in the
+    select list. The last test here is the one that catches a `__` creeping back in.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("timetable.timetable.view")
+        with tenant_context(self.tenant.id):
+            self.wing = CampusFactory(tenant=self.tenant, name="North Wing")
+            self.zoology = PeriodFactory(
+                tenant=self.tenant,
+                campus=self.wing,
+                name="Zoology",
+                sequence=11,
+                start_time=datetime.time(8, 0),
+                end_time=datetime.time(8, 45),
+                is_break=False,
+                weekdays=[4],
+            )
+            self.algebra = PeriodFactory(
+                tenant=self.tenant,
+                campus=self.wing,
+                name="Algebra",
+                sequence=12,
+                start_time=datetime.time(9, 0),
+                end_time=datetime.time(9, 50),
+                is_break=False,
+                weekdays=[3],
+            )
+            self.recess = PeriodFactory(
+                tenant=self.tenant,
+                campus=self.wing,
+                name="Recess",
+                sequence=13,
+                start_time=datetime.time(10, 0),
+                end_time=datetime.time(10, 20),
+                is_break=True,
+                weekdays=[2],
+            )
+
+    def ids(self, query: str) -> list[str]:
+        """`?campus_id=` excludes the fixture's tenant-wide periods, which is what makes
+        the expected order a list of three rather than of seven."""
+        response = self.client.get(f"/api/v1/periods?campus_id={self.wing.pk}&{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["id"] for row in response.json()["data"]]
+
+    def ascending(self) -> dict[str, tuple]:
+        return {
+            "sequence": (self.zoology, self.algebra, self.recess),
+            "name": (self.algebra, self.recess, self.zoology),
+            "start_time": (self.zoology, self.algebra, self.recess),
+            "end_time": (self.zoology, self.algebra, self.recess),
+        }
+
+    def test_each_column_the_table_renders_sorts_ascending(self) -> None:
+        for field, periods in self.ascending().items():
+            with self.subTest(field=field):
+                self.assertEqual(self.ids(f"ordering={field}"), [str(p.pk) for p in periods])
+
+    def test_the_same_columns_sort_descending(self) -> None:
+        for field, periods in self.ascending().items():
+            with self.subTest(field=field):
+                self.assertEqual(
+                    self.ids(f"ordering=-{field}"), [str(p.pk) for p in reversed(periods)]
+                )
+
+    def test_is_break_sorts_the_break_to_either_end(self) -> None:
+        """Two teaching periods share `False`, so only the break's position is pinned."""
+        self.assertEqual(self.ids("ordering=is_break")[-1], str(self.recess.pk))
+        self.assertEqual(self.ids("ordering=-is_break")[0], str(self.recess.pk))
+
+    def test_a_campus_scoped_principal_can_sort_by_the_annotated_campus(self) -> None:
+        """The `.distinct()` path, read by the principal it exists for.
+
+        `campus__name` in `ordering_fields` would answer 200 for the all-scoped admin
+        above and raise ProgrammingError for exactly this reader. Ordering is asserted
+        as a set because all three campus periods share one campus name and the pk
+        tiebreak decides between them; what is pinned is that the named campus sorts
+        ahead of the tenant-wide rows, whose `campus_name` is NULL.
+        """
+        user = UserFactory(tenant=self.tenant)
+        grant(
+            user,
+            "timetable.timetable.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.wing.pk,
+        )
+        authenticate(self.client, user)
+
+        response = self.client.get("/api/v1/periods?ordering=campus_name")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        ids = [row["id"] for row in response.json()["data"]]
+        self.assertEqual(len(ids), 3 + len(self.periods))
+        self.assertEqual(
+            set(ids[:3]),
+            {str(self.zoology.pk), str(self.algebra.pk), str(self.recess.pk)},
+        )
+
+    def test_an_undeclared_column_is_ignored_rather_than_an_error(self) -> None:
+        """`weekdays` is an array; there is no ordering of it a reader would recognise
+        as the one the header promises, so it is left out of the allowlist. Honouring
+        it would reverse this list — the answer is the view's own default instead."""
+        self.assertEqual(
+            self.ids("ordering=weekdays"),
+            [str(self.zoology.pk), str(self.algebra.pk), str(self.recess.pk)],
+        )
+
+
+class TeacherSubstitutionOrderingTests(TimetableAPITestCase):
+    """`?ordering=` on `/teacher-substitutions` — the vice principal's cover list."""
+
+    WEDNESDAY = MONDAY + datetime.timedelta(days=2)
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("timetable.timetable.view")
+        slot = self.publish(self.make_slot())
+        with tenant_context(self.tenant.id):
+            raza = StaffFactory(tenant=self.tenant, campus=self.campus, last_name="Raza")
+            sethi = StaffFactory(tenant=self.tenant, campus=self.campus, last_name="Sethi")
+            qureshi = StaffFactory(tenant=self.tenant, campus=self.campus, last_name="Qureshi")
+            zheng = StaffFactory(tenant=self.tenant, campus=self.campus, last_name="Zheng")
+            # Three dates on one slot: `substitutions_one_per_slot_per_date` is the only
+            # uniqueness in play, so this needs no second section or allocation.
+            self.monday = TeacherSubstitutionFactory(
+                tenant=self.tenant,
+                timetable_slot=slot,
+                date=MONDAY,
+                absent_staff=zheng,
+                substitute_staff=raza,
+                status=SubstitutionStatus.PROPOSED,
+                reason="Alpha",
+            )
+            self.tuesday = TeacherSubstitutionFactory(
+                tenant=self.tenant,
+                timetable_slot=slot,
+                date=TUESDAY,
+                absent_staff=qureshi,
+                substitute_staff=sethi,
+                status=SubstitutionStatus.CONFIRMED,
+                reason="Bravo",
+            )
+            self.wednesday = TeacherSubstitutionFactory(
+                tenant=self.tenant,
+                timetable_slot=slot,
+                date=self.WEDNESDAY,
+                absent_staff=raza,
+                substitute_staff=zheng,
+                status=SubstitutionStatus.DECLINED,
+                reason="Charlie",
+            )
+
+    def ids(self, query: str) -> list[str]:
+        response = self.client.get(f"/api/v1/teacher-substitutions?{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["id"] for row in response.json()["data"]]
+
+    def ascending(self) -> dict[str, tuple]:
+        return {
+            "date": (self.monday, self.tuesday, self.wednesday),
+            # confirmed, declined, proposed — the stored values, not the labels.
+            "status": (self.tuesday, self.wednesday, self.monday),
+            "absent_staff_last_name": (self.wednesday, self.tuesday, self.monday),
+            "substitute_staff_last_name": (self.monday, self.tuesday, self.wednesday),
+        }
+
+    def test_each_column_the_table_renders_sorts_ascending(self) -> None:
+        """Both staff columns are annotations rather than `absent_staff__last_name`
+        and `substitute_staff__last_name` — see the viewset for why that holds even
+        where no scope produces a `.distinct()` yet."""
+        for field, rows in self.ascending().items():
+            with self.subTest(field=field):
+                self.assertEqual(self.ids(f"ordering={field}"), [str(r.pk) for r in rows])
+
+    def test_the_same_columns_sort_descending(self) -> None:
+        for field, rows in self.ascending().items():
+            with self.subTest(field=field):
+                self.assertEqual(
+                    self.ids(f"ordering=-{field}"), [str(r.pk) for r in reversed(rows)]
+                )
+
+    def test_an_undeclared_column_is_ignored_rather_than_an_error(self) -> None:
+        """`reason` is free text nobody sorts a cover list by. Honouring it would put
+        Monday first; the view's own `-date` default puts Wednesday there."""
+        self.assertEqual(
+            self.ids("ordering=reason"),
+            [str(self.wednesday.pk), str(self.tuesday.pk), str(self.monday.pk)],
+        )

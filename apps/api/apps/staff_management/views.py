@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 from typing import TYPE_CHECKING
 
+from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -85,7 +86,41 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     serializer_class = StaffSerializer
     filterset_class = StaffFilterSet
     search_fields = ["first_name", "last_name", "employee_number", "email", "phone"]
-    ordering_fields = ["last_name", "joining_date", "created_at"]
+    # Everything the dashboard's staff roll renders.
+    # `campus_name`/`department_name`/`designation_name` are the annotations from
+    # `get_queryset`, never `campus__name` and friends: `scope_queryset` hands an
+    # OWN/ASSIGNED principal a `.distinct()` queryset, and Postgres rejects
+    # `SELECT DISTINCT` ordered by a joined column that is not in the select
+    # list. An annotation is in the select list, so it sorts for every principal
+    # rather than 500-ing for the ones this module actually has — a staff member
+    # on `own` and a department head on `assigned`.
+    # Index-backed: `last_name` (staff_tenant_name_idx), `staff_type`
+    # (staff_tenant_type_idx), `employment_status` (staff_tenant_status_idx),
+    # `employee_number` (staff_unique_employee_number_per_tenant, whose
+    # `deleted_at IS NULL` condition is exactly what this list already filters
+    # on) and `created_at` (its own index).
+    # Table scans: `first_name` — staff_tenant_name_idx leads with `last_name`,
+    # so it cannot serve a sort on its second column alone — plus `joining_date`
+    # and `email`, which nothing indexes at all (`email` is nullable, so staff
+    # with no address sort last ascending and first descending), plus the three
+    # annotated names, each a sort over a left join. Allowed because this list is
+    # bounded by one school's payroll; on a big table each would want an index.
+    ordering_fields = [
+        "last_name",
+        "first_name",
+        "employee_number",
+        "staff_type",
+        "employment_status",
+        "joining_date",
+        "email",
+        "campus_name",
+        "department_name",
+        "designation_name",
+        "created_at",
+    ]
+    #: Entries in ordering_fields that are annotations from get_queryset, not model
+    #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
+    ordering_annotations = ("campus_name", "department_name", "designation_name")
     scope_own_field = "user_id"
     required_feature = "module.staff"
     required_permission = "staff.staff.view"
@@ -101,7 +136,19 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("campus", "department", "designation")
+        # select_related keeps the list off a campus/department/designation fetch
+        # per row; the annotations are what `?ordering=<...>_name` sorts on, and
+        # they reuse those same joins rather than adding their own.
+        return (
+            super()
+            .get_queryset()
+            .select_related("campus", "department", "designation")
+            .annotate(
+                campus_name=F("campus__name"),
+                department_name=F("department__name"),
+                designation_name=F("designation__name"),
+            )
+        )
 
     def perform_create(self, serializer) -> None:
         """Delegate to the service so the API and the bulk importer agree.
@@ -215,6 +262,19 @@ class DesignationViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
+    # This endpoint declared no allowlist at all, which is not the same as "not
+    # sortable": `OrderingFilter` is a project-wide default and falls back to
+    # every serializer field when a view names none, so `?ordering=level` has
+    # been live — on an unindexed nullable column, documented nowhere. These are
+    # the columns the dashboard's designation table renders, and nothing else.
+    # Index-backed: `name` (designations_unique_name_per_tenant, whose
+    # `deleted_at IS NULL` condition is what this list already filters on) and
+    # `created_at` (its own index).
+    # Table scans: `code`, because designations_unique_code_per_tenant is partial
+    # (`WHERE code IS NOT NULL`) and so cannot order a list that also contains the
+    # rows it excludes; and `level`, which nothing indexes and which is nullable,
+    # so designations with no seniority sort last ascending and first descending.
+    ordering_fields = ["name", "code", "level", "created_at"]
     required_feature = "module.staff"
     required_permission = "staff.designation.view"
     required_permission_map = {
@@ -264,6 +324,12 @@ class StaffQualificationLinkViewSet(
 
     queryset = StaffQualification.objects
     serializer_class = StaffQualificationSerializer
+    # Declared for the same reason DesignationViewSet's is: a list that names no
+    # allowlist is sortable by every serializer field, not by none. This one is
+    # already narrowed to a single staff member, so the sort is over a handful of
+    # rows and only `qualification_type` (staff_qual_type_idx) and `created_at`
+    # are index-backed anyway.
+    ordering_fields = ["qualification_type", "title", "year_awarded", "created_at"]
     required_feature = "module.staff"
     required_permission = "staff.qualification.view"
     required_permission_map = {"create": "staff.qualification.create"}
@@ -354,6 +420,10 @@ class StaffDocumentLinkViewSet(
 
     queryset = StaffDocument.objects
     serializer_class = StaffDocumentSerializer
+    # See StaffQualificationLinkViewSet — one staff member's vault, so the sort is
+    # over a handful of rows; `verification_status` (staff_documents_status_idx)
+    # and `created_at` are the index-backed two.
+    ordering_fields = ["document_type", "title", "verification_status", "expires_at", "created_at"]
     required_feature = "module.staff"
     required_permission = "staff.document.view"
     required_permission_map = {"create": "staff.document.create"}

@@ -6,6 +6,8 @@ school_organization/tests/test_api.py's identical convention).
 
 from __future__ import annotations
 
+import datetime
+
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -16,12 +18,17 @@ from apps.school_organization.tests.factories import (
     authenticate,
     grant,
 )
+from apps.student_management.models import StudentStatus
 from apps.student_management.tests.factories import (
     DEFAULT_ADMISSION_DATE,
     DEFAULT_DOB,
+    GuardianFactory,
+    HouseFactory,
     StudentFactory,
+    StudentGuardianFactory,
     enable_feature,
 )
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 
@@ -337,3 +344,123 @@ class StudentListTests(StudentManagementAPITestCase):
 
         ids = {row["id"] for row in response.json()["data"]}
         self.assertEqual(ids, {str(own_student.pk)})
+
+
+class StudentOrderingTests(StudentManagementAPITestCase):
+    """`?ordering=` on `/students` — every column the roll renders is sortable.
+
+    The three rows below differ in every one of those columns, so each expected order
+    is a strict permutation with no ties for `StableOrderingFilter`'s pk tiebreak to
+    decide — a passing assertion here is the sort working, not a coincidence.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("students.student.view")
+        with tenant_context(self.tenant.id):
+            aurora = CampusFactory(tenant=self.tenant, name="Aurora Campus")
+            borealis = CampusFactory(tenant=self.tenant, name="Borealis Campus")
+            cygnus = CampusFactory(tenant=self.tenant, name="Cygnus Campus")
+            falcon = HouseFactory(tenant=self.tenant, name="Falcon")
+            osprey = HouseFactory(tenant=self.tenant, name="Osprey")
+            self.sethi = StudentFactory(
+                tenant=self.tenant,
+                campus=aurora,
+                house=osprey,
+                admission_number="ADM-001",
+                first_name="Ama",
+                last_name="Sethi",
+                admission_date=datetime.date(2026, 1, 15),
+                date_of_birth=datetime.date(2016, 2, 1),
+                status=StudentStatus.ACTIVE,
+                nationality="Bolivia",
+            )
+            self.zheng = StudentFactory(
+                tenant=self.tenant,
+                campus=borealis,
+                house=falcon,
+                admission_number="ADM-002",
+                first_name="Kai",
+                last_name="Zheng",
+                admission_date=datetime.date(2026, 2, 20),
+                date_of_birth=datetime.date(2014, 5, 11),
+                status=StudentStatus.SUSPENDED,
+                nationality="Argentina",
+            )
+            self.raza = StudentFactory(
+                tenant=self.tenant,
+                campus=cygnus,
+                # No house: `house_name` is the nullable one of the two annotations.
+                house=None,
+                admission_number="ADM-003",
+                first_name="Zara",
+                last_name="Raza",
+                admission_date=datetime.date(2026, 3, 1),
+                date_of_birth=datetime.date(2015, 9, 30),
+                status=StudentStatus.WITHDRAWN,
+                nationality="Chile",
+            )
+
+    def ids(self, query: str) -> list[str]:
+        response = self.client.get(f"/api/v1/students?{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return [row["id"] for row in response.json()["data"]]
+
+    def ascending(self) -> dict[str, tuple]:
+        return {
+            "last_name": (self.raza, self.sethi, self.zheng),
+            "first_name": (self.sethi, self.zheng, self.raza),
+            "admission_number": (self.sethi, self.zheng, self.raza),
+            "admission_date": (self.sethi, self.zheng, self.raza),
+            # active, suspended, withdrawn — the stored values, not the labels.
+            "status": (self.sethi, self.zheng, self.raza),
+            "date_of_birth": (self.zheng, self.raza, self.sethi),
+            "campus_name": (self.sethi, self.zheng, self.raza),
+            # Falcon, Osprey, then the student in no house: `house` is nullable and
+            # Postgres sorts NULL last ascending.
+            "house_name": (self.zheng, self.sethi, self.raza),
+        }
+
+    def test_each_column_the_roll_renders_sorts_ascending(self) -> None:
+        for field, students in self.ascending().items():
+            with self.subTest(field=field):
+                self.assertEqual(self.ids(f"ordering={field}"), [str(s.pk) for s in students])
+
+    def test_the_same_columns_sort_descending(self) -> None:
+        for field, students in self.ascending().items():
+            with self.subTest(field=field):
+                self.assertEqual(
+                    self.ids(f"ordering=-{field}"), [str(s.pk) for s in reversed(students)]
+                )
+
+    def test_a_guardian_can_sort_their_own_children_by_house(self) -> None:
+        """The `.distinct()` case the no-`__` rule exists for.
+
+        `Student.filter_owned_by_user` joins through `student_guardians` and ends in
+        `.distinct()`. Postgres refuses `SELECT DISTINCT` with an `ORDER BY` on a
+        joined column that is not in the select list, so `house__name` in
+        `ordering_fields` would answer 200 for the admin above and raise
+        ProgrammingError for exactly this reader. The annotation is in the select list.
+        """
+        user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant, user_id=user.pk)
+            StudentGuardianFactory(tenant=self.tenant, student=self.sethi, guardian=guardian)
+            StudentGuardianFactory(tenant=self.tenant, student=self.zheng, guardian=guardian)
+        grant(user, "students.student.view", scope=RecordScope.OWN)
+        authenticate(self.client, user)
+
+        self.assertEqual(self.ids("ordering=house_name"), [str(self.zheng.pk), str(self.sethi.pk)])
+        # The other annotation, and the opposite order — so a sort that silently did
+        # nothing could not pass both assertions.
+        self.assertEqual(self.ids("ordering=campus_name"), [str(self.sethi.pk), str(self.zheng.pk)])
+
+    def test_an_undeclared_column_is_ignored_rather_than_an_error(self) -> None:
+        """`nationality` is a real column left out of the allowlist. DRF drops an
+        unlisted term silently rather than answering 400, so the client that sent it
+        still gets a usable list — in the view's own default order. Honouring it would
+        have put Zheng first."""
+        self.assertEqual(
+            self.ids("ordering=nationality"),
+            [str(self.raza.pk), str(self.sethi.pk), str(self.zheng.pk)],
+        )

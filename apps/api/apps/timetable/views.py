@@ -35,6 +35,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
@@ -145,7 +146,33 @@ class RoomViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
-    ordering_fields = ["code", "name", "capacity", "created_at"]
+    # Every column the room table renders, except the building/floor pair: the client
+    # joins those two into one display string, and sorting on `building` alone would
+    # order the rows by something other than what the header names.
+    #
+    # Only `created_at` has an index that an ORDER BY can walk. `code` and `room_type`
+    # sit at the tail of composite indexes led by (tenant, campus), so neither is a
+    # usable prefix here; `name`, `capacity` and `is_active` have no index at all, and
+    # `campus_name` is joined. All six therefore sort the tenant's rooms in memory —
+    # affordable only because this table is bounded by one school's room count.
+    # `capacity` is nullable, so Postgres puts the unset rooms last ascending and first
+    # descending.
+    ordering_fields = [
+        "code",
+        "name",
+        "room_type",
+        "capacity",
+        "is_active",
+        "campus_name",
+        "created_at",
+    ]
+    #: Entries in ordering_fields that are annotations from get_queryset, not model
+    #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
+    ordering_annotations = ("campus_name",)
+    # Room.Meta.ordering. Declared here too because DRF's ordering filter reads the
+    # *view's* default, not the model's, and a list with no view default lets the
+    # paginator page an unordered result.
+    ordering = ["campus_id", "code"]
     scope_campus_field = "campus_id"
     required_feature = FEATURE
     required_permission = SCAFFOLDING_VIEW_KEY
@@ -158,7 +185,21 @@ class RoomViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("campus")
+        """`campus_name` is annotated, never traversed in `ordering_fields`.
+
+        No scope narrows this table with a ``.distinct()`` today — ``Room`` declares no
+        ``filter_owned_by_user`` — so `campus__name` would in fact work right now. It
+        is still annotated, and tests/test_endpoint_contracts.py refuses a `__` in any
+        `ordering_fields`: the day someone gives ``Room`` an own-scope hook (every one
+        written so far ends in ``.distinct()``, because the joins they walk fan out),
+        `SELECT DISTINCT` + `ORDER BY <joined column>` starts raising ProgrammingError
+        for that principal only, and nothing in review would connect the two changes.
+        The annotation costs one already-open join and removes the trap.
+        ``select_related`` is what keeps it to that one join.
+        """
+        return (
+            super().get_queryset().select_related("campus").annotate(campus_name=F("campus__name"))
+        )
 
 
 class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -172,7 +213,28 @@ class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
-    ordering_fields = ["sequence", "start_time", "created_at"]
+    # Every column the bell-schedule table renders except `weekdays`, which is an
+    # array — there is no ordering of it a reader would recognise as the one the
+    # header promises.
+    #
+    # Only `created_at` has an index an ORDER BY can walk: `periods_tenant_campus_idx`
+    # is led by (tenant, campus), so nothing else here is a usable prefix, and
+    # `sequence`, `name`, `start_time`, `end_time` and `is_break` all sort the tenant's
+    # periods in memory. A bell schedule is a few dozen rows, so that is the cheap
+    # half of the trade. `campus_name` is joined *and* nullable — a null campus means
+    # "every campus" (models.py), so those rows land last ascending, first descending.
+    ordering_fields = [
+        "sequence",
+        "name",
+        "start_time",
+        "end_time",
+        "is_break",
+        "campus_name",
+        "created_at",
+    ]
+    ordering_annotations = ("campus_name",)
+    # Period.Meta.ordering; see RoomViewSet for why the view repeats the model's.
+    ordering = ["sequence"]
     scope_campus_field = "campus_id"
     required_feature = FEATURE
     required_permission = SCAFFOLDING_VIEW_KEY
@@ -193,8 +255,13 @@ class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         the rows that do apply to them, and the day template would render with
         lunch missing. The scoped queryset is combined back with the tenant-wide
         rows rather than the campus filter being reimplemented here.
+
+        ``_with_campus_name`` is applied *after* that combine rather than to each
+        side of it. ``QuerySet.__or__`` keeps only the left-hand query's
+        annotations, so annotating both sides would be one wasted join and one
+        silent dependence on which operand is on the left.
         """
-        scoped = super().get_queryset().select_related("campus")
+        scoped = super().get_queryset()
 
         scopes = user_scopes(self.request.user)
         campus_ids = [ref for ref in scopes.get(RecordScope.CAMPUS, []) if ref]
@@ -202,10 +269,25 @@ class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # `scope_queryset` treats as granting nothing; widening that back to the
         # tenant-wide rows would turn a malformed assignment into extra access.
         if RecordScope.ALL in scopes or not campus_ids:
-            return scoped
+            return self._with_campus_name(scoped)
 
-        tenant_wide = Period.objects.alive().filter(campus__isnull=True).select_related("campus")
-        return (scoped | tenant_wide).distinct()
+        tenant_wide = Period.objects.alive().filter(campus__isnull=True)
+        return self._with_campus_name((scoped | tenant_wide).distinct())
+
+    @staticmethod
+    def _with_campus_name(queryset):
+        """Make the campus sortable without putting a `__` in `ordering_fields`.
+
+        This queryset is ``.distinct()`` on the campus-scoped path above, and
+        Postgres rejects ``SELECT DISTINCT`` with an ``ORDER BY`` on a joined column
+        that is not in the select list — so `campus__name` in `ordering_fields`
+        would be a 500 for exactly the principals that branch exists to serve. The
+        annotation is in the select list, which is what makes the alias safe.
+
+        ``select_related`` is not redundant with the annotation: without it the
+        serializer's campus fields would re-fetch the row per period.
+        """
+        return queryset.select_related("campus").annotate(campus_name=F("campus__name"))
 
 
 class TimetableSlotViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -585,7 +667,24 @@ class TeacherSubstitutionViewSet(
     queryset = TeacherSubstitution.objects
     serializer_class = TeacherSubstitutionSerializer
     filterset_class = TeacherSubstitutionFilterSet
-    ordering_fields = ["date", "created_at"]
+    # The two staff columns sort on surname, which is what the client shows first and
+    # the only half of a name a list is worth ordering by.
+    #
+    # `created_at` is the only entry with an index an ORDER BY can walk. `date` is the
+    # tail of (tenant, substitute_staff, date) and (tenant, absent_staff, date), so it
+    # is not a usable prefix on its own; `status` has no index; both surnames are
+    # joined. Those four sort the tenant's substitutions in memory — bounded by a
+    # school's cover history for one session, not by anything that grows without limit.
+    ordering_fields = [
+        "date",
+        "status",
+        "absent_staff_last_name",
+        "substitute_staff_last_name",
+        "created_at",
+    ]
+    ordering_annotations = ("absent_staff_last_name", "substitute_staff_last_name")
+    # TeacherSubstitution.Meta.ordering; see RoomViewSet for why the view repeats it.
+    ordering = ["-date"]
     # Page numbers, not a cursor: this list is bounded by one school's size and a
     # reader navigates it by position. api-architecture.md §2.4.
     pagination_class = PageNumberPagination
@@ -604,6 +703,15 @@ class TeacherSubstitutionViewSet(
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
+        """The two surnames are annotated, not traversed — see `RoomViewSet` for why
+        that holds even where nothing produces a ``.distinct()`` yet.
+
+        ``scope_own_field`` here is a plain forward join (`substitute_staff__user_id`),
+        so today an own-scoped substitute's queryset is not distinct; `PeriodViewSet`
+        and `StudentViewSet` are where the hazard actually bites. Both staff FKs are
+        non-null, so these annotations reuse the inner joins ``select_related`` already
+        opens.
+        """
         return (
             super()
             .get_queryset()
@@ -613,6 +721,10 @@ class TeacherSubstitutionViewSet(
                 "timetable_slot__period",
                 "absent_staff",
                 "substitute_staff",
+            )
+            .annotate(
+                absent_staff_last_name=F("absent_staff__last_name"),
+                substitute_staff_last_name=F("substitute_staff__last_name"),
             )
         )
 

@@ -187,3 +187,84 @@ class RecordScopeFieldTests(TestCase):
                 broken.append(f"{route} ({view.__name__}.scope_own_field={field!r}): {exc}")
 
         self.assertEqual(broken, [], "\n".join(broken))
+
+
+class OrderingContractTests(TestCase):
+    """Every list endpoint must declare what it can be sorted by, and mean it.
+
+    `OrderingFilter` is a project-wide default, so a list view that declares no
+    `ordering_fields` does not get "no sorting" — DRF falls back to every field on the
+    serializer. `/designations?ordering=level` worked that way for a while: an
+    unindexed, nullable column, sortable by anyone, documented nowhere. §2.4 of
+    api-architecture.md says "whitelisted per endpoint"; these tests are what make that
+    true rather than aspirational.
+    """
+
+    def _list_views(self):
+        """Views that expose a list, paired with the model behind them."""
+        for route, view in _api_views():
+            if _is_exempt(route):
+                continue
+            queryset = getattr(view, "queryset", None)
+            model = getattr(queryset, "model", None)
+            if model is None or not hasattr(view, "list"):
+                continue
+            yield route, view, model
+
+    def test_every_list_declares_what_it_can_be_sorted_by(self):
+        offenders = [
+            f"{route} ({view.__name__})"
+            for route, view, _ in self._list_views()
+            if not getattr(view, "ordering_fields", None)
+        ]
+
+        self.assertEqual(
+            offenders,
+            [],
+            "These list endpoints declare no ordering_fields, so DRF will accept an "
+            "?ordering= on any serializer field — including unindexed and nullable "
+            "ones. Declare the allowlist explicitly:\n" + "\n".join(offenders),
+        )
+
+    def test_no_ordering_field_traverses_a_relation(self):
+        """A `__` here is a 500 waiting for the right principal.
+
+        `scope_queryset` hands OWN/ASSIGNED principals a `.distinct()` queryset, and
+        Postgres rejects `SELECT DISTINCT` with an `ORDER BY` on a joined column that is
+        not in the select list. The sort works for an admin and raises ProgrammingError
+        for a class teacher. Annotate the related field and order by the alias instead —
+        an annotation IS in the select list.
+        """
+        offenders = [
+            f"{route} ({view.__name__}.ordering_fields contains {field!r})"
+            for route, view, _ in self._list_views()
+            for field in getattr(view, "ordering_fields", None) or ()
+            if "__" in field
+        ]
+
+        self.assertEqual(offenders, [], "\n".join(offenders))
+
+    def test_every_ordering_field_resolves_on_its_model(self):
+        """A typo'd allowlist entry is silently dropped by DRF, never reported.
+
+        `remove_invalid_fields` filters the request against the allowlist, but nothing
+        checks the allowlist itself against the model. A misspelled entry there fails
+        the same silent way a misspelled query parameter does: the list comes back in
+        its default order and the header looks broken for no visible reason.
+        """
+        from django.core.exceptions import FieldError
+        from django.db.models import QuerySet
+
+        broken = []
+        for route, view, model in self._list_views():
+            annotations = set(getattr(view, "ordering_annotations", ()) or ())
+            for field in getattr(view, "ordering_fields", None) or ():
+                name = field.lstrip("-")
+                if name in annotations:
+                    continue
+                try:
+                    QuerySet(model=model).order_by(name)
+                except FieldError as exc:
+                    broken.append(f"{route} ({view.__name__}): {field!r} — {exc}")
+
+        self.assertEqual(broken, [], "\n".join(broken))
