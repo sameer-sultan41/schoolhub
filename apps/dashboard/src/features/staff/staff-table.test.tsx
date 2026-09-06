@@ -104,7 +104,7 @@ describe("StaffTable", () => {
 
     renderWithProviders(<StaffTable />);
 
-    expect(await screen.findByText("No staff found.")).toBeInTheDocument();
+    expect(await screen.findByText("No staff yet")).toBeInTheDocument();
   });
 
   it("renders the ApiError envelope on a request failure", async () => {
@@ -359,7 +359,7 @@ describe("StaffTable", () => {
 
     renderWithProviders(<StaffTable />);
 
-    await screen.findByText("No staff found.");
+    await screen.findByText("No staff yet");
     expect(screen.queryByRole("link", { name: "New staff member" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Import" })).not.toBeInTheDocument();
   });

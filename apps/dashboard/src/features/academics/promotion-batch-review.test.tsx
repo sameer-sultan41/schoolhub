@@ -198,11 +198,11 @@ describe("PromotionBatchReview", () => {
 
     renderWithProviders(<PromotionBatchReview batchId="batch-1" />);
 
-    expect(await screen.findByText("This batch has no decisions.")).toBeInTheDocument();
+    expect(await screen.findByText("This batch has no decisions")).toBeInTheDocument();
     expect(screen.getByTestId("batch-actions")).toBeInTheDocument();
   });
 
-  it("renders the ApiError envelope instead of the table on failure", async () => {
+  it("renders the ApiError envelope in the table's error slot on failure", async () => {
     mockGet.mockRejectedValue(
       new ApiError({
         code: "not_found",
@@ -219,7 +219,10 @@ describe("PromotionBatchReview", () => {
       await screen.findByText(/could not find what you were looking for/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/Reference: req-11/)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // The table stays put — the envelope now goes into its own error slot — but the
+    // empty state must NOT appear: a failed request is not an empty result set, and
+    // saying so would tell the reader something untrue about their own school.
+    expect(screen.queryByText("This batch has no decisions")).not.toBeInTheDocument();
   });
 
   it("links back to the batch list", async () => {

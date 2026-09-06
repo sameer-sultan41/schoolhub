@@ -136,7 +136,7 @@ describe("CurriculumScreen", () => {
 
     renderWithProviders(<CurriculumScreen />);
 
-    expect(await screen.findByText("No curriculum mappings found.")).toBeInTheDocument();
+    expect(await screen.findByText("No subjects mapped yet")).toBeInTheDocument();
   });
 
   it("renders the ApiError envelope and the request id on a failed list", async () => {
@@ -154,7 +154,10 @@ describe("CurriculumScreen", () => {
 
     expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
     expect(screen.getByText(/Reference: req-9/)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // The table stays put — the envelope now goes into its own error slot — but the
+    // empty state must NOT appear: a failed request is not an empty result set, and
+    // saying so would tell the reader something untrue about their own school.
+    expect(screen.queryByText("No subjects mapped yet")).not.toBeInTheDocument();
   });
 
   it("hides every mutating control without the matching permission", async () => {

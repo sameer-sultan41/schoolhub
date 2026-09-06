@@ -77,8 +77,9 @@
     "summary": "Student profiles, guardians, and enrollment.",
     "list": {
       "caption": "Students",
-      "empty": "No students found.",
-      "searchPlaceholder": "Search by name or admission number"
+      "searchPlaceholder": "Search by name or admission number",
+      "emptyTitle": "No students yet",
+      "emptyDescription": "Add your first student, or import a class list."
     },
     "columns": {
       "admissionNumber": "Admission #",
@@ -324,8 +325,9 @@
     "summary": "Staff profiles, designations, qualifications, and documents.",
     "list": {
       "caption": "Staff",
-      "empty": "No staff found.",
-      "searchPlaceholder": "Search by name, employee number, email, or phone"
+      "searchPlaceholder": "Search by name, employee number, email, or phone",
+      "emptyTitle": "No staff yet",
+      "emptyDescription": "Add your first staff member, or import the list you already keep."
     },
     "columns": {
       "employeeNumber": "Employee #",
@@ -528,7 +530,8 @@
       "electiveWithGroup": "Elective · {group}",
       "list": {
         "caption": "Curriculum mappings",
-        "empty": "No curriculum mappings found."
+        "emptyTitle": "No subjects mapped yet",
+        "emptyDescription": "Add a subject to a class, or clone last session's curriculum."
       },
       "columns": {
         "kind": "Type",
@@ -567,7 +570,8 @@
       "overNormWarning": "This teacher is now allocated {periods} periods a week, above the norm of {norm}. The allocation was saved.",
       "list": {
         "caption": "Teacher allocations",
-        "empty": "No allocations found."
+        "emptyTitle": "No teachers allocated yet",
+        "emptyDescription": "Give a section's subject a teacher, and their weekly load starts counting here."
       },
       "columns": {
         "role": "Role",
@@ -597,7 +601,6 @@
     "loadSummary": {
       "title": "Teacher load",
       "normHint": "Weekly periods per teacher for the selected session, against a norm of {norm}.",
-      "empty": "No allocations in this session yet.",
       "overNorm": "Over norm",
       "withinNorm": "Within norm",
       "pickSession": "Choose a single academic session to see per-teacher load.",
@@ -605,7 +608,9 @@
         "allocations": "Allocations",
         "weeklyPeriods": "Weekly periods",
         "status": "Load"
-      }
+      },
+      "emptyTitle": "No teaching load in this session",
+      "emptyDescription": "Allocate a teacher to a section's subject and their weekly periods appear here."
     },
     "promotions": {
       "title": "Promotions",
@@ -613,7 +618,8 @@
       "sessionPair": "{from} → {to}",
       "list": {
         "caption": "Promotion decisions",
-        "empty": "No promotion batches found."
+        "emptyTitle": "No promotion batches yet",
+        "emptyDescription": "Start a batch to move a class into next session, then review each student's decision."
       },
       "columns": {
         "batch": "Batch",
@@ -670,7 +676,8 @@
         "title": "Promotion batch",
         "summary": "Review each student's decision, then submit the batch for approval.",
         "caption": "Per-student promotion decisions",
-        "empty": "This batch has no decisions."
+        "emptyTitle": "This batch has no decisions",
+        "emptyDescription": "Every student was left out of the batch. Create a new one to start again."
       },
       "report": {
         "title": "Execution report",
@@ -818,7 +825,8 @@
       },
       "list": {
         "caption": "Bell schedule periods",
-        "empty": "No periods found."
+        "emptyTitle": "No bell schedule yet",
+        "emptyDescription": "Add the periods your day runs on — every week grid is built from these."
       },
       "actions": {
         "create": "Add period",
@@ -858,7 +866,8 @@
       },
       "list": {
         "caption": "Rooms",
-        "empty": "No rooms found."
+        "emptyTitle": "No rooms yet",
+        "emptyDescription": "Add the rooms your school teaches in, so the conflict check knows what fits where."
       },
       "actions": {
         "create": "Add room",
@@ -894,7 +903,8 @@
       },
       "list": {
         "caption": "Teacher substitutions",
-        "empty": "No substitutions found."
+        "emptyTitle": "No substitutions yet",
+        "emptyDescription": "Propose cover when a teacher is away, and it appears here for approval."
       },
       "filters": {
         "from": "From",
@@ -922,9 +932,10 @@
       "dateLabel": "Show cover for",
       "dateHint": "Leave the date empty for the normal week.",
       "loading": "Loading your timetable…",
-      "empty": "You have no published timetable yet.",
       "free": "Free",
-      "substituted": "Covered"
+      "substituted": "Covered",
+      "emptyTitle": "No timetable published yet",
+      "emptyDescription": "Once your school publishes the week, your periods appear here."
     }
   },
   "common": {
@@ -939,7 +950,8 @@
     "details": "Details",
     "new": "New",
     "edit": "Edit",
-    "import": "Import"
+    "import": "Import",
+    "clearFilters": "Clear filters"
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",

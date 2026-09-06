@@ -28,7 +28,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { ApiErrorAlert, unhandledEnvelopeError } from "@/features/academics/academics-error-alert";
+import { ApiErrorAlert, unhandledEnvelopeError } from "@/components/api-error-alert";
 import type { CreatePromotionBatchResult } from "@/features/academics/academics-types";
 import { mapPromotionBatchFieldErrors } from "@/features/academics/promotion-map-field-errors";
 import {

@@ -17,20 +17,11 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { logout } from "@/lib/auth";
-import { LOGIN_PATH } from "@/lib/constants";
+import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
 import { SUPPORTED_LOCALES } from "@/lib/env";
 
-/**
- * Mirrors `LOCALE_COOKIE_NAME` in `src/i18n/request.ts`, which cannot be imported here:
- * that module pulls in `next/headers` and is server-only, so importing it from a client
- * component is a build error rather than a bundle-size question. Written from JS on
- * whichever host the browser is already on, for the same reason `lib/auth.ts` sets the
- * session cookie that way rather than having the API do it.
- */
-const LOCALE_COOKIE_NAME = "sh_locale";
-
-/** A year: a language choice is not a session, and should survive one. */
-const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+// The cookie is written from JS on whichever host the browser is already on, for the same
+// reason `lib/auth.ts` sets the session cookie that way rather than having the API do it.
 
 /**
  * "Ayesha Khan" → "AK". First and last only: a middle initial in a 32px circle is noise,

@@ -31,11 +31,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { ApiErrorAlert, unhandledEnvelopeError } from "@/features/academics/academics-error-alert";
 import type {
   AllocationLoadWarning,
   TeacherAllocationRecord,
 } from "@/features/academics/academics-types";
+import { ApiErrorAlert, unhandledEnvelopeError } from "@/components/api-error-alert";
 import { mapAllocationFieldErrors } from "@/features/academics/allocation-map-field-errors";
 import {
   allocationSchema,

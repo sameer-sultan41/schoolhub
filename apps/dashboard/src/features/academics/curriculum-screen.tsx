@@ -13,19 +13,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  EmptyState,
 } from "@schoolhub/ui";
 import { isCursorPagination } from "@schoolhub/types";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BookOpen } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
+import { FilterBar } from "@/components/filter-bar";
 import { ACADEMICS_PAGE_SIZE, ALL } from "@/features/academics/academics-constants";
-import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import { AcademicsNav } from "@/features/academics/academics-nav";
 import type { CurriculumRecord } from "@/features/academics/academics-types";
 import { CloneCurriculumDialog } from "@/features/academics/clone-curriculum-dialog";
@@ -107,15 +105,6 @@ export function CurriculumScreen() {
     [campuses.data],
   );
 
-  if (error) {
-    return (
-      <div className="space-y-4">
-        <AcademicsNav />
-        <ApiErrorAlert error={error} />
-      </div>
-    );
-  }
-
   const rows = data?.items ?? [];
   // /class-subjects paginates by cursor, never offset — narrowed for the same
   // reason staff-table.tsx narrows its own pagination meta.
@@ -195,73 +184,66 @@ export function CurriculumScreen() {
         </Can>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-48 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t("fields.academicSession")}
-          </span>
-          <Select value={academicSessionId} onValueChange={setAcademicSessionId}>
-            <SelectTrigger aria-label={t("fields.academicSession")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(sessions.data ?? []).map((session) => (
-                <SelectItem key={session.id} value={session.id}>
-                  {session.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("fields.class")}</span>
-          <Select value={classId} onValueChange={setClassId}>
-            <SelectTrigger aria-label={t("fields.class")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(classes.data ?? []).map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  {option.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("fields.campus")}</span>
-          <Select value={campusId} onValueChange={setCampusId}>
-            <SelectTrigger aria-label={t("fields.campus")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(campuses.data ?? []).map((campus) => (
-                <SelectItem key={campus.id} value={campus.id}>
-                  {campus.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t("curriculum.columns.kind")}
-          </span>
-          <Select value={isElective} onValueChange={setIsElective}>
-            <SelectTrigger aria-label={t("curriculum.columns.kind")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              <SelectItem value="false">{t("curriculum.core")}</SelectItem>
-              <SelectItem value="true">{t("curriculum.elective")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <FilterBar
+        selects={[
+          {
+            id: "academicSession",
+            label: t("fields.academicSession"),
+            value: academicSessionId,
+            onChange: setAcademicSessionId,
+            options: (sessions.data ?? []).map((session) => ({
+              value: session.id,
+              label: session.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+            className: "w-48",
+          },
+          {
+            id: "class",
+            label: t("fields.class"),
+            value: classId,
+            onChange: setClassId,
+            options: (classes.data ?? []).map((option) => ({
+              value: option.id,
+              label: option.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+          {
+            id: "campus",
+            label: t("fields.campus"),
+            value: campusId,
+            onChange: setCampusId,
+            options: (campuses.data ?? []).map((campus) => ({
+              value: campus.id,
+              label: campus.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+          {
+            id: "kind",
+            label: t("curriculum.columns.kind"),
+            value: isElective,
+            onChange: setIsElective,
+            options: [
+              { value: "false", label: t("curriculum.core") },
+              { value: "true", label: t("curriculum.elective") },
+            ],
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+        ]}
+        clearLabel={tCommon("clearFilters")}
+        onClear={() => {
+          setAcademicSessionId(ALL);
+          setClassId(ALL);
+          setCampusId(ALL);
+          setIsElective(ALL);
+        }}
+      />
 
       <DataTable
         columns={columns}
@@ -269,7 +251,19 @@ export function CurriculumScreen() {
         getRowId={(row) => row.id}
         caption={t("curriculum.list.caption")}
         isLoading={isPending}
-        emptyState={t("curriculum.list.empty")}
+        error={error ? <ApiErrorAlert error={error} /> : undefined}
+        emptyState={
+          <EmptyState
+            icon={BookOpen}
+            title={t("curriculum.list.emptyTitle")}
+            description={t("curriculum.list.emptyDescription")}
+            action={
+              <Can permission="academics.curriculum.create">
+                <CurriculumForm mode="create" />
+              </Can>
+            }
+          />
+        }
         pagination={{
           hasNext: Boolean(pagination?.next_cursor),
           hasPrevious: pager.hasPrevious,

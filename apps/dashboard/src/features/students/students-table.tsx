@@ -1,29 +1,19 @@
 "use client";
 
-import { ApiError, fetchPage } from "@schoolhub/api-client";
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  DataTable,
-  type DataTableColumn,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@schoolhub/ui";
+import { fetchPage } from "@schoolhub/api-client";
+import { Badge, Button, DataTable, type DataTableColumn, EmptyState } from "@schoolhub/ui";
 import { isCursorPagination } from "@schoolhub/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { GraduationCap } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
+import { FilterBar } from "@/components/filter-bar";
 import { IdCardBatchAction } from "@/features/students/id-card-batch-action";
-import { SEARCH_DEBOUNCE_MS, STUDENTS_PAGE_SIZE } from "@/features/students/student-constants";
+import { STUDENTS_PAGE_SIZE } from "@/features/students/student-constants";
 import type { StudentRecord, StudentStatus } from "@/features/students/student-types";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
 import { apiClient } from "@/lib/auth";
@@ -48,33 +38,21 @@ const ALL_STATUSES = "__all__";
 export function StudentsTable() {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
-  const tErrors = useTranslations("errors");
   const router = useRouter();
   const pager = useCursorPager();
 
   const [status, setStatus] = useState<StudentStatus | typeof ALL_STATUSES>(ALL_STATUSES);
+  // The COMMITTED search term only. FilterBar owns the draft the user is typing and the
+  // debounce that turns one into the other — this is what lands in the query key.
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  // Simple debounce: schedule the commit, clear it on every keystroke. The raw
-  // `search` value stays bound to the input so typing never lags; only
-  // `debouncedSearch` — the one that lands in the query key — is delayed.
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function onSearchChange(value: string) {
-    setSearch(value);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => {
-      setDebouncedSearch(value);
-    }, SEARCH_DEBOUNCE_MS);
-  }
 
   const filters = useMemo(
     () => ({
       ...(status !== ALL_STATUSES ? { status } : {}),
-      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(search ? { search } : {}),
     }),
-    [status, debouncedSearch],
+    [status, search],
   );
   pager.syncFilterKey(JSON.stringify(filters));
 
@@ -90,17 +68,6 @@ export function StudentsTable() {
       }),
     placeholderData: keepPreviousData,
   });
-
-  if (error instanceof ApiError) {
-    return (
-      <Alert variant="danger">
-        <AlertDescription>
-          {tErrors.has(error.code) ? tErrors(error.code) : error.message}
-          {error.requestId ? ` ${tErrors("requestId", { requestId: error.requestId })}` : ""}
-        </AlertDescription>
-      </Alert>
-    );
-  }
 
   const rows = data?.items ?? [];
   // /students paginates by cursor, never offset, but the API-client types
@@ -197,42 +164,32 @@ export function StudentsTable() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-48 flex-1 space-y-1">
-          <label htmlFor="students-search" className="text-xs font-medium text-muted-foreground">
-            {t("filters.search")}
-          </label>
-          <Input
-            id="students-search"
-            value={search}
-            onChange={(event) => {
-              onSearchChange(event.target.value);
-            }}
-            placeholder={t("list.searchPlaceholder")}
-          />
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("filters.status")}</span>
-          <Select
-            value={status}
-            onValueChange={(value) => {
+      <FilterBar
+        search={{
+          label: t("filters.search"),
+          placeholder: t("list.searchPlaceholder"),
+          value: search,
+          onChange: setSearch,
+        }}
+        selects={[
+          {
+            id: "status",
+            label: t("filters.status"),
+            value: status,
+            onChange: (value) => {
               setStatus(value as typeof status);
-            }}
-          >
-            <SelectTrigger aria-label={t("filters.status")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_STATUSES}>{t("filters.all")}</SelectItem>
-              {STATUSES.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {t(`status.${value}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+            },
+            options: STATUSES.map((value) => ({ value, label: t(`status.${value}`) })),
+            allLabel: t("filters.all"),
+            allValue: ALL_STATUSES,
+          },
+        ]}
+        clearLabel={tCommon("clearFilters")}
+        onClear={() => {
+          setSearch("");
+          setStatus(ALL_STATUSES);
+        }}
+      />
 
       <DataTable
         columns={columns}
@@ -240,7 +197,26 @@ export function StudentsTable() {
         getRowId={(row) => row.id}
         caption={t("list.caption")}
         isLoading={isPending}
-        emptyState={t("list.empty")}
+        // Wide table, scanned down one column rather than read row by row.
+        density="compact"
+        // The envelope goes into the table's own error slot rather than replacing the
+        // whole screen: the filter row above stays usable, so a failed request under a
+        // narrow filter can be widened without a reload.
+        error={error ? <ApiErrorAlert error={error} /> : undefined}
+        emptyState={
+          <EmptyState
+            icon={GraduationCap}
+            title={t("list.emptyTitle")}
+            description={t("list.emptyDescription")}
+            action={
+              <Can permission="students.student.create">
+                <Button asChild size="sm">
+                  <Link href="/students/new">{t("actions.create")}</Link>
+                </Button>
+              </Can>
+            }
+          />
+        }
         onRowClick={(row) => {
           router.push(`/students/${row.id}`);
         }}

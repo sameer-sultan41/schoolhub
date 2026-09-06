@@ -29,7 +29,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { ApiErrorAlert, unhandledEnvelopeError } from "@/features/academics/academics-error-alert";
+import { ApiErrorAlert, unhandledEnvelopeError } from "@/components/api-error-alert";
 import type { CurriculumRecord } from "@/features/academics/academics-types";
 import { mapCurriculumFieldErrors } from "@/features/academics/curriculum-map-field-errors";
 import {

@@ -97,7 +97,7 @@ describe("PeriodsScreen", () => {
     mockGet.mockResolvedValue(page([]));
     renderWithProviders(<PeriodsScreen />);
 
-    expect(await screen.findByText("No periods found.")).toBeInTheDocument();
+    expect(await screen.findByText("No bell schedule yet")).toBeInTheDocument();
   });
 
   it("filters by campus", async () => {
@@ -160,7 +160,7 @@ describe("PeriodsScreen", () => {
     expect(await screen.findByText(/conflicts with the current data/i)).toBeInTheDocument();
   });
 
-  it("renders the error envelope instead of the table on failure", async () => {
+  it("renders the error envelope in the table's error slot on failure", async () => {
     mockGet.mockRejectedValue(
       new ApiError({
         code: "server_error",
@@ -173,6 +173,9 @@ describe("PeriodsScreen", () => {
     renderWithProviders(<PeriodsScreen />);
 
     expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // The table stays put — the envelope now goes into its own error slot — but the
+    // empty state must NOT appear: a failed request is not an empty result set, and
+    // saying so would tell the reader something untrue about their own school.
+    expect(screen.queryByText("No bell schedule yet")).not.toBeInTheDocument();
   });
 });

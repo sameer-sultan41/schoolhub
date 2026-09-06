@@ -7,18 +7,17 @@ import {
   Button,
   DataTable,
   type DataTableColumn,
+  EmptyState,
   Input,
   Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from "@schoolhub/ui";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Repeat } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
+import { FilterBar } from "@/components/filter-bar";
 import { SubstitutionForm } from "@/features/timetable/substitution-form";
 import {
   ALL,
@@ -26,7 +25,6 @@ import {
   SUBSTITUTION_STATUS_BADGE,
   TIMETABLE_PAGE_SIZE,
 } from "@/features/timetable/timetable-constants";
-import { ApiErrorAlert } from "@/features/timetable/timetable-error-alert";
 import { TimetableNav } from "@/features/timetable/timetable-nav";
 import type { SubstitutionRecord } from "@/features/timetable/timetable-types";
 import { useTeachingStaffOptions } from "@/features/timetable/use-timetable-reference-data";
@@ -163,7 +161,31 @@ export function SubstitutionsScreen() {
         </Can>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
+      <FilterBar
+        selects={[
+          {
+            id: "status",
+            label: t("fields.status"),
+            value: status,
+            onChange: setStatus,
+            options: SUBSTITUTION_STATUSES.map((value) => ({
+              value,
+              label: t(`substitutions.status.${value}`),
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+        ]}
+        clearLabel={tCommon("clearFilters")}
+        // The date range is this screen's own control — FilterBar renders it in the same
+        // row but cannot know whether it is set, so say so explicitly.
+        extrasActive={Boolean(dateFrom || dateTo)}
+        onClear={() => {
+          setStatus(ALL);
+          setDateFrom("");
+          setDateTo("");
+        }}
+      >
         <div className="w-40 space-y-1">
           <Label htmlFor={fromId}>{t("substitutions.filters.from")}</Label>
           <Input
@@ -186,48 +208,40 @@ export function SubstitutionsScreen() {
             }}
           />
         </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("fields.status")}</span>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger aria-label={t("fields.status")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {SUBSTITUTION_STATUSES.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {t(`substitutions.status.${value}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      </FilterBar>
 
-      {error ? (
-        <ApiErrorAlert error={error} />
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          getRowId={(row) => row.id}
-          caption={t("substitutions.list.caption")}
-          isLoading={isPending}
-          emptyState={t("substitutions.list.empty")}
-          pagination={{
-            hasNext: Boolean(pagination?.next_cursor),
-            hasPrevious: pager.hasPrevious,
-            onNext: () => {
-              if (!isFetching) pager.onNext(pagination);
-            },
-            onPrevious: () => {
-              if (!isFetching) pager.onPrevious();
-            },
-            nextLabel: tCommon("next"),
-            previousLabel: tCommon("previous"),
-          }}
-        />
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        caption={t("substitutions.list.caption")}
+        isLoading={isPending}
+        error={error ? <ApiErrorAlert error={error} /> : undefined}
+        emptyState={
+          <EmptyState
+            icon={Repeat}
+            title={t("substitutions.list.emptyTitle")}
+            description={t("substitutions.list.emptyDescription")}
+            action={
+              <Can permission="timetable.substitution.create">
+                <SubstitutionForm />
+              </Can>
+            }
+          />
+        }
+        pagination={{
+          hasNext: Boolean(pagination?.next_cursor),
+          hasPrevious: pager.hasPrevious,
+          onNext: () => {
+            if (!isFetching) pager.onNext(pagination);
+          },
+          onPrevious: () => {
+            if (!isFetching) pager.onPrevious();
+          },
+          nextLabel: tCommon("next"),
+          previousLabel: tCommon("previous"),
+        }}
+      />
     </div>
   );
 }

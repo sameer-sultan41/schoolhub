@@ -33,8 +33,9 @@ import type {
   GuardianRelationship,
   StudentGuardianLink,
 } from "@/features/students/family-types";
-import { GUARDIAN_RELATIONSHIPS, SEARCH_DEBOUNCE_MS } from "@/features/students/student-constants";
+import { GUARDIAN_RELATIONSHIPS } from "@/features/students/student-constants";
 import { apiClient } from "@/lib/auth";
+import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-client";
 
 const GUARDIAN_STALE_TIME_MS = 5 * 60_000;

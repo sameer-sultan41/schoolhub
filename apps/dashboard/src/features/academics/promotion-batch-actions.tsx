@@ -4,8 +4,8 @@ import { Alert, AlertDescription, Button, Card, CardContent } from "@schoolhub/u
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
-import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import type {
   PromotionActionResult,
   PromotionExecutionReport,

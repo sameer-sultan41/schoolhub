@@ -20,3 +20,27 @@ export const DEFAULT_QUERY_STALE_TIME_MS = 30_000;
 export const DEFAULT_QUERY_GC_TIME_MS = 5 * 60_000;
 export const SESSION_QUERY_STALE_TIME_MS = 5 * 60_000;
 export const TENANT_QUERY_STALE_TIME_MS = 10 * 60_000;
+
+/**
+ * Debounce window for every list screen's search input — long enough to skip most
+ * keystrokes, short enough that the result still feels live.
+ *
+ * One constant rather than the per-module copies students and staff each kept: the
+ * feel of a search box is a property of the app, not of the roster it happens to be
+ * searching, and two constants meant two places to change it and one place to forget.
+ */
+export const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * Cookie next-intl resolves the locale from (`src/i18n/request.ts`).
+ *
+ * It lives here rather than beside that resolver because both a server module and a
+ * client one need the name: `i18n/request.ts` imports `next/headers` and is server-only,
+ * so a client component importing the constant from there is a build error rather than a
+ * bundle-size question. One definition, imported both ways, beats two strings that must
+ * silently agree.
+ */
+export const LOCALE_COOKIE_NAME = "sh_locale";
+
+/** A year: a language choice is not a session, and should outlive one. */
+export const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;

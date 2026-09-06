@@ -29,13 +29,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { ApiErrorAlert, unhandledEnvelopeError } from "@/components/api-error-alert";
 import { mapSubstitutionFieldErrors } from "@/features/timetable/substitution-map-field-errors";
 import {
   substitutionSchema,
   type SubstitutionFormValues,
 } from "@/features/timetable/substitution-schema";
 import { weekdayFromIsoDate } from "@/features/timetable/timetable-constants";
-import { ApiErrorAlert, unhandledEnvelopeError } from "@/features/timetable/timetable-error-alert";
 import type { SubstitutionRecord, TimetableSlotRecord } from "@/features/timetable/timetable-types";
 import {
   usePeriodOptions,

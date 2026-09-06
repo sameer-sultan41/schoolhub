@@ -13,21 +13,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  EmptyState,
   Input,
   Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from "@schoolhub/ui";
 import { isCursorPagination } from "@schoolhub/types";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { UserCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
+import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
+import { FilterBar } from "@/components/filter-bar";
 import { ACADEMICS_PAGE_SIZE, ALL } from "@/features/academics/academics-constants";
-import { ApiErrorAlert } from "@/features/academics/academics-error-alert";
 import { AcademicsNav } from "@/features/academics/academics-nav";
 import type { TeacherAllocationRecord } from "@/features/academics/academics-types";
 import { AllocationForm } from "@/features/academics/allocation-form";
@@ -199,99 +197,101 @@ export function AllocationsScreen() {
         </Can>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-48 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t("fields.academicSession")}
-          </span>
-          <Select value={academicSessionId} onValueChange={setAcademicSessionId}>
-            <SelectTrigger aria-label={t("fields.academicSession")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(sessions.data ?? []).map((session) => (
-                <SelectItem key={session.id} value={session.id}>
-                  {session.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("fields.section")}</span>
-          <Select value={sectionId} onValueChange={setSectionId}>
-            <SelectTrigger aria-label={t("fields.section")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(sections.data ?? []).map((section) => (
-                <SelectItem key={section.id} value={section.id}>
-                  {sectionLabels.get(section.id) ?? section.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("fields.subject")}</span>
-          <Select value={subjectId} onValueChange={setSubjectId}>
-            <SelectTrigger aria-label={t("fields.subject")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(subjects.data ?? []).map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  {option.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40 space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("fields.teacher")}</span>
-          <Select value={staffId} onValueChange={setStaffId}>
-            <SelectTrigger aria-label={t("fields.teacher")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-              {(staff.data ?? []).map((teacher) => (
-                <SelectItem key={teacher.id} value={teacher.id}>
-                  {`${teacher.first_name} ${teacher.last_name}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <FilterBar
+        selects={[
+          {
+            id: "academicSession",
+            label: t("fields.academicSession"),
+            value: academicSessionId,
+            onChange: setAcademicSessionId,
+            options: (sessions.data ?? []).map((session) => ({
+              value: session.id,
+              label: session.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+            className: "w-48",
+          },
+          {
+            id: "section",
+            label: t("fields.section"),
+            value: sectionId,
+            onChange: setSectionId,
+            options: (sections.data ?? []).map((section) => ({
+              value: section.id,
+              label: sectionLabels.get(section.id) ?? section.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+          {
+            id: "subject",
+            label: t("fields.subject"),
+            value: subjectId,
+            onChange: setSubjectId,
+            options: (subjects.data ?? []).map((option) => ({
+              value: option.id,
+              label: option.name,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+          {
+            id: "teacher",
+            label: t("fields.teacher"),
+            value: staffId,
+            onChange: setStaffId,
+            options: (staff.data ?? []).map((teacher) => ({
+              value: teacher.id,
+              label: `${teacher.first_name} ${teacher.last_name}`,
+            })),
+            allLabel: t("filters.all"),
+            allValue: ALL,
+          },
+        ]}
+        clearLabel={tCommon("clearFilters")}
+        onClear={() => {
+          setAcademicSessionId(ALL);
+          setSectionId(ALL);
+          setSubjectId(ALL);
+          setStaffId(ALL);
+        }}
+      />
 
-      {error ? (
-        <ApiErrorAlert error={error} />
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          getRowId={(row) => row.id}
-          caption={t("allocations.list.caption")}
-          isLoading={isPending}
-          emptyState={t("allocations.list.empty")}
-          pagination={{
-            hasNext: Boolean(pagination?.next_cursor),
-            hasPrevious: pager.hasPrevious,
-            onNext: () => {
-              if (!isFetching) pager.onNext(pagination);
-            },
-            onPrevious: () => {
-              if (!isFetching) pager.onPrevious();
-            },
-            nextLabel: tCommon("next"),
-            previousLabel: tCommon("previous"),
-          }}
-        />
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        caption={t("allocations.list.caption")}
+        isLoading={isPending}
+        // Wide table, scanned down one column rather than read row by row.
+        density="compact"
+        error={error ? <ApiErrorAlert error={error} /> : undefined}
+        emptyState={
+          <EmptyState
+            icon={UserCheck}
+            title={t("allocations.list.emptyTitle")}
+            description={t("allocations.list.emptyDescription")}
+            action={
+              <Can permission="academics.teacher-allocation.create">
+                <AllocationForm />
+              </Can>
+            }
+          />
+        }
+        pagination={{
+          hasNext: Boolean(pagination?.next_cursor),
+          hasPrevious: pager.hasPrevious,
+          onNext: () => {
+            if (!isFetching) pager.onNext(pagination);
+          },
+          onPrevious: () => {
+            if (!isFetching) pager.onPrevious();
+          },
+          nextLabel: tCommon("next"),
+          previousLabel: tCommon("previous"),
+        }}
+      />
 
       {academicSessionId === ALL ? (
         <p className="text-sm text-muted-foreground">{t("loadSummary.pickSession")}</p>
