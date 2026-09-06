@@ -1378,3 +1378,191 @@ REPORT_KINDS = (
 def assert_report_range(*, start_date: datetime.date, end_date: datetime.date) -> None:
     if end_date < start_date:
         raise DomainRuleViolation({"end_date": "The range ends before it starts."})
+
+
+# ---------------------------------------------------------------------------
+# Historical import (§9)
+# ---------------------------------------------------------------------------
+
+# The template's exact header names. Exact, not mapped: `student-management`'s
+# importer made the same call, and a column-mapping UI is a feature nobody has
+# asked for — the file comes out of a previous system once, during onboarding.
+IMPORT_COLUMNS = (
+    "admission_number",
+    "attendance_date",
+    "status",
+    "check_in_time",
+    "check_out_time",
+    "remarks",
+)
+REQUIRED_IMPORT_COLUMNS = ("admission_number", "attendance_date", "status")
+
+
+def parse_attendance_import(*, filename: str, data: bytes) -> list[dict[str, str]]:
+    """Parse a CSV or .xlsx register into row dicts keyed by IMPORT_COLUMNS.
+
+    Delegates to `student_management`'s parsers rather than growing a second
+    copy: they already handle the BOM Excel's "CSV UTF-8" adds and the
+    read-only/data-only workbook flags, and both are the kind of detail that is
+    silently wrong in a reimplementation.
+    """
+    from apps.student_management.services import parse_import_rows
+
+    return parse_import_rows(filename=filename, data=data)
+
+
+def import_attendance_row(
+    *,
+    row: dict[str, str],
+    row_number: int,
+    session: AcademicSession,
+    tenant_id: uuid.UUID,
+    actor_id: uuid.UUID,
+) -> dict[str, str] | None:
+    """Write one historical attendance row. Returns None, or a row-level error.
+
+    Each row commits independently, like the student importer: §9's journey is a
+    migration, and one bad line in ten thousand must not abort the batch — the
+    caller re-imports the failed rows from the error report.
+
+    **This path deliberately does not apply three rules the register does**, and
+    each omission is the point of having a separate path rather than reusing
+    `bulk_mark_student_attendance`:
+
+    1. **No calendar gate.** The tenant's *current* working week and holiday list
+       describe this year. A register migrated from three years ago was kept
+       against that year's calendar, and refusing rows against today's would
+       reject legitimate history — silently rewriting what a school's own records
+       say happened.
+    2. **No lock-window check.** Every imported row is historical by
+       construction, so the window has passed for all of them; enforcing it would
+       reject the entire file.
+    3. **No guardian alerts.** This is the most important of the three. Importing
+       a year of history must not email a parent about an absence from last March.
+       Writing rows directly is what guarantees that, rather than a flag on the
+       marking path that a later caller could forget to set.
+
+    Imported rows land **locked** (`is_locked=True`) and `source=import`: a
+    migrated register is not something a teacher edits at the register, and a
+    correction is the right way to change one. `AttendanceSource.IMPORT` was
+    declared and unreachable until now.
+    """
+    from apps.student_management.models import Student
+
+    missing = [column for column in REQUIRED_IMPORT_COLUMNS if not row.get(column)]
+    if missing:
+        return {"row": str(row_number), "field": missing[0], "issue": "This column is required."}
+
+    status_value = (row["status"] or "").strip().lower()
+    if status_value not in AttendanceStatus.values:
+        return {
+            "row": str(row_number),
+            "field": "status",
+            "issue": f"'{row['status']}' is not one of: {', '.join(AttendanceStatus.values)}.",
+        }
+    if status_value in SYSTEM_ONLY_STATUSES:
+        # The same rule the register and the correction flow enforce: `on_leave`
+        # means an approved leave request exists, and an import has none to point
+        # at. A migrated leave day is imported as `excused`.
+        return {
+            "row": str(row_number),
+            "field": "status",
+            "issue": "'on_leave' needs a leave request; import a migrated leave day as 'excused'.",
+        }
+
+    try:
+        on_date = datetime.date.fromisoformat(row["attendance_date"].strip())
+    except ValueError:
+        return {
+            "row": str(row_number),
+            "field": "attendance_date",
+            "issue": f"'{row['attendance_date']}' is not an ISO date (YYYY-MM-DD).",
+        }
+    if on_date > timezone.localdate():
+        return {
+            "row": str(row_number),
+            "field": "attendance_date",
+            "issue": "A historical import cannot carry a future date.",
+        }
+
+    check_in, error = _parse_import_time(row.get("check_in_time"), "check_in_time", row_number)
+    if error:
+        return error
+    check_out, error = _parse_import_time(row.get("check_out_time"), "check_out_time", row_number)
+    if error:
+        return error
+
+    student = (
+        Student.objects.alive().filter(admission_number=row["admission_number"].strip()).first()
+    )
+    if student is None:
+        return {
+            "row": str(row_number),
+            "field": "admission_number",
+            "issue": "No live student has this admission number.",
+        }
+
+    enrollment = (
+        StudentEnrollment.objects.alive()
+        .filter(student=student, academic_session=session)
+        .order_by("-enrollment_date")
+        .first()
+    )
+    if enrollment is None:
+        return {
+            "row": str(row_number),
+            "field": "admission_number",
+            "issue": "This student has no enrollment in the named session.",
+        }
+
+    late = (
+        calendar.late_minutes(check_in, campus_id=student.campus_id)
+        if status_value == AttendanceStatus.LATE and check_in is not None
+        else None
+    )
+
+    try:
+        with transaction.atomic():
+            StudentAttendance.objects.update_or_create(
+                student=student,
+                attendance_date=on_date,
+                period=None,
+                defaults={
+                    "tenant_id": tenant_id,
+                    "section": enrollment.section,
+                    "academic_session": session,
+                    "status": status_value,
+                    "check_in_time": check_in,
+                    "check_out_time": check_out,
+                    "late_minutes": late,
+                    "remarks": (row.get("remarks") or "").strip() or None,
+                    "source": AttendanceSource.IMPORT,
+                    "marked_by": actor_id,
+                    "is_locked": True,
+                    "created_by": actor_id,
+                    "updated_by": actor_id,
+                },
+            )
+    except IntegrityError:
+        return {
+            "row": str(row_number),
+            "field": "attendance_date",
+            "issue": "A conflicting record for this student and date already exists.",
+        }
+    return None
+
+
+def _parse_import_time(
+    raw: str | None, field: str, row_number: int
+) -> tuple[datetime.time | None, dict[str, str] | None]:
+    value = (raw or "").strip()
+    if not value:
+        return None, None
+    try:
+        return datetime.time.fromisoformat(value), None
+    except ValueError:
+        return None, {
+            "row": str(row_number),
+            "field": field,
+            "issue": f"'{value}' is not a time (HH:MM or HH:MM:SS).",
+        }

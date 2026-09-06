@@ -38,6 +38,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | -------------- | ----------- | ------------- |
 | `attendance.student-attendance.view` | View student attendance (record-scoped: `own`, `assigned`, `all`) | `teacher`, `class_teacher`, `principal`, `vice_principal`, `school_admin`, `student` (own), `guardian` (own children) |
 | `attendance.student-attendance.mark` | Mark/edit same-day student attendance | `teacher`, `class_teacher` |
+| `attendance.student-attendance.import` | Import a historical register during tenant onboarding (§9) | `it_admin` |
 | `attendance.staff-attendance.view` | View staff attendance (own for all staff; `all` for admin roles) | `hr_staff`, `school_admin`, `principal`; every staff role (own) |
 | `attendance.staff-attendance.mark` | Record staff check-in/out, late arrival, early departure | `hr_staff`, `school_admin` |
 | `attendance.correction.create` | Request a correction to a locked attendance record | `teacher`, `class_teacher`, `hr_staff` |
@@ -120,7 +121,7 @@ Approval chain is tenant-configurable (multi-tenancy doc §5); each step writes 
 - Staff check-in/out entries (manual now; device feed later).
 - Leave request form: leave type, date range, part-day flag, reason, optional file (via platform file upload flow).
 - Correction request form: target record, new values, reason.
-- CSV import of historical attendance during tenant onboarding (`attendance.student-attendance.import` granted to `it_admin` during migration — recommendation).
+- CSV import of historical attendance during tenant onboarding (`attendance.student-attendance.import` granted to `it_admin` during migration). **Built** — `POST /api/v1/student-attendance-imports`. The key was named here in prose and missing from §4's table; it is now in both.
 
 ## 10. Outputs
 
@@ -202,7 +203,8 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET/POST /api/v1/attendance-corrections` · `POST /api/v1/attendance-corrections/{id}:approve` · `:reject`
 - `GET/POST /api/v1/leave-requests` · `POST /api/v1/leave-requests/{id}:approve` · `:reject` · `:cancel`
 - `GET/POST/PATCH /api/v1/leave-types` · `/api/v1/leave-policies` · `GET /api/v1/leave-balances`
-- `GET /api/v1/reports/attendance-summary` — heavy exports return `202` + job resource per API doc §2.7.
+- `GET /api/v1/reports/attendance-summary` — heavy exports return `202` + job resource per API doc §2.7. `POST` to the same path always returns a job, in `format` = `csv` | `xlsx` | `pdf` (§6).
+- `POST /api/v1/student-attendance-imports` → `202` + job resource — §9's onboarding migration. **Not listed in this section originally**: §9 describes the capability and §4 (now) keys it, so the endpoint is declared here rather than left as a documented feature with no route.
 
 ## 17. Integration Requirements
 
@@ -248,7 +250,8 @@ marking (PR 1), the leave system (PR 2), staff attendance and reports (PR 3).**
 | §12 notifications | Five of six wired: `absence-alert`, `late-alert` (portal-enabled guardians, on commit), `leave-submitted` (whoever holds the current step's key), `leave-decision` (the submitter), `chronic-absence` (staff) |
 | §5.5 lock window | `tenant_settings.academic.attendance_lock_window_days`, clamped to §19's 0–7. Persisted nightly by `apps.attendance.tasks.lock_expired_attendance`; the service recomputes from the date and never trusts the column alone |
 | Feature flag | `module.attendance`, `default_enabled=False` |
-| §13 reports | All six — daily register, student summary, defaulters, student late arrivals, staff punctuality, leave — behind one `kind`-parameterised endpoint, with a 202 + job export lane. Every one asserted with `assertNumQueries` |
+| §13 reports | All six — daily register, student summary, defaulters, student late arrivals, staff punctuality, leave — behind one `kind`-parameterised endpoint, with a 202 + job export lane in all three of §6's formats (CSV, XLSX, PDF). Every one asserted with `assertNumQueries` |
+| §9 import | `POST /student-attendance-imports` → 202 + job, CSV or .xlsx, exact template headers, per-row error report on `GET /jobs/{id}` |
 | §18 outbound | Marking a teacher absent proposes cover for each published slot they hold that day, via `timetable.services.propose_substitutions_for_absence` |
 | Tests | Django: models, marking, leave, staff attendance, reports, API, leave API, cross-tenant, notifications, review regressions. E2E: `attendance-marking`, `attendance-leave` and `attendance-staff-reports` (live lane) |
 
@@ -339,10 +342,27 @@ rather than worked around, because the workaround would be a key nobody declared
   behind the `core/ai` gateway that does not exist. An arbitrary pick a human
   approves is honest; a hand-rolled ranking would be a worse version of a
   feature the doc already specifies properly.
-- **Exports are CSV only.** §6 names CSV/Excel/PDF. The rows are built once by
-  `tasks.build_report_rows` and written by one `csv.DictWriter`, so adding the
-  other two is a formatter, not a query — but shipping formats nobody has asked
-  for yet would be three code paths to keep correct instead of one.
+- ~~**Exports are CSV only.**~~ **All three of §6's formats now ship** —
+  `exports.py` renders one row shape as CSV, XLSX or PDF. Only the PDF carries a
+  row cap (`PDF_ROW_LIMIT`, 2000): a 40,000-row register is hundreds of pages
+  nobody opens, and the caller is told rather than handed a truncated document
+  that looks complete. PDF values are HTML-escaped — these are student and staff
+  names, and one containing `&` would otherwise break the table silently.
+- ~~**§9's historical CSV import.**~~ **Built**, as
+  `POST /student-attendance-imports`. It deliberately does **not** apply three
+  rules the register does, and each omission is why it is a separate path rather
+  than a flag on `bulk_mark_student_attendance`:
+  no calendar gate (today's working week and holidays describe *this* year; a
+  register migrated from three years ago was kept against that year's, and
+  refusing rows against today's would rewrite what the school's records say
+  happened), no lock-window check (every imported row is historical by
+  construction, so the window has passed for all of them), and — the important
+  one — **no guardian alerts**: importing a year of history must not email a
+  parent about an absence from last March. Imported rows land locked and
+  `source=import`, which makes `AttendanceSource.IMPORT` reachable for the first
+  time. Keyed to `it_admin`, not the marking roles: giving import to `teacher`
+  would make "rewrite any past register, bypassing the lock window and the
+  correction workflow" a routine classroom permission.
 - **§13's scheduled monthly register export** (§6) has no beat entry. It needs a
   per-tenant schedule, which is `reporting-analytics`' `report_schedules` — the
   module `CELERY_BEAT_SCHEDULE`'s own comment already names as the one that
@@ -352,10 +372,6 @@ rather than worked around, because the workaround would be a key nobody declared
   off-platform channel to reach; it waits on the in-app inbox surface rather than
   on any backend piece. Persisting rows nothing renders would be worse than the
   omission.
-- **§9's historical-attendance CSV import.** §9 names
-  `attendance.student-attendance.import` as a *recommendation* and §4's table does
-  not declare it, and §16 declares no endpoint — building it means inventing both.
-  `AttendanceSource.IMPORT` is reserved for it.
 - **`AttendanceSource.DEVICE`** — §6 and §21 reserve it for biometric/RFID so it
   arrives without a schema change. Nothing writes it.
 - **§14's four AI capabilities.** `core/ai` does not exist, and AGENTS.md hard

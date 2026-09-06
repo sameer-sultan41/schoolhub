@@ -2808,6 +2808,20 @@ paths:
           type: string
           format: date
       - in: query
+        name: format
+        schema:
+          enum:
+          - csv
+          - xlsx
+          - pdf
+          type: string
+          default: csv
+          minLength: 1
+        description: |-
+          * `csv` - csv
+          * `xlsx` - xlsx
+          * `pdf` - pdf
+      - in: query
         name: kind
         schema:
           enum:
@@ -2855,7 +2869,7 @@ paths:
     post:
       operationId: reports_attendance_summary_create
       description: |-
-        Always a job, however small.
+        Always a job, however small, in `format` (§6: CSV, XLSX or PDF).
 
         §13 lists export as its own capability and §4 keys it separately
         (`attendance.report.export`), so an export is a deliberate act with its
@@ -4267,6 +4281,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedStudentAttendanceList'
           description: ''
+  /api/v1/student-attendance-imports:
+    post:
+      operationId: student_attendance_imports_create
+      description: |-
+        `POST /student-attendance-imports` -> `202` + job — §9's migration import.
+
+        **The endpoint §16 does not list, for the key §4 did not table.** §9 names
+        both in prose — a "CSV import of historical attendance during tenant
+        onboarding", with `attendance.student-attendance.import` "granted to
+        `it_admin` during migration" — and §4's table omitted the row. The key is
+        registered in `permissions.py` and §4 is updated in the same PR, which is the
+        direction AGENTS.md's doc rule points; the alternative was leaving a
+        documented capability permanently unreachable.
+
+        No list or retrieve: the job is the only handle a caller needs, and
+        `GET /jobs/{id}` is where the row-level error report §9's journey asks for
+        shows up.
+
+        Keyed to `it_admin` rather than to the marking roles, deliberately. A teacher
+        marks today; an IT admin migrates a previous system's history once. Giving
+        the import key to `teacher` would make "rewrite any past register, bypassing
+        the lock window and the correction workflow" a routine classroom permission.
+      summary: Import a historical attendance register (CSV or .xlsx)
+      tags:
+      - student-attendance-imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttendanceImportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
   /api/v1/student-attendance/{id}:
     get:
       operationId: student_attendance_retrieve
@@ -6982,6 +7032,30 @@ components:
       description: |-
         * `student` - Student
         * `staff` - Staff
+    AttendanceImportRequest:
+      type: object
+      description: |-
+        `POST /student-attendance-imports` (multipart) — §9's onboarding migration.
+
+        The file rides in the job's own payload rather than through `core.files`'
+        two-step presigned flow, for the reason `StudentImportRequestSerializer`
+        gives: that flow exists for binary media served back to users later, and an
+        import file is read once into the job and never needs a signed URL.
+
+        `academic_session_id` is required and not defaulted to the current session —
+        unlike every other endpoint in this module. A historical register belongs to
+        a *past* session by definition, so falling back to "current" would file three
+        years of history under this year and be almost impossible to unpick.
+      properties:
+        file:
+          type: string
+          format: uri
+        academic_session_id:
+          type: string
+          format: uuid
+      required:
+      - academic_session_id
+      - file
     AttendanceReportQuery:
       type: object
       description: |-
@@ -7007,6 +7081,10 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+        format:
+          allOf:
+          - $ref: '#/components/schemas/FormatEnum'
+          default: csv
       required:
       - kind
       - start_date
@@ -7813,6 +7891,16 @@ components:
         * `pending` - Pending
         * `ready` - Ready
         * `quarantined` - Quarantined
+    FormatEnum:
+      enum:
+      - csv
+      - xlsx
+      - pdf
+      type: string
+      description: |-
+        * `csv` - csv
+        * `xlsx` - xlsx
+        * `pdf` - pdf
     GenderEnum:
       enum:
       - male

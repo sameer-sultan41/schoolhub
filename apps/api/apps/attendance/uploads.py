@@ -23,7 +23,24 @@ LEAVE_ATTACHMENT = registry.register(
 # task; `core/files/purposes.py`'s header is the argument for that.
 REPORT_EXPORT = registry.register(
     "attendance.report-export",
-    "A generated §13 attendance report (CSV).",
-    mime_types={"text/csv"},
+    "A generated §13 attendance report (CSV, XLSX or PDF).",
+    mime_types={
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/pdf",
+    },
     max_size_bytes=50 * MEGABYTE,
+)
+
+# The historical-attendance import §9 describes. Client-uploaded, unlike the
+# export above, so its MIME list is the gate `POST /files` enforces rather than
+# a description of what the server produced.
+ATTENDANCE_IMPORT = registry.register(
+    "attendance.import",
+    "A historical attendance register being migrated in during onboarding (§9).",
+    mime_types={
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+    max_size_bytes=10 * MEGABYTE,
 )

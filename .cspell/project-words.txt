@@ -209,6 +209,7 @@ Shoulds
 signups
 simplejwt
 smallint
+spreadsheetml
 sslmode
 stockouts
 subnetting

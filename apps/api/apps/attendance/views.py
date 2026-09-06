@@ -46,6 +46,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -69,6 +70,7 @@ from apps.attendance.models import (
 )
 from apps.attendance.serializers import (
     AttendanceCorrectionSerializer,
+    AttendanceImportRequestSerializer,
     AttendanceReportQuerySerializer,
     BulkMarkSerializer,
     CorrectionDecisionSerializer,
@@ -716,7 +718,7 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         responses={202: OpenApiResponse(description="A job resource; poll GET /jobs/{id}.")},
     )
     def post(self, request: Request) -> Response:
-        """Always a job, however small.
+        """Always a job, however small, in `format` (§6: CSV, XLSX or PDF).
 
         §13 lists export as its own capability and §4 keys it separately
         (`attendance.report.export`), so an export is a deliberate act with its
@@ -754,6 +756,7 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
                 "start_date": params["start_date"].isoformat(),
                 "end_date": params["end_date"].isoformat(),
                 "section_id": str(params["section_id"]) if params.get("section_id") else None,
+                "format": params.get("format", "csv"),
                 # The *requester*, so the job rebuilds the same record scope. Not
                 # the actor of the moment the worker runs, which is nobody.
                 "requested_by": str(request.user.pk),
@@ -769,3 +772,77 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         )
         record_audit(request, "export", job)
         return ActionResponse.accepted(str(job.pk), message=f"Report queued: {reason}.")
+
+
+_MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024
+
+
+class AttendanceImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
+    """`POST /student-attendance-imports` -> `202` + job — §9's migration import.
+
+    **The endpoint §16 does not list, for the key §4 did not table.** §9 names
+    both in prose — a "CSV import of historical attendance during tenant
+    onboarding", with `attendance.student-attendance.import` "granted to
+    `it_admin` during migration" — and §4's table omitted the row. The key is
+    registered in `permissions.py` and §4 is updated in the same PR, which is the
+    direction AGENTS.md's doc rule points; the alternative was leaving a
+    documented capability permanently unreachable.
+
+    No list or retrieve: the job is the only handle a caller needs, and
+    `GET /jobs/{id}` is where the row-level error report §9's journey asks for
+    shows up.
+
+    Keyed to `it_admin` rather than to the marking roles, deliberately. A teacher
+    marks today; an IT admin migrates a previous system's history once. Giving
+    the import key to `teacher` would make "rewrite any past register, bypassing
+    the lock window and the correction workflow" a routine classroom permission.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    required_feature = FEATURE
+    required_permission = "attendance.student-attendance.import"
+    parser_classes = [MultiPartParser]
+    serializer_class = AttendanceImportRequestSerializer
+
+    @extend_schema(
+        summary="Import a historical attendance register (CSV or .xlsx)",
+        request=AttendanceImportRequestSerializer,
+        responses={
+            202: OpenApiResponse(description="{'data': {'job_id': str, 'status': 'queued'}}")
+        },
+    )
+    def create(self, request: Request, *args, **kwargs) -> Response:
+        import base64
+
+        from apps.attendance.tasks import import_attendance_task
+        from core.jobs.services import attach_celery_task_id, create_job
+
+        payload = AttendanceImportRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        upload = payload.validated_data["file"]
+        session = payload.validated_data["academic_session"]
+
+        content = upload.read()
+        if len(content) > _MAX_IMPORT_FILE_BYTES:
+            raise DomainRuleViolation(
+                {"file": f"Import file exceeds the {_MAX_IMPORT_FILE_BYTES}-byte limit."}
+            )
+
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="attendance.import",
+            payload={
+                "filename": upload.name,
+                "content_base64": base64.b64encode(content).decode(),
+                "academic_session_id": str(session.pk),
+            },
+            actor_id=request.user.pk,
+        )
+        result = import_attendance_task.delay(
+            tenant_id=str(request.tenant.pk),
+            job_id=str(job.pk),
+            actor_id=str(request.user.pk),
+        )
+        attach_celery_task_id(job=job, celery_task_id=result.id)
+        record_audit(request, "import", job, after={"job_id": str(job.pk), "filename": upload.name})
+        return ActionResponse.accepted(str(job.pk), message="Historical import queued.")
