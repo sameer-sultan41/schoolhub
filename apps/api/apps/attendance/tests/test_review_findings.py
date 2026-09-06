@@ -16,6 +16,7 @@ from rest_framework import status
 
 from apps.attendance import services
 from apps.attendance.models import (
+    AttendanceCorrection,
     AttendanceStatus,
     CorrectionStatus,
     StudentAttendance,
@@ -38,7 +39,7 @@ from apps.attendance.tests.factories import (
     grant,
     open_all_week,
 )
-from core.api.exceptions import DomainRuleViolation
+from core.api.exceptions import Conflict, DomainRuleViolation
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -425,3 +426,99 @@ class EffectiveLockStateTests(AttendanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertFalse(response.data["is_locked"])
+
+
+class CorrectionDecisionLockingTests(AttendanceAPITestCase):
+    """The correction row is the audit trail, so the decision has to be atomic."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow_everything()
+        self.approver = UserFactory(tenant=self.tenant)
+        self.second_approver = UserFactory(tenant=self.tenant)
+        for user in (self.approver, self.second_approver):
+            grant(
+                user,
+                "attendance.correction.create",
+                "attendance.correction.approve",
+                scope=RecordScope.ALL,
+            )
+        configure_academic(
+            self.tenant, day_window={"start": "08:00", "end": "14:00", "grace_minutes": 10}
+        )
+        with tenant_context(self.tenant.id):
+            self.row = StudentAttendanceFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                section=self.section,
+                academic_session=self.session,
+                status=AttendanceStatus.ABSENT,
+                marked_by=self.user.pk,
+                is_locked=True,
+            )
+            self.correction = AttendanceCorrectionFactory(
+                tenant=self.tenant,
+                student_attendance=self.row,
+                requested_by=self.user.pk,
+                new_values={"status": AttendanceStatus.PRESENT.value},
+            )
+
+    def test_a_second_decision_on_a_decided_correction_is_refused(self) -> None:
+        """Both callers hold a *stale* in-memory row, which is the shape the race
+        produces: the second must re-read under the lock and see the first's
+        outcome rather than overwrite it."""
+        stale = AttendanceCorrection.objects.get(pk=self.correction.pk)
+
+        with tenant_context(self.tenant.id):
+            services.decide_correction(
+                correction=self.correction, approve=True, reviewer_id=self.approver.pk
+            )
+
+            with self.assertRaises(Conflict):
+                services.decide_correction(
+                    correction=stale, approve=False, reviewer_id=self.second_approver.pk
+                )
+
+            self.correction.refresh_from_db()
+            self.row.refresh_from_db()
+            self.assertEqual(self.correction.status, CorrectionStatus.APPROVED)
+            self.assertEqual(self.row.status, AttendanceStatus.PRESENT)
+
+    def test_a_time_only_correction_that_changes_nothing_is_refused(self) -> None:
+        """The guard compared a `datetime.time` against the ISO string the
+        serializer stores, so it never fired for a time-only proposal — a
+        correction proposing the exact same time was always accepted."""
+        with tenant_context(self.tenant.id):
+            self.row.status = AttendanceStatus.LATE
+            self.row.check_in_time = datetime.time(8, 30)
+            self.row.save(update_fields=["status", "check_in_time", "updated_at"])
+
+            with self.assertRaises(DomainRuleViolation):
+                services.request_correction(
+                    target=self.row,
+                    new_values={
+                        "status": AttendanceStatus.LATE.value,
+                        "check_in_time": "08:30:00",
+                    },
+                    reason="Proposing exactly what is already recorded.",
+                    actor_id=self.user.pk,
+                )
+
+    def test_a_time_only_correction_that_does_change_is_accepted(self) -> None:
+        """The control: the guard must not have become a blanket refusal."""
+        with tenant_context(self.tenant.id):
+            self.row.status = AttendanceStatus.LATE
+            self.row.check_in_time = datetime.time(8, 30)
+            self.row.save(update_fields=["status", "check_in_time", "updated_at"])
+
+            correction = services.request_correction(
+                target=self.row,
+                new_values={
+                    "status": AttendanceStatus.LATE.value,
+                    "check_in_time": "08:45:00",
+                },
+                reason="Arrived a quarter of an hour later than recorded.",
+                actor_id=self.user.pk,
+            )
+
+        self.assertEqual(correction.status, CorrectionStatus.PENDING)

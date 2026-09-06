@@ -512,8 +512,13 @@ def request_correction(
             {"new_values": f"Name at least one of: {', '.join(CORRECTABLE_FIELDS)}."}
         )
 
+    # Compared *after* normalisation, not before. The serializer stores times as
+    # ISO strings (so `_from_json` reads back exactly what a TimeField wrote),
+    # while `getattr` returns `datetime.time` — so a raw comparison of those two
+    # fields was never equal and the "values must differ" rule silently never
+    # fired for a time-only correction.
     old = {field: getattr(target, field) for field in proposed}
-    if all(old[field] == proposed[field] for field in proposed):
+    if _to_json(old) == _to_json(proposed):
         raise DomainRuleViolation({"new_values": "The proposed values match the record (§11)."})
 
     return AttendanceCorrection.objects.create(
@@ -546,7 +551,20 @@ def decide_correction(
     An approved correction applies ``new_values`` to the target **and the
     correction row stays**: §6 makes the row itself the audit trail, so it is
     never deleted and never rewritten.
+
+    **The correction row is locked before its status is read.** Only the target
+    attendance row was locked before, which left the decision itself racy: two
+    reviewers deciding the same correction in the same window both passed the
+    PENDING check, and the later commit won — so a correction could persist as
+    `rejected` after a concurrent `:approve` had already mutated the attendance
+    row and recomputed `late_minutes`. That is exactly the audit-trail guarantee
+    §6 asks this row to carry, so the lock belongs on the row that carries it.
     """
+    correction = (
+        AttendanceCorrection.objects.select_for_update()
+        .select_related("student_attendance")
+        .get(pk=correction.pk)
+    )
     if correction.status != CorrectionStatus.PENDING:
         raise Conflict(f"This correction was already {correction.status}.")
     if correction.requested_by == reviewer_id:
