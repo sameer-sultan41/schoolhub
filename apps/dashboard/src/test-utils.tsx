@@ -9,17 +9,16 @@ import type { ReactElement, ReactNode } from "react";
 import messages from "../messages/en.json";
 
 /**
- * Shared render wrapper: real English messages, a retry-disabled QueryClient, and the same
- * theme and motion providers `components/providers.tsx` mounts in production — a component
- * tested under a different provider tree is not the component that ships.
+ * Shared render wrapper: real English messages, a retry-disabled QueryClient, and the
+ * motion providers `components/providers.tsx` mounts in production — a component tested
+ * under a different provider tree is not the component that ships.
  *
- * Two deliberate differences from production:
- *  - `defaultTheme="light"`. Production defaults to "system", which in jsdom resolves
- *    through the stubbed `matchMedia` (always `matches: false`); pinning it removes a
- *    dependency on that stub from every test that renders anything themed.
- *  - `reducedMotion="always"`. Animations settle immediately, so assertions never race a
- *    transition. It also means every test exercises the reduced-motion branch, which is
- *    the branch most likely to be written and never looked at again.
+ * `reducedMotion="always"` is a deliberate difference from production: animations settle
+ * immediately, so assertions never race a transition, and every test exercises the
+ * reduced-motion branch — the branch most likely to be written once and never looked at
+ * again.
+ *
+ * `ThemeProvider` is NOT here; see `renderWithTheme` below for why.
  */
 export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -27,21 +26,44 @@ export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <NextIntlClientProvider locale="en" messages={messages} now={new Date("2026-01-01")}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          <MotionConfig reducedMotion="always">
-            {/* `strict` makes importing the full `motion` component a runtime error, so a
-                screen that reaches for it instead of `m` fails here rather than shipping
-                the 34kb bundle it was meant to avoid. */}
-            <LazyMotion features={domAnimation} strict>
-              <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-            </LazyMotion>
-          </MotionConfig>
-        </ThemeProvider>
+        <MotionConfig reducedMotion="always">
+          {/* `strict` makes importing the full `motion` component a runtime error, so a
+              screen that reaches for it instead of `m` fails here rather than shipping
+              the 34kb bundle it was meant to avoid. */}
+          <LazyMotion features={domAnimation} strict>
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+          </LazyMotion>
+        </MotionConfig>
       </NextIntlClientProvider>
     );
   }
 
   return { queryClient, ...render(ui, { wrapper: Wrapper, ...options }) };
+}
+
+/**
+ * `renderWithProviders` plus next-themes, for the handful of components that actually
+ * call `useTheme()`.
+ *
+ * Opt-in rather than part of the default wrapper because `ThemeProvider` renders an
+ * inline `<script>` — the one that sets the theme class before hydration and prevents a
+ * flash of the wrong theme. In a real page that script is invisible and load-bearing; in
+ * a test it lands inside RTL's `container` and makes it non-empty, which quietly breaks
+ * every `toBeEmptyDOMElement()` assertion in the suite. Those assertions are worth more
+ * than blanket theme context: nothing but the toggle and the toaster reads the theme in
+ * JS at all — every other component reads CSS custom properties, which jsdom does not
+ * resolve either way.
+ *
+ * `defaultTheme="light"` rather than production's "system" so the resolved theme does not
+ * depend on the stubbed `matchMedia`.
+ */
+export function renderWithTheme(ui: ReactElement, options?: RenderOptions) {
+  return renderWithProviders(
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      {ui}
+    </ThemeProvider>,
+    options,
+  );
 }
 
 /**

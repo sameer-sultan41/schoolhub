@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderWithProviders, resetTheme } from "@/test-utils";
+import { renderWithTheme, resetTheme } from "@/test-utils";
 import { ThemeToggle } from "./theme-toggle";
 
 describe("ThemeToggle", () => {
@@ -12,7 +12,7 @@ describe("ThemeToggle", () => {
   });
 
   it("offers light, dark and match-system", async () => {
-    renderWithProviders(<ThemeToggle />);
+    renderWithTheme(<ThemeToggle />);
     await userEvent.click(screen.getByRole("button", { name: "Change theme" }));
 
     expect(screen.getByRole("menuitemradio", { name: "Light" })).toBeInTheDocument();
@@ -21,7 +21,7 @@ describe("ThemeToggle", () => {
   });
 
   it("marks the active theme as checked", async () => {
-    renderWithProviders(<ThemeToggle />);
+    renderWithTheme(<ThemeToggle />);
     await userEvent.click(screen.getByRole("button", { name: "Change theme" }));
 
     expect(screen.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute(
@@ -31,7 +31,7 @@ describe("ThemeToggle", () => {
   });
 
   it("puts the chosen theme on the document element", async () => {
-    renderWithProviders(<ThemeToggle />);
+    renderWithTheme(<ThemeToggle />);
     await userEvent.click(screen.getByRole("button", { name: "Change theme" }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: "Dark" }));
 
@@ -43,7 +43,7 @@ describe("ThemeToggle", () => {
   });
 
   it("names itself for assistive tech rather than relying on the icon", () => {
-    renderWithProviders(<ThemeToggle />);
+    renderWithTheme(<ThemeToggle />);
 
     const trigger = screen.getByRole("button", { name: "Change theme" });
     expect(trigger).toBeInTheDocument();
