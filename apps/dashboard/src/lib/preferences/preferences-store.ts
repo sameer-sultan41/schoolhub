@@ -6,7 +6,7 @@ import {
   type PreferenceKey,
   type PreferenceValues,
 } from "./preferences-config";
-import { writePreferenceCookie } from "./preferences-cookies";
+import { writePreferenceCookie } from "./preferences-cookies.client";
 
 export interface PreferencesState {
   values: PreferenceValues;

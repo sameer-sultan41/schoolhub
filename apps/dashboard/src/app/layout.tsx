@@ -7,7 +7,7 @@ import { AppProviders } from "@/components/providers";
 import { PLATFORM_NAME } from "@/lib/constants";
 import { directionFor } from "@/lib/env";
 import { preferenceDataAttributes } from "@/lib/preferences/preferences-config";
-import { readPreferencesFromCookies } from "@/lib/preferences/preferences-cookies";
+import { readPreferencesFromCookies } from "@/lib/preferences/preferences-cookies.server";
 import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
 import "./globals.css";
 
