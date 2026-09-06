@@ -82,6 +82,59 @@ class PaginationEnvelopeTests(APITestCase):
         self.assertEqual(first_ids & second_ids, set(), "pages must not overlap")
 
 
+class CursorStabilityTests(APITestCase):
+    """A cursor page boundary must never fall inside a run of equal values.
+
+    `CursorPagination.get_ordering()` does not use its own `ordering` attribute when a
+    filter backend exposes `get_ordering` — it adopts that backend's result as the
+    cursor key. `OrderingFilter` is a project-wide default, so `?ordering=name` makes
+    `name` the cursor key on every list in the product.
+
+    DRF's cursor carries an `offset` to step over rows sharing the boundary value, but
+    that only resumes correctly if the query returns those rows in the same sequence
+    every time. `ORDER BY name` alone does not promise that. These five campuses share
+    one name, so the entire list is one tied run — the case where a non-deterministic
+    order costs rows.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        self.user = UserFactory(tenant=self.tenant)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+        grant(self.user, "school.campus.view")
+        with tenant_context(self.tenant.id):
+            for index in range(5):
+                CampusFactory(tenant=self.tenant, name="Shared Name", code=f"C{index}")
+
+    def _drain(self, path: str) -> list[str]:
+        """Every id the endpoint hands out, following its own cursors to the end."""
+        seen: list[str] = []
+        url = path
+        for _ in range(10):  # a cursor that never terminates is its own bug
+            page = self.client.get(url).json()
+            seen.extend(row["id"] for row in page["data"])
+            token = page["meta"]["pagination"]["next_cursor"]
+            if not token:
+                break
+            url = f"{path}&cursor={token}"
+        else:
+            self.fail("the cursor never terminated")
+        return seen
+
+    def test_paging_a_non_unique_ordering_loses_no_rows(self):
+        ids = self._drain("/api/v1/campuses?page_size=2&ordering=name")
+
+        self.assertEqual(len(ids), 5, "every row must appear exactly once")
+        self.assertEqual(len(set(ids)), 5, "no row may be served twice")
+
+    def test_paging_a_non_unique_descending_ordering_loses_no_rows(self):
+        ids = self._drain("/api/v1/campuses?page_size=2&ordering=-name")
+
+        self.assertEqual(len(ids), 5)
+        self.assertEqual(len(set(ids)), 5)
+
+
 class ErrorCodeContractTests(APITestCase):
     def test_the_client_knows_every_code_the_server_can_emit(self):
         from core.api.exceptions import Conflict, DomainRuleViolation, ModuleDisabled
