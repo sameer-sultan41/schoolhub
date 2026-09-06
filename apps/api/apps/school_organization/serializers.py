@@ -338,23 +338,27 @@ class HolidayEntrySerializer(serializers.Serializer):
     ``calendar.holiday_name`` — a closure an admin believes they configured and
     which never takes effect.
 
-    ``from``/``to`` are the wire names because that is what the entry looks like
-    on disk and what §16's filters call them; ``from`` is a Python keyword, hence
-    the ``source`` indirection rather than an attribute of that name.
+    ``start_date``/``end_date`` rather than §16's filter names ``from``/``to``:
+    ``from`` is a Python keyword, so it can be neither a serializer attribute nor
+    a comfortable key for any Python that later reads the stored entry. §16 uses
+    ``from``/``to`` for *query parameters*, which is a different namespace, and
+    those filters are not built (the resource is a singleton document).
     """
 
-    start_date = serializers.DateField(source="from")
-    end_date = serializers.DateField(source="to", required=False)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField(required=False)
     name = serializers.CharField(max_length=120)
     campus_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
     def validate(self, attrs: dict) -> dict:
-        # A single-day holiday may omit `to`; the calendar reader defaults it to
-        # `from`, and doing the same here keeps the stored shape uniform.
-        if attrs.get("to") is None:
-            attrs["to"] = attrs["from"]
-        if attrs["to"] < attrs["from"]:
-            raise serializers.ValidationError({"to": "A holiday cannot end before it starts."})
+        # A single-day holiday may omit `end_date`; defaulting it here keeps the
+        # stored shape uniform, so the calendar reader never has to guess.
+        if attrs.get("end_date") is None:
+            attrs["end_date"] = attrs["start_date"]
+        if attrs["end_date"] < attrs["start_date"]:
+            raise serializers.ValidationError(
+                {"end_date": "A holiday cannot end before it starts."}
+            )
         return attrs
 
     def validate_campus_id(self, value):

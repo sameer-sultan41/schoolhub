@@ -109,10 +109,10 @@ def holiday_name(day: datetime.date, *, campus_id: uuid.UUID | None = None) -> s
         scope = entry.get("campus_id")
         if scope is not None and scope != campus_ref:
             continue
-        start = _parse_date(entry.get("from"))
+        start = _parse_date(entry.get("start_date"))
         if start is None:
             continue
-        end = _parse_date(entry.get("to")) or start
+        end = _parse_date(entry.get("end_date")) or start
         if start <= day <= end:
             name = entry.get("name")
             return name if isinstance(name, str) and name else "Holiday"

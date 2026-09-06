@@ -6490,9 +6490,11 @@ components:
         ``calendar.holiday_name`` — a closure an admin believes they configured and
         which never takes effect.
 
-        ``from``/``to`` are the wire names because that is what the entry looks like
-        on disk and what §16's filters call them; ``from`` is a Python keyword, hence
-        the ``source`` indirection rather than an attribute of that name.
+        ``start_date``/``end_date`` rather than §16's filter names ``from``/``to``:
+        ``from`` is a Python keyword, so it can be neither a serializer attribute nor
+        a comfortable key for any Python that later reads the stored entry. §16 uses
+        ``from``/``to`` for *query parameters*, which is a different namespace, and
+        those filters are not built (the resource is a singleton document).
       properties:
         start_date:
           type: string

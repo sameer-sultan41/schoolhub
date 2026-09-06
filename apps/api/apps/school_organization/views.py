@@ -457,8 +457,8 @@ class HolidayCalendarView(TenantScopedViewSetMixin, APIView):
         if "holidays" in changes:
             academic["holidays"] = [
                 {
-                    "from": entry["from"].isoformat(),
-                    "to": entry["to"].isoformat(),
+                    "start_date": entry["start_date"].isoformat(),
+                    "end_date": entry["end_date"].isoformat(),
                     "name": entry["name"],
                     "campus_id": str(entry["campus_id"]) if entry.get("campus_id") else None,
                 }

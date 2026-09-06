@@ -47,7 +47,7 @@ Relationships: 1:1 `tenants`; referenced by website-cms and all modules for bran
 The implementation splits the spec's single `settings` column into named namespaces on the same
 row — `branding`, `academic`, `features` and `hr` — so each module reads a key it owns rather than
 one shared bag. `academic` carries the school calendar: `working_days` (weekday numbers, 0=Monday),
-`holidays` (`[{from, to, name, campus_id}]`, null `campus_id` = every campus) and `day_window`
+`holidays` (`[{start_date, end_date, name, campus_id}]`, null `campus_id` = every campus) and `day_window`
 (`{start, end, grace_minutes}`). `apps/school_organization/calendar.py` is the only reader;
 `attendance` refuses to mark on a non-working day and computes `late_minutes` from the window.
 

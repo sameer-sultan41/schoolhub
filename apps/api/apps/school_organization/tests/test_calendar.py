@@ -35,6 +35,19 @@ MONDAY = datetime.date(2026, 9, 7)
 FRIDAY = datetime.date(2026, 9, 4)
 
 
+def holiday(start: str, name: str, end: str | None = None, campus_id=None) -> dict:
+    """One entry in the stored (and wire) holiday shape.
+
+    A builder rather than literals at each call site: an entry is four keys, two
+    of which are almost always the same date, and the repetition buried what each
+    test was actually varying.
+    """
+    entry = {"start_date": start, "end_date": end or start, "name": name}
+    if campus_id is not None:
+        entry["campus_id"] = str(campus_id)
+    return entry
+
+
 def configure(tenant, academic: dict) -> None:
     """Write the tenant's academic configuration the way the endpoint would."""
     with tenant_context(tenant.id):
@@ -73,7 +86,7 @@ class WorkingDayTests(TestCase):
     def test_a_holiday_range_is_closed_on_both_ends(self) -> None:
         configure(
             self.tenant,
-            {"holidays": [{"from": "2026-12-24", "to": "2026-12-26", "name": "Winter break"}]},
+            {"holidays": [holiday("2026-12-24", "Winter break", end="2026-12-26")]},
         )
         with tenant_context(self.tenant.id):
             self.assertFalse(calendar.is_working_day(datetime.date(2026, 12, 24)))
@@ -83,7 +96,7 @@ class WorkingDayTests(TestCase):
             self.assertEqual(calendar.holiday_name(datetime.date(2026, 12, 25)), "Winter break")
 
     def test_a_single_day_holiday_needs_no_end_date(self) -> None:
-        configure(self.tenant, {"holidays": [{"from": "2026-09-07", "name": "Founders Day"}]})
+        configure(self.tenant, {"holidays": [holiday("2026-09-07", "Founders Day")]})
         with tenant_context(self.tenant.id):
             self.assertFalse(calendar.is_working_day(MONDAY))
 
@@ -92,16 +105,7 @@ class WorkingDayTests(TestCase):
             other = CampusFactory(tenant=self.tenant)
         configure(
             self.tenant,
-            {
-                "holidays": [
-                    {
-                        "from": "2026-09-07",
-                        "to": "2026-09-07",
-                        "name": "Founders Day",
-                        "campus_id": str(self.campus.pk),
-                    }
-                ]
-            },
+            {"holidays": [holiday("2026-09-07", "Founders Day", campus_id=self.campus.pk)]},
         )
         with tenant_context(self.tenant.id):
             self.assertFalse(calendar.is_working_day(MONDAY, campus_id=self.campus.pk))
@@ -112,7 +116,7 @@ class WorkingDayTests(TestCase):
         uses. A campus entry adds to the tenant-wide list, never replaces it."""
         configure(
             self.tenant,
-            {"holidays": [{"from": "2026-09-07", "to": "2026-09-07", "name": "National day"}]},
+            {"holidays": [holiday("2026-09-07", "National day")]},
         )
         with tenant_context(self.tenant.id):
             self.assertFalse(calendar.is_working_day(MONDAY, campus_id=self.campus.pk))
@@ -123,8 +127,8 @@ class WorkingDayTests(TestCase):
             self.tenant,
             {
                 "holidays": [
-                    {"from": "not-a-date", "name": "Typo"},
-                    {"from": "2026-09-07", "name": "Real"},
+                    {"start_date": "not-a-date", "name": "Typo"},
+                    holiday("2026-09-07", "Real"),
                 ]
             },
         )
@@ -133,7 +137,7 @@ class WorkingDayTests(TestCase):
 
     def test_another_tenants_calendar_is_not_visible(self) -> None:
         other_tenant = TenantFactory()
-        configure(other_tenant, {"holidays": [{"from": "2026-09-07", "name": "Theirs"}]})
+        configure(other_tenant, {"holidays": [holiday("2026-09-07", "Theirs")]})
         with tenant_context(self.tenant.id):
             self.assertIsNone(calendar.holiday_name(MONDAY))
             self.assertTrue(calendar.is_working_day(MONDAY))
@@ -210,7 +214,7 @@ class HolidayCalendarEndpointTests(APITestCase):
             self.url,
             {
                 "working_days": [0, 1, 2, 3, 4],
-                "holidays": [{"from": "2026-12-25", "to": "2026-12-25", "name": "Christmas"}],
+                "holidays": [holiday("2026-12-25", "Christmas")],
             },
             format="json",
         )
@@ -218,7 +222,7 @@ class HolidayCalendarEndpointTests(APITestCase):
 
         second = self.client.put(
             self.url,
-            {"holidays": [{"from": "2027-03-23", "to": "2027-03-23", "name": "Republic Day"}]},
+            {"holidays": [holiday("2027-03-23", "Republic Day")]},
             format="json",
         )
         self.assertEqual(second.status_code, 200)
@@ -232,7 +236,7 @@ class HolidayCalendarEndpointTests(APITestCase):
         `is_working_day` answers with."""
         self.client.put(
             self.url,
-            {"holidays": [{"from": "2026-09-07", "to": "2026-09-07", "name": "Founders Day"}]},
+            {"holidays": [holiday("2026-09-07", "Founders Day")]},
             format="json",
         )
         with tenant_context(self.tenant.id):
@@ -241,7 +245,7 @@ class HolidayCalendarEndpointTests(APITestCase):
     def test_a_range_that_ends_before_it_starts_is_refused(self) -> None:
         response = self.client.put(
             self.url,
-            {"holidays": [{"from": "2026-12-26", "to": "2026-12-24", "name": "Backwards"}]},
+            {"holidays": [holiday("2026-12-26", "Backwards", end="2026-12-24")]},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
@@ -260,16 +264,7 @@ class HolidayCalendarEndpointTests(APITestCase):
 
         response = self.client.put(
             self.url,
-            {
-                "holidays": [
-                    {
-                        "from": "2026-09-07",
-                        "to": "2026-09-07",
-                        "name": "Theirs",
-                        "campus_id": str(foreign_campus.pk),
-                    }
-                ]
-            },
+            {"holidays": [holiday("2026-09-07", "Theirs", campus_id=foreign_campus.pk)]},
             format="json",
         )
 
