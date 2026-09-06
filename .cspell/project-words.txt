@@ -89,6 +89,7 @@ greenvalley
 greppable
 healthcheck
 healthz
+hideable
 Hira
 homeroom
 hotspots

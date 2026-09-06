@@ -130,7 +130,10 @@
     --sh-color-warning: oklch(0.8 0.15 72);
     --sh-color-warning-foreground: oklch(0.19 0.03 72);
     --sh-color-danger: oklch(0.663 0.224 28.3);
-    --sh-color-danger-foreground: oklch(1 0 0);
+    /* Ink, not white: the spec's #FF453A is light enough that white on it is 3.41:1,
+       below AA. Dark ink on the same red is 5.46:1, and keeps the colour this palette
+       is identified by — matching what accent and warning already do in this arm. */
+    --sh-color-danger-foreground: oklch(0.19 0.03 28);
     --sh-color-info: oklch(0.7 0.15 255);
     --sh-color-info-foreground: oklch(0.19 0.03 255);
 
@@ -176,7 +179,10 @@
   --sh-color-warning: oklch(0.8 0.15 72);
   --sh-color-warning-foreground: oklch(0.19 0.03 72);
   --sh-color-danger: oklch(0.663 0.224 28.3);
-  --sh-color-danger-foreground: oklch(1 0 0);
+  /* Ink, not white: the spec's #FF453A is light enough that white on it is 3.41:1,
+     below AA. Dark ink on the same red is 5.46:1, and keeps the colour this palette
+     is identified by — matching what accent and warning already do in this arm. */
+  --sh-color-danger-foreground: oklch(0.19 0.03 28);
   --sh-color-info: oklch(0.7 0.15 255);
   --sh-color-info-foreground: oklch(0.19 0.03 255);
 

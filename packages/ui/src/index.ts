@@ -40,13 +40,24 @@ export type {
   ChartTooltipContentProps,
 } from "./components/chart";
 
+export { Checkbox } from "./components/checkbox";
+export type { CheckboxProps } from "./components/checkbox";
+
 export { DataTable } from "./components/data-table";
+export { DataTableColumnsMenu } from "./components/data-table-columns-menu";
 export type {
   DataTableColumn,
+  DataTableColumnVisibility,
+  DataTableCursorPagination,
+  DataTablePagePagination,
   DataTablePageSize,
   DataTableProps,
   DataTableSort,
 } from "./components/data-table";
+
+export { Pagination } from "./components/pagination";
+export type { PaginationProps } from "./components/pagination";
+export { getPageNumbers, PAGE_WINDOW_SIZE } from "./lib/page-numbers";
 
 export { EmptyState } from "./components/empty-state";
 export type { EmptyStateProps } from "./components/empty-state";

@@ -3,6 +3,8 @@ import type { ReactElement, ReactNode } from "react";
 import { DEFAULT_SKELETON_ROW_COUNT, INTERACTIVE_ELEMENT_SELECTOR } from "../lib/constants";
 import { cn } from "../lib/cn";
 import { Button } from "./button";
+import { DataTableColumnsMenu } from "./data-table-columns-menu";
+import { Pagination } from "./pagination";
 import { Skeleton } from "./skeleton";
 import {
   Table,
@@ -51,6 +53,23 @@ export interface DataTableColumn<TRow> {
   sortKey?: string;
   /** Column header for screen readers when `header` is an icon. */
   srLabel?: string;
+  /**
+   * Keeps the column out of the show/hide menu.
+   *
+   * For the two a reader must never lose: the selection checkbox, and the actions
+   * column. Hiding either leaves rows that can be looked at and not acted on, with no
+   * obvious way back — the menu that hid them is the only clue, and it is at the other
+   * end of the toolbar.
+   */
+  alwaysVisible?: true;
+  /**
+   * What this column shows while the page is loading. Defaults to a single bar.
+   *
+   * Worth setting wherever the real cell is not one line of text: a two-line person
+   * cell collapsing to one bar makes the table jump by a row's height the moment data
+   * arrives, which reads as a glitch rather than as loading.
+   */
+  skeleton?: ReactNode;
 }
 
 /**
@@ -177,6 +196,57 @@ export interface DataTableSort {
   sortDescendingLabel: (column: string) => string;
 }
 
+export interface DataTableCursorPagination {
+  mode?: "cursor";
+  hasNext: boolean;
+  hasPrevious: boolean;
+  onNext: () => void;
+  onPrevious: () => void;
+  nextLabel: string;
+  previousLabel: string;
+  /**
+   * Rendered at the start of the pagination row — "284 students".
+   *
+   * A slot rather than numbers, because the caller is the only one that can compute
+   * them: a total is opt-in per cursor endpoint (CountedCursorPagination), so a table
+   * that assumed one would print "of NaN" on every list that does not count.
+   */
+  summary?: ReactNode;
+  /** Rows per page. Omit and the control is not rendered. */
+  pageSize?: DataTablePageSize;
+}
+
+export interface DataTablePagePagination {
+  mode: "pages";
+  /** 1-based, matching the API's `?page=`. */
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  /**
+   * Rendered beside the pager — "11 - 20 of 243".
+   *
+   * Still a slot: the arithmetic is trivial but the WORDING is not, and this package
+   * has no i18n. The caller already holds the translated message and the page size.
+   */
+  summary?: ReactNode;
+  pageSize?: DataTablePageSize;
+  /** Labels for the pager. Required — no i18n in this package. */
+  label: string;
+  previousLabel: string;
+  nextLabel: string;
+  goToPageLabel: (page: number) => string;
+  morePagesLabel: string;
+}
+
+export interface DataTableColumnVisibility {
+  /** Column ids currently hidden. */
+  hidden: string[];
+  onChange: (hidden: string[]) => void;
+  /** Labels the trigger and the menu. Required — no i18n in this package. */
+  triggerLabel: string;
+  title: string;
+}
+
 export interface DataTablePageSize {
   value: number;
   options: number[];
@@ -215,6 +285,14 @@ export interface DataTableProps<TRow> {
    */
   error?: ReactNode;
   /**
+   * Show/hide columns. Omit and every column is always rendered.
+   *
+   * The hidden set lives in the caller so it can go in the URL alongside the filters —
+   * a column layout someone arranged is part of the view they would send to a
+   * colleague. `alwaysVisible` columns are never offered.
+   */
+  columnVisibility?: DataTableColumnVisibility;
+  /**
    * Server-side sorting. Omit and the headers stay plain text.
    *
    * The table renders the control and reports the intent; it never reorders `rows`
@@ -233,24 +311,16 @@ export interface DataTableProps<TRow> {
    * `onNext`/`onPrevious` are disabled automatically when their cursor is null.
    * `nextLabel`/`previousLabel` are required for the same reason as `emptyState`.
    */
-  pagination?: {
-    hasNext: boolean;
-    hasPrevious: boolean;
-    onNext: () => void;
-    onPrevious: () => void;
-    nextLabel: string;
-    previousLabel: string;
-    /**
-     * Rendered at the start of the pagination row — "Page 2 of 12", "284 students".
-     *
-     * A slot rather than numbers, because the caller is the only one that can compute
-     * them: a total is opt-in per endpoint here (CountedCursorPagination), so a table
-     * that assumed one would print "of NaN" on every list that does not count.
-     */
-    summary?: ReactNode;
-    /** Rows per page. Omit and the control is not rendered. */
-    pageSize?: DataTablePageSize;
-  };
+  /**
+   * How this list is paged, in whichever of the two shapes its endpoint supports.
+   *
+   * A discriminated union rather than one shape with optional halves: a cursor endpoint
+   * genuinely cannot supply a page number — a cursor knows what comes next, never where
+   * it is — so a single shape would have made `page` optional and pushed a runtime
+   * check into every caller. Omitting `mode` keeps the cursor behaviour, so the lists
+   * that still page by cursor did not have to change.
+   */
+  pagination?: DataTableCursorPagination | DataTablePagePagination;
   className?: string;
 }
 
@@ -272,11 +342,17 @@ export function DataTable<TRow>({
   onRowClick,
   pagination,
   sort,
+  columnVisibility,
   className,
 }: DataTableProps<TRow>) {
   // An error and an empty result are not the same thing, and a table that shows "No
   // students found." when the request actually failed is telling the reader something
   // untrue about their own school.
+  // Filter once, here: every loop below — header, skeleton, body — must agree on the
+  // column set, and three separate filters is how they stop agreeing.
+  const hidden = new Set(columnVisibility?.hidden ?? []);
+  const visibleColumns = columns.filter((column) => column.alwaysVisible || !hidden.has(column.id));
+
   const showEmpty = !isLoading && !error && rows.length === 0;
   const cellPadding = density === "compact" ? "py-2" : undefined;
 
@@ -284,20 +360,32 @@ export function DataTable<TRow>({
     <div className={cn("w-full space-y-4", className)}>
       {error}
 
+      {columnVisibility ? (
+        // Aligned to the end so it sits over the table's trailing edge rather than
+        // competing with the filter bar most screens put above this component.
+        <div className="flex justify-end">
+          <DataTableColumnsMenu columns={columns} visibility={columnVisibility} />
+        </div>
+      ) : null}
+
       <Table aria-busy={isLoading || undefined}>
         {caption ? <TableCaption className="sr-only">{caption}</TableCaption> : null}
         <TableHeader>
           <TableRow>
-            {columns.map((column) => (
+            {visibleColumns.map((column) => (
               <TableHead
                 key={column.id}
                 className={cn(numericHeaderClasses(column), column.className)}
                 aria-sort={ariaSort(column, sort)}
               >
-                {column.srLabel ? (
-                  <span className="sr-only">{column.srLabel}</span>
-                ) : sort && column.sortKey ? (
+                {/* sortKey wins over srLabel, which it did not before: an icon-headed
+                    column could declare a sortKey and silently never render a control,
+                    because the sr-only branch short-circuited first. SortButton takes
+                    srLabel as its accessible name, so both jobs are done at once. */}
+                {sort && column.sortKey ? (
                   <SortButton column={column} sort={sort} />
+                ) : column.srLabel ? (
+                  <span className="sr-only">{column.srLabel}</span>
                 ) : (
                   column.header
                 )}
@@ -309,9 +397,9 @@ export function DataTable<TRow>({
           {isLoading
             ? Array.from({ length: DEFAULT_SKELETON_ROW_COUNT }, (_, rowIndex) => (
                 <TableRow key={`skeleton-${rowIndex}`}>
-                  {columns.map((column) => (
+                  {visibleColumns.map((column) => (
                     <TableCell key={column.id}>
-                      <Skeleton className="h-4 w-2/3" />
+                      {column.skeleton ?? <Skeleton className="h-4 w-2/3" />}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -357,7 +445,7 @@ export function DataTable<TRow>({
                       : undefined
                   }
                 >
-                  {columns.map((column) => (
+                  {visibleColumns.map((column) => (
                     <TableCell
                       key={column.id}
                       className={cn(cellPadding, numericCellClasses(column), column.className)}
@@ -378,32 +466,45 @@ export function DataTable<TRow>({
       {showEmpty ? emptyState : null}
 
       {pagination ? (
-        // Summary and rows-per-page lead, the buttons trail. Wraps rather than
-        // scrolls: on a phone the two controls stack instead of pushing the Next
-        // button off the edge of the one row a reader needs to reach.
+        // Summary and rows-per-page lead, the pager trails. Wraps rather than scrolls:
+        // on a phone the two stack instead of pushing the pager off the edge of the one
+        // row a reader needs to reach.
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             {pagination.pageSize ? <PageSizeControl pageSize={pagination.pageSize} /> : null}
             {pagination.summary ?? null}
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={pagination.onPrevious}
-              disabled={!pagination.hasPrevious || isLoading}
-            >
-              {pagination.previousLabel}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={pagination.onNext}
-              disabled={!pagination.hasNext || isLoading}
-            >
-              {pagination.nextLabel}
-            </Button>
-          </div>
+          {pagination.mode === "pages" ? (
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              onPageChange={pagination.onPageChange}
+              label={pagination.label}
+              previousLabel={pagination.previousLabel}
+              nextLabel={pagination.nextLabel}
+              goToPageLabel={pagination.goToPageLabel}
+              morePagesLabel={pagination.morePagesLabel}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={pagination.onPrevious}
+                disabled={!pagination.hasPrevious || isLoading}
+              >
+                {pagination.previousLabel}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={pagination.onNext}
+                disabled={!pagination.hasNext || isLoading}
+              >
+                {pagination.nextLabel}
+              </Button>
+            </div>
+          )}
         </div>
       ) : null}
     </div>
