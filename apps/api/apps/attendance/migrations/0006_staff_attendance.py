@@ -24,7 +24,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('attendance', '0004_rls_policies'),
+        ('attendance', '0005_leave_source'),
         ('staff_management', '0002_rls_policies'),
         ('tenancy', '0005_tenantsettings_hr'),
     ]

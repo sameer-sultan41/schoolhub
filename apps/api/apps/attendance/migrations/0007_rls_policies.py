@@ -11,5 +11,5 @@ from core.tenancy.rls import rls_operations
 
 
 class Migration(migrations.Migration):
-    dependencies = [("attendance", "0005_staff_attendance")]
+    dependencies = [("attendance", "0006_staff_attendance")]
     operations = [*rls_operations("staff_attendance")]
