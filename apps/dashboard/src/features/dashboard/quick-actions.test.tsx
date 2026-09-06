@@ -1,12 +1,20 @@
 import type { PermissionKey } from "@schoolhub/types";
 import { screen } from "@testing-library/react";
-import { useSession } from "@/hooks/use-session";
+import { usePermission, useSession } from "@/hooks/use-session";
 import { makeUser, renderWithProviders } from "@/test-utils";
 import { QuickActions } from "./quick-actions";
 
-jest.mock("@/hooks/use-session", () => ({ useSession: jest.fn() }));
+// All three, not just `useSession`: `<Can>` reads `usePermission`/`useAnyPermission`
+// from this same module, and a factory naming only `useSession` replaces the other two
+// with undefined — which fails inside `Can`, not here, and reads as a product bug.
+jest.mock("@/hooks/use-session", () => ({
+  useSession: jest.fn(),
+  usePermission: jest.fn(() => false),
+  useAnyPermission: jest.fn(() => false),
+}));
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
+const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
 
 const EVERY_KEY: PermissionKey[] = [
   "students.student.create",
@@ -25,11 +33,13 @@ function signIn(permissions: PermissionKey[]) {
     error: null,
     refetch: jest.fn(),
   });
+  // Driven off the same list, so the gate and the card can never disagree: a test that
+  // grants nothing renders nothing.
+  mockUsePermission.mockImplementation((permission) => permissions.includes(permission));
 }
 
 describe("QuickActions", () => {
   beforeEach(() => {
-    mockUseSession.mockReset();
     signIn(EVERY_KEY);
   });
 

@@ -5,7 +5,7 @@ import type { TeacherLoadSummaryRow } from "@/features/academics/academics-types
 import { useSession } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
 import { apiResult, makeUser, renderWithProviders } from "@/test-utils";
-import { TeacherLoadChart } from "./teacher-load-chart";
+import { TeacherLoadChart, toTeacherLoadRows } from "./teacher-load-chart";
 
 jest.mock("@/hooks/use-session", () => ({ useSession: jest.fn() }));
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn() } }));
@@ -21,9 +21,8 @@ const FULL_ACCESS: PermissionKey[] = [
 
 const CURRENT_SESSION = { id: "sess-1", name: "2026-27", status: "active", is_current: true };
 
-/** Recharts marks, by the class names it puts on them — the same handles `packages/ui`'s own chart test uses. */
+/** Recharts marks, by the class names it puts on them — the same handle `packages/ui`'s own chart test uses. */
 const BAR = ".recharts-bar-rectangle";
-const CATEGORY_TICK = ".recharts-yAxis .recharts-cartesian-axis-tick-value";
 
 function makeRow(overrides: Partial<TeacherLoadSummaryRow> = {}): TeacherLoadSummaryRow {
   return {
@@ -85,7 +84,7 @@ describe("TeacherLoadChart", () => {
     expect(await screen.findByRole("img", { name: "Teaching load this week" })).toBeInTheDocument();
   });
 
-  it("draws one bar per teacher, heaviest first", async () => {
+  it("draws one bar per teacher", async () => {
     respond([
       makeRow({ staff_id: "a", name: "Ayesha Khan", weekly_periods: 18 }),
       makeRow({ staff_id: "b", name: "Bilal Ahmed", weekly_periods: 26, over_norm: true }),
@@ -97,11 +96,11 @@ describe("TeacherLoadChart", () => {
     await waitFor(() => {
       expect(container.querySelectorAll(BAR)).toHaveLength(3);
     });
-    expect([...container.querySelectorAll(CATEGORY_TICK)].map((tick) => tick.textContent)).toEqual([
-      "Bilal Ahmed",
-      "Chandni Raza",
-      "Ayesha Khan",
-    ]);
+    // The names are on the category axis in the running app, but Recharts places tick
+    // text from measured layout and `jest.setup.ts` stubs every element's
+    // `getBoundingClientRect` to a fixed 640×320 — so under jsdom those `<text>` nodes
+    // come back empty. The ordering is asserted against `toTeacherLoadRows` below, which
+    // is where this component actually decides it.
   });
 
   it("prints each figure beside its own bar rather than hiding it behind a hover", async () => {
@@ -178,7 +177,14 @@ describe("TeacherLoadChart", () => {
     respond([makeRow()], [{ ...CURRENT_SESSION, is_current: false }]);
     renderWithProviders(<TeacherLoadChart />);
 
-    expect(await screen.findByText("Ayesha Khan")).toBeInTheDocument();
+    // Asserted on the request rather than on the axis: which session was resolved is the
+    // decision, and the query parameter is where it is observable.
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith("/teacher-subject-allocations/load-summary", {
+        query: { academic_session_id: "sess-1" },
+      });
+    });
+    expect(await screen.findByText("18")).toBeInTheDocument();
   });
 
   it("reports a failed read through the error envelope", async () => {
@@ -191,5 +197,63 @@ describe("TeacherLoadChart", () => {
     expect(
       await screen.findByText("Something went wrong on our side. The team has been notified."),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * The ordering, the cut and the slot assignment, tested where they are decided.
+ *
+ * Recharts renders its category-axis text from measured layout, which jsdom has none of
+ * (`jest.setup.ts` stubs `getBoundingClientRect` to a fixed 640×320 for every element),
+ * so the rendered chart cannot answer "which teacher is on which row". The component
+ * hands that decision to this function, so this is the layer that can.
+ */
+describe("toTeacherLoadRows", () => {
+  it("orders by load, heaviest first, and breaks ties on name so the order is stable", () => {
+    const { visible } = toTeacherLoadRows([
+      makeRow({ staff_id: "a", name: "Ayesha Khan", weekly_periods: 18 }),
+      makeRow({ staff_id: "b", name: "Bilal Ahmed", weekly_periods: 26 }),
+      makeRow({ staff_id: "c", name: "Chandni Raza", weekly_periods: 22 }),
+      makeRow({ staff_id: "d", name: "Adnan Sethi", weekly_periods: 26 }),
+    ]);
+
+    expect(visible.map((row) => row.name)).toEqual([
+      "Adnan Sethi",
+      "Bilal Ahmed",
+      "Chandni Raza",
+      "Ayesha Khan",
+    ]);
+  });
+
+  it("caps the plot and counts what it left out", () => {
+    const { visible, remainder } = toTeacherLoadRows(
+      Array.from({ length: 11 }, (_, index) =>
+        makeRow({
+          staff_id: `staff-${String(index)}`,
+          name: `Teacher ${String(index)}`,
+          weekly_periods: 20 - index,
+        }),
+      ),
+    );
+
+    expect(visible).toHaveLength(8);
+    expect(remainder).toBe(3);
+    // The cut is by load, not by arrival: the eight heaviest are the eight that matter.
+    expect(visible.at(-1)?.load).toBe(13);
+  });
+
+  it("puts the exception in slot 5 and everything else in slot 1", () => {
+    const { visible, overNorm } = toTeacherLoadRows([
+      makeRow({ staff_id: "a", name: "Ayesha Khan", weekly_periods: 30, over_norm: true }),
+      makeRow({ staff_id: "b", name: "Bilal Ahmed", weekly_periods: 12 }),
+    ]);
+
+    expect(visible.map((row) => row.fill)).toEqual(["var(--color-overNorm)", "var(--color-load)"]);
+    // The same rows the callout names in words — colour is never the only carrier.
+    expect(overNorm.map((row) => row.name)).toEqual(["Ayesha Khan"]);
+  });
+
+  it("answers an empty, valid shape for no teachers at all", () => {
+    expect(toTeacherLoadRows([])).toEqual({ visible: [], overNorm: [], remainder: 0 });
   });
 });

@@ -41,13 +41,63 @@ const CHART_PADDING_PX = 24;
 /** Enough for a name at this type size; longer ones ellipsize rather than squeeze the plot. */
 const NAME_AXIS_WIDTH_PX = 120;
 
-interface LoadDatum {
+export interface LoadDatum {
   key: string;
   name: string;
   load: number;
   overNorm: boolean;
-  /** Read back by `ChartTooltipContent` so the tooltip's swatch matches the bar it describes. */
+  /**
+   * Colours the bar, and is read back by `ChartTooltipContent` so the tooltip's swatch
+   * matches the bar it describes. Resolves through `ChartContainer`'s custom properties
+   * to `--sh-color-chart-1` / `-5`.
+   */
   fill: string;
+}
+
+export interface TeacherLoadRows {
+  /** What the chart plots, heaviest first, capped at `DASHBOARD_MAX_ROWS`. */
+  visible: LoadDatum[];
+  /** The subset the callout names in words. A status is never left to a hue. */
+  overNorm: LoadDatum[];
+  /** How many teachers the cap left out. Zero hides the footer. */
+  remainder: number;
+}
+
+/**
+ * The load summary, ordered and cut to what a dashboard panel can show.
+ *
+ * Pure and exported so the decisions this component makes — the ordering, the top-N cut,
+ * the remainder count, which slot a bar gets — are tested where they can actually be
+ * observed. They cannot be observed through the rendered chart: Recharts' category axis
+ * needs real layout to place its tick text, and `jest.setup.ts` stubs
+ * `getBoundingClientRect` to a fixed 640×320 for every element, so under jsdom the axis
+ * renders its `<text>` nodes empty. Asserting on them would be asserting on a jsdom
+ * artefact, not on this screen (the labels are present in the running app).
+ *
+ * Ties break on name so the order is stable: two teachers on the same load must not swap
+ * places between renders.
+ */
+export function toTeacherLoadRows(rows: TeacherLoadSummaryRow[]): TeacherLoadRows {
+  const ordered = [...rows].sort(
+    (left, right) =>
+      right.weekly_periods - left.weekly_periods || left.name.localeCompare(right.name),
+  );
+
+  const visible = ordered.slice(0, DASHBOARD_MAX_ROWS).map<LoadDatum>((row) => ({
+    key: row.staff_id,
+    name: row.name,
+    load: row.weekly_periods,
+    overNorm: row.over_norm,
+    // Slot 1 for the series and slot 5 for the exception — fixed slots, assigned by
+    // meaning, never cycled and never by rank.
+    fill: row.over_norm ? "var(--color-overNorm)" : "var(--color-load)",
+  }));
+
+  return {
+    visible,
+    overNorm: visible.filter((row) => row.overNorm),
+    remainder: ordered.length - visible.length,
+  };
 }
 
 /**
@@ -111,17 +161,7 @@ export function TeacherLoadChart() {
     enabled: canView && sessionId !== null,
   });
 
-  const rows = useMemo(
-    () =>
-      [...(load.data ?? [])].sort(
-        (left, right) =>
-          right.weekly_periods - left.weekly_periods || left.name.localeCompare(right.name),
-      ),
-    [load.data],
-  );
-
-  // Slot 1 for the series and slot 5 for the exception — fixed slots, assigned by meaning
-  // and never cycled or ranked. Typed to the token: a literal colour here is a compile error.
+  // Typed to the token: a literal colour here is a compile error, not a review note.
   const chartConfig = useMemo<ChartConfig>(
     () => ({
       load: {
@@ -133,22 +173,13 @@ export function TeacherLoadChart() {
     [t],
   );
 
-  const visible = useMemo<LoadDatum[]>(
-    () =>
-      rows.slice(0, DASHBOARD_MAX_ROWS).map((row) => ({
-        key: row.staff_id,
-        name: row.name,
-        load: row.weekly_periods,
-        overNorm: row.over_norm,
-        fill: row.over_norm ? "var(--color-overNorm)" : "var(--color-load)",
-      })),
-    [rows],
+  const { visible, overNorm, remainder } = useMemo(
+    () => toTeacherLoadRows(load.data ?? []),
+    [load.data],
   );
 
   if (!canView) return null;
 
-  const remainder = rows.length - visible.length;
-  const overNorm = visible.filter((row) => row.overNorm);
   const error = sessions.error ?? load.error;
   const isPending =
     (canReadSessions && sessions.isPending) || (sessionId !== null && load.isPending);
@@ -211,10 +242,9 @@ export function TeacherLoadChart() {
                   content={<ChartTooltipContent valueFormatter={formatPeriods} />}
                 />
                 {/* No <Cell> children: Recharts v3 deprecates them and reads a `fill`
-                    field off each datum instead, which every row already carries (see
-                    `fill:` in the rows memo above). That is also what puts the right
-                    swatch in the tooltip, since ChartTooltipContent reads the same
-                    field. */}
+                    field off each datum instead, which every row already carries
+                    (`toTeacherLoadRows` sets it). That is also what puts the right swatch
+                    in the tooltip, since ChartTooltipContent reads the same field. */}
                 <Bar dataKey="load" fill="var(--color-load)" radius={4} maxBarSize={20}>
                   <LabelList
                     dataKey="load"

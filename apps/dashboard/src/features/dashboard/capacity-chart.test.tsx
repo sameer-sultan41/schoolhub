@@ -5,7 +5,7 @@ import type { ClassOption, SectionOption } from "@/features/students/enrollment-
 import { useSession } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
 import { apiResult, makeUser, renderWithProviders } from "@/test-utils";
-import { CapacityChart, sectionsInPayload } from "./capacity-chart";
+import { CapacityChart, sectionsInPayload, toCapacityRows } from "./capacity-chart";
 
 jest.mock("@/hooks/use-session", () => ({ useSession: jest.fn() }));
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn() } }));
@@ -17,7 +17,6 @@ const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 const FULL_ACCESS: PermissionKey[] = ["school.section.view", "school.class.view"];
 
 const BAR = ".recharts-bar-rectangle";
-const CATEGORY_TICK = ".recharts-yAxis .recharts-cartesian-axis-tick-value";
 
 const CLASSES: ClassOption[] = [
   { id: "c-5", name: "Grade 5", level: 5 },
@@ -95,7 +94,7 @@ describe("CapacityChart", () => {
     expect(screen.getByText("Capacity, in places")).toBeInTheDocument();
   });
 
-  it("sums section capacity per class, orders by class level, and labels each bar", async () => {
+  it("draws one bar per class and labels each with its own total", async () => {
     respond([
       makeSection({ id: "s1", class_id: "c-5", name: "A", capacity: 30 }),
       makeSection({ id: "s2", class_id: "c-5", name: "B", capacity: 28 }),
@@ -107,14 +106,14 @@ describe("CapacityChart", () => {
     await waitFor(() => {
       expect(container.querySelectorAll(BAR)).toHaveLength(2);
     });
-    // Grade 4 before Grade 5: entity order, not rank — a chart that reshuffles when a
-    // section is added is a chart nobody can read twice.
-    expect([...container.querySelectorAll(CATEGORY_TICK)].map((tick) => tick.textContent)).toEqual([
-      "Grade 4",
-      "Grade 5",
-    ]);
+    // Two sections of Grade 5 summed into one bar, and every bar carries its figure —
+    // a direct label, not a hover-only tooltip.
     expect(screen.getByText("58")).toBeInTheDocument();
     expect(screen.getByText("25")).toBeInTheDocument();
+    // The class names are on the category axis in the running app. Recharts places tick
+    // text from measured layout, and `jest.setup.ts` stubs every element's
+    // `getBoundingClientRect` to a fixed 640×320, so under jsdom those `<text>` nodes
+    // come back empty — the ordering is asserted against `toCapacityRows` below instead.
   });
 
   it("treats a null capacity as no places set aside rather than as zero students", async () => {
@@ -192,5 +191,96 @@ describe("sectionsInPayload", () => {
     expect(sectionsInPayload([])).toBeNull();
     expect(sectionsInPayload([{ dataKey: "capacity" }])).toBeNull();
     expect(sectionsInPayload([{ dataKey: "capacity", payload: { sections: "3" } }])).toBeNull();
+  });
+});
+
+/**
+ * The grouping, the ordering and the cut, tested where they are decided.
+ *
+ * The rendered chart cannot answer "which class is on which row" under jsdom — Recharts
+ * places its category-axis text from measured layout, and `jest.setup.ts` stubs
+ * `getBoundingClientRect` to a fixed 640×320 for every element. The component hands the
+ * decision to this function, so this is the layer that can.
+ */
+describe("toCapacityRows", () => {
+  it("sums every section's capacity into its class", () => {
+    const { visible } = toCapacityRows(
+      [
+        makeSection({ id: "s1", class_id: "c-5", capacity: 30 }),
+        makeSection({ id: "s2", class_id: "c-5", capacity: 28 }),
+        makeSection({ id: "s3", class_id: "c-4", capacity: 25 }),
+      ],
+      CLASSES,
+    );
+
+    expect(visible).toEqual([
+      { name: "Grade 4", level: 4, capacity: 25, sections: 1 },
+      { name: "Grade 5", level: 5, capacity: 58, sections: 2 },
+    ]);
+  });
+
+  it("orders by class level, never by size", () => {
+    // Grade 4 is the smaller class and still comes first: a class is an entity, and a
+    // chart that reshuffles when a section is added is a chart nobody can read twice.
+    const { visible } = toCapacityRows(
+      [
+        makeSection({ id: "s1", class_id: "c-5", capacity: 300 }),
+        makeSection({ id: "s2", class_id: "c-4", capacity: 5 }),
+      ],
+      CLASSES,
+    );
+
+    expect(visible.map((row) => row.name)).toEqual(["Grade 4", "Grade 5"]);
+  });
+
+  it("counts a null capacity as no places set aside, not as zero students", () => {
+    const { visible } = toCapacityRows(
+      [
+        makeSection({ id: "s1", class_id: "c-4", capacity: null }),
+        makeSection({ id: "s2", class_id: "c-4", capacity: 20 }),
+      ],
+      CLASSES,
+    );
+
+    // The section still counts towards the class; only its unset capacity adds nothing.
+    expect(visible).toEqual([{ name: "Grade 4", level: 4, capacity: 20, sections: 2 }]);
+  });
+
+  it("drops a class the reader cannot see rather than inventing a name for it", () => {
+    const { visible } = toCapacityRows(
+      [makeSection({ id: "s1", class_id: "c-hidden", capacity: 40 })],
+      CLASSES,
+    );
+
+    expect(visible).toEqual([]);
+  });
+
+  it("drops a class with no places recorded at all", () => {
+    const { visible } = toCapacityRows(
+      [makeSection({ id: "s1", class_id: "c-4", capacity: null })],
+      CLASSES,
+    );
+
+    expect(visible).toEqual([]);
+  });
+
+  it("caps the plot and counts what it left out", () => {
+    const manyClasses = Array.from({ length: 10 }, (_, index) => ({
+      id: `class-${String(index)}`,
+      name: `Grade ${String(index + 1)}`,
+      level: index + 1,
+    }));
+
+    const { visible, remainder } = toCapacityRows(
+      manyClasses.map((option, index) =>
+        makeSection({ id: `sec-${String(index)}`, class_id: option.id, capacity: 30 }),
+      ),
+      manyClasses,
+    );
+
+    expect(visible).toHaveLength(8);
+    expect(remainder).toBe(2);
+    // Cut from the top of the class order, so the footer count means "the highest two".
+    expect(visible.at(-1)?.name).toBe("Grade 8");
   });
 });

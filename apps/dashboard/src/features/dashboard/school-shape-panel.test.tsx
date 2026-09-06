@@ -1,15 +1,21 @@
 import { ApiError, type ApiResult } from "@schoolhub/api-client";
 import type { PermissionKey } from "@schoolhub/types";
 import { screen, waitFor } from "@testing-library/react";
-import { useSession } from "@/hooks/use-session";
+import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { apiResult, makeUser, renderWithProviders } from "@/test-utils";
+import { apiResult, renderWithProviders } from "@/test-utils";
 import { SchoolShapePanel } from "./school-shape-panel";
 
-jest.mock("@/hooks/use-session", () => ({ useSession: jest.fn() }));
+// `<Can>` is this panel's only permission surface — it never calls `useSession` itself.
+// Both gate hooks have to be stubbed: `Can` calls each one unconditionally, so a factory
+// that names only one replaces the other with undefined and throws inside `Can`.
+jest.mock("@/hooks/use-session", () => ({
+  usePermission: jest.fn(() => false),
+  useAnyPermission: jest.fn(() => false),
+}));
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn() } }));
 
-const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
+const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 
@@ -45,15 +51,9 @@ function countedPage(total: number | undefined): ApiResult<{ id: string }[]> {
   };
 }
 
+/** Grant exactly this list; every other key answers false, as `<Can>` would in production. */
 function signIn(permissions: PermissionKey[]) {
-  mockUseSession.mockReturnValue({
-    user: makeUser({ permissions }),
-    isLoading: false,
-    isAuthenticated: true,
-    isUnavailable: false,
-    error: null,
-    refetch: jest.fn(),
-  });
+  mockUsePermission.mockImplementation((permission) => permissions.includes(permission));
 }
 
 function respond({ studentTotal }: { studentTotal?: number } = { studentTotal: 1280 }) {
@@ -69,7 +69,6 @@ function respond({ studentTotal }: { studentTotal?: number } = { studentTotal: 1
 describe("SchoolShapePanel", () => {
   beforeEach(() => {
     mockGet.mockReset();
-    mockUseSession.mockReset();
     signIn(EVERY_KEY);
   });
 

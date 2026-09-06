@@ -38,13 +38,66 @@ const ROW_PITCH_PX = 36;
 const CHART_PADDING_PX = 24;
 const NAME_AXIS_WIDTH_PX = 96;
 
-interface CapacityDatum {
+export interface CapacityDatum {
   name: string;
   /** Sorts the bars; never drawn. Classes read in school order, not in size order. */
   level: number;
   capacity: number;
   /** Not plotted — the tooltip's label line reads it back off the hovered datum. */
   sections: number;
+}
+
+export interface CapacityRows {
+  /** What the chart plots, in class-level order, capped at `DASHBOARD_MAX_ROWS`. */
+  visible: CapacityDatum[];
+  /** How many classes the cap left out. Zero hides the footer. */
+  remainder: number;
+}
+
+/**
+ * Sections folded into their classes, ordered and cut to what a dashboard panel can show.
+ *
+ * Pure and exported so the decisions this component makes — the grouping, what a null
+ * capacity contributes, which rows survive, the ordering and the remainder — are tested
+ * where they can be observed. They cannot be observed through the rendered chart:
+ * Recharts' category axis needs real layout to place its tick text, and `jest.setup.ts`
+ * stubs `getBoundingClientRect` to a fixed 640×320 for every element, so under jsdom the
+ * axis renders its `<text>` nodes empty. That is a jsdom artefact — the class names are
+ * on the axis in the running app.
+ */
+export function toCapacityRows(sections: SectionOption[], classes: ClassOption[]): CapacityRows {
+  const byClass = new Map<string, { capacity: number; sections: number }>();
+  for (const section of sections) {
+    const entry = byClass.get(section.class_id) ?? { capacity: 0, sections: 0 };
+    // A null capacity means "unlimited" on the model, not zero — it contributes no
+    // places to a total that is explicitly about places set aside.
+    entry.capacity += section.capacity ?? 0;
+    entry.sections += 1;
+    byClass.set(section.class_id, entry);
+  }
+
+  const classById = new Map(classes.map((option) => [option.id, option]));
+
+  const ordered = [...byClass.entries()]
+    .flatMap<CapacityDatum>(([classId, entry]) => {
+      const option = classById.get(classId);
+      // A section whose class the reader cannot see is a scoping answer, not a row to
+      // invent a name for.
+      if (!option) return [];
+      return [
+        {
+          name: option.name,
+          level: option.level,
+          capacity: entry.capacity,
+          sections: entry.sections,
+        },
+      ];
+    })
+    .filter((row) => row.capacity > 0)
+    .sort((left, right) => left.level - right.level || left.name.localeCompare(right.name));
+
+  const visible = ordered.slice(0, DASHBOARD_MAX_ROWS);
+  return { visible, remainder: ordered.length - visible.length };
 }
 
 /**
@@ -105,38 +158,6 @@ export function CapacityChart() {
     gcTime: DASHBOARD_REFERENCE_GC_TIME_MS,
   });
 
-  const rows = useMemo<CapacityDatum[]>(() => {
-    const byClass = new Map<string, { capacity: number; sections: number }>();
-    for (const section of sections.data ?? []) {
-      const entry = byClass.get(section.class_id) ?? { capacity: 0, sections: 0 };
-      // A null capacity means "unlimited" on the model, not zero — it contributes no
-      // places to a total that is explicitly about places set aside.
-      entry.capacity += section.capacity ?? 0;
-      entry.sections += 1;
-      byClass.set(section.class_id, entry);
-    }
-
-    const classById = new Map((classes.data ?? []).map((option) => [option.id, option]));
-
-    return [...byClass.entries()]
-      .flatMap<CapacityDatum>(([classId, entry]) => {
-        const option = classById.get(classId);
-        // A section whose class the reader cannot see is a scoping answer, not a row to
-        // invent a name for.
-        if (!option) return [];
-        return [
-          {
-            name: option.name,
-            level: option.level,
-            capacity: entry.capacity,
-            sections: entry.sections,
-          },
-        ];
-      })
-      .filter((row) => row.capacity > 0)
-      .sort((left, right) => left.level - right.level || left.name.localeCompare(right.name));
-  }, [sections.data, classes.data]);
-
   const chartConfig = useMemo<ChartConfig>(
     () => ({
       capacity: {
@@ -147,10 +168,13 @@ export function CapacityChart() {
     [t],
   );
 
+  const { visible, remainder } = useMemo(
+    () => toCapacityRows(sections.data ?? [], classes.data ?? []),
+    [sections.data, classes.data],
+  );
+
   if (!canView) return null;
 
-  const visible = rows.slice(0, DASHBOARD_MAX_ROWS);
-  const remainder = rows.length - visible.length;
   const error = sections.error ?? classes.error;
   const isPending = sections.isPending || classes.isPending;
   const formatPlaces = (value: number) => formatCount(value, locale);

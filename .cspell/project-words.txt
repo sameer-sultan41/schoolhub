@@ -9,6 +9,7 @@
 # silence a real typo is not.
 ACMR
 Adeel
+Adnan
 ah
 AIGW
 allkeys
@@ -203,6 +204,7 @@ schemaname
 schoolhub
 schummar
 sess
+Sethi
 Shoulds
 signups
 simplejwt
