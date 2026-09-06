@@ -402,8 +402,13 @@ class EffectiveLockStateTests(AttendanceAPITestCase):
 
         response = self.client.get(f"/api/v1/student-attendance/{row.pk}")
 
+        # `response.data` on a *detail* route is the pre-render serializer output:
+        # the paginator builds the `{"data": ...}` envelope for a list, but a
+        # retrieve is only wrapped by `EnvelopeJSONRenderer` at render time, which
+        # the test client does not reach. Hence no `["data"]` here, unlike the
+        # list assertions elsewhere in this suite.
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertTrue(response.data["data"]["is_locked"])
+        self.assertTrue(response.data["is_locked"])
 
     def test_a_row_inside_the_window_still_reports_unlocked(self) -> None:
         with tenant_context(self.tenant.id):
@@ -419,4 +424,4 @@ class EffectiveLockStateTests(AttendanceAPITestCase):
         response = self.client.get(f"/api/v1/student-attendance/{row.pk}")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertFalse(response.data["data"]["is_locked"])
+        self.assertFalse(response.data["is_locked"])
