@@ -147,6 +147,18 @@ describe("Pagination", () => {
     );
   });
 
+  it("takes only the width it needs, so DataTable's footer keeps it beside the row summary", () => {
+    renderPagination();
+    const pager = screen.getByRole("navigation", { name: "Pagination" });
+
+    // shadcn's own root is `w-full justify-center`, which is right for a standalone pager
+    // centred under a page of content and wrong in the footer this one actually sits in:
+    // a full-width child of that wrapping flex row claims a line of its own and drops the
+    // pager below the "11 - 20 of 243" it is meant to sit next to.
+    expect(pager.className).not.toContain("w-full");
+    expect(pager.className).toContain("justify-center");
+  });
+
   it("distinguishes the current page by more than colour, from tokens only", () => {
     renderPagination({ page: 6, totalPages: 12 });
 

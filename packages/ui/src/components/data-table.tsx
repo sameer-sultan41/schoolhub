@@ -320,11 +320,6 @@ export interface DataTableProps<TRow> {
   toolbar?: ReactNode;
   onRowClick?: (row: TRow) => void;
   /**
-   * Cursor pagination controls (api-architecture.md §2.4). Omit for non-paginated tables.
-   * `onNext`/`onPrevious` are disabled automatically when their cursor is null.
-   * `nextLabel`/`previousLabel` are required for the same reason as `emptyState`.
-   */
-  /**
    * How this list is paged, in whichever of the two shapes its endpoint supports.
    *
    * A discriminated union rather than one shape with optional halves: a cursor endpoint
@@ -370,10 +365,16 @@ export function DataTable<TRow>({
   const showEmpty = !isLoading && !error && rows.length === 0;
   const cellPadding = density === "compact" ? "py-2" : undefined;
 
-  const columnsMenu = columnVisibility ? (
-    <DataTableColumnsMenu columns={columns} visibility={columnVisibility} />
-  ) : null;
-  const hasToolbar = toolbar !== undefined || columnsMenu !== null;
+  // Decided from what will actually RENDER, not from which props were passed. The menu
+  // returns null when every column is `alwaysVisible`, and a caller's toolbar is often a
+  // permission gate that renders null for this reader — either way, keying off the prop
+  // draws a bordered, padded bar above the header with nothing in it.
+  const hasHideableColumn = columns.some((column) => !column.alwaysVisible);
+  const columnsMenu =
+    columnVisibility && hasHideableColumn ? (
+      <DataTableColumnsMenu columns={columns} visibility={columnVisibility} />
+    ) : null;
+  const hasToolbar = Boolean(toolbar) || columnsMenu !== null;
 
   return (
     // One card holds the filter row, the table and the pager. `overflow-hidden` is what
@@ -504,7 +505,11 @@ export function DataTable<TRow>({
           become a bare string again. */}
       {showEmpty ? <div className="border-t border-border p-4">{emptyState}</div> : null}
 
-      {pagination ? (
+      {/* No footer under an empty state. A lone disabled "1" and a rows-per-page control
+          sit beneath a panel that has just said there is nothing here — and there is
+          nothing to page through and no rows to size. `total_pages` is 1 for an empty
+          result, not 0, so the pager cannot work this out on its own. */}
+      {pagination && !showEmpty ? (
         // Summary and rows-per-page lead, the pager trails. Wraps rather than scrolls:
         // on a phone the two stack instead of pushing the pager off the edge of the one
         // row a reader needs to reach.
