@@ -88,9 +88,13 @@ describe("ChartTooltipContent", () => {
     expect(screen.getByText("24 periods")).toBeInTheDocument();
   });
 
-  it("falls back to the series label from the config", () => {
+  it("names the series from the config rather than from the raw data key", () => {
     render(<ChartTooltipContentHarness />);
-    expect(screen.getByText("Periods taught")).toBeInTheDocument();
+
+    // Twice, and both are correct: once as the tooltip's own label line and once beside
+    // the value. What matters is that neither says "load".
+    expect(screen.getAllByText("Periods taught")).toHaveLength(2);
+    expect(screen.queryByText("load")).not.toBeInTheDocument();
   });
 });
 
