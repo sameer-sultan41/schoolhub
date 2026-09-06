@@ -10,6 +10,7 @@
 @import "@schoolhub/ui/styles/presets/tangerine.css";
 @import "@schoolhub/ui/styles/presets/soft-pop.css";
 @import "@schoolhub/ui/styles/presets/brutalist.css";
+@import "@schoolhub/ui/styles/presets/neon.css";
 
 /* Tailwind v4 auto-detects sources in this app; the shared package needs an explicit hint. */
 @source "../../../../packages/ui/src";

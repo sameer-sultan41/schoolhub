@@ -13,6 +13,13 @@
  * apps/website deliberately imports none of them — it has no switcher, and every page
  * there must wear its tenant's brand.
  */
-export const THEME_PRESETS = ["tenant", "ink-brass", "tangerine", "soft-pop", "brutalist"] as const;
+export const THEME_PRESETS = [
+  "tenant",
+  "ink-brass",
+  "tangerine",
+  "soft-pop",
+  "brutalist",
+  "neon",
+] as const;
 
 export type ThemePreset = (typeof THEME_PRESETS)[number];
