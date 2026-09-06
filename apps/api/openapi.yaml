@@ -2780,6 +2780,108 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/reports/attendance-summary:
+    get:
+      operationId: reports_attendance_summary_retrieve
+      description: |-
+        `GET /api/v1/reports/attendance-summary` — §13's six reports (§16).
+
+        **One endpoint with a `kind`, not six routes.** §16 declares exactly one
+        report URL, and the six differ in their rows rather than their shape: every
+        one is a flat list under a date range and a record scope.
+
+        **Small results come back inline; large ones return 202 and a job**
+        (api-architecture.md §2.7). The threshold is on row count rather than on the
+        report kind, because the same kind is both: a daily register is one section's
+        day, and the same query over a term is students x days.
+
+        Record scope is applied by `tasks.build_report_rows`, which the export job
+        calls too — so an exported CSV can never show more than the requester could
+        read inline. §13's closing line makes that a requirement, and a report is
+        read as authoritative, which is exactly why it is the worst place to lose a
+        scope.
+      summary: Run an attendance report
+      parameters:
+      - in: query
+        name: end_date
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: kind
+        schema:
+          enum:
+          - daily-register
+          - student-summary
+          - defaulters
+          - student-late-arrivals
+          - staff-punctuality
+          - leave
+          type: string
+          minLength: 1
+        description: |-
+          * `daily-register` - daily-register
+          * `student-summary` - student-summary
+          * `defaulters` - defaulters
+          * `student-late-arrivals` - student-late-arrivals
+          * `staff-punctuality` - staff-punctuality
+          * `leave` - leave
+        required: true
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+      - in: query
+        name: start_date
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: threshold
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: The report's rows, under `data`.
+    post:
+      operationId: reports_attendance_summary_create
+      description: |-
+        Always a job, however small.
+
+        §13 lists export as its own capability and §4 keys it separately
+        (`attendance.report.export`), so an export is a deliberate act with its
+        own permission — not "the same report, but bigger". Returning the bytes
+        inline for a small one would make the two paths differ by size, which is
+        the distinction the *reader* least expects.
+      summary: Export an attendance report as CSV
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceReportQuery'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttendanceReportQuery'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttendanceReportQuery'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: A job resource; poll GET /jobs/{id}.
   /api/v1/rooms:
     get:
       operationId: rooms_list
@@ -6880,6 +6982,34 @@ components:
       description: |-
         * `student` - Student
         * `staff` - Staff
+    AttendanceReportQuery:
+      type: object
+      description: |-
+        Query parameters for `GET /reports/attendance-summary` (§13, §16).
+
+        One endpoint with a `kind`, not six routes: §16 declares exactly one report
+        URL, and the six reports differ in their rows rather than in their shape —
+        every one is a flat list under a date range and a record scope.
+      properties:
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        section_id:
+          type: string
+          format: uuid
+          nullable: true
+        threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+      required:
+      - kind
+      - start_date
     AttendanceSourceEnum:
       enum:
       - manual
@@ -7883,6 +8013,22 @@ components:
           items:
             type: string
             format: uuid
+    KindEnum:
+      enum:
+      - daily-register
+      - student-summary
+      - defaulters
+      - student-late-arrivals
+      - staff-punctuality
+      - leave
+      type: string
+      description: |-
+        * `daily-register` - daily-register
+        * `student-summary` - student-summary
+        * `defaulters` - defaulters
+        * `student-late-arrivals` - student-late-arrivals
+        * `staff-punctuality` - staff-punctuality
+        * `leave` - leave
     LeaveApproval:
       type: object
       description: One step of §7.2's chain, nested on the request it belongs to.

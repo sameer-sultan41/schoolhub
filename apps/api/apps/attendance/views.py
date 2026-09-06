@@ -42,11 +42,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.attendance import services
 from apps.attendance.filters import (
@@ -67,6 +69,7 @@ from apps.attendance.models import (
 )
 from apps.attendance.serializers import (
     AttendanceCorrectionSerializer,
+    AttendanceReportQuerySerializer,
     BulkMarkSerializer,
     CorrectionDecisionSerializer,
     LeaveDecisionSerializer,
@@ -656,3 +659,109 @@ class StaffAttendanceViewSet(
         if staff.user_id and staff.user_id == request.user.pk:
             return StaffAttendanceSource.SELF
         return StaffAttendanceSource.MANUAL
+
+
+class AttendanceReportView(TenantScopedViewSetMixin, APIView):
+    """`GET /api/v1/reports/attendance-summary` — §13's six reports (§16).
+
+    **One endpoint with a `kind`, not six routes.** §16 declares exactly one
+    report URL, and the six differ in their rows rather than their shape: every
+    one is a flat list under a date range and a record scope.
+
+    **Small results come back inline; large ones return 202 and a job**
+    (api-architecture.md §2.7). The threshold is on row count rather than on the
+    report kind, because the same kind is both: a daily register is one section's
+    day, and the same query over a term is students x days.
+
+    Record scope is applied by `tasks.build_report_rows`, which the export job
+    calls too — so an exported CSV can never show more than the requester could
+    read inline. §13's closing line makes that a requirement, and a report is
+    read as authoritative, which is exactly why it is the worst place to lose a
+    scope.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    required_feature = FEATURE
+    required_permission = "attendance.report.view"
+    required_permission_map = {"post": "attendance.report.export"}
+    serializer_class = AttendanceReportQuerySerializer
+
+    @extend_schema(
+        summary="Run an attendance report",
+        parameters=[AttendanceReportQuerySerializer],
+        responses={200: OpenApiResponse(description="The report's rows, under `data`.")},
+    )
+    def get(self, request: Request) -> Response:
+        query = AttendanceReportQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        params = query.validated_data
+
+        rows = self._rows(request, params)
+        if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
+            return self._queue_export(request, params, reason="too many rows to return inline")
+
+        return Response(
+            {
+                "data": rows,
+                "meta": {"kind": params["kind"], "row_count": len(rows)},
+            }
+        )
+
+    @extend_schema(
+        summary="Export an attendance report as CSV",
+        request=AttendanceReportQuerySerializer,
+        responses={202: OpenApiResponse(description="A job resource; poll GET /jobs/{id}.")},
+    )
+    def post(self, request: Request) -> Response:
+        """Always a job, however small.
+
+        §13 lists export as its own capability and §4 keys it separately
+        (`attendance.report.export`), so an export is a deliberate act with its
+        own permission — not "the same report, but bigger". Returning the bytes
+        inline for a small one would make the two paths differ by size, which is
+        the distinction the *reader* least expects.
+        """
+        query = AttendanceReportQuerySerializer(data=request.data)
+        query.is_valid(raise_exception=True)
+        return self._queue_export(request, query.validated_data, reason="export requested")
+
+    @staticmethod
+    def _rows(request: Request, params: dict) -> list[dict]:
+        from apps.attendance.tasks import build_report_rows
+
+        return build_report_rows(
+            kind=params["kind"],
+            user=request.user,
+            start_date=params["start_date"],
+            end_date=params["end_date"],
+            section_id=str(params["section_id"]) if params.get("section_id") else None,
+        )
+
+    @staticmethod
+    def _queue_export(request: Request, params: dict, *, reason: str) -> Response:
+        from apps.attendance.tasks import export_attendance_report_task
+        from core.jobs.services import create_job
+
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="attendance.report-export",
+            payload={
+                "kind": params["kind"],
+                "start_date": params["start_date"].isoformat(),
+                "end_date": params["end_date"].isoformat(),
+                "section_id": str(params["section_id"]) if params.get("section_id") else None,
+                # The *requester*, so the job rebuilds the same record scope. Not
+                # the actor of the moment the worker runs, which is nobody.
+                "requested_by": str(request.user.pk),
+            },
+            actor_id=request.user.pk,
+        )
+        transaction.on_commit(
+            lambda: export_attendance_report_task.delay(
+                tenant_id=str(request.tenant.pk),
+                job_id=str(job.pk),
+                actor_id=str(request.user.pk),
+            )
+        )
+        record_audit(request, "export", job)
+        return ActionResponse.accepted(str(job.pk), message=f"Report queued: {reason}.")

@@ -1325,3 +1325,30 @@ def _queue_cover_proposals(*, staff: Staff, on_date: datetime.date, actor_id: uu
             actor_id=str(actor_id),
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Reports (§13)
+# ---------------------------------------------------------------------------
+
+# Above this many rows a report is built as a background job rather than served
+# inline (api-architecture.md §2.7). Chosen against the shape of the data rather
+# than a round number: a daily register is one section (~40 rows) and a term
+# summary is one school's students (hundreds), while a *term's* register is
+# students x days and runs to tens of thousands. The first two are a page; the
+# third is a download.
+SYNCHRONOUS_REPORT_ROW_LIMIT = 1000
+
+REPORT_KINDS = (
+    "daily-register",
+    "student-summary",
+    "defaulters",
+    "student-late-arrivals",
+    "staff-punctuality",
+    "leave",
+)
+
+
+def assert_report_range(*, start_date: datetime.date, end_date: datetime.date) -> None:
+    if end_date < start_date:
+        raise DomainRuleViolation({"end_date": "The range ends before it starts."})

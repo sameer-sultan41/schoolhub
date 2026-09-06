@@ -16,3 +16,14 @@ LEAVE_ATTACHMENT = registry.register(
     mime_types={"image/jpeg", "image/png", "application/pdf"},
     max_size_bytes=10 * MEGABYTE,
 )
+
+# Server-generated, never client-uploaded — `create_ready_file` writes it with
+# the bytes already in hand. Registered here anyway so the purpose is declared in
+# the one place this module declares purposes, rather than as a bare string in a
+# task; `core/files/purposes.py`'s header is the argument for that.
+REPORT_EXPORT = registry.register(
+    "attendance.report-export",
+    "A generated §13 attendance report (CSV).",
+    mime_types={"text/csv"},
+    max_size_bytes=50 * MEGABYTE,
+)

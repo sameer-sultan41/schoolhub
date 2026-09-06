@@ -1,24 +1,16 @@
 """Notification triggers and platform default templates — attendance.md §12.
 
-Six rows in the module doc; two are wired here. The four that are not, and what
-each waits on:
+Six rows in the module doc; **five are wired**. What they have in common is a
+recipient who is not already looking at the answer — a guardian who does not know
+their child is absent is the safeguarding case §2 names, a guardian waiting on a
+leave decision has no other way to learn of it, and a principal does not see a
+falling attendance rate unless something tells them.
 
-- `attendance.leave-submitted` and `attendance.leave-decision` need
-  `leave_requests` to exist, which is this module's second PR.
-- `attendance.correction-decision` is deliberately **not** wired even though the
-  correction flow ships in this PR. §12 sends it to the correction's requester,
-  who is a member of staff acting inside the dashboard — and unlike the guardian
-  alerts below, there is no off-platform recipient to reach. It waits on the
-  in-app inbox surface rather than on any backend piece; adding the trigger now
-  would persist rows nothing renders.
-- `attendance.chronic-absence` needs the threshold query §13's defaulter report
-  provides, which ships with the reports PR. A trigger with no way to detect its
-  own condition is a row in a catalog, not a notification.
-
-What the four wired ones have in common is a recipient who is not already
-looking at the answer: a guardian who does not know their child is absent is the
-safeguarding case §2 names, and a guardian waiting on a leave decision has no
-other way to learn of it.
+The one that is **not** wired is `attendance.correction-decision`, and it is
+deliberate. §12 sends it to the correction's requester, who is a member of staff
+acting inside the dashboard, with no off-platform channel to reach. It waits on
+the in-app inbox surface rather than on any backend piece; persisting rows
+nothing renders would be worse than the omission.
 """
 
 import logging
@@ -203,4 +195,52 @@ def notify_leave_decision(*, request) -> None:
         },
         source_type="leave_request",
         source_id=request.pk,
+    )
+
+
+CHRONIC_ABSENCE = "attendance.chronic-absence"
+
+_CHRONIC_VARS = {"student.first_name", "attendance_rate", "threshold"}
+
+catalog.register(
+    CHRONIC_ABSENCE,
+    template_code=CHRONIC_ABSENCE,
+    category=NotificationCategory.ATTENDANCE,
+    priority=NotificationPriority.HIGH,
+    channels={NotificationChannel.EMAIL},
+    variables=_CHRONIC_VARS,
+    description="A student's attendance fell below the tenant's defaulter threshold.",
+)
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
+    templates.register(
+        CHRONIC_ABSENCE,
+        channel=_channel,
+        subject="{{ student.first_name }}'s attendance is below {{ threshold }}%",
+        body=(
+            "{{ student.first_name }} is at {{ attendance_rate }}% attendance, below "
+            "the {{ threshold }}% threshold. §14's at-risk review starts here."
+        ),
+        variables=_CHRONIC_VARS,
+    )
+
+
+def notify_chronic_absence(*, tenant_id, recipients, student_name, rate, threshold) -> None:
+    """§12's chronic-absence row. Recipients are resolved by the caller.
+
+    Unlike the absence alert, this goes to *staff* — §12 names the class teacher
+    and principal — so there is no guardian link to walk here. The caller knows
+    which report produced the finding and therefore who asked for it; passing the
+    recipients in keeps this function from having to guess.
+    """
+    from core.notifications.services import notify
+
+    notify(
+        CHRONIC_ABSENCE,
+        tenant_id=tenant_id,
+        recipients=recipients,
+        context={
+            "student.first_name": student_name,
+            "attendance_rate": str(rate),
+            "threshold": str(threshold),
+        },
     )

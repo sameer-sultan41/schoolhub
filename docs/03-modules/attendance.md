@@ -230,25 +230,27 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 ## 20. Implementation status
 
-Built as three stacked PRs; this section is updated by each. **Marking (PR 1) and the leave
-system (PR 2) have landed; staff attendance and reports (PR 3) have not.**
+Built as three stacked PRs; this section is updated by each. **All three PRs have landed:
+marking (PR 1), the leave system (PR 2), staff attendance and reports (PR 3).**
 
 ### Built
 
-**PR 1 (marking) and PR 2 (leave) have landed.**
+**Complete.**
 
 | Area | State |
 | ---- | ----- |
-| Entities | `student_attendance`, `attendance_corrections`, `leave_types`, `leave_policies`, `leave_balances`, `leave_requests`, `leave_approvals` — all tenant-owned with RLS policies |
-| §16 endpoints | `GET /student-attendance` (filters: `date`, `date__gte`, `date__lte`, `section_id`, `student_id`, `period_id`, `status`; cursor paginated), `POST /student-attendance:bulk-mark` (accepts `Idempotency-Key`), `GET/POST /attendance-corrections`, `POST /attendance-corrections/{id}:approve` · `:reject`, `GET/POST /leave-requests`, `POST /leave-requests/{id}:approve` · `:reject` · `:cancel`, `GET /leave-types` (read-only — see below) |
+| Entities | All eight §15 tables — `student_attendance`, `staff_attendance`, `attendance_corrections`, `leave_types`, `leave_policies`, `leave_balances`, `leave_requests`, `leave_approvals` — tenant-owned with RLS policies |
+| §16 endpoints | `GET /student-attendance` (filters: `date`, `date__gte`, `date__lte`, `section_id`, `student_id`, `period_id`, `status`; cursor paginated), `POST /student-attendance:bulk-mark` (accepts `Idempotency-Key`), `GET/POST /attendance-corrections`, `POST /attendance-corrections/{id}:approve` · `:reject`, `GET/POST /leave-requests`, `POST /leave-requests/{id}:approve` · `:reject` · `:cancel`, `GET /leave-types` (read-only — see below), `GET/POST /staff-attendance`, `POST /staff-attendance/{id}:check-out`, `GET/POST /reports/attendance-summary` |
 | §4 permissions | All ten keys registered. `mark` was already in `core/rbac/registry.py`'s `EXTRA_ACTIONS` |
 | §11 validations (marking) | Not future-dated · not a weekend or holiday (via `school_organization.calendar`) · one row per student per date/period, enforced by two partial unique indexes · marker holds `assigned` scope for the section unless `all`-scoped · `late_minutes` computed server-side and a client value discarded · corrections need a locked target, a changed value, and an approver who is not the requester |
 | §11 validations (leave) | `start_date ≤ end_date` · no overlap with a *live* (pending or approved) request · attachment required where the type demands one · requester is the student or a portal-enabled linked guardian · `days_count` computed net of holidays and non-working days · `max_consecutive_days` honoured · approver ≠ submitter, **and no one person decides two levels of the same request** |
 | §7.2 approval chain | One level by default; a second when `days_count` exceeds `academic.student_leave_approval.escalation_threshold_days` (default 10, §8's fortnight). Approval auto-marks `on_leave` for the working days in range, skipping any date already marked. Cancellation before `start_date` withdraws the rows it wrote |
-| §12 notifications | `attendance.absence-alert` and `attendance.late-alert` (to portal-enabled guardians, on commit); `attendance.leave-submitted` (to whoever holds the current step's `required_permission`) and `attendance.leave-decision` (to the submitter — §12 names the requester, who is often a guardian acting for a child with no account) |
+| §12 notifications | Five of six wired: `absence-alert`, `late-alert` (portal-enabled guardians, on commit), `leave-submitted` (whoever holds the current step's key), `leave-decision` (the submitter), `chronic-absence` (staff) |
 | §5.5 lock window | `tenant_settings.academic.attendance_lock_window_days`, clamped to §19's 0–7. Persisted nightly by `apps.attendance.tasks.lock_expired_attendance`; the service recomputes from the date and never trusts the column alone |
 | Feature flag | `module.attendance`, `default_enabled=False` |
-| Tests | Django: models, marking, leave, API, leave API, cross-tenant, notifications. E2E: `attendance-marking.spec.ts` and `attendance-leave.spec.ts` (live lane) |
+| §13 reports | All six — daily register, student summary, defaulters, student late arrivals, staff punctuality, leave — behind one `kind`-parameterised endpoint, with a 202 + job export lane. Every one asserted with `assertNumQueries` |
+| §18 outbound | Marking a teacher absent proposes cover for each published slot they hold that day, via `timetable.services.propose_substitutions_for_absence` |
+| Tests | Django: models, marking, leave, staff attendance, reports, API, leave API, cross-tenant, notifications, review regressions. E2E: `attendance-marking`, `attendance-leave` and `attendance-staff-reports` (live lane) |
 
 ### Corrected in review
 
@@ -327,6 +329,24 @@ rather than worked around, because the workaround would be a key nobody declared
   becomes when a tenant edits a chain a request has already passed — the case
   hr-leave meets when it makes the chain editable mid-flight. Nothing here edits
   a chain after a request is raised.
+- **`SubstitutionStatus.completed` is still unreachable.** The cover *feed* now
+  exists, but "the covered period actually ran" needs a signal nothing emits —
+  the register records the student's presence, not the substitute teacher's
+  delivery of that period. Closing it means deciding what evidence counts, which
+  is a module-doc decision rather than a code one.
+- **Cover picks the first free substitute, not the best one.** §14's AI-TTB-03
+  is the ranked suggestion (workload balance, subject match) and is Phase 3 work
+  behind the `core/ai` gateway that does not exist. An arbitrary pick a human
+  approves is honest; a hand-rolled ranking would be a worse version of a
+  feature the doc already specifies properly.
+- **Exports are CSV only.** §6 names CSV/Excel/PDF. The rows are built once by
+  `tasks.build_report_rows` and written by one `csv.DictWriter`, so adding the
+  other two is a formatter, not a query — but shipping formats nobody has asked
+  for yet would be three code paths to keep correct instead of one.
+- **§13's scheduled monthly register export** (§6) has no beat entry. It needs a
+  per-tenant schedule, which is `reporting-analytics`' `report_schedules` — the
+  module `CELERY_BEAT_SCHEDULE`'s own comment already names as the one that
+  should bring `django-celery-beat` with it.
 - **Staff attendance** — §5.2, `staff_attendance`, `POST /staff-attendance` and
   `:check-out`. PR 3 of 3. `attendance_corrections` therefore has no
   `staff_attendance_id` column yet and its CHECK asserts the one target that

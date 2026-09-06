@@ -1178,6 +1178,51 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/reports/attendance-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run an attendance report
+         * @description `GET /api/v1/reports/attendance-summary` — §13's six reports (§16).
+         *
+         *     **One endpoint with a `kind`, not six routes.** §16 declares exactly one
+         *     report URL, and the six differ in their rows rather than their shape: every
+         *     one is a flat list under a date range and a record scope.
+         *
+         *     **Small results come back inline; large ones return 202 and a job**
+         *     (api-architecture.md §2.7). The threshold is on row count rather than on the
+         *     report kind, because the same kind is both: a daily register is one section's
+         *     day, and the same query over a term is students x days.
+         *
+         *     Record scope is applied by `tasks.build_report_rows`, which the export job
+         *     calls too — so an exported CSV can never show more than the requester could
+         *     read inline. §13's closing line makes that a requirement, and a report is
+         *     read as authoritative, which is exactly why it is the worst place to lose a
+         *     scope.
+         */
+        get: operations["reports_attendance_summary_retrieve"];
+        put?: never;
+        /**
+         * Export an attendance report as CSV
+         * @description Always a job, however small.
+         *
+         *     §13 lists export as its own capability and §4 keys it separately
+         *     (`attendance.report.export`), so an export is a deliberate act with its
+         *     own permission — not "the same report, but bigger". Returning the bytes
+         *     inline for a small one would make the two paths differ by size, which is
+         *     the distinction the *reader* least expects.
+         */
+        post: operations["reports_attendance_summary_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms": {
         parameters: {
             query?: never;
@@ -2944,6 +2989,24 @@ export interface components {
          */
         AttendanceCorrectionSubjectTypeEnum: "student" | "staff";
         /**
+         * @description Query parameters for `GET /reports/attendance-summary` (§13, §16).
+         *
+         *     One endpoint with a `kind`, not six routes: §16 declares exactly one report
+         *     URL, and the six reports differ in their rows rather than in their shape —
+         *     every one is a flat list under a date range and a record scope.
+         */
+        AttendanceReportQuery: {
+            kind: components["schemas"]["KindEnum"];
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date?: string;
+            /** Format: uuid */
+            section_id?: string | null;
+            /** Format: decimal */
+            threshold?: string;
+        };
+        /**
          * @description * `manual` - Manual
          *     * `system` - System
          *     * `import` - Import
@@ -3415,6 +3478,16 @@ export interface components {
         InviteRequest: {
             role_ids?: string[];
         };
+        /**
+         * @description * `daily-register` - daily-register
+         *     * `student-summary` - student-summary
+         *     * `defaulters` - defaulters
+         *     * `student-late-arrivals` - student-late-arrivals
+         *     * `staff-punctuality` - staff-punctuality
+         *     * `leave` - leave
+         * @enum {string}
+         */
+        KindEnum: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
         /** @description One step of §7.2's chain, nested on the request it belongs to. */
         LeaveApproval: {
             /** Format: uuid */
@@ -7393,6 +7466,62 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Period"];
                 };
+            };
+        };
+    };
+    reports_attendance_summary_retrieve: {
+        parameters: {
+            query: {
+                end_date?: string;
+                /**
+                 * @description * `daily-register` - daily-register
+                 *     * `student-summary` - student-summary
+                 *     * `defaulters` - defaulters
+                 *     * `student-late-arrivals` - student-late-arrivals
+                 *     * `staff-punctuality` - staff-punctuality
+                 *     * `leave` - leave
+                 */
+                kind: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
+                section_id?: string | null;
+                start_date: string;
+                threshold?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report's rows, under `data`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reports_attendance_summary_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceReportQuery"];
+                "application/x-www-form-urlencoded": components["schemas"]["AttendanceReportQuery"];
+                "multipart/form-data": components["schemas"]["AttendanceReportQuery"];
+            };
+        };
+        responses: {
+            /** @description A job resource; poll GET /jobs/{id}. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

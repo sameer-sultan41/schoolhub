@@ -18,7 +18,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | ---- | ------- | ------ |
 | 0 — Foundation | tenancy, auth/RBAC, [`school-organization`](03-modules/school-organization.md) | Done in substance — tenancy/RBAC/audit/API plumbing in `apps/api/core/`, `school_organization` Django app shipped and merged |
 | 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **Both full-stack complete** — `student-management` (PRs 1-4) and `staff-management` (this PR), see the per-module matrix below |
-| 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **In progress.** `academics` and `timetable` shipped; `attendance` is in flight as three stacked PRs (marking → leave → staff/reports), of which this is the first. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
+| 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **Backend complete.** `academics` and `timetable` shipped; `attendance` shipped as three stacked PRs (marking → leave → staff/reports). Dashboard screens for the tier are still outstanding. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
 | 3–7 | examinations, fees-finance, communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started (fees-finance has a spec-only PR: voucher/receipt/birthday-card docs) |
 
 ## Per-module implementation matrix
@@ -31,7 +31,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | academics | done (curriculum CRUD + `:clone`, teacher allocation + load summary, the promotion batch state machine with segregation of duties and idempotent execution) | — | live-lane API journeys + one promotion browser CUJ | done |
 | timetable | done (rooms/periods CRUD, draft slot grid with `meta.conflicts` on every edit, `:validate` / `:publish` with supersede-by-end-dating, `GET /timetables/my` for teacher/student/guardian, substitutions + `:approve`/`:reject`) | done (week grid editor, conflict panel, publish action, My timetable, substitutions queue) | live-lane API journeys + one build-and-publish browser CUJ | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
-| attendance | **marking + leave done** (register `:bulk-mark` with idempotent re-submission, the §5.5 lock window, corrections, guardian absence/late alerts, nightly lock sweep; the five leave tables, §7.2's escalating chain, auto-marking `on_leave`, cancellation). Staff attendance and §13's reports are PR 3 | — (backend-only; the dashboard agent owns screens) | live-lane API journeys for marking (mark → re-submit → read back, rejected row, future date) and leave (submit → approve → auto-mark, self-approval refused, cancel, overlap) | done |
+| attendance | **done** (register `:bulk-mark` with idempotent re-submission, the §5.5 lock window, corrections, guardian alerts, nightly lock sweep; the five leave tables, §7.2's escalating chain, auto-marking `on_leave`; staff attendance with `:check-out`, §13's six reports with a 202 export lane, and the absent-teacher cover feed into timetable) | — (backend-only; the dashboard agent owns screens) | live-lane API journeys for marking (mark → re-submit → read back, rejected row, future date) leave (submit → approve → auto-mark, self-approval refused, cancel, overlap) and staff/reports (record a day, check out, run a report, export as a job) | done |
 | everything else (13 modules) | — | — | — | done (spec exists; nothing implemented) |
 
 ---
@@ -92,13 +92,17 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   parent-portal is built entirely on that shape — needs `get_permissions`, not a
   class attribute. Full list in `03-modules/attendance.md` §20.
 
-- **`attendance` marking and leave have landed; staff attendance and reports have
-  not.** The module is three stacked PRs and two are in. `docs/03-modules/attendance.md`
-  §20 carries the full built/not-built register; the headline omissions are now
-  `staff_attendance` and §13's six reports (PR 3), §9's historical CSV import and
-  §14's four AI capabilities (both needing a doc decision or `core/ai`, neither of
-  which exists). `attendance_corrections` still has no `staff_attendance_id`
-  column, so its CHECK asserts the one target that exists and PR 3 widens it.
+- **`attendance` is complete.** All three stacked PRs landed. `docs/03-modules/attendance.md`
+  `03-modules/attendance.md` §20 carries the full built/not-built register; what
+  remains unbuilt is §9's historical CSV import (§4 keys nothing for it), §14's
+  four AI capabilities (`core/ai` does not exist), Excel/PDF export formats, and
+  §6's scheduled monthly export — which needs the per-tenant schedules
+  `reporting-analytics` is the module meant to bring.
+  **`SubstitutionStatus.completed` is still unreachable**, and it is worth being
+  precise about why: the cover *feed* now exists, but "the covered period
+  actually ran" needs a signal nothing emits — the register records a student's
+  presence, not a substitute's delivery of that period. Closing it is a
+  module-doc decision about what evidence counts, not a code change.
 - **The leave-table ownership conflict is settled and written into both docs.**
   `attendance` owns the five tables (`0003_leave_system.py`); `hr-leave` (Tier 6)
   adds none and layers staff policy, accrual and the editable approval engine on
@@ -116,14 +120,17 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   hr-leave. **Until then a tenant's leave types come from the seeds, not the
   API** — recorded rather than worked around, because the workaround is a key
   nobody declared.
+- **Phase 2 Tier 2 is backend-complete.** `academics`, `timetable` and
+  `attendance` have all shipped their APIs. The tier's dashboard screens are the
+  outstanding half, and are deliberately the other agent's — see the module-screens
+  note above.
 - **Two dangling UUID columns became real foreign keys**:
   `student_attendance.leave_request_id` and
   `timetable.TeacherSubstitution.leave_request_id`, the latter carrying a comment
   since PR #36 saying it was waiting for exactly this. Both migrations drop and
   re-add rather than alter, which is safe on these two only: neither could ever
   be written, so every row held NULL by construction. Both say so in their own
-  docstrings. `SubstitutionStatus.completed` is still unreachable — it waits on
-  PR 3's absent-teacher feed.
+  docstrings.
 
 - **The school calendar now exists** (this PR). `attendance` §11 requires that
   marking be refused on a tenant-configured holiday or non-working day, and
@@ -483,11 +490,10 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
    chain, and approved leave auto-marking `on_leave`. Both dangling
    `leave_request_id` columns became real FKs. `/leave-types` writes,
    `/leave-policies` and `/leave-balances` did **not** ship — see the gap above.
-   **PR 3: staff attendance and reports.** `staff_attendance` + `:check-out`,
-   the `attendance_corrections.staff_attendance_id` column and its widened
-   CHECK, §13's six reports with the 202 export lane, and the absent-teacher
-   feed into `timetable` that `SubstitutionStatus.completed` has been waiting
-   on.
+   **PR 3 (landed): staff attendance and reports.** `staff_attendance` +
+   `:check-out`, the `attendance_corrections.staff_attendance_id` column and its
+   widened CHECK, §13's six reports behind one `kind`-parameterised endpoint with
+   a 202 export lane, and the absent-teacher cover feed into `timetable`.
 9. **Two entity-ownership conflicts to settle before the modules that hit them.**
    Both module docs claim the same tables, and only one app can ship the
    migration:

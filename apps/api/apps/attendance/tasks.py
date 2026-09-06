@@ -21,6 +21,8 @@ from django.utils import timezone
 
 from apps.attendance import notifications, services
 from apps.attendance.models import AttendanceStatus, StudentAttendance
+from core.jobs.models import BackgroundJob
+from core.jobs.services import mark_failed, mark_running, mark_succeeded
 from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.tasks import TenantAwareTask
 
@@ -170,3 +172,116 @@ def propose_cover_for_absence(
     except Exception:
         logger.exception("cover proposal failed for staff %s on %s", staff_id, on_date)
         return {"proposed": 0}
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§13's export lane — the same rows the synchronous endpoint returns, as CSV.
+
+    The rows are recomputed here rather than carried in the job payload: a
+    payload big enough to hold a term's register is a payload big enough to be
+    the reason the export exists. `core.jobs`' own prune sweep already notes that
+    these rows carry base64 import payloads and are the heavier retention sweep.
+
+    **The scope is recomputed too, from the requesting user.** A report is read as
+    authoritative, so an export must not widen what its requester could see
+    inline — which it would if the job re-queried the table without the record
+    scope the endpoint applied.
+    """
+    import csv
+    import io
+
+    from core.files.services import create_ready_file
+    from core.rbac.models import User
+    from core.tenancy.context import tenant_atomic
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    try:
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            payload = job.payload
+            requester = User.objects.get(pk=payload["requested_by"])
+            rows = build_report_rows(
+                kind=payload["kind"],
+                user=requester,
+                start_date=datetime.date.fromisoformat(payload["start_date"]),
+                end_date=datetime.date.fromisoformat(payload["end_date"]),
+                section_id=payload.get("section_id"),
+            )
+
+            buffer = io.StringIO()
+            if rows:
+                writer = csv.DictWriter(buffer, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            else:
+                # A header-less empty file is indistinguishable from a failed
+                # export when someone opens it, so say so in the file itself.
+                buffer.write("no rows matched this report\n")
+
+            file = create_ready_file(
+                tenant_id=uuid.UUID(tenant_id),
+                purpose="attendance.report-export",
+                original_name=f"attendance-{payload['kind']}.csv",
+                mime_type="text/csv",
+                data=buffer.getvalue().encode(),
+                actor_id=uuid.UUID(actor_id),
+            )
+        mark_succeeded(job=job, result={"result_file_id": str(file.pk), "rows": len(rows)})
+    except Exception as exc:
+        # Same shape as student-management's export task: the job row is the only
+        # place a caller polling `GET /jobs/{id}` can learn this failed, so the
+        # failure has to be recorded rather than propagated into a retry.
+        mark_failed(job=job, error=str(exc))
+
+
+def build_report_rows(
+    *,
+    kind: str,
+    user,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    section_id: str | None = None,
+) -> list[dict]:
+    """Build one §13 report's rows under `user`'s record scope.
+
+    Shared by the endpoint and the export task so the two can never disagree —
+    which matters more here than usual, because a principal reads the inline
+    report and the exported CSV as the same document.
+    """
+    from apps.attendance import reports
+    from apps.attendance.models import LeaveRequest, RequesterType, StaffAttendance
+    from core.rbac.permissions import scope_queryset
+
+    if kind not in services.REPORT_KINDS:
+        raise ValueError(f"Unknown report kind {kind!r}")
+
+    if kind == "staff-punctuality":
+        scoped = scope_queryset(
+            StaffAttendance.objects.alive(), user, campus_field="staff__campus_id"
+        )
+        return reports.staff_punctuality(scoped, start_date=start_date, end_date=end_date)
+
+    if kind == "leave":
+        scoped = scope_queryset(
+            LeaveRequest.objects.alive().filter(requester_type=RequesterType.STUDENT),
+            user,
+            campus_field="student__campus_id",
+        )
+        return reports.leave_report(scoped, start_date=start_date, end_date=end_date)
+
+    scoped = scope_queryset(
+        StudentAttendance.objects.alive(), user, campus_field="section__campus_id"
+    )
+    if section_id:
+        scoped = scoped.filter(section_id=section_id)
+
+    if kind == "daily-register":
+        return reports.daily_register(scoped, on_date=start_date)
+    if kind == "defaulters":
+        return reports.defaulters(scoped, start_date=start_date, end_date=end_date)
+    if kind == "student-late-arrivals":
+        return reports.student_late_arrivals(scoped, start_date=start_date, end_date=end_date)
+    return reports.student_summary(scoped, start_date=start_date, end_date=end_date)

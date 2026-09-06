@@ -380,3 +380,28 @@ class StaffCheckOutSerializer(serializers.Serializer):
     """Body for `POST /staff-attendance/{id}:check-out` (§16)."""
 
     check_out_time = serializers.TimeField()
+
+
+class AttendanceReportQuerySerializer(serializers.Serializer):
+    """Query parameters for `GET /reports/attendance-summary` (§13, §16).
+
+    One endpoint with a `kind`, not six routes: §16 declares exactly one report
+    URL, and the six reports differ in their rows rather than in their shape —
+    every one is a flat list under a date range and a record scope.
+    """
+
+    kind = serializers.ChoiceField(choices=[(k, k) for k in services.REPORT_KINDS])
+    start_date = serializers.DateField()
+    end_date = serializers.DateField(required=False)
+    section_id = serializers.UUIDField(required=False, allow_null=True)
+    threshold = serializers.DecimalField(
+        max_digits=4, decimal_places=1, required=False, min_value=0, max_value=100
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        # A single-day report (the daily register) names one date; the rest take
+        # a range. Defaulting `end_date` to `start_date` means the register does
+        # not have to send the same date twice.
+        attrs.setdefault("end_date", attrs["start_date"])
+        services.assert_report_range(start_date=attrs["start_date"], end_date=attrs["end_date"])
+        return attrs

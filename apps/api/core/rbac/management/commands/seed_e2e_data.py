@@ -248,6 +248,11 @@ E2E_SCHOOL_ADMIN_PERMISSIONS = [
     "attendance.leave-request.view",
     "attendance.leave-request.create",
     "attendance.report.view",
+    "attendance.report.export",
+    # Staff attendance is `hr_staff`/`school_admin` in §4, and the live lane's
+    # admin identity is the one that records a day and checks a teacher out.
+    "attendance.staff-attendance.view",
+    "attendance.staff-attendance.mark",
     # The curriculum editor's Subject select and the allocation grid's Teacher select are
     # plain `GET /subjects` / `GET /staff` calls, each behind its own module's view key —
     # same reason the school_organization *.view keys above are here rather than assumed.
