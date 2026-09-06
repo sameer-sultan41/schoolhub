@@ -148,7 +148,9 @@ export function SchoolShapePanel() {
       <h2 id={titleId} className="font-heading text-base font-semibold text-foreground">
         {t("shape.title")}
       </h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Eight tiles read as a strip on a wide screen and as pairs on a phone. Two rows
+          of four was right at the foot of the page; directly under the hero, one row is. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
         {COUNT_TILES.map((tile) => (
           <Can key={tile.labelKey} permission={tile.permission}>
             <CountedTile tile={tile} />
