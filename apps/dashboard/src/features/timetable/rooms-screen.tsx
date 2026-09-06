@@ -29,6 +29,7 @@ import { TimetableNav } from "@/features/timetable/timetable-nav";
 import type { RoomRecord } from "@/features/timetable/timetable-types";
 import { useCampusOptions } from "@/features/timetable/use-timetable-reference-data";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
+import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -42,16 +43,18 @@ export function RoomsScreen() {
   const pager = useCursorPager();
 
   const campuses = useCampusOptions();
-  const [campusId, setCampusId] = useState<string>(ALL);
-  const [roomType, setRoomType] = useState<string>(ALL);
+  const table = useTableParams({
+    filterKeys: ["campus_id", "room_type"],
+    pageSize: TIMETABLE_PAGE_SIZE,
+    sortLabels: {
+      ascending: (column) => tCommon("sortAscending", { column }),
+      descending: (column) => tCommon("sortDescending", { column }),
+    },
+  });
+  const campusId = table.filter("campus_id");
+  const roomType = table.filter("room_type");
 
-  const filters = useMemo(
-    () => ({
-      ...(campusId !== ALL ? { campus_id: campusId } : {}),
-      ...(roomType !== ALL ? { room_type: roomType } : {}),
-    }),
-    [campusId, roomType],
-  );
+  const filters = table.query;
   pager.syncFilterKey(JSON.stringify(filters));
 
   const { data, isPending, isFetching, error } = useQuery({
@@ -61,7 +64,6 @@ export function RoomsScreen() {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: TIMETABLE_PAGE_SIZE,
         },
       }),
     placeholderData: keepPreviousData,
@@ -77,8 +79,8 @@ export function RoomsScreen() {
     data?.pagination && isCursorPagination(data.pagination) ? data.pagination : undefined;
 
   const columns: DataTableColumn<RoomRecord>[] = [
-    { id: "code", header: t("fields.code"), cell: (row) => row.code },
-    { id: "name", header: t("fields.name"), cell: (row) => row.name },
+    { id: "code", header: t("fields.code"), cell: (row) => row.code, sortKey: "code" },
+    { id: "name", header: t("fields.name"), cell: (row) => row.name, sortKey: "name" },
     {
       id: "type",
       header: t("fields.roomType"),
@@ -91,6 +93,7 @@ export function RoomsScreen() {
     },
     {
       id: "capacity",
+      sortKey: "capacity",
       header: t("fields.capacity"),
       className: "tabular-nums",
       cell: (row) => row.capacity ?? EMPTY,
@@ -144,7 +147,9 @@ export function RoomsScreen() {
             id: "campus",
             label: t("fields.campus"),
             value: campusId,
-            onChange: setCampusId,
+            onChange: (value) => {
+              table.setFilter("campus_id", value);
+            },
             options: (campuses.data ?? []).map((campus) => ({
               value: campus.id,
               label: campus.name,
@@ -157,7 +162,9 @@ export function RoomsScreen() {
             id: "roomType",
             label: t("fields.roomType"),
             value: roomType,
-            onChange: setRoomType,
+            onChange: (value) => {
+              table.setFilter("room_type", value);
+            },
             options: ROOM_TYPES.map((value) => ({ value, label: t(`rooms.types.${value}`) })),
             allLabel: t("filters.all"),
             allValue: ALL,
@@ -165,10 +172,7 @@ export function RoomsScreen() {
           },
         ]}
         clearLabel={tCommon("clearFilters")}
-        onClear={() => {
-          setCampusId(ALL);
-          setRoomType(ALL);
-        }}
+        onClear={table.clear}
       />
 
       <DataTable
@@ -190,6 +194,7 @@ export function RoomsScreen() {
             }
           />
         }
+        sort={table.sort}
         pagination={{
           hasNext: Boolean(pagination?.next_cursor),
           hasPrevious: pager.hasPrevious,
@@ -201,6 +206,12 @@ export function RoomsScreen() {
           },
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
+          pageSize: {
+            value: table.pageSize,
+            options: [25, 50, 100],
+            onChange: table.setPageSize,
+            label: tCommon("rowsPerPage"),
+          },
         }}
       />
     </div>

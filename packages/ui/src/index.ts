@@ -41,7 +41,12 @@ export type {
 } from "./components/chart";
 
 export { DataTable } from "./components/data-table";
-export type { DataTableColumn, DataTableProps } from "./components/data-table";
+export type {
+  DataTableColumn,
+  DataTablePageSize,
+  DataTableProps,
+  DataTableSort,
+} from "./components/data-table";
 
 export { EmptyState } from "./components/empty-state";
 export type { EmptyStateProps } from "./components/empty-state";

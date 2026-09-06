@@ -35,6 +35,7 @@ import {
   useClasses,
 } from "@/features/students/use-reference-data";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
+import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -59,20 +60,16 @@ export function CurriculumScreen() {
   const subjects = useSubjects();
   const campuses = useCampuses();
 
-  const [academicSessionId, setAcademicSessionId] = useState<string>(ALL);
-  const [classId, setClassId] = useState<string>(ALL);
-  const [campusId, setCampusId] = useState<string>(ALL);
-  const [isElective, setIsElective] = useState<string>(ALL);
+  const table = useTableParams({
+    filterKeys: ["academic_session_id", "class_id", "campus_id", "is_elective"],
+    pageSize: ACADEMICS_PAGE_SIZE,
+  });
+  const academicSessionId = table.filter("academic_session_id");
+  const classId = table.filter("class_id");
+  const campusId = table.filter("campus_id");
+  const isElective = table.filter("is_elective");
 
-  const filters = useMemo(
-    () => ({
-      ...(academicSessionId !== ALL ? { academic_session_id: academicSessionId } : {}),
-      ...(classId !== ALL ? { class_id: classId } : {}),
-      ...(campusId !== ALL ? { campus_id: campusId } : {}),
-      ...(isElective !== ALL ? { is_elective: isElective } : {}),
-    }),
-    [academicSessionId, classId, campusId, isElective],
-  );
+  const filters = table.query;
   pager.syncFilterKey(JSON.stringify(filters));
 
   const { data, isPending, isFetching, error } = useQuery({
@@ -82,7 +79,6 @@ export function CurriculumScreen() {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: ACADEMICS_PAGE_SIZE,
         },
       }),
     placeholderData: keepPreviousData,
@@ -190,7 +186,9 @@ export function CurriculumScreen() {
             id: "academicSession",
             label: t("fields.academicSession"),
             value: academicSessionId,
-            onChange: setAcademicSessionId,
+            onChange: (value) => {
+              table.setFilter("academic_session_id", value);
+            },
             options: (sessions.data ?? []).map((session) => ({
               value: session.id,
               label: session.name,
@@ -203,7 +201,9 @@ export function CurriculumScreen() {
             id: "class",
             label: t("fields.class"),
             value: classId,
-            onChange: setClassId,
+            onChange: (value) => {
+              table.setFilter("class_id", value);
+            },
             options: (classes.data ?? []).map((option) => ({
               value: option.id,
               label: option.name,
@@ -215,7 +215,9 @@ export function CurriculumScreen() {
             id: "campus",
             label: t("fields.campus"),
             value: campusId,
-            onChange: setCampusId,
+            onChange: (value) => {
+              table.setFilter("campus_id", value);
+            },
             options: (campuses.data ?? []).map((campus) => ({
               value: campus.id,
               label: campus.name,
@@ -227,7 +229,9 @@ export function CurriculumScreen() {
             id: "kind",
             label: t("curriculum.columns.kind"),
             value: isElective,
-            onChange: setIsElective,
+            onChange: (value) => {
+              table.setFilter("is_elective", value);
+            },
             options: [
               { value: "false", label: t("curriculum.core") },
               { value: "true", label: t("curriculum.elective") },
@@ -237,12 +241,7 @@ export function CurriculumScreen() {
           },
         ]}
         clearLabel={tCommon("clearFilters")}
-        onClear={() => {
-          setAcademicSessionId(ALL);
-          setClassId(ALL);
-          setCampusId(ALL);
-          setIsElective(ALL);
-        }}
+        onClear={table.clear}
       />
 
       <DataTable
@@ -275,6 +274,12 @@ export function CurriculumScreen() {
           },
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
+          pageSize: {
+            value: table.pageSize,
+            options: [25, 50, 100],
+            onChange: table.setPageSize,
+            label: tCommon("rowsPerPage"),
+          },
         }}
       />
     </div>

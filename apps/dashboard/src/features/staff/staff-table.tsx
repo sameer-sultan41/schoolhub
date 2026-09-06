@@ -8,7 +8,7 @@ import { Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { FilterBar } from "@/components/filter-bar";
@@ -17,6 +17,7 @@ import type { EmploymentStatus, StaffRecord, StaffType } from "@/features/staff/
 import { useDesignations } from "@/features/staff/use-designations";
 import { useCampuses } from "@/features/students/use-reference-data";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
+import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -66,25 +67,23 @@ export function StaffTable() {
     queryFn: () => collectPages<DepartmentOption>(apiClient, "/departments"),
   });
 
-  const [staffType, setStaffType] = useState<StaffType | typeof ALL>(ALL);
-  const [employmentStatus, setEmploymentStatus] = useState<EmploymentStatus | typeof ALL>(ALL);
-  const [campusId, setCampusId] = useState<string>(ALL);
-  const [departmentId, setDepartmentId] = useState<string>(ALL);
-  const [designationId, setDesignationId] = useState<string>(ALL);
-  // The COMMITTED search term only — FilterBar owns the draft and the debounce.
-  const [search, setSearch] = useState("");
+  const table = useTableParams({
+    filterKeys: ["staff_type", "employment_status", "campus_id", "department_id", "designation_id"],
+    searchable: true,
+    pageSize: STAFF_PAGE_SIZE,
+    sortLabels: {
+      ascending: (column) => tCommon("sortAscending", { column }),
+      descending: (column) => tCommon("sortDescending", { column }),
+    },
+  });
+  const staffType = table.filter("staff_type");
+  const employmentStatus = table.filter("employment_status");
+  const campusId = table.filter("campus_id");
+  const departmentId = table.filter("department_id");
+  const designationId = table.filter("designation_id");
+  const search = table.search;
 
-  const filters = useMemo(
-    () => ({
-      ...(staffType !== ALL ? { staff_type: staffType } : {}),
-      ...(employmentStatus !== ALL ? { employment_status: employmentStatus } : {}),
-      ...(campusId !== ALL ? { campus_id: campusId } : {}),
-      ...(departmentId !== ALL ? { department_id: departmentId } : {}),
-      ...(designationId !== ALL ? { designation_id: designationId } : {}),
-      ...(search ? { search } : {}),
-    }),
-    [staffType, employmentStatus, campusId, departmentId, designationId, search],
-  );
+  const filters = table.query;
   pager.syncFilterKey(JSON.stringify(filters));
 
   const { data, isPending, isFetching, error } = useQuery({
@@ -94,7 +93,6 @@ export function StaffTable() {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: STAFF_PAGE_SIZE,
         },
       }),
     placeholderData: keepPreviousData,
@@ -115,6 +113,7 @@ export function StaffTable() {
     },
     {
       id: "name",
+      sortKey: "last_name",
       header: t("columns.name"),
       cell: (row) => `${row.first_name} ${row.last_name}`,
     },
@@ -154,7 +153,7 @@ export function StaffTable() {
           label: t("filters.search"),
           placeholder: t("list.searchPlaceholder"),
           value: search,
-          onChange: setSearch,
+          onChange: table.setSearch,
         }}
         selects={[
           {
@@ -162,7 +161,7 @@ export function StaffTable() {
             label: t("filters.staffType"),
             value: staffType,
             onChange: (value) => {
-              setStaffType(value as typeof staffType);
+              table.setFilter("staff_type", value);
             },
             options: STAFF_TYPES.map((value) => ({ value, label: t(`staffType.${value}`) })),
             allLabel: t("filters.all"),
@@ -173,7 +172,7 @@ export function StaffTable() {
             label: t("filters.employmentStatus"),
             value: employmentStatus,
             onChange: (value) => {
-              setEmploymentStatus(value as typeof employmentStatus);
+              table.setFilter("employment_status", value);
             },
             options: EMPLOYMENT_STATUSES.map((value) => ({
               value,
@@ -186,7 +185,9 @@ export function StaffTable() {
             id: "campus",
             label: t("filters.campus"),
             value: campusId,
-            onChange: setCampusId,
+            onChange: (value) => {
+              table.setFilter("campus_id", value);
+            },
             options: (campuses.data ?? []).map((campus) => ({
               value: campus.id,
               label: campus.name,
@@ -198,7 +199,9 @@ export function StaffTable() {
             id: "department",
             label: t("filters.department"),
             value: departmentId,
-            onChange: setDepartmentId,
+            onChange: (value) => {
+              table.setFilter("department_id", value);
+            },
             options: (departmentsQuery.data ?? []).map((department) => ({
               value: department.id,
               label: department.name,
@@ -210,7 +213,9 @@ export function StaffTable() {
             id: "designation",
             label: t("filters.designation"),
             value: designationId,
-            onChange: setDesignationId,
+            onChange: (value) => {
+              table.setFilter("designation_id", value);
+            },
             options: (designations.data ?? []).map((designation) => ({
               value: designation.id,
               label: designation.name,
@@ -220,14 +225,7 @@ export function StaffTable() {
           },
         ]}
         clearLabel={tCommon("clearFilters")}
-        onClear={() => {
-          setSearch("");
-          setStaffType(ALL);
-          setEmploymentStatus(ALL);
-          setCampusId(ALL);
-          setDepartmentId(ALL);
-          setDesignationId(ALL);
-        }}
+        onClear={table.clear}
       />
 
       <DataTable
@@ -256,6 +254,7 @@ export function StaffTable() {
         onRowClick={(row) => {
           router.push(`/staff/${row.id}`);
         }}
+        sort={table.sort}
         pagination={{
           hasNext: Boolean(pagination?.next_cursor),
           hasPrevious: pager.hasPrevious,
@@ -267,6 +266,18 @@ export function StaffTable() {
           },
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
+          pageSize: {
+            value: table.pageSize,
+            options: [25, 50, 100],
+            onChange: table.setPageSize,
+            label: tCommon("rowsPerPage"),
+          },
+          // /staff is the other endpoint on CountedCursorPagination, so a total is real
+          // here. No page NUMBER: a cursor pager does not know where it is.
+          summary:
+            pagination?.total_count !== undefined
+              ? tCommon("totalRows", { count: pagination.total_count })
+              : null,
         }}
       />
     </div>

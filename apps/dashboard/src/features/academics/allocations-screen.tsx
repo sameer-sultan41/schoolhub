@@ -37,6 +37,7 @@ import {
 } from "@/features/academics/use-academics-reference-data";
 import { useAcademicSessions, useClasses } from "@/features/students/use-reference-data";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
+import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -61,20 +62,20 @@ export function AllocationsScreen() {
   const subjects = useSubjects();
   const staff = useTeachingStaff();
 
-  const [academicSessionId, setAcademicSessionId] = useState<string>(ALL);
-  const [sectionId, setSectionId] = useState<string>(ALL);
-  const [subjectId, setSubjectId] = useState<string>(ALL);
-  const [staffId, setStaffId] = useState<string>(ALL);
+  const table = useTableParams({
+    filterKeys: ["academic_session_id", "section_id", "subject_id", "staff_id"],
+    pageSize: ACADEMICS_PAGE_SIZE,
+    sortLabels: {
+      ascending: (column) => tCommon("sortAscending", { column }),
+      descending: (column) => tCommon("sortDescending", { column }),
+    },
+  });
+  const academicSessionId = table.filter("academic_session_id");
+  const sectionId = table.filter("section_id");
+  const subjectId = table.filter("subject_id");
+  const staffId = table.filter("staff_id");
 
-  const filters = useMemo(
-    () => ({
-      ...(academicSessionId !== ALL ? { academic_session_id: academicSessionId } : {}),
-      ...(sectionId !== ALL ? { section_id: sectionId } : {}),
-      ...(subjectId !== ALL ? { subject_id: subjectId } : {}),
-      ...(staffId !== ALL ? { staff_id: staffId } : {}),
-    }),
-    [academicSessionId, sectionId, subjectId, staffId],
-  );
+  const filters = table.query;
   pager.syncFilterKey(JSON.stringify(filters));
 
   const { data, isPending, isFetching, error } = useQuery({
@@ -87,7 +88,6 @@ export function AllocationsScreen() {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: ACADEMICS_PAGE_SIZE,
         },
       }),
     placeholderData: keepPreviousData,
@@ -162,6 +162,7 @@ export function AllocationsScreen() {
     },
     {
       id: "effective",
+      sortKey: "effective_from",
       header: t("allocations.columns.effective"),
       numeric: "identifier",
       cell: (row) =>
@@ -203,7 +204,9 @@ export function AllocationsScreen() {
             id: "academicSession",
             label: t("fields.academicSession"),
             value: academicSessionId,
-            onChange: setAcademicSessionId,
+            onChange: (value) => {
+              table.setFilter("academic_session_id", value);
+            },
             options: (sessions.data ?? []).map((session) => ({
               value: session.id,
               label: session.name,
@@ -216,7 +219,9 @@ export function AllocationsScreen() {
             id: "section",
             label: t("fields.section"),
             value: sectionId,
-            onChange: setSectionId,
+            onChange: (value) => {
+              table.setFilter("section_id", value);
+            },
             options: (sections.data ?? []).map((section) => ({
               value: section.id,
               label: sectionLabels.get(section.id) ?? section.name,
@@ -228,7 +233,9 @@ export function AllocationsScreen() {
             id: "subject",
             label: t("fields.subject"),
             value: subjectId,
-            onChange: setSubjectId,
+            onChange: (value) => {
+              table.setFilter("subject_id", value);
+            },
             options: (subjects.data ?? []).map((option) => ({
               value: option.id,
               label: option.name,
@@ -240,7 +247,9 @@ export function AllocationsScreen() {
             id: "teacher",
             label: t("fields.teacher"),
             value: staffId,
-            onChange: setStaffId,
+            onChange: (value) => {
+              table.setFilter("staff_id", value);
+            },
             options: (staff.data ?? []).map((teacher) => ({
               value: teacher.id,
               label: `${teacher.first_name} ${teacher.last_name}`,
@@ -250,12 +259,7 @@ export function AllocationsScreen() {
           },
         ]}
         clearLabel={tCommon("clearFilters")}
-        onClear={() => {
-          setAcademicSessionId(ALL);
-          setSectionId(ALL);
-          setSubjectId(ALL);
-          setStaffId(ALL);
-        }}
+        onClear={table.clear}
       />
 
       <DataTable
@@ -279,6 +283,7 @@ export function AllocationsScreen() {
             }
           />
         }
+        sort={table.sort}
         pagination={{
           hasNext: Boolean(pagination?.next_cursor),
           hasPrevious: pager.hasPrevious,
@@ -290,6 +295,12 @@ export function AllocationsScreen() {
           },
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
+          pageSize: {
+            value: table.pageSize,
+            options: [25, 50, 100],
+            onChange: table.setPageSize,
+            label: tCommon("rowsPerPage"),
+          },
         }}
       />
 

@@ -29,6 +29,7 @@ import { TimetableNav } from "@/features/timetable/timetable-nav";
 import type { PeriodRecord } from "@/features/timetable/timetable-types";
 import { useCampusOptions } from "@/features/timetable/use-timetable-reference-data";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
+import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -39,9 +40,17 @@ export function PeriodsScreen() {
   const pager = useCursorPager();
 
   const campuses = useCampusOptions();
-  const [campusId, setCampusId] = useState<string>(ALL);
+  const table = useTableParams({
+    filterKeys: ["campus_id"],
+    pageSize: TIMETABLE_PAGE_SIZE,
+    sortLabels: {
+      ascending: (column) => tCommon("sortAscending", { column }),
+      descending: (column) => tCommon("sortDescending", { column }),
+    },
+  });
+  const campusId = table.filter("campus_id");
 
-  const filters = useMemo(() => (campusId !== ALL ? { campus_id: campusId } : {}), [campusId]);
+  const filters = table.query;
   pager.syncFilterKey(JSON.stringify(filters));
 
   const { data, isPending, isFetching, error } = useQuery({
@@ -51,7 +60,6 @@ export function PeriodsScreen() {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: TIMETABLE_PAGE_SIZE,
         },
       }),
     placeholderData: keepPreviousData,
@@ -69,6 +77,7 @@ export function PeriodsScreen() {
   const columns: DataTableColumn<PeriodRecord>[] = [
     {
       id: "sequence",
+      sortKey: "sequence",
       header: t("fields.sequence"),
       className: "tabular-nums",
       cell: (row) => row.sequence,
@@ -76,6 +85,7 @@ export function PeriodsScreen() {
     { id: "name", header: t("fields.name"), cell: (row) => row.name },
     {
       id: "time",
+      sortKey: "start_time",
       header: t("periods.columns.time"),
       className: "tabular-nums",
       cell: (row) => `${row.start_time} – ${row.end_time}`,
@@ -142,7 +152,9 @@ export function PeriodsScreen() {
             id: "campus",
             label: t("fields.campus"),
             value: campusId,
-            onChange: setCampusId,
+            onChange: (value) => {
+              table.setFilter("campus_id", value);
+            },
             options: (campuses.data ?? []).map((campus) => ({
               value: campus.id,
               label: campus.name,
@@ -153,9 +165,7 @@ export function PeriodsScreen() {
           },
         ]}
         clearLabel={tCommon("clearFilters")}
-        onClear={() => {
-          setCampusId(ALL);
-        }}
+        onClear={table.clear}
       />
 
       <DataTable
@@ -177,6 +187,7 @@ export function PeriodsScreen() {
             }
           />
         }
+        sort={table.sort}
         pagination={{
           hasNext: Boolean(pagination?.next_cursor),
           hasPrevious: pager.hasPrevious,
@@ -188,6 +199,12 @@ export function PeriodsScreen() {
           },
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
+          pageSize: {
+            value: table.pageSize,
+            options: [25, 50, 100],
+            onChange: table.setPageSize,
+            label: tCommon("rowsPerPage"),
+          },
         }}
       />
     </div>

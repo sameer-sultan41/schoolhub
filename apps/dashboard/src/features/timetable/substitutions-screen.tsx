@@ -14,7 +14,7 @@ import {
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Repeat } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo } from "react";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { FilterBar } from "@/components/filter-bar";
@@ -29,6 +29,7 @@ import { TimetableNav } from "@/features/timetable/timetable-nav";
 import type { SubstitutionRecord } from "@/features/timetable/timetable-types";
 import { useTeachingStaffOptions } from "@/features/timetable/use-timetable-reference-data";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
+import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -54,25 +55,19 @@ export function SubstitutionsScreen() {
 
   const staff = useTeachingStaffOptions();
 
-  const [status, setStatus] = useState<string>(ALL);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const table = useTableParams({
+    filterKeys: ["status", "date__gte", "date__lte"],
+    pageSize: TIMETABLE_PAGE_SIZE,
+    sortLabels: {
+      ascending: (column) => tCommon("sortAscending", { column }),
+      descending: (column) => tCommon("sortDescending", { column }),
+    },
+  });
+  const status = table.filter("status");
+  const dateFrom = table.text("date__gte");
+  const dateTo = table.text("date__lte");
 
-  // `date__gte` / `date__lte`, not `date_from` / `date_to`: those are the names
-  // django-filter derives from `TeacherSubstitutionFilterSet`'s
-  // `"date": ["exact", "gte", "lte"]`, and it drops query parameters it does not
-  // recognise without a word — so the wrong spelling did not fail, it silently
-  // returned the unfiltered list while the two date inputs looked like they
-  // worked. §13's substitution report is a date range, so this is the filter
-  // that has to be right.
-  const filters = useMemo(
-    () => ({
-      ...(status !== ALL ? { status } : {}),
-      ...(dateFrom ? { date__gte: dateFrom } : {}),
-      ...(dateTo ? { date__lte: dateTo } : {}),
-    }),
-    [status, dateFrom, dateTo],
-  );
+  const filters = table.query;
   pager.syncFilterKey(JSON.stringify(filters));
 
   const { data, isPending, isFetching, error } = useQuery({
@@ -85,7 +80,6 @@ export function SubstitutionsScreen() {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: TIMETABLE_PAGE_SIZE,
         },
       }),
     placeholderData: keepPreviousData,
@@ -109,6 +103,7 @@ export function SubstitutionsScreen() {
   const columns: DataTableColumn<SubstitutionRecord>[] = [
     {
       id: "date",
+      sortKey: "date",
       header: t("fields.date"),
       className: "tabular-nums",
       cell: (row) => row.date,
@@ -167,7 +162,9 @@ export function SubstitutionsScreen() {
             id: "status",
             label: t("fields.status"),
             value: status,
-            onChange: setStatus,
+            onChange: (value) => {
+              table.setFilter("status", value);
+            },
             options: SUBSTITUTION_STATUSES.map((value) => ({
               value,
               label: t(`substitutions.status.${value}`),
@@ -180,11 +177,7 @@ export function SubstitutionsScreen() {
         // The date range is this screen's own control — FilterBar renders it in the same
         // row but cannot know whether it is set, so say so explicitly.
         extrasActive={Boolean(dateFrom || dateTo)}
-        onClear={() => {
-          setStatus(ALL);
-          setDateFrom("");
-          setDateTo("");
-        }}
+        onClear={table.clear}
       >
         <div className="w-40 space-y-1">
           <Label htmlFor={fromId}>{t("substitutions.filters.from")}</Label>
@@ -193,7 +186,7 @@ export function SubstitutionsScreen() {
             type="date"
             value={dateFrom}
             onChange={(event) => {
-              setDateFrom(event.target.value);
+              table.setText("date__gte", event.target.value);
             }}
           />
         </div>
@@ -204,7 +197,7 @@ export function SubstitutionsScreen() {
             type="date"
             value={dateTo}
             onChange={(event) => {
-              setDateTo(event.target.value);
+              table.setText("date__lte", event.target.value);
             }}
           />
         </div>
@@ -229,6 +222,7 @@ export function SubstitutionsScreen() {
             }
           />
         }
+        sort={table.sort}
         pagination={{
           hasNext: Boolean(pagination?.next_cursor),
           hasPrevious: pager.hasPrevious,
@@ -240,6 +234,12 @@ export function SubstitutionsScreen() {
           },
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
+          pageSize: {
+            value: table.pageSize,
+            options: [25, 50, 100],
+            onChange: table.setPageSize,
+            label: tCommon("rowsPerPage"),
+          },
         }}
       />
     </div>

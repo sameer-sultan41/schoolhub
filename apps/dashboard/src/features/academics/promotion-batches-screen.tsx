@@ -7,7 +7,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { TrendingUp } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { FilterBar } from "@/components/filter-bar";
@@ -22,6 +22,7 @@ import type { PromotionBatchRecord } from "@/features/academics/academics-types"
 import { PromotionBatchForm } from "@/features/academics/promotion-batch-form";
 import { useAcademicSessions, useClasses } from "@/features/students/use-reference-data";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
+import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -44,20 +45,16 @@ export function PromotionBatchesScreen() {
   const sessions = useAcademicSessions();
   const classes = useClasses();
 
-  const [fromSessionId, setFromSessionId] = useState<string>(ALL);
-  const [toSessionId, setToSessionId] = useState<string>(ALL);
-  const [classId, setClassId] = useState<string>(ALL);
-  const [status, setStatus] = useState<string>(ALL);
+  const table = useTableParams({
+    filterKeys: ["from_academic_session_id", "to_academic_session_id", "from_class_id", "status"],
+    pageSize: ACADEMICS_PAGE_SIZE,
+  });
+  const fromSessionId = table.filter("from_academic_session_id");
+  const toSessionId = table.filter("to_academic_session_id");
+  const classId = table.filter("from_class_id");
+  const status = table.filter("status");
 
-  const filters = useMemo(
-    () => ({
-      ...(fromSessionId !== ALL ? { from_academic_session_id: fromSessionId } : {}),
-      ...(toSessionId !== ALL ? { to_academic_session_id: toSessionId } : {}),
-      ...(classId !== ALL ? { from_class_id: classId } : {}),
-      ...(status !== ALL ? { status } : {}),
-    }),
-    [fromSessionId, toSessionId, classId, status],
-  );
+  const filters = table.query;
   pager.syncFilterKey(JSON.stringify(filters));
 
   const { data, isPending, isFetching, error } = useQuery({
@@ -72,7 +69,6 @@ export function PromotionBatchesScreen() {
         query: {
           ...filters,
           ...(pager.cursor ? { cursor: pager.cursor } : {}),
-          page_size: ACADEMICS_PAGE_SIZE,
         },
       }),
     placeholderData: keepPreviousData,
@@ -145,7 +141,9 @@ export function PromotionBatchesScreen() {
             id: "fromSession",
             label: t("promotions.fields.fromSession"),
             value: fromSessionId,
-            onChange: setFromSessionId,
+            onChange: (value) => {
+              table.setFilter("from_academic_session_id", value);
+            },
             options: (sessions.data ?? []).map((session) => ({
               value: session.id,
               label: session.name,
@@ -158,7 +156,9 @@ export function PromotionBatchesScreen() {
             id: "toSession",
             label: t("promotions.fields.toSession"),
             value: toSessionId,
-            onChange: setToSessionId,
+            onChange: (value) => {
+              table.setFilter("to_academic_session_id", value);
+            },
             options: (sessions.data ?? []).map((session) => ({
               value: session.id,
               label: session.name,
@@ -171,7 +171,9 @@ export function PromotionBatchesScreen() {
             id: "class",
             label: t("fields.class"),
             value: classId,
-            onChange: setClassId,
+            onChange: (value) => {
+              table.setFilter("from_class_id", value);
+            },
             options: (classes.data ?? []).map((option) => ({
               value: option.id,
               label: option.name,
@@ -183,7 +185,9 @@ export function PromotionBatchesScreen() {
             id: "status",
             label: t("promotions.columns.status"),
             value: status,
-            onChange: setStatus,
+            onChange: (value) => {
+              table.setFilter("status", value);
+            },
             options: PROMOTION_STATUSES.map((value) => ({
               value,
               label: t(`promotions.status.${value}`),
@@ -193,12 +197,7 @@ export function PromotionBatchesScreen() {
           },
         ]}
         clearLabel={tCommon("clearFilters")}
-        onClear={() => {
-          setFromSessionId(ALL);
-          setToSessionId(ALL);
-          setClassId(ALL);
-          setStatus(ALL);
-        }}
+        onClear={table.clear}
       />
 
       <DataTable
@@ -234,6 +233,12 @@ export function PromotionBatchesScreen() {
           },
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
+          pageSize: {
+            value: table.pageSize,
+            options: [25, 50, 100],
+            onChange: table.setPageSize,
+            label: tCommon("rowsPerPage"),
+          },
         }}
       />
     </div>

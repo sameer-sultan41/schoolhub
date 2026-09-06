@@ -8,7 +8,7 @@ import { GraduationCap } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { FilterBar } from "@/components/filter-bar";
@@ -16,7 +16,7 @@ import { IdCardBatchAction } from "@/features/students/id-card-batch-action";
 import { STUDENTS_PAGE_SIZE } from "@/features/students/student-constants";
 import type { StudentRecord, StudentStatus } from "@/features/students/student-types";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
-import { useSearchParam } from "@/hooks/use-search-param";
+import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 
@@ -42,38 +42,26 @@ export function StudentsTable() {
   const router = useRouter();
   const pager = useCursorPager();
 
-  // Filters, sort and page size live in the URL, not in useState: a filtered roster is
-  // then a link a head of year can send to a form tutor, and the back button and a
-  // refresh both keep the reader's place. Only the cursor stays in React state — see
-  // useSearchParam for why a cursor must never travel in a shared link.
-  // `isPending` from the hook is deliberately not taken: the query already keeps the
-  // previous rows on screen through a param change (keepPreviousData), so there is no
-  // gap for a busy state to fill here.
-  const { searchParams, updateParams } = useSearchParam();
-
-  const status = (searchParams.get("status") as StudentStatus | null) ?? ALL_STATUSES;
-  // The COMMITTED search term only. FilterBar owns the draft the user is typing and the
-  // debounce that turns one into the other — this is what lands in the URL and the key.
-  const search = searchParams.get("search") ?? "";
-  const sortBy = searchParams.get("sort_by");
-  const sortType = searchParams.get("sort_type") === "desc" ? "desc" : "asc";
-  const pageSize = Number(searchParams.get("page_size")) || STUDENTS_PAGE_SIZE;
+  // Filters, sort and page size live in the URL: a filtered roster is then a link a head
+  // of year can send to a form tutor, and Back and a refresh both keep the reader's
+  // place. Only the cursor stays in React state — see useSearchParam for why a cursor
+  // must never travel in a shared link.
+  const table = useTableParams({
+    filterKeys: ["status"],
+    searchable: true,
+    pageSize: STUDENTS_PAGE_SIZE,
+    sortLabels: {
+      ascending: (column) => tCommon("sortAscending", { column }),
+      descending: (column) => tCommon("sortDescending", { column }),
+    },
+  });
+  // FilterBar owns the draft the reader is typing and the debounce that commits it;
+  // what lands here is the committed term.
+  const status = table.filter("status");
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const filters = useMemo(
-    () => ({
-      ...(status !== ALL_STATUSES ? { status } : {}),
-      ...(search ? { search } : {}),
-      // The URL carries sort_by/sort_type, the house spelling across these dashboards;
-      // DRF wants one `ordering` field with a leading "-" for descending. Translated
-      // here, at the request boundary, rather than leaking the API's spelling into a
-      // link a reader might read.
-      ...(sortBy ? { ordering: sortType === "desc" ? `-${sortBy}` : sortBy } : {}),
-      page_size: pageSize,
-    }),
-    [status, search, sortBy, sortType, pageSize],
-  );
+  const filters = table.query;
   pager.syncFilterKey(JSON.stringify(filters));
 
   const { data, isPending, isFetching, error } = useQuery({
@@ -193,12 +181,8 @@ export function StudentsTable() {
         search={{
           label: t("filters.search"),
           placeholder: t("list.searchPlaceholder"),
-          value: search,
-          // Null, not "": a cleared search should leave the URL as short as it was
-          // rather than trailing `&search=`.
-          onChange: (value) => {
-            updateParams({ search: value || null });
-          },
+          value: table.search,
+          onChange: table.setSearch,
         }}
         selects={[
           {
@@ -206,7 +190,7 @@ export function StudentsTable() {
             label: t("filters.status"),
             value: status,
             onChange: (value) => {
-              updateParams({ status: value === ALL_STATUSES ? null : value });
+              table.setFilter("status", value);
             },
             options: STATUSES.map((value) => ({ value, label: t(`status.${value}`) })),
             allLabel: t("filters.all"),
@@ -214,9 +198,7 @@ export function StudentsTable() {
           },
         ]}
         clearLabel={tCommon("clearFilters")}
-        onClear={() => {
-          updateParams({ search: null, status: null });
-        }}
+        onClear={table.clear}
       />
 
       <DataTable
@@ -248,15 +230,7 @@ export function StudentsTable() {
         onRowClick={(row) => {
           router.push(`/students/${row.id}`);
         }}
-        sort={{
-          activeKey: sortBy,
-          direction: sortType,
-          onChange: (key, direction) => {
-            updateParams({ sort_by: key, sort_type: direction });
-          },
-          sortAscendingLabel: (column) => tCommon("sortAscending", { column }),
-          sortDescendingLabel: (column) => tCommon("sortDescending", { column }),
-        }}
+        sort={table.sort}
         pagination={{
           hasNext: Boolean(pagination?.next_cursor),
           hasPrevious: pager.hasPrevious,
@@ -269,11 +243,9 @@ export function StudentsTable() {
           nextLabel: tCommon("next"),
           previousLabel: tCommon("previous"),
           pageSize: {
-            value: pageSize,
+            value: table.pageSize,
             options: [25, 50, 100],
-            onChange: (size) => {
-              updateParams({ page_size: String(size) });
-            },
+            onChange: table.setPageSize,
             label: tCommon("rowsPerPage"),
           },
           // /students is one of the two endpoints on CountedCursorPagination, so a
