@@ -18,14 +18,14 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | ---- | ------- | ------ |
 | 0 — Foundation | tenancy, auth/RBAC, [`school-organization`](03-modules/school-organization.md) | Done in substance — tenancy/RBAC/audit/API plumbing in `apps/api/core/`, `school_organization` Django app shipped and merged |
 | 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **Both full-stack complete** — `student-management` (PRs 1-4) and `staff-management` (this PR), see the per-module matrix below |
-| 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **In progress.** `academics` shipped; `timetable` shipped (this PR); `attendance` not started. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
+| 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **In progress.** `academics` and `timetable` shipped; `attendance` is in flight as three stacked PRs (marking → leave → staff/reports), of which this is the first. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
 | 3–7 | examinations, fees-finance, communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started (fees-finance has a spec-only PR: voucher/receipt/birthday-card docs) |
 
 ## Per-module implementation matrix
 
 | Module | API | Dashboard screens | E2E | Spec doc |
 | ------ | --- | ------------------ | --- | -------- |
-| school-organization | done | — (platform-admin/setup UI not built) | live-lane API journeys only (no dashboard UI to drive) — CRUD + tenant isolation for all 9 resources, plus the academic-session `:activate`/`:close`/`:clone` lifecycle | done |
+| school-organization | done (+ the `/holiday-calendar` calendar §16 declared and nothing had built — `attendance` marks against it) | — (platform-admin/setup UI not built) | live-lane API journeys only (no dashboard UI to drive) — CRUD + tenant isolation for all 9 resources, plus the academic-session `:activate`/`:close`/`:clone` lifecycle | done |
 | student-management | done (CRUD, guardians/documents/files, enrollment lifecycle/transfers, import/export/ID cards) | done (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs, import wizard, ID-card batch action) | — | done |
 | staff-management | done (CRUD, designations, qualifications/documents with verification, invite/exit, import/export) | done (list/detail/create/edit + Qualifications/Documents tabs, import wizard) | — | done |
 | academics | done (curriculum CRUD + `:clone`, teacher allocation + load summary, the promotion batch state machine with segregation of duties and idempotent execution) | — | live-lane API journeys + one promotion browser CUJ | done |
@@ -78,6 +78,31 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   discipline, not enforcement.
 
 ## Deliberately NOT done
+
+- **The school calendar now exists** (this PR). `attendance` §11 requires that
+  marking be refused on a tenant-configured holiday or non-working day, and
+  `entities/attendance.md` specifies `late_minutes` as computed from the tenant
+  day window. **Neither existed anywhere in the backend** — a grep for
+  `holiday`, `weekend`, `working_day` or `day_window` across `apps/api` returned
+  one hit, a docstring in `school_organization/serializers.py` describing
+  configuration nobody had built. `school-organization.md` §16 has declared
+  `GET/PUT /api/v1/holiday-calendar` since Phase 1 and `urls.py` had no such
+  route. It is built here rather than privately inside `attendance` because §5.8
+  and §16 both assign it to school-organization, and because `examinations`
+  (scheduling around holidays) and `hr-leave` (`days_count` net of holidays)
+  need the same answers — a private copy would be duplicated twice more.
+  Stored in `tenant_settings.academic` (`working_days` / `holidays` /
+  `day_window`), not a new table: `entities/tenancy.md` lists no
+  `holiday_calendar` entity. `apps/school_organization/calendar.py` is the
+  single reader. **Two things it deliberately does not do:** §16's
+  `campus_id`/`from`/`to` filters are absent, because the resource is a small
+  singleton document rather than a paginated list; and the per-campus *working
+  week* override §5.8 anticipates is not implemented — `working_days()` takes a
+  `campus_id` and ignores it, so callers do not change when it lands, and the
+  per-campus half of the feature that *is* built is holidays, which is the half
+  attendance needs. `timetable.services._slot_weekday`'s "correct only while a
+  tenant starts its week on Monday" note is now closable, but is left alone in
+  this PR rather than changed in a module it does not otherwise touch.
 
 - **RLS is now genuinely enforced in CI** — it was not before. `api.yml`
   connected as the postgres image's `POSTGRES_USER`, which is a **superuser**,

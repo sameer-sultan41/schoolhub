@@ -65,7 +65,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 - **Classes & sections:** ordering (`level`) for promotion; section capacity used by enrollment validation; section↔class-teacher assignment; merge/rename with history preserved via audit log.
 - **Subjects:** unique code per tenant; elective pools flagged at curriculum level (academics module).
 - **Houses:** color/motto/house master; student house assignment happens on the student profile (student-management).
-- **Academic configuration:** holiday calendar (single dates + ranges, per-campus overrides); weekend definition; timezone per tenant with optional per-campus override; currency code used by fees-finance display.
+- **Academic configuration:** holiday calendar (single dates + ranges, per-campus overrides); weekend definition; timezone per tenant with optional per-campus override; currency code used by fees-finance display. **Built.** The calendar is stored in `tenant_settings.academic` under three keys — `working_days` (weekday numbers, 0=Monday), `holidays` (a list of `{from, to, name, campus_id}`, where a null `campus_id` means every campus and a campus entry *adds to* the tenant-wide list) and `day_window` (`{start, end, grace_minutes}`) — rather than in its own table, because [`entities/tenancy.md`](../05-database/entities/tenancy.md) lists no `holiday_calendar` entity and a column per school that wants one more field is a migration per school. `apps/api/apps/school_organization/calendar.py` is the single reader; `attendance` marks against it (§11 there), and `examinations` and `hr-leave` will. Unconfigured tenants get Monday-Friday and an 08:00-14:00 day, so a school can mark attendance before anyone opens the settings screen.
 
 ## 7. Workflows
 
@@ -183,7 +183,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md) 
 - `GET/POST /api/v1/departments`, `/api/v1/classes`, `/api/v1/sections`, `/api/v1/subjects`, `/api/v1/houses` + `{id}` detail routes — filters: `campus_id`, `class_id`, `is_active`, `search`.
 - `GET/POST /api/v1/academic-sessions` · `PATCH /api/v1/academic-sessions/{id}` · `POST /api/v1/academic-sessions/{id}:activate` · `POST /api/v1/academic-sessions/{id}:close` · `POST /api/v1/academic-sessions/{id}:clone` (colon-actions, audited).
 - `GET/POST /api/v1/terms` — filter: `academic_session_id`.
-- `GET/PUT /api/v1/holiday-calendar` — calendar entries; filter: `campus_id`, `from`, `to`.
+- `GET/PUT /api/v1/holiday-calendar` — calendar entries. **Built.** PUT replaces each list it names wholesale (merging entry by entry would leave no way to remove a holiday, which is what a cancelled closure needs); it takes the `school.settings.view`/`.update` keys, which §4 already describes as covering academic configuration. The `campus_id`/`from`/`to` *filters* are not built: the resource is a small singleton document, not a paginated list, so a client filters it client-side.
 - `POST /api/v1/structure-imports` → `202` + job resource (bulk import).
 
 ## 17. Integration Requirements

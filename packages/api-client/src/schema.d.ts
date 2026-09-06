@@ -595,6 +595,68 @@ export interface paths {
         patch: operations["guardians_partial_update"];
         trace?: never;
     };
+    "/api/v1/holiday-calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` — §16's declared calendar resource.
+         *
+         *     A projection of ``tenant_settings.academic``, not its own table: see
+         *     ``apps/school_organization/calendar.py``'s header for why the calendar is
+         *     JSONB configuration rather than an entity. It exists as a route separate from
+         *     ``/school-settings`` because §16 declares it separately, and because
+         *     ``it_admin`` adjusting an unplanned closure mid-year (§8) is a different and
+         *     far more frequent act than editing the school profile. It shares the settings
+         *     permission keys, which §4 already describes as covering "academic
+         *     configuration (calendar, timezone, locale, currency)" — inventing
+         *     ``school.holiday-calendar.*`` would put keys in the registry that no module
+         *     doc declares and no seeded role holds.
+         *
+         *     PUT rather than PATCH, and §16 says PUT: each list named in the body is
+         *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
+         *     holiday, which is exactly what a cancelled closure needs.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
+         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
+         *     plain ``APIView``, so without it ``request.tenant`` is never set and
+         *     ``RequiresModuleFeature`` fails closed on every request.
+         */
+        get: operations["holiday_calendar_retrieve"];
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` — §16's declared calendar resource.
+         *
+         *     A projection of ``tenant_settings.academic``, not its own table: see
+         *     ``apps/school_organization/calendar.py``'s header for why the calendar is
+         *     JSONB configuration rather than an entity. It exists as a route separate from
+         *     ``/school-settings`` because §16 declares it separately, and because
+         *     ``it_admin`` adjusting an unplanned closure mid-year (§8) is a different and
+         *     far more frequent act than editing the school profile. It shares the settings
+         *     permission keys, which §4 already describes as covering "academic
+         *     configuration (calendar, timezone, locale, currency)" — inventing
+         *     ``school.holiday-calendar.*`` would put keys in the registry that no module
+         *     doc declares and no seeded role holds.
+         *
+         *     PUT rather than PATCH, and §16 says PUT: each list named in the body is
+         *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
+         *     holiday, which is exactly what a cancelled closure needs.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
+         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
+         *     plain ``APIView``, so without it ``request.tenant`` is never set and
+         *     ``RequiresModuleFeature`` fails closed on every request.
+         */
+        put: operations["holiday_calendar_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/houses": {
         parameters: {
             query?: never;
@@ -2561,6 +2623,41 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` (§16).
+         *
+         *     PUT replaces each list it names wholesale, which is why this is a PUT and not
+         *     a PATCH: merging entry by entry would leave no way to *remove* a holiday, and
+         *     removing one is exactly what a cancelled closure needs.
+         */
+        HolidayCalendar: {
+            /** @description 0=Monday. Omit to leave the configured week unchanged. */
+            working_days?: number[];
+            holidays?: components["schemas"]["HolidayEntry"][];
+        };
+        /**
+         * @description One holiday or holiday range — module doc §5.8.
+         *
+         *     ``campus_id`` is a plain ``UUIDField`` rather than a ``PrimaryKeyRelatedField``
+         *     because these entries live inside JSONB, where there is no foreign key to do
+         *     the ownership check for us. ``validate_campus_id`` does it explicitly, or a
+         *     smuggled foreign id would be stored unchallenged and then silently ignored by
+         *     ``calendar.holiday_name`` — a closure an admin believes they configured and
+         *     which never takes effect.
+         *
+         *     ``from``/``to`` are the wire names because that is what the entry looks like
+         *     on disk and what §16's filters call them; ``from`` is a Python keyword, hence
+         *     the ``source`` indirection rather than an attribute of that name.
+         */
+        HolidayEntry: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date?: string;
+            name: string;
+            /** Format: uuid */
+            campus_id?: string | null;
         };
         House: {
             /** Format: uuid */
@@ -5554,6 +5651,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Guardian"];
+                };
+            };
+        };
+    };
+    holiday_calendar_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
+                };
+            };
+        };
+    };
+    holiday_calendar_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HolidayCalendar"];
+                "application/x-www-form-urlencoded": components["schemas"]["HolidayCalendar"];
+                "multipart/form-data": components["schemas"]["HolidayCalendar"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
                 };
             };
         };
