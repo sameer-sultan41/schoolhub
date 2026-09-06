@@ -94,7 +94,21 @@ describe("CapacityChart", () => {
     expect(screen.getByText("Capacity, in places")).toBeInTheDocument();
   });
 
-  it("draws one bar per class and labels each with its own total", async () => {
+  /*
+   * Nothing in this suite asserts an axis tick or a bar label, and that is deliberate.
+   *
+   * Both render in the browser — a screenshot of the running app shows every class named
+   * on the axis with its figure beside the bar — but recharts places both from measured
+   * layout, and `jest.setup.ts` stubs every element's getBoundingClientRect to a fixed
+   * 640x320, so the <text> never lands. Worse than merely failing: recharts leaves a
+   * hidden #recharts_measurement_span in the body holding the last string it measured, so
+   * a getByText for one of those figures can match THAT and pass while proving nothing.
+   * One did.
+   *
+   * Every figure and every ordering is asserted against `toCapacityRows` below instead,
+   * which is where the component actually decides them.
+   */
+  it("draws one bar per class, summing that class's sections", async () => {
     respond([
       makeSection({ id: "s1", class_id: "c-5", name: "A", capacity: 30 }),
       makeSection({ id: "s2", class_id: "c-5", name: "B", capacity: 28 }),
@@ -103,28 +117,26 @@ describe("CapacityChart", () => {
 
     const { container } = renderWithProviders(<CapacityChart />);
 
+    // Two sections of Grade 5 collapse into one bar; Grade 4 keeps its own.
     await waitFor(() => {
       expect(container.querySelectorAll(BAR)).toHaveLength(2);
     });
-    // Two sections of Grade 5 summed into one bar, and every bar carries its figure —
-    // a direct label, not a hover-only tooltip.
-    expect(screen.getByText("58")).toBeInTheDocument();
-    expect(screen.getByText("25")).toBeInTheDocument();
-    // The class names are on the category axis in the running app. Recharts places tick
-    // text from measured layout, and `jest.setup.ts` stubs every element's
-    // `getBoundingClientRect` to a fixed 640×320, so under jsdom those `<text>` nodes
-    // come back empty — the ordering is asserted against `toCapacityRows` below instead.
   });
 
-  it("treats a null capacity as no places set aside rather than as zero students", async () => {
+  it("charts a class whose sections only partly declare a capacity", async () => {
+    // The arithmetic — a null contributing no places while its section still counts — is
+    // asserted against toCapacityRows below. Here the point is only that such a class
+    // still gets a bar rather than being dropped.
     respond([
       makeSection({ id: "s1", class_id: "c-4", capacity: null }),
       makeSection({ id: "s2", class_id: "c-4", capacity: 20 }),
     ]);
 
-    renderWithProviders(<CapacityChart />);
+    const { container } = renderWithProviders(<CapacityChart />);
 
-    expect(await screen.findByText("20")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(container.querySelectorAll(BAR)).toHaveLength(1);
+    });
   });
 
   it("drops a section whose class the reader cannot see instead of inventing a name", async () => {

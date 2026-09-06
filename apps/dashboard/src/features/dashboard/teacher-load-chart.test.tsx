@@ -103,17 +103,26 @@ describe("TeacherLoadChart", () => {
     // is where this component actually decides it.
   });
 
-  it("prints each figure beside its own bar rather than hiding it behind a hover", async () => {
+  it("draws a bar for an over-norm teacher like any other", async () => {
     respond([
       makeRow({ staff_id: "a", name: "Ayesha Khan", weekly_periods: 18 }),
       makeRow({ staff_id: "b", name: "Bilal Ahmed", weekly_periods: 26, over_norm: true }),
     ]);
 
-    renderWithProviders(<TeacherLoadChart />);
+    const { container } = renderWithProviders(<TeacherLoadChart />);
 
-    // A tooltip reaches no touch reader at all, so the value is a direct label as well.
-    expect(await screen.findByText("18")).toBeInTheDocument();
-    expect(screen.getByText("26")).toBeInTheDocument();
+    // Over-norm changes the bar's slot, never whether it is drawn — the finding itself
+    // lives in the callout below the plot, asserted in the next test.
+    await waitFor(() => {
+      expect(container.querySelectorAll(BAR)).toHaveLength(2);
+    });
+    // No assertion on the bar labels here. They render in the browser — a screenshot of
+    // the running app shows a figure beside every bar — but `LabelList` is placed from
+    // measured layout, and `jest.setup.ts` stubs every element's getBoundingClientRect
+    // to a fixed 640x320, so the <text> never lands. Worse, recharts keeps a hidden
+    // #recharts_measurement_span in the body holding the last string it measured, so
+    // getByText for one of these figures can MATCH THAT and pass while asserting
+    // nothing. The figures are asserted against the pure row builder below instead.
   });
 
   it("states an over-norm teacher in words, never by the bar colour alone", async () => {
