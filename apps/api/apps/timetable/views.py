@@ -152,11 +152,11 @@ class RoomViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     #
     # Only `created_at` has an index that an ORDER BY can walk. `code` and `room_type`
     # sit at the tail of composite indexes led by (tenant, campus), so neither is a
-    # usable prefix here; `name`, `capacity` and `is_active` have no index at all, and
-    # `campus_name` is joined. All six therefore sort the tenant's rooms in memory —
-    # affordable only because this table is bounded by one school's room count.
-    # `capacity` is nullable, so Postgres puts the unset rooms last ascending and first
-    # descending.
+    # usable prefix here; `name` has `rooms_tenant_name_idx`, but `capacity` and
+    # `is_active` have no index at all, and `campus_name` is joined. Those therefore
+    # sort the tenant's rooms in memory — affordable only because this table is bounded
+    # by one school's room count. `capacity` is nullable, so Postgres puts the unset
+    # rooms last ascending and first descending.
     ordering_fields = [
         "code",
         "name",

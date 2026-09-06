@@ -89,18 +89,18 @@ class StudentViewSet(TenantModelViewSet):
     serializer_class = StudentSerializer
     filterset_class = StudentFilterSet
     search_fields = ["first_name", "last_name", "preferred_name", "admission_number"]
-    # Every column the roll renders. Four of these are index-backed for a tenant:
-    # `last_name` leads `students_tenant_name_idx`, `status` has
-    # `students_tenant_status_idx`, `admission_number` has the partial unique index
-    # (and the list is already filtered to `deleted_at IS NULL`, which is that index's
-    # own condition), and `created_at` is indexed on its own.
+    # Every column the roll renders. Five are index-backed for a tenant: `last_name`
+    # leads `students_tenant_name_idx`, `status` has `students_tenant_status_idx`,
+    # `admission_date` has `students_tenant_admitted_idx`, `admission_number` has the
+    # partial unique index (and the list is already filtered to `deleted_at IS NULL`,
+    # which is that index's own condition), and `created_at` is indexed on its own.
     #
     # The rest table-scan the tenant's roll and sort it in memory: `first_name` is the
-    # second column of the name index, never a prefix; `admission_date` and
-    # `date_of_birth` have no index; `campus_name` and `house_name` are joined.
-    # Bounded by one school's roll, which is why they are offered at all — revisit if
-    # a tenant's roll outgrows an in-memory sort. `house_name` is nullable (a student
-    # need not be in a house), so those rows land last ascending, first descending.
+    # second column of the name index, never a prefix; `date_of_birth` has no index;
+    # `campus_name` and `house_name` are joined. Bounded by one school's roll, which is
+    # why they are offered at all — revisit if a tenant's roll outgrows an in-memory
+    # sort. `house_name` is nullable (a student need not be in a house), so those rows
+    # land last ascending, first descending.
     ordering_fields = [
         "last_name",
         "first_name",

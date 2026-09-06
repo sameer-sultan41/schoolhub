@@ -96,15 +96,15 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     # on `own` and a department head on `assigned`.
     # Index-backed: `last_name` (staff_tenant_name_idx), `staff_type`
     # (staff_tenant_type_idx), `employment_status` (staff_tenant_status_idx),
-    # `employee_number` (staff_unique_employee_number_per_tenant, whose
-    # `deleted_at IS NULL` condition is exactly what this list already filters
-    # on) and `created_at` (its own index).
-    # Table scans: `first_name` — staff_tenant_name_idx leads with `last_name`,
-    # so it cannot serve a sort on its second column alone — plus `joining_date`
-    # and `email`, which nothing indexes at all (`email` is nullable, so staff
-    # with no address sort last ascending and first descending), plus the three
-    # annotated names, each a sort over a left join. Allowed because this list is
-    # bounded by one school's payroll; on a big table each would want an index.
+    # `joining_date` (staff_tenant_joined_idx), `employee_number`
+    # (staff_unique_employee_number_per_tenant, whose `deleted_at IS NULL` condition
+    # is exactly what this list already filters on) and `created_at` (its own index).
+    # Table scans: `first_name` — staff_tenant_name_idx leads with `last_name`, so it
+    # cannot serve a sort on its second column alone — plus `email`, which nothing
+    # indexes (it is nullable, so staff with no address sort last ascending and first
+    # descending), plus the three annotated names, each a sort over a left join.
+    # Allowed because this list is bounded by one school's payroll; on a big table
+    # each would want an index.
     ordering_fields = [
         "last_name",
         "first_name",
