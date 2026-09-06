@@ -2767,6 +2767,7 @@ export interface components {
                     next_cursor?: string | null;
                     previous_cursor?: string | null;
                     page_size?: number;
+                    total_count?: number;
                 };
             };
         };
@@ -2807,6 +2808,7 @@ export interface components {
                     next_cursor?: string | null;
                     previous_cursor?: string | null;
                     page_size?: number;
+                    total_count?: number;
                 };
             };
         };

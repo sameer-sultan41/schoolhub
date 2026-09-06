@@ -6804,6 +6804,8 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+                total_count:
+                  type: integer
     PaginatedStaffQualificationList:
       type: object
       properties:
@@ -6887,6 +6889,8 @@ components:
                   type: string
                   nullable: true
                 page_size:
+                  type: integer
+                total_count:
                   type: integer
     PaginatedStudentTransferList:
       type: object

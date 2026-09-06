@@ -51,6 +51,7 @@ from apps.staff_management.services import (
 )
 from apps.staff_management.tasks import export_staff_task, import_staff_task
 from core.api.exceptions import DomainRuleViolation
+from core.api.pagination import CountedCursorPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
@@ -77,6 +78,8 @@ class _StaffModuleViewSetMixin(TenantScopedViewSetMixin):
 class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     """Staff master records (module doc §5.1)."""
 
+    # Counted for the same reason as students: a bounded, frequently-totalled roll.
+    pagination_class = CountedCursorPagination
     queryset = Staff.objects
     serializer_class = StaffSerializer
     filterset_class = StaffFilterSet
