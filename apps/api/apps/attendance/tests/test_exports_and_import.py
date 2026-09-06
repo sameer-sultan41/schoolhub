@@ -451,6 +451,7 @@ class ImportOverwriteGuardTests(HistoricalImportTests):
                 attendance_date=self.last_year,
                 status=AttendanceStatus.PRESENT,
                 marked_by=self.user.pk,
+                source=AttendanceSource.MANUAL,
                 is_locked=True,
             )
 
@@ -498,8 +499,15 @@ class ImportOverwriteGuardTests(HistoricalImportTests):
             self.assertEqual(row.status, AttendanceStatus.ON_LEAVE)
             self.assertEqual(row.leave_request_id, request.pk)
 
-    def test_an_unlocked_row_still_re_imports(self) -> None:
-        """The control: a re-run after fixing the error report must still work."""
+    def test_the_import_can_re_import_its_own_locked_rows(self) -> None:
+        """The control, and the reason the guard keys on `source` rather than on
+        the lock alone: the import writes its own rows locked, so a bare
+        locked-row refusal would block the re-run §9's journey depends on."""
         self.import_row()
 
         self.assertIsNone(self.import_row(status=AttendanceStatus.PRESENT))
+
+        with tenant_context(self.tenant.id):
+            row = StudentAttendance.objects.alive().get(student=self.students[0])
+            self.assertEqual(row.status, AttendanceStatus.PRESENT)
+            self.assertEqual(row.source, AttendanceSource.IMPORT)

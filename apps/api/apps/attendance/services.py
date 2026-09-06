@@ -1538,7 +1538,17 @@ def import_attendance_row(
             "field": "attendance_date",
             "issue": "This student has approved leave on this date; cancel it before importing.",
         }
-    if existing is not None and (existing.is_locked or is_locked(existing.attendance_date)):
+    if (
+        existing is not None
+        and existing.source != AttendanceSource.IMPORT
+        and (existing.is_locked or is_locked(existing.attendance_date))
+    ):
+        # Locked *and not this path's own work*. The source is the discriminator,
+        # and it has to be: the import writes its own rows locked by design, so a
+        # bare locked-row refusal blocks the re-run §9's journey depends on —
+        # "reviews the row-level error report … re-imports failed rows only".
+        # A row a *person* marked or corrected is `manual`; one the leave module
+        # wrote is `system`. Those are the ones a migration must not rewrite.
         return {
             "row": str(row_number),
             "field": "attendance_date",
