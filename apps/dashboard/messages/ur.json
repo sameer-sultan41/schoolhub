@@ -145,6 +145,12 @@
       "importStudents": "طلبہ درآمد کریں",
       "buildTimetable": "ٹائم ٹیبل بنائیں",
       "reviewPromotions": "ترقیوں کا جائزہ"
+    },
+    "cards": {
+      "students": "داخل شدہ طلبہ",
+      "attendanceToday": "آج کی حاضری",
+      "feesOutstanding": "واجب الادا فیس",
+      "openAdmissions": "کھلے داخلہ استفسارات"
     }
   },
   "students": {

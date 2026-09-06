@@ -145,6 +145,12 @@
       "importStudents": "Import students",
       "buildTimetable": "Build timetable",
       "reviewPromotions": "Review promotions"
+    },
+    "cards": {
+      "students": "Enrolled students",
+      "attendanceToday": "Attendance today",
+      "feesOutstanding": "Outstanding fees",
+      "openAdmissions": "Open admission enquiries"
     }
   },
   "students": {
