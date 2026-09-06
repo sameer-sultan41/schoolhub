@@ -398,7 +398,15 @@ export function DataTable<TRow>({
             ? Array.from({ length: DEFAULT_SKELETON_ROW_COUNT }, (_, rowIndex) => (
                 <TableRow key={`skeleton-${rowIndex}`}>
                   {visibleColumns.map((column) => (
-                    <TableCell key={column.id}>
+                    // The skeleton cell carries the same alignment classes as the real
+                    // one. Without them a `measure` column's placeholder sits left while
+                    // its value sits right, so the whole column jumps sideways the moment
+                    // data lands — and every caller ends up hand-writing `ms-auto` into
+                    // its skeleton to compensate.
+                    <TableCell
+                      key={column.id}
+                      className={cn(cellPadding, numericCellClasses(column), column.className)}
+                    >
                       {column.skeleton ?? <Skeleton className="h-4 w-2/3" />}
                     </TableCell>
                   ))}

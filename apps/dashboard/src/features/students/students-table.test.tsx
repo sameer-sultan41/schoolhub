@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { StudentsTable } from "@/features/students/students-table";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { offsetPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 // StudentsTable never calls useSession itself — it renders <Can>, which reads
@@ -31,6 +31,7 @@ const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermiss
 const STUDENT = {
   id: "s1",
   admission_number: "2026-0001",
+  admission_date: "2026-04-01",
   first_name: "Amina",
   last_name: "Khan",
   preferred_name: null,
@@ -53,12 +54,7 @@ describe("StudentsTable", () => {
   });
 
   it("renders rows once data resolves", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
 
@@ -67,12 +63,7 @@ describe("StudentsTable", () => {
   });
 
   it("shows the translated empty state when the result set is empty", async () => {
-    mockGet.mockResolvedValue({
-      data: [],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
 
@@ -97,12 +88,7 @@ describe("StudentsTable", () => {
   });
 
   it("disables the Next button when there is no next page", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
 
@@ -111,12 +97,7 @@ describe("StudentsTable", () => {
   });
 
   it("clicking a row navigates to that student's detail page", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
 
@@ -126,38 +107,37 @@ describe("StudentsTable", () => {
     expect(mockPush).toHaveBeenCalledWith("/students/s1");
   });
 
-  it("clicking Next fetches the next page by cursor when one is available", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: "page-2", previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+  it("clicking a page number asks the server for that page", async () => {
+    // Two pages' worth: the pager only renders numbers when there is somewhere to go.
+    mockGet.mockResolvedValue(
+      offsetPage([STUDENT], { total_count: 30, page_size: 25 }, "req-list"),
+    );
 
     renderWithProviders(<StudentsTable />);
-
-    // The Next button exists (disabled) from the very first render, before the
-    // query resolves — wait for a row so `hasNext` reflects the loaded page's
-    // pagination, not the pre-fetch default.
     await screen.findByText("2026-0001");
-    const nextButton = screen.getByRole("button", { name: "Next" });
-    expect(nextButton).not.toBeDisabled();
-    fireEvent.click(nextButton);
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
 
     await waitFor(() => {
-      const lastCall = mockGet.mock.calls.at(-1)?.[1];
-      expect(lastCall?.query?.cursor).toBe("page-2");
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
     });
+  });
+
+  it("omits the page parameter on page one rather than sending page=1", async () => {
+    // A link to the first page of a filtered roster should read the same as the roster.
+    mockGet.mockResolvedValue(
+      offsetPage([STUDENT], { total_count: 30, page_size: 25 }, "req-list"),
+    );
+
+    renderWithProviders(<StudentsTable />);
+    await screen.findByText("2026-0001");
+
+    expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBeUndefined();
   });
 
   it("debounces the search input before it reaches the query", async () => {
     jest.useFakeTimers();
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
     await screen.findByText("2026-0001");
@@ -186,12 +166,7 @@ describe("StudentsTable", () => {
   });
 
   it("changing the status filter re-fetches with the selected status", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StudentsTable />);
@@ -206,39 +181,36 @@ describe("StudentsTable", () => {
     });
   });
 
-  it("clicking Previous returns to the prior page", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: "page-2", previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+  it("Previous returns to the page before, and is disabled on the first", async () => {
+    mockGet.mockResolvedValue(
+      offsetPage([STUDENT], { total_count: 30, page_size: 25 }, "req-list"),
+    );
 
     renderWithProviders(<StudentsTable />);
     await screen.findByText("2026-0001");
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    const previousButton = await screen.findByRole("button", { name: "Previous" });
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
     await waitFor(() => {
-      expect(previousButton).not.toBeDisabled();
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
     });
-    mockGet.mockClear();
-    fireEvent.click(previousButton);
+
+    const previous = screen.getByRole("button", { name: "Previous page" });
+    await waitFor(() => {
+      expect(previous).not.toBeDisabled();
+    });
+    fireEvent.click(previous);
 
     await waitFor(() => {
-      const lastCall = mockGet.mock.calls.at(-1)?.[1];
-      expect(lastCall?.query?.cursor).toBeUndefined();
+      // Back to page one, which is the absence of the parameter rather than page=1.
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBeUndefined();
     });
   });
 
   it("enables the ID-card action once a row is selected", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StudentsTable />);
@@ -253,12 +225,7 @@ describe("StudentsTable", () => {
 
   it("unchecking a selected row disables the action again", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StudentsTable />);
@@ -276,12 +243,7 @@ describe("StudentsTable", () => {
   it("select-all toggles every row on the page, both ways", async () => {
     mockUsePermission.mockReturnValue(true);
     const secondStudent = { ...STUDENT, id: "s2", admission_number: "2026-0002" };
-    mockGet.mockResolvedValue({
-      data: [STUDENT, secondStudent],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT, secondStudent], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StudentsTable />);
@@ -301,12 +263,7 @@ describe("StudentsTable", () => {
     mockUsePermission.mockReturnValue(true);
     mockGet.mockImplementation((path: string) => {
       if (path === "/students") {
-        return Promise.resolve({
-          data: [STUDENT],
-          meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-          requestId: "req-list",
-          status: 200,
-        });
+        return Promise.resolve(offsetPage([STUDENT], {}, "req-list"));
       }
       if (path === "/jobs/job1") {
         return Promise.resolve({
@@ -349,12 +306,7 @@ describe("StudentsTable", () => {
 
   it("offers the create action from inside the empty state, not just the header", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue({
-      data: [],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
 
@@ -366,12 +318,7 @@ describe("StudentsTable", () => {
   });
 
   it("offers no clear control until a filter is actually set", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
 
@@ -380,12 +327,7 @@ describe("StudentsTable", () => {
   });
 
   it("clearing the filters drops the status from the request", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StudentsTable />);
@@ -406,12 +348,7 @@ describe("StudentsTable", () => {
   });
 
   it("tightens the row height on this table, which is scanned rather than read", async () => {
-    mockGet.mockResolvedValue({
-      data: [STUDENT],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
 

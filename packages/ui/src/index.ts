@@ -9,7 +9,7 @@ export type { AlertProps } from "./components/alert";
 
 export { Avatar, AvatarFallback, AvatarImage } from "./components/avatar";
 
-export { Badge, badgeVariants } from "./components/badge";
+export { Badge, BadgeDot, badgeVariants } from "./components/badge";
 export type { BadgeProps } from "./components/badge";
 
 export { Button, buttonVariants } from "./components/button";
