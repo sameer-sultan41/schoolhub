@@ -41,6 +41,7 @@ from apps.attendance.tests.factories import (
     open_all_week,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 
@@ -56,7 +57,16 @@ class LeaveTestCase(TestCase):
         self.tenant = TenantFactory()
         self.guardian_user = UserFactory(tenant=self.tenant)
         self.approver = UserFactory(tenant=self.tenant)
+        # Level 2 needs someone who can see wider than level 1 — the vice
+        # principal §7.2 escalates to. Granted in the fixture rather than per
+        # test, because every escalation case needs it and a `second_approver`
+        # holding no scope at all could never satisfy the rule.
         self.second_approver = UserFactory(tenant=self.tenant)
+        grant(
+            self.second_approver,
+            "attendance.leave-request.approve",
+            scope=RecordScope.ALL,
+        )
         open_all_week(self.tenant)
 
         with tenant_context(self.tenant.id):
@@ -465,16 +475,19 @@ class LeaveWritePathRaceTests(LeaveTestCase):
         from apps.attendance import services as attendance_services
         from apps.attendance.models import AttendanceStatus
 
-        monday = next_monday()
+        # **Today**, not a future Monday: §11 refuses a future date *before* the
+        # on-leave guard is reached, so a forward-dated version of this test
+        # passed without exercising the rule it names.
+        today = timezone.localdate()
         with tenant_context(self.tenant.id):
-            request = self.submit(start_date=monday, end_date=monday)
+            request = self.submit(start_date=today, end_date=today)
             services.decide_leave_step(request=request, approve=True, approver_id=self.approver.pk)
 
             with self.assertRaises(DomainRuleViolation) as raised:
                 attendance_services.bulk_mark_student_attendance(
                     section=self.section,
                     session=self.session,
-                    on_date=monday,
+                    on_date=today,
                     period=None,
                     entries=[{"student_id": self.student.pk, "status": AttendanceStatus.PRESENT}],
                     actor_id=self.approver.pk,
