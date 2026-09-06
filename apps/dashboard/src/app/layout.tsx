@@ -6,6 +6,9 @@ import type { ReactNode } from "react";
 import { AppProviders } from "@/components/providers";
 import { PLATFORM_NAME } from "@/lib/constants";
 import { directionFor } from "@/lib/env";
+import { preferenceDataAttributes } from "@/lib/preferences/preferences-config";
+import { readPreferencesFromCookies } from "@/lib/preferences/preferences-cookies";
+import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
 import "./globals.css";
 
 /**
@@ -54,6 +57,10 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
   const messages = await getMessages();
+  // Read here rather than in a client boot script: this layout is already dynamic (the
+  // locale above comes from a cookie), so the attributes can be part of the server's own
+  // markup and there is no first paint with the wrong layout to hide.
+  const preferences = await readPreferencesFromCookies();
 
   return (
     // suppressHydrationWarning is required by next-themes, not a workaround for a bug of
@@ -66,10 +73,16 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       dir={directionFor(locale)}
       suppressHydrationWarning
       className={`h-full ${inter.variable} ${fraunces.variable} ${notoNastaliqUrdu.variable}`}
+      // Layout preferences ride on <html> because that is the only element every CSS rule
+      // below can reach — the preset stylesheets key off [data-theme-preset], and the
+      // shell reads the rest through `[html[data-…]_&]` variants.
+      {...preferenceDataAttributes(preferences)}
     >
       <body className="min-h-full font-sans">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <AppProviders>{children}</AppProviders>
+          <PreferencesProvider initialValues={preferences}>
+            <AppProviders>{children}</AppProviders>
+          </PreferencesProvider>
         </NextIntlClientProvider>
       </body>
     </html>
