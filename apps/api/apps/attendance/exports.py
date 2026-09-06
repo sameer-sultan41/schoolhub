@@ -81,6 +81,32 @@ def _cell(value: object) -> str:
     return str(value)
 
 
+# OWASP's CSV-injection set, plus the two whitespace characters Excel strips
+# before parsing — a cell starting with a tab or carriage return followed by `=`
+# is still a formula.
+_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _spreadsheet_safe(text: str) -> str:
+    """Neutralise a value a spreadsheet would otherwise execute as a formula.
+
+    `remarks` is free text a teacher types at the register, so a remark reading
+    `=HYPERLINK("http://evil","Click")` executes the moment someone opens the
+    export in Excel, Sheets or LibreOffice — a client-side execution vector that
+    starts inside our own data and needs no other flaw.
+
+    The leading apostrophe is the standard mitigation: every major spreadsheet
+    reads it as "the rest is text" and hides it in the cell. It does show in a
+    raw CSV opened in a text editor, which is the accepted cost — a visible
+    apostrophe is a far smaller problem than a live formula.
+
+    **Not applied to the PDF**, which escapes HTML instead: there is no formula
+    engine in a PDF, and a stray apostrophe in a printed register would be a
+    defect with nothing to justify it.
+    """
+    return f"'{text}" if text.startswith(_FORMULA_TRIGGERS) else text
+
+
 def _csv(rows: list[dict]) -> bytes:
     buffer = io.StringIO()
     if not rows:
@@ -91,7 +117,9 @@ def _csv(rows: list[dict]) -> bytes:
 
     writer = csv.DictWriter(buffer, fieldnames=_headers(rows))
     writer.writeheader()
-    writer.writerows({key: _cell(value) for key, value in row.items()} for row in rows)
+    writer.writerows(
+        {key: _spreadsheet_safe(_cell(value)) for key, value in row.items()} for row in rows
+    )
     return buffer.getvalue().encode()
 
 
@@ -120,7 +148,10 @@ def _xlsx(rows: list[dict], *, title: str) -> bytes:
     sheet.freeze_panes = "A2"
 
     for row in rows:
-        sheet.append([_cell(row.get(header)) for header in headers])
+        # openpyxl writes a string beginning `=` as a *formula*, so this is
+        # not merely defence against the reader's spreadsheet — it is what
+        # stops us writing one ourselves.
+        sheet.append([_spreadsheet_safe(_cell(row.get(header))) for header in headers])
 
     for index, header in enumerate(headers, start=1):
         widest = max((len(_cell(row.get(header))) for row in rows), default=0)

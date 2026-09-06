@@ -382,3 +382,124 @@ class ImportEndpointTests(AttendanceAPITestCase):
         response = self.upload(content=b"x" * (10 * 1024 * 1024 + 1))
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
+class SpreadsheetInjectionTests(TestCase):
+    """A remark a teacher typed must not execute when the export is opened.
+
+    `remarks` is free text on the register, so this vector starts inside our own
+    data and needs no other flaw to reach a reader's Excel.
+    """
+
+    DANGEROUS = [
+        {"remarks": '=HYPERLINK("http://evil","Click")'},
+        {"remarks": "+1+1"},
+        {"remarks": "-1+1"},
+        {"remarks": "@SUM(A1:A9)"},
+    ]
+
+    def test_csv_neutralises_every_formula_trigger(self) -> None:
+        data, _, _ = exports.render(self.DANGEROUS, fmt="csv", title="Register")
+
+        text = data.decode()
+        for line in text.splitlines()[1:]:
+            self.assertTrue(
+                line.lstrip('"').startswith("'"),
+                f"a formula trigger reached the cell unescaped: {line}",
+            )
+
+    def test_xlsx_writes_text_not_a_formula(self) -> None:
+        """openpyxl writes a string beginning `=` as a *formula*, so this is not
+        only defence against the reader's spreadsheet — it stops us authoring
+        one ourselves."""
+        import openpyxl
+
+        data, _, _ = exports.render(self.DANGEROUS, fmt="xlsx", title="Register")
+
+        sheet = openpyxl.load_workbook(io.BytesIO(data)).active
+        values = [row[0].value for row in sheet.iter_rows(min_row=2)]
+        self.assertTrue(all(value.startswith("'") for value in values), values)
+
+    def test_an_ordinary_remark_is_left_alone(self) -> None:
+        """The control: the guard must not be prefixing everything."""
+        data, _, _ = exports.render(
+            [{"remarks": "Left early for a dental appointment"}], fmt="csv", title="R"
+        )
+
+        self.assertNotIn("'Left early", data.decode())
+
+    def test_the_pdf_is_not_prefixed(self) -> None:
+        """There is no formula engine in a PDF, and a stray apostrophe in a
+        printed register would be a defect with nothing to justify it."""
+        data, _, _ = exports.render(self.DANGEROUS, fmt="pdf", title="Register")
+
+        self.assertTrue(data.startswith(b"%PDF"))
+
+
+class ImportOverwriteGuardTests(HistoricalImportTests):
+    """The import upserts, so it can land on a row a human has already settled."""
+
+    def test_a_locked_row_is_not_silently_overwritten(self) -> None:
+        """A locked row belongs to the correction workflow. A migration
+        rewriting one is worse than a line in the error report."""
+        with tenant_context(self.tenant.id):
+            StudentAttendanceFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                section=self.section,
+                academic_session=self.session,
+                attendance_date=self.last_year,
+                status=AttendanceStatus.PRESENT,
+                marked_by=self.user.pk,
+                is_locked=True,
+            )
+
+        error = self.import_row(status=AttendanceStatus.ABSENT)
+
+        self.assertIn("correction request", error["issue"])
+        with tenant_context(self.tenant.id):
+            row = StudentAttendance.objects.alive().get(student=self.students[0])
+            self.assertEqual(row.status, AttendanceStatus.PRESENT)
+
+    def test_an_approved_leave_row_is_not_clobbered(self) -> None:
+        """It belongs to a leave request that would be left pointing at a status
+        it no longer describes — the same stale-link bug the register guards."""
+        from apps.attendance.models import LeaveRequest, LeaveType, RequesterType
+
+        with tenant_context(self.tenant.id):
+            leave_type = LeaveType.objects.create(tenant=self.tenant, name="Sick", code="SICK-IMP")
+            request = LeaveRequest.objects.create(
+                tenant=self.tenant,
+                requester_type=RequesterType.STUDENT,
+                student=self.students[0],
+                leave_type=leave_type,
+                start_date=self.last_year,
+                end_date=self.last_year,
+                days_count=1,
+                reason="Migrated leave.",
+                submitted_by=self.user.pk,
+            )
+            StudentAttendanceFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                section=self.section,
+                academic_session=self.session,
+                attendance_date=self.last_year,
+                status=AttendanceStatus.ON_LEAVE,
+                leave_request=request,
+                marked_by=self.user.pk,
+            )
+
+        error = self.import_row(status=AttendanceStatus.ABSENT)
+
+        self.assertIn("approved leave", error["issue"])
+        with tenant_context(self.tenant.id):
+            row = StudentAttendance.objects.alive().get(student=self.students[0])
+            self.assertEqual(row.status, AttendanceStatus.ON_LEAVE)
+            self.assertEqual(row.leave_request_id, request.pk)
+
+    def test_an_unlocked_row_still_re_imports(self) -> None:
+        """The control: a re-run after fixing the error report must still work."""
+        self.import_row()
+
+        self.assertIsNone(self.import_row(status=AttendanceStatus.PRESENT))

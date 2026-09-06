@@ -348,9 +348,16 @@ rather than worked around, because the workaround would be a key nobody declared
   nobody opens, and the caller is told rather than handed a truncated document
   that looks complete. PDF values are HTML-escaped — these are student and staff
   names, and one containing `&` would otherwise break the table silently.
+  **CSV and XLSX values are neutralised against formula injection**: `remarks` is
+  free text a teacher types, so a remark reading `=HYPERLINK(...)` executes when
+  the export is opened in Excel or Sheets — a client-side execution vector that
+  starts inside our own data. openpyxl also writes a leading `=` as a real
+  formula, so the guard stops us authoring one as well as defending the reader.
 - ~~**§9's historical CSV import.**~~ **Built**, as
-  `POST /student-attendance-imports`. It deliberately does **not** apply three
-  rules the register does, and each omission is why it is a separate path rather
+  `POST /student-attendance-imports`. It refuses a **locked** or **on-leave**
+  row into the error report rather than overwriting it — a migration must not
+  silently rewrite what the correction workflow or an approved leave request
+  owns. It deliberately does **not** apply three other rules the register does, and each omission is why it is a separate path rather
   than a flag on `bulk_mark_student_attendance`:
   no calendar gate (today's working week and holidays describe *this* year; a
   register migrated from three years ago was kept against that year's, and

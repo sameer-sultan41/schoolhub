@@ -1502,6 +1502,11 @@ def import_attendance_row(
             "issue": "No live student has this admission number.",
         }
 
+    # **Any** enrollment status, deliberately — not just ACTIVE. A historical
+    # register is imported for a session that has usually ended, so the students
+    # in it are legitimately `completed`, `transferred` or `withdrawn` by now.
+    # Narrowing this to ACTIVE would reject exactly the rows a backfill exists to
+    # carry. The most recent enrollment is the one the register was kept against.
     enrollment = (
         StudentEnrollment.objects.alive()
         .filter(student=student, academic_session=session)
@@ -1513,6 +1518,34 @@ def import_attendance_row(
             "row": str(row_number),
             "field": "admission_number",
             "issue": "This student has no enrollment in the named session.",
+        }
+
+    # The import upserts, so it can land on a row a human has already settled.
+    # Neither of these may be overwritten, for the same reasons the register
+    # refuses them: a locked row is one the correction workflow owns, and an
+    # `on_leave` row belongs to an approved leave request that would be left
+    # pointing at a status it no longer describes. A migration silently
+    # rewriting either is worse than a row in the error report — the whole point
+    # of the report is that the operator re-imports what genuinely failed.
+    existing = (
+        StudentAttendance.objects.alive()
+        .filter(student=student, attendance_date=on_date, period__isnull=True)
+        .first()
+    )
+    if existing is not None and existing.status == AttendanceStatus.ON_LEAVE:
+        return {
+            "row": str(row_number),
+            "field": "attendance_date",
+            "issue": "This student has approved leave on this date; cancel it before importing.",
+        }
+    if existing is not None and (existing.is_locked or is_locked(existing.attendance_date)):
+        return {
+            "row": str(row_number),
+            "field": "attendance_date",
+            "issue": (
+                "A locked record already exists for this date; change it through a "
+                "correction request rather than a re-import."
+            ),
         }
 
     late = (
@@ -1543,11 +1576,16 @@ def import_attendance_row(
                     "updated_by": actor_id,
                 },
             )
-    except IntegrityError:
+    except IntegrityError as exc:
+        # The message carries the constraint name, so a genuine duplicate reads
+        # as one and anything else says what it actually was. A bare "duplicate
+        # record" for every IntegrityError sends the operator looking for a
+        # conflict that is not there.
+        detail = str(exc).strip().splitlines()[0]
         return {
             "row": str(row_number),
             "field": "attendance_date",
-            "issue": "A conflicting record for this student and date already exists.",
+            "issue": f"This row could not be written: {detail}",
         }
     return None
 

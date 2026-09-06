@@ -774,9 +774,6 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         return ActionResponse.accepted(str(job.pk), message=f"Report queued: {reason}.")
 
 
-_MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024
-
-
 class AttendanceImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
     """`POST /student-attendance-imports` -> `202` + job — §9's migration import.
 
@@ -814,6 +811,7 @@ class AttendanceImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet)
     def create(self, request: Request, *args, **kwargs) -> Response:
         import base64
 
+        from apps.attendance import uploads
         from apps.attendance.tasks import import_attendance_task
         from core.jobs.services import attach_celery_task_id, create_job
 
@@ -823,10 +821,12 @@ class AttendanceImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet)
         session = payload.validated_data["academic_session"]
 
         content = upload.read()
-        if len(content) > _MAX_IMPORT_FILE_BYTES:
-            raise DomainRuleViolation(
-                {"file": f"Import file exceeds the {_MAX_IMPORT_FILE_BYTES}-byte limit."}
-            )
+        # The registered purpose's own ceiling, not a second copy of the number.
+        # `core/files/purposes.py` exists precisely so a limit is declared once —
+        # a duplicate here is the drift that registry was built to end.
+        max_bytes = uploads.ATTENDANCE_IMPORT.max_size_bytes
+        if len(content) > max_bytes:
+            raise DomainRuleViolation({"file": f"Import file exceeds the {max_bytes}-byte limit."})
 
         job = create_job(
             tenant_id=request.tenant.pk,
