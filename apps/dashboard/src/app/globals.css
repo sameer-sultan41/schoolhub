@@ -5,6 +5,12 @@
 @import "tw-animate-css";
 @import "@schoolhub/ui/styles/theme.css";
 
+/* Colour presets. Imported after theme.css so their [data-theme-preset] rules win over
+   its :root defaults; a viewer picks one in the header's preferences popover. */
+@import "@schoolhub/ui/styles/presets/tangerine.css";
+@import "@schoolhub/ui/styles/presets/soft-pop.css";
+@import "@schoolhub/ui/styles/presets/brutalist.css";
+
 /* Tailwind v4 auto-detects sources in this app; the shared package needs an explicit hint. */
 @source "../../../../packages/ui/src";
 

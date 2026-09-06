@@ -1,0 +1,149 @@
+/*
+ * Tangerine — adapted from arhamkhnz/next-shadcn-admin-dashboard (MIT), remapped onto this
+ * repo's `--sh-*` tier. Upstream ships OKLCH already, so the values below are its own;
+ * only the variable names changed.
+ *
+ * Only `--sh-*` is written here. Never a `--color-*` name: those are aliases declared in
+ * theme.css's `@theme inline` block, and pointing one somewhere else would create the
+ * second source of truth that file exists to prevent.
+ *
+ * Deliberately NOT overridden, so they stay identical across every preset:
+ *   - success / warning / danger / info. A status colour is not a matter of taste, and
+ *     upstream's own `--destructive` for one preset is pure black, which is
+ *     indistinguishable from its foreground.
+ *   - --sh-color-ring, which is `var(--sh-color-primary)` and so already follows the
+ *     preset.
+ *   - the elevation scale, the platform tier, and the type stack.
+ *
+ * Specificity, low to high:
+ *   1. :root — theme.css, the Ink & Brass default
+ *   2. :root[data-theme-preset="tangerine"] — this file
+ *   3. the inline style on the TenantTheme wrapper — tenant branding, applied only
+ *      under the "tenant" preset (tenant-theme.tsx)
+ *
+ * Measured contrast (see the generator note in the PR body):
+ *   light foreground on background             10.64:1
+ *   light surface-foreground on surface        12.69:1
+ *   light primary-foreground on primary         4.53:1
+ *   light muted-foreground on surface           4.85:1
+ *   light secondary-foreground on secondary     6.81:1
+ *   light accent-foreground on accent           7.92:1
+ *   dark  foreground on background             12.27:1
+ *   dark  surface-foreground on surface        10.41:1
+ *   dark  primary-foreground on primary         4.53:1
+ *   dark  muted-foreground on surface           5.32:1
+ *   dark  secondary-foreground on secondary    10.41:1
+ *   dark  accent-foreground on accent           8.27:1
+ */
+
+:root[data-theme-preset="tangerine"] {
+  --sh-radius: 0.625rem;
+
+  --sh-color-background: oklch(0.94 0 236.5);
+  --sh-color-foreground: oklch(0.32 0 0);
+  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface-foreground: oklch(0.32 0 0);
+  --sh-color-surface-raised: oklch(1 0 0);
+  --sh-color-surface-sunken: oklch(0.973 0 0);
+
+  --sh-color-muted: oklch(0.98 0 247.84);
+  --sh-color-muted-foreground: oklch(0.55 0.02 264.36);
+  --sh-color-border: oklch(0.9 0.01 247.88);
+
+  --sh-color-primary: oklch(0.585 0.17 36.44);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  --sh-color-secondary: oklch(0.97 0 264.54);
+  --sh-color-secondary-foreground: oklch(0.45 0.03 256.8);
+  --sh-color-accent: oklch(0.91 0.02 243.82);
+  --sh-color-accent-foreground: oklch(0.38 0.14 265.52);
+
+  --sh-color-chart-1: oklch(0.72 0.06 248.68);
+  --sh-color-chart-2: oklch(0.79 0.09 35.96);
+  --sh-color-chart-3: oklch(0.58 0.08 254.16);
+  --sh-color-chart-4: oklch(0.5 0.08 259.49);
+  --sh-color-chart-5: oklch(0.42 0.1 264.03);
+  --sh-color-chart-6: oklch(0.39 0.1 322.03);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.585 0.17 36.44) 0%,
+    oklch(0.61 0.17 60.44) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(1 0 0);
+}
+
+/*
+ * Declared twice with identical values, matching theme.css: the media arm covers a viewer
+ * who has not chosen (`:not(.light)` lets an explicit light choice win), the class arm
+ * covers the dashboard's toggle. A divergence here is invisible until someone toggles.
+ */
+/* dark-mode token block */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset="tangerine"]:not(.light) {
+    --sh-color-background: oklch(0.26 0.03 262.67);
+    --sh-color-foreground: oklch(0.92 0 0);
+    --sh-color-surface: oklch(0.31 0.03 268.64);
+    --sh-color-surface-foreground: oklch(0.92 0 0);
+    --sh-color-surface-raised: oklch(0.29 0.02 268.4);
+    --sh-color-surface-sunken: oklch(0.278 0.03 268.64);
+
+    --sh-color-muted: oklch(0.31 0.03 266.71);
+    --sh-color-muted-foreground: oklch(0.72 0 0);
+    --sh-color-border: oklch(0.38 0.03 269.73);
+
+    --sh-color-primary: oklch(0.585 0.17 36.44);
+    --sh-color-primary-foreground: oklch(1 0 0);
+    --sh-color-secondary: oklch(0.31 0.03 266.71);
+    --sh-color-secondary-foreground: oklch(0.92 0 0);
+    --sh-color-accent: oklch(0.34 0.06 267.59);
+    --sh-color-accent-foreground: oklch(0.88 0.06 254.13);
+
+    --sh-color-chart-1: oklch(0.72 0.06 248.68);
+    --sh-color-chart-2: oklch(0.77 0.09 34.19);
+    --sh-color-chart-3: oklch(0.58 0.08 254.16);
+    --sh-color-chart-4: oklch(0.5 0.08 259.49);
+    --sh-color-chart-5: oklch(0.42 0.1 264.03);
+    --sh-color-chart-6: oklch(0.39 0.1 322.03);
+
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.585 0.17 36.44) 0%,
+      oklch(0.61 0.17 60.44) 100%
+    );
+    --sh-color-spotlight-foreground: oklch(1 0 0);
+  }
+}
+
+:root[data-theme-preset="tangerine"].dark {
+  --sh-color-background: oklch(0.26 0.03 262.67);
+  --sh-color-foreground: oklch(0.92 0 0);
+  --sh-color-surface: oklch(0.31 0.03 268.64);
+  --sh-color-surface-foreground: oklch(0.92 0 0);
+  --sh-color-surface-raised: oklch(0.29 0.02 268.4);
+  --sh-color-surface-sunken: oklch(0.278 0.03 268.64);
+
+  --sh-color-muted: oklch(0.31 0.03 266.71);
+  --sh-color-muted-foreground: oklch(0.72 0 0);
+  --sh-color-border: oklch(0.38 0.03 269.73);
+
+  --sh-color-primary: oklch(0.585 0.17 36.44);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  --sh-color-secondary: oklch(0.31 0.03 266.71);
+  --sh-color-secondary-foreground: oklch(0.92 0 0);
+  --sh-color-accent: oklch(0.34 0.06 267.59);
+  --sh-color-accent-foreground: oklch(0.88 0.06 254.13);
+
+  --sh-color-chart-1: oklch(0.72 0.06 248.68);
+  --sh-color-chart-2: oklch(0.77 0.09 34.19);
+  --sh-color-chart-3: oklch(0.58 0.08 254.16);
+  --sh-color-chart-4: oklch(0.5 0.08 259.49);
+  --sh-color-chart-5: oklch(0.42 0.1 264.03);
+  --sh-color-chart-6: oklch(0.39 0.1 322.03);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.585 0.17 36.44) 0%,
+    oklch(0.61 0.17 60.44) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(1 0 0);
+}

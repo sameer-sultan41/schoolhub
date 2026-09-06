@@ -184,5 +184,8 @@ export type { ToggleGroupItemProps, ToggleGroupProps } from "./components/toggle
 
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip";
 
+export { THEME_PRESETS } from "./styles/presets";
+export type { ThemePreset } from "./styles/presets";
+
 export { brandingToCssText, brandingToCssVariables, sanitizeCssValue } from "./lib/branding";
 export { cn } from "./lib/cn";

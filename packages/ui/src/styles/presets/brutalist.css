@@ -1,0 +1,149 @@
+/*
+ * Brutalist — adapted from arhamkhnz/next-shadcn-admin-dashboard (MIT), remapped onto this
+ * repo's `--sh-*` tier. Upstream ships OKLCH already, so the values below are its own;
+ * only the variable names changed.
+ *
+ * Only `--sh-*` is written here. Never a `--color-*` name: those are aliases declared in
+ * theme.css's `@theme inline` block, and pointing one somewhere else would create the
+ * second source of truth that file exists to prevent.
+ *
+ * Deliberately NOT overridden, so they stay identical across every preset:
+ *   - success / warning / danger / info. A status colour is not a matter of taste, and
+ *     upstream's own `--destructive` for one preset is pure black, which is
+ *     indistinguishable from its foreground.
+ *   - --sh-color-ring, which is `var(--sh-color-primary)` and so already follows the
+ *     preset.
+ *   - the elevation scale, the platform tier, and the type stack.
+ *
+ * Specificity, low to high:
+ *   1. :root — theme.css, the Ink & Brass default
+ *   2. :root[data-theme-preset="brutalist"] — this file
+ *   3. the inline style on the TenantTheme wrapper — tenant branding, applied only
+ *      under the "tenant" preset (tenant-theme.tsx)
+ *
+ * Measured contrast (see the generator note in the PR body):
+ *   light foreground on background             21.00:1
+ *   light surface-foreground on surface        21.00:1
+ *   light primary-foreground on primary         5.77:1
+ *   light muted-foreground on surface          12.63:1
+ *   light secondary-foreground on secondary    19.56:1
+ *   light accent-foreground on accent           4.83:1
+ *   dark  foreground on background             21.00:1
+ *   dark  surface-foreground on surface        12.63:1
+ *   dark  primary-foreground on primary         7.34:1
+ *   dark  muted-foreground on surface           7.87:1
+ *   dark  secondary-foreground on secondary    19.60:1
+ *   dark  accent-foreground on accent           7.14:1
+ */
+
+:root[data-theme-preset="brutalist"] {
+  --sh-radius: 0px;
+
+  --sh-color-background: oklch(1 0 0);
+  --sh-color-foreground: oklch(0 0 0);
+  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface-foreground: oklch(0 0 0);
+  --sh-color-surface-raised: oklch(1 0 0);
+  --sh-color-surface-sunken: oklch(0.973 0 0);
+
+  --sh-color-muted: oklch(0.9551 0 0);
+  --sh-color-muted-foreground: oklch(0.3211 0 0);
+  --sh-color-border: oklch(0 0 0);
+
+  --sh-color-primary: oklch(0.6489 0.237 26.9728);
+  --sh-color-primary-foreground: oklch(0 0 0);
+  --sh-color-secondary: oklch(0.968 0.211 109.7692);
+  --sh-color-secondary-foreground: oklch(0 0 0);
+  --sh-color-accent: oklch(0.5635 0.2408 260.8178);
+  --sh-color-accent-foreground: oklch(1 0 0);
+
+  --sh-color-chart-1: oklch(0.6489 0.237 26.9728);
+  --sh-color-chart-2: oklch(0.968 0.211 109.7692);
+  --sh-color-chart-3: oklch(0.5635 0.2408 260.8178);
+  --sh-color-chart-4: oklch(0.7323 0.2492 142.4953);
+  --sh-color-chart-5: oklch(0.5931 0.2726 328.3634);
+  --sh-color-chart-6: oklch(0.5631 0.2726 26.3634);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.6489 0.237 26.9728) 0%,
+    oklch(0.6739 0.237 50.9728) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(0 0 0);
+}
+
+/*
+ * Declared twice with identical values, matching theme.css: the media arm covers a viewer
+ * who has not chosen (`:not(.light)` lets an explicit light choice win), the class arm
+ * covers the dashboard's toggle. A divergence here is invisible until someone toggles.
+ */
+/* dark-mode token block */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset="brutalist"]:not(.light) {
+    --sh-color-background: oklch(0 0 0);
+    --sh-color-foreground: oklch(1 0 0);
+    --sh-color-surface: oklch(0.3211 0 0);
+    --sh-color-surface-foreground: oklch(1 0 0);
+    --sh-color-surface-raised: oklch(0.3211 0 0);
+    --sh-color-surface-sunken: oklch(0.2891 0 0);
+
+    --sh-color-muted: oklch(0.3211 0 0);
+    --sh-color-muted-foreground: oklch(0.8452 0 0);
+    --sh-color-border: oklch(1 0 0);
+
+    --sh-color-primary: oklch(0.7044 0.1872 23.1858);
+    --sh-color-primary-foreground: oklch(0 0 0);
+    --sh-color-secondary: oklch(0.9691 0.2005 109.6228);
+    --sh-color-secondary-foreground: oklch(0 0 0);
+    --sh-color-accent: oklch(0.6755 0.1765 252.2592);
+    --sh-color-accent-foreground: oklch(0 0 0);
+
+    --sh-color-chart-1: oklch(0.7044 0.1872 23.1858);
+    --sh-color-chart-2: oklch(0.9691 0.2005 109.6228);
+    --sh-color-chart-3: oklch(0.6755 0.1765 252.2592);
+    --sh-color-chart-4: oklch(0.7395 0.2268 142.8504);
+    --sh-color-chart-5: oklch(0.6131 0.2458 328.0714);
+    --sh-color-chart-6: oklch(0.5831 0.2458 26.0714);
+
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.7044 0.1872 23.1858) 0%,
+      oklch(0.7294 0.1872 47.1858) 100%
+    );
+    --sh-color-spotlight-foreground: oklch(0 0 0);
+  }
+}
+
+:root[data-theme-preset="brutalist"].dark {
+  --sh-color-background: oklch(0 0 0);
+  --sh-color-foreground: oklch(1 0 0);
+  --sh-color-surface: oklch(0.3211 0 0);
+  --sh-color-surface-foreground: oklch(1 0 0);
+  --sh-color-surface-raised: oklch(0.3211 0 0);
+  --sh-color-surface-sunken: oklch(0.2891 0 0);
+
+  --sh-color-muted: oklch(0.3211 0 0);
+  --sh-color-muted-foreground: oklch(0.8452 0 0);
+  --sh-color-border: oklch(1 0 0);
+
+  --sh-color-primary: oklch(0.7044 0.1872 23.1858);
+  --sh-color-primary-foreground: oklch(0 0 0);
+  --sh-color-secondary: oklch(0.9691 0.2005 109.6228);
+  --sh-color-secondary-foreground: oklch(0 0 0);
+  --sh-color-accent: oklch(0.6755 0.1765 252.2592);
+  --sh-color-accent-foreground: oklch(0 0 0);
+
+  --sh-color-chart-1: oklch(0.7044 0.1872 23.1858);
+  --sh-color-chart-2: oklch(0.9691 0.2005 109.6228);
+  --sh-color-chart-3: oklch(0.6755 0.1765 252.2592);
+  --sh-color-chart-4: oklch(0.7395 0.2268 142.8504);
+  --sh-color-chart-5: oklch(0.6131 0.2458 328.0714);
+  --sh-color-chart-6: oklch(0.5831 0.2458 26.0714);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.7044 0.1872 23.1858) 0%,
+    oklch(0.7294 0.1872 47.1858) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(0 0 0);
+}
