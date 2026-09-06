@@ -1,6 +1,9 @@
-import { ApiError } from "@schoolhub/api-client";
+import { ApiError, type ApiClient } from "@schoolhub/api-client";
+import { env } from "@/env";
 import { expect, test } from "@/fixtures";
+import { createLiveSession } from "@/lib/live-api";
 import { seedAttendanceRegister, today } from "@/lib/live-attendance-register";
+import { E2E_CLASS_TEACHER_EMAIL } from "@/lib/seed-constants";
 
 /**
  * Live API lane — no browser. See campuses.spec.ts's header for the shared rationale
@@ -22,6 +25,13 @@ import { seedAttendanceRegister, today } from "@/lib/live-attendance-register";
  *   `error.meta.rows` rather than committed, so the assertion is on the envelope *and*
  *   on nothing having been written.
  *
+ * **Two identities, deliberately.** The fixture is built by `liveApiClient` (the
+ * seeded school admin, which holds the structure and enrolment keys), but every
+ * `:bulk-mark` runs as the seeded class teacher — §4 grants
+ * `attendance.student-attendance.mark` to `teacher`/`class_teacher` and to nobody
+ * else, and widening the admin fixture to hold it would let this lane assert a
+ * permission the module does not actually grant.
+ *
  * Endpoints covered: `GET /student-attendance`, `POST /student-attendance:bulk-mark`.
  * The correction flow needs a *locked* row, which needs a date this lane cannot reach —
  * it is covered in the Django suite (`apps/attendance/tests/test_api.py`) and noted here
@@ -36,18 +46,26 @@ interface AttendanceRow {
   late_minutes: number | null;
 }
 
+async function markerSession(): Promise<ApiClient> {
+  return createLiveSession({
+    identifier: E2E_CLASS_TEACHER_EMAIL,
+    password: env.LIVE_ADMIN_PASSWORD,
+  });
+}
+
 test.describe("attendance marking (live API)", () => {
   test("a register is marked, re-submitted idempotently, and readable back", async ({
     liveApiClient,
   }) => {
     const register = await seedAttendanceRegister(liveApiClient);
+    const marker = await markerSession();
     const date = today();
     const entries = register.studentIds.map((id, index) => ({
       student_id: id,
       status: index === 0 ? "absent" : "present",
     }));
 
-    const first = await liveApiClient.post("/student-attendance:bulk-mark", {
+    const first = await marker.post("/student-attendance:bulk-mark", {
       section_id: register.sectionId,
       academic_session_id: register.sessionId,
       attendance_date: date,
@@ -58,7 +76,7 @@ test.describe("attendance marking (live API)", () => {
 
     // The same register again — a teacher's phone retrying, which §6 requires to
     // succeed rather than collide with `student_attendance_one_per_day`.
-    const second = await liveApiClient.post("/student-attendance:bulk-mark", {
+    const second = await marker.post("/student-attendance:bulk-mark", {
       section_id: register.sectionId,
       academic_session_id: register.sessionId,
       attendance_date: date,
@@ -67,7 +85,7 @@ test.describe("attendance marking (live API)", () => {
 
     expect(second.meta).toMatchObject({ marked: 0, updated: entries.length });
 
-    const list = await liveApiClient.get(
+    const list = await marker.get(
       `/student-attendance?section_id=${register.sectionId}&date=${date}`,
     );
     const rows = list.data as AttendanceRow[];
@@ -82,11 +100,12 @@ test.describe("attendance marking (live API)", () => {
   }) => {
     const register = await seedAttendanceRegister(liveApiClient);
     const outsider = await seedAttendanceRegister(liveApiClient);
+    const marker = await markerSession();
     const date = today();
     const [strangerId] = outsider.studentIds;
     if (!strangerId) throw new Error("expected the second register to have a roster");
 
-    const error = await liveApiClient
+    const error = await marker
       .post("/student-attendance:bulk-mark", {
         section_id: register.sectionId,
         academic_session_id: register.sessionId,
@@ -104,7 +123,7 @@ test.describe("attendance marking (live API)", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(422);
 
-    const list = await liveApiClient.get(
+    const list = await marker.get(
       `/student-attendance?section_id=${register.sectionId}&date=${date}`,
     );
     expect(list.data as AttendanceRow[]).toHaveLength(0);
@@ -112,10 +131,11 @@ test.describe("attendance marking (live API)", () => {
 
   test("marking a future date is refused", async ({ liveApiClient }) => {
     const register = await seedAttendanceRegister(liveApiClient);
+    const marker = await markerSession();
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const error = await liveApiClient
+    const error = await marker
       .post("/student-attendance:bulk-mark", {
         section_id: register.sectionId,
         academic_session_id: register.sessionId,

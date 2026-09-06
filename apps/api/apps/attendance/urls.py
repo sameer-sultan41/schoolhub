@@ -13,13 +13,20 @@ path wins over the list route.
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from apps.attendance.views import AttendanceCorrectionViewSet, StudentAttendanceViewSet
+from apps.attendance.views import (
+    AttendanceCorrectionViewSet,
+    LeaveRequestViewSet,
+    LeaveTypeViewSet,
+    StudentAttendanceViewSet,
+)
 
 router = SimpleRouter(trailing_slash=False)
 router.register("student-attendance", StudentAttendanceViewSet, basename="student-attendance")
 router.register(
     "attendance-corrections", AttendanceCorrectionViewSet, basename="attendance-corrections"
 )
+router.register("leave-types", LeaveTypeViewSet, basename="leave-types")
+router.register("leave-requests", LeaveRequestViewSet, basename="leave-requests")
 
 urlpatterns = [
     path(
@@ -36,6 +43,21 @@ urlpatterns = [
         "attendance-corrections/<uuid:pk>:reject",
         AttendanceCorrectionViewSet.as_view({"post": "reject"}),
         name="attendance-corrections-reject",
+    ),
+    path(
+        "leave-requests/<uuid:pk>:approve",
+        LeaveRequestViewSet.as_view({"post": "approve"}),
+        name="leave-requests-approve",
+    ),
+    path(
+        "leave-requests/<uuid:pk>:reject",
+        LeaveRequestViewSet.as_view({"post": "reject"}),
+        name="leave-requests-reject",
+    ),
+    path(
+        "leave-requests/<uuid:pk>:cancel",
+        LeaveRequestViewSet.as_view({"post": "cancel"}),
+        name="leave-requests-cancel",
     ),
     *router.urls,
 ]

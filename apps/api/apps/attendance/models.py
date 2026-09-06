@@ -60,6 +60,7 @@ class AttendanceSource(models.TextChoices):
     """
 
     MANUAL = "manual", "Manual"
+    SYSTEM = "system", "System"
     IMPORT = "import", "Import"
     DEVICE = "device", "Device"
 
@@ -119,11 +120,14 @@ class StudentAttendance(TenantOwnedModel):
         blank=True,
         help_text="Computed server-side from the tenant day window (§11); never client-supplied.",
     )
-    leave_request_id = models.UUIDField(
+    leave_request = models.ForeignKey(
+        "attendance.LeaveRequest",
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
-        help_text="leave_requests(id) — a plain UUID, not an FK: the table ships in this "
-        "module's second PR. Becomes a real foreign key there.",
+        related_name="student_attendance",
+        db_column="leave_request_id",
+        help_text="Set when status is on_leave; written by the leave module, never marked.",
     )
     source = models.CharField(
         max_length=20, choices=AttendanceSource.choices, default=AttendanceSource.MANUAL
@@ -286,3 +290,358 @@ class AttendanceCorrection(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.subject_type} correction ({self.status})"
+
+
+class LeaveAppliesTo(models.TextChoices):
+    STAFF = "staff", "Staff"
+    STUDENT = "student", "Student"
+    BOTH = "both", "Both"
+
+
+class RequesterType(models.TextChoices):
+    STAFF = "staff", "Staff"
+    STUDENT = "student", "Student"
+
+
+class DayPart(models.TextChoices):
+    FULL = "full", "Full day"
+    FIRST_HALF = "first_half", "First half"
+    SECOND_HALF = "second_half", "Second half"
+
+
+class LeaveStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class ApprovalDecision(models.TextChoices):
+    """`skipped` is declared and **unreachable today.**
+
+    The locked entity map lists it, and it is what a chain step becomes when a
+    tenant's configuration removes a level that a request has already passed —
+    the case `hr-leave` (Tier 6) meets when it makes the chain editable
+    mid-flight. Nothing in this module edits a chain after a request is raised,
+    so `decide_leave_step` only ever produces `approved` or `rejected`. Reserved,
+    not implemented, and said here rather than left for a reader to infer a
+    workflow from an enum.
+    """
+
+    PENDING = "pending", "Pending"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+    SKIPPED = "skipped", "Skipped"
+
+
+class AccrualFrequency(models.TextChoices):
+    ANNUAL = "annual", "Annual"
+    MONTHLY = "monthly", "Monthly"
+
+
+class LeaveType(TenantOwnedModel):
+    """A tenant-configured leave category, for staff, students, or both.
+
+    Owned by this module and **shared with `hr-leave`** (Tier 6):
+    `entities/attendance.md` carries the column spec, `attendance.md` §15 and
+    `hr-leave.md` §15 both list the table, and only one app can ship the
+    migration. It is this one, because attendance is the module that ships
+    first; hr-leave adds no tables and layers staff policy, accrual and the
+    editable multi-step approval engine on top.
+    """
+
+    name = models.CharField(max_length=100, help_text='e.g. "Sick Leave".')
+    code = models.CharField(max_length=20)
+    applies_to = models.CharField(
+        max_length=10, choices=LeaveAppliesTo.choices, default=LeaveAppliesTo.BOTH
+    )
+    is_paid = models.BooleanField(
+        default=True, help_text="Staff payroll relevance only; meaningless for a student."
+    )
+    requires_attachment = models.BooleanField(default=False, help_text="e.g. a medical note (§6).")
+    max_consecutive_days = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Null = unlimited."
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "leave_types"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "code"],
+                name="leave_types_unique_code",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "applies_to", "is_active"], name="leave_types_use_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code} ({self.name})"
+
+    @property
+    def allows_students(self) -> bool:
+        return self.applies_to in (LeaveAppliesTo.STUDENT, LeaveAppliesTo.BOTH)
+
+    @property
+    def allows_staff(self) -> bool:
+        return self.applies_to in (LeaveAppliesTo.STAFF, LeaveAppliesTo.BOTH)
+
+
+class LeavePolicy(TenantOwnedModel):
+    """Quota and accrual rules binding a leave type to a staff population.
+
+    **Staff only** — the entity doc is explicit that students have no policies or
+    balances. The table ships here because attendance owns the migration for the
+    whole leave domain; the semantics, the accrual job and the endpoints are
+    `hr-leave`'s (Tier 6), and nothing in this module reads it. See §20 of the
+    module doc for why the rows exist before anything writes them.
+    """
+
+    leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name="policies")
+    name = models.CharField(max_length=100)
+    annual_quota_days = models.DecimalField(
+        max_digits=5, decimal_places=1, help_text="Entitlement per cycle; half-days supported."
+    )
+    accrual_frequency = models.CharField(
+        max_length=20, choices=AccrualFrequency.choices, default=AccrualFrequency.ANNUAL
+    )
+    carry_forward_max_days = models.DecimalField(max_digits=5, decimal_places=1, default=0)
+    min_notice_days = models.PositiveSmallIntegerField(default=0)
+    applicability = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Optional filter: departments/designations/employment types.",
+    )
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True, help_text="Null = open-ended.")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "leave_policies"
+        ordering = ["-effective_from"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(effective_to__isnull=True)
+                | models.Q(effective_to__gte=models.F("effective_from")),
+                name="leave_policies_effective_range",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant", "leave_type", "is_active"], name="leave_policies_active_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class LeaveBalance(TenantOwnedModel):
+    """Per-staff entitlement and usage for one policy in one cycle.
+
+    **Staff only**, and maintained by `hr-leave`'s accrual jobs — see
+    `LeavePolicy`'s docstring. Nothing in this module writes it.
+    """
+
+    staff = models.ForeignKey(
+        "staff_management.Staff", on_delete=models.PROTECT, related_name="leave_balances"
+    )
+    leave_policy = models.ForeignKey(LeavePolicy, on_delete=models.PROTECT, related_name="balances")
+    period_start = models.DateField(help_text="Balance cycle start (session or calendar year).")
+    period_end = models.DateField()
+    entitled_days = models.DecimalField(max_digits=5, decimal_places=1)
+    carried_forward_days = models.DecimalField(max_digits=5, decimal_places=1, default=0)
+    used_days = models.DecimalField(max_digits=5, decimal_places=1, default=0)
+    pending_days = models.DecimalField(
+        max_digits=5, decimal_places=1, default=0, help_text="Soft hold for pending requests."
+    )
+
+    class Meta:
+        db_table = "leave_balances"
+        ordering = ["-period_start"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "staff", "leave_policy", "period_start"],
+                name="leave_balances_unique_cycle",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(period_end__gte=models.F("period_start")),
+                name="leave_balances_period_range",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.staff_id} {self.period_start}"
+
+
+class LeaveRequest(TenantOwnedModel):
+    """A leave application by, or on behalf of, a student or a staff member.
+
+    Both requester kinds share the table because `hr-leave` §15 and
+    `attendance` §15 describe one; **only the student half has endpoints here.**
+    §4 grants `attendance.leave-request.*` to students and guardians, while staff
+    leave is keyed `hr.leave-request.*` in `hr-leave.md` §4 — a namespace this
+    module must not register on another module's behalf. `requester_type` is what
+    keeps the two apart, and `services` refuses a staff request through the
+    student endpoints rather than half-serving it.
+
+    `days_count` is computed net of holidays and non-working days (§11) through
+    `school_organization.calendar`, never taken from the client — a leave request
+    that counts a Sunday would be a balance error for staff and a false
+    attendance record for a student.
+    """
+
+    requester_type = models.CharField(max_length=10, choices=RequesterType.choices)
+    staff = models.ForeignKey(
+        "staff_management.Staff",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="leave_requests",
+    )
+    student = models.ForeignKey(
+        "student_management.Student",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="leave_requests",
+    )
+    submitted_by = models.UUIDField(help_text="users(id); a guardian may submit for a student.")
+    leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name="requests")
+    start_date = models.DateField()
+    end_date = models.DateField()
+    day_part = models.CharField(max_length=20, choices=DayPart.choices, default=DayPart.FULL)
+    days_count = models.DecimalField(
+        max_digits=5, decimal_places=1, help_text="Computed net of holidays (§11)."
+    )
+    reason = models.CharField(max_length=1000)
+    attachment_file = models.ForeignKey(
+        "files.File",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="leave_requests",
+        db_column="attachment_file_id",
+    )
+    status = models.CharField(
+        max_length=20, choices=LeaveStatus.choices, default=LeaveStatus.PENDING
+    )
+    current_approval_level = models.PositiveSmallIntegerField(
+        default=1, help_text="Step pointer into the tenant's approval chain (§7.2)."
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "leave_requests"
+        ordering = ["-start_date"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(staff__isnull=False, student__isnull=True)
+                    | models.Q(staff__isnull=True, student__isnull=False)
+                ),
+                name="leave_requests_exactly_one_subject",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="leave_requests_end_on_or_after_start",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "staff", "start_date"], name="leave_req_staff_idx"),
+            models.Index(fields=["tenant", "student", "start_date"], name="leave_req_student_idx"),
+            models.Index(fields=["tenant", "status"], name="leave_req_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.requester_type} leave {self.start_date}..{self.end_date}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — a student's own requests, a guardian's children's.
+
+        Delegates to ``Student.filter_owned_by_user`` for the same reason
+        ``StudentAttendance`` does: that hook is the one place the
+        portal-enabled guardian link is interpreted, and a second copy is a
+        second place for revoked access to be forgotten.
+
+        A staff member's own requests are deliberately **not** included. Staff
+        leave is `hr.leave-request.*`, and widening this hook would give a staff
+        member an attendance-keyed read of a request that module has not yet
+        decided the visibility rules for.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — a class teacher's own sections' students.
+
+        §4 grants `attendance.leave-request.view` to `class_teacher` scoped to
+        what they are assigned, and §7.2 makes them the first approver, so this
+        is the queryset their morning queue is built from.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+
+        from apps.student_management.models import Student
+
+        assigned = Student.filter_assigned_to_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=assigned)
+
+
+class LeaveApproval(TenantOwnedModel):
+    """One step of a leave request's approval chain (§7.2).
+
+    Rows are created for the whole chain when the request is raised, not one at a
+    time, so the requester can see how many steps stand between them and a
+    decision — and so `current_approval_level` always points at a row that
+    exists. `required_permission` is denormalised onto the step because the chain
+    is tenant configuration: the key that governed a step must stay readable
+    after an admin edits the chain, or an audit of last term's approvals would
+    describe this term's rules.
+    """
+
+    leave_request = models.ForeignKey(
+        LeaveRequest, on_delete=models.PROTECT, related_name="approvals"
+    )
+    level = models.PositiveSmallIntegerField(help_text="1-based step order.")
+    required_permission = models.CharField(
+        max_length=100, help_text="e.g. attendance.leave-request.approve."
+    )
+    approver_id = models.UUIDField(
+        null=True, blank=True, help_text="users(id); set on decision, differs from submitted_by."
+    )
+    decision = models.CharField(
+        max_length=20, choices=ApprovalDecision.choices, default=ApprovalDecision.PENDING
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=500, null=True, blank=True)
+
+    class Meta:
+        db_table = "leave_approvals"
+        ordering = ["level"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "leave_request", "level"],
+                name="leave_approvals_unique_level",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant", "approver_id", "decision"], name="leave_step_approver_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"L{self.level} {self.decision}"

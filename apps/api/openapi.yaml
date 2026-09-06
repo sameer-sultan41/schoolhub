@@ -2159,6 +2159,478 @@ paths:
               schema:
                 $ref: '#/components/schemas/BackgroundJob'
           description: ''
+  /api/v1/leave-requests:
+    get:
+      operationId: leave_requests_list
+      description: |-
+        `leave_requests` — the **student** half (§5.4, §7.2).
+
+        Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+        grants `attendance.leave-request.create` to `student` and `guardian`, and the
+        record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+        `Student.filter_owned_by_user` — is what keeps a guardian to their own
+        children.
+
+        **Staff leave requests are not served here.** The table holds both kinds
+        because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+        leave is keyed `hr.leave-request.*` in a namespace this module must not
+        register on another's behalf. Every write here sets
+        `requester_type = student`, and the queryset is filtered to student requests
+        so an `all`-scoped principal cannot read staff leave through an
+        attendance-keyed endpoint before hr-leave has decided its visibility rules.
+
+        No PATCH: §16 declares list, create and the three colon-actions. Editing a
+        pending request in place would move dates an approver had already seen.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: leave_type_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: requester_type
+        schema:
+          type: string
+          enum:
+          - staff
+          - student
+        description: |-
+          * `staff` - Staff
+          * `student` - Student
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - approved
+          - cancelled
+          - pending
+          - rejected
+        description: |-
+          * `pending` - Pending
+          * `approved` - Approved
+          * `rejected` - Rejected
+          * `cancelled` - Cancelled
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - leave-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLeaveRequestList'
+          description: ''
+    post:
+      operationId: leave_requests_create
+      description: |-
+        `leave_requests` — the **student** half (§5.4, §7.2).
+
+        Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+        grants `attendance.leave-request.create` to `student` and `guardian`, and the
+        record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+        `Student.filter_owned_by_user` — is what keeps a guardian to their own
+        children.
+
+        **Staff leave requests are not served here.** The table holds both kinds
+        because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+        leave is keyed `hr.leave-request.*` in a namespace this module must not
+        register on another's behalf. Every write here sets
+        `requester_type = student`, and the queryset is filtered to student requests
+        so an `all`-scoped principal cannot read staff leave through an
+        attendance-keyed endpoint before hr-leave has decided its visibility rules.
+
+        No PATCH: §16 declares list, create and the three colon-actions. Editing a
+        pending request in place would move dates an approver had already seen.
+      summary: Submit a student leave request
+      tags:
+      - leave-requests
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LeaveRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LeaveRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveRequest'
+          description: ''
+  /api/v1/leave-requests/{id}:
+    get:
+      operationId: leave_requests_retrieve
+      description: |-
+        `leave_requests` — the **student** half (§5.4, §7.2).
+
+        Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+        grants `attendance.leave-request.create` to `student` and `guardian`, and the
+        record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+        `Student.filter_owned_by_user` — is what keeps a guardian to their own
+        children.
+
+        **Staff leave requests are not served here.** The table holds both kinds
+        because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+        leave is keyed `hr.leave-request.*` in a namespace this module must not
+        register on another's behalf. Every write here sets
+        `requester_type = student`, and the queryset is filtered to student requests
+        so an `all`-scoped principal cannot read staff leave through an
+        attendance-keyed endpoint before hr-leave has decided its visibility rules.
+
+        No PATCH: §16 declares list, create and the three colon-actions. Editing a
+        pending request in place would move dates an approver had already seen.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this leave request.
+        required: true
+      tags:
+      - leave-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveRequest'
+          description: ''
+  /api/v1/leave-requests/{id}:approve:
+    post:
+      operationId: leave_requests_:approve_create
+      description: |-
+        `leave_requests` — the **student** half (§5.4, §7.2).
+
+        Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+        grants `attendance.leave-request.create` to `student` and `guardian`, and the
+        record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+        `Student.filter_owned_by_user` — is what keeps a guardian to their own
+        children.
+
+        **Staff leave requests are not served here.** The table holds both kinds
+        because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+        leave is keyed `hr.leave-request.*` in a namespace this module must not
+        register on another's behalf. Every write here sets
+        `requester_type = student`, and the queryset is filtered to student requests
+        so an `all`-scoped principal cannot read staff leave through an
+        attendance-keyed endpoint before hr-leave has decided its visibility rules.
+
+        No PATCH: §16 declares list, create and the three colon-actions. Editing a
+        pending request in place would move dates an approver had already seen.
+      summary: Approve the current step of a leave request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - leave-requests
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveDecision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LeaveDecision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LeaveDecision'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveRequest'
+          description: ''
+  /api/v1/leave-requests/{id}:cancel:
+    post:
+      operationId: leave_requests_:cancel_create
+      description: |-
+        `leave_requests` — the **student** half (§5.4, §7.2).
+
+        Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+        grants `attendance.leave-request.create` to `student` and `guardian`, and the
+        record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+        `Student.filter_owned_by_user` — is what keeps a guardian to their own
+        children.
+
+        **Staff leave requests are not served here.** The table holds both kinds
+        because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+        leave is keyed `hr.leave-request.*` in a namespace this module must not
+        register on another's behalf. Every write here sets
+        `requester_type = student`, and the queryset is filtered to student requests
+        so an `all`-scoped principal cannot read staff leave through an
+        attendance-keyed endpoint before hr-leave has decided its visibility rules.
+
+        No PATCH: §16 declares list, create and the three colon-actions. Editing a
+        pending request in place would move dates an approver had already seen.
+      summary: Cancel a leave request before it starts
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - leave-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveRequest'
+          description: ''
+  /api/v1/leave-requests/{id}:reject:
+    post:
+      operationId: leave_requests_:reject_create
+      description: |-
+        `leave_requests` — the **student** half (§5.4, §7.2).
+
+        Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+        grants `attendance.leave-request.create` to `student` and `guardian`, and the
+        record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+        `Student.filter_owned_by_user` — is what keeps a guardian to their own
+        children.
+
+        **Staff leave requests are not served here.** The table holds both kinds
+        because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+        leave is keyed `hr.leave-request.*` in a namespace this module must not
+        register on another's behalf. Every write here sets
+        `requester_type = student`, and the queryset is filtered to student requests
+        so an `all`-scoped principal cannot read staff leave through an
+        attendance-keyed endpoint before hr-leave has decided its visibility rules.
+
+        No PATCH: §16 declares list, create and the three colon-actions. Editing a
+        pending request in place would move dates an approver had already seen.
+      summary: Reject a leave request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - leave-requests
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveDecision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LeaveDecision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LeaveDecision'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveRequest'
+          description: ''
+  /api/v1/leave-types:
+    get:
+      operationId: leave_types_list
+      description: |-
+        `leave_types` — **read-only here**, and the reason is a spec conflict worth stating.
+
+        §16 of this module lists `GET/POST/PATCH /api/v1/leave-types` (and
+        `/leave-policies`, `/leave-balances`). §4 of this module declares **no
+        permission key for any of them** — its table has keys for attendance,
+        corrections, leave *requests* and reports, and nothing else. The keys that do
+        govern them are `hr.leave-type.*`, `hr.leave-policy.*` and
+        `hr.leave-balance.*`, declared by `hr-leave.md` §4.
+
+        Registering another module's `hr.*` keys from this app would break the
+        registry the day hr-leave ships its own `permissions.py` (duplicate key), and
+        inventing `attendance.leave-type.*` would put keys in the registry that no
+        module doc declares — the thing `timetable/views.py`'s docstring explicitly
+        refuses to do. So the split is by *what §4 can key*:
+
+        - **Reading** the catalogue is part of working with leave requests, so this
+          list takes `attendance.leave-request.view`. That is exactly the move
+          `timetable` makes for `/periods` and `/rooms`, which §4 there also leaves
+          unkeyed: reading the scaffolding falls under the key for the thing it is
+          scaffolding for. `.view` rather than `.create`, because §4 grants `.view`
+          to requesters *and* approvers — an approver reading a request needs the
+          type's name, and a key only requesters hold would have hidden it from the
+          one person who has to decide.
+        - **Writing** leave types, and the whole of `/leave-policies` and
+          `/leave-balances`, is HR configuration and ships with hr-leave (Tier 6),
+          which "adds no tables" precisely because this module's migration created
+          them.
+
+        The consequence is real and recorded in the module doc's §20: until hr-leave
+        lands, a tenant's leave types come from the seeds rather than from the API.
+      parameters:
+      - in: query
+        name: applies_to
+        schema:
+          type: string
+          enum:
+          - both
+          - staff
+          - student
+        description: |-
+          * `staff` - Staff
+          * `student` - Student
+          * `both` - Both
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - leave-types
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLeaveTypeList'
+          description: ''
+  /api/v1/leave-types/{id}:
+    get:
+      operationId: leave_types_retrieve
+      description: |-
+        `leave_types` — **read-only here**, and the reason is a spec conflict worth stating.
+
+        §16 of this module lists `GET/POST/PATCH /api/v1/leave-types` (and
+        `/leave-policies`, `/leave-balances`). §4 of this module declares **no
+        permission key for any of them** — its table has keys for attendance,
+        corrections, leave *requests* and reports, and nothing else. The keys that do
+        govern them are `hr.leave-type.*`, `hr.leave-policy.*` and
+        `hr.leave-balance.*`, declared by `hr-leave.md` §4.
+
+        Registering another module's `hr.*` keys from this app would break the
+        registry the day hr-leave ships its own `permissions.py` (duplicate key), and
+        inventing `attendance.leave-type.*` would put keys in the registry that no
+        module doc declares — the thing `timetable/views.py`'s docstring explicitly
+        refuses to do. So the split is by *what §4 can key*:
+
+        - **Reading** the catalogue is part of working with leave requests, so this
+          list takes `attendance.leave-request.view`. That is exactly the move
+          `timetable` makes for `/periods` and `/rooms`, which §4 there also leaves
+          unkeyed: reading the scaffolding falls under the key for the thing it is
+          scaffolding for. `.view` rather than `.create`, because §4 grants `.view`
+          to requesters *and* approvers — an approver reading a request needs the
+          type's name, and a key only requesters hold would have hidden it from the
+          one person who has to decide.
+        - **Writing** leave types, and the whole of `/leave-policies` and
+          `/leave-balances`, is HR configuration and ships with hr-leave (Tier 6),
+          which "adds no tables" precisely because this module's migration created
+          them.
+
+        The consequence is real and recorded in the module doc's §20: until hr-leave
+        lands, a tenant's leave types come from the seeds rather than from the API.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this leave type.
+        required: true
+      tags:
+      - leave-types
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveType'
+          description: ''
   /api/v1/periods:
     get:
       operationId: periods_list
@@ -6067,6 +6539,16 @@ components:
         * `active` - Active
         * `closed` - Closed
         * `archived` - Archived
+    AppliesToEnum:
+      enum:
+      - staff
+      - student
+      - both
+      type: string
+      description: |-
+        * `staff` - Staff
+        * `student` - Student
+        * `both` - Both
     AttendanceCorrection:
       type: object
       description: '`attendance_corrections` — the request half. Decisions are colon-actions.'
@@ -6160,11 +6642,13 @@ components:
     AttendanceSourceEnum:
       enum:
       - manual
+      - system
       - import
       - device
       type: string
       description: |-
         * `manual` - Manual
+        * `system` - System
         * `import` - Import
         * `device` - Device
     AttendanceStatusEnum:
@@ -6534,6 +7018,16 @@ components:
       - id
       - subject_id
       - updated_at
+    DayPartEnum:
+      enum:
+      - full
+      - first_half
+      - second_half
+      type: string
+      description: |-
+        * `full` - Full day
+        * `first_half` - First half
+        * `second_half` - Second half
     Department:
       type: object
       properties:
@@ -7148,6 +7642,225 @@ components:
           items:
             type: string
             format: uuid
+    LeaveApproval:
+      type: object
+      description: One step of §7.2's chain, nested on the request it belongs to.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        level:
+          type: integer
+          readOnly: true
+          description: 1-based step order.
+        required_permission:
+          type: string
+          readOnly: true
+          description: e.g. attendance.leave-request.approve.
+        approver_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id); set on decision, differs from submitted_by.
+        decision:
+          allOf:
+          - $ref: '#/components/schemas/LeaveApprovalDecisionEnum'
+          readOnly: true
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        note:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - approver_id
+      - decided_at
+      - decision
+      - id
+      - level
+      - note
+      - required_permission
+    LeaveApprovalDecisionEnum:
+      enum:
+      - pending
+      - approved
+      - rejected
+      - skipped
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `approved` - Approved
+        * `rejected` - Rejected
+        * `skipped` - Skipped
+    LeaveDecision:
+      type: object
+      description: |-
+        Body for `:approve` / `:reject` — an optional note, nothing else.
+
+        The decision is the route rather than a field, for the reason
+        `CorrectionDecisionSerializer` gives: one endpoint taking `{"approve": bool}`
+        could not be permission-gated differently for the two outcomes.
+      properties:
+        note:
+          type: string
+          nullable: true
+          maxLength: 500
+    LeaveRequest:
+      type: object
+      description: |-
+        `leave_requests` — the student half (§16).
+
+        `days_count` is read-only because §11 computes it net of holidays, and
+        `status`/`current_approval_level`/`decided_at` because they move only through
+        the colon-actions. A writable `days_count` would let a client understate a
+        fortnight to duck the escalation threshold.
+
+        The chain is nested rather than fetched separately: a requester's first
+        question is "how many people have to say yes", and §16 declares no
+        `/leave-requests/{id}/approvals` sub-resource to ask it with.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        requester_type:
+          allOf:
+          - $ref: '#/components/schemas/AttendanceCorrectionSubjectTypeEnum'
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+        submitted_by:
+          type: string
+          format: uuid
+          readOnly: true
+          description: users(id); a guardian may submit for a student.
+        leave_type_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        day_part:
+          $ref: '#/components/schemas/DayPartEnum'
+        days_count:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,1})?$
+          readOnly: true
+          description: Computed net of holidays (§11).
+        reason:
+          type: string
+          maxLength: 1000
+        attachment_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AttendanceCorrectionStatusEnum'
+          readOnly: true
+        current_approval_level:
+          type: integer
+          readOnly: true
+          description: Step pointer into the tenant's approval chain (§7.2).
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        approvals:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaveApproval'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approvals
+      - created_at
+      - current_approval_level
+      - days_count
+      - decided_at
+      - end_date
+      - id
+      - leave_type_id
+      - reason
+      - requester_type
+      - start_date
+      - status
+      - student_id
+      - submitted_by
+      - updated_at
+    LeaveType:
+      type: object
+      description: '`leave_types` — read-only here. See views.py for why writes are
+        hr-leave''s.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+          description: e.g. "Sick Leave".
+        code:
+          type: string
+          readOnly: true
+        applies_to:
+          allOf:
+          - $ref: '#/components/schemas/AppliesToEnum'
+          readOnly: true
+        is_paid:
+          type: boolean
+          readOnly: true
+          description: Staff payroll relevance only; meaningless for a student.
+        requires_attachment:
+          type: boolean
+          readOnly: true
+          description: e.g. a medical note (§6).
+        max_consecutive_days:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Null = unlimited.
+        is_active:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - applies_to
+      - code
+      - created_at
+      - id
+      - is_active
+      - is_paid
+      - max_consecutive_days
+      - name
+      - requires_attachment
+      - updated_at
     Login:
       type: object
       description: |-
@@ -7389,6 +8102,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/House'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedLeaveRequestList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaveRequest'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedLeaveTypeList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaveType'
         meta:
           type: object
           properties:
@@ -9705,9 +10460,6 @@ components:
           type: string
           format: uuid
           readOnly: true
-          nullable: true
-          description: 'leave_requests(id) — a plain UUID, not an FK: the table ships
-            in this module''s second PR. Becomes a real foreign key there.'
         source:
           allOf:
           - $ref: '#/components/schemas/AttendanceSourceEnum'
@@ -10212,10 +10964,9 @@ components:
         leave_request_id:
           type: string
           format: uuid
-          readOnly: true
           nullable: true
-          description: 'leave_requests(id) — a plain UUID, not an FK: the attendance
-            module that owns that table has not shipped yet.'
+          description: The approved staff leave this cover is for, when there is one.
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/TeacherSubstitutionStatusEnum'

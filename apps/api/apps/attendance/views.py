@@ -49,12 +49,27 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.attendance import services
-from apps.attendance.filters import AttendanceCorrectionFilterSet, StudentAttendanceFilterSet
-from apps.attendance.models import AttendanceCorrection, StudentAttendance
+from apps.attendance.filters import (
+    AttendanceCorrectionFilterSet,
+    LeaveRequestFilterSet,
+    LeaveTypeFilterSet,
+    StudentAttendanceFilterSet,
+)
+from apps.attendance.models import (
+    AttendanceCorrection,
+    DayPart,
+    LeaveRequest,
+    LeaveType,
+    RequesterType,
+    StudentAttendance,
+)
 from apps.attendance.serializers import (
     AttendanceCorrectionSerializer,
     BulkMarkSerializer,
     CorrectionDecisionSerializer,
+    LeaveDecisionSerializer,
+    LeaveRequestSerializer,
+    LeaveTypeSerializer,
     StudentAttendanceSerializer,
 )
 from apps.school_organization.models import AcademicSession
@@ -320,3 +335,216 @@ class AttendanceCorrectionViewSet(
             request, "approve" if approve else "reject", decided, before=before, after=after
         )
         return ActionResponse.ok(after, message=message)
+
+
+class LeaveTypeViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`leave_types` — **read-only here**, and the reason is a spec conflict worth stating.
+
+    §16 of this module lists `GET/POST/PATCH /api/v1/leave-types` (and
+    `/leave-policies`, `/leave-balances`). §4 of this module declares **no
+    permission key for any of them** — its table has keys for attendance,
+    corrections, leave *requests* and reports, and nothing else. The keys that do
+    govern them are `hr.leave-type.*`, `hr.leave-policy.*` and
+    `hr.leave-balance.*`, declared by `hr-leave.md` §4.
+
+    Registering another module's `hr.*` keys from this app would break the
+    registry the day hr-leave ships its own `permissions.py` (duplicate key), and
+    inventing `attendance.leave-type.*` would put keys in the registry that no
+    module doc declares — the thing `timetable/views.py`'s docstring explicitly
+    refuses to do. So the split is by *what §4 can key*:
+
+    - **Reading** the catalogue is part of working with leave requests, so this
+      list takes `attendance.leave-request.view`. That is exactly the move
+      `timetable` makes for `/periods` and `/rooms`, which §4 there also leaves
+      unkeyed: reading the scaffolding falls under the key for the thing it is
+      scaffolding for. `.view` rather than `.create`, because §4 grants `.view`
+      to requesters *and* approvers — an approver reading a request needs the
+      type's name, and a key only requesters hold would have hidden it from the
+      one person who has to decide.
+    - **Writing** leave types, and the whole of `/leave-policies` and
+      `/leave-balances`, is HR configuration and ships with hr-leave (Tier 6),
+      which "adds no tables" precisely because this module's migration created
+      them.
+
+    The consequence is real and recorded in the module doc's §20: until hr-leave
+    lands, a tenant's leave types come from the seeds rather than from the API.
+    """
+
+    permission_classes = PORTAL_READABLE_PERMISSIONS
+    queryset = LeaveType.objects
+    serializer_class = LeaveTypeSerializer
+    filterset_class = LeaveTypeFilterSet
+    search_fields = ["name", "code"]
+    ordering_fields = ["name", "code"]
+    # A leave type is school-wide configuration with no campus dimension, the
+    # same shape as `/classes` and `/subjects`. Left at the default `campus_id`
+    # this raises FieldError for every campus-scoped caller.
+    scope_campus_field = None
+    required_feature = FEATURE
+    required_permission = "attendance.leave-request.view"
+    http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        """Reference data has no owner, so record scope does not apply to it.
+
+        `scope_queryset` falls through to `.none()` for an `own`-scoped principal
+        when the model defines no `filter_owned_by_user` — which is right for a
+        *record* and wrong for a *catalogue*. A guardian holds
+        `attendance.leave-request.view` at `RecordScope.OWN`, and narrowing the
+        list of leave types by ownership returned nothing at all: the submission
+        form had no types to choose from, and nothing errored.
+
+        Same reasoning `scope_campus_field = None` already carries one line up —
+        a scope over a table with no such dimension is already satisfied by
+        tenant scoping — extended to `own`. Stated here rather than solved by
+        giving `LeaveType` a `filter_owned_by_user` that returns everything,
+        which would be the same decision written as if it were a rule about
+        ownership.
+        """
+        return self.queryset.alive()
+
+
+class LeaveRequestViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`leave_requests` — the **student** half (§5.4, §7.2).
+
+    Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+    grants `attendance.leave-request.create` to `student` and `guardian`, and the
+    record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+    `Student.filter_owned_by_user` — is what keeps a guardian to their own
+    children.
+
+    **Staff leave requests are not served here.** The table holds both kinds
+    because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+    leave is keyed `hr.leave-request.*` in a namespace this module must not
+    register on another's behalf. Every write here sets
+    `requester_type = student`, and the queryset is filtered to student requests
+    so an `all`-scoped principal cannot read staff leave through an
+    attendance-keyed endpoint before hr-leave has decided its visibility rules.
+
+    No PATCH: §16 declares list, create and the three colon-actions. Editing a
+    pending request in place would move dates an approver had already seen.
+    """
+
+    permission_classes = PORTAL_READABLE_PERMISSIONS
+    queryset = LeaveRequest.objects
+    serializer_class = LeaveRequestSerializer
+    filterset_class = LeaveRequestFilterSet
+    search_fields = ["reason"]
+    ordering_fields = ["start_date", "created_at", "status"]
+    scope_own_field = None  # the guardian union lives in the model hook
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "attendance.leave-request.view"
+    required_permission_map = {
+        "create": "attendance.leave-request.create",
+        "approve": "attendance.leave-request.approve",
+        "reject": "attendance.leave-request.approve",
+        # §6 puts cancellation with the requester, not the approver: "cancellation
+        # allowed until start date" is the guardian withdrawing their own ask.
+        "cancel": "attendance.leave-request.create",
+    }
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .filter(requester_type=RequesterType.STUDENT)
+            .select_related("student", "leave_type")
+            .prefetch_related("approvals")
+        )
+
+    @extend_schema(
+        summary="Submit a student leave request",
+        responses={201: LeaveRequestSerializer},
+    )
+    def create(self, request: Request, *args, **kwargs) -> Response:
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        leave_request = services.submit_leave_request(
+            student=data["student"],
+            leave_type=data["leave_type"],
+            start_date=data["start_date"],
+            end_date=data["end_date"],
+            day_part=data.get("day_part", DayPart.FULL),
+            reason=data["reason"],
+            attachment_file=data.get("attachment_file"),
+            submitted_by=request.user.pk,
+            requesting_user=request.user,
+        )
+        body = self.get_serializer(leave_request).data
+        record_audit(request, "create", leave_request, after=body)
+        return Response({"data": body}, status=201)
+
+    @extend_schema(
+        summary="Approve the current step of a leave request",
+        request=LeaveDecisionSerializer,
+        responses={200: LeaveRequestSerializer},
+    )
+    def approve(self, request: Request, pk) -> Response:
+        return self._decide(request, pk, approve=True)
+
+    @extend_schema(
+        summary="Reject a leave request",
+        request=LeaveDecisionSerializer,
+        responses={200: LeaveRequestSerializer},
+    )
+    def reject(self, request: Request, pk) -> Response:
+        return self._decide(request, pk, approve=False)
+
+    @extend_schema(
+        summary="Cancel a leave request before it starts",
+        request=None,
+        responses={200: LeaveRequestSerializer},
+    )
+    def cancel(self, request: Request, pk) -> Response:
+        leave_request = get_object_or_404(self.get_queryset(), pk=pk)
+        before = self.get_serializer(leave_request).data
+
+        cancelled = services.cancel_leave_request(request=leave_request, actor_id=request.user.pk)
+        after = self.get_serializer(cancelled).data
+        record_audit(request, "update", cancelled, before=before, after=after)
+        return ActionResponse.ok(after, message="Leave request cancelled.")
+
+    def _decide(self, request: Request, pk, *, approve: bool) -> Response:
+        """Both decisions are one service call — §7.2 draws no asymmetry.
+
+        The response reports how many days were auto-marked, because §7.2's
+        "dates auto-marked on_leave" can legitimately mark fewer days than the
+        request covers: a date the teacher already marked is left alone, and a
+        holiday inside the range was never a school day. An approver who is told
+        only "approved" has no way to notice the difference.
+        """
+        leave_request = get_object_or_404(self.get_queryset(), pk=pk)
+        body = LeaveDecisionSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+
+        before = self.get_serializer(leave_request).data
+        decided = services.decide_leave_step(
+            request=leave_request,
+            approve=approve,
+            approver_id=request.user.pk,
+            note=body.validated_data.get("note"),
+        )
+        after = self.get_serializer(decided).data
+        record_audit(
+            request, "approve" if approve else "reject", decided, before=before, after=after
+        )
+        marked = decided.student_attendance.alive().count() if approve else 0
+        return Response(
+            {"data": after, "meta": {"auto_marked_days": marked}},
+            status=200,
+        )

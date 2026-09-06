@@ -8,7 +8,19 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # `main` *and* feature branches, so a **stacked** PR gets the same gate.
+    # `pull_request.branches` filters on the branch a PR *targets*, so with
+    # `[main]` alone a PR based on another feature branch — which is what PR
+    # stacking is — ran none of this: no cspell, no Prettier, no schema-freshness
+    # check, no coverage floor, no doc-sync. `api.yml` declares no `branches:` at
+    # all and so always ran, which is exactly why the gap was easy to miss: the
+    # backend suite went green on a stacked PR while five other gates never fired.
+    #
+    # GitHub does re-target a stacked PR at `main` once its base merges, which
+    # would eventually run these — but "eventually, after the parent merges" is
+    # not a gate, and the whole point of stacking is to review the child before
+    # then.
+    branches: [main, "feat/**", "fix/**", "chore/**"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

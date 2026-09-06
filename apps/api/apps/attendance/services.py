@@ -14,29 +14,43 @@ request is genuinely re-sent.
 from __future__ import annotations
 
 import datetime
+import logging
 import uuid
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from apps.attendance import uploads
 from apps.attendance.models import (
+    ApprovalDecision,
     AttendanceCorrection,
     AttendanceSource,
     AttendanceStatus,
     CorrectionStatus,
+    DayPart,
+    LeaveApproval,
+    LeaveRequest,
+    LeaveStatus,
+    LeaveType,
+    RequesterType,
     StudentAttendance,
 )
 from apps.school_organization import calendar
+from apps.school_organization.models import AcademicSession
 from apps.school_organization.services import assert_session_writable
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
+from apps.student_management.services import assert_file_usable
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.rbac.models import RecordScope
 from core.rbac.permissions import user_scopes
 from core.tenancy.models import TenantSettings
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
-    from apps.school_organization.models import AcademicSession, Section
+    from apps.school_organization.models import Section
     from apps.timetable.models import Period
 
 # §19: "lock window: end of marking day (recommendation; tenant-configurable
@@ -392,6 +406,34 @@ def bulk_mark_student_attendance(
             "Some of these records are locked and must be changed through a correction request.",
         )
 
+    # The guard in the *other* direction. `apply_approved_leave` already refuses
+    # to overwrite a date a teacher has marked; without this, marking silently
+    # overwrote an approved-leave day — leaving `leave_request` pointing at a
+    # request whose dates the row no longer reflects, so the leave module had a
+    # row it believed it owned and would withdraw on cancellation, showing a
+    # status nobody had asked it to hold.
+    #
+    # Refused rather than reconciled: the two possible reconciliations are
+    # "clear the link" (which loses the fact that leave was approved) and
+    # "cancel the leave" (which is a decision, not a side effect of taking a
+    # register). Naming the request lets the teacher do the second deliberately.
+    on_leave = [
+        {
+            "student_id": str(student_id),
+            "issue": (
+                "This student has approved leave on this date; cancel the leave "
+                "request before marking them."
+            ),
+        }
+        for student_id, row in existing.items()
+        if row.status == AttendanceStatus.ON_LEAVE
+    ]
+    if on_leave:
+        raise DomainRuleViolation(
+            {"entries": "Some students are on approved leave; the register was not saved."},
+            meta={"rows": on_leave},
+        )
+
     created, updated, transitioned = _apply_register(
         entries=entries,
         existing=existing,
@@ -642,3 +684,477 @@ def _from_json(field: str, value):
                 {field: f"'{value}' is not a valid time; this correction cannot be applied."}
             ) from exc
     return value
+
+
+# ---------------------------------------------------------------------------
+# Student leave (§5.4, §7.2)
+# ---------------------------------------------------------------------------
+
+STUDENT_LEAVE_APPROVE = "attendance.leave-request.approve"
+
+# §8's journey names the case: "a two-week request escalates automatically to the
+# vice principal". Ten working days is that fortnight, and it is the only number
+# the module doc gives — a default that can be pointed at beats one invented here.
+DEFAULT_ESCALATION_THRESHOLD_DAYS = 10
+
+# The statuses that occupy a person's calendar. A cancelled or rejected request
+# holds nothing, so a second request over the same dates must be allowed — §11's
+# overlap rule is about live claims, not about history.
+LIVE_LEAVE_STATUSES = frozenset({LeaveStatus.PENDING, LeaveStatus.APPROVED})
+
+
+def _leave_config() -> dict:
+    row = TenantSettings.objects.first()
+    academic = row.academic if row is not None and isinstance(row.academic, dict) else {}
+    config = academic.get("student_leave_approval")
+    return config if isinstance(config, dict) else {}
+
+
+def escalation_threshold_days() -> int:
+    """Above this many days, a student leave request needs a second approval.
+
+    Tenant-configurable per multi-tenancy §5 — the approval chain is
+    configuration, not a constant — but read defensively: zero would escalate
+    every single-day absence and make the second approver's queue useless, so it
+    is floored at one.
+    """
+    configured = _leave_config().get("escalation_threshold_days")
+    if not isinstance(configured, int) or isinstance(configured, bool):
+        return DEFAULT_ESCALATION_THRESHOLD_DAYS
+    return max(configured, 1)
+
+
+def student_leave_chain(days_count) -> list[dict]:
+    """The §7.2 chain for a request of this length.
+
+    Two levels at most, and **both take the same permission key**, which is worth
+    stating because it looks like a mistake: §4 grants
+    `attendance.leave-request.approve` to `class_teacher`, `vice_principal` and
+    `principal` alike. What separates level 1 from level 2 is not the key but the
+    *record scope* a holder has — a class teacher is `assigned`-scoped to their
+    own sections, a vice principal `all`-scoped — plus the rule in
+    `decide_leave_step` that the two levels cannot be decided by the same person.
+    Without that rule the escalation would be theatre: the class teacher who
+    approved level 1 could approve level 2 and the threshold would mean nothing.
+    """
+    chain = [{"level": 1, "required_permission": STUDENT_LEAVE_APPROVE}]
+    if days_count > escalation_threshold_days():
+        chain.append({"level": 2, "required_permission": STUDENT_LEAVE_APPROVE})
+    return chain
+
+
+def leave_days_between(
+    start: datetime.date, end: datetime.date, *, day_part: str, campus_id: uuid.UUID | None
+):
+    """§11's `days_count`, net of holidays and non-working days.
+
+    Computed, never taken from the client. A request that counted a Sunday would
+    be a false attendance record for a student and — once hr-leave consumes the
+    same column — a balance error for a staff member.
+
+    A half-day is only meaningful on a single date: `day_part` describes which
+    half of *a* day, and applying it to a range would silently mean "half of every
+    day in it", which no caller means and §6 does not describe.
+    """
+    days = [
+        start + datetime.timedelta(days=offset)
+        for offset in range((end - start).days + 1)
+        if calendar.is_working_day(start + datetime.timedelta(days=offset), campus_id=campus_id)
+    ]
+    count = Decimal(len(days))
+    if count == 1 and day_part != DayPart.FULL:
+        return Decimal("0.5")
+    return count
+
+
+def assert_may_request_for_student(*, user, student: Student) -> None:
+    """§11 — "requester must be the student or a linked guardian".
+
+    Resolved through `Student.filter_owned_by_user`, the same hook the read scope
+    uses, so a guardian whose portal access was revoked cannot submit on a child's
+    behalf either. Two rules that must agree, implemented once.
+    """
+    visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+    if not visible.filter(pk=student.pk).exists():
+        raise DomainRuleViolation(
+            {"student_id": "You may only request leave for yourself or a child you are linked to."}
+        )
+
+
+def assert_no_overlapping_leave(
+    *, student: Student, start: datetime.date, end: datetime.date, exclude_pk=None
+) -> None:
+    """§11 — no overlap with an existing approved or pending request."""
+    clashes = LeaveRequest.objects.alive().filter(
+        student=student,
+        status__in=LIVE_LEAVE_STATUSES,
+        start_date__lte=end,
+        end_date__gte=start,
+    )
+    if exclude_pk is not None:
+        clashes = clashes.exclude(pk=exclude_pk)
+
+    clash = clashes.first()
+    if clash is not None:
+        raise DomainRuleViolation(
+            {
+                "start_date": (
+                    f"This overlaps a {clash.status} request for "
+                    f"{clash.start_date} – {clash.end_date}."
+                )
+            }
+        )
+
+
+@transaction.atomic
+def submit_leave_request(
+    *,
+    student: Student,
+    leave_type: LeaveType,
+    start_date: datetime.date,
+    end_date: datetime.date,
+    day_part: str,
+    reason: str,
+    attachment_file=None,
+    submitted_by: uuid.UUID,
+    requesting_user,
+) -> LeaveRequest:
+    """§5.4 — a guardian or student raises a request, and its chain is built with it.
+
+    The whole chain is materialised now rather than a step at a time, so the
+    requester can see how many decisions stand between them and an answer, and so
+    `current_approval_level` always points at a row that exists.
+    """
+    assert_may_request_for_student(user=requesting_user, student=student)
+
+    if not leave_type.allows_students:
+        raise DomainRuleViolation(
+            {"leave_type_id": f"'{leave_type.name}' is not a leave type students may request."}
+        )
+    if not leave_type.is_active:
+        raise DomainRuleViolation({"leave_type_id": f"'{leave_type.name}' is no longer offered."})
+    if end_date < start_date:
+        raise DomainRuleViolation({"end_date": "Leave cannot end before it starts."})
+    if leave_type.requires_attachment and attachment_file is None:
+        raise DomainRuleViolation(
+            {"attachment_file_id": f"'{leave_type.name}' requires a supporting document."}
+        )
+    if attachment_file is not None:
+        assert_file_usable(file=attachment_file, purpose=uploads.LEAVE_ATTACHMENT.key)
+
+    assert_no_overlapping_leave(student=student, start=start_date, end=end_date)
+
+    campus_id = student.campus_id
+    days_count = leave_days_between(start_date, end_date, day_part=day_part, campus_id=campus_id)
+    if days_count <= 0:
+        raise DomainRuleViolation(
+            {"start_date": "Those dates are all holidays or non-working days for this school."}
+        )
+    if leave_type.max_consecutive_days is not None and days_count > leave_type.max_consecutive_days:
+        raise DomainRuleViolation(
+            {
+                "end_date": (
+                    f"'{leave_type.name}' allows at most "
+                    f"{leave_type.max_consecutive_days} consecutive days."
+                )
+            }
+        )
+
+    request = LeaveRequest.objects.create(
+        tenant_id=student.tenant_id,
+        requester_type=RequesterType.STUDENT,
+        student=student,
+        leave_type=leave_type,
+        start_date=start_date,
+        end_date=end_date,
+        day_part=day_part,
+        days_count=days_count,
+        reason=reason,
+        attachment_file=attachment_file,
+        submitted_by=submitted_by,
+        created_by=submitted_by,
+        updated_by=submitted_by,
+    )
+    LeaveApproval.objects.bulk_create(
+        [
+            LeaveApproval(
+                tenant_id=student.tenant_id,
+                leave_request=request,
+                level=step["level"],
+                required_permission=step["required_permission"],
+                created_by=submitted_by,
+                updated_by=submitted_by,
+            )
+            for step in student_leave_chain(days_count)
+        ]
+    )
+    _notify_leave_submitted(request=request)
+    return request
+
+
+@transaction.atomic
+def decide_leave_step(
+    *, request: LeaveRequest, approve: bool, approver_id: uuid.UUID, note: str | None = None
+) -> LeaveRequest:
+    """One step of §7.2's chain. Approving the last step approves the request.
+
+    Three rules hold here rather than in the viewset, because the same three have
+    to hold when hr-leave decides a staff request through its own endpoint:
+
+    1. **The approver is not the submitter** (§11, RBAC §2.4).
+    2. **No approver decides two levels of the same request.** Without this the
+       escalation threshold means nothing — the class teacher who approved level
+       1 could approve level 2 and the second opinion would be their own.
+    3. **A rejection ends the request outright**, at whatever level it happens.
+       §7.2's flowchart has one arrow out of a rejection and it goes to
+       "Rejected + notification"; there is no partial rejection to represent.
+    """
+    request = LeaveRequest.objects.select_for_update().get(pk=request.pk)
+    if request.status != LeaveStatus.PENDING:
+        raise Conflict(f"This request was already {request.status}.")
+    if request.submitted_by == approver_id:
+        raise DomainRuleViolation(
+            {"approver_id": "An approver cannot decide a request they submitted (§11)."}
+        )
+
+    step = request.approvals.alive().filter(level=request.current_approval_level).first()
+    if step is None:
+        raise Conflict("This request has no pending approval step.")
+    if request.approvals.alive().filter(approver_id=approver_id).exists():
+        raise DomainRuleViolation(
+            {
+                "approver_id": (
+                    "You have already decided a step of this request; an escalation "
+                    "needs a second person."
+                )
+            }
+        )
+    _assert_escalation_reaches_wider(step=step, user_id=approver_id)
+
+    now = timezone.now()
+    step.decision = ApprovalDecision.APPROVED if approve else ApprovalDecision.REJECTED
+    step.approver_id = approver_id
+    step.decided_at = now
+    step.note = note
+    step.updated_by = approver_id
+    step.save(
+        update_fields=["decision", "approver_id", "decided_at", "note", "updated_by", "updated_at"]
+    )
+
+    if not approve:
+        request.status = LeaveStatus.REJECTED
+        request.decided_at = now
+    else:
+        remaining = request.approvals.alive().filter(decision=ApprovalDecision.PENDING).count()
+        if remaining:
+            request.current_approval_level += 1
+        else:
+            request.status = LeaveStatus.APPROVED
+            request.decided_at = now
+
+    request.updated_by = approver_id
+    request.save(
+        update_fields=["status", "current_approval_level", "decided_at", "updated_by", "updated_at"]
+    )
+
+    if request.status == LeaveStatus.APPROVED:
+        apply_approved_leave(request=request, actor_id=approver_id)
+    if request.status in (LeaveStatus.APPROVED, LeaveStatus.REJECTED):
+        _notify_leave_decision(request=request)
+
+    return request
+
+
+def _assert_escalation_reaches_wider(*, step: LeaveApproval, user_id: uuid.UUID) -> None:
+    """Level 2 needs someone who can see more than level 1 could.
+
+    "Two different people" was not enough on its own. §4 grants the approve key
+    to `class_teacher`, `vice_principal` and `principal` alike, so two
+    `assigned`-scoped class teachers with overlapping sections could take a
+    level and a level — and a request that escalated *because it was long* would
+    be decided entirely inside the scope that raised it, without the wider view
+    §7.2 escalates to a vice principal precisely to obtain.
+
+    So the second level requires a `campus` or `all` scope. Expressed as scope
+    rather than as a role because roles are tenant-editable and scope is what
+    actually determines what an approver can see — the same reason
+    `student_leave_chain` keys both levels the same and lets scope separate them.
+    """
+    if step.level < 2:
+        return
+
+    from core.rbac.models import User
+
+    reviewer = User.objects.filter(pk=user_id).first()
+    scopes = user_scopes(reviewer) if reviewer is not None else {}
+    if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
+        return
+
+    raise DomainRuleViolation(
+        {
+            "approver_id": (
+                "This request escalated past the threshold and needs an approver "
+                "with campus-wide or school-wide scope."
+            )
+        }
+    )
+
+
+@transaction.atomic
+def cancel_leave_request(*, request: LeaveRequest, actor_id: uuid.UUID) -> LeaveRequest:
+    """§6 — "cancellation allowed until start date".
+
+    An approved request may be cancelled too, not only a pending one: a child who
+    recovers early should come back to school without an `on_leave` row saying
+    otherwise. The auto-marked rows are withdrawn with it, which is why this is
+    not simply a status write.
+    """
+    request = LeaveRequest.objects.select_for_update().get(pk=request.pk)
+    if request.status in (LeaveStatus.REJECTED, LeaveStatus.CANCELLED):
+        raise Conflict(f"This request was already {request.status}.")
+    if request.start_date <= timezone.localdate():
+        raise DomainRuleViolation(
+            {"start_date": "Leave can only be cancelled before it starts (§6)."}
+        )
+
+    _withdraw_auto_marked_rows(request=request, actor_id=actor_id)
+
+    request.status = LeaveStatus.CANCELLED
+    request.decided_at = timezone.now()
+    request.updated_by = actor_id
+    request.save(update_fields=["status", "decided_at", "updated_by", "updated_at"])
+    return request
+
+
+def apply_approved_leave(*, request: LeaveRequest, actor_id: uuid.UUID) -> int:
+    """§7.2 — "dates auto-marked on_leave". Returns the number of rows written.
+
+    Only working days get a row, and only where none already exists: a date the
+    teacher already marked is left alone rather than overwritten, because a
+    student who was recorded present is a fact and the approval is a claim about
+    the future. Those dates are reported as skipped rather than silently ignored —
+    `_LeaveMarkOutcome` carries the count so the caller can say so.
+
+    Daily rows only, never per-period: the request is for whole dates, and
+    fabricating a row per period would invent marks nobody made.
+
+    Staff requests return early. `leave_requests` holds both kinds and
+    `student` is therefore nullable; there is no staff register to write to
+    until PR 3 ships `staff_attendance`, and mypy is right that reaching for
+    `request.student.campus_id` on a staff row would crash. Guarded rather than
+    cast, because the guard is also the honest description of what this does.
+    """
+    if request.student is None:
+        return 0
+
+    session = AcademicSession.objects.alive().filter(is_current=True).first()
+    if session is None:
+        # An approved request with nowhere to record it. Loud rather than silent:
+        # the approval already happened and the register would quietly disagree.
+        logger.warning(
+            "leave %s approved with no current academic session; no rows auto-marked",
+            request.pk,
+        )
+        return 0
+
+    enrollment = (
+        StudentEnrollment.objects.alive()
+        .filter(student=request.student, academic_session=session, status=EnrollmentStatus.ACTIVE)
+        .first()
+    )
+    if enrollment is None:
+        logger.warning("leave %s approved for a student with no active enrollment", request.pk)
+        return 0
+
+    campus_id = request.student.campus_id
+    dates = [
+        request.start_date + datetime.timedelta(days=offset)
+        for offset in range((request.end_date - request.start_date).days + 1)
+    ]
+    working = [day for day in dates if calendar.is_working_day(day, campus_id=campus_id)]
+    already = set(
+        StudentAttendance.objects.alive()
+        .filter(student=request.student, attendance_date__in=working, period__isnull=True)
+        .values_list("attendance_date", flat=True)
+    )
+
+    def _rows_for(dates: list[datetime.date]) -> list[StudentAttendance]:
+        return [
+            StudentAttendance(
+                tenant_id=request.tenant_id,
+                student=request.student,
+                section=enrollment.section,
+                academic_session=session,
+                attendance_date=day,
+                status=AttendanceStatus.ON_LEAVE,
+                leave_request=request,
+                source=AttendanceSource.SYSTEM,
+                marked_by=actor_id,
+                created_by=actor_id,
+                updated_by=actor_id,
+            )
+            for day in dates
+        ]
+
+    pending = [day for day in working if day not in already]
+    try:
+        with transaction.atomic():
+            StudentAttendance.objects.bulk_create(_rows_for(pending))
+    except IntegrityError:
+        # A teacher marked one of these dates between our read and our insert.
+        # Without the savepoint this rolled back **the approval decision itself**
+        # and 500'd the approver — the leave was refused because someone took a
+        # register, which is not a relationship either action should have.
+        #
+        # The recovery is deliberately *not* an upsert: a date a teacher has
+        # already marked is theirs, exactly as the read above already decided.
+        # The retry narrows to what is still genuinely missing.
+        already = set(
+            StudentAttendance.objects.alive()
+            .filter(student=request.student, attendance_date__in=working, period__isnull=True)
+            .values_list("attendance_date", flat=True)
+        )
+        pending = [day for day in working if day not in already]
+        StudentAttendance.objects.bulk_create(_rows_for(pending))
+
+    return len(pending)
+
+
+def _withdraw_auto_marked_rows(*, request: LeaveRequest, actor_id: uuid.UUID) -> int:
+    """Soft-delete the `on_leave` rows this request wrote, and nothing else.
+
+    Filtered on `leave_request` rather than on dates: a row a teacher marked
+    themselves over the same range is not this request's to remove, and the
+    back-link is the only thing that tells the two apart.
+    """
+    return (
+        StudentAttendance.objects.alive()
+        .filter(leave_request=request)
+        .update(deleted_at=timezone.now(), updated_by=actor_id, updated_at=timezone.now())
+    )
+
+
+def _notify_leave_submitted(*, request: LeaveRequest) -> None:
+    """§12 — tell the approvers at the current step. Never fails the submission.
+
+    Swallowed and logged for the reason `staff_management._notify_invited` gives:
+    the request is the outcome the guardian asked for, and a template or transport
+    problem must not roll it back.
+    """
+    from apps.attendance import notifications
+
+    try:
+        with transaction.atomic():
+            notifications.notify_leave_submitted(request=request)
+    except Exception:
+        logger.exception("leave-submitted notification failed for request %s", request.pk)
+
+
+def _notify_leave_decision(*, request: LeaveRequest) -> None:
+    from apps.attendance import notifications
+
+    try:
+        with transaction.atomic():
+            notifications.notify_leave_decision(request=request)
+    except Exception:
+        logger.exception("leave-decision notification failed for request %s", request.pk)

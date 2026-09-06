@@ -180,6 +180,15 @@ All tables are tenant-scoped per [`multi-tenancy.md`](../02-architecture/multi-t
 - `leave_types` — tenant-configured leave categories for students and staff.
 - `leave_policies` — quota/accrual rules per leave type (staff detail governed by hr-leave).
 - `leave_balances` — per-staff entitlement/usage per period (consumed by hr-leave/payroll).
+
+> **Ownership, settled.** [`hr-leave.md`](hr-leave.md) §15 claims the same five leave
+> tables, and only one Django app can ship the migration. **This module owns them**
+> (`apps/api/apps/attendance/migrations/0003_leave_system.py`) because it ships first;
+> **hr-leave adds no tables** and layers the staff policy semantics, accrual/carry-forward
+> jobs and the configurable multi-step approval engine on top — which §1 above already
+> says in prose. `leave_policies` and `leave_balances` are created here and read by
+> nothing in this module: they are staff concepts, and the entity doc is explicit that
+> students have neither.
 - `leave_requests` — student and staff leave requests.
 - `leave_approvals` — per-step approval records for leave requests.
 
@@ -221,21 +230,25 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 ## 20. Implementation status
 
-Built as three stacked PRs; this section is updated by each. **Marking (PR 1 of 3)
-has landed.**
+Built as three stacked PRs; this section is updated by each. **Marking (PR 1) and the leave
+system (PR 2) have landed; staff attendance and reports (PR 3) have not.**
 
 ### Built
 
+**PR 1 (marking) and PR 2 (leave) have landed.**
+
 | Area | State |
 | ---- | ----- |
-| Entities | `student_attendance`, `attendance_corrections` — both tenant-owned with RLS policies (`0002_rls_policies.py`) |
-| §16 endpoints | `GET /student-attendance` (filters: `date`, `date__gte`, `date__lte`, `section_id`, `student_id`, `period_id`, `status`; cursor paginated), `POST /student-attendance:bulk-mark` (accepts `Idempotency-Key`), `GET/POST /attendance-corrections`, `POST /attendance-corrections/{id}:approve` · `:reject` |
+| Entities | `student_attendance`, `attendance_corrections`, `leave_types`, `leave_policies`, `leave_balances`, `leave_requests`, `leave_approvals` — all tenant-owned with RLS policies |
+| §16 endpoints | `GET /student-attendance` (filters: `date`, `date__gte`, `date__lte`, `section_id`, `student_id`, `period_id`, `status`; cursor paginated), `POST /student-attendance:bulk-mark` (accepts `Idempotency-Key`), `GET/POST /attendance-corrections`, `POST /attendance-corrections/{id}:approve` · `:reject`, `GET/POST /leave-requests`, `POST /leave-requests/{id}:approve` · `:reject` · `:cancel`, `GET /leave-types` (read-only — see below) |
 | §4 permissions | All ten keys registered. `mark` was already in `core/rbac/registry.py`'s `EXTRA_ACTIONS` |
-| §11 validations | Not future-dated · not a weekend or holiday (via `school_organization.calendar`) · one row per student per date/period, enforced by two partial unique indexes · marker holds `assigned` scope for the section unless `all`-scoped · `late_minutes` computed server-side and a client value discarded · corrections need a locked target, a changed value, and an approver who is not the requester |
-| §12 notifications | `attendance.absence-alert` and `attendance.late-alert`, fanned out on commit to guardians holding a live, portal-enabled link |
+| §11 validations (marking) | Not future-dated · not a weekend or holiday (via `school_organization.calendar`) · one row per student per date/period, enforced by two partial unique indexes · marker holds `assigned` scope for the section unless `all`-scoped · `late_minutes` computed server-side and a client value discarded · corrections need a locked target, a changed value, and an approver who is not the requester |
+| §11 validations (leave) | `start_date ≤ end_date` · no overlap with a *live* (pending or approved) request · attachment required where the type demands one · requester is the student or a portal-enabled linked guardian · `days_count` computed net of holidays and non-working days · `max_consecutive_days` honoured · approver ≠ submitter, **and no one person decides two levels of the same request** |
+| §7.2 approval chain | One level by default; a second when `days_count` exceeds `academic.student_leave_approval.escalation_threshold_days` (default 10, §8's fortnight). Approval auto-marks `on_leave` for the working days in range, skipping any date already marked. Cancellation before `start_date` withdraws the rows it wrote |
+| §12 notifications | `attendance.absence-alert` and `attendance.late-alert` (to portal-enabled guardians, on commit); `attendance.leave-submitted` (to whoever holds the current step's `required_permission`) and `attendance.leave-decision` (to the submitter — §12 names the requester, who is often a guardian acting for a child with no account) |
 | §5.5 lock window | `tenant_settings.academic.attendance_lock_window_days`, clamped to §19's 0–7. Persisted nightly by `apps.attendance.tasks.lock_expired_attendance`; the service recomputes from the date and never trusts the column alone |
 | Feature flag | `module.attendance`, `default_enabled=False` |
-| Tests | Django: models, marking, API, cross-tenant, notifications. E2E: `e2e/tests/live/api/attendance-marking.spec.ts` (live lane) |
+| Tests | Django: models, marking, leave, API, leave API, cross-tenant, notifications. E2E: `attendance-marking.spec.ts` and `attendance-leave.spec.ts` (live lane) |
 
 ### Corrected in review
 
@@ -274,14 +287,46 @@ depends on:
   `Student.filter_owned_by_user` rather than restating the portal-enabled
   guardian join.
 
-### Deliberately not built (marking PR)
+### The leave-type write gap, and why it is shaped this way
 
-- **The leave system** — §15's five leave tables, §16's `/leave-requests`,
-  `/leave-types`, `/leave-policies`, `/leave-balances`, and §7.2's approval chain.
-  PR 2 of 3. Approved leave auto-marking `on_leave` lands with it, which is why
-  `on_leave` is refused at the register today (a status meaning "there is an
-  approved leave request" must not be settable without one) and why
-  `student_attendance.leave_request_id` is still a plain UUID rather than an FK.
+**§16 of this module lists `GET/POST/PATCH /api/v1/leave-types`, `/leave-policies`
+and `/leave-balances`. §4 of this module declares no permission key for any of
+them.** The keys that govern them — `hr.leave-type.*`, `hr.leave-policy.*`,
+`hr.leave-balance.*` — are declared by [`hr-leave.md`](hr-leave.md) §4.
+
+Registering another module's `hr.*` keys from this app would break the permission
+registry the day hr-leave ships its own `permissions.py` (duplicate key), and
+inventing `attendance.leave-type.*` would put keys in the registry that no module
+doc declares. So the split is by what §4 here *can* key:
+
+- **Reading** the catalogue is part of working with leave requests, so
+  `GET /leave-types` takes `attendance.leave-request.view` — the same move
+  `timetable` makes for `/periods` and `/rooms`, which its §4 also leaves
+  unkeyed. `.view` rather than `.create`, because §4 grants `.view` to
+  requesters *and* approvers: an approver reading a request needs the type's
+  name, and a key only requesters hold would hide it from the one person who has
+  to decide.
+- **Writing** leave types, and all of `/leave-policies` and `/leave-balances`, is
+  HR configuration and ships with hr-leave (Tier 6).
+
+**The consequence is real: until hr-leave lands, a tenant's leave types come from
+the seeds (`seed_e2e_data`, `seed_dev_data`), not from the API.** Recorded here
+rather than worked around, because the workaround would be a key nobody declared.
+
+### Deliberately not built
+
+- **`leave_policies` and `leave_balances` have tables and no behaviour.** They are
+  staff concepts governed by hr-leave; nothing in this module reads or writes
+  them. The tables exist so hr-leave adds none.
+- **Staff leave requests.** `leave_requests` holds both kinds because both module
+  docs describe one table, but only the student half has endpoints here —
+  `LeaveRequestViewSet` filters to `requester_type = student` so an `all`-scoped
+  attendance principal cannot read staff leave through an attendance-keyed
+  endpoint before hr-leave has decided its visibility rules.
+- **`ApprovalDecision.skipped`** is declared and unreachable. It is what a step
+  becomes when a tenant edits a chain a request has already passed — the case
+  hr-leave meets when it makes the chain editable mid-flight. Nothing here edits
+  a chain after a request is raised.
 - **Staff attendance** — §5.2, `staff_attendance`, `POST /staff-attendance` and
   `:check-out`. PR 3 of 3. `attendance_corrections` therefore has no
   `staff_attendance_id` column yet and its CHECK asserts the one target that
