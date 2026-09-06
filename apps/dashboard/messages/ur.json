@@ -18,7 +18,13 @@
     "signOut": "سائن آؤٹ",
     "skipToContent": "مرکزی مواد پر جائیں",
     "primary": "بنیادی نیویگیشن",
-    "closeMenu": "مینو بند کریں"
+    "closeMenu": "مینو بند کریں",
+    "theme": {
+      "label": "تھیم تبدیل کریں",
+      "light": "روشن",
+      "dark": "تاریک",
+      "system": "سسٹم کے مطابق"
+    }
   },
   "auth": {
     "login": {

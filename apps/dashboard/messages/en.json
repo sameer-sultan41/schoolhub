@@ -18,7 +18,13 @@
     "signOut": "Sign out",
     "skipToContent": "Skip to main content",
     "primary": "Primary navigation",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "theme": {
+      "label": "Change theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "Match system"
+    }
   },
   "auth": {
     "login": {

@@ -1,12 +1,10 @@
 import { ApiError } from "@schoolhub/api-client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NextIntlClientProvider } from "next-intl";
-import messages from "../../../messages/en.json";
 import { StudentsTable } from "@/features/students/students-table";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
+import { renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 // StudentsTable never calls useSession itself — it renders <Can>, which reads
@@ -29,15 +27,6 @@ const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
 const mockPost = apiClient.post as jest.MockedFunction<typeof apiClient.post>;
 const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
-
-function renderWithProviders(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-    </NextIntlClientProvider>,
-  );
-}
 
 const STUDENT = {
   id: "s1",
