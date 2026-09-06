@@ -118,7 +118,11 @@ export function Pagination({
     <nav
       aria-label={label}
       data-slot="pagination"
-      className={cn("flex w-full justify-center", className)}
+      // Not `w-full`: shadcn's own root stretches so a standalone pager can centre under
+      // a page of content, but this one sits in `DataTable`'s footer beside the row-range
+      // summary — a full-width child in that wrapping flex row takes a line of its own
+      // and pushes the pager onto a second row for no reason.
+      className={cn("flex justify-center", className)}
       {...props}
     >
       <ul data-slot="pagination-content" className="flex flex-row items-center gap-1">

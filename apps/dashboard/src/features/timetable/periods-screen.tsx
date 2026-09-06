@@ -214,29 +214,30 @@ export function PeriodsScreen() {
         </Can>
       </div>
 
-      <FilterBar
-        selects={[
-          {
-            id: "campus",
-            label: t("fields.campus"),
-            value: campusId,
-            onChange: (value) => {
-              table.setFilter("campus_id", value);
-            },
-            options: (campuses.data ?? []).map((campus) => ({
-              value: campus.id,
-              label: campus.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-            className: "w-48",
-          },
-        ]}
-        clearLabel={tCommon("clearFilters")}
-        onClear={table.clear}
-      />
-
       <DataTable
+        toolbar={
+          <FilterBar
+            selects={[
+              {
+                id: "campus",
+                label: t("fields.campus"),
+                value: campusId,
+                onChange: (value) => {
+                  table.setFilter("campus_id", value);
+                },
+                options: (campuses.data ?? []).map((campus) => ({
+                  value: campus.id,
+                  label: campus.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+                className: "w-48",
+              },
+            ]}
+            clearLabel={tCommon("clearFilters")}
+            onClear={table.clear}
+          />
+        }
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}

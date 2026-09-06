@@ -206,41 +206,42 @@ export function RoomsScreen() {
         </Can>
       </div>
 
-      <FilterBar
-        selects={[
-          {
-            id: "campus",
-            label: t("fields.campus"),
-            value: campusId,
-            onChange: (value) => {
-              table.setFilter("campus_id", value);
-            },
-            options: (campuses.data ?? []).map((campus) => ({
-              value: campus.id,
-              label: campus.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-            className: "w-48",
-          },
-          {
-            id: "roomType",
-            label: t("fields.roomType"),
-            value: roomType,
-            onChange: (value) => {
-              table.setFilter("room_type", value);
-            },
-            options: ROOM_TYPES.map((value) => ({ value, label: t(`rooms.types.${value}`) })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-            className: "w-48",
-          },
-        ]}
-        clearLabel={tCommon("clearFilters")}
-        onClear={table.clear}
-      />
-
       <DataTable
+        toolbar={
+          <FilterBar
+            selects={[
+              {
+                id: "campus",
+                label: t("fields.campus"),
+                value: campusId,
+                onChange: (value) => {
+                  table.setFilter("campus_id", value);
+                },
+                options: (campuses.data ?? []).map((campus) => ({
+                  value: campus.id,
+                  label: campus.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+                className: "w-48",
+              },
+              {
+                id: "roomType",
+                label: t("fields.roomType"),
+                value: roomType,
+                onChange: (value) => {
+                  table.setFilter("room_type", value);
+                },
+                options: ROOM_TYPES.map((value) => ({ value, label: t(`rooms.types.${value}`) })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+                className: "w-48",
+              },
+            ]}
+            clearLabel={tCommon("clearFilters")}
+            onClear={table.clear}
+          />
+        }
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}

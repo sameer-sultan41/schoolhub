@@ -220,71 +220,72 @@ export function CurriculumScreen() {
         </Can>
       </div>
 
-      <FilterBar
-        selects={[
-          {
-            id: "academicSession",
-            label: t("fields.academicSession"),
-            value: academicSessionId,
-            onChange: (value) => {
-              table.setFilter("academic_session_id", value);
-            },
-            options: (sessions.data ?? []).map((session) => ({
-              value: session.id,
-              label: session.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-            className: "w-48",
-          },
-          {
-            id: "class",
-            label: t("fields.class"),
-            value: classId,
-            onChange: (value) => {
-              table.setFilter("class_id", value);
-            },
-            options: (classes.data ?? []).map((option) => ({
-              value: option.id,
-              label: option.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "campus",
-            label: t("fields.campus"),
-            value: campusId,
-            onChange: (value) => {
-              table.setFilter("campus_id", value);
-            },
-            options: (campuses.data ?? []).map((campus) => ({
-              value: campus.id,
-              label: campus.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "kind",
-            label: t("curriculum.columns.kind"),
-            value: isElective,
-            onChange: (value) => {
-              table.setFilter("is_elective", value);
-            },
-            options: [
-              { value: "false", label: t("curriculum.core") },
-              { value: "true", label: t("curriculum.elective") },
-            ],
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-        ]}
-        clearLabel={tCommon("clearFilters")}
-        onClear={table.clear}
-      />
-
       <DataTable
+        toolbar={
+          <FilterBar
+            selects={[
+              {
+                id: "academicSession",
+                label: t("fields.academicSession"),
+                value: academicSessionId,
+                onChange: (value) => {
+                  table.setFilter("academic_session_id", value);
+                },
+                options: (sessions.data ?? []).map((session) => ({
+                  value: session.id,
+                  label: session.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+                className: "w-48",
+              },
+              {
+                id: "class",
+                label: t("fields.class"),
+                value: classId,
+                onChange: (value) => {
+                  table.setFilter("class_id", value);
+                },
+                options: (classes.data ?? []).map((option) => ({
+                  value: option.id,
+                  label: option.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "campus",
+                label: t("fields.campus"),
+                value: campusId,
+                onChange: (value) => {
+                  table.setFilter("campus_id", value);
+                },
+                options: (campuses.data ?? []).map((campus) => ({
+                  value: campus.id,
+                  label: campus.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "kind",
+                label: t("curriculum.columns.kind"),
+                value: isElective,
+                onChange: (value) => {
+                  table.setFilter("is_elective", value);
+                },
+                options: [
+                  { value: "false", label: t("curriculum.core") },
+                  { value: "true", label: t("curriculum.elective") },
+                ],
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+            ]}
+            clearLabel={tCommon("clearFilters")}
+            onClear={table.clear}
+          />
+        }
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}

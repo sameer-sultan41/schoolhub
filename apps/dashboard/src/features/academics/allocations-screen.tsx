@@ -254,71 +254,72 @@ export function AllocationsScreen() {
         </Can>
       </div>
 
-      <FilterBar
-        selects={[
-          {
-            id: "academicSession",
-            label: t("fields.academicSession"),
-            value: academicSessionId,
-            onChange: (value) => {
-              table.setFilter("academic_session_id", value);
-            },
-            options: (sessions.data ?? []).map((session) => ({
-              value: session.id,
-              label: session.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-            className: "w-48",
-          },
-          {
-            id: "section",
-            label: t("fields.section"),
-            value: sectionId,
-            onChange: (value) => {
-              table.setFilter("section_id", value);
-            },
-            options: (sections.data ?? []).map((section) => ({
-              value: section.id,
-              label: sectionLabels.get(section.id) ?? section.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "subject",
-            label: t("fields.subject"),
-            value: subjectId,
-            onChange: (value) => {
-              table.setFilter("subject_id", value);
-            },
-            options: (subjects.data ?? []).map((option) => ({
-              value: option.id,
-              label: option.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "teacher",
-            label: t("fields.teacher"),
-            value: staffId,
-            onChange: (value) => {
-              table.setFilter("staff_id", value);
-            },
-            options: (staff.data ?? []).map((teacher) => ({
-              value: teacher.id,
-              label: `${teacher.first_name} ${teacher.last_name}`,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-        ]}
-        clearLabel={tCommon("clearFilters")}
-        onClear={table.clear}
-      />
-
       <DataTable
+        toolbar={
+          <FilterBar
+            selects={[
+              {
+                id: "academicSession",
+                label: t("fields.academicSession"),
+                value: academicSessionId,
+                onChange: (value) => {
+                  table.setFilter("academic_session_id", value);
+                },
+                options: (sessions.data ?? []).map((session) => ({
+                  value: session.id,
+                  label: session.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+                className: "w-48",
+              },
+              {
+                id: "section",
+                label: t("fields.section"),
+                value: sectionId,
+                onChange: (value) => {
+                  table.setFilter("section_id", value);
+                },
+                options: (sections.data ?? []).map((section) => ({
+                  value: section.id,
+                  label: sectionLabels.get(section.id) ?? section.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "subject",
+                label: t("fields.subject"),
+                value: subjectId,
+                onChange: (value) => {
+                  table.setFilter("subject_id", value);
+                },
+                options: (subjects.data ?? []).map((option) => ({
+                  value: option.id,
+                  label: option.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "teacher",
+                label: t("fields.teacher"),
+                value: staffId,
+                onChange: (value) => {
+                  table.setFilter("staff_id", value);
+                },
+                options: (staff.data ?? []).map((teacher) => ({
+                  value: teacher.id,
+                  label: `${teacher.first_name} ${teacher.last_name}`,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+            ]}
+            clearLabel={tCommon("clearFilters")}
+            onClear={table.clear}
+          />
+        }
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}

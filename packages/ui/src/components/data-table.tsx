@@ -276,7 +276,8 @@ export interface DataTableProps<TRow> {
    */
   emptyState: ReactElement;
   /**
-   * Rendered above the table when the query failed. Optional: a table with an error has
+   * Rendered inside the card, between the filter row and the header, when the query
+   * failed. Optional: a table with an error has
    * nothing to show, but the caller owns the error envelope (`error.code`, `details`) and
    * how it reads, so this is a slot rather than an error object.
    *
@@ -305,6 +306,18 @@ export interface DataTableProps<TRow> {
    * column rather than reading each row.
    */
   density?: "comfortable" | "compact";
+  /**
+   * The filter row, rendered inside the table's own card above the header.
+   *
+   * A filter bar floating as a separate block above a separately-bordered table is two
+   * objects where a reader sees one thing — they narrow the list and then look at the
+   * list. Putting them in one frame is what the reference dashboards do, and it is why
+   * `Table` grew a `frame` prop: the card owns the border now.
+   *
+   * A slot rather than a `FilterBar` prop because this package does not know about the
+   * dashboard's filter component, and two screens put a date range in the same row.
+   */
+  toolbar?: ReactNode;
   onRowClick?: (row: TRow) => void;
   /**
    * Cursor pagination controls (api-architecture.md §2.4). Omit for non-paginated tables.
@@ -339,6 +352,7 @@ export function DataTable<TRow>({
   emptyState,
   error,
   density = "comfortable",
+  toolbar,
   onRowClick,
   pagination,
   sort,
@@ -356,19 +370,36 @@ export function DataTable<TRow>({
   const showEmpty = !isLoading && !error && rows.length === 0;
   const cellPadding = density === "compact" ? "py-2" : undefined;
 
-  return (
-    <div className={cn("w-full space-y-4", className)}>
-      {error}
+  const columnsMenu = columnVisibility ? (
+    <DataTableColumnsMenu columns={columns} visibility={columnVisibility} />
+  ) : null;
+  const hasToolbar = toolbar !== undefined || columnsMenu !== null;
 
-      {columnVisibility ? (
-        // Aligned to the end so it sits over the table's trailing edge rather than
-        // competing with the filter bar most screens put above this component.
-        <div className="flex justify-end">
-          <DataTableColumnsMenu columns={columns} visibility={columnVisibility} />
+  return (
+    // One card holds the filter row, the table and the pager. `overflow-hidden` is what
+    // lets the header's muted fill and the pager's divider meet the rounded corners
+    // instead of squaring off inside them.
+    <div
+      className={cn(
+        "w-full overflow-hidden rounded-[var(--sh-radius)] border border-border bg-surface",
+        className,
+      )}
+    >
+      {hasToolbar ? (
+        // items-end, not items-center: the filter fields carry labels above them, so
+        // their baselines are what the columns button has to line up with.
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border p-4">
+          <div className="min-w-0 flex-1">{toolbar}</div>
+          {columnsMenu}
         </div>
       ) : null}
 
-      <Table aria-busy={isLoading || undefined}>
+      {/* Inside the card, above the header: the failure belongs to this list, and the
+          filter row above it stays usable so a request that failed under a narrow filter
+          can be widened without a reload. */}
+      {error ? <div className="border-b border-border p-4">{error}</div> : null}
+
+      <Table frame="none" aria-busy={isLoading || undefined}>
         {caption ? <TableCaption className="sr-only">{caption}</TableCaption> : null}
         <TableHeader>
           <TableRow>
@@ -471,13 +502,13 @@ export function DataTable<TRow>({
           nothing else. The presentation belongs to the caller now — in this repo, always
           an <EmptyState> — and the prop type requires an element so it cannot quietly
           become a bare string again. */}
-      {showEmpty ? emptyState : null}
+      {showEmpty ? <div className="border-t border-border p-4">{emptyState}</div> : null}
 
       {pagination ? (
         // Summary and rows-per-page lead, the pager trails. Wraps rather than scrolls:
         // on a phone the two stack instead of pushing the pager off the edge of the one
         // row a reader needs to reach.
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4">
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             {pagination.pageSize ? <PageSizeControl pageSize={pagination.pageSize} /> : null}
             {pagination.summary ?? null}

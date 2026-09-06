@@ -209,72 +209,73 @@ export function PromotionBatchesScreen() {
         </Can>
       </div>
 
-      <FilterBar
-        selects={[
-          {
-            id: "fromSession",
-            label: t("promotions.fields.fromSession"),
-            value: fromSessionId,
-            onChange: (value) => {
-              table.setFilter("from_academic_session_id", value);
-            },
-            options: (sessions.data ?? []).map((session) => ({
-              value: session.id,
-              label: session.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-            className: "w-44",
-          },
-          {
-            id: "toSession",
-            label: t("promotions.fields.toSession"),
-            value: toSessionId,
-            onChange: (value) => {
-              table.setFilter("to_academic_session_id", value);
-            },
-            options: (sessions.data ?? []).map((session) => ({
-              value: session.id,
-              label: session.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-            className: "w-44",
-          },
-          {
-            id: "class",
-            label: t("fields.class"),
-            value: classId,
-            onChange: (value) => {
-              table.setFilter("from_class_id", value);
-            },
-            options: (classes.data ?? []).map((option) => ({
-              value: option.id,
-              label: option.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "status",
-            label: t("promotions.columns.status"),
-            value: status,
-            onChange: (value) => {
-              table.setFilter("status", value);
-            },
-            options: PROMOTION_STATUSES.map((value) => ({
-              value,
-              label: t(`promotions.status.${value}`),
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-        ]}
-        clearLabel={tCommon("clearFilters")}
-        onClear={table.clear}
-      />
-
       <DataTable
+        toolbar={
+          <FilterBar
+            selects={[
+              {
+                id: "fromSession",
+                label: t("promotions.fields.fromSession"),
+                value: fromSessionId,
+                onChange: (value) => {
+                  table.setFilter("from_academic_session_id", value);
+                },
+                options: (sessions.data ?? []).map((session) => ({
+                  value: session.id,
+                  label: session.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+                className: "w-44",
+              },
+              {
+                id: "toSession",
+                label: t("promotions.fields.toSession"),
+                value: toSessionId,
+                onChange: (value) => {
+                  table.setFilter("to_academic_session_id", value);
+                },
+                options: (sessions.data ?? []).map((session) => ({
+                  value: session.id,
+                  label: session.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+                className: "w-44",
+              },
+              {
+                id: "class",
+                label: t("fields.class"),
+                value: classId,
+                onChange: (value) => {
+                  table.setFilter("from_class_id", value);
+                },
+                options: (classes.data ?? []).map((option) => ({
+                  value: option.id,
+                  label: option.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "status",
+                label: t("promotions.columns.status"),
+                value: status,
+                onChange: (value) => {
+                  table.setFilter("status", value);
+                },
+                options: PROMOTION_STATUSES.map((value) => ({
+                  value,
+                  label: t(`promotions.status.${value}`),
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+            ]}
+            clearLabel={tCommon("clearFilters")}
+            onClear={table.clear}
+          />
+        }
         columns={columns}
         rows={rows}
         getRowId={(row) => row.batch_id}

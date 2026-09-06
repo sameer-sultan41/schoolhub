@@ -230,54 +230,55 @@ export function SubstitutionsScreen() {
         </Can>
       </div>
 
-      <FilterBar
-        selects={[
-          {
-            id: "status",
-            label: t("fields.status"),
-            value: status,
-            onChange: (value) => {
-              table.setFilter("status", value);
-            },
-            options: SUBSTITUTION_STATUSES.map((value) => ({
-              value,
-              label: t(`substitutions.status.${value}`),
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-        ]}
-        clearLabel={tCommon("clearFilters")}
-        // The date range is this screen's own control — FilterBar renders it in the same
-        // row but cannot know whether it is set, so say so explicitly.
-        extrasActive={Boolean(dateFrom || dateTo)}
-        onClear={table.clear}
-      >
-        <div className="w-40 space-y-1">
-          <Label htmlFor={fromId}>{t("substitutions.filters.from")}</Label>
-          <Input
-            id={fromId}
-            type="date"
-            value={dateFrom}
-            onChange={(event) => {
-              table.setText("date__gte", event.target.value);
-            }}
-          />
-        </div>
-        <div className="w-40 space-y-1">
-          <Label htmlFor={toId}>{t("substitutions.filters.to")}</Label>
-          <Input
-            id={toId}
-            type="date"
-            value={dateTo}
-            onChange={(event) => {
-              table.setText("date__lte", event.target.value);
-            }}
-          />
-        </div>
-      </FilterBar>
-
       <DataTable
+        toolbar={
+          <FilterBar
+            selects={[
+              {
+                id: "status",
+                label: t("fields.status"),
+                value: status,
+                onChange: (value) => {
+                  table.setFilter("status", value);
+                },
+                options: SUBSTITUTION_STATUSES.map((value) => ({
+                  value,
+                  label: t(`substitutions.status.${value}`),
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+            ]}
+            clearLabel={tCommon("clearFilters")}
+            // The date range is this screen's own control — FilterBar renders it in the same
+            // row but cannot know whether it is set, so say so explicitly.
+            extrasActive={Boolean(dateFrom || dateTo)}
+            onClear={table.clear}
+          >
+            <div className="w-40 space-y-1">
+              <Label htmlFor={fromId}>{t("substitutions.filters.from")}</Label>
+              <Input
+                id={fromId}
+                type="date"
+                value={dateFrom}
+                onChange={(event) => {
+                  table.setText("date__gte", event.target.value);
+                }}
+              />
+            </div>
+            <div className="w-40 space-y-1">
+              <Label htmlFor={toId}>{t("substitutions.filters.to")}</Label>
+              <Input
+                id={toId}
+                type="date"
+                value={dateTo}
+                onChange={(event) => {
+                  table.setText("date__lte", event.target.value);
+                }}
+              />
+            </div>
+          </FilterBar>
+        }
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}
