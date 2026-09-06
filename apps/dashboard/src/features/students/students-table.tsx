@@ -32,6 +32,9 @@ import { queryKeys } from "@/lib/query-client";
 
 const STATUSES: StudentStatus[] = ["active", "suspended", "transferred", "withdrawn", "graduated"];
 
+/** The house convention for "no value" — see AGENTS.md's cell vocabulary. */
+const EMPTY = "—";
+
 /**
  * The badge variant a student's status wears.
  *
@@ -211,6 +214,25 @@ export function StudentsTable() {
       skeleton: PERSON_SKELETON,
     },
     {
+      id: "campus",
+      header: t("fields.campus"),
+      // The name comes down on the row itself — the list serializer sends `campus_name`
+      // beside `campus_id` — so this costs no second request and no lookup map, which
+      // is what a column of raw UUIDs was worth avoiding.
+      sortKey: "campus_name",
+      cell: (row) => row.campus_name,
+      skeleton: <Skeleton className="h-4 w-28" />,
+    },
+    {
+      id: "house",
+      header: t("fields.house"),
+      sortKey: "house_name",
+      // A student need not be in a house. The dash says "none", where an empty cell
+      // reads as a rendering fault.
+      cell: (row) => row.house_name ?? EMPTY,
+      skeleton: <Skeleton className="h-4 w-20" />,
+    },
+    {
       id: "admissionDate",
       header: t("columns.admissionDate"),
       // `identifier`, not `measure`: a date names a row rather than being a quantity
@@ -262,31 +284,32 @@ export function StudentsTable() {
         </div>
       </div>
 
-      <FilterBar
-        search={{
-          label: t("filters.search"),
-          placeholder: t("list.searchPlaceholder"),
-          value: table.search,
-          onChange: table.setSearch,
-        }}
-        selects={[
-          {
-            id: "status",
-            label: t("filters.status"),
-            value: status,
-            onChange: (value) => {
-              table.setFilter("status", value);
-            },
-            options: STATUSES.map((value) => ({ value, label: t(`status.${value}`) })),
-            allLabel: t("filters.all"),
-            allValue: ALL_STATUSES,
-          },
-        ]}
-        clearLabel={tCommon("clearFilters")}
-        onClear={table.clear}
-      />
-
       <DataTable
+        toolbar={
+          <FilterBar
+            search={{
+              label: t("filters.search"),
+              placeholder: t("list.searchPlaceholder"),
+              value: table.search,
+              onChange: table.setSearch,
+            }}
+            selects={[
+              {
+                id: "status",
+                label: t("filters.status"),
+                value: status,
+                onChange: (value) => {
+                  table.setFilter("status", value);
+                },
+                options: STATUSES.map((value) => ({ value, label: t(`status.${value}`) })),
+                allLabel: t("filters.all"),
+                allValue: ALL_STATUSES,
+              },
+            ]}
+            clearLabel={tCommon("clearFilters")}
+            onClear={table.clear}
+          />
+        }
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}
@@ -295,8 +318,8 @@ export function StudentsTable() {
         // Wide table, scanned down one column rather than read row by row.
         density="compact"
         // The envelope goes into the table's own error slot rather than replacing the
-        // whole screen: the filter row above stays usable, so a failed request under a
-        // narrow filter can be widened without a reload.
+        // whole screen: the filter row stays usable, so a failed request under a narrow
+        // filter can be widened without a reload.
         error={error ? <ApiErrorAlert error={error} /> : undefined}
         emptyState={
           <EmptyState

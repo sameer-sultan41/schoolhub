@@ -49,7 +49,15 @@ const STAFF_MEMBER = {
   last_name: "Ahmed",
   staff_type: "teaching",
   employment_status: "active",
+  joining_date: "2024-08-01",
   email: "bilal.ahmed@demo.localhost",
+  // The list serializer sends these beside their ids so the directory can name a
+  // campus, a department and a designation without three lookup requests. Department
+  // is null here on purpose — it is optional on a staff record, and the dash is what
+  // the cell must render for it.
+  campus_name: "Main Campus",
+  department_name: null,
+  designation_name: "Senior Teacher",
 };
 
 function mockStaffAndDepartments(staffPage: ApiResult<unknown>) {

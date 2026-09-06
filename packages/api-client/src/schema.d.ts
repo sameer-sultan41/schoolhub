@@ -3206,10 +3206,13 @@ export interface components {
             staff_type?: components["schemas"]["StaffTypeEnum"];
             /** Format: uuid */
             campus_id?: string;
+            readonly campus_name?: string;
             /** Format: uuid */
             department_id?: string | null;
+            readonly department_name?: string | null;
             /** Format: uuid */
             designation_id?: string | null;
+            readonly designation_name?: string | null;
             /** Format: uuid */
             reports_to_staff_id?: string | null;
             employment_type?: components["schemas"]["EmploymentTypeEnum"];
@@ -3276,8 +3279,10 @@ export interface components {
             photo_file_id?: string | null;
             /** Format: uuid */
             campus_id?: string;
+            readonly campus_name?: string;
             /** Format: uuid */
             house_id?: string | null;
+            readonly house_name?: string | null;
             readonly status?: components["schemas"]["StudentStatusEnum"];
             /** Format: date */
             admission_date?: string;
@@ -3692,10 +3697,13 @@ export interface components {
             staff_type: components["schemas"]["StaffTypeEnum"];
             /** Format: uuid */
             campus_id: string;
+            readonly campus_name: string;
             /** Format: uuid */
             department_id?: string | null;
+            readonly department_name: string | null;
             /** Format: uuid */
             designation_id?: string | null;
+            readonly designation_name: string | null;
             /** Format: uuid */
             reports_to_staff_id?: string | null;
             employment_type?: components["schemas"]["EmploymentTypeEnum"];
@@ -3805,8 +3813,10 @@ export interface components {
             photo_file_id?: string | null;
             /** Format: uuid */
             campus_id: string;
+            readonly campus_name: string;
             /** Format: uuid */
             house_id?: string | null;
+            readonly house_name: string | null;
             readonly status: components["schemas"]["StudentStatusEnum"];
             /** Format: date */
             admission_date: string;

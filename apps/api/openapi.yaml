@@ -7636,13 +7636,24 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         department_id:
           type: string
           format: uuid
           nullable: true
+        department_name:
+          type: string
+          readOnly: true
+          nullable: true
         designation_id:
           type: string
           format: uuid
+          nullable: true
+        designation_name:
+          type: string
+          readOnly: true
           nullable: true
         reports_to_staff_id:
           type: string
@@ -7793,9 +7804,16 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         house_id:
           type: string
           format: uuid
+          nullable: true
+        house_name:
+          type: string
+          readOnly: true
           nullable: true
         status:
           allOf:
@@ -8583,13 +8601,24 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         department_id:
           type: string
           format: uuid
           nullable: true
+        department_name:
+          type: string
+          readOnly: true
+          nullable: true
         designation_id:
           type: string
           format: uuid
+          nullable: true
+        designation_name:
+          type: string
+          readOnly: true
           nullable: true
         reports_to_staff_id:
           type: string
@@ -8645,7 +8674,10 @@ components:
           readOnly: true
       required:
       - campus_id
+      - campus_name
       - created_at
+      - department_name
+      - designation_name
       - employment_status
       - exit_date
       - exit_reason
@@ -8849,9 +8881,16 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         house_id:
           type: string
           format: uuid
+          nullable: true
+        house_name:
+          type: string
+          readOnly: true
           nullable: true
         status:
           allOf:
@@ -8896,10 +8935,12 @@ components:
       required:
       - admission_date
       - campus_id
+      - campus_name
       - created_at
       - date_of_birth
       - first_name
       - gender
+      - house_name
       - id
       - last_name
       - status

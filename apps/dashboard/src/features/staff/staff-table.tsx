@@ -13,7 +13,7 @@ import {
 import { isOffsetPagination } from "@schoolhub/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Users } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -27,6 +27,7 @@ import { useDesignations } from "@/features/staff/use-designations";
 import { useCampuses } from "@/features/students/use-reference-data";
 import { useTableParams } from "@/hooks/use-table-params";
 import { apiClient } from "@/lib/auth";
+import { formatDate } from "@/lib/format";
 import { queryKeys } from "@/lib/query-client";
 
 const STAFF_TYPES: StaffType[] = ["teaching", "non_teaching"];
@@ -40,7 +41,7 @@ const EMPLOYMENT_STATUSES: EmploymentStatus[] = [
   "terminated",
 ];
 
-/** No email on file. Mirrors staff-detail.tsx's EMPTY exactly. */
+/** No value on file. Mirrors staff-detail.tsx's EMPTY exactly. */
 const EMPTY = "—";
 
 /**
@@ -103,6 +104,7 @@ const ALL = "__all__";
 export function StaffTable() {
   const t = useTranslations("staff");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
   const router = useRouter();
 
   const campuses = useCampuses();
@@ -169,6 +171,24 @@ export function StaffTable() {
       skeleton: PERSON_SKELETON,
     },
     {
+      id: "designation",
+      header: t("fields.designation"),
+      // Designation and department are separate columns rather than one stacked cell:
+      // each has its own `?ordering=` key, and a two-line cell that sorted only by its
+      // top line would be a control that half works. Both names come down on the row —
+      // the list serializer sends them beside their ids — so neither costs a lookup.
+      sortKey: "designation_name",
+      cell: (row) => row.designation_name ?? EMPTY,
+      skeleton: <Skeleton className="h-4 w-24" />,
+    },
+    {
+      id: "department",
+      header: t("fields.department"),
+      sortKey: "department_name",
+      cell: (row) => row.department_name ?? EMPTY,
+      skeleton: <Skeleton className="h-4 w-24" />,
+    },
+    {
       id: "staffType",
       header: t("columns.staffType"),
       sortKey: "staff_type",
@@ -196,6 +216,23 @@ export function StaffTable() {
         </Badge>
       ),
       skeleton: <Skeleton className="h-5 w-20 rounded-full" />,
+    },
+    {
+      id: "campus",
+      header: t("fields.campus"),
+      sortKey: "campus_name",
+      cell: (row) => row.campus_name,
+      skeleton: <Skeleton className="h-4 w-28" />,
+    },
+    {
+      id: "joiningDate",
+      header: t("fields.joiningDate"),
+      // `identifier`, not `measure`: a date names a row rather than being a quantity
+      // compared down the column, so it takes the figures' face but stays start-aligned.
+      numeric: "identifier",
+      sortKey: "joining_date",
+      cell: (row) => formatDate(row.joining_date, locale),
+      skeleton: <Skeleton className="h-4 w-24" />,
     },
     {
       id: "email",
@@ -232,87 +269,88 @@ export function StaffTable() {
         </Can>
       </div>
 
-      <FilterBar
-        search={{
-          label: t("filters.search"),
-          placeholder: t("list.searchPlaceholder"),
-          value: search,
-          onChange: table.setSearch,
-        }}
-        selects={[
-          {
-            id: "staffType",
-            label: t("filters.staffType"),
-            value: staffType,
-            onChange: (value) => {
-              table.setFilter("staff_type", value);
-            },
-            options: STAFF_TYPES.map((value) => ({ value, label: t(`staffType.${value}`) })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "employmentStatus",
-            label: t("filters.employmentStatus"),
-            value: employmentStatus,
-            onChange: (value) => {
-              table.setFilter("employment_status", value);
-            },
-            options: EMPLOYMENT_STATUSES.map((value) => ({
-              value,
-              label: t(`employmentStatus.${value}`),
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "campus",
-            label: t("filters.campus"),
-            value: campusId,
-            onChange: (value) => {
-              table.setFilter("campus_id", value);
-            },
-            options: (campuses.data ?? []).map((campus) => ({
-              value: campus.id,
-              label: campus.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "department",
-            label: t("filters.department"),
-            value: departmentId,
-            onChange: (value) => {
-              table.setFilter("department_id", value);
-            },
-            options: (departmentsQuery.data ?? []).map((department) => ({
-              value: department.id,
-              label: department.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-          {
-            id: "designation",
-            label: t("filters.designation"),
-            value: designationId,
-            onChange: (value) => {
-              table.setFilter("designation_id", value);
-            },
-            options: (designations.data ?? []).map((designation) => ({
-              value: designation.id,
-              label: designation.name,
-            })),
-            allLabel: t("filters.all"),
-            allValue: ALL,
-          },
-        ]}
-        clearLabel={tCommon("clearFilters")}
-        onClear={table.clear}
-      />
-
       <DataTable
+        toolbar={
+          <FilterBar
+            search={{
+              label: t("filters.search"),
+              placeholder: t("list.searchPlaceholder"),
+              value: search,
+              onChange: table.setSearch,
+            }}
+            selects={[
+              {
+                id: "staffType",
+                label: t("filters.staffType"),
+                value: staffType,
+                onChange: (value) => {
+                  table.setFilter("staff_type", value);
+                },
+                options: STAFF_TYPES.map((value) => ({ value, label: t(`staffType.${value}`) })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "employmentStatus",
+                label: t("filters.employmentStatus"),
+                value: employmentStatus,
+                onChange: (value) => {
+                  table.setFilter("employment_status", value);
+                },
+                options: EMPLOYMENT_STATUSES.map((value) => ({
+                  value,
+                  label: t(`employmentStatus.${value}`),
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "campus",
+                label: t("filters.campus"),
+                value: campusId,
+                onChange: (value) => {
+                  table.setFilter("campus_id", value);
+                },
+                options: (campuses.data ?? []).map((campus) => ({
+                  value: campus.id,
+                  label: campus.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "department",
+                label: t("filters.department"),
+                value: departmentId,
+                onChange: (value) => {
+                  table.setFilter("department_id", value);
+                },
+                options: (departmentsQuery.data ?? []).map((department) => ({
+                  value: department.id,
+                  label: department.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+              {
+                id: "designation",
+                label: t("filters.designation"),
+                value: designationId,
+                onChange: (value) => {
+                  table.setFilter("designation_id", value);
+                },
+                options: (designations.data ?? []).map((designation) => ({
+                  value: designation.id,
+                  label: designation.name,
+                })),
+                allLabel: t("filters.all"),
+                allValue: ALL,
+              },
+            ]}
+            clearLabel={tCommon("clearFilters")}
+            onClear={table.clear}
+          />
+        }
         columns={columns}
         rows={rows}
         getRowId={(row) => row.id}

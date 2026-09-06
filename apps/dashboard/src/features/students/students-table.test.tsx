@@ -36,6 +36,11 @@ const STUDENT = {
   last_name: "Khan",
   preferred_name: null,
   status: "active",
+  // The list serializer sends these beside their ids so the roll can name a campus and
+  // a house without two lookup requests. `house_name` is null on purpose — a student
+  // need not be in a house, and the dash is what the cell must render for it.
+  campus_name: "Main Campus",
+  house_name: null,
 };
 
 describe("StudentsTable", () => {

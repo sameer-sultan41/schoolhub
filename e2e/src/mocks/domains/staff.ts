@@ -14,8 +14,11 @@ export interface Staff {
   photo_file_id: string | null;
   staff_type: "teaching" | "non_teaching";
   campus_id: string;
+  campus_name: string;
   department_id: string | null;
+  department_name: string | null;
   designation_id: string | null;
+  designation_name: string | null;
   reports_to_staff_id: string | null;
   employment_type: "full_time" | "part_time" | "contract" | "visiting";
   employment_status: "active" | "on_leave" | "suspended" | "resigned" | "retired" | "terminated";
@@ -44,8 +47,11 @@ export function buildStaff(overrides: Partial<Staff> = {}): Staff {
     photo_file_id: null,
     staff_type: "teaching",
     campus_id: "campus-0001",
+    campus_name: "Main Campus",
     department_id: null,
+    department_name: null,
     designation_id: null,
+    designation_name: null,
     reports_to_staff_id: null,
     employment_type: "full_time",
     employment_status: "active",
