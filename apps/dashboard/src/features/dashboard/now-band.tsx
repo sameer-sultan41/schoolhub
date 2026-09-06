@@ -57,7 +57,13 @@ export function NowBand() {
               {t("welcome", { name: greetingName })}
             </p>
           ) : null}
-          <p className="text-sm text-primary-foreground/75">
+          {/* spotlight-foreground, not primary-foreground, everywhere on this band:
+              primary-foreground flips to near-black in dark mode (dark-mode `primary`
+              is a light violet), and this band stays a dark surface in both schemes.
+              Left as primary-foreground the date, the period labels and the strip
+              itself rendered near-black on dark violet — visible in the running app,
+              invisible to every test. */}
+          <p className="text-sm text-spotlight-foreground/75">
             {format.dateTime(now, {
               weekday: "long",
               day: "numeric",
@@ -75,7 +81,7 @@ export function NowBand() {
               <span
                 key={`band-${String(index)}`}
                 style={{ flexGrow: weight }}
-                className="h-3 basis-0 animate-pulse rounded-full bg-primary-foreground/25"
+                className="h-3 basis-0 animate-pulse rounded-full bg-spotlight-foreground/25"
               />
             ))}
           </div>
@@ -118,18 +124,18 @@ export function NowBand() {
                         aria-hidden="true"
                         className={
                           isCurrent
-                            ? "block h-4 rounded-full bg-primary-foreground"
+                            ? "block h-4 rounded-full bg-spotlight-foreground"
                             : block.isBreak
                               ? // Breaks read as gaps: narrower, and unfilled.
-                                "block h-1.5 rounded-full bg-primary-foreground/20"
-                              : "block h-3 rounded-full bg-primary-foreground/55"
+                                "block h-1.5 rounded-full bg-spotlight-foreground/20"
+                              : "block h-3 rounded-full bg-spotlight-foreground/55"
                         }
                       />
                       <span
                         className={
                           isCurrent
                             ? "block truncate text-[11px] font-semibold"
-                            : "block truncate text-[11px] text-primary-foreground/70"
+                            : "block truncate text-[11px] text-spotlight-foreground/70"
                         }
                       >
                         {block.label}
@@ -150,7 +156,7 @@ export function NowBand() {
             </div>
 
             {currentBlock ? (
-              <div className="rounded-[var(--sh-radius)] bg-primary-foreground/10 px-4 py-3">
+              <div className="rounded-[var(--sh-radius)] bg-spotlight-foreground/10 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge className="border-transparent bg-accent text-accent-foreground">
                     {t("nowBand.now")}
@@ -160,13 +166,13 @@ export function NowBand() {
                     <Badge variant="info">{t("nowBand.substituted")}</Badge>
                   ) : null}
                 </div>
-                <p className="mt-1 text-sm text-primary-foreground/80">
+                <p className="mt-1 text-sm text-spotlight-foreground/80">
                   {currentBlock.detail ??
                     (currentBlock.isBreak ? t("nowBand.break") : t("nowBand.free"))}
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-primary-foreground/75">{t("nowBand.between")}</p>
+              <p className="text-sm text-spotlight-foreground/75">{t("nowBand.between")}</p>
             )}
           </div>
         )}
