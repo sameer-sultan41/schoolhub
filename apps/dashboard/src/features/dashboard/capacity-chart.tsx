@@ -23,10 +23,10 @@ import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import {
-  DASHBOARD_MAX_ROWS,
   DASHBOARD_REFERENCE_GC_TIME_MS,
   DASHBOARD_REFERENCE_STALE_TIME_MS,
 } from "@/features/dashboard/dashboard-constants";
+import { takeTopRows } from "@/features/dashboard/dashboard-rows";
 import type { ClassOption, SectionOption } from "@/features/students/enrollment-types";
 import { useSession } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
@@ -96,8 +96,7 @@ export function toCapacityRows(sections: SectionOption[], classes: ClassOption[]
     .filter((row) => row.capacity > 0)
     .sort((left, right) => left.level - right.level || left.name.localeCompare(right.name));
 
-  const visible = ordered.slice(0, DASHBOARD_MAX_ROWS);
-  return { visible, remainder: ordered.length - visible.length };
+  return takeTopRows(ordered);
 }
 
 /**

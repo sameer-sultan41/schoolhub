@@ -1,61 +1,12 @@
 "use client";
 
-import type { PermissionKey } from "@schoolhub/types";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@schoolhub/ui";
-import {
-  CalendarPlus,
-  ClipboardCheck,
-  type LucideIcon,
-  Upload,
-  UserPlus,
-  UserRoundPlus,
-} from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Can } from "@/components/can";
 import { useSession } from "@/hooks/use-session";
 import { hasAnyPermission } from "@/lib/permissions";
-
-type ActionKey =
-  "newStudent" | "newStaff" | "importStudents" | "buildTimetable" | "reviewPromotions";
-
-interface QuickAction {
-  key: ActionKey;
-  href: string;
-  /** The key that lets the reader finish the action, not merely open the screen. */
-  permission: PermissionKey;
-  icon: LucideIcon;
-}
-
-const ACTIONS: QuickAction[] = [
-  {
-    key: "newStudent",
-    href: "/students/new",
-    permission: "students.student.create",
-    icon: UserPlus,
-  },
-  { key: "newStaff", href: "/staff/new", permission: "staff.staff.create", icon: UserRoundPlus },
-  {
-    key: "importStudents",
-    href: "/students/import",
-    permission: "students.student.import",
-    icon: Upload,
-  },
-  // The week grid is where a timetable is actually built, and `timetable.slot.create` is
-  // what makes it more than a read-only view of someone else's work.
-  {
-    key: "buildTimetable",
-    href: "/timetable",
-    permission: "timetable.slot.create",
-    icon: CalendarPlus,
-  },
-  {
-    key: "reviewPromotions",
-    href: "/academics/promotions",
-    permission: "academics.promotion.view",
-    icon: ClipboardCheck,
-  },
-];
+import { QUICK_ACTIONS } from "@/lib/quick-actions";
 
 /**
  * The five things people come to this app to start.
@@ -75,7 +26,7 @@ export function QuickActions() {
   if (
     !hasAnyPermission(
       user,
-      ACTIONS.map((action) => action.permission),
+      QUICK_ACTIONS.map((action) => action.permission),
     )
   )
     return null;
@@ -86,7 +37,7 @@ export function QuickActions() {
         <CardTitle>{t("actions.title")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
-        {ACTIONS.map((action) => (
+        {QUICK_ACTIONS.map((action) => (
           <Can key={action.key} permission={action.permission}>
             <Button asChild variant="outline">
               <Link href={action.href}>

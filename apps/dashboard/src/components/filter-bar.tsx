@@ -9,8 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@schoolhub/ui";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
+import { useId, type ReactNode } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 /**
  * The sentinel every list screen already uses for "no filter on this field". Kept out of
@@ -74,8 +74,10 @@ export interface FilterBarProps {
  *
  * Every list screen used to hand-roll this — including its own copy of the debounce,
  * which is why students and staff each had the identical `searchTimer` ref and the
- * academics/timetable screens had none at all. The debounce lives here now, on the one
- * `SEARCH_DEBOUNCE_MS` in `lib/constants.ts`.
+ * academics/timetable screens had none at all. The debounce is `useDebouncedValue`, on
+ * the one `SEARCH_DEBOUNCE_MS` in `lib/constants.ts`; it is a hook rather than part of
+ * this component because the one other place that needs it — the guardian-link dialog —
+ * is not a filter row, and bending it into one would have been the wrong fix.
  *
  * The clear control is deliberately absent rather than disabled when nothing is set: a
  * permanently-greyed button in the filter row reads as something broken, and there is
@@ -90,40 +92,26 @@ export function FilterBar({
   extrasActive = false,
 }: FilterBarProps) {
   const searchInputId = useId();
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // The raw value stays bound to the input so typing never lags; only the committed
-  // value — the one that lands in the query key — is delayed.
-  const [draft, setDraft] = useState(search?.value ?? "");
-  // Mirror of the last committed value we have seen, so a caller that resets its own
-  // search state (as `onClear` does) is not left with a stale draft in the box.
-  const [committed, setCommitted] = useState(search?.value ?? "");
-
-  if (search && search.value !== committed) {
-    setCommitted(search.value);
-    setDraft(search.value);
-  }
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  function onDraftChange(value: string) {
-    setDraft(value);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      setCommitted(value);
+  // The draft stays bound to the input so typing never lags; only the settled value — the
+  // one that lands in the caller's query key — is delayed.
+  const {
+    draft,
+    settled,
+    onDraftChange,
+    set: setSearchValue,
+  } = useDebouncedValue(search?.value ?? "", {
+    onSettle: (value) => {
       search?.onChange(value);
-    }, SEARCH_DEBOUNCE_MS);
-  }
+    },
+  });
+
+  // A caller that resets its own search state — `onClear` does exactly that — must not be
+  // left with a stale draft in the box.
+  if (search && search.value !== settled) setSearchValue(search.value);
 
   function clearAll() {
-    if (timer.current) clearTimeout(timer.current);
-    setDraft("");
-    setCommitted("");
+    setSearchValue("");
     onClear();
   }
 

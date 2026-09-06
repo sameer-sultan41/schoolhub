@@ -24,10 +24,10 @@ import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts"
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import type { TeacherLoadSummaryRow } from "@/features/academics/academics-types";
 import {
-  DASHBOARD_MAX_ROWS,
   DASHBOARD_REFERENCE_GC_TIME_MS,
   DASHBOARD_REFERENCE_STALE_TIME_MS,
 } from "@/features/dashboard/dashboard-constants";
+import { takeTopRows } from "@/features/dashboard/dashboard-rows";
 import type { AcademicSessionSummary } from "@/features/dashboard/dashboard-types";
 import { useSession } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
@@ -78,22 +78,22 @@ export interface TeacherLoadRows {
  * places between renders.
  */
 export function toTeacherLoadRows(rows: TeacherLoadSummaryRow[]): TeacherLoadRows {
-  const ordered = [...rows].sort(
-    (left, right) =>
-      right.weekly_periods - left.weekly_periods || left.name.localeCompare(right.name),
-  );
+  const ordered = [...rows]
+    .sort(
+      (left, right) =>
+        right.weekly_periods - left.weekly_periods || left.name.localeCompare(right.name),
+    )
+    .map((row): LoadDatum => ({
+      key: row.staff_id,
+      name: row.name,
+      load: row.weekly_periods,
+      overNorm: row.over_norm,
+      // Slot 1 for the series and slot 5 for the exception — fixed slots, assigned by
+      // meaning, never cycled and never by rank.
+      fill: row.over_norm ? "var(--color-overNorm)" : "var(--color-load)",
+    }));
 
-  const toDatum = (row: TeacherLoadSummaryRow): LoadDatum => ({
-    key: row.staff_id,
-    name: row.name,
-    load: row.weekly_periods,
-    overNorm: row.over_norm,
-    // Slot 1 for the series and slot 5 for the exception — fixed slots, assigned by
-    // meaning, never cycled and never by rank.
-    fill: row.over_norm ? "var(--color-overNorm)" : "var(--color-load)",
-  });
-
-  const visible = ordered.slice(0, DASHBOARD_MAX_ROWS).map(toDatum);
+  const { visible, remainder } = takeTopRows(ordered);
 
   return {
     visible,
@@ -104,8 +104,11 @@ export function toTeacherLoadRows(rows: TeacherLoadSummaryRow[]): TeacherLoadRow
     // them on 20. Filtering the slice dropped exactly those people from the callout, so
     // the panel would have promised "a status is never left to a hue" and then silently
     // said nothing about them. The whole point of the callout is that it survives the cut.
-    overNorm: ordered.filter((row) => row.over_norm).map(toDatum),
-    remainder: ordered.length - visible.length,
+    //
+    // `ordered` is the mapped list, so this and `visible` cannot drift apart: there is one
+    // source, and the slice is taken from it rather than mapped separately alongside it.
+    overNorm: ordered.filter((row) => row.overNorm),
+    remainder,
   };
 }
 

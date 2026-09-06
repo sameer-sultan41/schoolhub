@@ -1,9 +1,7 @@
 "use client";
 
-import type { PermissionKey } from "@schoolhub/types";
 import { Button } from "@schoolhub/ui";
-import type { LucideIcon } from "lucide-react";
-import { FileUp, GraduationCap, Search, UserRoundPlus } from "lucide-react";
+import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -20,27 +18,7 @@ import {
 import { useSession } from "@/hooks/use-session";
 import { NAV_GROUPS } from "@/lib/nav-items";
 import { canAccessModule, hasPermission } from "@/lib/permissions";
-
-/**
- * Actions the palette offers beyond navigation. Each names the permission key the API
- * really enforces — the palette is a shortcut to a screen the person can already reach,
- * never a way to reach one they cannot.
- */
-const ACTIONS: { key: string; href: string; icon: LucideIcon; permission: PermissionKey }[] = [
-  {
-    key: "newStudent",
-    href: "/students/new",
-    icon: UserRoundPlus,
-    permission: "students.student.create",
-  },
-  { key: "newStaff", href: "/staff/new", icon: GraduationCap, permission: "staff.staff.create" },
-  {
-    key: "importStudents",
-    href: "/students/import",
-    icon: FileUp,
-    permission: "students.student.import",
-  },
-];
+import { PALETTE_QUICK_ACTIONS } from "@/lib/quick-actions";
 
 /**
  * ⌘K / Ctrl+K navigation and actions.
@@ -90,7 +68,10 @@ export function CommandPalette() {
     ),
   })).filter((group) => group.items.length > 0);
 
-  const actions = ACTIONS.filter((action) => hasPermission(user, action.permission));
+  // Shared with the Quick actions panel — see lib/quick-actions.ts. Each entry names the
+  // permission key the API really enforces, so the palette stays a shortcut to something
+  // the person can already do rather than a way to reach something they cannot.
+  const actions = PALETTE_QUICK_ACTIONS.filter((action) => hasPermission(user, action.permission));
 
   return (
     <>

@@ -1,21 +1,6 @@
-import { TableSkeleton, ScreenHeaderSkeleton } from "@schoolhub/ui";
+import { TableRouteLoading } from "@/components/route-loading";
 
-/**
- * Route-level loading state for `/staff`.
- *
- * Shape-matched rather than generic: the header block plus the roster table: employee number,
- * name, type and employment status.
- * Next renders this in place of the page while its async server component resolves, so
- * the layout it hands over to is the layout that was already on screen.
- *
- * The group-level `(app)/loading.tsx` is still the fallback for any route without one
- * of these; this one exists because a stat-tile grid is not what this screen renders.
- */
+/** The roster table: employee number, name, type and employment status. */
 export default function Loading() {
-  return (
-    <div className="space-y-6">
-      <ScreenHeaderSkeleton />
-      <TableSkeleton columns={4} />
-    </div>
-  );
+  return <TableRouteLoading columns={4} />;
 }
