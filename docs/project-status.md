@@ -93,11 +93,30 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   class attribute. Full list in `03-modules/attendance.md` §20.
 
 - **`attendance` is complete.** All three stacked PRs landed. `docs/03-modules/attendance.md`
-  `03-modules/attendance.md` §20 carries the full built/not-built register; what
-  remains unbuilt is §9's historical CSV import (§4 keys nothing for it), §14's
-  four AI capabilities (`core/ai` does not exist), Excel/PDF export formats, and
-  §6's scheduled monthly export — which needs the per-tenant schedules
-  `reporting-analytics` is the module meant to bring.
+  `03-modules/attendance.md` §20 carries the full built/not-built register. A
+  fourth stacked PR closed two more of its gaps: **§6's three export formats**
+  (CSV, XLSX and PDF over one row shape — a formatter split, so the numbers in a
+  spreadsheet and a printed register cannot drift) and **§9's historical import**
+  (`POST /student-attendance-imports`).
+  What remains unbuilt is §14's four AI capabilities (`core/ai` does not exist,
+  and AGENTS.md hard rule 6 forbids a provider SDK) and §6's *scheduled* monthly
+  export, which needs the per-tenant schedules `reporting-analytics` is the
+  module meant to bring — the static beat dict can run a sweep but has nowhere
+  to deliver the result, since no endpoint lists a tenant's generated reports.
+- **The import path deliberately skips three rules the register enforces**, and
+  the reasoning generalises to any later migration importer: no calendar gate
+  (today's working week describes *this* year, not the year the register came
+  from), no lock-window check (every imported row is historical by construction),
+  and **no guardian notifications** — importing a year of history must not email
+  a parent about an absence from last March. A separate write path is what
+  guarantees the third, rather than a flag on the marking path that a later
+  caller could forget to set.
+- **A permission key moved from prose into §4's table.** §9 named
+  `attendance.student-attendance.import` and its `it_admin` role in prose while
+  §4's table omitted the row, so the capability was documented and unreachable.
+  The key is registered and §4 now carries it. This is the narrow case where
+  editing the spec is right: the doc already named the key, and the alternative
+  was inventing one it never mentions.
   **`SubstitutionStatus.completed` is still unreachable**, and it is worth being
   precise about why: the cover *feed* now exists, but "the covered period
   actually ran" needs a signal nothing emits — the register records a student's

@@ -1208,7 +1208,7 @@ export interface paths {
         put?: never;
         /**
          * Export an attendance report as CSV
-         * @description Always a job, however small.
+         * @description Always a job, however small, in `format` (§6: CSV, XLSX or PDF).
          *
          *     §13 lists export as its own capability and §4 keys it separately
          *     (`attendance.report.export`), so an export is a deliberate act with its
@@ -1714,6 +1714,43 @@ export interface paths {
         get: operations["student_attendance_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a historical attendance register (CSV or .xlsx)
+         * @description `POST /student-attendance-imports` -> `202` + job — §9's migration import.
+         *
+         *     **The endpoint §16 does not list, for the key §4 did not table.** §9 names
+         *     both in prose — a "CSV import of historical attendance during tenant
+         *     onboarding", with `attendance.student-attendance.import` "granted to
+         *     `it_admin` during migration" — and §4's table omitted the row. The key is
+         *     registered in `permissions.py` and §4 is updated in the same PR, which is the
+         *     direction AGENTS.md's doc rule points; the alternative was leaving a
+         *     documented capability permanently unreachable.
+         *
+         *     No list or retrieve: the job is the only handle a caller needs, and
+         *     `GET /jobs/{id}` is where the row-level error report §9's journey asks for
+         *     shows up.
+         *
+         *     Keyed to `it_admin` rather than to the marking roles, deliberately. A teacher
+         *     marks today; an IT admin migrates a previous system's history once. Giving
+         *     the import key to `teacher` would make "rewrite any past register, bypassing
+         *     the lock window and the correction workflow" a routine classroom permission.
+         */
+        post: operations["student_attendance_imports_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2989,6 +3026,25 @@ export interface components {
          */
         AttendanceCorrectionSubjectTypeEnum: "student" | "staff";
         /**
+         * @description `POST /student-attendance-imports` (multipart) — §9's onboarding migration.
+         *
+         *     The file rides in the job's own payload rather than through `core.files`'
+         *     two-step presigned flow, for the reason `StudentImportRequestSerializer`
+         *     gives: that flow exists for binary media served back to users later, and an
+         *     import file is read once into the job and never needs a signed URL.
+         *
+         *     `academic_session_id` is required and not defaulted to the current session —
+         *     unlike every other endpoint in this module. A historical register belongs to
+         *     a *past* session by definition, so falling back to "current" would file three
+         *     years of history under this year and be almost impossible to unpick.
+         */
+        AttendanceImportRequest: {
+            /** Format: uri */
+            file: string;
+            /** Format: uuid */
+            academic_session_id: string;
+        };
+        /**
          * @description Query parameters for `GET /reports/attendance-summary` (§13, §16).
          *
          *     One endpoint with a `kind`, not six routes: §16 declares exactly one report
@@ -3005,6 +3061,8 @@ export interface components {
             section_id?: string | null;
             /** Format: decimal */
             threshold?: string;
+            /** @default csv */
+            format: components["schemas"]["FormatEnum"];
         };
         /**
          * @description * `manual` - Manual
@@ -3377,6 +3435,13 @@ export interface components {
          * @enum {string}
          */
         FileStatusEnum: "pending" | "ready" | "quarantined";
+        /**
+         * @description * `csv` - csv
+         *     * `xlsx` - xlsx
+         *     * `pdf` - pdf
+         * @enum {string}
+         */
+        FormatEnum: "csv" | "xlsx" | "pdf";
         /**
          * @description * `male` - Male
          *     * `female` - Female
@@ -7474,6 +7539,12 @@ export interface operations {
             query: {
                 end_date?: string;
                 /**
+                 * @description * `csv` - csv
+                 *     * `xlsx` - xlsx
+                 *     * `pdf` - pdf
+                 */
+                format?: "csv" | "xlsx" | "pdf";
+                /**
                  * @description * `daily-register` - daily-register
                  *     * `student-summary` - student-summary
                  *     * `defaulters` - defaulters
@@ -8555,6 +8626,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaginatedStudentAttendanceList"];
                 };
+            };
+        };
+    };
+    student_attendance_imports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["AttendanceImportRequest"];
+            };
+        };
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}} */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

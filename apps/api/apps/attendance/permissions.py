@@ -5,6 +5,13 @@ Mirrors that table exactly. Two things about it are worth stating once:
 - **`mark` is this module's declared verb** (§4's own header says so). It is
   already in ``core.rbac.registry.EXTRA_ACTIONS``, registered there by an earlier
   module doc pass, so no registry change ships with this app.
+- **`attendance.student-attendance.import` is declared in §9, not §4.** The
+  module doc names the key and the role in prose — "granted to `it_admin` during
+  migration (recommendation)" — while §4's permission table omits the row. The
+  key is registered here and **the §4 table is updated in the same PR**, which is
+  the direction AGENTS.md's "update the module doc in the same PR" points: a key
+  the doc already names belongs in the table the doc keeps keys in. Inventing a
+  key the doc never mentions would be the different, worse thing.
 - **`student` and `guardian` hold real keys here**, unlike every module before
   this one, and that is what makes attendance the first module whose viewsets
   are not uniformly behind ``DenyRestrictedPrincipals``. §4 grants both an
@@ -38,6 +45,10 @@ ALL_STAFF = (
 )
 
 MARKERS = ("teacher", "class_teacher")
+# §9 names this role explicitly — "granted to `it_admin` during migration" —
+# and it is deliberately *not* the marking roles: a teacher marks today, an
+# IT admin migrates a previous system's history once.
+IMPORTERS = ("it_admin",)
 LEADERSHIP = ("principal", "vice_principal", "school_admin")
 STUDENT_ATTENDANCE_VIEWERS = (
     "teacher",
@@ -71,6 +82,12 @@ registry.register(
     "attendance.student-attendance.mark",
     "Mark or edit same-day student attendance.",
     MARKERS,
+)
+
+registry.register(
+    "attendance.student-attendance.import",
+    "Import a historical attendance register during tenant onboarding (§9).",
+    IMPORTERS,
 )
 
 registry.register(

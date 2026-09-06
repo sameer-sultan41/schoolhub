@@ -22,7 +22,7 @@ from django.utils import timezone
 from apps.attendance import notifications, services
 from apps.attendance.models import AttendanceStatus, StudentAttendance
 from core.jobs.models import BackgroundJob
-from core.jobs.services import mark_failed, mark_running, mark_succeeded
+from core.jobs.services import mark_failed, mark_running, mark_succeeded, update_progress
 from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.tasks import TenantAwareTask
 
@@ -188,9 +188,7 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
     inline — which it would if the job re-queried the table without the record
     scope the endpoint applied.
     """
-    import csv
-    import io
-
+    from apps.attendance import exports, uploads
     from core.files.services import create_ready_file
     from core.rbac.models import User
     from core.tenancy.context import tenant_atomic
@@ -213,25 +211,22 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
                 section_id=payload.get("section_id"),
             )
 
-            buffer = io.StringIO()
-            if rows:
-                writer = csv.DictWriter(buffer, fieldnames=list(rows[0]))
-                writer.writeheader()
-                writer.writerows(rows)
-            else:
-                # A header-less empty file is indistinguishable from a failed
-                # export when someone opens it, so say so in the file itself.
-                buffer.write("no rows matched this report\n")
+            fmt = payload.get("format", "csv")
+            title = f"{payload['kind'].replace('-', ' ').capitalize()}"
+            data, mime_type, extension = exports.render(rows, fmt=fmt, title=title)
 
             file = create_ready_file(
                 tenant_id=uuid.UUID(tenant_id),
-                purpose="attendance.report-export",
-                original_name=f"attendance-{payload['kind']}.csv",
-                mime_type="text/csv",
-                data=buffer.getvalue().encode(),
+                purpose=uploads.REPORT_EXPORT.key,
+                original_name=f"attendance-{payload['kind']}.{extension}",
+                mime_type=mime_type,
+                data=data,
                 actor_id=uuid.UUID(actor_id),
             )
-        mark_succeeded(job=job, result={"result_file_id": str(file.pk), "rows": len(rows)})
+        mark_succeeded(
+            job=job,
+            result={"result_file_id": str(file.pk), "rows": len(rows), "format": fmt},
+        )
     except Exception as exc:
         # Same shape as student-management's export task: the job row is the only
         # place a caller polling `GET /jobs/{id}` can learn this failed, so the
@@ -295,5 +290,68 @@ def build_report_rows(
     if kind == "defaulters":
         return reports.defaulters(scoped, start_date=start_date, end_date=end_date, limit=limit)
     if kind == "student-late-arrivals":
-        return reports.student_late_arrivals(scoped, start_date=start_date, end_date=end_date)
+        return reports.student_late_arrivals(
+            scoped, start_date=start_date, end_date=end_date, limit=limit
+        )
     return reports.student_summary(scoped, start_date=start_date, end_date=end_date, limit=limit)
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def import_attendance_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§9's historical-register import, row by row.
+
+    Row-by-row rather than bulk, and that is the trade §9's own journey asks for:
+    "reviews the row-level error report … re-imports failed rows only" needs a
+    per-row verdict, which a `bulk_create` cannot give. The importer is a
+    once-per-tenant onboarding job, so the row count buys the error report.
+
+    Progress is reported as it goes, because a year of registers is long enough
+    that a caller polling `GET /jobs/{id}` needs to see it moving.
+    """
+    import base64
+
+    from apps.attendance import services
+    from apps.school_organization.models import AcademicSession
+    from core.tenancy.context import tenant_atomic
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    try:
+        payload = job.payload
+        data = base64.b64decode(payload["content_base64"])
+        rows = services.parse_attendance_import(filename=payload["filename"], data=data)
+
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            session = AcademicSession.objects.alive().get(pk=payload["academic_session_id"])
+
+        errors: list[dict[str, str]] = []
+        succeeded = 0
+        total = len(rows) or 1
+        for index, row in enumerate(rows, start=1):
+            with tenant_atomic(uuid.UUID(tenant_id)):
+                # +1 for the header line, so the row numbers in the error report
+                # match what a spreadsheet editor shows.
+                error = services.import_attendance_row(
+                    row=row,
+                    row_number=index + 1,
+                    session=session,
+                    tenant_id=uuid.UUID(tenant_id),
+                    actor_id=uuid.UUID(actor_id),
+                )
+            if error:
+                errors.append(error)
+            else:
+                succeeded += 1
+            if index % 100 == 0:
+                update_progress(job=job, progress=int(index / total * 100))
+
+        mark_succeeded(
+            job=job,
+            result={"rows": len(rows), "succeeded": succeeded, "errors": errors},
+        )
+    except Exception as exc:
+        # The job row is the only place a caller polling GET /jobs/{id} can learn
+        # this failed, so the failure is recorded rather than raised into a retry.
+        mark_failed(job=job, error=str(exc))

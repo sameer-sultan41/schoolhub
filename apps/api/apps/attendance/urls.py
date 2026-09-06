@@ -15,6 +15,7 @@ from rest_framework.routers import SimpleRouter
 
 from apps.attendance.views import (
     AttendanceCorrectionViewSet,
+    AttendanceImportViewSet,
     AttendanceReportView,
     LeaveRequestViewSet,
     LeaveTypeViewSet,
@@ -32,6 +33,11 @@ router.register("leave-requests", LeaveRequestViewSet, basename="leave-requests"
 router.register("staff-attendance", StaffAttendanceViewSet, basename="staff-attendance")
 
 urlpatterns = [
+    path(
+        "student-attendance-imports",
+        AttendanceImportViewSet.as_view({"post": "create"}),
+        name="student-attendance-imports",
+    ),
     path(
         "reports/attendance-summary",
         AttendanceReportView.as_view(),

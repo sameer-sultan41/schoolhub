@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.attendance import services
+from apps.attendance import exports, services
 from apps.attendance.models import (
     AttendanceCorrection,
     AttendanceStatus,
@@ -397,6 +397,12 @@ class AttendanceReportQuerySerializer(serializers.Serializer):
     threshold = serializers.DecimalField(
         max_digits=4, decimal_places=1, required=False, min_value=0, max_value=100
     )
+    # Only meaningful on the export (`POST`); a `GET` returns JSON rows. Declared
+    # on the shared serializer rather than a second one because the six other
+    # parameters are identical and duplicating them is how the two drift.
+    format = serializers.ChoiceField(
+        choices=[(key, key) for key in exports.FORMATS], required=False, default="csv"
+    )
 
     def validate(self, attrs: dict) -> dict:
         # A single-day report (the daily register) names one date; the rest take
@@ -405,3 +411,21 @@ class AttendanceReportQuerySerializer(serializers.Serializer):
         attrs.setdefault("end_date", attrs["start_date"])
         services.assert_report_range(start_date=attrs["start_date"], end_date=attrs["end_date"])
         return attrs
+
+
+class AttendanceImportRequestSerializer(serializers.Serializer):
+    """`POST /student-attendance-imports` (multipart) — §9's onboarding migration.
+
+    The file rides in the job's own payload rather than through `core.files`'
+    two-step presigned flow, for the reason `StudentImportRequestSerializer`
+    gives: that flow exists for binary media served back to users later, and an
+    import file is read once into the job and never needs a signed URL.
+
+    `academic_session_id` is required and not defaulted to the current session —
+    unlike every other endpoint in this module. A historical register belongs to
+    a *past* session by definition, so falling back to "current" would file three
+    years of history under this year and be almost impossible to unpick.
+    """
+
+    file = serializers.FileField()
+    academic_session_id = _fk(AcademicSession, source="academic_session")
