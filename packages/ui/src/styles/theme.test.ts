@@ -29,8 +29,20 @@ const REQUIRED_TOKENS = [
   ...CHART_SLOTS.map((slot) => `--sh-color-chart-${slot}`),
 ];
 
-/** The dark half of the file, which must redeclare everything that flips. */
-const darkBlock = css.slice(css.indexOf("/* dark-mode token block */"));
+const DARK_BLOCK_MARKER = "/* dark-mode token block */";
+
+/**
+ * The dark half of the file, which must redeclare everything that flips. Sliced from an
+ * explicit marker rather than from the first `@media` rule — the `@custom-variant` block
+ * higher up also matches `prefers-color-scheme`. A missing marker throws here rather than
+ * yielding `slice(-1)`, which would leave every assertion below passing against one
+ * character of noise.
+ */
+const markerIndex = css.indexOf(DARK_BLOCK_MARKER);
+if (markerIndex < 0) {
+  throw new Error(`theme.css no longer contains the marker ${DARK_BLOCK_MARKER}`);
+}
+const darkBlock = css.slice(markerIndex);
 
 describe("theme.css", () => {
   it.each(REQUIRED_TOKENS)("declares %s", (token) => {
@@ -42,9 +54,10 @@ describe("theme.css", () => {
   });
 
   it("marks where the dark-mode token block begins", () => {
-    // The slice above is meaningless without this marker, and a silent -1 index would
-    // make every dark-mode assertion below pass against the whole file.
-    expect(css).toContain("/* dark-mode token block */");
+    // Redundant with the throw above by design: this is the assertion that NAMES the
+    // failure, so a rename reads as "the marker moved" rather than as a module that
+    // would not import.
+    expect(css).toContain(DARK_BLOCK_MARKER);
   });
 
   it.each(CHART_SLOTS)("gives chart slot %i a dark-mode step", (slot) => {

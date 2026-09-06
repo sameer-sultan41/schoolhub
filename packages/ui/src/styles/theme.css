@@ -375,13 +375,16 @@
 }
 
 /*
- * dark-mode token block
- *
  * Declared TWICE, with identical values, and they must stay identical — a divergence
  * here is invisible until someone toggles. The media arm covers apps/website and any
  * dashboard viewer who has not chosen (`:not(.light)` lets an explicit light choice win);
  * the class arm covers the dashboard's toggle.
+ *
+ * The single-line marker below is load-bearing: theme.test.ts anchors on it to find where
+ * the dark half of the file starts, and asserts the marker's own presence first so a
+ * rename cannot silently make every dark-mode assertion vacuous.
  */
+/* dark-mode token block */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
     --sh-color-background: oklch(0.194 0.034 267.6);
