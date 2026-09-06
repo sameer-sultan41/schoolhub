@@ -580,6 +580,14 @@ def effective_slots_for(*, session: AcademicSession, section_ids: list, on_date:
 # ---------------------------------------------------------------------------
 
 
+# Named rather than written inline in the `except`. PEP 758 makes
+# `except A, B:` valid on the Python 3.14 this project pins, and ruff's
+# formatter rewrites the parenthesised form to it — but it reads as the Python 2
+# syntax it is not, and a reviewer stopping to check that is a cost the tuple
+# does not have.
+_PROPOSAL_REFUSALS = (DomainRuleViolation, Conflict)
+
+
 def slots_needing_cover(*, staff: Staff, on_date: date) -> list[TimetableSlot]:
     """The published, currently-in-force slots this teacher holds on this date.
 
@@ -655,7 +663,7 @@ def propose_substitutions_for_absence(
                         leave_request_id=leave_request_id,
                     )
                 )
-        except DomainRuleViolation, Conflict:
+        except _PROPOSAL_REFUSALS:
             # A race against another proposal, or a rule this candidate fails on
             # closer inspection. One slot's failure must not cost the rest their
             # cover, and the queue is advisory until a human approves it.
@@ -667,7 +675,15 @@ def propose_substitutions_for_absence(
 def _first_free_substitute(
     *, slot: TimetableSlot, on_date: date, absent_staff: Staff
 ) -> Staff | None:
-    """An active teacher who is free for this slot's period on this date.
+    """An active teacher **at the slot's own campus** who is free for its period.
+
+    The campus filter is not an optimisation. Without it a multi-campus tenant
+    proposed cover across sites — a teacher at the other end of the city assigned
+    to a period they cannot physically reach, and an approver with no reason to
+    notice, because the proposal looks exactly like a valid one. `sections` carry
+    a campus and `staff` carry a campus; nothing else in the conflict rules
+    compares them, because every other path starts from a grid a human built for
+    one campus.
 
     Deliberately *first free*, not *best*: §14's AI-TTB-03 is the ranked
     suggestion (workload balance, subject match) and it is Phase 3 work behind
@@ -684,6 +700,7 @@ def _first_free_substitute(
         .filter(
             employment_status=EmploymentStatus.ACTIVE,
             staff_type=StaffType.TEACHING,
+            campus_id=slot.section.campus_id,
         )
         .exclude(pk=absent_staff.pk)
         .order_by("pk")

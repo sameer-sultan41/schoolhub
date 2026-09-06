@@ -341,3 +341,124 @@ class StaffAttendanceEndpointTests(AttendanceAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
+class StaffAttendanceRaceTests(StaffAttendanceServiceTests):
+    def test_a_racing_first_insert_becomes_an_update(self) -> None:
+        """§5.2's self check-in is a button a person double-taps, so this path
+        reaches the race more easily than the student register does.
+        `select_for_update` cannot lock a row that does not exist yet."""
+        from unittest import mock
+
+        real_alive = StaffAttendance.objects.alive
+        calls = {"n": 0}
+
+        def blind_first(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return real_alive().none()
+            return real_alive(*args, **kwargs)
+
+        with tenant_context(self.tenant.id):
+            self.mark()  # the row the "other" request already committed
+
+            with mock.patch.object(StaffAttendance.objects, "alive", side_effect=blind_first):
+                row = self.mark(status=StaffAttendanceStatus.ABSENT)
+
+            self.assertEqual(row.status, StaffAttendanceStatus.ABSENT)
+            self.assertEqual(StaffAttendance.objects.alive().count(), 1)
+
+    def test_check_out_reads_the_row_under_a_lock(self) -> None:
+        """A stale in-memory row must not be what a check-out writes back —
+        `early_departure_minutes` is a payroll input, and quietly the wrong
+        number is worse than a raised error."""
+        with tenant_context(self.tenant.id):
+            row = self.mark(check_in_time=datetime.time(8, 0))
+            stale = StaffAttendance.objects.get(pk=row.pk)
+
+            services.check_out_staff(
+                row=row, check_out_time=datetime.time(13, 0), actor_id=self.user.pk
+            )
+            # The stale handle still says "no check-out"; the service must reload.
+            services.check_out_staff(
+                row=stale, check_out_time=datetime.time(12, 0), actor_id=self.user.pk
+            )
+
+            row.refresh_from_db()
+            self.assertEqual(row.check_out_time, datetime.time(12, 0))
+            self.assertEqual(row.early_departure_minutes, 120)
+
+
+class CoverCampusScopeTests(TestCase):
+    """An absent teacher's class must not be offered to another campus."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        from apps.attendance.tests.factories import (
+            AcademicSessionFactory,
+            ClassFactory,
+            SectionFactory,
+        )
+
+        self.tenant = TenantFactory()
+        self.user = UserFactory(tenant=self.tenant)
+        open_all_week(self.tenant)
+        with tenant_context(self.tenant.id):
+            self.campus = CampusFactory(tenant=self.tenant)
+            self.other_campus = CampusFactory(tenant=self.tenant)
+            self.session = AcademicSessionFactory(tenant=self.tenant, is_current=True)
+            self.school_class = ClassFactory(tenant=self.tenant, level=6)
+            self.section = SectionFactory(
+                tenant=self.tenant, school_class=self.school_class, campus=self.campus
+            )
+            self.absent = StaffFactory(tenant=self.tenant, campus=self.campus)
+            self.far_away = StaffFactory(tenant=self.tenant, campus=self.other_campus)
+
+    def test_a_substitute_at_another_campus_is_never_proposed(self) -> None:
+        """Without the campus filter the proposal looked exactly like a valid
+        one, so an approver had no reason to notice a teacher assigned to a
+        period at the other end of the city."""
+        from apps.timetable.models import SlotStatus
+        from apps.timetable.services import _first_free_substitute
+        from apps.timetable.tests.factories import PeriodFactory, TimetableSlotFactory
+
+        with tenant_context(self.tenant.id):
+            period = PeriodFactory(tenant=self.tenant, sequence=1)
+            slot = TimetableSlotFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.section,
+                period=period,
+                staff=self.absent,
+                status=SlotStatus.PUBLISHED,
+            )
+
+            chosen = _first_free_substitute(
+                slot=slot, on_date=MARKING_DATE, absent_staff=self.absent
+            )
+
+        self.assertIsNone(chosen)
+
+    def test_a_substitute_at_the_same_campus_is_proposed(self) -> None:
+        """The control: the filter must not have refused everyone."""
+        from apps.timetable.models import SlotStatus
+        from apps.timetable.services import _first_free_substitute
+        from apps.timetable.tests.factories import PeriodFactory, TimetableSlotFactory
+
+        with tenant_context(self.tenant.id):
+            colleague = StaffFactory(tenant=self.tenant, campus=self.campus)
+            period = PeriodFactory(tenant=self.tenant, sequence=1)
+            slot = TimetableSlotFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.section,
+                period=period,
+                staff=self.absent,
+                status=SlotStatus.PUBLISHED,
+            )
+
+            chosen = _first_free_substitute(
+                slot=slot, on_date=MARKING_DATE, absent_staff=self.absent
+            )
+
+        self.assertEqual(chosen.pk, colleague.pk)

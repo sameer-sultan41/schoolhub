@@ -203,6 +203,8 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
         with tenant_atomic(uuid.UUID(tenant_id)):
             payload = job.payload
             requester = User.objects.get(pk=payload["requested_by"])
+            # No `limit`: the job is the unbounded path, which is the whole
+            # reason the endpoint hands it anything over the inline ceiling.
             rows = build_report_rows(
                 kind=payload["kind"],
                 user=requester,
@@ -244,12 +246,20 @@ def build_report_rows(
     start_date: datetime.date,
     end_date: datetime.date,
     section_id: str | None = None,
+    limit: int | None = None,
 ) -> list[dict]:
     """Build one §13 report's rows under `user`'s record scope.
 
     Shared by the endpoint and the export task so the two can never disagree —
     which matters more here than usual, because a principal reads the inline
     report and the exported CSV as the same document.
+
+    `limit` caps how many rows are *materialised*, so the endpoint can decide
+    "inline or job?" without paying for the answer: it asks for one more row than
+    the synchronous ceiling, and getting that many back is enough to know. The
+    threshold used to be checked *after* the whole term-scale query had been
+    built — precisely the cost the 202-and-a-job pattern exists to avoid — and
+    the result was then discarded and recomputed by the job.
     """
     from apps.attendance import reports
     from apps.attendance.models import LeaveRequest, RequesterType, StaffAttendance
@@ -262,7 +272,9 @@ def build_report_rows(
         scoped = scope_queryset(
             StaffAttendance.objects.alive(), user, campus_field="staff__campus_id"
         )
-        return reports.staff_punctuality(scoped, start_date=start_date, end_date=end_date)
+        return reports.staff_punctuality(
+            scoped, start_date=start_date, end_date=end_date, limit=limit
+        )
 
     if kind == "leave":
         scoped = scope_queryset(
@@ -270,7 +282,7 @@ def build_report_rows(
             user,
             campus_field="student__campus_id",
         )
-        return reports.leave_report(scoped, start_date=start_date, end_date=end_date)
+        return reports.leave_report(scoped, start_date=start_date, end_date=end_date, limit=limit)
 
     scoped = scope_queryset(
         StudentAttendance.objects.alive(), user, campus_field="section__campus_id"
@@ -279,9 +291,9 @@ def build_report_rows(
         scoped = scoped.filter(section_id=section_id)
 
     if kind == "daily-register":
-        return reports.daily_register(scoped, on_date=start_date)
+        return reports.daily_register(scoped, on_date=start_date, limit=limit)
     if kind == "defaulters":
-        return reports.defaulters(scoped, start_date=start_date, end_date=end_date)
+        return reports.defaulters(scoped, start_date=start_date, end_date=end_date, limit=limit)
     if kind == "student-late-arrivals":
         return reports.student_late_arrivals(scoped, start_date=start_date, end_date=end_date)
-    return reports.student_summary(scoped, start_date=start_date, end_date=end_date)
+    return reports.student_summary(scoped, start_date=start_date, end_date=end_date, limit=limit)

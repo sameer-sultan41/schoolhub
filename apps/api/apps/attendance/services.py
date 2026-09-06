@@ -1249,13 +1249,32 @@ def mark_staff_attendance(
 
     was_absent = row is not None and row.status in ABSENT_STAFF_STATUSES
     if row is None:
-        row = StaffAttendance.objects.create(
-            tenant_id=staff.tenant_id,
-            staff=staff,
-            attendance_date=on_date,
-            created_by=actor_id,
-            **values,
-        )
+        try:
+            with transaction.atomic():
+                row = StaffAttendance.objects.create(
+                    tenant_id=staff.tenant_id,
+                    staff=staff,
+                    attendance_date=on_date,
+                    created_by=actor_id,
+                    **values,
+                )
+        except IntegrityError:
+            # The same race the student register documents, and it reaches this
+            # path more easily rather than less: §5.2's self check-in is a button
+            # a person double-taps. `select_for_update` above cannot lock a row
+            # that does not exist yet, so both requests read "absent" and both
+            # insert; the unique index picks a winner and the loser has to
+            # become an update rather than a 500.
+            row = (
+                StaffAttendance.objects.alive()
+                .filter(staff=staff, attendance_date=on_date)
+                .select_for_update()
+                .get()
+            )
+            was_absent = row.status in ABSENT_STAFF_STATUSES
+            for field, value in values.items():
+                setattr(row, field, value)
+            row.save(update_fields=[*values, "updated_at"])
     else:
         for field, value in values.items():
             setattr(row, field, value)
@@ -1279,6 +1298,13 @@ def check_out_staff(
     event with its own time, and because the early-departure minutes it implies
     are computed, not sent.
     """
+    # Re-read under a lock, like every other mutate-in-place path in this module.
+    # Last-write-wins is a quieter failure than the IntegrityError the insert
+    # race raises — two check-outs seconds apart simply keep the later one — but
+    # `early_departure_minutes` is a payroll input, and "quietly the wrong
+    # number" is the worse of the two outcomes to leave in.
+    row = StaffAttendance.objects.select_for_update().select_related("staff").get(pk=row.pk)
+
     if row.check_in_time is None:
         raise DomainRuleViolation(
             {"check_out_time": "This record has no check-in to check out from."}

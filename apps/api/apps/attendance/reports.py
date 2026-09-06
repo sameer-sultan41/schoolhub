@@ -50,6 +50,16 @@ EXCLUDED_FROM_RATE = frozenset({AttendanceStatus.ON_LEAVE, AttendanceStatus.EXCU
 DEFAULT_DEFAULTER_THRESHOLD = Decimal("75.0")
 
 
+def _capped(rows, limit: int | None):
+    """Apply the caller's row cap as a queryset slice.
+
+    A slice, not a Python truncation: the point of the cap is that the rows
+    are never built, so it has to reach SQL as a LIMIT. `None` means
+    unbounded, which is what the export job asks for.
+    """
+    return rows if limit is None else rows[:limit]
+
+
 def _as_dicts(rows) -> list[dict]:
     """`.values()` yields TypedDict rows; every caller here wants plain dicts.
 
@@ -60,7 +70,12 @@ def _as_dicts(rows) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def daily_register(queryset: QuerySet[StudentAttendance], *, on_date: datetime.date) -> list[dict]:
+def daily_register(
+    queryset: QuerySet[StudentAttendance],
+    *,
+    on_date: datetime.date,
+    limit: int | None = None,
+) -> list[dict]:
     """§13's daily attendance register — one section's day, student by student."""
     rows = (
         queryset.filter(attendance_date=on_date)
@@ -79,7 +94,7 @@ def daily_register(queryset: QuerySet[StudentAttendance], *, on_date: datetime.d
             section_name=F("section__name"),
         )
     )
-    return [dict(row) for row in rows]
+    return [dict(row) for row in _capped(rows, limit)]
 
 
 def student_summary(
@@ -87,6 +102,7 @@ def student_summary(
     *,
     start_date: datetime.date,
     end_date: datetime.date,
+    limit: int | None = None,
 ) -> list[dict]:
     """§13's per-student attendance percentage over a range.
 
@@ -115,7 +131,7 @@ def student_summary(
 
     return [
         {**row, "attendance_rate": _rate(row["present_days"], row["counted_days"])}
-        for row in grouped
+        for row in _capped(grouped, limit)
     ]
 
 
@@ -125,6 +141,7 @@ def defaulters(
     start_date: datetime.date,
     end_date: datetime.date,
     threshold: Decimal | None = None,
+    limit: int | None = None,
 ) -> list[dict]:
     """§13's defaulter / chronic-absence report — students below a threshold.
 
@@ -137,12 +154,18 @@ def defaulters(
     never expected — a mid-year admission, or a range that is all holidays — and
     listing them as a defaulter would be a false accusation.
     """
-    limit = DEFAULT_DEFAULTER_THRESHOLD if threshold is None else threshold
-    return [
+    cutoff = DEFAULT_DEFAULTER_THRESHOLD if threshold is None else threshold
+    # `limit` is *not* passed down to `student_summary`. Defaulters are a filtered
+    # subset, so capping the source would cap the wrong population — the first N
+    # students alphabetically rather than the first N defaulters — and a report
+    # that silently answers a different question is worse than a slow one. The
+    # cap applies to the filtered result instead.
+    below = [
         row
         for row in student_summary(queryset, start_date=start_date, end_date=end_date)
-        if row["counted_days"] > 0 and row["attendance_rate"] < limit
+        if row["counted_days"] > 0 and row["attendance_rate"] < cutoff
     ]
+    return below if limit is None else below[:limit]
 
 
 def student_late_arrivals(
@@ -150,9 +173,10 @@ def student_late_arrivals(
     *,
     start_date: datetime.date,
     end_date: datetime.date,
+    limit: int | None = None,
 ) -> list[dict]:
     """§13's late-arrival report, student half — count and total minutes."""
-    return _as_dicts(
+    rows = (
         queryset.filter(
             attendance_date__gte=start_date,
             attendance_date__lte=end_date,
@@ -171,6 +195,7 @@ def student_late_arrivals(
         )
         .order_by("-late_count")
     )
+    return _as_dicts(_capped(rows, limit))
 
 
 def staff_punctuality(
@@ -178,6 +203,7 @@ def staff_punctuality(
     *,
     start_date: datetime.date,
     end_date: datetime.date,
+    limit: int | None = None,
 ) -> list[dict]:
     """§13's staff attendance & punctuality report — the payroll export.
 
@@ -185,7 +211,7 @@ def staff_punctuality(
     counting a closure against a teacher's punctuality is the mistake that status
     exists to prevent.
     """
-    return _as_dicts(
+    rows = (
         queryset.filter(
             attendance_date__gte=start_date,
             attendance_date__lte=end_date,
@@ -217,6 +243,7 @@ def staff_punctuality(
         )
         .order_by("last_name", "first_name")
     )
+    return _as_dicts(_capped(rows, limit))
 
 
 def leave_report(
@@ -224,6 +251,7 @@ def leave_report(
     *,
     start_date: datetime.date,
     end_date: datetime.date,
+    limit: int | None = None,
 ) -> list[dict]:
     """§13's leave report — **student leave only**, as §13 itself says.
 
@@ -234,7 +262,7 @@ def leave_report(
     inside it belongs in a report about that range. Filtering on `start_date`
     alone would drop exactly the long absences a leave report exists to surface.
     """
-    return _as_dicts(
+    rows = (
         queryset.filter(start_date__lte=end_date, end_date__gte=start_date)
         .values(
             "id",
@@ -250,6 +278,7 @@ def leave_report(
         )
         .order_by("-start_date")
     )
+    return _as_dicts(_capped(rows, limit))
 
 
 def _rate(present_days: int, counted_days: int) -> Decimal:

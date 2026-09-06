@@ -347,14 +347,6 @@ rather than worked around, because the workaround would be a key nobody declared
   per-tenant schedule, which is `reporting-analytics`' `report_schedules` — the
   module `CELERY_BEAT_SCHEDULE`'s own comment already names as the one that
   should bring `django-celery-beat` with it.
-- **Staff attendance** — §5.2, `staff_attendance`, `POST /staff-attendance` and
-  `:check-out`. PR 3 of 3. `attendance_corrections` therefore has no
-  `staff_attendance_id` column yet and its CHECK asserts the one target that
-  exists; the staff PR widens both.
-- **§13's six reports and their exports**, and `GET /reports/attendance-summary`.
-  PR 3 of 3. `attendance.chronic-absence` (§12) waits on the same threshold query
-  — a trigger with no way to detect its own condition is a catalog row, not a
-  notification.
 - **`attendance.correction-decision`** (§12). The correction flow ships here, but
   its recipient is a member of staff working inside the dashboard, with no
   off-platform channel to reach; it waits on the in-app inbox surface rather than

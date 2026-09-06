@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from rest_framework import status
 
-from apps.attendance import reports
+from apps.attendance import reports, services
 from apps.attendance.models import (
     AttendanceStatus,
     StaffAttendanceStatus,
@@ -344,3 +344,46 @@ class ReportExportTaskTests(ReportDataTestCase):
             self.assertEqual(job.status, JobStatus.SUCCEEDED)
             self.assertEqual(job.result["rows"], 3)
             self.assertIn("result_file_id", job.result)
+
+
+class ReportRowCapTests(ReportDataTestCase):
+    """The inline/job decision must not cost the query it is deciding about."""
+
+    def test_a_limit_caps_what_is_materialised(self) -> None:
+        with tenant_context(self.tenant.id):
+            rows = reports.student_summary(
+                self.scoped(), start_date=self.start, end_date=self.end, limit=2
+            )
+
+        self.assertEqual(len(rows), 2)
+
+    def test_the_endpoint_asks_for_one_row_past_the_ceiling(self) -> None:
+        """One row past the ceiling is all it takes to know, so the decision
+        costs a bounded query rather than the term-scale one the job rebuilds."""
+        from unittest import mock
+
+        from apps.attendance import tasks
+
+        real = tasks.build_report_rows
+        seen = {}
+
+        def record(**kwargs):
+            seen.update(kwargs)
+            return real(**kwargs)
+
+        with mock.patch.object(tasks, "build_report_rows", side_effect=record):
+            self.client.get(
+                f"{REPORTS}?kind=student-summary&start_date={self.start}&end_date={self.end}"
+            )
+
+        self.assertEqual(seen["limit"], services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1)
+
+    def test_a_defaulter_cap_applies_to_the_filtered_set(self) -> None:
+        """Capping the source would cap the wrong population — the first N
+        students alphabetically rather than the first N defaulters."""
+        with tenant_context(self.tenant.id):
+            rows = reports.defaulters(
+                self.scoped(), start_date=self.start, end_date=self.end, limit=5
+            )
+
+        self.assertEqual(len(rows), 1)

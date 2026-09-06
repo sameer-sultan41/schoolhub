@@ -696,7 +696,10 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         query.is_valid(raise_exception=True)
         params = query.validated_data
 
-        rows = self._rows(request, params)
+        # One row past the ceiling is all it takes to know. Asking for
+        # `limit + 1` means the decision costs a bounded query rather than the
+        # whole term-scale one the job is going to rebuild anyway.
+        rows = self._rows(request, params, limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1)
         if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
             return self._queue_export(request, params, reason="too many rows to return inline")
 
@@ -726,7 +729,7 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         return self._queue_export(request, query.validated_data, reason="export requested")
 
     @staticmethod
-    def _rows(request: Request, params: dict) -> list[dict]:
+    def _rows(request: Request, params: dict, *, limit: int | None = None) -> list[dict]:
         from apps.attendance.tasks import build_report_rows
 
         return build_report_rows(
@@ -735,6 +738,7 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
             start_date=params["start_date"],
             end_date=params["end_date"],
             section_id=str(params["section_id"]) if params.get("section_id") else None,
+            limit=limit,
         )
 
     @staticmethod
