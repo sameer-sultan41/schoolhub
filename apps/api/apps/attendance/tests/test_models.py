@@ -100,7 +100,11 @@ class StudentAttendanceConstraintTests(TestCase):
 
             self.mark(status=AttendanceStatus.ABSENT)
 
-            self.assertEqual(StudentAttendance.objects.count(), 1)
+            # `objects` is tenant-scoped, not alive-filtered — the deleted row is
+            # still there, which is the point: it stays as history and only stops
+            # occupying the index.
+            self.assertEqual(StudentAttendance.objects.alive().count(), 1)
+            self.assertEqual(StudentAttendance.objects.count(), 2)
 
     def test_another_tenants_row_does_not_collide(self) -> None:
         """The constraints are tenant-first; two schools mark on the same day."""
