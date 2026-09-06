@@ -2780,6 +2780,108 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/reports/attendance-summary:
+    get:
+      operationId: reports_attendance_summary_retrieve
+      description: |-
+        `GET /api/v1/reports/attendance-summary` — §13's six reports (§16).
+
+        **One endpoint with a `kind`, not six routes.** §16 declares exactly one
+        report URL, and the six differ in their rows rather than their shape: every
+        one is a flat list under a date range and a record scope.
+
+        **Small results come back inline; large ones return 202 and a job**
+        (api-architecture.md §2.7). The threshold is on row count rather than on the
+        report kind, because the same kind is both: a daily register is one section's
+        day, and the same query over a term is students x days.
+
+        Record scope is applied by `tasks.build_report_rows`, which the export job
+        calls too — so an exported CSV can never show more than the requester could
+        read inline. §13's closing line makes that a requirement, and a report is
+        read as authoritative, which is exactly why it is the worst place to lose a
+        scope.
+      summary: Run an attendance report
+      parameters:
+      - in: query
+        name: end_date
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: kind
+        schema:
+          enum:
+          - daily-register
+          - student-summary
+          - defaulters
+          - student-late-arrivals
+          - staff-punctuality
+          - leave
+          type: string
+          minLength: 1
+        description: |-
+          * `daily-register` - daily-register
+          * `student-summary` - student-summary
+          * `defaulters` - defaulters
+          * `student-late-arrivals` - student-late-arrivals
+          * `staff-punctuality` - staff-punctuality
+          * `leave` - leave
+        required: true
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+      - in: query
+        name: start_date
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: threshold
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: The report's rows, under `data`.
+    post:
+      operationId: reports_attendance_summary_create
+      description: |-
+        Always a job, however small.
+
+        §13 lists export as its own capability and §4 keys it separately
+        (`attendance.report.export`), so an export is a deliberate act with its
+        own permission — not "the same report, but bigger". Returning the bytes
+        inline for a small one would make the two paths differ by size, which is
+        the distinction the *reader* least expects.
+      summary: Export an attendance report as CSV
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceReportQuery'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttendanceReportQuery'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttendanceReportQuery'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: A job resource; poll GET /jobs/{id}.
   /api/v1/rooms:
     get:
       operationId: rooms_list
@@ -3311,6 +3413,247 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Staff'
+          description: ''
+  /api/v1/staff-attendance:
+    get:
+      operationId: staff_attendance_list
+      description: |-
+        `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+
+        `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+        grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+        no restricted principal at all. A student has no business reading a teacher's
+        arrival time.
+
+        That "every staff role (own)" is the widest `own` grant on the platform, and
+        it is why `POST` is keyed separately: reading your own punctuality and
+        recording someone else's are different acts, and §4 keys the second to
+        `hr_staff`/`school_admin`.
+
+        **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+        staff member to record their own arrival, which no student may do; recording
+        it as `manual` would make §13's report unable to tell a self-report from an
+        HR-verified one.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: date
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date__lte
+        schema:
+          type: string
+          format: date
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: source
+        schema:
+          type: string
+          enum:
+          - device
+          - import
+          - manual
+          - self
+        description: |-
+          * `manual` - Manual
+          * `self` - Self check-in
+          * `import` - Import
+          * `device` - Device
+      - in: query
+        name: staff_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - absent
+          - half_day
+          - holiday
+          - late
+          - on_leave
+          - present
+        description: |-
+          * `present` - Present
+          * `absent` - Absent
+          * `late` - Late
+          * `half_day` - Half day
+          * `on_leave` - On leave
+          * `holiday` - Holiday
+      tags:
+      - staff-attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStaffAttendanceList'
+          description: ''
+    post:
+      operationId: staff_attendance_create
+      description: |-
+        `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+
+        `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+        grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+        no restricted principal at all. A student has no business reading a teacher's
+        arrival time.
+
+        That "every staff role (own)" is the widest `own` grant on the platform, and
+        it is why `POST` is keyed separately: reading your own punctuality and
+        recording someone else's are different acts, and §4 keys the second to
+        `hr_staff`/`school_admin`.
+
+        **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+        staff member to record their own arrival, which no student may do; recording
+        it as `manual` would make §13's report unable to tell a self-report from an
+        HR-verified one.
+      summary: Record a staff member's attendance for a date
+      tags:
+      - staff-attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffAttendance'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StaffAttendance'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StaffAttendance'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffAttendance'
+          description: ''
+  /api/v1/staff-attendance/{id}:
+    get:
+      operationId: staff_attendance_retrieve
+      description: |-
+        `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+
+        `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+        grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+        no restricted principal at all. A student has no business reading a teacher's
+        arrival time.
+
+        That "every staff role (own)" is the widest `own` grant on the platform, and
+        it is why `POST` is keyed separately: reading your own punctuality and
+        recording someone else's are different acts, and §4 keys the second to
+        `hr_staff`/`school_admin`.
+
+        **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+        staff member to record their own arrival, which no student may do; recording
+        it as `manual` would make §13's report unable to tell a self-report from an
+        HR-verified one.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this staff attendance.
+        required: true
+      tags:
+      - staff-attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffAttendance'
+          description: ''
+  /api/v1/staff-attendance/{id}:check-out:
+    post:
+      operationId: staff_attendance_:check_out_create
+      description: |-
+        `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+
+        `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+        grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+        no restricted principal at all. A student has no business reading a teacher's
+        arrival time.
+
+        That "every staff role (own)" is the widest `own` grant on the platform, and
+        it is why `POST` is keyed separately: reading your own punctuality and
+        recording someone else's are different acts, and §4 keys the second to
+        `hr_staff`/`school_admin`.
+
+        **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+        staff member to record their own arrival, which no student may do; recording
+        it as `manual` would make §13's report unable to tell a self-report from an
+        HR-verified one.
+      summary: Record a staff member's departure
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - staff-attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffCheckOut'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StaffCheckOut'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StaffCheckOut'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffAttendance'
           description: ''
   /api/v1/staff-documents/{id}:
     get:
@@ -6639,6 +6982,34 @@ components:
       description: |-
         * `student` - Student
         * `staff` - Staff
+    AttendanceReportQuery:
+      type: object
+      description: |-
+        Query parameters for `GET /reports/attendance-summary` (§13, §16).
+
+        One endpoint with a `kind`, not six routes: §16 declares exactly one report
+        URL, and the six reports differ in their rows rather than in their shape —
+        every one is a flat list under a date range and a record scope.
+      properties:
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        section_id:
+          type: string
+          format: uuid
+          nullable: true
+        threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+      required:
+      - kind
+      - start_date
     AttendanceSourceEnum:
       enum:
       - manual
@@ -7642,6 +8013,22 @@ components:
           items:
             type: string
             format: uuid
+    KindEnum:
+      enum:
+      - daily-register
+      - student-summary
+      - defaulters
+      - student-late-arrivals
+      - staff-punctuality
+      - leave
+      type: string
+      description: |-
+        * `daily-register` - daily-register
+        * `student-summary` - student-summary
+        * `defaulters` - defaulters
+        * `student-late-arrivals` - student-late-arrivals
+        * `staff-punctuality` - staff-punctuality
+        * `leave` - leave
     LeaveApproval:
       type: object
       description: One step of §7.2's chain, nested on the request it belongs to.
@@ -8230,6 +8617,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Section'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedStaffAttendanceList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffAttendance'
         meta:
           type: object
           properties:
@@ -10165,6 +10573,128 @@ components:
       - phone
       - staff_type
       - updated_at
+    StaffAttendance:
+      type: object
+      description: |-
+        `staff_attendance` — §5.2.
+
+        The three computed columns are read-only for the reason the student
+        serializer's are: §11 computes them, and §13's punctuality report is a
+        payroll input that is only worth reading if every row was measured the same
+        way. `is_locked` is the effective lock, not the nightly-swept column — the
+        same fix the student serializer carries.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        staff_id:
+          type: string
+          format: uuid
+        attendance_date:
+          type: string
+          format: date
+          description: Calendar date in the tenant's timezone.
+        status:
+          $ref: '#/components/schemas/StaffAttendanceStatusEnum'
+        check_in_time:
+          type: string
+          format: time
+          nullable: true
+        check_out_time:
+          type: string
+          format: time
+          nullable: true
+          description: Must be later than check_in_time (§11).
+        late_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Computed server-side from the tenant work-day window; never
+            client-supplied.
+        early_departure_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Computed server-side, like late_minutes.
+        leave_request_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Set when status is on_leave; written by hr-leave's approval
+            flow.
+          readOnly: true
+        source:
+          $ref: '#/components/schemas/StaffAttendanceSourceEnum'
+        marked_by:
+          type: string
+          format: uuid
+          readOnly: true
+          description: users(id) — the recording actor.
+        is_locked:
+          type: boolean
+          readOnly: true
+        remarks:
+          type: string
+          nullable: true
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attendance_date
+      - created_at
+      - early_departure_minutes
+      - id
+      - is_locked
+      - late_minutes
+      - leave_request_id
+      - marked_by
+      - staff_id
+      - status
+      - updated_at
+    StaffAttendanceSourceEnum:
+      enum:
+      - manual
+      - self
+      - import
+      - device
+      type: string
+      description: |-
+        * `manual` - Manual
+        * `self` - Self check-in
+        * `import` - Import
+        * `device` - Device
+    StaffAttendanceStatusEnum:
+      enum:
+      - present
+      - absent
+      - late
+      - half_day
+      - on_leave
+      - holiday
+      type: string
+      description: |-
+        * `present` - Present
+        * `absent` - Absent
+        * `late` - Late
+        * `half_day` - Half day
+        * `on_leave` - On leave
+        * `holiday` - Holiday
+    StaffCheckOut:
+      type: object
+      description: Body for `POST /staff-attendance/{id}:check-out` (§16).
+      properties:
+        check_out_time:
+          type: string
+          format: time
+      required:
+      - check_out_time
     StaffDocument:
       type: object
       properties:

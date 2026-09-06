@@ -231,22 +231,23 @@ class AttendanceCorrection(TenantOwnedModel):
     target. `old_values`/`new_values` are snapshots rather than a diff so the
     before-state survives even if the target is corrected again later.
 
-    **`staff_attendance_id` is not here yet.** The entity doc specifies two
-    nullable target columns under one exactly-one CHECK, and `staff_attendance`
-    does not ship until this module's third PR. Declaring the column now would
-    mean either a lazy FK to a model that does not exist — which fails Django's
-    own checks — or a plain UUID standing in for a foreign key inside its own
-    app, which is the shape this codebase reserves for genuine cross-module
-    references (`Section.class_teacher_staff_id`, `TimetableSlot`'s absent-teacher
-    link) and has no reason to use here. So the CHECK below asserts the one
-    target that exists, and the staff PR widens it. Nothing is rewritten under
-    load by that: `module.attendance` ships `default_enabled=False`, so no tenant
-    holds a row until well after both halves have landed.
+    **Exactly one target**, which is now genuinely a choice of two: the marking PR
+    shipped this table with only `student_attendance` to point at and a CHECK that
+    said so, and the staff PR widens both. `subject_type` says which without a
+    join, because an approver's queue renders the two differently and should not
+    have to test two nullable columns to find out.
     """
 
     subject_type = models.CharField(max_length=10, choices=CorrectionSubjectType.choices)
     student_attendance = models.ForeignKey(
         StudentAttendance,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="corrections",
+    )
+    staff_attendance = models.ForeignKey(
+        "attendance.StaffAttendance",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
@@ -269,23 +270,34 @@ class AttendanceCorrection(TenantOwnedModel):
         db_table = "attendance_corrections"
         ordering = ["-created_at"]
         constraints = [
-            # A correction with no target is approvable and updates nothing. The
-            # staff PR widens this to "exactly one of the two", which is what the
-            # entity doc specifies; today there is only one target to point at,
-            # and a CHECK that asserts the rule as it currently stands is worth
-            # more than one written for a column that does not exist.
+            # Exactly one target. Both set would make "which row does approval
+            # update?" undefined; neither set would make the correction point at
+            # nothing and still be approvable. This replaces the marking PR's
+            # narrower pair, which asserted the same rule for the one target that
+            # existed then.
             models.CheckConstraint(
-                condition=models.Q(student_attendance__isnull=False),
-                name="attendance_corrections_has_a_target",
+                condition=(
+                    models.Q(student_attendance__isnull=False, staff_attendance__isnull=True)
+                    | models.Q(student_attendance__isnull=True, staff_attendance__isnull=False)
+                ),
+                name="attendance_corrections_exactly_one_target",
             ),
+            # `subject_type` must agree with the column that is set, or the
+            # denormalised discriminator is a second source of truth that can
+            # disagree with the first — and it is the one an approver's queue
+            # filters on.
             models.CheckConstraint(
-                condition=models.Q(subject_type=CorrectionSubjectType.STUDENT),
-                name="attendance_corrections_student_targets_only",
+                condition=(
+                    models.Q(subject_type="student", student_attendance__isnull=False)
+                    | models.Q(subject_type="staff", staff_attendance__isnull=False)
+                ),
+                name="attendance_corrections_subject_type_matches_target",
             ),
         ]
         indexes = [
             models.Index(fields=["tenant", "status"], name="att_corr_status_idx"),
             models.Index(fields=["tenant", "student_attendance"], name="att_corr_student_idx"),
+            models.Index(fields=["tenant", "staff_attendance"], name="att_corr_staff_idx"),
         ]
 
     def __str__(self) -> str:
@@ -645,3 +657,160 @@ class LeaveApproval(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"L{self.level} {self.decision}"
+
+
+class StaffAttendanceStatus(models.TextChoices):
+    """§5.2's six staff statuses.
+
+    Two differ from the student set and both matter. `holiday` exists because a
+    staff attendance row is also a *payroll* input (§10, and hr-leave reads the
+    same table): "the school was shut" and "this person did not come in" are the
+    same absence to a register and very different numbers to a payslip.
+    `excused` is absent from this set for the mirror-image reason — a student is
+    excused by a teacher's judgement, a staff member is on approved leave.
+    """
+
+    PRESENT = "present", "Present"
+    ABSENT = "absent", "Absent"
+    LATE = "late", "Late"
+    HALF_DAY = "half_day", "Half day"
+    ON_LEAVE = "on_leave", "On leave"
+    HOLIDAY = "holiday", "Holiday"
+
+
+class StaffAttendanceSource(models.TextChoices):
+    """`self` is the one addition to the student source set: §5.2 allows a staff
+    member to check themselves in, which no student may do.
+
+    `device` is reserved and unreachable for the same reason it is on the student
+    table — §21's biometric/RFID scope.
+    """
+
+    MANUAL = "manual", "Manual"
+    SELF = "self", "Self check-in"
+    IMPORT = "import", "Import"
+    DEVICE = "device", "Device"
+
+
+class StaffAttendance(TenantOwnedModel):
+    """One staff member's presence on one date, with times.
+
+    **Never per period.** A student register can run per period (§19's tenant
+    setting); a staff day is one row with a check-in and a check-out, because
+    that is what §5.3's late-arrival/early-departure capture and §13's punctuality
+    report measure. Hence one plain unique constraint here where
+    `student_attendance` needs two partial ones.
+
+    Absence rows feed `timetable.TeacherSubstitution` — §18 declares attendance
+    outbound to timetable, and `services.mark_staff_attendance` is where that
+    signal is emitted.
+    """
+
+    staff = models.ForeignKey(
+        "staff_management.Staff", on_delete=models.PROTECT, related_name="attendance"
+    )
+    attendance_date = models.DateField(help_text="Calendar date in the tenant's timezone.")
+    status = models.CharField(max_length=20, choices=StaffAttendanceStatus.choices)
+    check_in_time = models.TimeField(null=True, blank=True)
+    check_out_time = models.TimeField(
+        null=True, blank=True, help_text="Must be later than check_in_time (§11)."
+    )
+    late_minutes = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Computed server-side from the tenant work-day window; never client-supplied.",
+    )
+    early_departure_minutes = models.IntegerField(
+        null=True, blank=True, help_text="Computed server-side, like late_minutes."
+    )
+    leave_request = models.ForeignKey(
+        LeaveRequest,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="staff_attendance",
+        db_column="leave_request_id",
+        help_text="Set when status is on_leave; written by hr-leave's approval flow.",
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=StaffAttendanceSource.choices,
+        default=StaffAttendanceSource.MANUAL,
+    )
+    marked_by = models.UUIDField(help_text="users(id) — the recording actor.")
+    is_locked = models.BooleanField(default=False)
+    remarks = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = "staff_attendance"
+        ordering = ["-attendance_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "staff", "attendance_date"],
+                name="staff_attendance_one_per_day",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(check_out_time__isnull=True)
+                | models.Q(check_in_time__isnull=True)
+                | models.Q(check_out_time__gt=models.F("check_in_time")),
+                name="staff_attendance_check_out_after_check_in",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(late_minutes__isnull=True) | models.Q(late_minutes__gte=0),
+                name="staff_attendance_late_minutes_not_negative",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(early_departure_minutes__isnull=True)
+                | models.Q(early_departure_minutes__gte=0),
+                name="staff_attendance_early_minutes_not_negative",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant", "attendance_date", "status"], name="staff_att_date_status_idx"
+            ),
+            models.Index(
+                fields=["tenant", "staff", "attendance_date"], name="staff_att_staff_date_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.staff_id} on {self.attendance_date}: {self.status}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — a staff member's own attendance.
+
+        §4 grants `attendance.staff-attendance.view` to "every staff role (own)",
+        which is the widest `own` grant in the platform: every teacher, clerk and
+        librarian can see their own punctuality and nobody else's. Joined through
+        `staff.user_id` rather than a column on this table, because a staff row is
+        the thing a user is linked to.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        return queryset.filter(staff__user_id=user.pk, staff__deleted_at__isnull=True)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — the staff who report to this user.
+
+        §4 does not grant `assigned` on staff attendance, so nothing reaches this
+        today. It exists because `scope_queryset` falls through to `.none()`
+        without it, and a department head granted `assigned` by a tenant admin
+        would silently see an empty punctuality report rather than an error —
+        the exact failure mode PR #37 spent a whole PR fixing on the campus axis.
+        Reports-to is the relationship `Staff` already models.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+
+        from apps.staff_management.models import EmploymentStatus, Staff
+
+        manager_ids = (
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
+        return queryset.filter(staff__reports_to_id__in=manager_ids)

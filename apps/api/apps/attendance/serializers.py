@@ -23,9 +23,11 @@ from apps.attendance.models import (
     LeaveApproval,
     LeaveRequest,
     LeaveType,
+    StaffAttendance,
     StudentAttendance,
 )
 from apps.school_organization.models import AcademicSession, Section
+from apps.staff_management.models import Staff
 from apps.student_management.models import Student
 from apps.timetable.models import Period
 from core.files.models import File
@@ -319,3 +321,87 @@ class LeaveDecisionSerializer(serializers.Serializer):
     """
 
     note = serializers.CharField(max_length=500, required=False, allow_null=True)
+
+
+class StaffAttendanceSerializer(serializers.ModelSerializer):
+    """`staff_attendance` — §5.2.
+
+    The three computed columns are read-only for the reason the student
+    serializer's are: §11 computes them, and §13's punctuality report is a
+    payroll input that is only worth reading if every row was measured the same
+    way. `is_locked` is the effective lock, not the nightly-swept column — the
+    same fix the student serializer carries.
+    """
+
+    staff_id = _fk(Staff, source="staff")
+    is_locked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffAttendance
+        fields = (
+            "id",
+            "staff_id",
+            "attendance_date",
+            "status",
+            "check_in_time",
+            "check_out_time",
+            "late_minutes",
+            "early_departure_minutes",
+            "leave_request_id",
+            "source",
+            "marked_by",
+            "is_locked",
+            "remarks",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            *READ_ONLY_FIELDS,
+            "late_minutes",
+            "early_departure_minutes",
+            "leave_request_id",
+            "marked_by",
+            "is_locked",
+        )
+
+    def get_is_locked(self, row: StaffAttendance) -> bool:
+        return bool(row.is_locked or services.is_locked(row.attendance_date))
+
+    def validate(self, attrs: dict) -> dict:
+        check_in, check_out = attrs.get("check_in_time"), attrs.get("check_out_time")
+        if check_in and check_out and check_out <= check_in:
+            raise serializers.ValidationError(
+                {"check_out_time": "Check-out must be later than check-in."}
+            )
+        return attrs
+
+
+class StaffCheckOutSerializer(serializers.Serializer):
+    """Body for `POST /staff-attendance/{id}:check-out` (§16)."""
+
+    check_out_time = serializers.TimeField()
+
+
+class AttendanceReportQuerySerializer(serializers.Serializer):
+    """Query parameters for `GET /reports/attendance-summary` (§13, §16).
+
+    One endpoint with a `kind`, not six routes: §16 declares exactly one report
+    URL, and the six reports differ in their rows rather than in their shape —
+    every one is a flat list under a date range and a record scope.
+    """
+
+    kind = serializers.ChoiceField(choices=[(k, k) for k in services.REPORT_KINDS])
+    start_date = serializers.DateField()
+    end_date = serializers.DateField(required=False)
+    section_id = serializers.UUIDField(required=False, allow_null=True)
+    threshold = serializers.DecimalField(
+        max_digits=4, decimal_places=1, required=False, min_value=0, max_value=100
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        # A single-day report (the daily register) names one date; the rest take
+        # a range. Defaulting `end_date` to `start_date` means the register does
+        # not have to send the same date twice.
+        attrs.setdefault("end_date", attrs["start_date"])
+        services.assert_report_range(start_date=attrs["start_date"], end_date=attrs["end_date"])
+        return attrs

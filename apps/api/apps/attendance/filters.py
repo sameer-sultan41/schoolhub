@@ -20,6 +20,7 @@ from apps.attendance.models import (
     AttendanceCorrection,
     LeaveRequest,
     LeaveType,
+    StaffAttendance,
     StudentAttendance,
 )
 
@@ -78,3 +79,21 @@ class LeaveTypeFilterSet(django_filters.FilterSet):
     class Meta:
         model = LeaveType
         fields = {"applies_to": ["exact"], "is_active": ["exact"]}
+
+
+class StaffAttendanceFilterSet(django_filters.FilterSet):
+    """§16 names no filters for `/staff-attendance`.
+
+    Staff, status and a date range are what §13's punctuality report and an HR
+    clerk's day view narrow on, and both are indexed
+    (`staff_att_staff_date_idx`, `staff_att_date_status_idx`).
+    """
+
+    staff_id = django_filters.UUIDFilter(field_name="staff_id")
+    date = django_filters.DateFilter(field_name="attendance_date")
+    date__gte = django_filters.DateFilter(field_name="attendance_date", lookup_expr="gte")
+    date__lte = django_filters.DateFilter(field_name="attendance_date", lookup_expr="lte")
+
+    class Meta:
+        model = StaffAttendance
+        fields = {"status": ["exact"], "source": ["exact"]}

@@ -1178,6 +1178,51 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/reports/attendance-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run an attendance report
+         * @description `GET /api/v1/reports/attendance-summary` — §13's six reports (§16).
+         *
+         *     **One endpoint with a `kind`, not six routes.** §16 declares exactly one
+         *     report URL, and the six differ in their rows rather than their shape: every
+         *     one is a flat list under a date range and a record scope.
+         *
+         *     **Small results come back inline; large ones return 202 and a job**
+         *     (api-architecture.md §2.7). The threshold is on row count rather than on the
+         *     report kind, because the same kind is both: a daily register is one section's
+         *     day, and the same query over a term is students x days.
+         *
+         *     Record scope is applied by `tasks.build_report_rows`, which the export job
+         *     calls too — so an exported CSV can never show more than the requester could
+         *     read inline. §13's closing line makes that a requirement, and a report is
+         *     read as authoritative, which is exactly why it is the worst place to lose a
+         *     scope.
+         */
+        get: operations["reports_attendance_summary_retrieve"];
+        put?: never;
+        /**
+         * Export an attendance report as CSV
+         * @description Always a job, however small.
+         *
+         *     §13 lists export as its own capability and §4 keys it separately
+         *     (`attendance.report.export`), so an export is a deliberate act with its
+         *     own permission — not "the same report, but bigger". Returning the bytes
+         *     inline for a small one would make the two paths differ by size, which is
+         *     the distinction the *reader* least expects.
+         */
+        post: operations["reports_attendance_summary_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms": {
         parameters: {
             query?: never;
@@ -1311,6 +1356,128 @@ export interface paths {
         put?: never;
         /** @description Staff master records (module doc §5.1). */
         post: operations["staff_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+         *
+         *     `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+         *     grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+         *     no restricted principal at all. A student has no business reading a teacher's
+         *     arrival time.
+         *
+         *     That "every staff role (own)" is the widest `own` grant on the platform, and
+         *     it is why `POST` is keyed separately: reading your own punctuality and
+         *     recording someone else's are different acts, and §4 keys the second to
+         *     `hr_staff`/`school_admin`.
+         *
+         *     **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+         *     staff member to record their own arrival, which no student may do; recording
+         *     it as `manual` would make §13's report unable to tell a self-report from an
+         *     HR-verified one.
+         */
+        get: operations["staff_attendance_list"];
+        put?: never;
+        /**
+         * Record a staff member's attendance for a date
+         * @description `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+         *
+         *     `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+         *     grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+         *     no restricted principal at all. A student has no business reading a teacher's
+         *     arrival time.
+         *
+         *     That "every staff role (own)" is the widest `own` grant on the platform, and
+         *     it is why `POST` is keyed separately: reading your own punctuality and
+         *     recording someone else's are different acts, and §4 keys the second to
+         *     `hr_staff`/`school_admin`.
+         *
+         *     **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+         *     staff member to record their own arrival, which no student may do; recording
+         *     it as `manual` would make §13's report unable to tell a self-report from an
+         *     HR-verified one.
+         */
+        post: operations["staff_attendance_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-attendance/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+         *
+         *     `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+         *     grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+         *     no restricted principal at all. A student has no business reading a teacher's
+         *     arrival time.
+         *
+         *     That "every staff role (own)" is the widest `own` grant on the platform, and
+         *     it is why `POST` is keyed separately: reading your own punctuality and
+         *     recording someone else's are different acts, and §4 keys the second to
+         *     `hr_staff`/`school_admin`.
+         *
+         *     **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+         *     staff member to record their own arrival, which no student may do; recording
+         *     it as `manual` would make §13's report unable to tell a self-report from an
+         *     HR-verified one.
+         */
+        get: operations["staff_attendance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-attendance/{id}:check-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a staff member's departure
+         * @description `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+         *
+         *     `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+         *     grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+         *     no restricted principal at all. A student has no business reading a teacher's
+         *     arrival time.
+         *
+         *     That "every staff role (own)" is the widest `own` grant on the platform, and
+         *     it is why `POST` is keyed separately: reading your own punctuality and
+         *     recording someone else's are different acts, and §4 keys the second to
+         *     `hr_staff`/`school_admin`.
+         *
+         *     **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+         *     staff member to record their own arrival, which no student may do; recording
+         *     it as `manual` would make §13's report unable to tell a self-report from an
+         *     HR-verified one.
+         */
+        post: operations["staff_attendance_:check_out_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2822,6 +2989,24 @@ export interface components {
          */
         AttendanceCorrectionSubjectTypeEnum: "student" | "staff";
         /**
+         * @description Query parameters for `GET /reports/attendance-summary` (§13, §16).
+         *
+         *     One endpoint with a `kind`, not six routes: §16 declares exactly one report
+         *     URL, and the six reports differ in their rows rather than in their shape —
+         *     every one is a flat list under a date range and a record scope.
+         */
+        AttendanceReportQuery: {
+            kind: components["schemas"]["KindEnum"];
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date?: string;
+            /** Format: uuid */
+            section_id?: string | null;
+            /** Format: decimal */
+            threshold?: string;
+        };
+        /**
          * @description * `manual` - Manual
          *     * `system` - System
          *     * `import` - Import
@@ -3293,6 +3478,16 @@ export interface components {
         InviteRequest: {
             role_ids?: string[];
         };
+        /**
+         * @description * `daily-register` - daily-register
+         *     * `student-summary` - student-summary
+         *     * `defaulters` - defaulters
+         *     * `student-late-arrivals` - student-late-arrivals
+         *     * `staff-punctuality` - staff-punctuality
+         *     * `leave` - leave
+         * @enum {string}
+         */
+        KindEnum: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
         /** @description One step of §7.2's chain, nested on the request it belongs to. */
         LeaveApproval: {
             /** Format: uuid */
@@ -3578,6 +3773,16 @@ export interface components {
         };
         PaginatedSectionList: {
             data?: components["schemas"]["Section"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStaffAttendanceList: {
+            data?: components["schemas"]["StaffAttendance"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -4554,6 +4759,78 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description `staff_attendance` — §5.2.
+         *
+         *     The three computed columns are read-only for the reason the student
+         *     serializer's are: §11 computes them, and §13's punctuality report is a
+         *     payroll input that is only worth reading if every row was measured the same
+         *     way. `is_locked` is the effective lock, not the nightly-swept column — the
+         *     same fix the student serializer carries.
+         */
+        StaffAttendance: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            staff_id: string;
+            /**
+             * Format: date
+             * @description Calendar date in the tenant's timezone.
+             */
+            attendance_date: string;
+            status: components["schemas"]["StaffAttendanceStatusEnum"];
+            /** Format: time */
+            check_in_time?: string | null;
+            /**
+             * Format: time
+             * @description Must be later than check_in_time (§11).
+             */
+            check_out_time?: string | null;
+            /** @description Computed server-side from the tenant work-day window; never client-supplied. */
+            readonly late_minutes: number | null;
+            /** @description Computed server-side, like late_minutes. */
+            readonly early_departure_minutes: number | null;
+            /**
+             * Format: uuid
+             * @description Set when status is on_leave; written by hr-leave's approval flow.
+             */
+            readonly leave_request_id: string | null;
+            source?: components["schemas"]["StaffAttendanceSourceEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) — the recording actor.
+             */
+            readonly marked_by: string;
+            readonly is_locked: boolean;
+            remarks?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `manual` - Manual
+         *     * `self` - Self check-in
+         *     * `import` - Import
+         *     * `device` - Device
+         * @enum {string}
+         */
+        StaffAttendanceSourceEnum: "manual" | "self" | "import" | "device";
+        /**
+         * @description * `present` - Present
+         *     * `absent` - Absent
+         *     * `late` - Late
+         *     * `half_day` - Half day
+         *     * `on_leave` - On leave
+         *     * `holiday` - Holiday
+         * @enum {string}
+         */
+        StaffAttendanceStatusEnum: "present" | "absent" | "late" | "half_day" | "on_leave" | "holiday";
+        /** @description Body for `POST /staff-attendance/{id}:check-out` (§16). */
+        StaffCheckOut: {
+            /** Format: time */
+            check_out_time: string;
         };
         StaffDocument: {
             /** Format: uuid */
@@ -7192,6 +7469,62 @@ export interface operations {
             };
         };
     };
+    reports_attendance_summary_retrieve: {
+        parameters: {
+            query: {
+                end_date?: string;
+                /**
+                 * @description * `daily-register` - daily-register
+                 *     * `student-summary` - student-summary
+                 *     * `defaulters` - defaulters
+                 *     * `student-late-arrivals` - student-late-arrivals
+                 *     * `staff-punctuality` - staff-punctuality
+                 *     * `leave` - leave
+                 */
+                kind: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
+                section_id?: string | null;
+                start_date: string;
+                threshold?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report's rows, under `data`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reports_attendance_summary_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceReportQuery"];
+                "application/x-www-form-urlencoded": components["schemas"]["AttendanceReportQuery"];
+                "multipart/form-data": components["schemas"]["AttendanceReportQuery"];
+            };
+        };
+        responses: {
+            /** @description A job resource; poll GET /jobs/{id}. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     rooms_list: {
         parameters: {
             query?: {
@@ -7593,6 +7926,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_attendance_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                date?: string;
+                date__gte?: string;
+                date__lte?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `manual` - Manual
+                 *     * `self` - Self check-in
+                 *     * `import` - Import
+                 *     * `device` - Device
+                 */
+                source?: "device" | "import" | "manual" | "self";
+                staff_id?: string;
+                /**
+                 * @description * `present` - Present
+                 *     * `absent` - Absent
+                 *     * `late` - Late
+                 *     * `half_day` - Half day
+                 *     * `on_leave` - On leave
+                 *     * `holiday` - Holiday
+                 */
+                status?: "absent" | "half_day" | "holiday" | "late" | "on_leave" | "present";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStaffAttendanceList"];
+                };
+            };
+        };
+    };
+    staff_attendance_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAttendance"];
+                "application/x-www-form-urlencoded": components["schemas"]["StaffAttendance"];
+                "multipart/form-data": components["schemas"]["StaffAttendance"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffAttendance"];
+                };
+            };
+        };
+    };
+    staff_attendance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff attendance. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffAttendance"];
+                };
+            };
+        };
+    };
+    "staff_attendance_:check_out_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffCheckOut"];
+                "application/x-www-form-urlencoded": components["schemas"]["StaffCheckOut"];
+                "multipart/form-data": components["schemas"]["StaffCheckOut"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffAttendance"];
                 };
             };
         };

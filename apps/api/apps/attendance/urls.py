@@ -15,8 +15,10 @@ from rest_framework.routers import SimpleRouter
 
 from apps.attendance.views import (
     AttendanceCorrectionViewSet,
+    AttendanceReportView,
     LeaveRequestViewSet,
     LeaveTypeViewSet,
+    StaffAttendanceViewSet,
     StudentAttendanceViewSet,
 )
 
@@ -27,8 +29,14 @@ router.register(
 )
 router.register("leave-types", LeaveTypeViewSet, basename="leave-types")
 router.register("leave-requests", LeaveRequestViewSet, basename="leave-requests")
+router.register("staff-attendance", StaffAttendanceViewSet, basename="staff-attendance")
 
 urlpatterns = [
+    path(
+        "reports/attendance-summary",
+        AttendanceReportView.as_view(),
+        name="attendance-report-summary",
+    ),
     path(
         "student-attendance:bulk-mark",
         StudentAttendanceViewSet.as_view({"post": "bulk_mark"}),
@@ -53,6 +61,11 @@ urlpatterns = [
         "leave-requests/<uuid:pk>:reject",
         LeaveRequestViewSet.as_view({"post": "reject"}),
         name="leave-requests-reject",
+    ),
+    path(
+        "staff-attendance/<uuid:pk>:check-out",
+        StaffAttendanceViewSet.as_view({"post": "check_out"}),
+        name="staff-attendance-check-out",
     ),
     path(
         "leave-requests/<uuid:pk>:cancel",
