@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useTransition } from "react";
+import { useCallback, useEffect, useRef, useTransition } from "react";
 
 type ParamUpdates = Record<string, string | null>;
 
@@ -31,20 +31,40 @@ export function useSearchParam() {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
+  // The query string we last WROTE, held until the router reports it back.
+  //
+  // `router.replace` is asynchronous, and `searchParams` is a render-time snapshot, so
+  // two updates fired before the next render both build on the same stale base and the
+  // second silently drops the first. That is not a corner case: the column menu stays
+  // open precisely so several columns can be ticked in a row, and every tick but the
+  // last was being lost. Reading from what we last wrote makes a burst of updates
+  // compose instead of overwrite.
+  const pendingSearch = useRef<string | null>(null);
+
+  // The router has caught up — the snapshot is authoritative again. Clearing rather
+  // than comparing: a value that arrived from anywhere else (Back, a link, another
+  // component) should win over what this hook remembers writing.
+  useEffect(() => {
+    pendingSearch.current = null;
+  }, [searchParams]);
+
   const updateParams = useCallback(
     (updates: ParamUpdates) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(pendingSearch.current ?? searchParams.toString());
 
       for (const [key, value] of Object.entries(updates)) {
         if (value === null) params.delete(key);
         else params.set(key, value);
       }
 
+      const next = params.toString();
+      pendingSearch.current = next;
+
       startTransition(() => {
         // replace, not push: a sort click is a refinement of the view the reader is
         // already looking at, not a new place. Pushing would make Back walk them
         // through every filter keystroke before leaving the screen.
-        router.replace(`?${params.toString()}`, { scroll: false });
+        router.replace(`?${next}`, { scroll: false });
       });
     },
     [searchParams, router],
