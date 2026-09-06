@@ -237,6 +237,30 @@ has landed.**
 | Feature flag | `module.attendance`, `default_enabled=False` |
 | Tests | Django: models, marking, API, cross-tenant, notifications. E2E: `e2e/tests/live/api/attendance-marking.spec.ts` (live lane) |
 
+### Corrected in review
+
+Ten findings, worth recording because three of them describe rules the module now
+depends on:
+
+- **`:bulk-mark` keeps `DenyRestrictedPrincipals`; the reads drop it.** A
+  viewset-wide portal exemption covered the write action too. Marking writes a
+  whole section's register, and `assert_marker_may_mark_section` returns early
+  for `all`/`campus` scope — correctly, since many admin users have no `Staff`
+  row — so the principal check has to sit in front of it, not inside it.
+- **A correction cannot set `on_leave`,** and its times are validated when the
+  correction is *raised* rather than when approved days later. Approving a
+  correction now **recomputes `late_minutes`**, which is not a correctable field
+  and was previously carried over stale — a row corrected from absent to late
+  reported zero minutes late and §13's punctuality report summed those zeros.
+- **Alerts fire on a status *transition*, not on current status.** §6 requires
+  retries to be safe, so alerting on current status meant the module's own
+  idempotency promise re-sent every guardian the same message on every retry.
+- A re-mark after a mid-session section change now moves the row's
+  `section`/`academic_session` to the section it was marked in; a soft-deleted
+  student is no longer markable; a genuinely simultaneous first insert is merged
+  rather than 409'd; and `is_locked` on the wire is the *effective* lock the
+  write path enforces, not the nightly-swept column.
+
 ### Two design decisions worth carrying forward
 
 - **Marking is an upsert, not an insert.** §6 requires idempotency per (student,

@@ -45,6 +45,7 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
     section_id = _fk(Section, source="section")
     academic_session_id = _fk(AcademicSession, source="academic_session")
     period_id = _fk(Period, source="period", allow_null=True, required=False)
+    is_locked = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentAttendance
@@ -77,6 +78,17 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
             "marked_by",
             "is_locked",
         )
+
+    def get_is_locked(self, row: StudentAttendance) -> bool:
+        """The *effective* lock state, not the persisted column.
+
+        `is_locked` is swept nightly, so between the window passing and the sweep
+        running the column says False while every write path answers 409 — the
+        service checks `row.is_locked or is_locked(row.attendance_date)`. A client
+        rendering the column alone offered an edit that could not succeed. Same
+        expression, one source.
+        """
+        return bool(row.is_locked or services.is_locked(row.attendance_date))
 
 
 class BulkMarkEntrySerializer(serializers.Serializer):
@@ -155,6 +167,13 @@ class AttendanceCorrectionSerializer(serializers.ModelSerializer):
         )
 
     def validate_new_values(self, value: dict) -> dict:
+        """Validate the proposal at the point it is *raised*, not when applied.
+
+        These values sit in JSONB until an approver acts, which can be days
+        later, so anything not checked here fails at `:approve` — far from the
+        request that introduced it, and to a person who did not write it. That is
+        how a malformed `check_in_time` became a 500 on approval.
+        """
         if not isinstance(value, dict):
             raise serializers.ValidationError("Expected an object of field → new value.")
         unknown = set(value) - set(services.CORRECTABLE_FIELDS)
@@ -163,8 +182,28 @@ class AttendanceCorrectionSerializer(serializers.ModelSerializer):
                 f"Not correctable: {', '.join(sorted(unknown))}. "
                 f"Allowed: {', '.join(services.CORRECTABLE_FIELDS)}."
             )
-        if "status" in value and value["status"] not in AttendanceStatus.values:
-            raise serializers.ValidationError({"status": "Not a known attendance status."})
+
+        if "status" in value:
+            if value["status"] not in AttendanceStatus.values:
+                raise serializers.ValidationError({"status": "Not a known attendance status."})
+            if value["status"] in services.SYSTEM_ONLY_STATUSES:
+                raise serializers.ValidationError(
+                    {
+                        "status": (
+                            "'on_leave' is set by an approved leave request, not by a correction."
+                        )
+                    }
+                )
+
+        # Round-tripped through the same field the register uses, so "what is a
+        # valid time" is answered in one place. `to_internal_value` raises the
+        # usual 400; storing the normalised ISO string keeps `_from_json` reading
+        # exactly what a TimeField wrote.
+        time_field = serializers.TimeField()
+        for field in ("check_in_time", "check_out_time"):
+            if value.get(field) is not None:
+                value[field] = time_field.to_internal_value(value[field]).isoformat()
+
         return value
 
 

@@ -4263,7 +4263,15 @@ export interface components {
              * @description users(id) — the marking actor.
              */
             readonly marked_by: string;
-            /** @description True past the lock window; changes then need a correction (§5.5). */
+            /**
+             * @description The *effective* lock state, not the persisted column.
+             *
+             *     `is_locked` is swept nightly, so between the window passing and the sweep
+             *     running the column says False while every write path answers 409 — the
+             *     service checks `row.is_locked or is_locked(row.attendance_date)`. A client
+             *     rendering the column alone offered an edit that could not succeed. Same
+             *     expression, one source.
+             */
             readonly is_locked: boolean;
             remarks?: string | null;
             /** Format: date-time */

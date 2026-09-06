@@ -4,13 +4,26 @@ Thin by design: every rule that needs more than the request body lives in
 ``services``, so the API, §9's historical importer and the leave module's
 auto-marking all apply the same checks.
 
-**`DenyRestrictedPrincipals` is not on every viewset here, and that is new.**
-Every module before this one keeps students and guardians off all of its
-endpoints. §4 grants both an `own`-scoped `attendance.student-attendance.view` —
-a student sees their own attendance, a guardian their children's — so
-``StudentAttendanceViewSet`` deliberately omits it and lets the *record scope* do
-the narrowing, through ``StudentAttendance.filter_owned_by_user``. The correction
-viewset keeps the guard: §4 grants `attendance.correction.*` to staff only.
+**`DenyRestrictedPrincipals` is per-action here, and that is new.** Every module
+before this one keeps students and guardians off all of its endpoints. §4 grants
+both an `own`-scoped `attendance.student-attendance.view` — a student sees their
+own attendance, a guardian their children's — so ``StudentAttendanceViewSet``
+drops the guard **for reads only** and lets the record scope do that narrowing,
+through ``StudentAttendance.filter_owned_by_user``.
+
+**Its write action keeps the guard** (``get_permissions``). A viewset-wide
+exemption covered ``:bulk-mark`` as well, and marking is not a scoped read of
+one child's row — it writes a whole section's register. §4 grants
+`attendance.student-attendance.mark` to `teacher`/`class_teacher` only, so a
+restricted principal holding it is already a misconfiguration; the point is that
+it should not also be an escalation. `assert_marker_may_mark_section` cannot
+close this on its own: it returns early for `RecordScope.ALL`/`CAMPUS`, which is
+correct for an admin (many admin users have no `Staff` row at all, so requiring
+one would break the legitimate case) and is exactly why the principal check has
+to sit in front of it rather than inside it.
+
+The correction viewset keeps the guard on every action: §4 grants
+`attendance.correction.*` to staff only.
 
 **Rows are not created through `POST /student-attendance`.** §16 declares the
 list and `:bulk-mark`, and nothing else — a register is submitted for a section
@@ -122,6 +135,22 @@ class StudentAttendanceViewSet(
     required_permission = "attendance.student-attendance.view"
     required_permission_map = {"bulk_mark": "attendance.student-attendance.mark"}
     http_method_names = ["get", "post", "head", "options"]
+
+    # Reads are open to restricted principals (§4 grants them an `own`-scoped
+    # view); writes are not. Anything not named here is a read.
+    STAFF_ONLY_ACTIONS = frozenset({"bulk_mark"})
+
+    def get_permissions(self):
+        """Add `DenyRestrictedPrincipals` to the write action only.
+
+        DRF resolves `permission_classes` per view, not per action, so a viewset
+        that serves both a portal read and a staff write has to choose here. See
+        the module docstring for why marking cannot rely on the service check
+        alone.
+        """
+        if self.action in self.STAFF_ONLY_ACTIONS:
+            return [permission() for permission in STAFF_PERMISSIONS]
+        return super().get_permissions()
 
     def get_queryset(self):
         return (

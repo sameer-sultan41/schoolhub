@@ -80,6 +80,18 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 
 ## Deliberately NOT done
 
+- **PR #42's review found ten issues and one was a privilege-escalation path.**
+  `StudentAttendanceViewSet` drops `DenyRestrictedPrincipals` so students and
+  guardians can read their own attendance (§4 grants them an `own`-scoped view) —
+  but the exemption was viewset-wide, so it covered `:bulk-mark` too, and
+  `assert_marker_may_mark_section` returns early for `all`/`campus` scope. It is
+  now per-action. The lesson generalises past this module: **a viewset that
+  serves both a portal read and a staff write cannot express that with
+  `permission_classes` alone**, because DRF resolves it per view. Any later
+  module granting a restricted principal a read on a table staff also write —
+  parent-portal is built entirely on that shape — needs `get_permissions`, not a
+  class attribute. Full list in `03-modules/attendance.md` §20.
+
 - **`attendance` marking has landed; leave and staff/reports have not.** The
   module is three stacked PRs and this is the first. `docs/03-modules/attendance.md`
   §20 carries the full built/not-built register; the headline omissions are the

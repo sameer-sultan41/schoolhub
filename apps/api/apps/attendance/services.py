@@ -17,7 +17,7 @@ import datetime
 import uuid
 from typing import TYPE_CHECKING
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.attendance.models import (
@@ -166,9 +166,22 @@ def section_roster(*, section: Section, session: AcademicSession) -> list[Studen
 
 
 def _enrolled_student_ids(*, section: Section, session: AcademicSession) -> set[uuid.UUID]:
+    """The student ids a register submission may legitimately name.
+
+    `student__deleted_at__isnull=True` is not redundant with `.alive()`: that
+    narrows the *enrollment*, and a soft-deleted student can still hold a live
+    enrollment row — nothing cascades the flag. Without it a deleted student
+    stayed markable, which `section_roster` already excluded, so the roster a
+    teacher was shown and the roster the validator accepted disagreed.
+    """
     return set(
         StudentEnrollment.objects.alive()
-        .filter(section=section, academic_session=session, status=EnrollmentStatus.ACTIVE)
+        .filter(
+            section=section,
+            academic_session=session,
+            status=EnrollmentStatus.ACTIVE,
+            student__deleted_at__isnull=True,
+        )
         .values_list("student_id", flat=True)
     )
 
@@ -192,6 +205,107 @@ def _resolve_times(
     if entry.get("status") != AttendanceStatus.LATE or check_in is None:
         return check_in, None
     return check_in, calendar.late_minutes(check_in, campus_id=campus_id)
+
+
+# The fields a register submission writes. Named once because they were written
+# out three times — constructor kwargs, attribute assignments, and the
+# `bulk_update` field list — with nothing keeping the three in step. `section`
+# and `academic_session` are in the list deliberately: see `_apply_register`.
+REGISTER_WRITE_FIELDS = (
+    "section",
+    "academic_session",
+    "status",
+    "check_in_time",
+    "check_out_time",
+    "late_minutes",
+    "remarks",
+    "marked_by",
+    "updated_by",
+)
+
+
+def _lock_existing_rows(
+    *, student_ids: set[uuid.UUID], on_date: datetime.date, period: Period | None
+) -> dict[uuid.UUID, StudentAttendance]:
+    """The rows this submission will update, locked for the transaction.
+
+    Keyed on (student, date, period) and **not** on section, which is what the
+    unique indexes key on too — so a student who changed section mid-session has
+    one row for the date, not one per section they passed through.
+    """
+    return {
+        row.student_id: row
+        for row in StudentAttendance.objects.alive()
+        .filter(student_id__in=student_ids, attendance_date=on_date, period=period)
+        .select_for_update()
+    }
+
+
+def _apply_register(
+    *,
+    entries: list[dict],
+    existing: dict[uuid.UUID, StudentAttendance],
+    section: Section,
+    session: AcademicSession,
+    on_date: datetime.date,
+    period: Period | None,
+    actor_id: uuid.UUID,
+) -> tuple[list[StudentAttendance], list[StudentAttendance], list[StudentAttendance]]:
+    """Turn a submission into rows to create and rows to update.
+
+    Returns `(created, updated, transitioned)`. `transitioned` is the subset
+    whose status *changed* — a new row always counts, an updated one only if its
+    status moved — and it is what the alert fan-out reads, so a resubmitted
+    register does not re-notify every guardian.
+
+    **An updated row has its `section` and `academic_session` reassigned.** The
+    lookup matches on (student, date, period) because that is what the unique
+    indexes enforce, so a student transferred between sections mid-session is
+    found by whoever marks them next. Leaving `section` alone left the row
+    pointing at the section they had left, which put the mark on the wrong
+    teacher's register and inside the wrong campus scope. The section of record
+    is the one it was marked in.
+    """
+    created: list[StudentAttendance] = []
+    updated: list[StudentAttendance] = []
+    transitioned: list[StudentAttendance] = []
+
+    for entry in entries:
+        check_in, late = _resolve_times(entry, campus_id=section.campus_id)
+        values = {
+            "section": section,
+            "academic_session": session,
+            "status": entry["status"],
+            "check_in_time": check_in,
+            "check_out_time": entry.get("check_out_time"),
+            "late_minutes": late,
+            "remarks": entry.get("remarks"),
+            "marked_by": actor_id,
+            "updated_by": actor_id,
+        }
+        row = existing.get(entry["student_id"])
+        if row is None:
+            fresh = StudentAttendance(
+                tenant_id=section.tenant_id,
+                student_id=entry["student_id"],
+                period=period,
+                attendance_date=on_date,
+                source=AttendanceSource.MANUAL,
+                created_by=actor_id,
+                **values,
+            )
+            created.append(fresh)
+            transitioned.append(fresh)
+            continue
+
+        changed = row.status != values["status"]
+        for field, value in values.items():
+            setattr(row, field, value)
+        updated.append(row)
+        if changed:
+            transitioned.append(row)
+
+    return created, updated, transitioned
 
 
 @transaction.atomic
@@ -266,12 +380,7 @@ def bulk_mark_student_attendance(
             meta={"rows": problems},
         )
 
-    existing = {
-        row.student_id: row
-        for row in StudentAttendance.objects.alive()
-        .filter(student_id__in=seen, attendance_date=on_date, period=period)
-        .select_for_update()
-    }
+    existing = _lock_existing_rows(student_ids=seen, on_date=on_date, period=period)
 
     locked = [
         str(student_id)
@@ -283,61 +392,54 @@ def bulk_mark_student_attendance(
             "Some of these records are locked and must be changed through a correction request.",
         )
 
-    created: list[StudentAttendance] = []
-    updated: list[StudentAttendance] = []
+    created, updated, transitioned = _apply_register(
+        entries=entries,
+        existing=existing,
+        section=section,
+        session=session,
+        on_date=on_date,
+        period=period,
+        actor_id=actor_id,
+    )
 
-    for entry in entries:
-        check_in, late = _resolve_times(entry, campus_id=section.campus_id)
-        row = existing.get(entry["student_id"])
-        if row is None:
-            created.append(
-                StudentAttendance(
-                    tenant_id=section.tenant_id,
-                    student_id=entry["student_id"],
-                    section=section,
-                    academic_session=session,
-                    period=period,
-                    attendance_date=on_date,
-                    status=entry["status"],
-                    check_in_time=check_in,
-                    check_out_time=entry.get("check_out_time"),
-                    late_minutes=late,
-                    remarks=entry.get("remarks"),
-                    source=AttendanceSource.MANUAL,
-                    marked_by=actor_id,
-                    created_by=actor_id,
-                    updated_by=actor_id,
-                )
-            )
-        else:
-            row.status = entry["status"]
-            row.check_in_time = check_in
-            row.check_out_time = entry.get("check_out_time")
-            row.late_minutes = late
-            row.remarks = entry.get("remarks")
-            row.marked_by = actor_id
-            row.updated_by = actor_id
-            updated.append(row)
-
-    if created:
-        StudentAttendance.objects.bulk_create(created)
-    if updated:
-        StudentAttendance.objects.bulk_update(
-            updated,
-            [
-                "status",
-                "check_in_time",
-                "check_out_time",
-                "late_minutes",
-                "remarks",
-                "marked_by",
-                "updated_by",
-                "updated_at",
-            ],
+    try:
+        with transaction.atomic():
+            if created:
+                StudentAttendance.objects.bulk_create(created)
+    except IntegrityError:
+        # Another submission inserted one of these keys between our lookup and
+        # our insert. `select_for_update` cannot prevent this: there is no row
+        # yet to lock, so both transactions read "absent" and both insert, and
+        # the partial unique index picks a winner. Re-reading and turning the
+        # losers into updates is what makes §6's idempotency promise hold for a
+        # genuinely simultaneous double-submit rather than only for a sequential
+        # retry — which is the case a teacher's phone on flaky Wi-Fi actually
+        # produces. One retry, not a loop: the second pass locks the rows that
+        # now exist, so there is no third outcome to wait for.
+        existing = _lock_existing_rows(student_ids=seen, on_date=on_date, period=period)
+        created, updated, transitioned = _apply_register(
+            entries=entries,
+            existing=existing,
+            section=section,
+            session=session,
+            on_date=on_date,
+            period=period,
+            actor_id=actor_id,
         )
+        if created:
+            StudentAttendance.objects.bulk_create(created)
+
+    if updated:
+        StudentAttendance.objects.bulk_update(updated, [*REGISTER_WRITE_FIELDS, "updated_at"])
 
     rows = [*created, *updated]
-    alerts = [row for row in rows if row.status in ALERT_STATUSES]
+    # **Only rows that actually *became* absent or late.** Alerting on current
+    # status re-sent every guardian the same message on every retry — and §6
+    # requires retries, so the module's own idempotency promise was what made it
+    # a repeat-notification bug rather than a rare one. `transitioned` holds the
+    # rows whose status actually changed, so a resubmitted register with the same
+    # marks queues nothing.
+    alerts = [row for row in transitioned if row.status in ALERT_STATUSES]
     if alerts:
         _queue_alerts(tenant_id=section.tenant_id, rows=alerts)
 
@@ -395,6 +497,16 @@ def request_correction(
         )
 
     proposed = {field: new_values[field] for field in CORRECTABLE_FIELDS if field in new_values}
+    if proposed.get("status") in SYSTEM_ONLY_STATUSES:
+        # The same rule the register enforces, and it has to hold here too: a
+        # correction is the *other* write path onto an attendance row, and
+        # `on_leave` means "there is an approved leave request". Reachable
+        # through a correction, it would set the status with no `leave_request`
+        # to back it — the back-link would be a lie and the leave module would
+        # have no row to withdraw on cancellation.
+        raise DomainRuleViolation(
+            {"new_values": ("'on_leave' is set by an approved leave request, not by a correction.")}
+        )
     if not proposed:
         raise DomainRuleViolation(
             {"new_values": f"Name at least one of: {', '.join(CORRECTABLE_FIELDS)}."}
@@ -459,15 +571,32 @@ def decide_correction(
     )
 
     if approve:
-        target = StudentAttendance.objects.select_for_update().get(
-            pk=correction.student_attendance_id
-        )
-        for field, value in correction.new_values.items():
-            setattr(target, field, _from_json(field, value))
-        target.updated_by = reviewer_id
-        target.save(update_fields=[*correction.new_values, "updated_by", "updated_at"])
+        _apply_correction(correction=correction, reviewer_id=reviewer_id)
 
     return correction
+
+
+def _apply_correction(*, correction: AttendanceCorrection, reviewer_id: uuid.UUID) -> None:
+    """Write an approved correction onto its target row.
+
+    **`late_minutes` is recomputed, not carried over.** It is not a correctable
+    field — §11 computes it server-side — so a correction that changes `status`
+    to `late` or moves `check_in_time` left the old value in place: a row
+    corrected from absent to late reported zero minutes late, and §13's
+    punctuality report summed those zeros. Recomputing here is the same call the
+    register makes, so both write paths agree.
+    """
+    target = StudentAttendance.objects.select_for_update().get(pk=correction.student_attendance_id)
+    for field, value in correction.new_values.items():
+        setattr(target, field, _from_json(field, value))
+
+    target.late_minutes = (
+        calendar.late_minutes(target.check_in_time, campus_id=target.section.campus_id)
+        if target.status == AttendanceStatus.LATE and target.check_in_time is not None
+        else None
+    )
+    target.updated_by = reviewer_id
+    target.save(update_fields=[*correction.new_values, "late_minutes", "updated_by", "updated_at"])
 
 
 def _to_json(values: dict) -> dict:
@@ -479,6 +608,19 @@ def _to_json(values: dict) -> dict:
 
 
 def _from_json(field: str, value):
+    """Parse a stored value back to its column type.
+
+    Defensive rather than trusting: these rows are JSONB written when the
+    correction was *raised*, and an approval can be days later. A value that
+    cannot be parsed raises a 422 naming the field instead of an uncaught
+    `ValueError` — which surfaced as a 500 on `:approve`, long after the request
+    that introduced it, with the malformed value invisible in the response.
+    """
     if field in ("check_in_time", "check_out_time") and isinstance(value, str):
-        return datetime.time.fromisoformat(value)
+        try:
+            return datetime.time.fromisoformat(value)
+        except ValueError as exc:
+            raise DomainRuleViolation(
+                {field: f"'{value}' is not a valid time; this correction cannot be applied."}
+            ) from exc
     return value
