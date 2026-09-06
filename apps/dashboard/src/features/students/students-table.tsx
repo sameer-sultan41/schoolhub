@@ -122,7 +122,7 @@ export function StudentsTable() {
     {
       id: "admissionNumber",
       header: t("columns.admissionNumber"),
-      className: "tabular-nums",
+      numeric: "identifier",
       cell: (row) => row.admission_number,
     },
     {

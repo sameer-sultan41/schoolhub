@@ -157,13 +157,13 @@ export function AllocationsScreen() {
     {
       id: "weeklyPeriods",
       header: t("fields.weeklyPeriods"),
-      className: "tabular-nums",
+      numeric: "measure",
       cell: (row) => row.weekly_periods ?? EMPTY,
     },
     {
       id: "effective",
       header: t("allocations.columns.effective"),
-      className: "tabular-nums",
+      numeric: "identifier",
       cell: (row) =>
         row.effective_to
           ? t("allocations.endedOn", { date: row.effective_to })

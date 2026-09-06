@@ -150,7 +150,7 @@ export function CurriculumScreen() {
     {
       id: "weeklyPeriods",
       header: t("fields.weeklyPeriods"),
-      className: "tabular-nums",
+      numeric: "measure",
       cell: (row) => row.weekly_periods,
     },
     {

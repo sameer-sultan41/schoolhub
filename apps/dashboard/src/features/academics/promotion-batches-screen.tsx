@@ -95,7 +95,7 @@ export function PromotionBatchesScreen() {
     {
       id: "batch",
       header: t("promotions.columns.batch"),
-      className: "tabular-nums",
+      numeric: "identifier",
       cell: (row) => row.batch_id,
     },
     {
@@ -115,7 +115,7 @@ export function PromotionBatchesScreen() {
     {
       id: "students",
       header: t("promotions.columns.students"),
-      className: "tabular-nums",
+      numeric: "measure",
       cell: (row) => String(row.students),
     },
     {

@@ -110,7 +110,7 @@ export function StaffTable() {
     {
       id: "employeeNumber",
       header: t("columns.employeeNumber"),
-      className: "tabular-nums",
+      numeric: "identifier",
       cell: (row) => row.employee_number,
     },
     {

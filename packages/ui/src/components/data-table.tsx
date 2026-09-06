@@ -19,10 +19,45 @@ export interface DataTableColumn<TRow> {
   header: ReactNode;
   /** Cell renderer. Keep formatting (dates, money) in the caller, not here. */
   cell: (row: TRow) => ReactNode;
-  /** Tailwind classes for the cell + header, e.g. "text-end tabular-nums". */
+  /** Tailwind classes for the cell + header. Presentation only — see `numeric` for figures. */
   className?: string;
+  /**
+   * Marks the column as figures, and says what job they do. The component picks the
+   * treatment from that rather than the caller hand-rolling it, which is how the
+   * eight numeric columns across this app ended up with three different spellings.
+   *
+   * `measure` — a quantity read DOWN the column and compared: weekly periods, a
+   * student count. Tabular figures in the numeric face, aligned to the end so digits
+   * of the same place value stack and a longer number is visibly larger.
+   *
+   * `identifier` — digits that name a row rather than measure it: an admission
+   * number, a batch id, a date. Same face, because they still want to align, but
+   * start-aligned: a reader matches these from their first character, and ranging
+   * them right would make a column of mixed-length codes ragged where it is scanned.
+   *
+   * Alignment is logical, so a measure column sits against the correct edge under
+   * Urdu with no second rule.
+   */
+  numeric?: "measure" | "identifier";
   /** Column header for screen readers when `header` is an icon. */
   srLabel?: string;
+}
+
+/**
+ * A numeric column's treatment, split between its header and its cells.
+ *
+ * The header takes the alignment but NOT the numeral face: it is a label, and setting
+ * it in the mono face puts one header in a different typeface from every other header
+ * in the same row, which reads as a mistake rather than as emphasis. Only the figures
+ * themselves wear the figures' face.
+ */
+function numericHeaderClasses<TRow>(column: DataTableColumn<TRow>): string | undefined {
+  return column.numeric === "measure" ? "text-end" : undefined;
+}
+
+function numericCellClasses<TRow>(column: DataTableColumn<TRow>): string | undefined {
+  if (!column.numeric) return undefined;
+  return cn("font-numeric tabular-nums", column.numeric === "measure" && "text-end");
 }
 
 export interface DataTableProps<TRow> {
@@ -111,7 +146,10 @@ export function DataTable<TRow>({
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
-              <TableHead key={column.id} className={column.className}>
+              <TableHead
+                key={column.id}
+                className={cn(numericHeaderClasses(column), column.className)}
+              >
                 {column.srLabel ? <span className="sr-only">{column.srLabel}</span> : column.header}
               </TableHead>
             ))}
@@ -170,7 +208,10 @@ export function DataTable<TRow>({
                   }
                 >
                   {columns.map((column) => (
-                    <TableCell key={column.id} className={cn(cellPadding, column.className)}>
+                    <TableCell
+                      key={column.id}
+                      className={cn(cellPadding, numericCellClasses(column), column.className)}
+                    >
                       {column.cell(row)}
                     </TableCell>
                   ))}
