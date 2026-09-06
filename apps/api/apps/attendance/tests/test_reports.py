@@ -139,9 +139,12 @@ class DefaulterTests(ReportDataTestCase):
         self.assertEqual([row["student_id"] for row in rows], [self.students[1].pk])
 
     def test_the_threshold_is_configurable(self) -> None:
-        rows = self.defaulters(threshold=Decimal("100.0"))
+        """Downwards, because the fixture's other two students are at exactly
+        100% and "below 100" excludes them — a threshold that caught them would
+        have to be `<=`, which would make every full attender a defaulter."""
+        self.assertEqual(len(self.defaulters()), 1)
 
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(self.defaulters(threshold=Decimal("30.0"))), 0)
 
     def test_a_student_with_no_counted_days_is_not_a_defaulter(self) -> None:
         """They were never expected — a mid-year admission, or a range that is
