@@ -119,13 +119,12 @@ class AttendanceCrossTenantTests(AttendanceAPITestCase):
             response.status_code,
             (status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND),
         )
+        # Asserted on the row's *state*, not on a row count: the fixture already
+        # marked this student absent today, so counting would have passed whether
+        # or not the request had overwritten them.
         with tenant_context(self.other.id):
-            self.assertEqual(
-                StudentAttendance.objects.alive()
-                .filter(student=self.foreign_student, attendance_date=MARKING_DATE)
-                .count(),
-                0,
-            )
+            self.foreign_row.refresh_from_db()
+            self.assertEqual(self.foreign_row.status, AttendanceStatus.ABSENT)
 
     def test_marking_another_tenants_student_into_our_own_section_is_refused(self) -> None:
         """The nastier shape: a section the caller *can* reach, holding a student
@@ -145,6 +144,8 @@ class AttendanceCrossTenantTests(AttendanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         with tenant_context(self.other.id):
+            self.foreign_row.refresh_from_db()
+            self.assertEqual(self.foreign_row.status, AttendanceStatus.ABSENT)
             self.assertEqual(
                 StudentAttendance.objects.alive().filter(student=self.foreign_student).count(), 1
             )

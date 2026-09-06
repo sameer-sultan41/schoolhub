@@ -193,7 +193,7 @@ class StudentAttendanceListTests(AttendanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["data"]), 1)
-        self.assertEqual(response.data["data"][0]["student_id"], str(self.students[0].pk))
+        self.assertEqual(response.data["data"][0]["student_id"], self.students[0].pk)
 
     def test_a_guardian_sees_only_the_children_they_are_linked_to(self) -> None:
         guardian_user = UserFactory(tenant=self.tenant)
@@ -216,7 +216,7 @@ class StudentAttendanceListTests(AttendanceAPITestCase):
         response = self.client.get(LIST)
 
         self.assertEqual(len(response.data["data"]), 1)
-        self.assertEqual(response.data["data"][0]["student_id"], str(self.students[1].pk))
+        self.assertEqual(response.data["data"][0]["student_id"], self.students[1].pk)
 
     def test_a_class_teacher_sees_their_assigned_sections_rows(self) -> None:
         authenticate(self.client, self.teacher_user)
