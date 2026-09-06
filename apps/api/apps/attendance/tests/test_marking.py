@@ -31,14 +31,14 @@ from apps.attendance.tests.factories import (
     StudentFactory,
     TenantFactory,
     UserFactory,
+    configure_academic,
     grant,
+    holiday,
+    open_all_week,
 )
-from apps.school_organization.tests.test_calendar import configure, holiday
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
-
-SATURDAY = datetime.date(2026, 4, 11)
 
 
 class MarkingTestCase(TestCase):
@@ -48,6 +48,7 @@ class MarkingTestCase(TestCase):
         super().setUp()
         self.tenant = TenantFactory()
         self.user = UserFactory(tenant=self.tenant)
+        open_all_week(self.tenant)
         with tenant_context(self.tenant.id):
             self.campus = CampusFactory(tenant=self.tenant)
             self.session = AcademicSessionFactory(tenant=self.tenant, is_current=True)
@@ -87,11 +88,21 @@ class MarkingTestCase(TestCase):
 
 
 class MarkableDateTests(MarkingTestCase):
-    def test_marking_a_weekend_is_refused(self) -> None:
-        """§11. A school that marks attendance on a Saturday has a data problem,
-        not a UI annoyance."""
+    def test_marking_a_non_working_day_is_refused(self) -> None:
+        """§11. A school that marks attendance on its weekend has a data problem,
+        not a UI annoyance.
+
+        The working week is narrowed here rather than relied on from the default,
+        because the fixture opens the school all week so that "today" is always
+        markable (factories.MARKING_DATE). Naming the closed day explicitly is
+        also what makes this test independent of which weekday CI runs on.
+        """
+        weekday = MARKING_DATE.weekday()
+        open_days = [day for day in range(7) if day != weekday]
+        configure_academic(self.tenant, working_days=open_days)
+
         with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation) as raised:
-            self.mark(on_date=SATURDAY)
+            self.mark()
 
         self.assertIn("not a working day", str(raised.exception.detail))
 
@@ -99,7 +110,9 @@ class MarkableDateTests(MarkingTestCase):
         """A teacher told only 'this date cannot be marked' retries; one told
         'this is Founders Day' stops. §8's it_admin journey adds a closure
         mid-year and expects attendance to honour it immediately."""
-        configure(self.tenant, {"holidays": [holiday(MARKING_DATE.isoformat(), "Founders Day")]})
+        configure_academic(
+            self.tenant, holidays=[holiday(MARKING_DATE.isoformat(), "Founders Day")]
+        )
 
         with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation) as raised:
             self.mark()
@@ -113,9 +126,9 @@ class MarkableDateTests(MarkingTestCase):
     def test_a_campus_holiday_does_not_close_a_section_on_another_campus(self) -> None:
         with tenant_context(self.tenant.id):
             other_campus = CampusFactory(tenant=self.tenant)
-        configure(
+        configure_academic(
             self.tenant,
-            {"holidays": [holiday(MARKING_DATE.isoformat(), "Theirs", campus_id=other_campus.pk)]},
+            holidays=[holiday(MARKING_DATE.isoformat(), "Theirs", campus_id=other_campus.pk)],
         )
 
         with tenant_context(self.tenant.id):
@@ -202,8 +215,8 @@ class BulkMarkTests(MarkingTestCase):
 
 class LateMinutesTests(MarkingTestCase):
     def test_lateness_is_computed_from_the_tenant_day_window(self) -> None:
-        configure(
-            self.tenant, {"day_window": {"start": "08:00", "end": "14:00", "grace_minutes": 10}}
+        configure_academic(
+            self.tenant, day_window={"start": "08:00", "end": "14:00", "grace_minutes": 10}
         )
         with tenant_context(self.tenant.id):
             self.mark(
@@ -224,8 +237,8 @@ class LateMinutesTests(MarkingTestCase):
         client's number would still let the caller decide it, and §13's
         punctuality report is only worth reading if every row was measured the
         same way."""
-        configure(
-            self.tenant, {"day_window": {"start": "08:00", "end": "14:00", "grace_minutes": 10}}
+        configure_academic(
+            self.tenant, day_window={"start": "08:00", "end": "14:00", "grace_minutes": 10}
         )
         with tenant_context(self.tenant.id):
             self.mark(
@@ -264,7 +277,7 @@ class LockWindowTests(MarkingTestCase):
             self.assertTrue(services.is_locked(timezone.localdate() - datetime.timedelta(days=1)))
 
     def test_the_window_is_tenant_configurable(self) -> None:
-        configure(self.tenant, {"attendance_lock_window_days": 3})
+        configure_academic(self.tenant, attendance_lock_window_days=3)
         with tenant_context(self.tenant.id):
             self.assertFalse(services.is_locked(timezone.localdate() - datetime.timedelta(days=2)))
             self.assertTrue(services.is_locked(timezone.localdate() - datetime.timedelta(days=4)))
@@ -272,7 +285,7 @@ class LockWindowTests(MarkingTestCase):
     def test_an_out_of_range_window_is_clamped_to_the_documented_maximum(self) -> None:
         """§19 states 0-7. A tenant storing 3650 has turned the correction
         workflow off without anyone deciding to."""
-        configure(self.tenant, {"attendance_lock_window_days": 3650})
+        configure_academic(self.tenant, attendance_lock_window_days=3650)
         with tenant_context(self.tenant.id):
             self.assertEqual(services.lock_window_days(), services.MAX_LOCK_WINDOW_DAYS)
 

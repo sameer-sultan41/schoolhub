@@ -219,6 +219,15 @@ SPECTACULAR_SETTINGS = {
             ("verified", "verified"),
             ("rejected", "rejected"),
         ],
+        # `status` is the most reused field name on the platform, and attendance
+        # adds two more sets of choices to it. Named here rather than left to
+        # drf-spectacular's hash suffix (`StatusEdcEnum`), which changes whenever
+        # any *other* module's status choices move and churns the generated
+        # TypeScript client for a diff that has nothing to do with it.
+        "AttendanceStatusEnum": "apps.attendance.models.AttendanceStatus",
+        "AttendanceCorrectionStatusEnum": "apps.attendance.models.CorrectionStatus",
+        "AttendanceSourceEnum": "apps.attendance.models.AttendanceSource",
+        "AttendanceCorrectionSubjectTypeEnum": "apps.attendance.models.CorrectionSubjectType",
     },
 }
 

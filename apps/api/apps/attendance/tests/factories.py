@@ -13,9 +13,8 @@ the fixtures drift apart.
 
 from __future__ import annotations
 
-import datetime
-
 import factory
+from django.utils import timezone
 
 from apps.attendance.models import (
     AttendanceCorrection,
@@ -44,6 +43,8 @@ from apps.student_management.tests.factories import (
     StudentGuardianFactory,
 )
 from apps.timetable.tests.factories import PeriodFactory, enable_feature
+from core.tenancy.context import tenant_context
+from core.tenancy.models import TenantSettings
 
 __all__ = [
     "AcademicSessionFactory",
@@ -63,22 +64,58 @@ __all__ = [
     "TenantFactory",
     "UserFactory",
     "authenticate",
+    "configure_academic",
     "enable_feature",
     "grant",
+    "holiday",
+    "open_all_week",
 ]
 
-# A Monday inside AcademicSessionFactory's default 2026-04-01 .. 2027-03-31
-# window. Monday matters: `calendar.DEFAULT_WORKING_DAYS` is Mon-Fri, so a
-# fixture dated on a weekend would be refused by §11's own gate and every
-# marking test would fail for a reason unrelated to what it asserts.
-MARKING_DATE = datetime.date(2026, 4, 6)
+# **Today**, not a fixed date. §5.5 locks a register at the end of its marking
+# day, so a fixture pinned to any past date arrives already locked and every
+# re-submission test would fail on the lock rather than on what it asserts.
+#
+# Today is whatever weekday CI happens to run on, which is why every fixture also
+# calls `open_all_week` — the calendar's real Mon-Fri default is asserted in
+# school_organization's own test_calendar.py, and re-asserting it here by
+# accident, on two days in seven, would only make these tests flaky.
+MARKING_DATE = timezone.localdate()
+
+
+def configure_academic(tenant, **keys) -> None:
+    """Merge keys into the tenant's academic settings, leaving the rest alone.
+
+    Merge rather than replace: a test that sets a holiday must not silently drop
+    the working week the fixture depends on, which is exactly the kind of
+    coupling that makes a fixture fail on Saturdays only.
+    """
+    with tenant_context(tenant.id):
+        row, _ = TenantSettings.objects.get_or_create(tenant=tenant)
+        row.academic = {**(row.academic or {}), **keys}
+        row.save(update_fields=["academic", "updated_at"])
+
+
+def open_all_week(tenant) -> None:
+    """Configure the tenant to operate seven days a week.
+
+    See MARKING_DATE: the fixtures mark today, and today is not always a weekday.
+    """
+    configure_academic(tenant, working_days=[0, 1, 2, 3, 4, 5, 6])
+
+
+def holiday(start: str, name: str, end: str | None = None, campus_id=None) -> dict:
+    """One entry in the stored holiday shape (school_organization/calendar.py)."""
+    entry = {"start_date": start, "end_date": end or start, "name": name}
+    if campus_id is not None:
+        entry["campus_id"] = str(campus_id)
+    return entry
 
 
 class StudentAttendanceFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = StudentAttendance
 
-    attendance_date = MARKING_DATE
+    attendance_date = factory.LazyFunction(timezone.localdate)
     status = AttendanceStatus.PRESENT
     source = AttendanceSource.MANUAL
     is_locked = False

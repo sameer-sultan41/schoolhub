@@ -33,7 +33,10 @@ from apps.attendance.tests.factories import (
     UserFactory,
     authenticate,
     enable_feature,
+    grant,
+    open_all_week,
 )
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 
@@ -44,6 +47,7 @@ class AttendanceAPITestCase(APITestCase):
         self.user = UserFactory(tenant=self.tenant)
         authenticate(self.client, self.user)
         enable_feature(self.tenant, "module.attendance")
+        open_all_week(self.tenant)
 
         with tenant_context(self.tenant.id):
             self.campus = CampusFactory(tenant=self.tenant)
@@ -84,3 +88,20 @@ class AttendanceAPITestCase(APITestCase):
                 PeriodFactory(tenant=self.tenant, sequence=sequence) for sequence in range(1, 5)
             ]
             self.period = self.periods[0]
+
+    def allow_everything(self, user=None) -> None:
+        """Grant the acting user every key this module declares, `all`-scoped.
+
+        So that a denial in a test can only have come from the thing that test is
+        about. A cross-tenant test that passed because a permission was missing
+        would prove nothing about tenant scoping — which is the failure mode
+        timetable/tests/test_cross_tenant.py's own header names.
+        """
+        grant(
+            user or self.user,
+            "attendance.student-attendance.view",
+            "attendance.student-attendance.mark",
+            "attendance.correction.create",
+            "attendance.correction.approve",
+            scope=RecordScope.ALL,
+        )
