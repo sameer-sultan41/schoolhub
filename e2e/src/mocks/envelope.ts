@@ -6,6 +6,7 @@ import type {
   ApiStatusCode,
   ApiSuccessEnvelope,
   CursorPagination,
+  OffsetPagination,
 } from "@schoolhub/types";
 
 /**
@@ -91,6 +92,37 @@ export function paginated<TItem>(
         next_cursor: null,
         previous_cursor: null,
         page_size: items.length,
+        ...pagination,
+      },
+    },
+  });
+}
+
+/**
+ * A page-numbered list page — what the bounded admin lists return
+ * (api-architecture.md §2.4 names them).
+ *
+ * `total_count` and `total_pages` default to describing a single complete page of the
+ * items given, which is what most stubs want and none of them should have to state.
+ * Override them to model a list the pager has somewhere to go in.
+ *
+ * Separate from `paginated` rather than one builder with a mode: a spec asserting
+ * page-number behaviour against a cursor envelope is a spec that cannot fail for the
+ * right reason, and picking the wrong builder is a type error at the call site instead.
+ */
+export function pagedList<TItem>(
+  items: TItem[],
+  pagination: Partial<OffsetPagination> = {},
+): MockResponse<ApiSuccessEnvelope<TItem[]>> {
+  const pageSize = pagination.page_size ?? Math.max(items.length, 1);
+  const totalCount = pagination.total_count ?? items.length;
+  return ok(items, {
+    meta: {
+      pagination: {
+        page: 1,
+        page_size: pageSize,
+        total_count: totalCount,
+        total_pages: Math.max(1, Math.ceil(totalCount / pageSize)),
         ...pagination,
       },
     },

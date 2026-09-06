@@ -1,8 +1,8 @@
-import { paginated } from "../envelope";
+import { pagedList } from "../envelope";
 import type { MockModule } from "../router";
 
 export interface DashboardHomeOptions {
-  /** `meta.pagination.total_count` for `/students`. `undefined` models an endpoint that does not count. */
+  /** `meta.pagination.total_count` for `/students`. Omit for the default head count. */
   studentTotal?: number;
   /** Same, for `/staff`. */
   staffTotal?: number;
@@ -23,10 +23,11 @@ export interface DashboardHomeOptions {
  * list grows, the `mockApi` fixture's teardown will name the newly-unstubbed path, which
  * is the mechanism working: add it here rather than widening a catch-all.
  *
- * The counts come from `meta.pagination.total_count`, which `CountedCursorPagination`
- * (apps/api/core/api/pagination.py) emits for exactly these two bounded lists. The row
- * itself is a stub: the tile reads only the total, so modelling a whole `Student` here
- * would be inventing a contract this screen does not consume.
+ * The counts come from `meta.pagination.total_count`. Both lists page by number now
+ * (`PageNumberPagination`, api-architecture.md §2.4), so the total is always present
+ * rather than the opt-in it was under a counted cursor. The row itself is a stub: the
+ * tile reads only the total, so modelling a whole `Student` here would be inventing a
+ * contract this screen does not consume.
  *
  */
 export function dashboardHomeModule(options: DashboardHomeOptions = {}): MockModule {
@@ -34,10 +35,10 @@ export function dashboardHomeModule(options: DashboardHomeOptions = {}): MockMod
 
   return (api) => {
     api.get("/students", () =>
-      paginated([{ id: "student-e2e" }], { page_size: 1, total_count: studentTotal }),
+      pagedList([{ id: "student-e2e" }], { page_size: 1, total_count: studentTotal }),
     );
     api.get("/staff", () =>
-      paginated([{ id: "staff-e2e" }], { page_size: 1, total_count: staffTotal }),
+      pagedList([{ id: "staff-e2e" }], { page_size: 1, total_count: staffTotal }),
     );
   };
 }

@@ -204,13 +204,16 @@ function CountedTile({ tile }: { tile: CountTile }) {
  *
  * One cheap request, never a drained list: `/students` and `/staff` grow with the school
  * and paging through them to count them would be an unbounded read for a figure the
- * server already knows. `CountedCursorPagination` (apps/api/core/api/pagination.py)
- * counts on the queryset as narrowed — tenant scope, record scope and filters applied —
- * so the number matches the rows this reader can actually see.
+ * server already knows. Both page by number now (`PageNumberPagination`,
+ * apps/api/core/api/pagination.py), and the count is taken on the queryset as narrowed —
+ * tenant scope, record scope and filters applied — so the number matches the rows this
+ * reader can actually see.
  *
- * The absent case stays live and stays honest. `total_count` is optional in the contract
- * and an endpoint that does not count omits the field rather than sending null, so a
- * missing total renders `unavailable` — never a zero, and never an error.
+ * The absent case stays live and stays honest even though neither tile can reach it
+ * today. `total_count` is optional across the contract as a whole: a cursor endpoint
+ * counts only if it opts in, and one that does not omits the field rather than sending
+ * null. A missing total renders `unavailable` — never a zero, and never an error — so
+ * pointing a tile at such an endpoint later degrades instead of lying.
  */
 function TotalCountTile({ tile }: { tile: TotalTile }) {
   const t = useTranslations("dashboard");

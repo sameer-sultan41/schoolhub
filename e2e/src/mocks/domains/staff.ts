@@ -1,5 +1,5 @@
 import { id } from "@/data/factories";
-import { fail, ok, paginated } from "../envelope";
+import { fail, ok, pagedList } from "../envelope";
 import type { MockModule } from "../router";
 
 /** Trimmed to the fields the dashboard reads (staff-types.ts's `StaffRecord`). */
@@ -108,7 +108,21 @@ export function staffModule(options: StaffOptions = {}): MockModule {
     const staff = [...(options.staff ?? [])];
     const designations = [...(options.designations ?? [buildDesignation()])];
 
-    api.get("/staff", () => paginated(staff));
+    // Pages server-side, because that is where paging happens: `/staff` returns page
+    // numbers now (api-architecture.md §2.4), and the dashboard is deliberately dumb
+    // about it — it sends `?page=` and renders whatever comes back. A stub that
+    // returned the whole list whatever the page asked for would let a broken pager
+    // pass, which is the one thing a numbered-paging spec exists to catch.
+    api.get("/staff", (request) => {
+      const pageSize = Number(request.searchParams.get("page_size") ?? staff.length) || 1;
+      const page = Number(request.searchParams.get("page") ?? 1) || 1;
+      const start = (page - 1) * pageSize;
+      return pagedList(staff.slice(start, start + pageSize), {
+        page,
+        page_size: pageSize,
+        total_count: staff.length,
+      });
+    });
 
     api.get("/staff/:staffId", (request) => {
       const match = staff.find((member) => member.id === request.params["staffId"]);
@@ -136,6 +150,6 @@ export function staffModule(options: StaffOptions = {}): MockModule {
       return ok(created, { status: 201 });
     });
 
-    api.get("/designations", () => paginated(designations));
+    api.get("/designations", () => pagedList(designations));
   };
 }
