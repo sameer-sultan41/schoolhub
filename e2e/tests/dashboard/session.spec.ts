@@ -11,8 +11,17 @@ test.describe("session restore", () => {
     await dashboardPage.goto();
 
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+
     // The access token is deliberately memory-only, so a cold load must refresh — but a
     // second refresh would mean concurrent requests are not sharing the in-flight one.
+    //
+    // Polled, not read once. The heading is server-rendered chrome and is visible before
+    // the client has hydrated, so it says nothing about whether session restore has run
+    // yet; a bare read raced hydration and saw 0 whenever the page painted quickly. The
+    // second assertion is what still makes this "exactly once": the count must reach 1
+    // and then stay there once the page has gone quiet.
+    await expect.poll(() => mockApi.countCalls("POST", "/auth/refresh")).toBe(1);
+    await page.waitForLoadState("networkidle");
     expect(mockApi.countCalls("POST", "/auth/refresh")).toBe(1);
     expect(signedIn.permissions.length).toBeGreaterThan(0);
   });
