@@ -74,6 +74,7 @@ from apps.timetable.serializers import (
     TimetableSlotSerializer,
 )
 from core.api.exceptions import DomainRuleViolation
+from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
@@ -141,6 +142,9 @@ class RoomViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = RoomSerializer
     filterset_class = RoomFilterSet
     search_fields = ["name", "code", "building"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["code", "name", "capacity", "created_at"]
     scope_campus_field = "campus_id"
     required_feature = FEATURE
@@ -165,6 +169,9 @@ class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = PeriodSerializer
     filterset_class = PeriodFilterSet
     search_fields = ["name"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["sequence", "start_time", "created_at"]
     scope_campus_field = "campus_id"
     required_feature = FEATURE
@@ -579,6 +586,9 @@ class TeacherSubstitutionViewSet(
     serializer_class = TeacherSubstitutionSerializer
     filterset_class = TeacherSubstitutionFilterSet
     ordering_fields = ["date", "created_at"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     # §4 declares no substitution view key either; the same reasoning as periods
     # and rooms applies (module docstring). "own" is the substitute's own cover
     # list — the person who has to act on it.

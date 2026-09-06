@@ -53,6 +53,7 @@ from apps.school_organization.serializers import (
     SubjectSerializer,
     TermSerializer,
 )
+from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.audit.services import record_audit
@@ -83,6 +84,9 @@ class CampusViewSet(BlockingDestroyMixin, TenantModelViewSet):
     serializer_class = CampusSerializer
     filterset_class = CampusFilterSet
     search_fields = ["name", "code"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["name", "code", "created_at"]
     required_feature = "module.school"
     required_permission = "school.campus.view"
@@ -120,6 +124,9 @@ class DepartmentViewSet(BlockingDestroyMixin, TenantModelViewSet):
     serializer_class = DepartmentSerializer
     filterset_class = DepartmentFilterSet
     search_fields = ["name", "code"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["name", "code", "created_at"]
     required_feature = "module.school"
     required_permission = "school.department.view"
@@ -257,6 +264,9 @@ class ClassViewSet(BlockingDestroyMixin, TenantModelViewSet):
     serializer_class = ClassSerializer
     filterset_class = ClassFilterSet
     search_fields = ["name", "code"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["level", "name", "created_at"]
     required_feature = "module.school"
     required_permission = "school.class.view"
@@ -275,6 +285,9 @@ class SectionViewSet(BlockingDestroyMixin, TenantModelViewSet):
     serializer_class = SectionSerializer
     filterset_class = SectionFilterSet
     search_fields = ["name"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["name", "created_at"]
     required_feature = "module.school"
     required_permission = "school.section.view"
@@ -298,6 +311,9 @@ class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):
     serializer_class = SubjectSerializer
     filterset_class = SubjectFilterSet
     search_fields = ["name", "code"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["name", "code", "created_at"]
     required_feature = "module.school"
     required_permission = "school.subject.view"
@@ -321,6 +337,9 @@ class HouseViewSet(BlockingDestroyMixin, TenantModelViewSet):
     serializer_class = HouseSerializer
     filterset_class = HouseFilterSet
     search_fields = ["name", "code"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["name", "created_at"]
     required_feature = "module.school"
     required_permission = "school.house.view"

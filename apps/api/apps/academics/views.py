@@ -78,6 +78,9 @@ class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
     serializer_class = CurriculumSerializer
     filterset_class = CurriculumFilterSet
     search_fields = ["elective_group", "notes"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["created_at"]
     scope_campus_field = "campus_id"
     required_feature = FEATURE
@@ -218,6 +221,9 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = TeacherAllocationSerializer
     filterset_class = TeacherAllocationFilterSet
     ordering_fields = ["created_at", "effective_from"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     # "own" for a teacher means their own allocations, joined through
     # staff.user_id — TeacherSubjectAllocation.filter_owned_by_user.
     scope_own_field = "staff__user_id"

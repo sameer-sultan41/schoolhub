@@ -223,14 +223,13 @@ class MedicalNotesVisibilityTests(StudentManagementAPITestCase):
 
 
 class StudentListTotalCountTests(StudentManagementAPITestCase):
-    """`/students` opts into `CountedCursorPagination` (core/api/pagination.py).
+    """`/students` is page-numbered (core/api/pagination.py), so it reports a total.
 
-    Cursor pagination does not count by default, and that is the whole reason it is cheap
-    on the append-heavy tables it exists for. Students are the opposite case: a bounded
-    roll that staff, and the dashboard, ask the size of constantly. These tests pin the
-    two things that make the total worth having — that it is the size of the WHOLE
-    narrowed set rather than of the page, and that it narrows with the same filters and
-    scopes the rows do.
+    A roll is a bounded set that staff, and the dashboard, ask the size of constantly —
+    and one navigated by position, which is why it pages by number rather than by
+    cursor. These tests pin the two things that make the total worth having: that it is
+    the size of the WHOLE narrowed set rather than of the page, and that it narrows with
+    the same filters and scopes the rows do.
     """
 
     def test_the_total_is_the_whole_set_not_the_page(self) -> None:

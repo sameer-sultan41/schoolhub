@@ -125,7 +125,14 @@ class CountedCursorPagination(CursorPagination):
 
 
 class PageNumberPagination(DRFPageNumberPagination):
-    """Opt-in, for bounded admin lists that genuinely need page numbers."""
+    """Opt-in, for bounded admin lists that genuinely need page numbers.
+
+    A page number is the one thing a cursor cannot report: a cursor knows what comes
+    next, never where it is. Lists a person navigates by position — jumping to the last
+    page, or back to page 3 — need this instead. See api-architecture.md §2.4 for which
+    lists qualify; the constraint is that the set is bounded by one school's size, so
+    the COUNT(*) each page pays for is over thousands of rows, not millions.
+    """
 
     page_size = 25
     max_page_size = 100
@@ -150,3 +157,37 @@ class PageNumberPagination(DRFPageNumberPagination):
                 ]
             )
         )
+
+    def get_paginated_response_schema(self, schema):
+        """Document the envelope this class actually returns.
+
+        Without this the class inherits DRF's stock `{count, next, previous, results}`
+        schema, which is not what `get_paginated_response` above emits. openapi.yaml
+        then describes a shape the API never sends, and `packages/api-client` is
+        generated from openapi.yaml — so the TypeScript type for every endpoint using
+        this class is wrong, and nothing fails until a reader reaches the screen.
+
+        `CursorPagination` has carried its own override since the divergence
+        `tests/test_api_contract.py` was written for; this class was simply missed, and
+        `/student-promotions` has been documented wrongly ever since.
+        """
+        return {
+            "type": "object",
+            "properties": {
+                "data": schema,
+                "meta": {
+                    "type": "object",
+                    "properties": {
+                        "pagination": {
+                            "type": "object",
+                            "properties": {
+                                "page": {"type": "integer"},
+                                "page_size": {"type": "integer"},
+                                "total_count": {"type": "integer"},
+                                "total_pages": {"type": "integer"},
+                            },
+                        }
+                    },
+                },
+            },
+        }

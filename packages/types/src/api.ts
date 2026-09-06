@@ -41,6 +41,18 @@ export function isCursorPagination(pagination: Pagination): pagination is Cursor
   return "next_cursor" in pagination;
 }
 
+/**
+ * Discriminates the other arm of the union.
+ *
+ * Keyed on `total_pages` rather than `page`: `page_size` is on both arms, and `page` is
+ * near enough to it to invite a typo that would silently match a cursor envelope.
+ * `total_pages` exists only where the server counted, which is exactly what page-number
+ * pagination means.
+ */
+export function isOffsetPagination(pagination: Pagination): pagination is OffsetPagination {
+  return "total_pages" in pagination;
+}
+
 export interface ApiMeta {
   pagination?: Pagination;
   [key: string]: unknown;

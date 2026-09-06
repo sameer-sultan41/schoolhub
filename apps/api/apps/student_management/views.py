@@ -70,7 +70,7 @@ from apps.student_management.tasks import (
     import_students_task,
 )
 from core.api.exceptions import DomainRuleViolation
-from core.api.pagination import CountedCursorPagination
+from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import attach_celery_task_id, create_job
@@ -80,10 +80,10 @@ from core.rbac.permissions import has_permission_key
 class StudentViewSet(TenantModelViewSet):
     """Student master records (module doc §5.1-2)."""
 
-    # Counted: "how many students does this school have" is a question the dashboard and
-    # every staff user asks, and a school's roll is bounded — a COUNT over one tenant's
-    # rows is indexed and cheap. See CountedCursorPagination for why it is not the default.
-    pagination_class = CountedCursorPagination
+    # Page numbers: a roll is navigated by position — jump to the last page, back to
+    # page 3 — which a cursor cannot report. A school's roll is bounded, so the COUNT
+    # each page pays for is over one tenant's indexed rows. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     queryset = Student.objects
     serializer_class = StudentSerializer
     filterset_class = StudentFilterSet

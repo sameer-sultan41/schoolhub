@@ -51,7 +51,7 @@ from apps.staff_management.services import (
 )
 from apps.staff_management.tasks import export_staff_task, import_staff_task
 from core.api.exceptions import DomainRuleViolation
-from core.api.pagination import CountedCursorPagination
+from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
@@ -78,8 +78,9 @@ class _StaffModuleViewSetMixin(TenantScopedViewSetMixin):
 class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     """Staff master records (module doc §5.1)."""
 
-    # Counted for the same reason as students: a bounded, frequently-totalled roll.
-    pagination_class = CountedCursorPagination
+    # Page numbers for the same reason as students: a bounded roll navigated by
+    # position rather than by scrolling. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     queryset = Staff.objects
     serializer_class = StaffSerializer
     filterset_class = StaffFilterSet
@@ -211,6 +212,9 @@ class DesignationViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     queryset = Designation.objects
     serializer_class = DesignationSerializer
     search_fields = ["name", "code"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     required_feature = "module.staff"
     required_permission = "staff.designation.view"
     required_permission_map = {
