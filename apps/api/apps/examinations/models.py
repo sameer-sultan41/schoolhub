@@ -1400,3 +1400,25 @@ class Question(TenantOwnedModel):
 
     def __str__(self) -> str:
         return self.question_text[:60]
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — the questions in banks a teacher's subject owns.
+
+        **Delegates to `QuestionBank.filter_assigned_to_user`** rather than
+        restating the allocation join: a question is assigned to whoever the
+        *bank* is assigned to, and a second copy of that predicate is a second
+        place for a reassigned teacher to keep access.
+
+        Review found this hook missing entirely, and the consequence was worse
+        than it looks. `scope_queryset` falls through to `.none()` when an
+        `assigned`-scoped principal reaches a model with no hook — so a teacher
+        who could correctly see their own bank got an **empty list** of the
+        questions inside it, on every nested endpoint including `:approve`.
+        Silent, and the only scope test exercised the bank list rather than the
+        nested routes.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        visible = QuestionBank.filter_assigned_to_user(QuestionBank.objects.alive(), user)
+        return queryset.filter(question_bank__in=visible)

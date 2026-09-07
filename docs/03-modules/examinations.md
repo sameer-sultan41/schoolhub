@@ -508,6 +508,34 @@ ids *before* calling the service — outside the lock — so
 `publish_exam_results` and `publish_report_cards` now **return** the ids they
 actually moved, and only the winner's list is non-empty.
 
+### Corrected in review (PR E)
+
+Two Majors, and both were silent failures rather than errors.
+
+- **`Question` had no `filter_assigned_to_user`, unlike its sibling
+  `QuestionBank`.** `scope_queryset` falls through to `.none()` for an
+  `assigned`-scoped principal reaching a model with no hook — so a teacher who
+  could correctly see their own bank got an **empty list** of the questions
+  inside it, on list, retrieve, update, delete and `:approve` alike. §4 gives
+  teachers exactly that scope, so it was the normal case. The existing scope
+  test only exercised the bank list, which is why it survived; every nested
+  route is now asserted, because the gap was per-endpoint rather than
+  per-model. The hook delegates to `QuestionBank.filter_assigned_to_user`
+  rather than restating the allocation join — a second copy of that predicate
+  is a second place for a reassigned teacher to keep access.
+- **Paper selection sliced `[:count]` silently and took no lock.** The
+  endpoint's satisfiability check runs synchronously; selection runs later in
+  the job's own transaction. Between the two, a concurrent assembly on the same
+  bank can take the questions or someone can unapprove one — and the original
+  produced a **short exam paper** with the job marked succeeded. Nobody notices
+  until a hall of students has a paper missing its last section. The pool is now
+  locked with `select_for_update` for the duration, and a shortfall raises
+  rather than truncating, naming the section and its topic so a teacher with a
+  five-section blueprint knows which one. The job records it as a failure.
+
+  The endpoint's check is still there and still worth having — it gives an
+  immediate, readable refusal — but it is no longer the one that holds.
+
 ### Deliberately not built
 
 The module is otherwise complete; what follows is the full register.

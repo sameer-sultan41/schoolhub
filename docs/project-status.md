@@ -315,6 +315,21 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   **No RBAC registry change:** result processing takes the standard `create`
   verb rather than a new `process` one, since processing is precisely what
   creates `results` rows.
+- **PR #54's review found two silent failures, and the shape they share is
+  worth carrying.** Neither raised an error; both just quietly returned less
+  than they should have. (1) `Question` had no `filter_assigned_to_user` while
+  its sibling `QuestionBank` did, and `scope_queryset` falls through to
+  `.none()` for an `assigned`-scoped principal on a model with no hook — so a
+  teacher who could see their own bank got an **empty list** of the questions
+  in it, including on the `:approve` route that stands between an AI draft and
+  a student. **Any new model reachable by an `assigned`-scoped role needs the
+  hook, and the test has to exercise the *nested* routes, not just the parent's
+  list** — that omission is exactly why this survived review twice.
+  (2) Paper assembly checked satisfiability synchronously and then selected
+  asynchronously with no lock, silently slicing `[:count]` — producing a short
+  exam paper with the job marked succeeded. Now locked, and a shortfall fails
+  the job. **The generalisation: a check in the request and the work in a job
+  are two different moments, and only the one holding the lock is a guarantee.**
 - **PR #53's review found the result lifecycle taking no row locks**, and the
   finding's sharpest part was that the module was inconsistent with itself:
   `set_default_scale` and `bulk_enter_marks` took `select_for_update()` while

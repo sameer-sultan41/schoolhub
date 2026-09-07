@@ -38,7 +38,7 @@ from apps.examinations.tests.factories import (
     authenticate,
     grant,
 )
-from core.api.exceptions import Conflict
+from core.api.exceptions import Conflict, DomainRuleViolation
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -546,3 +546,209 @@ class AssembleGuardTests(QuestionBankTestCase):
 
             with self.assertRaises(Conflict):
                 services.assert_question_is_approvable(question)
+
+
+class NestedQuestionScopeTests(QuestionBankTestCase):
+    """PR #54's review, Major 1 — `Question` had no `filter_assigned_to_user`.
+
+    The consequence was silent: `scope_queryset` falls through to `.none()` for
+    an `assigned`-scoped principal reaching a model with no hook, so a teacher
+    who could correctly see their own **bank** got an empty list of the
+    questions inside it — on list, retrieve, update, delete and `:approve`
+    alike. The existing scope test only exercised the bank list, which is
+    exactly why it survived.
+
+    Every nested route is asserted here, not just the list, because the gap was
+    per-endpoint rather than per-model.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            self.mine = self.question(topic="Algebra")
+            stranger_subject = SubjectFactory(tenant=self.tenant)
+            self.stranger_bank = QuestionBankFactory(tenant=self.tenant, subject=stranger_subject)
+            self.not_mine = QuestionFactory(tenant=self.tenant, question_bank=self.stranger_bank)
+        grant(
+            self.subject_teacher_user,
+            "exams.question-bank.view",
+            "exams.question-bank.update",
+            "exams.question.approve",
+            scope=RecordScope.ASSIGNED,
+        )
+        self.teacher = APIClient()
+        authenticate(self.teacher, self.subject_teacher_user)
+
+    def test_an_assigned_teacher_lists_the_questions_in_their_own_bank(self) -> None:
+        response = self.teacher.get(f"{BANKS}/{self.bank.pk}/questions")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual({row["id"] for row in response.json()["data"]}, {str(self.mine.pk)})
+
+    def test_an_assigned_teacher_retrieves_a_question_in_their_own_bank(self) -> None:
+        response = self.teacher.get(f"{BANKS}/{self.bank.pk}/questions/{self.mine.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_an_assigned_teacher_edits_a_question_in_their_own_bank(self) -> None:
+        response = self.teacher.patch(
+            f"{BANKS}/{self.bank.pk}/questions/{self.mine.pk}",
+            {"topic": "Geometry"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_an_assigned_teacher_approves_an_ai_question_in_their_own_bank(self) -> None:
+        """The endpoint the gap mattered most on: §7.2's approval is what stands
+        between an AI draft and a student, and a teacher silently unable to
+        reach it would leave drafts unapproved with no error to report."""
+        with tenant_context(self.tenant.id):
+            draft = self.question(source=QuestionSource.AI_GENERATED, is_approved=False)
+
+        response = self.teacher.post(f"{BANKS}/{self.bank.pk}/questions/{draft.pk}:approve")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_an_assigned_teacher_deletes_a_question_in_their_own_bank(self) -> None:
+        grant(
+            self.subject_teacher_user,
+            "exams.question-bank.view",
+            "exams.question-bank.delete",
+            scope=RecordScope.ASSIGNED,
+        )
+
+        response = self.teacher.delete(f"{BANKS}/{self.bank.pk}/questions/{self.mine.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_a_question_in_a_bank_they_do_not_teach_is_out_of_reach(self) -> None:
+        """The control. Adding the hook must narrow, not merely unblock — the
+        fix would be worthless if it granted everything."""
+        response = self.teacher.get(f"{BANKS}/{self.stranger_bank.pk}/questions/{self.not_mine.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_the_hook_delegates_rather_than_restating_the_allocation_join(self) -> None:
+        """A second copy of the predicate is a second place for a reassigned
+        teacher to keep access."""
+        from apps.examinations.models import Question as QuestionModel
+
+        with tenant_context(self.tenant.id):
+            scoped = QuestionModel.filter_assigned_to_user(
+                QuestionModel.objects.alive(), self.subject_teacher_user
+            )
+
+            self.assertEqual(
+                {row.pk for row in scoped}, {row.pk for row in self.bank.questions.all()}
+            )
+
+
+class AssemblyShortfallTests(QuestionBankTestCase):
+    """PR #54's review, Major 2 — selection sliced silently and took no lock.
+
+    The endpoint's satisfiability check runs synchronously; selection runs later
+    in the job's transaction. Between the two a concurrent assembly can take the
+    questions or someone can unapprove one — and the original
+    `candidates[:count]` produced a **short exam paper** with the job marked
+    succeeded. Nobody notices until a hall of students has a paper missing its
+    last section.
+    """
+
+    def test_a_pool_that_shrank_after_the_check_fails_rather_than_truncating(self) -> None:
+        self.stock(easy=2)
+        sections = [{"difficulty": QuestionDifficulty.EASY, "count": 2}]
+
+        with tenant_context(self.tenant.id):
+            # The blueprint was satisfiable when the endpoint checked it.
+            self.assertEqual(
+                services.assert_blueprint_is_satisfiable(bank=self.bank, sections=sections),
+                [],
+            )
+            # Then someone unapproves one, exactly as could happen between the
+            # request and the worker picking it up.
+            victim = Question.objects.alive().filter(question_bank=self.bank).first()
+            victim.is_approved = False
+            victim.save(update_fields=["is_approved"])
+
+            with self.assertRaises(DomainRuleViolation) as caught:
+                services.select_paper_questions(bank=self.bank, sections=sections)
+
+        message = str(caught.exception.detail)
+        self.assertIn("only 1 approved question(s) were available", message)
+        self.assertIn("re-check it and try again", message)
+
+    def test_the_message_names_the_section_and_its_topic(self) -> None:
+        """A teacher with a five-section blueprint needs to know which one."""
+        self.stock(easy=1)
+
+        with (
+            tenant_context(self.tenant.id),
+            self.assertRaises(DomainRuleViolation) as caught,
+        ):
+            services.select_paper_questions(
+                bank=self.bank,
+                sections=[
+                    {"difficulty": QuestionDifficulty.EASY, "count": 1},
+                    {"difficulty": QuestionDifficulty.HARD, "count": 3, "topic": "Calculus"},
+                ],
+            )
+
+        message = str(caught.exception.detail)
+        self.assertIn("Section 2", message)
+        self.assertIn("Calculus", message)
+
+    def test_selection_locks_the_candidate_rows(self) -> None:
+        """A genuine race is not reproducible in a single-connection
+        `TestCase`, so this asserts the mechanism — the same approach the
+        result-lifecycle lock tests take."""
+        import inspect
+
+        self.assertIn("select_for_update()", inspect.getsource(services.select_paper_questions))
+
+    def test_an_exactly_sufficient_pool_still_assembles(self) -> None:
+        """The control: the re-check must not reject a blueprint that fits
+        precisely, which is the common case for a small bank."""
+        self.stock(easy=2)
+
+        with tenant_context(self.tenant.id):
+            chosen = services.select_paper_questions(
+                bank=self.bank,
+                sections=[{"difficulty": QuestionDifficulty.EASY, "count": 2}],
+            )
+
+        self.assertEqual(len(chosen[0]["questions"]), 2)
+
+    def test_the_job_records_the_shortfall_as_a_failure(self) -> None:
+        """A short paper marked succeeded is the outcome this exists to
+        prevent, so the job has to carry the error a teacher can act on."""
+        from apps.examinations import tasks
+        from core.jobs.models import JobStatus
+        from core.jobs.services import create_job
+
+        self.stock(easy=1)
+        with tenant_context(self.tenant.id):
+            job = create_job(
+                tenant_id=self.tenant.pk,
+                job_type="exams.assemble-paper",
+                payload={
+                    "question_bank_id": str(self.bank.pk),
+                    "title": "Term 1 Paper",
+                    "sections": [
+                        {"difficulty": QuestionDifficulty.EASY, "count": 5, "marks_each": None}
+                    ],
+                    "requested_by": str(self.user.pk),
+                },
+                actor_id=self.user.pk,
+            )
+
+        tasks.assemble_paper_task(
+            tenant_id=str(self.tenant.pk),
+            job_id=str(job.pk),
+            actor_id=str(self.user.pk),
+        )
+
+        with tenant_context(self.tenant.id):
+            job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertIn("approved question(s) were available", job.error)

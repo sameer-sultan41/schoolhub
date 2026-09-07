@@ -1685,21 +1685,49 @@ def select_paper_questions(*, bank: QuestionBank, sections: list[dict]) -> list[
 
     A question already taken by an earlier section is not offered again: a paper
     with the same question twice is a paper somebody has to reprint.
+
+    **`select_for_update`, and a re-check that each section was actually
+    filled.** The endpoint's satisfiability check runs synchronously and this
+    runs later, in the job's own transaction — so between the two, a concurrent
+    assembly on the same bank can take the questions, or a teacher can unapprove
+    one. Review found the original silently slicing `[:count]` and producing a
+    **short exam paper** with the job marked succeeded. Nobody would have
+    noticed until a hall of students had a paper missing its last section.
+
+    So the pool is locked for the duration, and a shortfall raises rather than
+    truncating: `assemble_paper_task` records it as a job failure, which is the
+    outcome a teacher can act on.
     """
     taken: set = set()
     chosen: list[dict] = []
 
-    for section in sections:
+    for index, section in enumerate(sections):
         difficulty = section["difficulty"]
         topic = section.get("topic")
+        count = section["count"]
         candidates = (
             Question.objects.alive()
+            .select_for_update()
             .filter(question_bank=bank, is_approved=True, difficulty=difficulty)
             .exclude(pk__in=taken)
         )
         if topic:
             candidates = candidates.filter(topic=topic)
-        picked = list(candidates.order_by("usage_count", "created_at")[: section["count"]])
+        picked = list(candidates.order_by("usage_count", "created_at")[:count])
+
+        if len(picked) < count:
+            raise DomainRuleViolation(
+                {
+                    "sections": (
+                        f"Section {index + 1} asked for {count} {difficulty} question(s)"
+                        + (f" on {topic}" if topic else "")
+                        + f" but only {len(picked)} approved question(s) were available when "
+                        "the paper was assembled. The bank changed after the blueprint was "
+                        "accepted — re-check it and try again."
+                    )
+                }
+            )
+
         taken.update(question.pk for question in picked)
         chosen.append(
             {

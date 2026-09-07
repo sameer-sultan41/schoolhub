@@ -905,6 +905,14 @@ def assemble_paper_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> 
     §15 records that assembled papers are stored as files with **no table** to
     join against — so `usage_count` is the only record that a question was used,
     and a crash between the two would lose it.
+
+    **The selection re-checks satisfiability under a row lock**, and that is not
+    belt-and-braces with the endpoint's check — it is the one that holds. The
+    endpoint checks so a teacher gets an immediate, readable refusal; this runs
+    later, and between the two a concurrent assembly can take the questions or
+    someone can unapprove one. A shortfall here fails the **job** rather than
+    truncating, because a paper missing its last section, marked succeeded, is
+    discovered by a hall of students.
     """
     from apps.examinations import documents, services, uploads
     from apps.examinations.models import QuestionBank
