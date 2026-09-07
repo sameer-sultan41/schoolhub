@@ -236,6 +236,8 @@ SPECTACULAR_SETTINGS = {
         "ExamStatusEnum": "apps.examinations.models.ExamStatus",
         "ExamTypeEnum": "apps.examinations.models.ExamType",
         "GradingScaleTypeEnum": "apps.examinations.models.ScaleType",
+        "ExamScheduleStatusEnum": "apps.examinations.models.ScheduleStatus",
+        "AdmitCardStatusEnum": "apps.examinations.models.AdmitCardStatus",
     },
 }
 
@@ -273,6 +275,12 @@ CELERY_TASK_ROUTES = {
     "apps.attendance.tasks.send_attendance_alerts": {"queue": "transactional"},
     # The nightly lock sweep is the opposite: nobody is waiting on it.
     "apps.attendance.tasks.lock_expired_attendance": {"queue": "bulk"},
+    # Rendering a hall's worth of admit-card PDFs is the heaviest thing this
+    # platform does; nobody is waiting on it in real time.
+    "apps.examinations.tasks.render_admit_cards_task": {"queue": "bulk"},
+    # The schedule announcement is the opposite: a student who misses it misses
+    # a paper, which is the same reason attendance's absence alert is here.
+    "apps.examinations.tasks.notify_schedule_published": {"queue": "transactional"},
     "core.idempotency.tasks.*": {"queue": "bulk"},
     "core.jobs.tasks.*": {"queue": "bulk"},
     # notifications.md §5 names three lanes (emergency / transactional / bulk);

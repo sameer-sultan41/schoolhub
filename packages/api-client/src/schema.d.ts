@@ -135,6 +135,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admit-cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/admit-cards` — §5.3's issued cards.
+         *
+         *     **No create or update.** §16 declares a `GET` plus two colon-actions and
+         *     nothing else: a card's number is generated so two students can never share
+         *     one, its file is written by a job, and its status moves through
+         *     `:issue-admit-cards` and `:revoke`. A per-row create would bypass all three.
+         *
+         *     Portal-readable for reads only; see the module docstring.
+         */
+        get: operations["admit_cards_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admit-cards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/admit-cards` — §5.3's issued cards.
+         *
+         *     **No create or update.** §16 declares a `GET` plus two colon-actions and
+         *     nothing else: a card's number is generated so two students can never share
+         *     one, its file is written by a job, and its status moves through
+         *     `:issue-admit-cards` and `:revoke`. A per-row create would bypass all three.
+         *
+         *     Portal-readable for reads only; see the module docstring.
+         */
+        get: operations["admit_cards_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admit-cards/{id}:revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /admit-cards/{id}:revoke` — withdraw a card, with a reason (§5.3). */
+        post: operations["admit_cards_:revoke_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/attendance-corrections": {
         parameters: {
             query?: never;
@@ -533,6 +602,87 @@ export interface paths {
         patch: operations["designations_partial_update"];
         trace?: never;
     };
+    "/api/v1/exam-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/exam-schedules` — §5.2's sittings.
+         *
+         *     **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+         *     imperfect: §8's exam-staff journey is "resolves the two room clashes the
+         *     checker flags", which requires the clashing state to be storable and the
+         *     whole list to come back at once. `:publish-schedule` is where hard clashes
+         *     become blocking — the same division `timetable`'s draft grid and its
+         *     `:publish` already draw.
+         *
+         *     Portal-readable for reads only; see the module docstring.
+         */
+        get: operations["exam_schedules_list"];
+        put?: never;
+        /** @description 201 with `meta.conflicts` — a clash list, not a refusal. */
+        post: operations["exam_schedules_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exam-schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/exam-schedules` — §5.2's sittings.
+         *
+         *     **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+         *     imperfect: §8's exam-staff journey is "resolves the two room clashes the
+         *     checker flags", which requires the clashing state to be storable and the
+         *     whole list to come back at once. `:publish-schedule` is where hard clashes
+         *     become blocking — the same division `timetable`'s draft grid and its
+         *     `:publish` already draw.
+         *
+         *     Portal-readable for reads only; see the module docstring.
+         */
+        get: operations["exam_schedules_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description `/exam-schedules` — §5.2's sittings.
+         *
+         *     **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+         *     imperfect: §8's exam-staff journey is "resolves the two room clashes the
+         *     checker flags", which requires the clashing state to be storable and the
+         *     whole list to come back at once. `:publish-schedule` is where hard clashes
+         *     become blocking — the same division `timetable`'s draft grid and its
+         *     `:publish` already draw.
+         *
+         *     Portal-readable for reads only; see the module docstring.
+         */
+        delete: operations["exam_schedules_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description `/exam-schedules` — §5.2's sittings.
+         *
+         *     **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+         *     imperfect: §8's exam-staff journey is "resolves the two room clashes the
+         *     checker flags", which requires the clashing state to be storable and the
+         *     whole list to come back at once. `:publish-schedule` is where hard clashes
+         *     become blocking — the same division `timetable`'s draft grid and its
+         *     `:publish` already draw.
+         *
+         *     Portal-readable for reads only; see the module docstring.
+         */
+        patch: operations["exam_schedules_partial_update"];
+        trace?: never;
+    };
     "/api/v1/exam-subjects": {
         parameters: {
             query?: never;
@@ -635,6 +785,57 @@ export interface paths {
          *     could publish results without passing the approval gate.
          */
         patch: operations["exams_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/exams/{id}:issue-admit-cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /exams/{id}:issue-admit-cards` — 202 + a job (§16).
+         *
+         *     The **rows** are created synchronously so the caller learns immediately
+         *     how many cards this run added, and only the PDFs are deferred: a hall's
+         *     worth of WeasyPrint renders is not work an exam clerk holds a request
+         *     open for (api-architecture.md §2.7).
+         *
+         *     Accepts `Idempotency-Key`, because a clerk's double-click on a batch
+         *     action should replay the first answer rather than start a second render
+         *     of three hundred documents.
+         */
+        post: operations["exams_:issue_admit_cards_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{id}:publish-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /exams/{id}:publish-schedule` — release the timetable (§5.2).
+         *
+         *     Routed under `/exams` rather than `/exam-schedules` because it is the
+         *     *exam* that moves state: a schedule is published as a whole, not sitting
+         *     by sitting, and §6 calls it "schedule publish to portals".
+         */
+        post: operations["exams_:publish_schedule_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/files": {
@@ -3216,6 +3417,50 @@ export interface components {
          */
         AcademicSessionStatusEnum: "planned" | "active" | "closed" | "archived";
         /**
+         * @description `admit_cards` — read-only on the wire (§5.3).
+         *
+         *     Every field a client might want to set is set by the module: the number is
+         *     generated so two students can never share one, `file` is written by the
+         *     render job, and `status`/`issued_*` move through `:issue-admit-cards` and
+         *     `:revoke`. There is no create or update endpoint — §16 declares a `GET` and
+         *     two colon-actions, and nothing else.
+         */
+        AdmitCard: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly exam_id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly admit_card_no: string;
+            /** Format: uuid */
+            readonly file_id: string | null;
+            readonly status: components["schemas"]["AdmitCardStatusEnum"];
+            /** Format: date-time */
+            readonly issued_at: string | null;
+            readonly revoked_reason: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description The body of `POST /admit-cards/{id}:revoke`.
+         *
+         *     The reason is required, not optional: a CHECK constraint enforces it too,
+         *     because a revocation nobody can explain is the one a parent will ask about.
+         */
+        AdmitCardRevoke: {
+            reason: string;
+        };
+        /**
+         * @description * `generated` - Generated
+         *     * `issued` - Issued
+         *     * `revoked` - Revoked
+         * @enum {string}
+         */
+        AdmitCardStatusEnum: "generated" | "issued" | "revoked";
+        /**
          * @description * `staff` - Staff
          *     * `student` - Student
          *     * `both` - Both
@@ -3665,6 +3910,47 @@ export interface components {
             readonly updated_at: string;
         };
         /**
+         * @description `exam_schedules` — one section's sitting of one paper (§5.2).
+         *
+         *     `status` is writable here, unlike on `Exam`: §5.2's transitions are
+         *     `completed` and `cancelled`, neither of which gates anything a client could
+         *     escalate through — a cancelled sitting frees its room, which is the point,
+         *     and marking one complete is an operational note. The exam's own lifecycle is
+         *     the one with an approval gate behind it.
+         */
+        ExamSchedule: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            exam_subject_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /** Format: date */
+            exam_date: string;
+            /** Format: time */
+            start_time: string;
+            /** Format: time */
+            end_time: string;
+            /** Format: uuid */
+            room_id?: string | null;
+            /** Format: uuid */
+            invigilator_staff_id?: string | null;
+            status?: components["schemas"]["ExamScheduleStatusEnum"];
+            /** @description Printed on admit cards (§5.3). */
+            instructions?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `scheduled` - Scheduled
+         *     * `completed` - Completed
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        ExamScheduleStatusEnum: "scheduled" | "completed" | "cancelled";
+        /**
          * @description * `draft` - Draft
          *     * `scheduled` - Scheduled
          *     * `ongoing` - Ongoing
@@ -4089,6 +4375,16 @@ export interface components {
                 };
             };
         };
+        PaginatedAdmitCardList: {
+            data?: components["schemas"]["AdmitCard"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedAttendanceCorrectionList: {
             data?: components["schemas"]["AttendanceCorrection"][];
             meta?: {
@@ -4161,6 +4457,16 @@ export interface components {
         };
         PaginatedExamList: {
             data?: components["schemas"]["Exam"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedExamScheduleList: {
+            data?: components["schemas"]["ExamSchedule"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -4580,6 +4886,40 @@ export interface components {
             ends_on?: string | null;
             readonly status?: components["schemas"]["ExamStatusEnum"];
             description?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description `exam_schedules` — one section's sitting of one paper (§5.2).
+         *
+         *     `status` is writable here, unlike on `Exam`: §5.2's transitions are
+         *     `completed` and `cancelled`, neither of which gates anything a client could
+         *     escalate through — a cancelled sitting frees its room, which is the point,
+         *     and marking one complete is an operational note. The exam's own lifecycle is
+         *     the one with an approval gate behind it.
+         */
+        PatchedExamSchedule: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            exam_subject_id?: string;
+            /** Format: uuid */
+            section_id?: string;
+            /** Format: date */
+            exam_date?: string;
+            /** Format: time */
+            start_time?: string;
+            /** Format: time */
+            end_time?: string;
+            /** Format: uuid */
+            room_id?: string | null;
+            /** Format: uuid */
+            invigilator_staff_id?: string | null;
+            status?: components["schemas"]["ExamScheduleStatusEnum"];
+            /** @description Printed on admit cards (§5.3). */
+            instructions?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -6267,6 +6607,91 @@ export interface operations {
             };
         };
     };
+    admit_cards_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                exam_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `generated` - Generated
+                 *     * `issued` - Issued
+                 *     * `revoked` - Revoked
+                 */
+                status?: "generated" | "issued" | "revoked";
+                student_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAdmitCardList"];
+                };
+            };
+        };
+    };
+    admit_cards_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this admit card. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdmitCard"];
+                };
+            };
+        };
+    };
+    "admit_cards_:revoke_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdmitCardRevoke"];
+                "application/x-www-form-urlencoded": components["schemas"]["AdmitCardRevoke"];
+                "multipart/form-data": components["schemas"]["AdmitCardRevoke"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdmitCard"];
+                };
+            };
+        };
+    };
     attendance_corrections_list: {
         parameters: {
             query?: {
@@ -7259,6 +7684,144 @@ export interface operations {
             };
         };
     };
+    exam_schedules_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                exam_date?: string;
+                exam_date__gte?: string;
+                exam_date__lte?: string;
+                exam_id?: string;
+                exam_subject_id?: string;
+                invigilator_staff_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                room_id?: string;
+                /** @description A search term. */
+                search?: string;
+                section_id?: string;
+                /**
+                 * @description * `scheduled` - Scheduled
+                 *     * `completed` - Completed
+                 *     * `cancelled` - Cancelled
+                 */
+                status?: "cancelled" | "completed" | "scheduled";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedExamScheduleList"];
+                };
+            };
+        };
+    };
+    exam_schedules_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExamSchedule"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExamSchedule"];
+                "multipart/form-data": components["schemas"]["ExamSchedule"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSchedule"];
+                };
+            };
+        };
+    };
+    exam_schedules_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam schedule. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSchedule"];
+                };
+            };
+        };
+    };
+    exam_schedules_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam schedule. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exam_schedules_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam schedule. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedExamSchedule"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedExamSchedule"];
+                "multipart/form-data": components["schemas"]["PatchedExamSchedule"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSchedule"];
+                };
+            };
+        };
+    };
     exam_subjects_list: {
         parameters: {
             query?: {
@@ -7536,6 +8099,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Exam"];
+                };
+            };
+        };
+    };
+    "exams_:issue_admit_cards_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "exams_:publish_schedule_create": {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                exam_date?: string;
+                exam_date__gte?: string;
+                exam_date__lte?: string;
+                exam_id?: string;
+                exam_subject_id?: string;
+                invigilator_staff_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                room_id?: string;
+                /** @description A search term. */
+                search?: string;
+                section_id?: string;
+                /**
+                 * @description * `scheduled` - Scheduled
+                 *     * `completed` - Completed
+                 *     * `cancelled` - Cancelled
+                 */
+                status?: "cancelled" | "completed" | "scheduled";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedExamScheduleList"];
                 };
             };
         };

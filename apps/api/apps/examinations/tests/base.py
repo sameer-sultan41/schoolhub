@@ -63,6 +63,11 @@ ALL_KEYS = (
     "exams.grading-scale.view",
     "exams.grading-scale.create",
     "exams.grading-scale.update",
+    "exams.schedule.view",
+    "exams.schedule.create",
+    "exams.schedule.update",
+    "exams.admit-card.view",
+    "exams.admit-card.issue",
 )
 
 

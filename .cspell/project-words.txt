@@ -98,6 +98,10 @@ idcards
 idempot
 Imran
 interceptable
+invig
+invigilating
+invigilations
+invigilator
 Iqra
 isready
 JazzCash
@@ -234,6 +238,7 @@ tsvector
 TTFB
 Turbopack
 unallocated
+unauditable
 unconfigured
 undoable
 ungated

@@ -243,23 +243,28 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 Built as five stacked PRs. This section is updated by each.
 
-**PR A — setup (this PR).** Grading scales with validated bands, exams, and
-per-class subject configuration.
+**PR A — setup.** Grading scales with validated bands, exams, and per-class
+subject configuration.
+**PR B — scheduling and admit cards (this PR).** Sittings with a clash engine,
+schedule publish, and the admit-card batch.
 
 ### Built
 
 | Area | State |
 | ---- | ----- |
-| Entities | 4 of §15's 11 tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects` — tenant-owned with RLS policies |
-| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects` |
-| §4 permissions | `exams.exam.{view,create,update,delete}` and `exams.grading-scale.{view,create,update}`. The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
+| Entities | 6 of §15's 11 tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards` — tenant-owned with RLS policies |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` |
+| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`. The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
+| §11 scheduling | One sitting per (exam-subject, section) · `end_time > start_time` · a section must belong to the exam-subject's class · a completed or cancelled sitting cannot be rescheduled · admit cards need a published schedule · a revocation needs a reason (CHECK, not only a service rule) |
+| §5.2 clash engine | `conflicts.py` — hard: room double-booked, invigilator double-booked, a student sitting two papers at once, a sitting outside the exam's own dates, a sitting on a non-working day or holiday. Soft: an over-capacity room, a sitting on a weekday the sections have published lessons. Every write returns the whole list; only hard findings block `:publish-schedule` |
+| §12 notifications | Two of six wired — `exams.schedule-published` and `exams.admit-card-issued`, both to the scheduled students and their portal-enabled guardians, on commit, in **one** `notify()` call per exam. The other four wait on `marks`, `results` and `report_cards` |
 | §5.5 grading | `grading.py` — `percentage_for` (ROUND_HALF_UP, one decimal place), `assert_scale_is_complete`, `band_for` (boundary resolves to the upper band), `gpa_for` (None unless the scale type is `gpa` or `hybrid`) |
 | §7.1 lifecycle | `exams.status` starts at `draft` and is **read-only on the wire**. Configuration is frozen past `scheduled`; only a draft exam may be deleted |
 | Feature flag | `module.examinations`, `default_enabled=False` |
 | Tests | Models (constraints), grading (the maths and every band-rule refusal), API (endpoints, permissions, the feature gate), cross-tenant (one case per endpoint, all asserting 404) |
 
-### Three decisions worth carrying forward
+### Decisions worth carrying forward
 
 - **§11's band rule cannot be a constraint, and the split is deliberate.**
   "Contiguous, non-overlapping, covering 0–100%" is a statement about a *set* of
@@ -281,19 +286,57 @@ per-class subject configuration.
   409 against whichever scale currently holds it — describing the constraint
   rather than the caller's intent.
 
+- **The clash engine shares no code with `timetable/conflicts.py`, on purpose.**
+  A timetable slot is a cell in a weekly grid (`day_of_week` + `period_id`) and
+  takes its times from the period it names, so a clash there is an equality
+  test on a key tuple. An exam sitting is a wall-clock interval on a calendar
+  date, so a clash is an *overlap* test and two sittings can conflict without
+  sharing any key. Every detector in that file reads `TimetableSlot`
+  attributes, and its own header records that its duplication with the database
+  constraints is load-bearing — bending it to serve two row shapes would risk
+  that to save a file. What is copied is the **pattern**: a frozen `Conflict`
+  carrying severity and every row involved, one prefetching `collect_scope`,
+  pure detectors with no query inside any of them, and hard findings blocking
+  publish while soft ones warn.
+- **Overlap is half-open** (`a.start < b.end and b.start < a.end`). A paper
+  ending at 11:00 and one starting at 11:00 do not clash: back-to-back sittings
+  are the normal shape of an exam day, and the closed reading reports a false
+  conflict on every one of them.
+- **A sitting on a holiday is a *hard* finding, not a soft one.** The
+  alternative is a hall of students arriving at a locked school. A school that
+  genuinely opens for an exam edits its working week or removes the holiday,
+  which is a real change rather than an override — and it reads the same
+  calendar `attendance` refuses to mark against.
+- **A student collision is computed through section *rosters*, not section
+  ids.** A student enrolled across two sections (an elective cohort, a resit
+  group) is exactly the case an identity comparison would miss while appearing
+  to check it.
+- **The admit-card batch is idempotent, and a revoked card is never
+  reinstated.** §8's journey is "issues admit cards in one batch", which in
+  practice means pressing the button again after the roll changes — so a re-run
+  tops up and reports both counts. But revocation is a decision someone made
+  (§5.3's fee-clearance case), and a top-up silently undoing it would reverse
+  that decision without anyone asking.
+- **Rows are created synchronously; only the PDFs are deferred.** The caller
+  learns immediately how many cards the run added, and the job renders whatever
+  has no `file_id` — which is what makes it re-runnable after a partial failure
+  rather than something that has to be unpicked.
+- **`cancelled` is a status, not a soft delete.** A cancelled sitting stays
+  visible to a student who already saw it, and — the load-bearing half — is
+  excluded from every clash check and from the occupancy constraints, because a
+  room freed by a cancellation is free.
+
 ### Deliberately not built in this PR
 
-Everything from §15's remaining seven tables onward: `exam_schedules` and
-`admit_cards` (PR B), `marks` (PR C), `results` and `report_cards` (PR D),
-`question_banks` and `questions` plus §13's reports (PR E).
+§15's remaining five tables: `marks` (PR C), `results` and `report_cards`
+(PR D), `question_banks` and `questions` plus §13's reports (PR E).
 
-`exam_schedules` will need its **own** clash engine rather than reusing
-`timetable/conflicts.py`. That engine is keyed on `(day_of_week, period_id)` — a
-weekly grid cell — while an exam sitting is a wall-clock interval on a calendar
-date, and its own docstring notes that its duplication with the database
-constraints is load-bearing. What transfers is the pattern (a `Conflict`
-dataclass, one prefetching `collect_scope`, pure detectors, hard conflicts
-blocking publish), not the code.
+**§19's fee-clearance gate on admit-card issue is not built.** `fees-finance`
+does not exist, §19 makes the policy "optional, default off" and leaves its
+details to client confirmation, and a policy hook with no policy behind it is a
+lie in the code. The place it would go is
+`services.assert_exam_is_issuable`, and `admit_cards.revoked_reason` already
+records the outcome when a school applies the rule by hand.
 
 §14's four AI capabilities (AI-EXM-01 to 04) and §16's
 `POST /question-banks/{id}:generate-questions` are **out of scope for this

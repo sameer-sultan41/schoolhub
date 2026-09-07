@@ -32,7 +32,8 @@ declared in a module doc §4 before being added, which `process` never was.
 
 Keys arrive with the PR that ships an endpoint for them, so
 `tests/test_endpoint_contracts.py` never sees a registered key with nothing
-behind it. This PR registers the exam and grading-scale keys only.
+behind it. Registered so far: the exam and grading-scale keys (PR A), and the
+schedule and admit-card keys (PR B).
 """
 
 from core.rbac.registry import registry
@@ -73,6 +74,23 @@ EXAM_VIEWERS = (
 # after it.
 SCALE_AUTHORS = ("school_admin", "principal")
 
+# §4 gives scheduling to `exam_staff` alone — it is the one operation in this
+# module that books rooms and people, and a wider grant is how two departments
+# double-book a hall.
+SCHEDULERS = ("exam_staff",)
+# The portal side of §3's role table. A `student`/`guardian` reads their own
+# schedule and their own card; the *record scope*, not the key, is what narrows
+# them (see each model's `filter_owned_by_user`).
+PORTAL = ("student", "guardian")
+ADMIT_CARD_VIEWERS = (
+    "exam_staff",
+    "school_admin",
+    "principal",
+    "vice_principal",
+    "class_teacher",
+    *PORTAL,
+)
+
 registry.register(
     "exams.exam.view",
     "View exam definitions and their subject configuration.",
@@ -100,4 +118,31 @@ registry.register(
     "exams.grading-scale.update",
     "Edit a grading scale or its bands.",
     SCALE_AUTHORS,
+)
+
+registry.register(
+    "exams.schedule.view",
+    "View exam schedules (record-scoped: own for portal users, assigned for teachers).",
+    (*ALL_STAFF, *PORTAL),
+)
+registry.register(
+    "exams.schedule.create",
+    "Schedule a paper into a date, time, room and invigilator.",
+    SCHEDULERS,
+)
+registry.register(
+    "exams.schedule.update",
+    "Reschedule, cancel or re-room a sitting; publish the schedule.",
+    SCHEDULERS,
+)
+
+registry.register(
+    "exams.admit-card.view",
+    "View issued admit cards (record-scoped).",
+    ADMIT_CARD_VIEWERS,
+)
+registry.register(
+    "exams.admit-card.issue",
+    "Generate, issue and revoke admit cards (§5.3).",
+    ("exam_staff",),
 )

@@ -376,3 +376,292 @@ class ExamSubject(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.exam_id}/{self.subject_id}"
+
+
+class ScheduleStatus(models.TextChoices):
+    """§5.2's sitting states.
+
+    `cancelled` is not a soft delete: a cancelled sitting stays visible so a
+    student who saw it on their schedule can see that it is off, and — the
+    reason it is a status rather than a `deleted_at` — a cancelled sitting is
+    **excluded from every clash check**. A room freed by a cancellation is free.
+    """
+
+    SCHEDULED = "scheduled", "Scheduled"
+    COMPLETED = "completed", "Completed"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+# The statuses a sitting must be in to occupy a room, an invigilator or a
+# student's time. Named once because `conflicts.py`, the constraints and the
+# services all have to agree on it.
+OCCUPYING_SCHEDULE_STATUSES = (ScheduleStatus.SCHEDULED, ScheduleStatus.COMPLETED)
+
+
+class AdmitCardStatus(models.TextChoices):
+    """§5.3's admit-card states.
+
+    `revoked` is terminal by policy rather than by schema: §5.3 makes issue
+    revocable (a fee-clearance rule, tenant-configurable) and §19 leaves the
+    policy itself to client confirmation, so the column records the fact and the
+    service decides who may set it.
+    """
+
+    GENERATED = "generated", "Generated"
+    ISSUED = "issued", "Issued"
+    REVOKED = "revoked", "Revoked"
+
+
+class ExamSchedule(TenantOwnedModel):
+    """One exam-subject sat by one section, at a date and time — §5.2.
+
+    **Keyed on the section, not the class**, and the entities doc says so: two
+    sections of Grade 8 sit the same paper in different rooms, sometimes at
+    different times, because a school rarely has one hall big enough. That is
+    also why room and invigilator clashes are real here and not merely
+    theoretical.
+
+    `start_time`/`end_time` are wall-clock on `exam_date`, which is the reason
+    this module needs its own clash engine rather than reusing
+    `timetable.conflicts`: a timetable slot is a cell in a weekly grid
+    (`day_of_week` + `period_id`) and takes its times from the period, while a
+    sitting is an interval on a calendar date. See `conflicts.py`'s header.
+    """
+
+    exam_subject = models.ForeignKey(
+        ExamSubject, on_delete=models.CASCADE, related_name="schedules"
+    )
+    section = models.ForeignKey(
+        "school_organization.Section", on_delete=models.PROTECT, related_name="exam_schedules"
+    )
+    exam_date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    room = models.ForeignKey(
+        "timetable.Room",
+        on_delete=models.PROTECT,
+        related_name="exam_schedules",
+        null=True,
+        blank=True,
+        help_text="Null while a sitting is scheduled but not yet roomed.",
+    )
+    invigilator_staff = models.ForeignKey(
+        "staff_management.Staff",
+        on_delete=models.PROTECT,
+        related_name="invigilations",
+        null=True,
+        blank=True,
+        db_column="invigilator_staff_id",
+    )
+    status = models.CharField(
+        max_length=20, choices=ScheduleStatus.choices, default=ScheduleStatus.SCHEDULED
+    )
+    instructions = models.CharField(
+        max_length=500, null=True, blank=True, help_text="Printed on admit cards (§5.3)."
+    )
+
+    class Meta:
+        db_table = "exam_schedules"
+        ordering = ["exam_date", "start_time"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "exam_subject", "section"],
+                name="exam_schedules_one_per_section",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(end_time__gt=models.F("start_time")),
+                name="exam_schedules_end_after_start",
+            ),
+            # Two partial uniques over *occupying* sittings only. They cannot
+            # express interval overlap — no constraint can — so they are
+            # deliberately narrower than `conflicts.py`: they catch the exact
+            # duplicate that two admins saving the same sitting within
+            # milliseconds produce, which is the case a service-level
+            # `.exists()` check loses. The engine catches everything else and
+            # can report it all at once, which a constraint violation cannot.
+            # Same belt-and-braces split `timetable`'s substitution occupancy
+            # constraints use.
+            models.UniqueConstraint(
+                fields=["tenant", "room", "exam_date", "start_time"],
+                name="exam_schedules_room_one_per_sitting",
+                condition=models.Q(
+                    deleted_at__isnull=True,
+                    room__isnull=False,
+                    status__in=OCCUPYING_SCHEDULE_STATUSES,
+                ),
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "invigilator_staff", "exam_date", "start_time"],
+                name="exam_schedules_invigilator_one_per_sitting",
+                condition=models.Q(
+                    deleted_at__isnull=True,
+                    invigilator_staff__isnull=False,
+                    status__in=OCCUPYING_SCHEDULE_STATUSES,
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "exam_date", "room"], name="exam_sched_date_room_idx"),
+            models.Index(
+                fields=["tenant", "exam_date", "invigilator_staff"],
+                name="exam_sched_date_invig_idx",
+            ),
+            models.Index(fields=["tenant", "section", "exam_date"], name="exam_sched_section_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.exam_subject_id} @ {self.exam_date} {self.start_time}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — the sittings a student, or a guardian's child, sits.
+
+        Delegates the student lookup to `Student.filter_owned_by_user` rather
+        than restating the guardian join: that hook already unions a student's
+        own row with the children they hold a live, portal-enabled
+        `student_guardians` link to, and a second copy of that predicate is a
+        second place for revoked portal access to be forgotten.
+
+        Resolved through the *enrollment*, because a sitting names a section and
+        a student's section is recorded on their enrollment for the session.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        sections = (
+            StudentEnrollment.objects.alive()
+            .filter(student__in=visible, status=EnrollmentStatus.ACTIVE)
+            .values_list("section_id", flat=True)
+        )
+        return queryset.filter(section_id__in=sections)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — a teacher's own section, or their invigilations.
+
+        The union is deliberate. A class teacher needs their section's schedule;
+        an invigilator needs the sittings they are supervising, which are
+        routinely *not* their own section — that is the point of an invigilator.
+        Narrowing to either one alone would hide half of what each needs.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.staff_management.models import EmploymentStatus, Staff
+
+        staff_ids = list(
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
+        if not staff_ids:
+            return queryset.none()
+        return queryset.filter(
+            models.Q(section__class_teacher_staff_id__in=staff_ids)
+            | models.Q(invigilator_staff_id__in=staff_ids)
+        ).distinct()
+
+
+class AdmitCard(TenantOwnedModel):
+    """One student's admit card for one exam — §5.3.
+
+    `admit_card_no` is tenant-unique and generated server-side. It is the number
+    a student writes on a paper and an invigilator checks against a list, so it
+    has to be stable and unguessable-by-accident rather than merely unique: two
+    students holding the same number is a spoiled sitting.
+
+    `file` is nullable and stays that way after a successful issue: the PDF is
+    rendered by a background job, so a row exists in `generated` before its
+    document does, and §16's `:issue-admit-cards` returns 202 rather than
+    waiting on a hall's worth of renders.
+    """
+
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="admit_cards")
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="admit_cards"
+    )
+    admit_card_no = models.CharField(max_length=50)
+    file = models.ForeignKey(
+        "files.File",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        db_column="file_id",
+    )
+    status = models.CharField(
+        max_length=20, choices=AdmitCardStatus.choices, default=AdmitCardStatus.GENERATED
+    )
+    issued_by = models.UUIDField(null=True, blank=True)
+    issued_at = models.DateTimeField(null=True, blank=True)
+    revoked_reason = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = "admit_cards"
+        ordering = ["admit_card_no"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "exam", "student"],
+                name="admit_cards_one_per_student_per_exam",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "admit_card_no"],
+                name="admit_cards_number_unique",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            # A revocation without a reason is unauditable: §5.3 makes revocation
+            # a policy decision (fee clearance, typically), and "why" is the part
+            # a parent will ask about.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status=AdmitCardStatus.REVOKED)
+                    | models.Q(revoked_reason__isnull=False)
+                ),
+                name="admit_cards_revocation_has_a_reason",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "exam", "status"], name="admit_cards_exam_status_idx"),
+            models.Index(fields=["tenant", "student"], name="admit_cards_student_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.admit_card_no
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — a student's own card, a guardian's children's."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — a class teacher's own section's cards."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.staff_management.models import EmploymentStatus, Staff
+        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+        staff_ids = list(
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
+        if not staff_ids:
+            return queryset.none()
+        student_ids = (
+            StudentEnrollment.objects.alive()
+            .filter(
+                status=EnrollmentStatus.ACTIVE,
+                section__class_teacher_staff_id__in=staff_ids,
+            )
+            .values_list("student_id", flat=True)
+        )
+        return queryset.filter(student_id__in=student_ids)
