@@ -1198,6 +1198,7 @@ def process_exam_results(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     conflating them would be the segregation-of-duties failure §4 exists to
     prevent.
     """
+    exam = lock_exam(exam)
     assert_exam_is_recomputable(exam)
 
     scope = processing.collect(exam=exam)
@@ -1236,6 +1237,32 @@ def assert_approver_is_not_the_processor(*, results: list, approver_id: uuid.UUI
                 )
             }
         )
+
+
+def lock_exam(exam: Exam) -> Exam:
+    """Re-read the exam under `SELECT ... FOR UPDATE` and return the locked row.
+
+    **Every action that reads a status and writes it back must call this**, and
+    review found `:approve-results`, `:send-results-back` and
+    `:publish-results` not doing so while `set_default_scale` and
+    `bulk_enter_marks` in this same file did — the module was inconsistent with
+    itself.
+
+    The race is not theoretical. Two near-simultaneous approvals both pass the
+    `status == processing` check, both `bulk_update`, and the loser's commit
+    overwrites `approved_by`/`approved_at` — corrupting the very audit trail
+    the segregation-of-duties rule exists to protect. The same window lets a
+    concurrent publish schedule §12's guardian notification twice.
+
+    Locking the **exam** row rather than the result rows is deliberate: it is
+    the one row all three actions have in common, so it serialises them against
+    each other rather than only against themselves. The result rows are then
+    read inside the same transaction, behind that lock.
+
+    Returns the re-read instance, so callers see committed state rather than
+    the possibly-stale one they were handed.
+    """
+    return Exam.objects.select_for_update().get(pk=exam.pk)
 
 
 @transaction.atomic
@@ -1290,6 +1317,7 @@ def send_results_back(*, exam: Exam, actor_id: uuid.UUID, reason: str) -> dict:
     awaiting a decision, and leaving them pending would keep the exam in an
     approver's queue while its marks are being changed underneath them.
     """
+    exam = lock_exam(exam)
     if exam.status not in (ExamStatus.PROCESSING, ExamStatus.APPROVED):
         raise Conflict(
             f"This exam is {exam.get_status_display().lower()}, so there are no results to "
@@ -1325,6 +1353,9 @@ def withhold_result(*, result: Result, reason: str, actor_id: uuid.UUID) -> Resu
     Refused once published: the result is already with the student, and the
     remedy then is a correction, not a retroactive hold.
     """
+    # The row, not the exam: withholding is per student, and locking the exam
+    # would serialise every guardian's hold against every other one.
+    result = Result.objects.select_for_update().get(pk=result.pk)
     if result.status == ResultStatus.PUBLISHED:
         raise Conflict(
             "This result is already published, so it cannot be withheld. Reprocess the exam "
@@ -1350,6 +1381,7 @@ def publish_exam_results(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     `attendance`'s review found: alerting on current state re-sent every
     guardian the same message on every retry.
     """
+    exam = lock_exam(exam)
     if exam.status not in (ExamStatus.APPROVED, ExamStatus.PUBLISHED):
         raise Conflict(
             f"This exam is {exam.get_status_display().lower()}. Only approved results can be "
@@ -1358,6 +1390,7 @@ def publish_exam_results(*, exam: Exam, actor_id: uuid.UUID) -> dict:
 
     publishable = list(
         Result.objects.alive()
+        .select_for_update()
         .filter(exam=exam, status=ResultStatus.APPROVED)
         .exclude(outcome=ResultOutcome.WITHHELD)
     )
@@ -1376,7 +1409,16 @@ def publish_exam_results(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     exam.status = ExamStatus.PUBLISHED
     exam.updated_by = actor_id
     exam.save(update_fields=["status", "updated_by", "updated_at"])
-    return {"published": len(publishable), "withheld": withheld}
+    return {
+        "published": len(publishable),
+        "withheld": withheld,
+        # The ids that actually **transitioned**, returned rather than left for
+        # the caller to pre-collect. Review found the view collecting them
+        # *before* calling this — outside the lock — so two concurrent
+        # publishes could each schedule §12's guardian notification for the same
+        # rows. Only the winner's list is non-empty now.
+        "published_ids": [str(row.pk) for row in publishable],
+    }
 
 
 # --- §5.7 report cards ----------------------------------------------------
@@ -1510,9 +1552,9 @@ def publish_report_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     parent's portal that resolves to nothing.
     """
     ready = list(
-        ReportCard.objects.alive().filter(
-            exam=exam, status=ReportCardStatus.GENERATED, file__isnull=False
-        )
+        ReportCard.objects.alive()
+        .select_for_update()
+        .filter(exam=exam, status=ReportCardStatus.GENERATED, file__isnull=False)
     )
     if not ready:
         raise Conflict(

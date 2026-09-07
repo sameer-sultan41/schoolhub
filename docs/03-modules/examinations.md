@@ -445,6 +445,33 @@ card, so three hundred cards was six hundred round trips, the shape
 answers the whole batch in two queries, and a test asserts it agrees with the
 single form.
 
+### Corrected in review (PR D)
+
+**One Major: the result lifecycle took no row locks.** `approve_exam_results`,
+`send_results_back` and `publish_exam_results` all read `exam.status` and the
+result rows with plain queries and wrote back later in the same transaction —
+while `set_default_scale` and `bulk_enter_marks`, in the same file, correctly
+took `select_for_update()`. The module was inconsistent with itself, which is
+what made it findable.
+
+The race is not theoretical: two near-simultaneous approvals both pass the
+`status == processing` check, both `bulk_update`, and the loser's commit
+overwrites `approved_by`/`approved_at` — corrupting the very audit trail the
+segregation-of-duties rule exists to protect. The same window let a concurrent
+publish schedule §12's guardian notification twice.
+
+Fixed with a shared `services.lock_exam`, called by all four state-changing
+actions. It locks the **exam** row rather than the result rows deliberately:
+that is the one row all of them have in common, so it serialises them against
+*each other* rather than only against themselves. `withhold_result` locks the
+result instead, because withholding is per student and locking the exam would
+serialise every hold against every other one.
+
+The notification half needed a second change. The view had collected the moved
+ids *before* calling the service — outside the lock — so
+`publish_exam_results` and `publish_report_cards` now **return** the ids they
+actually moved, and only the winner's list is non-empty.
+
 ### Deliberately not built in this PR
 
 §15's remaining two tables: `question_banks` and `questions`, plus §13's

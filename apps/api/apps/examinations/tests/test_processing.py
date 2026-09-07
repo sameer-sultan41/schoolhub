@@ -561,3 +561,91 @@ class ResultVisibilityTests(ProcessingTestCase):
             with self.subTest(action=action):
                 response = self.portal.post(f"/api/v1/exams/{self.exam.pk}:{action}")
                 self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ConcurrencyLockTests(ProcessingTestCase):
+    """PR #53's review finding: the result lifecycle took no row locks.
+
+    A genuine race is not reproducible in a single-connection `TestCase`, so
+    these assert the *mechanism* — that each action locks and that the moved
+    ids come from under that lock — rather than staging two workers. What the
+    review actually caught was an inconsistency the module could see in itself:
+    `set_default_scale` and `bulk_enter_marks` locked and these three did not.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.mark_all("60.00", "70.00", "80.00")
+        self.process()
+
+    def test_every_lifecycle_action_locks_the_exam_row(self) -> None:
+        """Locking the *exam* rather than the result rows is deliberate: it is
+        the row all three actions share, so it serialises them against each
+        other rather than only against themselves."""
+        import inspect
+
+        for function in (
+            services.process_exam_results,
+            services.approve_exam_results,
+            services.send_results_back,
+            services.publish_exam_results,
+        ):
+            with self.subTest(function=function.__name__):
+                self.assertIn("lock_exam(exam)", inspect.getsource(function))
+
+    def test_withholding_locks_the_result_not_the_exam(self) -> None:
+        """Per student, so locking the exam would serialise every hold against
+        every other one."""
+        import inspect
+
+        source = inspect.getsource(services.withhold_result)
+        self.assertIn("select_for_update()", source)
+        self.assertNotIn("lock_exam", source)
+
+    def test_publish_returns_the_ids_it_moved(self) -> None:
+        """The caller notifies on these. Collected in the view *before* the
+        service — the original shape — two concurrent publishes both read the
+        same approved rows and each scheduled §12's notification for them.
+        """
+        with tenant_context(self.tenant.id):
+            approver = UserFactory(tenant=self.tenant)
+            services.approve_exam_results(exam=self.exam, approver_id=approver.pk)
+            outcome = services.publish_exam_results(exam=self.exam, actor_id=approver.pk)
+
+        self.assertEqual(len(outcome["published_ids"]), 3)
+        self.assertEqual(outcome["published"], len(outcome["published_ids"]))
+
+    def test_a_second_publish_returns_an_empty_moved_list(self) -> None:
+        """So the notification fires once. The count and the list have to agree,
+        which is why they come from the same place."""
+        with tenant_context(self.tenant.id):
+            approver = UserFactory(tenant=self.tenant)
+            services.approve_exam_results(exam=self.exam, approver_id=approver.pk)
+            services.publish_exam_results(exam=self.exam, actor_id=approver.pk)
+            second = services.publish_exam_results(exam=self.exam, actor_id=approver.pk)
+
+        self.assertEqual(second["published_ids"], [])
+        self.assertEqual(second["published"], 0)
+
+    def test_a_second_approval_finds_nothing_pending(self) -> None:
+        """The status check under the lock is what makes this a conflict rather
+        than a silent second write over `approved_by`."""
+        with tenant_context(self.tenant.id):
+            approver = UserFactory(tenant=self.tenant)
+            services.approve_exam_results(exam=self.exam, approver_id=approver.pk)
+
+            with self.assertRaises(Conflict):
+                services.approve_exam_results(exam=self.exam, approver_id=approver.pk)
+
+    def test_the_locked_read_sees_committed_state_not_the_stale_instance(self) -> None:
+        """`lock_exam` returns the re-read row, so a caller handed a stale
+        instance still checks against what is committed."""
+        with tenant_context(self.tenant.id):
+            stale = self.exam
+            fresh = services.lock_exam(stale)
+            self.exam.status = ExamStatus.APPROVED
+            self.exam.save(update_fields=["status"])
+            after = services.lock_exam(stale)
+
+        self.assertEqual(fresh.status, ExamStatus.PROCESSING)
+        self.assertEqual(after.status, ExamStatus.APPROVED)

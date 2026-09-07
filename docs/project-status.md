@@ -315,6 +315,18 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   **No RBAC registry change:** result processing takes the standard `create`
   verb rather than a new `process` one, since processing is precisely what
   creates `results` rows.
+- **PR #53's review found the result lifecycle taking no row locks**, and the
+  finding's sharpest part was that the module was inconsistent with itself:
+  `set_default_scale` and `bulk_enter_marks` took `select_for_update()` while
+  `approve`/`send-back`/`publish` did not. Two near-simultaneous approvals both
+  passed the status check and each `bulk_update`, so the loser's commit
+  overwrote `approved_by`/`approved_at` — corrupting the audit trail the
+  segregation-of-duties rule exists to protect. **The generalisation: any
+  read-status-then-write-status action needs a lock, and a module that locks in
+  some places and not others is telling you where to look.** Fixed with a shared
+  `lock_exam` on the row all the actions have in common, plus returning the
+  moved ids *from under the lock* rather than pre-collecting them in the view —
+  which was the same race producing a duplicate guardian notification.
 - **`examinations`' result cycle settled four rulings a school will argue
   about**, each tested rather than left to emerge. An **absent** student is
   `outcome=absent`, not a zero — a zero ranks them last and drags the section's

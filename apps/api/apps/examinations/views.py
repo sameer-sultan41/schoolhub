@@ -68,7 +68,6 @@ from apps.examinations.models import (
     ReportCard,
     ReportCardStatus,
     Result,
-    ResultOutcome,
     ResultStatus,
 )
 from apps.examinations.serializers import (
@@ -866,20 +865,20 @@ class ResultViewSet(
         exam = get_object_or_404(Exam.objects.alive(), pk=pk)
         before = {"status": exam.status}
 
-        moving = list(
-            Result.objects.alive()
-            .filter(exam=exam, status=ResultStatus.APPROVED)
-            .exclude(outcome=ResultOutcome.WITHHELD)
-            .values_list("pk", flat=True)
-        )
+        # The moved ids come back **from the service**, which collected them
+        # under `SELECT ... FOR UPDATE`. Collecting them here first — the
+        # original shape — left a window in which two concurrent publishes both
+        # read the same approved rows and each scheduled §12's notification for
+        # them.
         outcome = services.publish_exam_results(exam=exam, actor_id=request.user.pk)
         record_audit(request, "publish", exam, before=before, after=outcome)
 
+        moved = outcome["published_ids"]
         transaction.on_commit(
             lambda: tasks.notify_results_published.delay(
                 tenant_id=str(request.tenant.pk),
                 exam_id=str(exam.pk),
-                result_ids=[str(pk_value) for pk_value in moving],
+                result_ids=moved,
             )
         )
         return ActionResponse.ok(
@@ -1012,19 +1011,14 @@ class ReportCardViewSet(
         """
         exam = get_object_or_404(Exam.objects.alive(), pk=pk)
 
-        moving = list(
-            ReportCard.objects.alive()
-            .filter(exam=exam, status=ReportCardStatus.GENERATED, file__isnull=False)
-            .values_list("pk", flat=True)
-        )
         outcome = services.publish_report_cards(exam=exam, actor_id=request.user.pk)
         record_audit(request, "publish", exam, after=outcome)
 
+        # From the service, under its lock — see `:publish-results`.
+        moved = outcome["published_ids"]
         transaction.on_commit(
             lambda: tasks.notify_report_cards_ready.delay(
-                tenant_id=str(request.tenant.pk),
-                exam_id=str(exam.pk),
-                card_ids=[str(pk_value) for pk_value in moving],
+                tenant_id=str(request.tenant.pk), exam_id=str(exam.pk), card_ids=moved
             )
         )
         return ActionResponse.ok(
