@@ -278,3 +278,75 @@ class HolidayCalendarEndpointTests(APITestCase):
         response = self.client.put(self.url, {"working_days": [0, 1]}, format="json")
 
         self.assertEqual(response.status_code, 403)
+
+
+class WorkingDayMapTests(TestCase):
+    """The batch accessor `examinations` needs, and the reason it exists.
+
+    Every other function here reads `tenant_settings.academic` on each call,
+    which is right for the single question `attendance` asks once per request
+    and wrong for a caller asking about a whole exam week. CI caught that as an
+    N+1 inside `examinations.conflicts`, whose detectors are documented as
+    query-free — so the batch form reads the configuration once and answers
+    every pair against it.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        with tenant_context(self.tenant.id):
+            self.campus = CampusFactory(tenant=self.tenant)
+
+    def test_it_agrees_with_the_single_answer_form(self) -> None:
+        """The property that matters: both branches delegate to the same private
+        helpers, so a change to either rule cannot apply to one caller only."""
+        configure(
+            self.tenant,
+            {
+                "working_days": [0, 1, 2, 3, 4],
+                "holidays": [holiday(MONDAY.isoformat(), "Founders Day")],
+            },
+        )
+        days = [MONDAY, SATURDAY, MONDAY + datetime.timedelta(days=1)]
+
+        with tenant_context(self.tenant.id):
+            batch = calendar.working_day_map((day, None) for day in days)
+            single = {
+                (day, None): (calendar.is_working_day(day), calendar.holiday_name(day))
+                for day in days
+            }
+
+        self.assertEqual(batch, single)
+
+    def test_many_days_cost_one_read(self) -> None:
+        """The whole point. A month of dates must not be a month of queries."""
+        configure(self.tenant, {"working_days": [0, 1, 2, 3, 4]})
+        month = [MONDAY + datetime.timedelta(days=offset) for offset in range(30)]
+
+        with tenant_context(self.tenant.id), self.assertNumQueries(1):
+            answers = calendar.working_day_map((day, None) for day in month)
+
+        self.assertEqual(len(answers), 30)
+
+    def test_a_repeated_pair_is_answered_once(self) -> None:
+        """Callers pass one entry per row, and several rows share a date."""
+        with tenant_context(self.tenant.id):
+            answers = calendar.working_day_map([(MONDAY, None)] * 5)
+
+        self.assertEqual(len(answers), 1)
+
+    def test_a_campus_holiday_answers_only_for_that_campus(self) -> None:
+        configure(
+            self.tenant,
+            {"holidays": [holiday(MONDAY.isoformat(), "Founders Day", campus_id=self.campus.pk)]},
+        )
+
+        with tenant_context(self.tenant.id):
+            answers = calendar.working_day_map([(MONDAY, self.campus.pk), (MONDAY, None)])
+
+        self.assertEqual(answers[(MONDAY, self.campus.pk)], (False, "Founders Day"))
+        self.assertEqual(answers[(MONDAY, None)], (True, None))
+
+    def test_an_empty_input_is_an_empty_answer(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.assertEqual(calendar.working_day_map([]), {})

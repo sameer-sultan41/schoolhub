@@ -421,12 +421,13 @@ class ClashEngineTests(ScheduleTestCase):
         with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as larger:
             conflicts.detect_conflicts(exam=self.exam)
 
-        # The working-day map is keyed by (date, campus), so two extra *dates*
-        # legitimately cost two extra calendar reads. What must not grow is the
-        # per-sitting cost, which is what this compares.
-        self.assertLessEqual(
+        # Exact equality, not a tolerance: `calendar.working_day_map` reads the
+        # configuration once for the whole exam, so extra dates cost nothing
+        # either. A tolerance here would have hidden the two-queries-per-date
+        # cost the first fix still had.
+        self.assertEqual(
             len(larger.captured_queries),
-            len(small.captured_queries) + 2,
+            len(small.captured_queries),
             f"query count grew with sittings: {len(small.captured_queries)} -> "
             f"{len(larger.captured_queries)}",
         )

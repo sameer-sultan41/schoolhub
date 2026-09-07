@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from core.tenancy.models import TenantSettings
@@ -77,15 +78,14 @@ def _parse_date(value: object) -> datetime.date | None:
         return None
 
 
-def working_days(*, campus_id: uuid.UUID | None = None) -> frozenset[int]:
-    """Weekday numbers (0=Monday) the school operates on.
+def _working_days_from(academic: dict) -> frozenset[int]:
+    """`working_days` over an already-loaded configuration.
 
-    `campus_id` is accepted for symmetry with the rest of this module and for
-    the per-campus override §5.8 anticipates; the working week is tenant-wide
-    today, and taking the argument now means no caller changes when it stops
-    being.
+    Split out so `working_day_map` can answer many days from one read — see
+    that function's docstring. `working_days` stays the public single-answer
+    form and delegates here, so there is one implementation of the rule.
     """
-    configured = _academic().get("working_days")
+    configured = academic.get("working_days")
     if not isinstance(configured, list):
         return frozenset(DEFAULT_WORKING_DAYS)
     days = frozenset(day for day in configured if isinstance(day, int) and 0 <= day <= 6)
@@ -94,16 +94,12 @@ def working_days(*, campus_id: uuid.UUID | None = None) -> frozenset[int]:
     return days or frozenset(DEFAULT_WORKING_DAYS)
 
 
-def holiday_name(day: datetime.date, *, campus_id: uuid.UUID | None = None) -> str | None:
-    """The name of the holiday covering `day`, or None.
-
-    An entry with no `campus_id` applies to every campus; one naming a campus
-    applies only there and *adds to* the tenant-wide list rather than replacing
-    it — the same reading `Period.campus` and `departments.campus_id` already use
-    for a nullable campus reference.
-    """
+def _holiday_name_from(
+    academic: dict, day: datetime.date, *, campus_id: uuid.UUID | None
+) -> str | None:
+    """`holiday_name` over an already-loaded configuration."""
     campus_ref = str(campus_id) if campus_id is not None else None
-    for entry in _academic().get("holidays") or []:
+    for entry in academic.get("holidays") or []:
         if not isinstance(entry, dict):
             continue
         scope = entry.get("campus_id")
@@ -117,6 +113,60 @@ def holiday_name(day: datetime.date, *, campus_id: uuid.UUID | None = None) -> s
             name = entry.get("name")
             return name if isinstance(name, str) and name else "Holiday"
     return None
+
+
+def working_day_map(
+    days: Iterable[tuple[datetime.date, uuid.UUID | None]],
+) -> dict[tuple[datetime.date, uuid.UUID | None], tuple[bool, str | None]]:
+    """Answer working-day and holiday for many (day, campus) pairs in **one** read.
+
+    Every other function here reads `tenant_settings.academic` on each call,
+    which is correct for the single-answer question `attendance` asks once per
+    request and wrong for a caller asking about a whole exam week: `examinations`
+    schedules a term of sittings and `is_working_day` alone costs two queries
+    each, which CI caught as an N+1 inside a conflict detector that is
+    documented as query-free.
+
+    So this reads the configuration once and evaluates every pair against it.
+    The rules are not restated — both branches delegate to the same private
+    helpers `working_days` and `holiday_name` use — so a change to the
+    working-week or holiday reading cannot apply to one caller and not the
+    other.
+
+    Returns `{(day, campus_id): (is_working_day, holiday_name)}`.
+    """
+    academic = _academic()
+    week = _working_days_from(academic)
+    answers: dict[tuple[datetime.date, uuid.UUID | None], tuple[bool, str | None]] = {}
+    for day, campus_id in days:
+        key = (day, campus_id)
+        if key in answers:
+            continue
+        holiday = _holiday_name_from(academic, day, campus_id=campus_id)
+        answers[key] = (day.weekday() in week and holiday is None, holiday)
+    return answers
+
+
+def working_days(*, campus_id: uuid.UUID | None = None) -> frozenset[int]:
+    """Weekday numbers (0=Monday) the school operates on.
+
+    `campus_id` is accepted for symmetry with the rest of this module and for
+    the per-campus override §5.8 anticipates; the working week is tenant-wide
+    today, and taking the argument now means no caller changes when it stops
+    being.
+    """
+    return _working_days_from(_academic())
+
+
+def holiday_name(day: datetime.date, *, campus_id: uuid.UUID | None = None) -> str | None:
+    """The name of the holiday covering `day`, or None.
+
+    An entry with no `campus_id` applies to every campus; one naming a campus
+    applies only there and *adds to* the tenant-wide list rather than replacing
+    it — the same reading `Period.campus` and `departments.campus_id` already use
+    for a nullable campus reference.
+    """
+    return _holiday_name_from(_academic(), day, campus_id=campus_id)
 
 
 def is_working_day(day: datetime.date, *, campus_id: uuid.UUID | None = None) -> bool:

@@ -114,13 +114,13 @@ class Scope:
     staff_label: dict = field(default_factory=dict)
     section_students: dict = field(default_factory=dict)
     timetabled_weekdays: set = field(default_factory=set)
-    # `(exam_date, campus_id) -> (is_working_day, holiday_name)`, resolved once
-    # per distinct pair. `school_organization.calendar` reads
-    # `tenant_settings.academic` on **every** call, so asking it per sitting is
-    # a query per row — the N+1 this file's no-query rule exists to stop, and
-    # the one CI caught. Precomputing here makes the cost scale with the exam's
-    # *dates* (a week) rather than with its sittings (hundreds), and keeps
-    # `calendar` as the single source of truth rather than reimplementing it.
+    # `(exam_date, campus_id) -> (is_working_day, holiday_name)`, from a single
+    # `calendar.working_day_map` call. Every *other* calendar function reads
+    # `tenant_settings.academic` per call, so asking `is_working_day` per
+    # sitting was two queries a row — the N+1 this file's no-query rule exists
+    # to stop, and the one CI caught. The batch accessor was added to
+    # `school_organization.calendar` rather than re-derived here, so the
+    # working-week and holiday rules stay in one place.
     working_day: dict = field(default_factory=dict)
 
 
@@ -200,20 +200,13 @@ def collect_scope(*, exam: Exam) -> Scope:
         .distinct()
     )
 
-    # Distinct (date, campus) pairs across this exam's own sittings only: the
-    # working-day check is a finding against *this* exam, not against another
-    # that happens to share the day.
+    # One calendar read for the whole exam, via `calendar.working_day_map`.
+    # Scoped to this exam's *own* sittings: a working-day finding is against
+    # this exam, not against another that happens to share the day.
     section_campus = {pk: section.campus_id for pk, section in sections.items()}
-    working_day = {}
-    for row in own:
-        key = (row.exam_date, section_campus.get(row.section_id))
-        if key in working_day:
-            continue
-        holiday = calendar.holiday_name(row.exam_date, campus_id=key[1])
-        working_day[key] = (
-            calendar.is_working_day(row.exam_date, campus_id=key[1]),
-            holiday,
-        )
+    working_day = calendar.working_day_map(
+        (row.exam_date, section_campus.get(row.section_id)) for row in own
+    )
 
     return Scope(
         exam=exam,
