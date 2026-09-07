@@ -1,5 +1,6 @@
 import type { ApiResult } from "@schoolhub/api-client";
 import type { AuthenticatedUser, CursorPagination, OffsetPagination } from "@schoolhub/types";
+import { TooltipProvider } from "@schoolhub/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
@@ -10,8 +11,8 @@ import messages from "../messages/en.json";
 
 /**
  * Shared render wrapper: real English messages, a retry-disabled QueryClient, and the
- * motion providers `components/providers.tsx` mounts in production — a component tested
- * under a different provider tree is not the component that ships.
+ * motion and tooltip providers `components/providers.tsx` mounts in production — a
+ * component tested under a different provider tree is not the component that ships.
  *
  * `reducedMotion="always"` is a deliberate difference from production: animations settle
  * immediately, so assertions never race a transition, and every test exercises the
@@ -31,7 +32,15 @@ export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
               screen that reaches for it instead of `m` fails here rather than shipping
               the 34kb bundle it was meant to avoid. */}
           <LazyMotion features={domAnimation} strict>
-            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+            <QueryClientProvider client={queryClient}>
+              {/* Mirrors `components/providers.tsx`. Radix's Tooltip.Root throws
+                  without it, so a cell that pairs a relative date with the absolute
+                  one in a tooltip — the house pattern — took its whole screen's test
+                  file down. Context only: it renders no element, so `container` is
+                  still what the component under test produced, which is why this one
+                  belongs here and `ThemeProvider` does not. */}
+              <TooltipProvider>{children}</TooltipProvider>
+            </QueryClientProvider>
           </LazyMotion>
         </MotionConfig>
       </NextIntlClientProvider>

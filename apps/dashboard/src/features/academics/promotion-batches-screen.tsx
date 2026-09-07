@@ -15,7 +15,7 @@ import {
 import { isOffsetPagination } from "@schoolhub/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { TrendingUp } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale, useNow, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -54,6 +54,10 @@ export function PromotionBatchesScreen() {
   const t = useTranslations("academics");
   const tCommon = useTranslations("common");
   const locale = useLocale();
+  // next-intl's clock, not `new Date()`. `formatRelativeTime` defaults to the machine
+  // clock, and nothing can pin that: the provider's `now` never reaches the cell, so a
+  // test could only assert a distance from whenever it happened to run.
+  const now = useNow();
   const router = useRouter();
 
   const sessions = useAcademicSessions();
@@ -175,7 +179,7 @@ export function PromotionBatchesScreen() {
               tabIndex={0}
               className="rounded-[var(--sh-radius)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
-              {formatRelativeTime(row.started_at, locale)}
+              {formatRelativeTime(row.started_at, locale, now)}
             </span>
           </TooltipTrigger>
           <TooltipContent>{formatDateTime(row.started_at, locale)}</TooltipContent>

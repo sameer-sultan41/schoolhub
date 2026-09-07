@@ -1,10 +1,10 @@
-import { ApiError, type ApiResult } from "@schoolhub/api-client";
+import { ApiError } from "@schoolhub/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AllocationsScreen } from "@/features/academics/allocations-screen";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { offsetPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() },
@@ -13,7 +13,26 @@ jest.mock("@/hooks/use-session", () => ({
   usePermission: jest.fn(() => false),
   useAnyPermission: jest.fn(() => false),
 }));
-jest.mock("next/navigation", () => ({ usePathname: () => "/academics/allocations" }));
+
+/**
+ * The router has to ROUND-TRIP, not swallow the write.
+ *
+ * Filters, sort, hidden columns and page live in the URL now (`useTableParams` →
+ * `useSearchParam`), so `replace` is what applies a page click and `useSearchParams` is
+ * where the next render reads it back from. A `replace: jest.fn()` that stores nothing
+ * would leave the screen on page one forever, and the pager assertions below would pass
+ * against a table that never moved. `usePathname` is still here for `AcademicsNav`.
+ */
+let mockSearchParams = new URLSearchParams();
+const mockReplace = jest.fn((url: string) => {
+  mockSearchParams = new URLSearchParams(url.split("?")[1] ?? "");
+});
+const mockRouter = { replace: mockReplace, push: jest.fn(), prefetch: jest.fn() };
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/academics/allocations",
+  useRouter: () => mockRouter,
+  useSearchParams: () => mockSearchParams,
+}));
 
 /** The five reference lists, in mutable bindings so a test can hold any of them
  * in the `data: undefined` state the grid paints before they arrive — every name
@@ -69,6 +88,18 @@ const mockPatch = apiClient.patch as jest.MockedFunction<typeof apiClient.patch>
 const mockDelete = apiClient.delete as jest.MockedFunction<typeof apiClient.delete>;
 const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
 
+/**
+ * The date the "Effective" column renders, built the way `formatDate` builds it.
+ *
+ * Not a hand-typed "Jun 30, 2026": `new Date("2026-06-30")` is UTC midnight, which is
+ * the day before in every zone behind UTC, and the medium-style pattern itself moves
+ * with the ICU version. Same reasoning as `format.test.ts`'s currency case — assert the
+ * cell went through a localized date format, not one machine's rendering of it.
+ */
+function mediumDate(isoDate: string): string {
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(isoDate));
+}
+
 const CURRENT_PRIMARY = {
   id: "alloc1",
   academic_session_id: "sess1",
@@ -92,14 +123,8 @@ const ENDED_CO_TEACHER = {
   effective_to: "2026-06-30",
 };
 
-function page(items: unknown[], nextCursor: string | null = null): ApiResult<unknown> {
-  return {
-    data: items,
-    meta: { pagination: { next_cursor: nextCursor, previous_cursor: null, page_size: 25 } },
-    requestId: "req-list",
-    status: 200,
-  };
-}
+/** Two pages of a 30-row allocation grid, so the pager has somewhere to go. */
+const FIRST_OF_TWO_PAGES = { total_count: 30, page_size: 25 };
 
 describe("AllocationsScreen", () => {
   beforeEach(() => {
@@ -107,6 +132,10 @@ describe("AllocationsScreen", () => {
     mockPatch.mockReset();
     mockDelete.mockReset();
     mockUsePermission.mockReturnValue(false);
+    // The URL is state now, and it survives a render — reset it or the page a previous
+    // test navigated to leaks into the next one.
+    mockReplace.mockClear();
+    mockSearchParams = new URLSearchParams();
     mockSessions = { data: SESSIONS };
     mockClasses = { data: CLASSES };
     mockSections = { data: SECTIONS };
@@ -115,33 +144,39 @@ describe("AllocationsScreen", () => {
   });
 
   it("renders a current primary allocation with its resolved names", async () => {
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
 
     renderWithProviders(<AllocationsScreen />);
 
-    expect(await screen.findByText("Bilal Ahmed")).toBeInTheDocument();
-    expect(screen.getByText("Grade 7 A")).toBeInTheDocument();
-    expect(screen.getByText("Mathematics")).toBeInTheDocument();
-    expect(screen.getByText("Primary")).toBeInTheDocument();
-    expect(screen.getByText("Current")).toBeInTheDocument();
-    expect(screen.getByText("6")).toBeInTheDocument();
+    const cell = await screen.findByText("Bilal Ahmed");
+    const row = within(cell.closest("tr") as HTMLElement);
+    expect(row.getByText("Grade 7 A")).toBeInTheDocument();
+    expect(row.getByText("Mathematics")).toBeInTheDocument();
+    expect(row.getByText("Primary")).toBeInTheDocument();
+    expect(row.getByText("Current")).toBeInTheDocument();
+    expect(row.getByText("6")).toBeInTheDocument();
+    // The teacher is a person cell now — initials beside the name, both in one cell.
+    expect(row.getByText("BA")).toBeInTheDocument();
   });
 
   it("renders an end-dated co-teacher row", async () => {
-    mockGet.mockResolvedValue(page([ENDED_CO_TEACHER]));
+    mockGet.mockResolvedValue(offsetPage([ENDED_CO_TEACHER]));
 
     renderWithProviders(<AllocationsScreen />);
 
     expect(await screen.findByText("Co-teacher")).toBeInTheDocument();
-    expect(screen.getByText("Ended 2026-06-30")).toBeInTheDocument();
+    expect(screen.getByText(`Ended ${mediumDate("2026-06-30")}`)).toBeInTheDocument();
   });
 
   it("shows the translated empty state", async () => {
-    mockGet.mockResolvedValue(page([]));
+    mockGet.mockResolvedValue(offsetPage([]));
 
     renderWithProviders(<AllocationsScreen />);
 
     expect(await screen.findByText("No teachers allocated yet")).toBeInTheDocument();
+    // No row range either: "1–0 of 0" under an empty state that has already said there
+    // is nothing here is a second, worse way of saying the same thing.
+    expect(screen.queryByText(/of 0/)).not.toBeInTheDocument();
   });
 
   it("renders the ApiError envelope in the table's error slot on failure", async () => {
@@ -166,7 +201,7 @@ describe("AllocationsScreen", () => {
   });
 
   it("hides the create, end and remove controls without permission", async () => {
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
 
     renderWithProviders(<AllocationsScreen />);
 
@@ -177,7 +212,7 @@ describe("AllocationsScreen", () => {
   });
 
   it("prompts for a session before showing the load summary", async () => {
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
     const user = userEvent.setup();
 
     renderWithProviders(<AllocationsScreen />);
@@ -200,7 +235,7 @@ describe("AllocationsScreen", () => {
   });
 
   it("filters by teacher", async () => {
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
     const user = userEvent.setup();
 
     renderWithProviders(<AllocationsScreen />);
@@ -214,22 +249,26 @@ describe("AllocationsScreen", () => {
     });
   });
 
-  it("pages forward by cursor", async () => {
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY], "cursor-2"));
+  it("asks the server for the page number the reader picks", async () => {
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY], FIRST_OF_TWO_PAGES));
 
     renderWithProviders(<AllocationsScreen />);
     await screen.findByText("Bilal Ahmed");
+    expect(screen.getByText("1–25 of 30")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
 
     await waitFor(() => {
-      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.cursor).toBe("cursor-2");
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
     });
+    // The range follows the reader's own page, not the `page: 1` the (kept-previous)
+    // response still carries while the second page is in flight.
+    expect(await screen.findByText("26–30 of 30")).toBeInTheDocument();
   });
 
   it("end-dates an allocation rather than deleting it", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
     mockPatch.mockResolvedValue({ data: {}, meta: undefined, requestId: null, status: 200 });
     const user = userEvent.setup();
 
@@ -254,7 +293,7 @@ describe("AllocationsScreen", () => {
 
   it("removes an allocation entered by mistake", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
     mockDelete.mockResolvedValue({ data: null, meta: undefined, requestId: null, status: 204 });
     const user = userEvent.setup();
 
@@ -271,7 +310,7 @@ describe("AllocationsScreen", () => {
 
   it("renders the envelope inside the remove dialog when the server refuses", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
     mockDelete.mockRejectedValue(
       new ApiError({
         code: "conflict",
@@ -297,7 +336,7 @@ describe("AllocationsScreen", () => {
     mockSections = { data: undefined };
     mockSubjects = { data: undefined };
     mockStaff = { data: undefined };
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
     const user = userEvent.setup();
 
     renderWithProviders(<AllocationsScreen />);
@@ -305,18 +344,26 @@ describe("AllocationsScreen", () => {
     const cell = await screen.findByText("6");
     const row = cell.closest("tr") as HTMLElement;
     // Section, subject and teacher are id lookups into lists that have not
-    // arrived; the period count and the role live on the row itself.
+    // arrived; the period count and the role live on the row itself, and an
+    // allocation with no end date is "Current" rather than a dash.
     expect(within(row).getAllByText("—")).toHaveLength(3);
     expect(within(row).getByText("Primary")).toBeInTheDocument();
+    // A teacher who cannot be named gets the dash alone, not an avatar with nobody
+    // behind it.
+    expect(within(row).queryByText("BA")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("combobox", { name: "Teacher" }));
-    expect(screen.getAllByRole("option")).toHaveLength(1);
-    expect(screen.getByRole("option", { name: "All" })).toBeInTheDocument();
+
+    // Scoped to the open listbox: the rows-per-page control at the foot of the card is
+    // a native <select>, and its 25/50/100 children carry the `option` role too.
+    const listbox = within(screen.getByRole("listbox"));
+    expect(listbox.getAllByRole("option")).toHaveLength(1);
+    expect(listbox.getByRole("option", { name: "All" })).toBeInTheDocument();
   });
 
   it("labels a section by its own name while the class list is still loading", async () => {
     mockClasses = { data: undefined };
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
 
     renderWithProviders(<AllocationsScreen />);
 
@@ -328,17 +375,17 @@ describe("AllocationsScreen", () => {
 
   it("shows the start date of an allocation that began mid-session and has not ended", async () => {
     mockGet.mockResolvedValue(
-      page([{ ...CURRENT_PRIMARY, effective_from: "2026-04-01", effective_to: null }]),
+      offsetPage([{ ...CURRENT_PRIMARY, effective_from: "2026-04-01", effective_to: null }]),
     );
 
     renderWithProviders(<AllocationsScreen />);
 
-    expect(await screen.findByText("2026-04-01")).toBeInTheDocument();
+    expect(await screen.findByText(mediumDate("2026-04-01"))).toBeInTheDocument();
     expect(screen.queryByText("Current")).not.toBeInTheDocument();
   });
 
   it("filters by section and by subject", async () => {
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY]));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY]));
     const user = userEvent.setup();
 
     renderWithProviders(<AllocationsScreen />);
@@ -360,21 +407,23 @@ describe("AllocationsScreen", () => {
   });
 
   it("steps back to the first page, where Previous is no longer offered", async () => {
-    mockGet.mockResolvedValueOnce(page([CURRENT_PRIMARY], "cursor-2"));
-    mockGet.mockResolvedValueOnce(page([{ ...CURRENT_PRIMARY, id: "alloc9", weekly_periods: 9 }]));
-    mockGet.mockResolvedValue(page([CURRENT_PRIMARY], "cursor-2"));
+    mockGet.mockResolvedValue(offsetPage([CURRENT_PRIMARY], FIRST_OF_TWO_PAGES));
 
     renderWithProviders(<AllocationsScreen />);
-    await screen.findByText("6");
+    await screen.findByText("Bilal Ahmed");
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    // Await the second page's own row, not the request: Previous is guarded while
-    // a page is still in flight, so the click below has to land after it settles.
-    expect(await screen.findByText("9")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
+    await waitFor(() => {
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous page" }));
 
-    expect(await screen.findByText("6")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    await waitFor(() => {
+      // Page one is the absence of the parameter, not `page=1`.
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBeUndefined();
+    });
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
   });
 });
