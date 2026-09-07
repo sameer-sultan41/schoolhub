@@ -72,6 +72,13 @@ ALL_KEYS = (
     "exams.marks.update",
     "exams.marks.import",
     "exams.marks.lock",
+    "exams.result.view",
+    "exams.result.create",
+    "exams.result.approve",
+    "exams.result.publish",
+    "exams.report-card.view",
+    "exams.report-card.create",
+    "exams.report-card.publish",
 )
 
 

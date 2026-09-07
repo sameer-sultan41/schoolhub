@@ -2334,6 +2334,48 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/exams/{id}:approve-results:
+    post:
+      operationId: exams_:approve_results_create
+      description: |-
+        `POST /exams/{id}:approve-results` — §5.6's gate.
+
+        `assert_approver_is_not_the_processor` lives in `services`, not here:
+        the rule is the module's and has to hold for any caller, and §4's
+        closing line makes it a property of the results rather than of the
+        request.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/exams/{id}:generate-report-cards:
+    post:
+      operationId: exams_:generate_report_cards_create
+      description: '`POST /exams/{id}:generate-report-cards` — 202 + a job (§16).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
   /api/v1/exams/{id}:issue-admit-cards:
     post:
       operationId: exams_:issue_admit_cards_create
@@ -2361,6 +2403,78 @@ paths:
       - jwtAuth: []
       responses:
         '202':
+          description: No response body
+  /api/v1/exams/{id}:process-results:
+    post:
+      operationId: exams_:process_results_create
+      description: |-
+        `POST /exams/{id}:process-results` — 202 + a job (§16).
+
+        The readiness check runs here *and* in the job. Here it is for the
+        clerk — an immediate, readable refusal naming which subjects are
+        outstanding. In the job it is what actually holds, because marks can
+        change between the request and the worker picking it up.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
+  /api/v1/exams/{id}:publish-report-cards:
+    post:
+      operationId: exams_:publish_report_cards_create
+      description: |-
+        `POST /exams/{id}:publish-report-cards` — release them to the portals.
+
+        §12's notification fires on the cards that actually moved, whose ids are
+        collected before the write — the same transition-not-state rule
+        `:publish-results` follows.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/exams/{id}:publish-results:
+    post:
+      operationId: exams_:publish_results_create
+      description: |-
+        `POST /exams/{id}:publish-results` — §5.6's release.
+
+        §12's notification fires on the rows that actually **transitioned**,
+        whose ids are collected before the write and handed to the task. That is
+        `attendance`'s review finding applied: publishing is idempotent, so
+        notifying on current status would re-send every guardian the same
+        message on a re-publish.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
           description: No response body
   /api/v1/exams/{id}:publish-schedule:
     post:
@@ -2465,6 +2579,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedExamScheduleList'
           description: ''
+  /api/v1/exams/{id}:send-results-back:
+    post:
+      operationId: exams_:send_results_back_create
+      description: |-
+        `POST /exams/{id}:send-results-back` — §7.1's "changes requested" edge.
+
+        Not in §16's list; see the module doc's §20 for why it is built anyway.
+        Behind the *approve* key, because sending back is the other half of the
+        same decision.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendResultsBack'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SendResultsBack'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendResultsBack'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/files:
     get:
       operationId: files_list
@@ -4319,6 +4468,156 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/report-cards:
+    get:
+      operationId: report_cards_list
+      description: |-
+        `/report-cards` — §5.7.
+
+        `PATCH` exists for the two remark fields and nothing else; everything
+        structural is set by the generation job. Remarks are writable only while the
+        card is a draft, because editing them on a published card would change a
+        document a parent already holds without the version changing.
+
+        Portal-readable for reads only, and a restricted principal sees `published`
+        cards — the same two-narrowings split `ResultViewSet` documents.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: exam_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - draft
+          - generated
+          - published
+        description: |-
+          * `draft` - Draft
+          * `generated` - Generated
+          * `published` - Published
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: term_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - report-cards
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReportCardList'
+          description: ''
+  /api/v1/report-cards/{id}:
+    get:
+      operationId: report_cards_retrieve
+      description: |-
+        `/report-cards` — §5.7.
+
+        `PATCH` exists for the two remark fields and nothing else; everything
+        structural is set by the generation job. Remarks are writable only while the
+        card is a draft, because editing them on a published card would change a
+        document a parent already holds without the version changing.
+
+        Portal-readable for reads only, and a restricted principal sees `published`
+        cards — the same two-narrowings split `ResultViewSet` documents.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this report card.
+        required: true
+      tags:
+      - report-cards
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportCard'
+          description: ''
+    patch:
+      operationId: report_cards_partial_update
+      description: |-
+        `/report-cards` — §5.7.
+
+        `PATCH` exists for the two remark fields and nothing else; everything
+        structural is set by the generation job. Remarks are writable only while the
+        card is a draft, because editing them on a published card would change a
+        document a parent already holds without the version changing.
+
+        Portal-readable for reads only, and a restricted principal sees `published`
+        cards — the same two-narrowings split `ResultViewSet` documents.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this report card.
+        required: true
+      tags:
+      - report-cards
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReportCard'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReportCard'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReportCard'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportCard'
+          description: ''
   /api/v1/reports/attendance-summary:
     get:
       operationId: reports_attendance_summary_retrieve
@@ -4435,6 +4734,172 @@ paths:
       responses:
         '202':
           description: A job resource; poll GET /jobs/{id}.
+  /api/v1/results:
+    get:
+      operationId: results_list
+      description: |-
+        `/results` — §5.5's processed outcomes and §5.6's chain.
+
+        **Two narrowings, and they answer different questions.** Record scope
+        answers *whose* result a caller may see — `filter_owned_by_user` for a
+        student or guardian, `filter_assigned_to_user` for a class teacher. This
+        viewset adds *when*: a restricted principal sees `published` rows only,
+        because §5.6 makes releasing a separate, permissioned act from computing.
+        Conflating the two inside the model hook would put a publishing rule
+        somewhere nobody looks for one.
+
+        Portal-readable for reads only. The **readable** actions are named and
+        everything else is staff-only, which is PR B's review lesson: a list of
+        writes has to be updated whenever one is added, and forgetting is silent.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: exam_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: outcome
+        schema:
+          type: string
+          enum:
+          - absent
+          - fail
+          - pass
+          - withheld
+        description: |-
+          * `pass` - Pass
+          * `fail` - Fail
+          * `absent` - Absent
+          * `withheld` - Withheld
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - approved
+          - pending_approval
+          - processing
+          - published
+        description: |-
+          * `processing` - Processing
+          * `pending_approval` - Pending approval
+          * `approved` - Approved
+          * `published` - Published
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - results
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResultList'
+          description: ''
+  /api/v1/results/{id}:
+    get:
+      operationId: results_retrieve
+      description: |-
+        `/results` — §5.5's processed outcomes and §5.6's chain.
+
+        **Two narrowings, and they answer different questions.** Record scope
+        answers *whose* result a caller may see — `filter_owned_by_user` for a
+        student or guardian, `filter_assigned_to_user` for a class teacher. This
+        viewset adds *when*: a restricted principal sees `published` rows only,
+        because §5.6 makes releasing a separate, permissioned act from computing.
+        Conflating the two inside the model hook would put a publishing rule
+        somewhere nobody looks for one.
+
+        Portal-readable for reads only. The **readable** actions are named and
+        everything else is staff-only, which is PR B's review lesson: a list of
+        writes has to be updated whenever one is added, and forgetting is silent.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this result.
+        required: true
+      tags:
+      - results
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: ''
+  /api/v1/results/{id}:withhold:
+    post:
+      operationId: results_:withhold_create
+      description: '`POST /results/{id}:withhold` — §5.6''s per-student hold.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - results
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResultWithhold'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResultWithhold'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResultWithhold'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: ''
   /api/v1/rooms:
     get:
       operationId: rooms_list
@@ -10982,6 +11447,48 @@ components:
                   type: integer
                 total_pages:
                   type: integer
+    PaginatedReportCardList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportCard'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedResultList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Result'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedRoomList:
       type: object
       properties:
@@ -12076,6 +12583,73 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedReportCard:
+      type: object
+      description: |-
+        `report_cards` — read, plus the two remark fields (§5.7).
+
+        Remarks are the only writable part, and only while the card is a draft:
+        §5.7 has a class teacher and a principal write them before generation, and
+        editing them on a published card would change a document a parent already
+        holds without the version changing.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_id:
+          type: string
+          format: uuid
+          readOnly: true
+        term_id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        result_id:
+          type: string
+          format: uuid
+          readOnly: true
+        file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        class_teacher_remarks:
+          type: string
+          nullable: true
+          maxLength: 1000
+        principal_remarks:
+          type: string
+          nullable: true
+          maxLength: 1000
+        attendance_summary:
+          readOnly: true
+          nullable: true
+          description: Snapshot from the attendance module at generation time.
+        version:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ReportCardStatusEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedRoom:
       type: object
       description: '`rooms` — physical rooms, labs and halls (§5.4).'
@@ -12946,6 +13520,244 @@ components:
         * `sibling` - Sibling
         * `legal_guardian` - Legal guardian
         * `other` - Other
+    ReportCard:
+      type: object
+      description: |-
+        `report_cards` — read, plus the two remark fields (§5.7).
+
+        Remarks are the only writable part, and only while the card is a draft:
+        §5.7 has a class teacher and a principal write them before generation, and
+        editing them on a published card would change a document a parent already
+        holds without the version changing.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_id:
+          type: string
+          format: uuid
+          readOnly: true
+        term_id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        result_id:
+          type: string
+          format: uuid
+          readOnly: true
+        file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        class_teacher_remarks:
+          type: string
+          nullable: true
+          maxLength: 1000
+        principal_remarks:
+          type: string
+          nullable: true
+          maxLength: 1000
+        attendance_summary:
+          readOnly: true
+          nullable: true
+          description: Snapshot from the attendance module at generation time.
+        version:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ReportCardStatusEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attendance_summary
+      - created_at
+      - exam_id
+      - file_id
+      - id
+      - published_at
+      - result_id
+      - status
+      - student_id
+      - term_id
+      - updated_at
+      - version
+    ReportCardStatusEnum:
+      enum:
+      - draft
+      - generated
+      - published
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `generated` - Generated
+        * `published` - Published
+    Result:
+      type: object
+      description: |-
+        `results` — read-only on the wire (§16 declares a `GET` and no writes).
+
+        Every field here is computed or moved by a permissioned action: the
+        aggregates by `:process-results`, `status`/`approved_*` by
+        `:approve-results`, `published_at` by `:publish-results`, and `outcome` by
+        processing or `:withhold`. A client that could PATCH any of them could skip
+        §5.6's gate entirely, which is the whole point of having one.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        section_id:
+          type: string
+          format: uuid
+          readOnly: true
+        total_max_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          readOnly: true
+        total_obtained_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          readOnly: true
+        percentage:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          readOnly: true
+        grade:
+          type: string
+          readOnly: true
+        gpa:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        rank_in_section:
+          type: integer
+          readOnly: true
+          nullable: true
+        rank_in_class:
+          type: integer
+          readOnly: true
+          nullable: true
+        outcome:
+          allOf:
+          - $ref: '#/components/schemas/ResultOutcomeEnum'
+          readOnly: true
+        grace_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Moderation adjustment; audited (§19).
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ResultStatusEnum'
+          readOnly: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approved_at
+      - created_at
+      - exam_id
+      - gpa
+      - grace_marks
+      - grade
+      - id
+      - outcome
+      - percentage
+      - published_at
+      - rank_in_class
+      - rank_in_section
+      - section_id
+      - status
+      - student_id
+      - total_max_marks
+      - total_obtained_marks
+      - updated_at
+    ResultOutcomeEnum:
+      enum:
+      - pass
+      - fail
+      - absent
+      - withheld
+      type: string
+      description: |-
+        * `pass` - Pass
+        * `fail` - Fail
+        * `absent` - Absent
+        * `withheld` - Withheld
+    ResultStatusEnum:
+      enum:
+      - processing
+      - pending_approval
+      - approved
+      - published
+      type: string
+      description: |-
+        * `processing` - Processing
+        * `pending_approval` - Pending approval
+        * `approved` - Approved
+        * `published` - Published
+    ResultWithhold:
+      type: object
+      description: |-
+        The body of `POST /results/{id}:withhold` (§5.6).
+
+        A reason is required. Withholding one student's result is a decision
+        somebody will be asked about, and "why" is the part that has to survive
+        into the audit log — the same argument the admit-card revocation makes.
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     Room:
       type: object
       description: '`rooms` — physical rooms, labs and halls (§5.4).'
@@ -13084,6 +13896,22 @@ components:
       - id
       - name
       - updated_at
+    SendResultsBack:
+      type: object
+      description: |-
+        The body of `POST /exams/{id}:send-results-back` (§7.1).
+
+        Not in §16's endpoint list, and built anyway — see the module doc's §20.
+        §7.1's flowchart has an explicit "changes requested: unlock and re-enter"
+        edge out of the approval gate, and without an endpoint for it a data-entry
+        error found at approval has no route back and someone reaches for a
+        database edit.
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     SessionClone:
       type: object
       description: Input for ``POST /academic-sessions/{id}:clone`` — the new session's

@@ -19,7 +19,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from apps.examinations import conflicts, grading
+from apps.examinations import conflicts, grading, processing
 from apps.examinations.models import (
     OCCUPYING_SCHEDULE_STATUSES,
     AdmitCard,
@@ -32,6 +32,11 @@ from apps.examinations.models import (
     GradingScale,
     Marks,
     MarksStatus,
+    ReportCard,
+    ReportCardStatus,
+    Result,
+    ResultOutcome,
+    ResultStatus,
     ScheduleStatus,
 )
 from apps.school_organization.models import (
@@ -1148,3 +1153,370 @@ def import_candidates_by_admission_number(*, exam_subject: ExamSubject) -> dict:
         student.admission_number: student
         for student in _entry_students(exam_subject=exam_subject).values()
     }
+
+
+# --- §5.5 processing, §5.6 approval and publishing -------------------------
+
+# An exam may only be recomputed while nothing downstream has been settled.
+# §7.1's "changes requested" path returns an exam here from `approved`.
+RECOMPUTABLE_EXAM_STATUSES = frozenset(
+    {
+        ExamStatus.SCHEDULED,
+        ExamStatus.ONGOING,
+        ExamStatus.MARKS_ENTRY,
+        ExamStatus.PROCESSING,
+    }
+)
+
+
+def assert_exam_is_recomputable(exam: Exam) -> None:
+    """§6 — "recompute is idempotent and re-runnable **until approval**".
+
+    Refused once approved, because a recompute then would change a figure a
+    principal has already signed off, and the approval record would still name
+    them. §7.1's route is to send the results back, which returns the exam to
+    `marks_entry` and re-opens both entry and processing.
+    """
+    if exam.status not in RECOMPUTABLE_EXAM_STATUSES:
+        raise Conflict(
+            f"This exam is {exam.get_status_display().lower()}. Results can only be "
+            "reprocessed before approval — send them back for correction first."
+        )
+
+
+@transaction.atomic
+def process_exam_results(*, exam: Exam, actor_id: uuid.UUID) -> dict:
+    """§5.5's batch — totals, percentage, grade, GPA, ranks, outcome.
+
+    Idempotent by construction: `processing.write` upserts, so a second run
+    updates in place rather than colliding with
+    `results_one_per_student_per_exam`.
+
+    Moves the exam to `processing` and every row to `pending_approval`, which is
+    what puts it in front of §5.6's approver. The exam's own status is not set
+    to `approved` here — that is a separate, differently-permissioned act, and
+    conflating them would be the segregation-of-duties failure §4 exists to
+    prevent.
+    """
+    assert_exam_is_recomputable(exam)
+
+    scope = processing.collect(exam=exam)
+    processing.assert_ready_to_process(scope)
+    computed = processing.compute(scope)
+    outcome = processing.write(exam=exam, computed=computed, actor_id=actor_id)
+
+    exam.status = ExamStatus.PROCESSING
+    exam.updated_by = actor_id
+    exam.save(update_fields=["status", "updated_by", "updated_at"])
+
+    return {**outcome, "students": len(computed)}
+
+
+def assert_approver_is_not_the_processor(*, results: list, approver_id: uuid.UUID) -> None:
+    """§4's closing line — "the approver cannot be the user who ran processing".
+
+    auth-and-rbac §2.4's segregation of duties, and the one check in this module
+    that exists purely to stop a single person completing a two-person process.
+    Checked in `services` rather than the viewset because the rule is the
+    module's: it has to hold when a later caller approves through some other
+    door.
+
+    Compared against `created_by` on the result rows, which `processing.write`
+    stamps with the processing initiator. Reading it from the rows rather than
+    from the exam is deliberate: the exam's `updated_by` is whoever touched it
+    last, which after a rename is not the processor at all.
+    """
+    processors = {row.created_by for row in results if row.created_by is not None}
+    if approver_id in processors:
+        raise DomainRuleViolation(
+            {
+                "approved_by": (
+                    "You ran the processing for this exam, so you cannot also approve it. "
+                    "Results need a second pair of eyes (§4)."
+                )
+            }
+        )
+
+
+@transaction.atomic
+def approve_exam_results(*, exam: Exam, approver_id: uuid.UUID) -> dict:
+    """§5.6 — the principal's gate, and the module's segregation of duties.
+
+    Approves every row that is pending. A **withheld** row is approved too and
+    stays withheld: §5.6 makes withholding a hold on *publication*, not a
+    refusal to approve, and leaving it unapproved would block the exam's own
+    status transition over one student.
+    """
+    if exam.status != ExamStatus.PROCESSING:
+        raise Conflict(
+            f"This exam is {exam.get_status_display().lower()}. Only processed results can "
+            "be approved."
+        )
+
+    pending = list(Result.objects.alive().filter(exam=exam, status=ResultStatus.PENDING_APPROVAL))
+    if not pending:
+        raise Conflict("There are no processed results awaiting approval on this exam.")
+
+    assert_approver_is_not_the_processor(results=pending, approver_id=approver_id)
+
+    now = timezone.now()
+    for row in pending:
+        row.status = ResultStatus.APPROVED
+        row.approved_by = approver_id
+        row.approved_at = now
+        row.updated_by = approver_id
+    Result.objects.bulk_update(
+        pending,
+        ["status", "approved_by", "approved_at", "updated_by"],
+        batch_size=500,
+    )
+
+    exam.status = ExamStatus.APPROVED
+    exam.updated_by = approver_id
+    exam.save(update_fields=["status", "updated_by", "updated_at"])
+    return {"approved": len(pending)}
+
+
+@transaction.atomic
+def send_results_back(*, exam: Exam, actor_id: uuid.UUID, reason: str) -> dict:
+    """§7.1's "changes requested" edge — return an exam to marks entry.
+
+    The only way out of `approved`, and the reason both `assert_exam_accepts_marks`
+    and `assert_exam_is_recomputable` can be strict: without this, a data-entry
+    error found at approval would have no route back and someone would reach for
+    a database edit.
+
+    Rows return to `processing`, not `pending_approval`: they are no longer
+    awaiting a decision, and leaving them pending would keep the exam in an
+    approver's queue while its marks are being changed underneath them.
+    """
+    if exam.status not in (ExamStatus.PROCESSING, ExamStatus.APPROVED):
+        raise Conflict(
+            f"This exam is {exam.get_status_display().lower()}, so there are no results to "
+            "send back."
+        )
+
+    reopened = (
+        Result.objects.alive()
+        .filter(exam=exam)
+        .exclude(status=ResultStatus.PUBLISHED)
+        .update(
+            status=ResultStatus.PROCESSING,
+            approved_by=None,
+            approved_at=None,
+            updated_by=actor_id,
+            updated_at=timezone.now(),
+        )
+    )
+    exam.status = ExamStatus.MARKS_ENTRY
+    exam.updated_by = actor_id
+    exam.save(update_fields=["status", "updated_by", "updated_at"])
+    return {"reopened": reopened, "reason": reason}
+
+
+@transaction.atomic
+def withhold_result(*, result: Result, reason: str, actor_id: uuid.UUID) -> Result:
+    """§5.6 — "withheld results supported per student".
+
+    An `outcome`, not a separate flag, so a withheld result is excluded from
+    publishing by the same query that includes everything else rather than by a
+    condition each caller has to remember.
+
+    Refused once published: the result is already with the student, and the
+    remedy then is a correction, not a retroactive hold.
+    """
+    if result.status == ResultStatus.PUBLISHED:
+        raise Conflict(
+            "This result is already published, so it cannot be withheld. Reprocess the exam "
+            "to correct it."
+        )
+    result.outcome = ResultOutcome.WITHHELD
+    result.updated_by = actor_id
+    result.save(update_fields=["outcome", "updated_by", "updated_at"])
+    return result
+
+
+@transaction.atomic
+def publish_exam_results(*, exam: Exam, actor_id: uuid.UUID) -> dict:
+    """§5.6 — release approved results to students and guardians.
+
+    **Only approved rows, and never a withheld one.** Both are the point of the
+    action: publishing an unapproved result bypasses the gate §4 puts a separate
+    key on, and publishing a withheld one undoes a decision someone took about
+    one student.
+
+    Idempotent, and it reports how many rows *moved*. §12's notification fires
+    on that count rather than on the exam's status, which is the bug
+    `attendance`'s review found: alerting on current state re-sent every
+    guardian the same message on every retry.
+    """
+    if exam.status not in (ExamStatus.APPROVED, ExamStatus.PUBLISHED):
+        raise Conflict(
+            f"This exam is {exam.get_status_display().lower()}. Only approved results can be "
+            "published."
+        )
+
+    publishable = list(
+        Result.objects.alive()
+        .filter(exam=exam, status=ResultStatus.APPROVED)
+        .exclude(outcome=ResultOutcome.WITHHELD)
+    )
+    withheld = Result.objects.alive().filter(exam=exam, outcome=ResultOutcome.WITHHELD).count()
+
+    now = timezone.now()
+    for row in publishable:
+        row.status = ResultStatus.PUBLISHED
+        row.published_at = now
+        row.updated_by = actor_id
+    if publishable:
+        Result.objects.bulk_update(
+            publishable, ["status", "published_at", "updated_by"], batch_size=500
+        )
+
+    exam.status = ExamStatus.PUBLISHED
+    exam.updated_by = actor_id
+    exam.save(update_fields=["status", "updated_by", "updated_at"])
+    return {"published": len(publishable), "withheld": withheld}
+
+
+# --- §5.7 report cards ----------------------------------------------------
+
+
+def assert_report_cards_are_generatable(exam: Exam) -> None:
+    """§11 — "report cards only from published results".
+
+    A card carries a grade and a rank, so generating one before publication
+    would put a figure in a parent's hands that a school has not yet released —
+    and §5.6's whole point is that releasing is a separate, permissioned act.
+    """
+    if exam.status != ExamStatus.PUBLISHED:
+        raise Conflict(
+            f"This exam is {exam.get_status_display().lower()}. Report cards are generated "
+            "from published results (§11)."
+        )
+
+
+def attendance_summary_for(*, students: list, start_date, end_date) -> dict:
+    """§5.7's attendance figures, for every student in one call.
+
+    Reads `apps.attendance.reports.student_summary` — the same query §13's own
+    attendance report uses, so a report card and an attendance report cannot
+    disagree about the same child.
+
+    **Called once for the whole cohort, not per student.** The report function
+    takes a queryset and groups in SQL, which is exactly the property that makes
+    a batch call possible; asking per student would be the N+1 that module's
+    own docstring warns about.
+
+    Returns `{student_id: {...}}`. A student with no register rows is absent
+    from the mapping rather than present with zeros — a school that has not kept
+    attendance has no figure, and printing 0% attended would be a claim the data
+    does not support.
+    """
+    from apps.attendance.models import StudentAttendance
+    from apps.attendance.reports import student_summary
+
+    rows = student_summary(
+        StudentAttendance.objects.alive().filter(student__in=students),
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return {
+        row["student_id"]: {
+            "present_days": row["present_days"],
+            "counted_days": row["counted_days"],
+            "absent_days": row["absent_days"],
+            "late_days": row["late_days"],
+            "attendance_rate": str(row["attendance_rate"]),
+        }
+        for row in rows
+    }
+
+
+def report_card_period(*, exam: Exam) -> tuple:
+    """The date range a card's attendance summary covers.
+
+    The exam's term where it has one, else the session. Not the exam's own
+    dates: §5.7 wants the attendance a report card reports on, and a parent
+    reading one expects the term's figure rather than the three days of an exam
+    week.
+    """
+    if exam.term_id is not None:
+        return exam.term.start_date, exam.term.end_date
+    return exam.academic_session.start_date, exam.academic_session.end_date
+
+
+@transaction.atomic
+def upsert_report_card(*, exam: Exam, result: Result, summary: dict, actor_id: uuid.UUID):
+    """One student's card row, versioned rather than duplicated.
+
+    §6 asks for "regeneration versioning": a school that reissues a card after
+    fixing a remark needs the previous one to stop being current without the
+    record of it vanishing. So a regeneration bumps `version` and clears the
+    stale `file`, and the render job fills a new one in.
+
+    Remarks are **preserved** across a regeneration. They are a class teacher's
+    and a principal's own words, and a regeneration triggered by a marks
+    correction has nothing to say about them — losing them would make anyone
+    who had written remarks reluctant to regenerate at all.
+    """
+    existing = ReportCard.objects.alive().filter(exam=exam, student_id=result.student_id).first()
+    if existing is None:
+        return ReportCard.objects.create(
+            tenant=exam.tenant,
+            exam=exam,
+            student_id=result.student_id,
+            result=result,
+            attendance_summary=summary or None,
+            status=ReportCardStatus.DRAFT,
+            created_by=actor_id,
+            updated_by=actor_id,
+        )
+
+    if existing.status == ReportCardStatus.PUBLISHED:
+        existing.version += 1
+    existing.result = result
+    existing.attendance_summary = summary or None
+    existing.file = None
+    existing.status = ReportCardStatus.DRAFT
+    existing.updated_by = actor_id
+    existing.save(
+        update_fields=[
+            "version",
+            "result",
+            "attendance_summary",
+            "file",
+            "status",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+    return existing
+
+
+@transaction.atomic
+def publish_report_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
+    """§5.7 — release generated cards to the portals.
+
+    Only cards that have a rendered file. A `draft` card with no document is a
+    row waiting on the render job, and publishing it would put a link in a
+    parent's portal that resolves to nothing.
+    """
+    ready = list(
+        ReportCard.objects.alive().filter(
+            exam=exam, status=ReportCardStatus.GENERATED, file__isnull=False
+        )
+    )
+    if not ready:
+        raise Conflict(
+            "No report cards have finished rendering for this exam yet. Poll the generation "
+            "job before publishing."
+        )
+
+    now = timezone.now()
+    for card in ready:
+        card.status = ReportCardStatus.PUBLISHED
+        card.published_at = now
+        card.updated_by = actor_id
+    ReportCard.objects.bulk_update(ready, ["status", "published_at", "updated_by"], batch_size=500)
+    return {"published": len(ready)}

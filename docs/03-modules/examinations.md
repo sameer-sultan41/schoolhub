@@ -247,23 +247,29 @@ Built as five stacked PRs. This section is updated by each.
 subject configuration.
 **PR B — scheduling and admit cards.** Sittings with a clash engine, schedule
 publish, and the admit-card batch.
-**PR C — marks entry (this PR).** The grid, the four entry gates, the lock
-lifecycle, the sheet import and the missing-entries dashboard.
+**PR C — marks entry.** The grid, the four entry gates, the lock lifecycle,
+the sheet import and the missing-entries dashboard.
+**PR D — results and report cards (this PR).** Processing, the approval gate,
+publishing, withholding, and versioned report cards.
 
 ### Built
 
 | Area | State |
 | ---- | ----- |
-| Entities | 7 of §15's 11 tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks` — tenant-owned with RLS policies |
-| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `POST /marks:bulk-entry` (accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job) |
-| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{create,update,import,lock}`. The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
+| Entities | 9 of §15's 11 tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards` — tenant-owned with RLS policies |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `POST /marks:bulk-entry` (accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards` |
+| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. **All of §4's keys are now registered.** The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
+| §5.5 processing | `processing.py` — totals with subject weightage on *both* sides of the fraction, percentage, grade band, GPA, dense ranks, and outcome. Five queries for a whole school; the per-student loop never queries |
+| §11 processing | Blocked while any exam-subject has marks outstanding, measured against the **expected roll** rather than rows that happen to exist. Recompute is idempotent and refused once approved |
+| §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.created_by`, which processing stamps. Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
+| §5.7 report cards | Versioned on regeneration, remarks preserved, stale file cleared. Attendance is a JSONB **snapshot** from `attendance.reports.student_summary` — one query for the whole cohort |
 | §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students with an active enrolment in a class the exam-subject covers |
 | §5.4 lifecycle | `draft → submitted → locked` on the row, plus `exam_subjects.marks_locked_at` on the *window*. Four gates on every write, each with its own message because each has a different remedy: the exam's status (§7.1), the entry window (§6), the subject lock, and the teacher's allocation (§4). An **unset** window means always open |
 | §6 dashboard | `GET /exams/{id}/marks-progress` — expected / entered / submitted per exam-subject, in a bounded number of queries whatever the size of the exam |
 | §11 scheduling | One sitting per (exam-subject, section) · `end_time > start_time` · a section must belong to the exam-subject's class · a completed or cancelled sitting cannot be rescheduled · admit cards need a published schedule · a revocation needs a reason (CHECK, not only a service rule) |
 | §5.2 clash engine | `conflicts.py` — hard: room double-booked, invigilator double-booked, a student sitting two papers at once, a sitting outside the exam's own dates, a sitting on a non-working day or holiday. Soft: an over-capacity room, a sitting on a weekday the sections have published lessons. Every write returns the whole list; only hard findings block `:publish-schedule` |
-| §12 notifications | Two of six wired — `exams.schedule-published` (one `notify()` for the whole exam, on commit) and `exams.admit-card-issued` (one per card, because §12's template names the card number, with guardians fetched once and grouped rather than queried per card). The admit-card one fires after the **render**, not at issue: it says the card is ready to download, which is only true once a document exists. PR C adds `exams.marks-entry-reminder`, to the *allocated subject teachers* of any exam-subject whose window closes within two days with marks still outstanding — §12 says "teachers with pending entries", and a broadcast to all staff is the kind of notification people learn to ignore. The other three wait on `results` and `report_cards` |
+| §12 notifications | Two of six wired — `exams.schedule-published` (one `notify()` for the whole exam, on commit) and `exams.admit-card-issued` (one per card, because §12's template names the card number, with guardians fetched once and grouped rather than queried per card). The admit-card one fires after the **render**, not at issue: it says the card is ready to download, which is only true once a document exists. PR C adds `exams.marks-entry-reminder`, to the *allocated subject teachers* of any exam-subject whose window closes within two days with marks still outstanding — §12 says "teachers with pending entries", and a broadcast to all staff is the kind of notification people learn to ignore. PR D adds the last three — `result-approval-pending` (in-app only, to whoever holds `exams.result.approve`, resolved from the **permission** so a delegation to `vice_principal` is followed), `result-published` and `report-card-ready` (both to the students whose rows actually *transitioned*, whose ids the caller passes in). **All six of §12's rows now have a caller** — PR B's review found one registered with none |
 | §5.5 grading | `grading.py` — `percentage_for` (ROUND_HALF_UP, one decimal place), `assert_scale_is_complete`, `band_for` (boundary resolves to the upper band), `gpa_for` (None unless the scale type is `gpa` or `hybrid`) |
 | §7.1 lifecycle | `exams.status` starts at `draft` and is **read-only on the wire**. Configuration is frozen past `scheduled`; only a draft exam may be deleted |
 | Feature flag | `module.examinations`, `default_enabled=False` |
@@ -363,6 +369,42 @@ lifecycle, the sheet import and the missing-entries dashboard.
   N+1 shape PR B's review caught twice, and the fix belongs in the query rather
   than at each call site.
 
+- **Three rules in `processing.py` are the ones a school will argue about**, so
+  each is named and tested rather than left implicit. An **absent** student is
+  `outcome=absent`, not a zero — a zero would rank them last and drag the
+  section's pass rate down, a data error presented as a child's result. An
+  **exempt** subject shrinks the denominator rather than scoring zero (§5.4 —
+  "excluded from aggregates"), while an **absent** subject keeps its maximum,
+  because the paper was set and not sat. And **ties share a rank**: two students
+  on 91% are both second, because breaking the tie by name or id would invent a
+  difference the marks do not support.
+- **Subject weightage scales both sides of the fraction.** §5.1 makes it a
+  weight *within* the exam's aggregate, so a subject at 50% contributes half its
+  marks and half its maximum — which keeps a percentage a percentage. Scaling
+  only the obtained side would silently change what the total was out of.
+- **§7.1's "changes requested" edge is built as `:send-results-back`, and §16
+  does not list it.** That is a deliberate addition rather than an invention:
+  §7.1's flowchart has the edge explicitly, and without an endpoint for it a
+  data-entry error found at approval has no route back — someone reaches for a
+  database edit. It is also what lets `assert_exam_accepts_marks` and
+  `assert_exam_is_recomputable` be strict, since there is a sanctioned way out
+  of `approved`.
+- **A withheld result survives a recompute, and a revoked admit card survives a
+  re-issue.** The same rule twice: a decision someone took is not undone by a
+  batch operation running again.
+- **Two narrowings on `/results`, and only one is record scope.** The model hook
+  answers *whose* result a caller may see; the viewset adds *whether it is
+  released*, filtering a restricted principal to `published`. Conflating them
+  inside `filter_owned_by_user` would put a publishing rule somewhere nobody
+  looks for one. `core.rbac.permissions.is_restricted_principal` was extracted
+  from `DenyRestrictedPrincipals` so a queryset can ask the same question the
+  permission class asks.
+- **§12's three new triggers all fire on the rows that *transitioned***, whose
+  ids the caller collects before the write and passes to the task. Publishing is
+  idempotent, so notifying on current status would re-send every guardian the
+  same message on a re-publish — `attendance`'s review finding, applied ahead of
+  time.
+
 ### Corrected in review
 
 Seven findings. Three describe rules the module now depends on:
@@ -405,8 +447,26 @@ single form.
 
 ### Deliberately not built in this PR
 
-§15's remaining four tables: `results` and `report_cards` (PR D),
-`question_banks` and `questions` plus §13's reports (PR E).
+§15's remaining two tables: `question_banks` and `questions`, plus §13's
+reports and exports (PR E).
+
+**§11's processing waiver is still not built**, and now that the block it would
+waive exists, the reason is sharper: §11 calls it a recommendation and §4
+declares no key for it. A waiver is only worth designing once a school has met
+the block often enough to say what should bypass it — and an unaudited override
+of "marks are outstanding" is exactly the kind of switch that gets used by
+default.
+
+**Term-consolidated report cards are deferred.** §19 calls them the recommended
+default output, and they need weighted aggregation across several exams — which
+needs more than one exam's results to exist. `report_cards.term_id` and its
+partial unique ship now, so the later work is data-compatible rather than a
+migration.
+
+**§10's `result.published` webhook is not built.** `api-architecture.md` §2.6
+describes a webhook dispatcher and nothing on the platform implements one.
+The call site it would occupy is `ResultViewSet.publish`, beside the
+notification.
 
 **§14's AI-EXM-02 (AI grading assistance) is out of scope, and the schema says
 so.** `marks` has no `source` column, because there is only one source — a

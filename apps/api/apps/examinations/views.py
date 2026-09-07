@@ -46,7 +46,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.examinations import conflicts, services, tasks
+from apps.examinations import conflicts, processing, services, tasks
 from apps.examinations.filters import (
     AdmitCardFilterSet,
     ExamFilterSet,
@@ -54,6 +54,8 @@ from apps.examinations.filters import (
     ExamSubjectFilterSet,
     GradingScaleFilterSet,
     MarksFilterSet,
+    ReportCardFilterSet,
+    ResultFilterSet,
 )
 from apps.examinations.models import (
     AdmitCard,
@@ -63,6 +65,11 @@ from apps.examinations.models import (
     GradeBand,
     GradingScale,
     Marks,
+    ReportCard,
+    ReportCardStatus,
+    Result,
+    ResultOutcome,
+    ResultStatus,
 )
 from apps.examinations.serializers import (
     AdmitCardRevokeSerializer,
@@ -75,13 +82,22 @@ from apps.examinations.serializers import (
     GradingScaleSerializer,
     MarksImportRequestSerializer,
     MarksSerializer,
+    ReportCardSerializer,
+    ResultSerializer,
+    ResultWithholdSerializer,
+    SendResultsBackSerializer,
 )
+from core.api.exceptions import Conflict
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job
-from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey
+from core.rbac.permissions import (
+    DenyRestrictedPrincipals,
+    HasPermissionKey,
+    is_restricted_principal,
+)
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -702,4 +718,315 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         record_audit(request, "import", exam_subject, after={"job_id": str(job.pk)})
         return ActionResponse.accepted(
             str(job.pk), message="Marks sheet queued. Poll the job for the row-level report."
+        )
+
+
+class ResultViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/results` — §5.5's processed outcomes and §5.6's chain.
+
+    **Two narrowings, and they answer different questions.** Record scope
+    answers *whose* result a caller may see — `filter_owned_by_user` for a
+    student or guardian, `filter_assigned_to_user` for a class teacher. This
+    viewset adds *when*: a restricted principal sees `published` rows only,
+    because §5.6 makes releasing a separate, permissioned act from computing.
+    Conflating the two inside the model hook would put a publishing rule
+    somewhere nobody looks for one.
+
+    Portal-readable for reads only. The **readable** actions are named and
+    everything else is staff-only, which is PR B's review lesson: a list of
+    writes has to be updated whenever one is added, and forgetting is silent.
+    """
+
+    permission_classes = PORTAL_READABLE_PERMISSIONS
+    queryset = Result.objects
+    serializer_class = ResultSerializer
+    filterset_class = ResultFilterSet
+    ordering_fields = ["percentage", "rank_in_section", "created_at"]
+    scope_own_field = None
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "exams.result.view"
+    required_permission_map = {
+        "process": "exams.result.create",
+        "approve": "exams.result.approve",
+        "send_back": "exams.result.approve",
+        "publish": "exams.result.publish",
+        "withhold": "exams.result.publish",
+    }
+    http_method_names = ["get", "post", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return super().get_permissions()
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related("student", "grade_band", "section")
+        if is_restricted_principal(self.request.user):
+            # §5.6 — a student or guardian sees a result only once it is
+            # released. Applied here rather than in the model hook because it is
+            # a question about the *result's* state, not about whose it is.
+            queryset = queryset.filter(status=ResultStatus.PUBLISHED)
+        return queryset
+
+    @extend_schema(request=None, responses={202: None})
+    def process(self, request: Request, pk: str | None = None):
+        """`POST /exams/{id}:process-results` — 202 + a job (§16).
+
+        The readiness check runs here *and* in the job. Here it is for the
+        clerk — an immediate, readable refusal naming which subjects are
+        outstanding. In the job it is what actually holds, because marks can
+        change between the request and the worker picking it up.
+        """
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        services.assert_exam_is_recomputable(exam)
+        processing.assert_ready_to_process(processing.collect(exam=exam))
+
+        def execute():
+            job = create_job(
+                tenant_id=request.tenant.pk,
+                job_type="exams.process-results",
+                payload={"exam_id": str(exam.pk), "requested_by": str(request.user.pk)},
+                actor_id=request.user.pk,
+            )
+            transaction.on_commit(
+                lambda: tasks.process_results_task.delay(
+                    tenant_id=str(request.tenant.pk),
+                    job_id=str(job.pk),
+                    actor_id=str(request.user.pk),
+                )
+            )
+            record_audit(request, "create", exam, after={"job_id": str(job.pk)})
+            return ActionResponse.accepted(str(job.pk), message="Result processing queued.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="exams:process-results",
+            execute=execute,
+        )
+
+    @extend_schema(request=None, responses={200: None})
+    def approve(self, request: Request, pk: str | None = None):
+        """`POST /exams/{id}:approve-results` — §5.6's gate.
+
+        `assert_approver_is_not_the_processor` lives in `services`, not here:
+        the rule is the module's and has to hold for any caller, and §4's
+        closing line makes it a property of the results rather than of the
+        request.
+        """
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        before = {"status": exam.status}
+        outcome = services.approve_exam_results(exam=exam, approver_id=request.user.pk)
+        record_audit(request, "approve", exam, before=before, after=outcome)
+        return ActionResponse.ok(outcome, message=f"{outcome['approved']} result(s) approved.")
+
+    @extend_schema(request=SendResultsBackSerializer, responses={200: None})
+    def send_back(self, request: Request, pk: str | None = None):
+        """`POST /exams/{id}:send-results-back` — §7.1's "changes requested" edge.
+
+        Not in §16's list; see the module doc's §20 for why it is built anyway.
+        Behind the *approve* key, because sending back is the other half of the
+        same decision.
+        """
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        serializer = SendResultsBackSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        before = {"status": exam.status}
+
+        outcome = services.send_results_back(
+            exam=exam,
+            actor_id=request.user.pk,
+            reason=serializer.validated_data["reason"],
+        )
+
+        record_audit(request, "update", exam, before=before, after=outcome)
+        return ActionResponse.ok(
+            outcome,
+            message=f"{outcome['reopened']} result(s) reopened; marks entry is open again.",
+        )
+
+    @extend_schema(request=None, responses={200: None})
+    def publish(self, request: Request, pk: str | None = None):
+        """`POST /exams/{id}:publish-results` — §5.6's release.
+
+        §12's notification fires on the rows that actually **transitioned**,
+        whose ids are collected before the write and handed to the task. That is
+        `attendance`'s review finding applied: publishing is idempotent, so
+        notifying on current status would re-send every guardian the same
+        message on a re-publish.
+        """
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        before = {"status": exam.status}
+
+        moving = list(
+            Result.objects.alive()
+            .filter(exam=exam, status=ResultStatus.APPROVED)
+            .exclude(outcome=ResultOutcome.WITHHELD)
+            .values_list("pk", flat=True)
+        )
+        outcome = services.publish_exam_results(exam=exam, actor_id=request.user.pk)
+        record_audit(request, "publish", exam, before=before, after=outcome)
+
+        transaction.on_commit(
+            lambda: tasks.notify_results_published.delay(
+                tenant_id=str(request.tenant.pk),
+                exam_id=str(exam.pk),
+                result_ids=[str(pk_value) for pk_value in moving],
+            )
+        )
+        return ActionResponse.ok(
+            outcome,
+            message=(
+                f"{outcome['published']} result(s) published"
+                + (f"; {outcome['withheld']} withheld." if outcome["withheld"] else ".")
+            ),
+        )
+
+    @extend_schema(request=ResultWithholdSerializer, responses={200: ResultSerializer})
+    def withhold(self, request: Request, pk: str | None = None):
+        """`POST /results/{id}:withhold` — §5.6's per-student hold."""
+        result = get_object_or_404(Result.objects.alive(), pk=pk)
+        serializer = ResultWithholdSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        before = {"outcome": result.outcome}
+
+        services.withhold_result(
+            result=result,
+            reason=serializer.validated_data["reason"],
+            actor_id=request.user.pk,
+        )
+
+        record_audit(
+            request,
+            "update",
+            result,
+            before=before,
+            after={"outcome": result.outcome, "reason": serializer.validated_data["reason"]},
+        )
+        return ActionResponse.ok(
+            ResultSerializer(result).data, message="Result withheld from publication."
+        )
+
+
+class ReportCardViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/report-cards` — §5.7.
+
+    `PATCH` exists for the two remark fields and nothing else; everything
+    structural is set by the generation job. Remarks are writable only while the
+    card is a draft, because editing them on a published card would change a
+    document a parent already holds without the version changing.
+
+    Portal-readable for reads only, and a restricted principal sees `published`
+    cards — the same two-narrowings split `ResultViewSet` documents.
+    """
+
+    permission_classes = PORTAL_READABLE_PERMISSIONS
+    queryset = ReportCard.objects
+    serializer_class = ReportCardSerializer
+    filterset_class = ReportCardFilterSet
+    ordering_fields = ["created_at", "version"]
+    scope_own_field = None
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "exams.report-card.view"
+    required_permission_map = {
+        "update": "exams.report-card.create",
+        "partial_update": "exams.report-card.create",
+        "generate": "exams.report-card.create",
+        "publish": "exams.report-card.publish",
+    }
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return super().get_permissions()
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related("student", "result")
+        if is_restricted_principal(self.request.user):
+            queryset = queryset.filter(status=ReportCardStatus.PUBLISHED)
+        return queryset
+
+    def perform_update(self, serializer) -> None:
+        if serializer.instance.status == ReportCardStatus.PUBLISHED:
+            raise Conflict(
+                "This report card is published. Regenerate it to issue a new version with "
+                "different remarks."
+            )
+        super().perform_update(serializer)
+
+    @extend_schema(request=None, responses={202: None})
+    def generate(self, request: Request, pk: str | None = None):
+        """`POST /exams/{id}:generate-report-cards` — 202 + a job (§16)."""
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        services.assert_report_cards_are_generatable(exam)
+
+        def execute():
+            job = create_job(
+                tenant_id=request.tenant.pk,
+                job_type="exams.report-cards",
+                payload={"exam_id": str(exam.pk), "requested_by": str(request.user.pk)},
+                actor_id=request.user.pk,
+            )
+            transaction.on_commit(
+                lambda: tasks.generate_report_cards_task.delay(
+                    tenant_id=str(request.tenant.pk),
+                    job_id=str(job.pk),
+                    actor_id=str(request.user.pk),
+                )
+            )
+            record_audit(request, "create", exam, after={"job_id": str(job.pk)})
+            return ActionResponse.accepted(str(job.pk), message="Report card generation queued.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="exams:generate-report-cards",
+            execute=execute,
+        )
+
+    @extend_schema(request=None, responses={200: None})
+    def publish(self, request: Request, pk: str | None = None):
+        """`POST /exams/{id}:publish-report-cards` — release them to the portals.
+
+        §12's notification fires on the cards that actually moved, whose ids are
+        collected before the write — the same transition-not-state rule
+        `:publish-results` follows.
+        """
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+
+        moving = list(
+            ReportCard.objects.alive()
+            .filter(exam=exam, status=ReportCardStatus.GENERATED, file__isnull=False)
+            .values_list("pk", flat=True)
+        )
+        outcome = services.publish_report_cards(exam=exam, actor_id=request.user.pk)
+        record_audit(request, "publish", exam, after=outcome)
+
+        transaction.on_commit(
+            lambda: tasks.notify_report_cards_ready.delay(
+                tenant_id=str(request.tenant.pk),
+                exam_id=str(exam.pk),
+                card_ids=[str(pk_value) for pk_value in moving],
+            )
+        )
+        return ActionResponse.ok(
+            outcome, message=f"{outcome['published']} report card(s) published."
         )

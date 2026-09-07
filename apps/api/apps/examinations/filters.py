@@ -22,6 +22,8 @@ from apps.examinations.models import (
     ExamSubject,
     GradingScale,
     Marks,
+    ReportCard,
+    Result,
 )
 
 
@@ -98,3 +100,23 @@ class MarksFilterSet(django_filters.FilterSet):
     class Meta:
         model = Marks
         fields = {"status": ["exact"], "is_absent": ["exact"], "is_exempt": ["exact"]}
+
+
+class ResultFilterSet(django_filters.FilterSet):
+    exam_id = django_filters.UUIDFilter(field_name="exam_id")
+    student_id = django_filters.UUIDFilter(field_name="student_id")
+    section_id = django_filters.UUIDFilter(field_name="section_id")
+
+    class Meta:
+        model = Result
+        fields = {"status": ["exact"], "outcome": ["exact"]}
+
+
+class ReportCardFilterSet(django_filters.FilterSet):
+    exam_id = django_filters.UUIDFilter(field_name="exam_id")
+    term_id = django_filters.UUIDFilter(field_name="term_id")
+    student_id = django_filters.UUIDFilter(field_name="student_id")
+
+    class Meta:
+        model = ReportCard
+        fields = {"status": ["exact"]}

@@ -96,3 +96,128 @@ def admit_card_html(*, card, exam, student, sittings, school_name: str) -> str:
     <p class="signature">Invigilator signature: ______________________</p>
   </body>
 </html>"""
+
+
+_REPORT_CARD_STYLES = """
+@page { size: A4; margin: 14mm; }
+body { font-family: sans-serif; font-size: 10.5pt; color: #111; }
+h1 { font-size: 17pt; margin: 0 0 1mm; }
+.school { color: #444; font-size: 10pt; margin: 0 0 6mm; }
+.identity dt { float: left; width: 40mm; font-weight: bold; }
+.identity dd { margin: 0 0 1.5mm 40mm; }
+.identity { border: 0.6pt solid #666; padding: 4mm; margin-bottom: 5mm; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 5mm; }
+th, td { border: 0.4pt solid #999; padding: 1.6mm 2mm; text-align: left; }
+thead { display: table-header-group; }
+.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.summary td { border: none; padding: 0.8mm 0; }
+.summary .label { font-weight: bold; width: 46mm; }
+.remarks { border: 0.4pt solid #999; padding: 3mm; margin-bottom: 4mm; }
+.remarks h2 { font-size: 11pt; margin: 0 0 1.5mm; }
+.signature { margin-top: 12mm; font-size: 9.5pt; }
+.absent { color: #555; font-style: italic; }
+"""
+
+
+def report_card_html(*, card, exam, student, result, subject_rows, school_name: str) -> str:
+    """One student's report card — §5.7.
+
+    `subject_rows` and the attendance summary are both passed in already
+    resolved, so nothing here queries: a generation batch renders a whole
+    section, and a query in this function would be one per child.
+
+    **An absent subject prints "Absent", not a zero**, for the same reason
+    `processing` gives the outcome its own value: a zero on a report card reads
+    as a mark the student earned.
+
+    Remarks render only when written. An empty "Class teacher's remarks" box on
+    a document a parent keeps is worse than no box at all.
+    """
+    rows = "".join(
+        "<tr>"
+        f"<td>{html.text(row['subject'])}</td>"
+        f'<td class="numeric">{html.text(row["max_marks"])}</td>'
+        + (
+            '<td class="absent" colspan="2">Absent</td>'
+            if row["is_absent"]
+            else '<td class="absent" colspan="2">Exempt</td>'
+            if row["is_exempt"]
+            else f'<td class="numeric">{html.text(row["obtained"])}</td>'
+            f"<td>{html.text(row['verdict'])}</td>"
+        )
+        + "</tr>"
+        for row in subject_rows
+    )
+    if not rows:
+        rows = '<tr><td colspan="4">No subject marks recorded.</td></tr>'
+
+    attendance = card.attendance_summary or {}
+    attendance_line = (
+        f"{html.text(attendance.get('attendance_rate'))}% "
+        f"({html.text(attendance.get('present_days'))} of "
+        f"{html.text(attendance.get('counted_days'))} days)"
+        if attendance
+        else '<span class="absent">Not recorded</span>'
+    )
+
+    remark_blocks = ""
+    for heading, body in (
+        ("Class teacher's remarks", card.class_teacher_remarks),
+        ("Principal's remarks", card.principal_remarks),
+    ):
+        if body:
+            remark_blocks += (
+                f'<div class="remarks"><h2>{html.text(heading)}</h2><p>{html.text(body)}</p></div>'
+            )
+
+    rank = (
+        html.text(result.rank_in_section)
+        if result.rank_in_section is not None
+        else '<span class="absent">n/a</span>'
+    )
+    grade = (
+        html.text(result.grade_band.label)
+        if result.grade_band_id is not None
+        else '<span class="absent">n/a</span>'
+    )
+
+    return f"""<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Report card {html.text(student.admission_number)}</title>
+    <style>{_REPORT_CARD_STYLES}</style>
+  </head>
+  <body>
+    <h1>Report card</h1>
+    <p class="school">{html.text(school_name)} &middot; {html.text(exam.name)}</p>
+    <dl class="identity">
+      <dt>Name</dt>
+      <dd>{html.text(f"{student.first_name} {student.last_name}")}</dd>
+      <dt>Admission number</dt>
+      <dd>{html.text(student.admission_number)}</dd>
+      <dt>Version</dt>
+      <dd>{html.text(card.version)}</dd>
+    </dl>
+    <table>
+      <thead>
+        <tr><th>Subject</th><th>Out of</th><th>Obtained</th><th>Result</th></tr>
+      </thead>
+      <tbody>{rows}</tbody>
+    </table>
+    <table class="summary">
+      <tr><td class="label">Total</td>
+          <td>{html.text(result.total_obtained_marks)} /
+              {html.text(result.total_max_marks)}</td></tr>
+      <tr><td class="label">Percentage</td>
+          <td>{html.text(result.percentage)}%</td></tr>
+      <tr><td class="label">Grade</td><td>{grade}</td></tr>
+      <tr><td class="label">Rank in section</td><td>{rank}</td></tr>
+      <tr><td class="label">Outcome</td>
+          <td>{html.text(result.get_outcome_display())}</td></tr>
+      <tr><td class="label">Attendance</td><td>{attendance_line}</td></tr>
+    </table>
+    {remark_blocks}
+    <p class="signature">Class teacher: ____________________ &nbsp;&nbsp;
+       Principal: ____________________</p>
+  </body>
+</html>"""

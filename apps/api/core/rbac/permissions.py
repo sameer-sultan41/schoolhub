@@ -105,6 +105,24 @@ class IsPlatformPrincipal(permissions.BasePermission):
         return bool(user and user.is_authenticated and user.is_platform)
 
 
+def is_restricted_principal(user) -> bool:
+    """True for a student or guardian — anyone holding a restricted-principal role.
+
+    Extracted from `DenyRestrictedPrincipals` so a *queryset* can ask the same
+    question the permission class asks. `examinations` needs it because §5.6
+    releases a result in two steps: record scope decides *whose* result a caller
+    may see, and this decides whether they may see an unpublished one at all.
+    Those are different narrowings, and only one of them belongs in a model's
+    record-scope hook.
+
+    Reads the same rows the permission class does, so the two can never
+    disagree about who counts as restricted.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return user.user_roles.filter(role__is_restricted_principal=True).exists()
+
+
 class DenyRestrictedPrincipals(permissions.BasePermission):
     """Students and guardians can never reach staff endpoints, even via a custom role."""
 
@@ -112,7 +130,7 @@ class DenyRestrictedPrincipals(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        return not user.user_roles.filter(role__is_restricted_principal=True).exists()
+        return not is_restricted_principal(user)
 
 
 def scope_queryset(

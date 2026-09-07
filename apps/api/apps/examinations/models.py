@@ -858,3 +858,327 @@ class Marks(TenantOwnedModel):
                 student__enrollments__deleted_at__isnull=True,
             )
         return queryset.filter(predicate).distinct()
+
+
+class ResultOutcome(models.TextChoices):
+    """§5.5's verdict on one student's exam.
+
+    `absent` is **not** a fail, and the distinction is the point: a student who
+    did not sit has no percentage to judge, and scoring them zero would put
+    them bottom of the rank and count against the section's pass rate — a data
+    error presented as a child's result.
+
+    `withheld` is §5.6's per-student hold. It is an outcome rather than a flag
+    so that a withheld result is excluded from publishing by the same query
+    that includes everything else, instead of by a condition each caller has to
+    remember.
+    """
+
+    PASS = "pass", "Pass"
+    FAIL = "fail", "Fail"
+    ABSENT = "absent", "Absent"
+    WITHHELD = "withheld", "Withheld"
+
+
+class ResultStatus(models.TextChoices):
+    """§5.6's approval chain, on the result row rather than only on the exam.
+
+    Per row, because §5.6 supports withholding *one* student's result while the
+    rest of a section publishes — which a status on the exam alone cannot
+    express.
+    """
+
+    PROCESSING = "processing", "Processing"
+    PENDING_APPROVAL = "pending_approval", "Pending approval"
+    APPROVED = "approved", "Approved"
+    PUBLISHED = "published", "Published"
+
+
+class ReportCardStatus(models.TextChoices):
+    """§5.7's report-card states."""
+
+    DRAFT = "draft", "Draft"
+    GENERATED = "generated", "Generated"
+    PUBLISHED = "published", "Published"
+
+
+class Result(TenantOwnedModel):
+    """One student's processed outcome for one exam — §5.5.
+
+    **Recomputed idempotently until approved.** §6 says "recompute is idempotent
+    and re-runnable until approval", so processing updates this row in place
+    rather than inserting a second one; the unique index below is what makes
+    that a requirement rather than a preference.
+
+    `section_id` is the section **at processing time**, denormalised
+    deliberately. A student who changes section after results are published
+    must not retroactively move their result into the new section's rank list,
+    and resolving the section through the enrolment at read time would do
+    exactly that.
+
+    `created_by` is the processing initiator, and `approved_by` must differ from
+    it — §4's closing line and auth-and-rbac §2.4's segregation of duties. That
+    is checked in `services`, not here, because a CHECK cannot compare a column
+    against another row's author and the rule has to hold for any caller.
+    """
+
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="results")
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="results"
+    )
+    section = models.ForeignKey(
+        "school_organization.Section",
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="The section at processing time; never resolved again at read time.",
+    )
+    total_max_marks = models.DecimalField(max_digits=8, decimal_places=2)
+    total_obtained_marks = models.DecimalField(max_digits=8, decimal_places=2)
+    percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    grade_band = models.ForeignKey(
+        GradeBand, on_delete=models.PROTECT, related_name="+", null=True, blank=True
+    )
+    gpa = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    rank_in_section = models.IntegerField(null=True, blank=True)
+    rank_in_class = models.IntegerField(null=True, blank=True)
+    outcome = models.CharField(max_length=20, choices=ResultOutcome.choices)
+    grace_marks = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        help_text="Moderation adjustment; audited (§19).",
+    )
+    status = models.CharField(
+        max_length=20, choices=ResultStatus.choices, default=ResultStatus.PROCESSING
+    )
+    approved_by = models.UUIDField(
+        null=True, blank=True, help_text="Must differ from the processing initiator (§4)."
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "results"
+        ordering = ["-percentage"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "exam", "student"],
+                name="results_one_per_student_per_exam",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(percentage__gte=0, percentage__lte=100),
+                name="results_percentage_in_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(total_obtained_marks__gte=0, total_max_marks__gte=0),
+                name="results_totals_not_negative",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(grace_marks__gte=0),
+                name="results_grace_marks_not_negative",
+            ),
+            # An approval without an approver, or an approver with no timestamp,
+            # is an audit trail with a hole in it — and this is the row a school
+            # points at when a parent disputes a grade.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status__in=[ResultStatus.PROCESSING, ResultStatus.PENDING_APPROVAL])
+                    | models.Q(approved_by__isnull=False, approved_at__isnull=False)
+                ),
+                name="results_approval_is_attributable",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status=ResultStatus.PUBLISHED) | models.Q(published_at__isnull=False)
+                ),
+                name="results_publication_has_a_timestamp",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "exam", "section"], name="results_exam_section_idx"),
+            models.Index(fields=["tenant", "student"], name="results_student_idx"),
+            models.Index(fields=["tenant", "status"], name="results_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.student_id} @ {self.exam_id}: {self.percentage}%"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — a student's own result, a guardian's children's.
+
+        Delegates to `Student.filter_owned_by_user` rather than restating the
+        guardian join, which already unions a student's own row with the
+        children they hold a live, portal-enabled link to.
+
+        **This hook does not decide whether an unpublished result is visible.**
+        §5.6 gates that, and the viewset narrows a restricted principal to
+        `published` separately — record scope answers "whose", not "when".
+        Conflating the two here would put a publishing rule in a place nobody
+        looks for one.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — §13's "teachers see assigned sections".
+
+        Resolved on this table's own `section_id`, not through an enrolment: a
+        result records the section it was processed in, and that is the section
+        whose teacher is entitled to see it.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.staff_management.models import EmploymentStatus, Staff
+
+        staff_ids = (
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
+        return queryset.filter(section__class_teacher_staff_id__in=staff_ids)
+
+
+class ReportCard(TenantOwnedModel):
+    """A generated report card — §5.7.
+
+    **Exactly one of `exam` or `term` is set**, enforced by a CHECK and by two
+    disjoint partial unique indexes. That is the same shape
+    `student_attendance` uses for its daily-versus-period split, and for the
+    same reason: PostgreSQL treats NULLs as distinct, so one unique index over
+    both columns would let a student collect two exam cards for one exam and
+    never notice.
+
+    `attendance_summary` is a **snapshot** taken at generation time, not a live
+    join. A card is a document a school hands to a parent; if it were computed
+    on read, last year's card would silently restate itself against this year's
+    register every time anyone opened it.
+
+    `version` increments on regeneration rather than a second row being written
+    — §6 asks for "regeneration versioning", and a school that reissues a card
+    after fixing a remark needs the old one to stop being the current card
+    without the record of it disappearing.
+    """
+
+    exam = models.ForeignKey(
+        Exam, on_delete=models.CASCADE, related_name="report_cards", null=True, blank=True
+    )
+    term = models.ForeignKey(
+        "school_organization.Term",
+        on_delete=models.PROTECT,
+        related_name="report_cards",
+        null=True,
+        blank=True,
+        help_text="Set instead of `exam` for a term-consolidated card.",
+    )
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="report_cards"
+    )
+    result = models.ForeignKey(
+        Result,
+        on_delete=models.PROTECT,
+        related_name="report_cards",
+        null=True,
+        blank=True,
+        help_text="Null for a term consolidation, which spans several results.",
+    )
+    file = models.ForeignKey(
+        "files.File",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        db_column="file_id",
+    )
+    class_teacher_remarks = models.CharField(max_length=1000, null=True, blank=True)
+    principal_remarks = models.CharField(max_length=1000, null=True, blank=True)
+    attendance_summary = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Snapshot from the attendance module at generation time.",
+    )
+    version = models.IntegerField(default=1)
+    status = models.CharField(
+        max_length=20, choices=ReportCardStatus.choices, default=ReportCardStatus.DRAFT
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "report_cards"
+        ordering = ["student__admission_number"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(exam__isnull=False, term__isnull=True)
+                    | models.Q(exam__isnull=True, term__isnull=False)
+                ),
+                name="report_cards_exactly_one_scope",
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "exam", "student"],
+                name="report_cards_one_per_exam",
+                condition=models.Q(exam__isnull=False, deleted_at__isnull=True),
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "term", "student"],
+                name="report_cards_one_per_term",
+                condition=models.Q(term__isnull=False, deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(version__gte=1), name="report_cards_version_positive"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "exam", "status"], name="report_cards_exam_idx"),
+            models.Index(fields=["tenant", "student"], name="report_cards_student_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"report card {self.student_id} v{self.version}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — a student's own card, a guardian's children's."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — §3 gives a class teacher their homeroom's.
+
+        Resolved through the *result*'s section where there is one, because that
+        is the section recorded at processing time. A term-consolidated card has
+        no single result, so it falls back to the student's active enrolment —
+        which is the right answer for a card that spans a whole term anyway.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.staff_management.models import EmploymentStatus, Staff
+        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+        staff_ids = list(
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
+        if not staff_ids:
+            return queryset.none()
+        homeroom_students = (
+            StudentEnrollment.objects.alive()
+            .filter(status=EnrollmentStatus.ACTIVE, section__class_teacher_staff_id__in=staff_ids)
+            .values_list("student_id", flat=True)
+        )
+        return queryset.filter(
+            models.Q(result__section__class_teacher_staff_id__in=staff_ids)
+            | models.Q(result__isnull=True, student_id__in=homeroom_students)
+        ).distinct()

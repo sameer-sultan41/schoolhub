@@ -33,3 +33,10 @@ MARKS_IMPORT = registry.register(
     },
     max_size_bytes=10 * MEGABYTE,
 )
+
+REPORT_CARD = registry.register(
+    "exams.report-card",
+    "A rendered report card for one student for one exam (§5.7).",
+    mime_types={"application/pdf"},
+    max_size_bytes=5 * MEGABYTE,
+)
