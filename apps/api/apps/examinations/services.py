@@ -1441,19 +1441,26 @@ def report_card_period(*, exam: Exam) -> tuple:
     reading one expects the term's figure rather than the three days of an exam
     week.
     """
-    if exam.term_id is not None:
-        return exam.term.start_date, exam.term.end_date
+    # Bound and checked, not `term_id is not None`: the FK is what carries the
+    # dates, and narrowing on the id leaves the attribute access unguarded.
+    term = exam.term
+    if term is not None:
+        return term.start_date, term.end_date
     return exam.academic_session.start_date, exam.academic_session.end_date
 
 
 @transaction.atomic
-def upsert_report_card(*, exam: Exam, result: Result, summary: dict, actor_id: uuid.UUID):
+def upsert_report_card(*, exam: Exam, result: Result, summary: dict | None, actor_id: uuid.UUID):
     """One student's card row, versioned rather than duplicated.
 
     §6 asks for "regeneration versioning": a school that reissues a card after
     fixing a remark needs the previous one to stop being current without the
     record of it vanishing. So a regeneration bumps `version` and clears the
     stale `file`, and the render job fills a new one in.
+
+    `summary` is nullable, and the signature says so: a student with no register
+    rows has no attendance figure, and the body already stores `None` for them —
+    the annotation had claimed otherwise.
 
     Remarks are **preserved** across a regeneration. They are a class teacher's
     and a principal's own words, and a regeneration triggered by a marks
