@@ -1361,9 +1361,6 @@ def withhold_result(*, result: Result, reason: str, actor_id: uuid.UUID) -> Resu
     # The row, not the exam: withholding is per student, and locking the exam
     # would serialise every guardian's hold against every other one.
     result = Result.objects.select_for_update().get(pk=result.pk)
-    # The row, not the exam: withholding is per student, and locking the exam
-    # would serialise every guardian's hold against every other one.
-    result = Result.objects.select_for_update().get(pk=result.pk)
     if result.status == ResultStatus.PUBLISHED:
         raise Conflict(
             "This result is already published, so it cannot be withheld. Reprocess the exam "
