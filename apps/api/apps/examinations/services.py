@@ -1274,13 +1274,18 @@ def approve_exam_results(*, exam: Exam, approver_id: uuid.UUID) -> dict:
     refusal to approve, and leaving it unapproved would block the exam's own
     status transition over one student.
     """
+    exam = lock_exam(exam)
     if exam.status != ExamStatus.PROCESSING:
         raise Conflict(
             f"This exam is {exam.get_status_display().lower()}. Only processed results can "
             "be approved."
         )
 
-    pending = list(Result.objects.alive().filter(exam=exam, status=ResultStatus.PENDING_APPROVAL))
+    pending = list(
+        Result.objects.alive()
+        .select_for_update()
+        .filter(exam=exam, status=ResultStatus.PENDING_APPROVAL)
+    )
     if not pending:
         raise Conflict("There are no processed results awaiting approval on this exam.")
 
@@ -1353,6 +1358,9 @@ def withhold_result(*, result: Result, reason: str, actor_id: uuid.UUID) -> Resu
     Refused once published: the result is already with the student, and the
     remedy then is a correction, not a retroactive hold.
     """
+    # The row, not the exam: withholding is per student, and locking the exam
+    # would serialise every guardian's hold against every other one.
+    result = Result.objects.select_for_update().get(pk=result.pk)
     # The row, not the exam: withholding is per student, and locking the exam
     # would serialise every guardian's hold against every other one.
     result = Result.objects.select_for_update().get(pk=result.pk)
