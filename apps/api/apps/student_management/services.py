@@ -1172,7 +1172,9 @@ def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -
     import io
 
     import qrcode
-    from weasyprint import HTML
+
+    from core.documents import html as document_html
+    from core.documents import render_pdf
 
     with tenant_atomic(tenant_id):
         students = list(Student.objects.alive().filter(pk__in=student_ids).select_related("campus"))
@@ -1183,13 +1185,18 @@ def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -
         buffer = io.BytesIO()
         qr_image.save(buffer, format="PNG")
         qr_data_uri = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+        # **Every interpolated value escaped.** These are names a registrar
+        # typed, and a pupil recorded as `O'Brien & Sons` or with a surname
+        # containing a tag rewrote the card rather than appearing on it. The QR
+        # data URI goes through `attr` because it sits inside a quoted attribute.
+        full_name = document_html.text(f"{student.first_name} {student.last_name}")
         cards_html.append(
             f"""
             <div class="card">
-              <h2>{student.first_name} {student.last_name}</h2>
-              <p class="admission-number">{student.admission_number}</p>
-              <p>{student.campus.name}</p>
-              <img src="{qr_data_uri}" width="80" height="80" alt="" />
+              <h2>{full_name}</h2>
+              <p class="admission-number">{document_html.text(student.admission_number)}</p>
+              <p>{document_html.text(student.campus.name)}</p>
+              <img src="{document_html.attr(qr_data_uri)}" width="80" height="80" alt="" />
             </div>
             """
         )
@@ -1198,6 +1205,7 @@ def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -
     <html>
       <head>
         <style>
+          @page {{ size: A4; margin: 12mm; }}
           .card {{
             page-break-after: always;
             padding: 24px;
@@ -1211,4 +1219,4 @@ def render_id_cards_pdf(*, student_ids: list[uuid.UUID], tenant_id: uuid.UUID) -
       <body>{"".join(cards_html)}</body>
     </html>
     """
-    return HTML(string=html).write_pdf(), len(students)
+    return render_pdf(html), len(students)

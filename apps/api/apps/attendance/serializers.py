@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.attendance import exports, services
+from apps.attendance import services
 from apps.attendance.models import (
     AttendanceCorrection,
     AttendanceStatus,
@@ -30,6 +30,7 @@ from apps.school_organization.models import AcademicSession, Section
 from apps.staff_management.models import Staff
 from apps.student_management.models import Student
 from apps.timetable.models import Period
+from core.exports import tabular
 from core.files.models import File
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
@@ -401,7 +402,7 @@ class AttendanceReportQuerySerializer(serializers.Serializer):
     # on the shared serializer rather than a second one because the six other
     # parameters are identical and duplicating them is how the two drift.
     format = serializers.ChoiceField(
-        choices=[(key, key) for key in exports.FORMATS], required=False, default="csv"
+        choices=[(key, key) for key in tabular.FORMATS], required=False, default="csv"
     )
 
     def validate(self, attrs: dict) -> dict:

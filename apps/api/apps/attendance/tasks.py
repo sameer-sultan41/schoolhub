@@ -188,7 +188,8 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
     inline — which it would if the job re-queried the table without the record
     scope the endpoint applied.
     """
-    from apps.attendance import exports, uploads
+    from apps.attendance import uploads
+    from core.exports import tabular
     from core.files.services import create_ready_file
     from core.rbac.models import User
     from core.tenancy.context import tenant_atomic
@@ -213,7 +214,7 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
 
             fmt = payload.get("format", "csv")
             title = f"{payload['kind'].replace('-', ' ').capitalize()}"
-            data, mime_type, extension = exports.render(rows, fmt=fmt, title=title)
+            data, mime_type, extension = tabular.render(rows, fmt=fmt, title=title)
 
             file = create_ready_file(
                 tenant_id=uuid.UUID(tenant_id),

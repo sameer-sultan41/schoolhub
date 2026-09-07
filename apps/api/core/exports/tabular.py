@@ -1,17 +1,21 @@
-"""Rendering §13's report rows into the three formats §6 names.
+"""Rendering report rows into the three formats a school actually asks for.
 
-One writer per format over one row shape, deliberately: `tasks.build_report_rows`
-produces the rows, and everything here only decides how they are laid out. That
-is what makes adding a format a formatter rather than a query, and it is why the
-numbers in a CSV, a spreadsheet and a printed PDF cannot drift apart — a school
-that reconciles an exported register against a printed one is checking the
-school's data, not this module's three code paths.
+One writer per format over one row shape, deliberately: the caller produces
+rows, and everything here only decides how they are laid out. That is what makes
+adding a format a formatter rather than a query, and it is why the numbers in a
+CSV, a spreadsheet and a printed PDF cannot drift apart — a school that
+reconciles an exported register against a printed one is checking the school's
+data, not this module's three code paths.
 
-Both heavy imports are **lazy**, and for different reasons. `openpyxl` is cheap
-but only ever needed here. `weasyprint` needs system libraries that only
-`.github/workflows/api.yml`'s `test` job installs, so a module-level import
-would break `manage.py` everywhere else — the convention every WeasyPrint caller
-in this repo already follows.
+**Generic over `list[dict]`, and it stays that way.** This began as
+`apps/attendance/exports.py` and moved here unchanged when `examinations` became
+its second caller: nothing below knows what a row means, which is exactly the
+property that let it move. A format-specific rule that needs to know is a rule
+that belongs in the calling module.
+
+`openpyxl` is imported lazily because it is only ever needed here; the PDF path
+delegates to `core.documents.render_pdf`, which owns the harder lazy-import
+constraint (WeasyPrint's system libraries exist only in CI's `test` job).
 """
 
 from __future__ import annotations
@@ -19,10 +23,12 @@ from __future__ import annotations
 import csv
 import datetime
 import io
-from html import escape
 
-# `text/csv` matches the upload-purpose registry's declared MIME for
-# `attendance.report-export`; the other two are added there alongside.
+from core.documents import html as document_html
+from core.documents.pdf import render_pdf
+
+# Each caller registers these three MIME types on its own report-export upload
+# purpose; the strings live here because the renderer is what decides them.
 FORMATS = {
     "csv": ("text/csv", "csv"),
     "xlsx": (
@@ -175,8 +181,6 @@ def _sheet_name(title: str) -> str:
 
 
 def _pdf(rows: list[dict], *, title: str) -> bytes:
-    from weasyprint import HTML
-
     if len(rows) > PDF_ROW_LIMIT:
         raise ReportTooLargeForFormat(
             f"{len(rows)} rows is too many to print; export CSV or XLSX instead "
@@ -184,13 +188,15 @@ def _pdf(rows: list[dict], *, title: str) -> bytes:
         )
 
     headers = _headers(rows)
-    # **Every value escaped.** These are student and staff names straight out of
-    # the database, and a name containing `&` or `<` would otherwise break the
-    # table silently — a register missing a row is worse than one that fails.
-    header_html = "".join(f"<th>{escape(_readable(header))}</th>" for header in headers)
+    # **Every value escaped**, through `core.documents.html`, which is
+    # escape-by-default and has no `raw()` to reach for. These are student and
+    # staff names straight out of the database, and a name containing `&` or `<`
+    # would otherwise break the table silently — a register missing a row is
+    # worse than one that fails.
+    header_html = "".join(f"<th>{document_html.text(_readable(header))}</th>" for header in headers)
     body_html = "".join(
         "<tr>"
-        + "".join(f"<td>{escape(_cell(row.get(header)))}</td>" for header in headers)
+        + "".join(f"<td>{document_html.text(_cell(row.get(header)))}</td>" for header in headers)
         + "</tr>"
         for row in rows
     )
@@ -216,7 +222,7 @@ def _pdf(rows: list[dict], *, title: str) -> bytes:
         </style>
       </head>
       <body>
-        <h1>{escape(title)}</h1>
+        <h1>{document_html.text(title)}</h1>
         <p class="generated">Generated {datetime.date.today().isoformat()}</p>
         <table>
           <thead><tr>{header_html}</tr></thead>
@@ -225,7 +231,8 @@ def _pdf(rows: list[dict], *, title: str) -> bytes:
       </body>
     </html>
     """
-    return HTML(string=document).write_pdf()
+    # The document sets its own landscape `@page`, so `render_pdf` leaves it be.
+    return render_pdf(document)
 
 
 def _readable(header: str) -> str:

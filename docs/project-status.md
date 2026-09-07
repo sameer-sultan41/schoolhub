@@ -299,6 +299,23 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   PR 1, ahead of the features that will exercise them. The student<->guardian
   link has no destroy endpoint by design (see the module doc) — the
   dashboard has no "unlink" UI to match.
+- **`core.documents` and `core.exports` now exist** — extracted when
+  `examinations` became the third module needing a PDF. Three modules were
+  hand-rolling WeasyPrint (`student_management`'s ID cards, `attendance`'s
+  report exports, and examinations' admit cards / report cards / papers), and
+  the interesting part was not the duplication: **two of the three escaped their
+  inputs and one did not.** The ID-card renderer f-string'd student names
+  straight into its template, so a pupil recorded as `O'Brien & Sons` produced a
+  broken card and one whose surname contained a tag rewrote the layout. That is
+  fixed as part of the move. `core.documents.html` is escape-by-default and has
+  **no `raw()` helper** — a caller needing markup composes it from escaped
+  parts, which puts the escaping in the diff rather than absent from it.
+  `core.documents.render_pdf` is now the single WeasyPrint call site on the
+  platform, which matters because WeasyPrint's system libraries exist only in
+  `api.yml`'s `test` job: one place now has to remember that the import must
+  stay inside the function, instead of four. `core.exports.tabular` is
+  `apps/attendance/exports.py` moved unchanged — it was always generic over
+  `list[dict]`, which is exactly what let it move.
 - **`core.idempotency` now exists** (PR 3): stores a colon-action's response
   per `(tenant, key, endpoint)` and replays it on a repeat `Idempotency-Key`
   within 24h. Expired rows are pruned hourly by
