@@ -39,6 +39,8 @@ from apps.examinations.tests.factories import (
     ExamScheduleFactory,
     ExamSubjectFactory,
     MarksFactory,
+    ReportCardFactory,
+    ResultFactory,
     RoomFactory,
     SectionFactory,
     StudentFactory,
@@ -57,6 +59,8 @@ EXAM_SCHEDULES = "/api/v1/exam-schedules"
 ADMIT_CARDS = "/api/v1/admit-cards"
 MARKS = "/api/v1/marks"
 BULK_ENTRY = "/api/v1/marks:bulk-entry"
+RESULTS = "/api/v1/results"
+REPORT_CARDS = "/api/v1/report-cards"
 
 
 class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
@@ -114,6 +118,19 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
                 exam_subject=self.foreign_exam_subject,
                 student=StudentFactory(tenant=self.other_tenant, campus=foreign_campus),
                 entered_by=self.user.pk,
+            )
+            foreign_result_student = StudentFactory(tenant=self.other_tenant, campus=foreign_campus)
+            self.foreign_result = ResultFactory(
+                tenant=self.other_tenant,
+                exam=self.foreign_exam,
+                student=foreign_result_student,
+                section=foreign_section,
+            )
+            self.foreign_report_card = ReportCardFactory(
+                tenant=self.other_tenant,
+                exam=self.foreign_exam,
+                student=foreign_result_student,
+                result=self.foreign_result,
             )
             self.foreign_card = AdmitCardFactory(
                 tenant=self.other_tenant,
@@ -448,3 +465,69 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # --- results ----------------------------------------------------------
+
+    def test_retrieving_a_foreign_result_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{RESULTS}/{self.foreign_result.pk}"))
+
+    def test_listing_results_never_shows_another_tenant_s(self) -> None:
+        response = self.client.get(RESULTS)
+
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(self.foreign_result.pk), ids)
+
+    def test_processing_a_foreign_exam_s_results_is_a_404(self) -> None:
+        self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:process-results"))
+
+    def test_approving_a_foreign_exam_s_results_is_a_404(self) -> None:
+        """Succeeding here would sign off another school's grades under this
+        caller's name."""
+        self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:approve-results"))
+
+    def test_publishing_a_foreign_exam_s_results_is_a_404(self) -> None:
+        self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:publish-results"))
+
+    def test_sending_a_foreign_exam_s_results_back_is_a_404(self) -> None:
+        self.assert404(
+            self.client.post(
+                f"{EXAMS}/{self.foreign_exam.pk}:send-results-back",
+                {"reason": "not mine"},
+                format="json",
+            )
+        )
+
+    def test_withholding_a_foreign_result_is_a_404(self) -> None:
+        self.assert404(
+            self.client.post(
+                f"{RESULTS}/{self.foreign_result.pk}:withhold",
+                {"reason": "not mine"},
+                format="json",
+            )
+        )
+
+    # --- report cards -----------------------------------------------------
+
+    def test_retrieving_a_foreign_report_card_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{REPORT_CARDS}/{self.foreign_report_card.pk}"))
+
+    def test_patching_a_foreign_report_card_s_remarks_is_a_404(self) -> None:
+        self.assert404(
+            self.client.patch(
+                f"{REPORT_CARDS}/{self.foreign_report_card.pk}",
+                {"class_teacher_remarks": "not mine to write"},
+                format="json",
+            )
+        )
+
+    def test_listing_report_cards_never_shows_another_tenant_s(self) -> None:
+        response = self.client.get(REPORT_CARDS)
+
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(self.foreign_report_card.pk), ids)
+
+    def test_generating_a_foreign_exam_s_report_cards_is_a_404(self) -> None:
+        self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:generate-report-cards"))
+
+    def test_publishing_a_foreign_exam_s_report_cards_is_a_404(self) -> None:
+        self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:publish-report-cards"))

@@ -478,3 +478,415 @@ def remind_marks_entry() -> dict[str, int]:
     reason `attendance.lock_expired_attendance` is written this way.
     """
     return for_each_tenant(remind_tenant_marks_entry, job="exams-marks-reminder")
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def process_results_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§16's `:process-results` — 202 + a job (api-architecture.md §2.7).
+
+    Asynchronous because §5.5 grades every student in the school at once, and a
+    2,000-student run is not work an exam clerk holds a request open for.
+
+    The block on outstanding marks is checked **inside** the job as well as at
+    the endpoint. The endpoint check is for the clerk's benefit — an immediate,
+    readable refusal — and this one is what actually holds, because marks can
+    change between the request and the worker picking it up.
+    """
+    from apps.examinations.models import Exam
+    from apps.examinations.services import process_exam_results
+    from core.tenancy.context import tenant_atomic
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    try:
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            exam = (
+                Exam.objects.alive().select_related("grading_scale").get(pk=job.payload["exam_id"])
+            )
+            outcome = process_exam_results(exam=exam, actor_id=uuid.UUID(actor_id))
+
+        notify_results_pending_approval.delay(
+            tenant_id=tenant_id, exam_id=str(job.payload["exam_id"])
+        )
+        mark_succeeded(job=job, result=outcome)
+    except Exception as exc:
+        mark_failed(job=job, error=str(exc))
+
+
+@shared_task(base=TenantAwareTask)
+def notify_results_pending_approval(*, tenant_id: str, exam_id: str) -> dict[str, int]:
+    """§12's `exams.result-approval-pending`, to whoever holds the approve key.
+
+    Recipients are resolved from the **permission**, not from a role name: §4
+    makes approval delegable to `vice_principal`, and a school that has
+    delegated it needs the notice to follow the delegation. Hard-coding
+    `principal` would send it to someone who may not be able to act.
+    """
+    from apps.examinations import notifications
+    from apps.examinations.models import Exam, Result, ResultStatus
+    from core.notifications.services import Recipient, notify
+    from core.rbac.models import User
+    from core.rbac.permissions import effective_permission_keys
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        exam = Exam.objects.alive().filter(pk=exam_id).first()
+        if exam is None:
+            return {"notified": 0}
+        school_name = Tenant.objects.get(pk=tenant_id).name
+        pending = (
+            Result.objects.alive().filter(exam=exam, status=ResultStatus.PENDING_APPROVAL).count()
+        )
+        if not pending:
+            return {"notified": 0}
+
+        # Every active user in the tenant, filtered by the key. The candidate
+        # set is a school's staff, not its students, so this is small — and
+        # `effective_permission_keys` is cached per user.
+        recipients = [
+            Recipient(user_id=user.pk)
+            for user in User.objects.filter(is_active=True)
+            if "exams.result.approve" in effective_permission_keys(user)
+        ]
+        if not recipients:
+            logger.warning(
+                "no user holds exams.result.approve in tenant %s; results are pending with "
+                "nobody notified",
+                tenant_id,
+            )
+            return {"notified": 0}
+
+        try:
+            notify(
+                notifications.RESULT_APPROVAL_PENDING,
+                tenant_id=uuid.UUID(tenant_id),
+                recipients=recipients,
+                context={
+                    "exam.name": exam.name,
+                    "school.name": school_name,
+                    "student_count": str(pending),
+                },
+                source_type="exams",
+                source_id=exam.pk,
+            )
+        except Exception:
+            logger.exception(
+                "%s failed for exam %s", notifications.RESULT_APPROVAL_PENDING, exam.pk
+            )
+            return {"notified": 0}
+
+    return {"notified": len(recipients)}
+
+
+@shared_task(base=TenantAwareTask)
+def notify_results_published(*, tenant_id: str, exam_id: str, result_ids: list[str]) -> dict:
+    """§12's `exams.result-published`, to the students whose results just moved.
+
+    **`result_ids` is the rows that actually transitioned**, passed in by the
+    caller rather than re-queried here. That is `attendance`'s review finding
+    applied: alerting on *current* status meant a retry re-sent every guardian
+    the same message, and publishing is idempotent by design, so a re-publish
+    would do exactly that.
+
+    A withheld result is absent from the list by construction — `publish_exam_results`
+    excludes it — so no notice goes out about a result nobody can see.
+    """
+    from apps.examinations import notifications
+    from apps.examinations.models import Exam, Result
+    from apps.student_management.models import StudentGuardian
+    from core.notifications.services import Recipient, notify
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    if not result_ids:
+        return {"notified": 0}
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        exam = Exam.objects.alive().filter(pk=exam_id).first()
+        if exam is None:
+            return {"notified": 0}
+        school_name = Tenant.objects.get(pk=tenant_id).name
+        rows = list(Result.objects.alive().filter(pk__in=result_ids).select_related("student"))
+        if not rows:
+            return {"notified": 0}
+
+        guardians: dict = {}
+        links = (
+            StudentGuardian.objects.alive()
+            .filter(
+                student__in=[row.student for row in rows],
+                has_portal_access=True,
+                guardian__deleted_at__isnull=True,
+                guardian__user_id__isnull=False,
+            )
+            .values_list("student_id", "guardian__user_id")
+        )
+        for student_id, user_id in links:
+            guardians.setdefault(student_id, []).append(user_id)
+
+        user_ids = []
+        for row in rows:
+            if row.student.user_id:
+                user_ids.append(row.student.user_id)
+            user_ids.extend(guardians.get(row.student_id, []))
+
+        recipients = [Recipient(user_id=user_id) for user_id in dict.fromkeys(user_ids)]
+        if not recipients:
+            return {"notified": 0}
+
+        try:
+            # One call for the whole exam. §12's template names the exam, not the
+            # grade — a result is not something to put in an email body, and the
+            # portal is where a student reads it.
+            notify(
+                notifications.RESULT_PUBLISHED,
+                tenant_id=uuid.UUID(tenant_id),
+                recipients=recipients,
+                context={"exam.name": exam.name, "school.name": school_name},
+                source_type="exams",
+                source_id=exam.pk,
+            )
+        except Exception:
+            logger.exception("%s failed for exam %s", notifications.RESULT_PUBLISHED, exam.pk)
+            return {"notified": 0}
+
+    return {"notified": len(recipients)}
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def generate_report_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§16's `:generate-report-cards` — 202 + a job.
+
+    **The attendance summary is fetched once for the whole cohort**, then each
+    card renders from it. `services.attendance_summary_for` groups in SQL, which
+    is what makes that possible; asking per student would be the N+1 both this
+    module's review and `attendance.reports`' own docstring warn about.
+
+    One PDF per card, and the job renders whatever has no `file_id` — so a
+    partial failure is fixed by re-running rather than by unpicking a batch,
+    the same property `render_admit_cards_task` has.
+    """
+    from apps.examinations import documents, services, uploads
+    from apps.examinations.models import (
+        Exam,
+        ExamSubject,
+        Marks,
+        ReportCardStatus,
+        Result,
+        ResultOutcome,
+        ResultStatus,
+    )
+    from core.documents import render_pdf
+    from core.files.services import create_ready_file
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    rendered = 0
+    failed: list[dict[str, str]] = []
+    try:
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            exam = (
+                Exam.objects.alive()
+                .select_related("term", "academic_session")
+                .get(pk=job.payload["exam_id"])
+            )
+            services.assert_report_cards_are_generatable(exam)
+            school_name = Tenant.objects.get(pk=tenant_id).name
+
+            results = list(
+                Result.objects.alive()
+                .filter(exam=exam, status=ResultStatus.PUBLISHED)
+                .exclude(outcome=ResultOutcome.WITHHELD)
+                .select_related("student", "grade_band")
+            )
+            start_date, end_date = services.report_card_period(exam=exam)
+            summaries = services.attendance_summary_for(
+                students=[row.student for row in results],
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+            # Marks and subject configuration for every student, fetched once.
+            subjects = {
+                subject.pk: subject
+                for subject in ExamSubject.objects.alive()
+                .filter(exam=exam)
+                .select_related("subject")
+            }
+            marks_by_student: dict = {}
+            for row in (
+                Marks.objects.alive()
+                .filter(exam_subject__exam=exam)
+                .values(
+                    "student_id",
+                    "exam_subject_id",
+                    "theory_marks",
+                    "practical_marks",
+                    "is_absent",
+                    "is_exempt",
+                )
+            ):
+                marks_by_student.setdefault(row["student_id"], []).append(row)
+
+            cards = [
+                services.upsert_report_card(
+                    exam=exam,
+                    result=result,
+                    summary=summaries.get(result.student_id),
+                    actor_id=uuid.UUID(actor_id),
+                )
+                for result in results
+            ]
+            results_by_student = {result.student_id: result for result in results}
+
+        total = len(cards) or 1
+        for index, card in enumerate(cards, start=1):
+            try:
+                with tenant_atomic(uuid.UUID(tenant_id)):
+                    result = results_by_student[card.student_id]
+                    document = documents.report_card_html(
+                        card=card,
+                        exam=exam,
+                        student=result.student,
+                        result=result,
+                        subject_rows=_subject_rows(
+                            marks_by_student.get(card.student_id, []), subjects
+                        ),
+                        school_name=school_name,
+                    )
+                    file = create_ready_file(
+                        tenant_id=uuid.UUID(tenant_id),
+                        purpose=uploads.REPORT_CARD.key,
+                        original_name=(
+                            f"report-card-{result.student.admission_number}-v{card.version}.pdf"
+                        ),
+                        mime_type="application/pdf",
+                        data=render_pdf(document),
+                        actor_id=uuid.UUID(actor_id),
+                    )
+                    card.file = file
+                    card.status = ReportCardStatus.GENERATED
+                    card.updated_by = uuid.UUID(actor_id)
+                    card.save(update_fields=["file", "status", "updated_by", "updated_at"])
+                rendered += 1
+            except Exception as exc:
+                # One card failing must not cost a whole cohort theirs. The card
+                # keeps `draft` with no file, so a re-run picks it up.
+                logger.exception("report card for %s failed to render", card.student_id)
+                failed.append({"student_id": str(card.student_id), "error": str(exc)})
+
+            if index % PROGRESS_EVERY == 0:
+                update_progress(job=job, progress=int(index / total * 100))
+
+        mark_succeeded(
+            job=job, result={"rendered": rendered, "failed": failed, "cards": len(cards)}
+        )
+    except Exception as exc:
+        mark_failed(job=job, error=str(exc))
+
+
+def _subject_rows(marks: list[dict], subjects: dict) -> list[dict]:
+    """One student's per-subject lines for their card. Pure — no queries.
+
+    `verdict` is computed here rather than stored: a pass mark can be edited
+    while an exam is open, and a card should print the verdict against the
+    configuration it was generated under rather than a stale copy.
+    """
+    rows = []
+    for row in marks:
+        subject = subjects.get(row["exam_subject_id"])
+        if subject is None:
+            continue
+        theory = row["theory_marks"]
+        practical = row["practical_marks"]
+        obtained = (theory or 0) + (practical or 0)
+        maximum = subject.max_marks + (subject.practical_max_marks or 0)
+        passed = theory is not None and theory >= subject.pass_marks
+        rows.append(
+            {
+                "subject": subject.subject.name,
+                "max_marks": maximum,
+                "obtained": obtained,
+                "is_absent": row["is_absent"],
+                "is_exempt": row["is_exempt"],
+                "verdict": "Pass" if passed else "Fail",
+            }
+        )
+    return sorted(rows, key=lambda row: row["subject"])
+
+
+@shared_task(base=TenantAwareTask)
+def notify_report_cards_ready(*, tenant_id: str, exam_id: str, card_ids: list[str]) -> dict:
+    """§12's `exams.report-card-ready`, for the cards that just published.
+
+    `card_ids` is passed in rather than re-queried, for the reason
+    `notify_results_published` gives: publishing is idempotent, and notifying on
+    *current* state would re-send every guardian the same message on a
+    re-publish. That is `attendance`'s review finding, and PR B's review found
+    the other half of the same mistake here — a trigger registered with no
+    caller at all.
+    """
+    from apps.examinations import notifications
+    from apps.examinations.models import Exam, ReportCard
+    from apps.student_management.models import StudentGuardian
+    from core.notifications.services import Recipient, notify
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    if not card_ids:
+        return {"notified": 0}
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        exam = Exam.objects.alive().filter(pk=exam_id).first()
+        if exam is None:
+            return {"notified": 0}
+        school_name = Tenant.objects.get(pk=tenant_id).name
+        cards = list(ReportCard.objects.alive().filter(pk__in=card_ids).select_related("student"))
+        if not cards:
+            return {"notified": 0}
+
+        guardians: dict = {}
+        links = (
+            StudentGuardian.objects.alive()
+            .filter(
+                student__in=[card.student for card in cards],
+                has_portal_access=True,
+                guardian__deleted_at__isnull=True,
+                guardian__user_id__isnull=False,
+            )
+            .values_list("student_id", "guardian__user_id")
+        )
+        for student_id, user_id in links:
+            guardians.setdefault(student_id, []).append(user_id)
+
+        user_ids = []
+        for card in cards:
+            if card.student.user_id:
+                user_ids.append(card.student.user_id)
+            user_ids.extend(guardians.get(card.student_id, []))
+
+        recipients = [Recipient(user_id=user_id) for user_id in dict.fromkeys(user_ids)]
+        if not recipients:
+            return {"notified": 0}
+
+        try:
+            notify(
+                notifications.REPORT_CARD_READY,
+                tenant_id=uuid.UUID(tenant_id),
+                recipients=recipients,
+                context={"exam.name": exam.name, "school.name": school_name},
+                source_type="report_cards",
+                source_id=exam.pk,
+            )
+        except Exception:
+            logger.exception("%s failed for exam %s", notifications.REPORT_CARD_READY, exam.pk)
+            return {"notified": 0}
+
+    return {"notified": len(recipients)}

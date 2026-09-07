@@ -242,6 +242,9 @@ SPECTACULAR_SETTINGS = {
         "ExamScheduleStatusEnum": "apps.examinations.models.ScheduleStatus",
         "AdmitCardStatusEnum": "apps.examinations.models.AdmitCardStatus",
         "MarksStatusEnum": "apps.examinations.models.MarksStatus",
+        "ResultStatusEnum": "apps.examinations.models.ResultStatus",
+        "ResultOutcomeEnum": "apps.examinations.models.ResultOutcome",
+        "ReportCardStatusEnum": "apps.examinations.models.ReportCardStatus",
     },
 }
 
@@ -288,6 +291,15 @@ CELERY_TASK_ROUTES = {
     "apps.examinations.tasks.notify_admit_cards_issued": {"queue": "transactional"},
     "apps.examinations.tasks.import_marks_task": {"queue": "bulk"},
     "apps.examinations.tasks.remind_marks_entry": {"queue": "bulk"},
+    # Grading a whole school and rendering a cohort's report cards are the two
+    # heaviest jobs on the platform.
+    "apps.examinations.tasks.process_results_task": {"queue": "bulk"},
+    "apps.examinations.tasks.generate_report_cards_task": {"queue": "bulk"},
+    # The three result announcements are the opposite: a student waiting on a
+    # result, and an approver blocking every downstream step.
+    "apps.examinations.tasks.notify_results_pending_approval": {"queue": "transactional"},
+    "apps.examinations.tasks.notify_results_published": {"queue": "transactional"},
+    "apps.examinations.tasks.notify_report_cards_ready": {"queue": "transactional"},
     "core.idempotency.tasks.*": {"queue": "bulk"},
     "core.jobs.tasks.*": {"queue": "bulk"},
     # notifications.md §5 names three lanes (emergency / transactional / bulk);

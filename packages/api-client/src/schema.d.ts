@@ -849,6 +849,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exams/{id}:approve-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /exams/{id}:approve-results` — §5.6's gate.
+         *
+         *     `assert_approver_is_not_the_processor` lives in `services`, not here:
+         *     the rule is the module's and has to hold for any caller, and §4's
+         *     closing line makes it a property of the results rather than of the
+         *     request.
+         */
+        post: operations["exams_:approve_results_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{id}:generate-report-cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /exams/{id}:generate-report-cards` — 202 + a job (§16). */
+        post: operations["exams_:generate_report_cards_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/exams/{id}:issue-admit-cards": {
         parameters: {
             query?: never;
@@ -877,6 +918,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exams/{id}:process-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /exams/{id}:process-results` — 202 + a job (§16).
+         *
+         *     The readiness check runs here *and* in the job. Here it is for the
+         *     clerk — an immediate, readable refusal naming which subjects are
+         *     outstanding. In the job it is what actually holds, because marks can
+         *     change between the request and the worker picking it up.
+         */
+        post: operations["exams_:process_results_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{id}:publish-report-cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /exams/{id}:publish-report-cards` — release them to the portals.
+         *
+         *     §12's notification fires on the cards that actually moved, whose ids are
+         *     collected before the write — the same transition-not-state rule
+         *     `:publish-results` follows.
+         */
+        post: operations["exams_:publish_report_cards_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{id}:publish-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /exams/{id}:publish-results` — §5.6's release.
+         *
+         *     §12's notification fires on the rows that actually **transitioned**,
+         *     whose ids are collected before the write and handed to the task. That is
+         *     `attendance`'s review finding applied: publishing is idempotent, so
+         *     notifying on current status would re-send every guardian the same
+         *     message on a re-publish.
+         */
+        post: operations["exams_:publish_results_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/exams/{id}:publish-schedule": {
         parameters: {
             query?: never;
@@ -894,6 +1007,29 @@ export interface paths {
          *     by sitting, and §6 calls it "schedule publish to portals".
          */
         post: operations["exams_:publish_schedule_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{id}:send-results-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /exams/{id}:send-results-back` — §7.1's "changes requested" edge.
+         *
+         *     Not in §16's list; see the module doc's §20 for why it is built anyway.
+         *     Behind the *approve* key, because sending back is the other half of the
+         *     same decision.
+         */
+        post: operations["exams_:send_results_back_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1794,6 +1930,71 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/report-cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/report-cards` — §5.7.
+         *
+         *     `PATCH` exists for the two remark fields and nothing else; everything
+         *     structural is set by the generation job. Remarks are writable only while the
+         *     card is a draft, because editing them on a published card would change a
+         *     document a parent already holds without the version changing.
+         *
+         *     Portal-readable for reads only, and a restricted principal sees `published`
+         *     cards — the same two-narrowings split `ResultViewSet` documents.
+         */
+        get: operations["report_cards_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/report-cards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/report-cards` — §5.7.
+         *
+         *     `PATCH` exists for the two remark fields and nothing else; everything
+         *     structural is set by the generation job. Remarks are writable only while the
+         *     card is a draft, because editing them on a published card would change a
+         *     document a parent already holds without the version changing.
+         *
+         *     Portal-readable for reads only, and a restricted principal sees `published`
+         *     cards — the same two-narrowings split `ResultViewSet` documents.
+         */
+        get: operations["report_cards_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description `/report-cards` — §5.7.
+         *
+         *     `PATCH` exists for the two remark fields and nothing else; everything
+         *     structural is set by the generation job. Remarks are writable only while the
+         *     card is a draft, because editing them on a published card would change a
+         *     document a parent already holds without the version changing.
+         *
+         *     Portal-readable for reads only, and a restricted principal sees `published`
+         *     cards — the same two-narrowings split `ResultViewSet` documents.
+         */
+        patch: operations["report_cards_partial_update"];
+        trace?: never;
+    };
     "/api/v1/reports/attendance-summary": {
         parameters: {
             query?: never;
@@ -1833,6 +2034,85 @@ export interface paths {
          *     the distinction the *reader* least expects.
          */
         post: operations["reports_attendance_summary_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/results` — §5.5's processed outcomes and §5.6's chain.
+         *
+         *     **Two narrowings, and they answer different questions.** Record scope
+         *     answers *whose* result a caller may see — `filter_owned_by_user` for a
+         *     student or guardian, `filter_assigned_to_user` for a class teacher. This
+         *     viewset adds *when*: a restricted principal sees `published` rows only,
+         *     because §5.6 makes releasing a separate, permissioned act from computing.
+         *     Conflating the two inside the model hook would put a publishing rule
+         *     somewhere nobody looks for one.
+         *
+         *     Portal-readable for reads only. The **readable** actions are named and
+         *     everything else is staff-only, which is PR B's review lesson: a list of
+         *     writes has to be updated whenever one is added, and forgetting is silent.
+         */
+        get: operations["results_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/results/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/results` — §5.5's processed outcomes and §5.6's chain.
+         *
+         *     **Two narrowings, and they answer different questions.** Record scope
+         *     answers *whose* result a caller may see — `filter_owned_by_user` for a
+         *     student or guardian, `filter_assigned_to_user` for a class teacher. This
+         *     viewset adds *when*: a restricted principal sees `published` rows only,
+         *     because §5.6 makes releasing a separate, permissioned act from computing.
+         *     Conflating the two inside the model hook would put a publishing rule
+         *     somewhere nobody looks for one.
+         *
+         *     Portal-readable for reads only. The **readable** actions are named and
+         *     everything else is staff-only, which is PR B's review lesson: a list of
+         *     writes has to be updated whenever one is added, and forgetting is silent.
+         */
+        get: operations["results_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/results/{id}:withhold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /results/{id}:withhold` — §5.6's per-student hold. */
+        post: operations["results_:withhold_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4852,6 +5132,26 @@ export interface components {
                 };
             };
         };
+        PaginatedReportCardList: {
+            data?: components["schemas"]["ReportCard"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedResultList: {
+            data?: components["schemas"]["Result"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedRoomList: {
             data?: components["schemas"]["Room"][];
             meta?: {
@@ -5437,6 +5737,40 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /**
+         * @description `report_cards` — read, plus the two remark fields (§5.7).
+         *
+         *     Remarks are the only writable part, and only while the card is a draft:
+         *     §5.7 has a class teacher and a principal write them before generation, and
+         *     editing them on a published card would change a document a parent already
+         *     holds without the version changing.
+         */
+        PatchedReportCard: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            readonly exam_id?: string;
+            /** Format: uuid */
+            readonly term_id?: string;
+            /** Format: uuid */
+            readonly student_id?: string;
+            /** Format: uuid */
+            readonly result_id?: string;
+            /** Format: uuid */
+            readonly file_id?: string | null;
+            class_teacher_remarks?: string | null;
+            principal_remarks?: string | null;
+            /** @description Snapshot from the attendance module at generation time. */
+            readonly attendance_summary?: unknown;
+            readonly version?: number;
+            readonly status?: components["schemas"]["ReportCardStatusEnum"];
+            /** Format: date-time */
+            readonly published_at?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         /** @description `rooms` — physical rooms, labs and halls (§5.4). */
         PatchedRoom: {
             /** Format: uuid */
@@ -5893,6 +6227,118 @@ export interface components {
          * @enum {string}
          */
         RelationshipEnum: "father" | "mother" | "grandparent" | "sibling" | "legal_guardian" | "other";
+        /**
+         * @description `report_cards` — read, plus the two remark fields (§5.7).
+         *
+         *     Remarks are the only writable part, and only while the card is a draft:
+         *     §5.7 has a class teacher and a principal write them before generation, and
+         *     editing them on a published card would change a document a parent already
+         *     holds without the version changing.
+         */
+        ReportCard: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly exam_id: string;
+            /** Format: uuid */
+            readonly term_id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            /** Format: uuid */
+            readonly result_id: string;
+            /** Format: uuid */
+            readonly file_id: string | null;
+            class_teacher_remarks?: string | null;
+            principal_remarks?: string | null;
+            /** @description Snapshot from the attendance module at generation time. */
+            readonly attendance_summary: unknown;
+            readonly version: number;
+            readonly status: components["schemas"]["ReportCardStatusEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `generated` - Generated
+         *     * `published` - Published
+         * @enum {string}
+         */
+        ReportCardStatusEnum: "draft" | "generated" | "published";
+        /**
+         * @description `results` — read-only on the wire (§16 declares a `GET` and no writes).
+         *
+         *     Every field here is computed or moved by a permissioned action: the
+         *     aggregates by `:process-results`, `status`/`approved_*` by
+         *     `:approve-results`, `published_at` by `:publish-results`, and `outcome` by
+         *     processing or `:withhold`. A client that could PATCH any of them could skip
+         *     §5.6's gate entirely, which is the whole point of having one.
+         */
+        Result: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly exam_id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            /** Format: uuid */
+            readonly section_id: string;
+            /** Format: decimal */
+            readonly total_max_marks: string;
+            /** Format: decimal */
+            readonly total_obtained_marks: string;
+            /** Format: decimal */
+            readonly percentage: string;
+            readonly grade: string;
+            /** Format: decimal */
+            readonly gpa: string | null;
+            readonly rank_in_section: number | null;
+            readonly rank_in_class: number | null;
+            readonly outcome: components["schemas"]["ResultOutcomeEnum"];
+            /**
+             * Format: decimal
+             * @description Moderation adjustment; audited (§19).
+             */
+            readonly grace_marks: string;
+            readonly status: components["schemas"]["ResultStatusEnum"];
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            /** Format: date-time */
+            readonly published_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `pass` - Pass
+         *     * `fail` - Fail
+         *     * `absent` - Absent
+         *     * `withheld` - Withheld
+         * @enum {string}
+         */
+        ResultOutcomeEnum: "pass" | "fail" | "absent" | "withheld";
+        /**
+         * @description * `processing` - Processing
+         *     * `pending_approval` - Pending approval
+         *     * `approved` - Approved
+         *     * `published` - Published
+         * @enum {string}
+         */
+        ResultStatusEnum: "processing" | "pending_approval" | "approved" | "published";
+        /**
+         * @description The body of `POST /results/{id}:withhold` (§5.6).
+         *
+         *     A reason is required. Withholding one student's result is a decision
+         *     somebody will be asked about, and "why" is the part that has to survive
+         *     into the audit log — the same argument the admit-card revocation makes.
+         */
+        ResultWithhold: {
+            reason: string;
+        };
         /** @description `rooms` — physical rooms, labs and halls (§5.4). */
         Room: {
             /** Format: uuid */
@@ -5962,6 +6408,18 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description The body of `POST /exams/{id}:send-results-back` (§7.1).
+         *
+         *     Not in §16's endpoint list, and built anyway — see the module doc's §20.
+         *     §7.1's flowchart has an explicit "changes requested: unlock and re-enter"
+         *     edge out of the approval gate, and without an endpoint for it a data-entry
+         *     error found at approval has no route back and someone reaches for a
+         *     database edit.
+         */
+        SendResultsBack: {
+            reason: string;
         };
         /** @description Input for ``POST /academic-sessions/{id}:clone`` — the new session's identity. */
         SessionClone: {
@@ -8450,6 +8908,46 @@ export interface operations {
             };
         };
     };
+    "exams_:approve_results_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "exams_:generate_report_cards_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "exams_:issue_admit_cards_create": {
         parameters: {
             query?: never;
@@ -8463,6 +8961,66 @@ export interface operations {
         responses: {
             /** @description No response body */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "exams_:process_results_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "exams_:publish_report_cards_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "exams_:publish_results_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8511,6 +9069,32 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaginatedExamScheduleList"];
                 };
+            };
+        };
+    };
+    "exams_:send_results_back_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendResultsBack"];
+                "application/x-www-form-urlencoded": components["schemas"]["SendResultsBack"];
+                "multipart/form-data": components["schemas"]["SendResultsBack"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9761,6 +10345,93 @@ export interface operations {
             };
         };
     };
+    report_cards_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                exam_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `generated` - Generated
+                 *     * `published` - Published
+                 */
+                status?: "draft" | "generated" | "published";
+                student_id?: string;
+                term_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedReportCardList"];
+                };
+            };
+        };
+    };
+    report_cards_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this report card. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportCard"];
+                };
+            };
+        };
+    };
+    report_cards_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this report card. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedReportCard"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedReportCard"];
+                "multipart/form-data": components["schemas"]["PatchedReportCard"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportCard"];
+                };
+            };
+        };
+    };
     reports_attendance_summary_retrieve: {
         parameters: {
             query: {
@@ -9820,6 +10491,100 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    results_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                exam_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /**
+                 * @description * `pass` - Pass
+                 *     * `fail` - Fail
+                 *     * `absent` - Absent
+                 *     * `withheld` - Withheld
+                 */
+                outcome?: "absent" | "fail" | "pass" | "withheld";
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                section_id?: string;
+                /**
+                 * @description * `processing` - Processing
+                 *     * `pending_approval` - Pending approval
+                 *     * `approved` - Approved
+                 *     * `published` - Published
+                 */
+                status?: "approved" | "pending_approval" | "processing" | "published";
+                student_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResultList"];
+                };
+            };
+        };
+    };
+    results_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this result. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"];
+                };
+            };
+        };
+    };
+    "results_:withhold_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResultWithhold"];
+                "application/x-www-form-urlencoded": components["schemas"]["ResultWithhold"];
+                "multipart/form-data": components["schemas"]["ResultWithhold"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"];
+                };
             };
         };
     };

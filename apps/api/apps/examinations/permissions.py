@@ -33,7 +33,8 @@ declared in a module doc §4 before being added, which `process` never was.
 Keys arrive with the PR that ships an endpoint for them, so
 `tests/test_endpoint_contracts.py` never sees a registered key with nothing
 behind it. Registered so far: the exam and grading-scale keys (PR A), the
-schedule and admit-card keys (PR B), and the marks keys (PR C).
+schedule and admit-card keys (PR B), the marks keys (PR C), and the result and
+report-card keys (PR D).
 """
 
 from core.rbac.registry import registry
@@ -92,6 +93,29 @@ MARKS_ENTRANTS = ("teacher", "exam_staff")
 # Locking closes a window and stamps every row, which is a school-policy act
 # rather than a teaching one — §4 gives it to `exam_staff` and `school_admin`.
 MARKS_LOCKERS = ("exam_staff", "school_admin")
+
+# §4 — "`exams.result.view` … all tenant roles per scope". The *scope* is what
+# narrows each: a student sees their own, a teacher their assigned sections,
+# leadership everything. And the viewset narrows a restricted principal to
+# `published` on top of that, because §5.6 makes releasing a separate act from
+# computing.
+RESULT_VIEWERS = (*ALL_STAFF, *PORTAL)
+# Processing is `exam_staff`'s (§3 — "runs result processing, not approval").
+RESULT_PROCESSORS = ("exam_staff", "school_admin")
+# §4 puts approval with the principal and makes it delegable to the vice
+# principal. Both hold the key; `assert_approver_is_not_the_processor` is what
+# stops either of them also having been the processor.
+RESULT_APPROVERS = ("principal", "vice_principal")
+RESULT_PUBLISHERS = ("principal", "school_admin")
+REPORT_CARD_VIEWERS = (
+    "exam_staff",
+    "school_admin",
+    "principal",
+    "vice_principal",
+    "class_teacher",
+    "teacher",
+    *PORTAL,
+)
 ADMIT_CARD_VIEWERS = (
     "exam_staff",
     "school_admin",
@@ -176,4 +200,41 @@ registry.register(
     "exams.marks.lock",
     "Lock or reopen an exam-subject's marks window (§6 — audited).",
     MARKS_LOCKERS,
+)
+
+registry.register(
+    "exams.result.view",
+    "View processed results (record-scoped; portal users see published only).",
+    RESULT_VIEWERS,
+)
+registry.register(
+    "exams.result.create",
+    "Run result processing for an exam (§5.5) — not approval.",
+    RESULT_PROCESSORS,
+)
+registry.register(
+    "exams.result.approve",
+    "Approve processed results, and send them back for correction (§5.6).",
+    RESULT_APPROVERS,
+)
+registry.register(
+    "exams.result.publish",
+    "Publish approved results, and withhold one student's (§5.6).",
+    RESULT_PUBLISHERS,
+)
+
+registry.register(
+    "exams.report-card.view",
+    "View report cards (record-scoped).",
+    REPORT_CARD_VIEWERS,
+)
+registry.register(
+    "exams.report-card.create",
+    "Generate report cards, and write class-teacher remarks (§5.7).",
+    ("exam_staff", "class_teacher", "school_admin"),
+)
+registry.register(
+    "exams.report-card.publish",
+    "Publish generated report cards to the portals.",
+    ("principal", "school_admin"),
 )

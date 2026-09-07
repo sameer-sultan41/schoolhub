@@ -31,6 +31,8 @@ from apps.examinations.views import (
     GradingScaleViewSet,
     MarksImportViewSet,
     MarksViewSet,
+    ReportCardViewSet,
+    ResultViewSet,
 )
 
 router = SimpleRouter(trailing_slash=False)
@@ -40,8 +42,45 @@ router.register("exam-subjects", ExamSubjectViewSet, basename="exam-subjects")
 router.register("exam-schedules", ExamScheduleViewSet, basename="exam-schedules")
 router.register("admit-cards", AdmitCardViewSet, basename="admit-cards")
 router.register("marks", MarksViewSet, basename="marks")
+router.register("results", ResultViewSet, basename="results")
+router.register("report-cards", ReportCardViewSet, basename="report-cards")
 
 urlpatterns = [
+    path(
+        "exams/<uuid:pk>:process-results",
+        ResultViewSet.as_view({"post": "process"}),
+        name="exams-process-results",
+    ),
+    path(
+        "exams/<uuid:pk>:approve-results",
+        ResultViewSet.as_view({"post": "approve"}),
+        name="exams-approve-results",
+    ),
+    path(
+        "exams/<uuid:pk>:send-results-back",
+        ResultViewSet.as_view({"post": "send_back"}),
+        name="exams-send-results-back",
+    ),
+    path(
+        "exams/<uuid:pk>:publish-results",
+        ResultViewSet.as_view({"post": "publish"}),
+        name="exams-publish-results",
+    ),
+    path(
+        "results/<uuid:pk>:withhold",
+        ResultViewSet.as_view({"post": "withhold"}),
+        name="results-withhold",
+    ),
+    path(
+        "exams/<uuid:pk>:generate-report-cards",
+        ReportCardViewSet.as_view({"post": "generate"}),
+        name="exams-generate-report-cards",
+    ),
+    path(
+        "exams/<uuid:pk>:publish-report-cards",
+        ReportCardViewSet.as_view({"post": "publish"}),
+        name="exams-publish-report-cards",
+    ),
     path(
         "marks:bulk-entry",
         MarksViewSet.as_view({"post": "bulk_entry"}),

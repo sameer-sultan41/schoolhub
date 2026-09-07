@@ -4,11 +4,9 @@ This PR wires the two §12 rows it can resolve recipients for — a published ex
 schedule and an issued admit card — both fanning out to the students sitting the
 exam and their portal-enabled guardians.
 
-PR C adds `exams.marks-entry-reminder`. The remaining three —
-`exams.result-approval-pending`, `exams.result-published` and
-`exams.report-card-ready` — wait on `results` and `report_cards` (PR D). Naming
-them here rather than leaving them absent is the same practice
-`timetable/notifications.py` follows for its two deferred rows.
+PR C added `exams.marks-entry-reminder`; PR D adds the last three. **All six
+of §12's rows are now wired**, which for this module means all six have a
+caller — see below.
 
 **Every trigger registered here is called from somewhere.** PR B's review found
 `exams.admit-card-issued` registered with templates, documented as wired, and
@@ -117,4 +115,84 @@ for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
             "{{ school.name }}"
         ),
         variables=_REMINDER_VARS,
+    )
+
+RESULT_APPROVAL_PENDING = "exams.result-approval-pending"
+RESULT_PUBLISHED = "exams.result-published"
+REPORT_CARD_READY = "exams.report-card-ready"
+
+_APPROVAL_VARS = {"exam.name", "school.name", "student_count"}
+_PUBLISH_VARS = {"exam.name", "school.name"}
+
+catalog.register(
+    RESULT_APPROVAL_PENDING,
+    template_code=RESULT_APPROVAL_PENDING,
+    category=NotificationCategory.EXAMS,
+    # High: an exam sits in `processing` until someone approves it, and every
+    # downstream step — publishing, report cards — waits behind this one person.
+    priority=NotificationPriority.HIGH,
+    # In-app only, which is §12's own choice for this row. An approver acts
+    # inside the dashboard, and the decision needs the result summary in front
+    # of them rather than a link in an inbox.
+    channels=set(),
+    variables=_APPROVAL_VARS,
+    description="Processed results are waiting for an approver's decision.",
+)
+
+templates.register(
+    RESULT_APPROVAL_PENDING,
+    channel=NotificationChannel.IN_APP,
+    subject="{{ exam.name }} results are ready for your approval",
+    body=(
+        "{{ student_count }} processed result(s) for {{ exam.name }} are waiting for "
+        "approval. Nothing is published until you approve them.\n\n{{ school.name }}"
+    ),
+    variables=_APPROVAL_VARS,
+)
+
+catalog.register(
+    RESULT_PUBLISHED,
+    template_code=RESULT_PUBLISHED,
+    category=NotificationCategory.EXAMS,
+    priority=NotificationPriority.HIGH,
+    channels={NotificationChannel.EMAIL},
+    variables=_PUBLISH_VARS,
+    description="An exam's results have been published to students and guardians.",
+)
+
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
+    templates.register(
+        RESULT_PUBLISHED,
+        channel=_channel,
+        subject="{{ exam.name }} results are now available",
+        body=(
+            # Deliberately no grade in the body. A result is not something to
+            # put in an email, and the portal is where a student reads it —
+            # which is also the only place record scope applies.
+            "The results for {{ exam.name }} have been published. Sign in to the portal "
+            "to view them.\n\n{{ school.name }}"
+        ),
+        variables=_PUBLISH_VARS,
+    )
+
+catalog.register(
+    REPORT_CARD_READY,
+    template_code=REPORT_CARD_READY,
+    category=NotificationCategory.EXAMS,
+    priority=NotificationPriority.NORMAL,
+    channels={NotificationChannel.EMAIL},
+    variables=_PUBLISH_VARS,
+    description="A report card has been published and is downloadable.",
+)
+
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
+    templates.register(
+        REPORT_CARD_READY,
+        channel=_channel,
+        subject="{{ exam.name }} report card is ready",
+        body=(
+            "The report card for {{ exam.name }} is available to download from the "
+            "portal.\n\n{{ school.name }}"
+        ),
+        variables=_PUBLISH_VARS,
     )

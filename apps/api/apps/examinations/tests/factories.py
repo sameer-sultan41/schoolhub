@@ -38,6 +38,9 @@ from apps.examinations.models import (
     GradingScale,
     Marks,
     MarksStatus,
+    ReportCard,
+    Result,
+    ResultOutcome,
     ScaleType,
     ScheduleStatus,
 )
@@ -79,6 +82,8 @@ __all__ = [
     "ExamSubjectFactory",
     "GradeBandFactory",
     "MarksFactory",
+    "ReportCardFactory",
+    "ResultFactory",
     "GradingScaleFactory",
     "GuardianFactory",
     "RoomFactory",
@@ -289,3 +294,22 @@ def open_marks_entry(exam_subject, *, opens_at=None, closes_at=None) -> None:
         exam_subject.save(
             update_fields=["marks_entry_opens_at", "marks_entry_closes_at", "updated_at"]
         )
+
+
+class ResultFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Result
+
+    total_max_marks = Decimal("100.00")
+    total_obtained_marks = Decimal("60.00")
+    percentage = Decimal("60.00")
+    outcome = ResultOutcome.PASS
+    # No SubFactory for exam/student/section: all three must belong to the same
+    # tenant and agree with each other, so callers wire them explicitly.
+
+
+class ReportCardFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ReportCard
+
+    version = 1

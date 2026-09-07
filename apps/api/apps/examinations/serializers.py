@@ -33,6 +33,8 @@ from apps.examinations.models import (
     GradingScale,
     Marks,
     MarksStatus,
+    ReportCard,
+    Result,
 )
 from apps.examinations.services import ENTRY_SETTABLE_STATUSES
 from apps.school_organization.models import AcademicSession, Class, Section, Subject, Term
@@ -490,3 +492,116 @@ class MarksImportRequestSerializer(serializers.Serializer):
         if not value.name.lower().endswith((".csv", ".xlsx")):
             raise serializers.ValidationError("Upload a .csv or .xlsx marks sheet.")
         return value
+
+
+class ResultSerializer(serializers.ModelSerializer):
+    """`results` — read-only on the wire (§16 declares a `GET` and no writes).
+
+    Every field here is computed or moved by a permissioned action: the
+    aggregates by `:process-results`, `status`/`approved_*` by
+    `:approve-results`, `published_at` by `:publish-results`, and `outcome` by
+    processing or `:withhold`. A client that could PATCH any of them could skip
+    §5.6's gate entirely, which is the whole point of having one.
+    """
+
+    exam_id = serializers.UUIDField(read_only=True)
+    student_id = serializers.UUIDField(read_only=True)
+    section_id = serializers.UUIDField(read_only=True)
+    grade = serializers.CharField(source="grade_band.label", read_only=True, default=None)
+
+    class Meta:
+        model = Result
+        fields = (
+            "id",
+            "exam_id",
+            "student_id",
+            "section_id",
+            "total_max_marks",
+            "total_obtained_marks",
+            "percentage",
+            "grade",
+            "gpa",
+            "rank_in_section",
+            "rank_in_class",
+            "outcome",
+            "grace_marks",
+            "status",
+            "approved_at",
+            "published_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class ReportCardSerializer(serializers.ModelSerializer):
+    """`report_cards` — read, plus the two remark fields (§5.7).
+
+    Remarks are the only writable part, and only while the card is a draft:
+    §5.7 has a class teacher and a principal write them before generation, and
+    editing them on a published card would change a document a parent already
+    holds without the version changing.
+    """
+
+    exam_id = serializers.UUIDField(read_only=True)
+    term_id = serializers.UUIDField(read_only=True)
+    student_id = serializers.UUIDField(read_only=True)
+    result_id = serializers.UUIDField(read_only=True)
+    file_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = ReportCard
+        fields = (
+            "id",
+            "exam_id",
+            "term_id",
+            "student_id",
+            "result_id",
+            "file_id",
+            "class_teacher_remarks",
+            "principal_remarks",
+            "attendance_summary",
+            "version",
+            "status",
+            "published_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "exam_id",
+            "term_id",
+            "student_id",
+            "result_id",
+            "file_id",
+            "attendance_summary",
+            "version",
+            "status",
+            "published_at",
+            "created_at",
+            "updated_at",
+        )
+
+
+class ResultWithholdSerializer(serializers.Serializer):
+    """The body of `POST /results/{id}:withhold` (§5.6).
+
+    A reason is required. Withholding one student's result is a decision
+    somebody will be asked about, and "why" is the part that has to survive
+    into the audit log — the same argument the admit-card revocation makes.
+    """
+
+    reason = serializers.CharField(max_length=255)
+
+
+class SendResultsBackSerializer(serializers.Serializer):
+    """The body of `POST /exams/{id}:send-results-back` (§7.1).
+
+    Not in §16's endpoint list, and built anyway — see the module doc's §20.
+    §7.1's flowchart has an explicit "changes requested: unlock and re-enter"
+    edge out of the approval gate, and without an endpoint for it a data-entry
+    error found at approval has no route back and someone reaches for a
+    database edit.
+    """
+
+    reason = serializers.CharField(max_length=500)
