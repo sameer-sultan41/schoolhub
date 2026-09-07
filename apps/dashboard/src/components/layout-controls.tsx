@@ -138,7 +138,7 @@ export function LayoutControls() {
     <Popover>
       <PopoverTrigger asChild>
         <Button
-          variant="ghost"
+          variant="chrome-ghost"
           size="icon"
           aria-label={t("trigger")}
           className="[&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110"

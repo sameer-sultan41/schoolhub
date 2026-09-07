@@ -1,0 +1,167 @@
+/*
+ * Ink & Brass — SchoolHub's previous platform brand, kept as a preset.
+ *
+ * Unlike the other four presets, this one is not a borrowed palette: until Aurora
+ * replaced it, this WAS theme.css's `:root`. `ink-brass` therefore used to need no
+ * stylesheet at all — presets.ts described it as "that same withholding with no preset
+ * stylesheet behind it, which leaves the platform default from theme.css's own :root".
+ *
+ * That is exactly why this file has to exist now. The moment the defaults moved, the
+ * "Ink & Brass" entry in the Colours menu would have started rendering Aurora — the
+ * label would have kept its name and lost its meaning, and the old palette would have
+ * been unrecoverable without a git checkout. Pinning it here keeps the menu honest and
+ * makes the whole palette change one dropdown click away from being undone.
+ *
+ * Values are copied verbatim from theme.css as it stood before Aurora. Do not "tidy"
+ * them toward the new palette — the point of this file is that it does not move.
+ *
+ * Only `--sh-*` is written here. Never a `--color-*` name: those are aliases declared in
+ * theme.css's `@theme inline` block, and pointing one somewhere else would create the
+ * second source of truth that file exists to prevent.
+ *
+ * Deliberately NOT overridden, so they stay identical across every preset:
+ *   - success / warning / danger / info. A status colour is not a matter of taste, and
+ *     the two status inks Aurora re-stepped differ from these by under 1% lightness —
+ *     imperceptible, and correct for them to track the base file.
+ *   - --sh-color-ring, which is `var(--sh-color-primary)` and so already follows.
+ *   - the elevation scale, the platform tier, and the type stack.
+ *
+ * Specificity, low to high:
+ *   1. :root — theme.css, the Aurora default
+ *   2. :root[data-theme-preset="ink-brass"] — this file
+ *   3. the inline style on the TenantTheme wrapper — tenant branding, applied only
+ *      under the "tenant" preset (tenant-theme.tsx)
+ *
+ * Measured contrast (light): foreground on background 15.45:1; primary-foreground on
+ * primary 9.92:1; accent-foreground on accent 7.22:1; muted-foreground on surface
+ * 4.85:1; chrome-foreground on chrome 14.6:1; chrome-primary on chrome 9.3:1.
+ */
+
+:root[data-theme-preset="ink-brass"] {
+  --sh-radius: 0.625rem;
+
+  --sh-color-background: oklch(1 0 0);
+  --sh-color-foreground: oklch(0.264 0.056 269.3);
+  --sh-color-surface: oklch(0.979 0.006 264.5);
+  --sh-color-surface-foreground: oklch(0.264 0.056 269.3);
+  --sh-color-surface-raised: oklch(1 0 0);
+  --sh-color-surface-sunken: oklch(0.952 0.011 267);
+
+  --sh-color-muted: oklch(0.958 0.01 267.4);
+  --sh-color-muted-foreground: oklch(0.503 0.034 266.1);
+  --sh-color-border: oklch(0.912 0.018 264.5);
+
+  --sh-color-primary: oklch(0.395 0.148 278);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  --sh-color-secondary: oklch(0.934 0.022 280);
+  --sh-color-secondary-foreground: oklch(0.395 0.148 278);
+  --sh-color-accent: oklch(0.762 0.155 74);
+  --sh-color-accent-foreground: oklch(0.314 0.058 267);
+
+  /*
+   * Ink & Brass had no chrome tier — its sidebar was a `surface` panel like any card,
+   * and the header was the page background. Restoring that under a base file whose
+   * chrome is ink means saying so explicitly, which is what these six do: the frame
+   * follows this preset's own surface/muted/border rather than theme.css's ink.
+   *
+   * Declared once, in the light block only, and deliberately so — custom-property
+   * indirection resolves at computed-value time, so when the dark arms below restate
+   * `--sh-color-surface`, chrome follows without a second copy to keep in sync.
+   */
+  --sh-color-chrome: var(--sh-color-surface);
+  --sh-color-chrome-foreground: var(--sh-color-surface-foreground);
+  --sh-color-chrome-muted: var(--sh-color-muted-foreground);
+  --sh-color-chrome-accent: var(--sh-color-muted);
+  --sh-color-chrome-border: var(--sh-color-border);
+  --sh-color-chrome-primary: var(--sh-color-primary);
+
+  --sh-color-chart-1: oklch(0.514 0.204 281.7);
+  --sh-color-chart-2: oklch(0.635 0.129 74.4);
+  --sh-color-chart-3: oklch(0.606 0.106 213.2);
+  --sh-color-chart-4: oklch(0.576 0.153 135);
+  --sh-color-chart-5: oklch(0.614 0.179 2.5);
+  --sh-color-chart-6: oklch(0.542 0.148 262.4);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    var(--sh-color-primary) 0%,
+    oklch(0.42 0.155 302) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(1 0 0);
+}
+
+/*
+ * Declared twice with identical values, matching theme.css: the media arm covers a viewer
+ * who has not chosen (`:not(.light)` lets an explicit light choice win), the class arm
+ * covers the dashboard's toggle. A divergence here is invisible until someone toggles.
+ */
+/* dark-mode token block */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset="ink-brass"]:not(.light) {
+    --sh-color-background: oklch(0.194 0.034 267.6);
+    --sh-color-foreground: oklch(0.973 0.007 268.5);
+    --sh-color-surface: oklch(0.248 0.044 268);
+    --sh-color-surface-foreground: oklch(0.973 0.007 268.5);
+    --sh-color-surface-raised: oklch(0.288 0.048 268.2);
+    --sh-color-surface-sunken: oklch(0.216 0.038 267.8);
+
+    --sh-color-muted: oklch(0.277 0.046 267.7);
+    --sh-color-muted-foreground: oklch(0.706 0.037 267.5);
+    --sh-color-border: oklch(0.31 0.049 268.9);
+
+    --sh-color-primary: oklch(0.665 0.135 278);
+    --sh-color-primary-foreground: oklch(0.194 0.034 267.6);
+    --sh-color-secondary: oklch(0.326 0.068 279);
+    --sh-color-secondary-foreground: oklch(0.864 0.041 279);
+    --sh-color-accent: oklch(0.762 0.155 74);
+    --sh-color-accent-foreground: oklch(0.194 0.034 267.6);
+
+    --sh-color-chart-1: oklch(0.62 0.16 278.2);
+    --sh-color-chart-2: oklch(0.66 0.14 74.2);
+    --sh-color-chart-3: oklch(0.65 0.11 209.8);
+    --sh-color-chart-4: oklch(0.629 0.139 130.1);
+    --sh-color-chart-5: oklch(0.62 0.15 354.7);
+    --sh-color-chart-6: oklch(0.6 0.141 255.2);
+
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.395 0.148 278) 0%,
+      oklch(0.42 0.155 302) 100%
+    );
+    --sh-color-spotlight-foreground: oklch(1 0 0);
+  }
+}
+
+:root[data-theme-preset="ink-brass"].dark {
+  --sh-color-background: oklch(0.194 0.034 267.6);
+  --sh-color-foreground: oklch(0.973 0.007 268.5);
+  --sh-color-surface: oklch(0.248 0.044 268);
+  --sh-color-surface-foreground: oklch(0.973 0.007 268.5);
+  --sh-color-surface-raised: oklch(0.288 0.048 268.2);
+  --sh-color-surface-sunken: oklch(0.216 0.038 267.8);
+
+  --sh-color-muted: oklch(0.277 0.046 267.7);
+  --sh-color-muted-foreground: oklch(0.706 0.037 267.5);
+  --sh-color-border: oklch(0.31 0.049 268.9);
+
+  --sh-color-primary: oklch(0.665 0.135 278);
+  --sh-color-primary-foreground: oklch(0.194 0.034 267.6);
+  --sh-color-secondary: oklch(0.326 0.068 279);
+  --sh-color-secondary-foreground: oklch(0.864 0.041 279);
+  --sh-color-accent: oklch(0.762 0.155 74);
+  --sh-color-accent-foreground: oklch(0.194 0.034 267.6);
+
+  --sh-color-chart-1: oklch(0.62 0.16 278.2);
+  --sh-color-chart-2: oklch(0.66 0.14 74.2);
+  --sh-color-chart-3: oklch(0.65 0.11 209.8);
+  --sh-color-chart-4: oklch(0.629 0.139 130.1);
+  --sh-color-chart-5: oklch(0.62 0.15 354.7);
+  --sh-color-chart-6: oklch(0.6 0.141 255.2);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.395 0.148 278) 0%,
+    oklch(0.42 0.155 302) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(1 0 0);
+}

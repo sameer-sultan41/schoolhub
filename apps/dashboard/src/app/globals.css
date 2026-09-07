@@ -6,7 +6,10 @@
 @import "@schoolhub/ui/styles/theme.css";
 
 /* Colour presets. Imported after theme.css so their [data-theme-preset] rules win over
-   its :root defaults; a viewer picks one in the header's preferences popover. */
+   its :root defaults; a viewer picks one in the header's preferences popover.
+   ink-brass pins the platform's previous palette — see that file's own header for why
+   it has to exist now that it is no longer what :root happens to contain. */
+@import "@schoolhub/ui/styles/presets/ink-brass.css";
 @import "@schoolhub/ui/styles/presets/tangerine.css";
 @import "@schoolhub/ui/styles/presets/soft-pop.css";
 @import "@schoolhub/ui/styles/presets/brutalist.css";

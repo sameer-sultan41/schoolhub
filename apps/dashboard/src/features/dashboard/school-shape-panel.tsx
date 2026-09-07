@@ -31,11 +31,25 @@ import { queryKeys } from "@/lib/query-client";
 type ShapeLabelKey =
   "classes" | "sections" | "subjects" | "rooms" | "houses" | "campuses" | "students" | "staff";
 
+/**
+ * Chart-ramp slot for each tile's icon chip.
+ *
+ * Eight tiles, six slots, so two repeat — assigned 1..6 then 1,2 so that no repeat is ever
+ * ADJACENT in either layout this grid takes. At 8-up, slot 1 returns at position 7, next
+ * to 6 and 2. At 4-up it lands under position 3 (slot 3) and beside 6 and 2. Adjacency is
+ * the case theme.css's ramp is validated for, which is why it is the thing kept true here.
+ *
+ * The slot belongs to the entity, not to its figure — "colour follows the entity, never
+ * its rank" (theme.css). Rooms stay slot 4 whether the school has two or two hundred.
+ */
+type AccentSlot = 1 | 2 | 3 | 4 | 5 | 6;
+
 interface CountTile {
   labelKey: ShapeLabelKey;
   path: string;
   permission: PermissionKey;
   icon: LucideIcon;
+  accent: AccentSlot;
   /** Query key parts, matched to the reference-data hooks so one cache entry serves both. */
   module: string;
   resource: string;
@@ -52,6 +66,7 @@ interface CountTile {
 const COUNT_TILES: CountTile[] = [
   {
     labelKey: "classes",
+    accent: 1,
     path: "/classes",
     permission: "school.class.view",
     icon: GraduationCap,
@@ -60,6 +75,7 @@ const COUNT_TILES: CountTile[] = [
   },
   {
     labelKey: "sections",
+    accent: 2,
     path: "/sections",
     permission: "school.section.view",
     icon: Blocks,
@@ -69,6 +85,7 @@ const COUNT_TILES: CountTile[] = [
   },
   {
     labelKey: "subjects",
+    accent: 3,
     path: "/subjects",
     permission: "school.subject.view",
     icon: BookOpen,
@@ -77,6 +94,7 @@ const COUNT_TILES: CountTile[] = [
   },
   {
     labelKey: "rooms",
+    accent: 4,
     path: "/rooms",
     permission: TIMETABLE_VIEW_PERMISSION,
     icon: DoorOpen,
@@ -86,6 +104,7 @@ const COUNT_TILES: CountTile[] = [
   },
   {
     labelKey: "houses",
+    accent: 5,
     path: "/houses",
     permission: "school.house.view",
     icon: Flag,
@@ -94,6 +113,7 @@ const COUNT_TILES: CountTile[] = [
   },
   {
     labelKey: "campuses",
+    accent: 6,
     path: "/campuses",
     permission: "school.campus.view",
     icon: Building2,
@@ -107,6 +127,7 @@ interface TotalTile {
   path: string;
   permission: PermissionKey;
   icon: LucideIcon;
+  accent: AccentSlot;
   module: string;
   resource: string;
 }
@@ -115,6 +136,7 @@ interface TotalTile {
 const TOTAL_TILES: TotalTile[] = [
   {
     labelKey: "students",
+    accent: 1,
     path: "/students",
     permission: "students.student.view",
     icon: Users,
@@ -123,6 +145,7 @@ const TOTAL_TILES: TotalTile[] = [
   },
   {
     labelKey: "staff",
+    accent: 2,
     path: "/staff",
     permission: "staff.staff.view",
     icon: IdCard,
@@ -189,6 +212,7 @@ function CountedTile({ tile }: { tile: CountTile }) {
     <StatCard
       label={t(`shape.${tile.labelKey}`)}
       icon={tile.icon}
+      accent={tile.accent}
       state={isPending ? "loading" : isError ? "unavailable" : "ready"}
       // "Unavailable right now", not "not counted yet": a failed request is a temporary
       // state, and telling the reader the feature does not exist would be a different
@@ -232,6 +256,7 @@ function TotalCountTile({ tile }: { tile: TotalTile }) {
     <StatCard
       label={t(`shape.${tile.labelKey}`)}
       icon={tile.icon}
+      accent={tile.accent}
       state={state}
       unavailableLabel={isError ? t("shape.unknown") : t("shape.unavailable")}
       value={formatCount(total ?? 0, locale)}

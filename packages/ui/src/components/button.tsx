@@ -20,6 +20,16 @@ const buttonVariants = cva(
         secondary: "bg-secondary text-secondary-foreground hover:opacity-90",
         outline: "border border-border bg-transparent text-foreground hover:bg-muted",
         ghost: "bg-transparent text-foreground hover:bg-muted",
+        /*
+         * The two frame variants — for controls that sit in the header or the sidebar
+         * rail rather than on the page. They exist because `ghost` and `outline` hardcode
+         * the PAGE's tokens (`text-foreground`, `hover:bg-muted`), and the chrome tier is
+         * ink in both schemes: on the header those resolve to near-black text on a dark
+         * surface, and a hover that flashes a near-white pill. Same shapes, frame tokens.
+         */
+        "chrome-ghost": "bg-transparent text-chrome-foreground hover:bg-chrome-accent",
+        "chrome-outline":
+          "border border-chrome-border bg-transparent text-chrome-muted hover:bg-chrome-accent hover:text-chrome-foreground",
         danger: "bg-danger text-danger-foreground hover:opacity-90",
         // A row-level "Remove" trigger, not the confirm inside the dialog it opens: the
         // same weight as `outline` (quiet, same shape/size as a neighbouring Edit button)

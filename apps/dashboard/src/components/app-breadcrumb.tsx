@@ -66,9 +66,15 @@ export function AppBreadcrumb() {
 
   return (
     <nav aria-label={t("nav.breadcrumb")} className="min-w-0">
-      <ol className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+      {/* chrome-, not page-, foregrounds: the breadcrumb sits in the header, which is the
+          ink frame in both schemes — `text-muted-foreground` here would be page ink on a
+          dark surface. */}
+      <ol className="flex min-w-0 items-center gap-1.5 text-sm text-chrome-muted">
         <li className="flex min-w-0 items-center">
-          <Link href={moduleItem.href} className="truncate transition-colors hover:text-foreground">
+          <Link
+            href={moduleItem.href}
+            className="truncate transition-colors hover:text-chrome-foreground"
+          >
             {t(`nav.${moduleItem.key}`)}
           </Link>
         </li>
@@ -80,7 +86,7 @@ export function AppBreadcrumb() {
                   document points back the way the reader came from. */}
               <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 rtl:scale-x-[-1]" />
               <span
-                className={isLast ? "truncate font-medium text-foreground" : "truncate"}
+                className={isLast ? "truncate font-medium text-chrome-foreground" : "truncate"}
                 aria-current={isLast ? "page" : undefined}
               >
                 {crumb.label}

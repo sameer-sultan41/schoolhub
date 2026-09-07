@@ -76,12 +76,12 @@ export function CommandPalette() {
   return (
     <>
       <Button
-        variant="outline"
+        variant="chrome-outline"
         size="sm"
         onClick={() => {
           setOpen(true);
         }}
-        className="hidden gap-2 text-muted-foreground sm:inline-flex"
+        className="hidden gap-2 sm:inline-flex"
         leadingIcon={<Search aria-hidden="true" className="size-4" />}
       >
         {t("trigger")}

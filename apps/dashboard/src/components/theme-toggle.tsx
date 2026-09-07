@@ -53,7 +53,7 @@ export function ThemeToggle() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="ghost"
+          variant="chrome-ghost"
           size="icon"
           aria-label={t("label")}
           className="[&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110"

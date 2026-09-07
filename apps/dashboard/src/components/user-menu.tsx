@@ -58,12 +58,12 @@ export function UserMenu({ user }: { user: AuthenticatedUser | null }) {
         {/* aria-label, not the initials: "AK" is a decoration a screen reader cannot make
             sense of, and the same two letters name two different people in two tenants. */}
         <Button
-          variant="ghost"
+          variant="chrome-ghost"
           size="icon"
           className="group rounded-full"
           aria-label={t("account")}
         >
-          <Avatar className="size-8 ring-2 ring-transparent transition-[box-shadow] duration-200 group-hover:ring-primary/30">
+          <Avatar className="size-8 ring-2 ring-transparent transition-[box-shadow] duration-200 group-hover:ring-chrome-primary/40">
             <AvatarFallback>{initialsFor(fullName)}</AvatarFallback>
           </Avatar>
         </Button>

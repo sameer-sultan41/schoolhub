@@ -155,7 +155,7 @@ export function SidebarProvider({
             } as CSSProperties
           }
           className={cn(
-            "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-surface-sunken",
+            "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-chrome",
             className,
           )}
           {...props}
@@ -282,7 +282,9 @@ export function SidebarTrigger({
   return (
     <Button
       data-sidebar="trigger"
-      variant="ghost"
+      // chrome-ghost, not ghost: this control lives in the frame it toggles, so it takes
+      // the frame's tokens rather than the page's.
+      variant="chrome-ghost"
       size="icon"
       className={cn("size-7", className)}
       onClick={(event) => {
@@ -474,13 +476,28 @@ const sidebarMenuButtonVariants = cva(
   // Hover and active are deliberately two different treatments, not the same tint at two
   // strengths: hover is neutral (bg-sidebar-accent, the panel's own "lifted" tone, same as
   // every other momentary state in this file) so pointing at an item never reads as
-  // "this is now the current page." Active is coloured (primary tint + a primary
+  // "this is now the current page." Active is coloured (a primary tint + a primary
   // accent bar + primary text) precisely because it's the one state that must stay
   // identifiable after the pointer moves away — a screenshot of the sidebar with no
   // cursor visible should still show which page is open. `data-[active=false]:` scopes
   // hover/press so the active tab keeps its own treatment even while the pointer is
   // sitting on it, rather than the two states fighting for the same element.
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-lg border-s-2 border-transparent p-2 text-start text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding,box-shadow,color,background-color,border-color] group-has-data-[sidebar=menu-action]/menu-item:pe-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=false]:hover:bg-sidebar-accent data-[active=false]:hover:text-sidebar-accent-foreground data-[active=false]:active:bg-sidebar-accent data-[active=false]:active:text-sidebar-accent-foreground data-[active=true]:border-primary data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-primary data-[active=true]:shadow-sm data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-200 data-[active=false]:hover:[&>svg]:scale-110 data-[active=false]:hover:[&>svg]:text-primary",
+  //
+  // The "primary" here is `sidebar-primary`, NOT the page's `primary`. Those are two
+  // different colours by design: theme.css's chrome tier is ink in both schemes, and the
+  // page's own primary measures 1.66:1 against it — an active tab painted in it would be
+  // invisible. `sidebar-primary` is the lightened step chosen for exactly this surface
+  // (5.90:1). Presets that keep a light rail alias the two back together, so this is
+  // correct under those too.
+  //
+  // The active LABEL takes frame ink, not the hue, and that split is measured rather than
+  // stylistic. Painting the label in `sidebar-primary` on its own 15% tint lands at
+  // 3.41:1 — under AA — because tinting moves the background toward the text, the same
+  // trap badge.tsx documents at length for soft badges. Frame ink on that tint measures
+  // 7.61:1. So the hue stays where the hue is legal: the accent bar (5.95:1 against the
+  // rail, clearing 1.4.11's 3:1 for a UI boundary) and the icon (3.41:1, which clears the
+  // same graphical floor — an icon is not text).
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-lg border-s-2 border-transparent p-2 text-start text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding,box-shadow,color,background-color,border-color] group-has-data-[sidebar=menu-action]/menu-item:pe-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=false]:hover:bg-sidebar-accent data-[active=false]:hover:text-sidebar-accent-foreground data-[active=false]:active:bg-sidebar-accent data-[active=false]:active:text-sidebar-accent-foreground data-[active=true]:border-sidebar-primary data-[active=true]:bg-sidebar-primary/15 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[active=true]:shadow-sm data-[active=true]:[&>svg]:text-sidebar-primary data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-200 data-[active=false]:hover:[&>svg]:scale-110 data-[active=false]:hover:[&>svg]:text-sidebar-primary",
   {
     variants: {
       variant: {
