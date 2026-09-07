@@ -315,6 +315,30 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   **No RBAC registry change:** result processing takes the standard `create`
   verb rather than a new `process` one, since processing is precisely what
   creates `results` rows.
+- **PR #51's review found the #42 privilege-escalation class again, in the
+  module whose own docstring warns about it.** `:publish-schedule` was missing
+  from `ExamScheduleViewSet.required_permission_map`, so it inherited
+  `required_permission` — the bare *view* key every portal user holds — and
+  from `STAFF_ONLY_ACTIONS`, so `DenyRestrictedPrincipals` never applied. A
+  guardian could have published any exam's timetable for the tenant.
+  **The lesson is structural, not a reminder to be careful:** naming the write
+  actions means the list has to be updated whenever one is added, and
+  forgetting is silent. Both portal-readable viewsets in `examinations` now name
+  their **readable** actions instead (`PORTAL_READABLE_ACTIONS = {"list",
+  "retrieve"}`) and everything else is staff-only by default — so a new action
+  fails safe, and forgetting to add a read is a 403 someone reports the same
+  day. Any later module granting a restricted principal a read on a table staff
+  also write — parent-portal is built entirely on that shape — should invert the
+  set the same way.
+- **Two real bugs in that clash engine, both found in review, both of the kind
+  tests pass over.** `_pairs_by_key` guarded `if group is not None`, but the
+  detectors return a *tuple* (`(room_id, exam_date)`) that is never itself
+  None — so unroomed sittings grouped under `(None, date)` and every pair of
+  them was a hard room clash, making publish unreachable while a school was
+  still assigning halls. And pairs were formed across the whole merged scope,
+  so a clash purely between two *other* exams blocked this exam's publish. Both
+  now have a control test beside the regression, because each fix could
+  otherwise be "fixed" by disabling the detector.
 - **`examinations` needed its own clash engine, and that is not duplication for
   its own sake.** `timetable/conflicts.py` is keyed on `(day_of_week,
   period_id)` — a cell in a weekly grid whose times come from the period it

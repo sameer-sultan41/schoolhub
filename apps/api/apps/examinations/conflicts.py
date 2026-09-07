@@ -261,18 +261,37 @@ def _own(scope: Scope) -> list:
     return [row for row in scope.schedules if row.exam_subject.exam_id == scope.exam.pk]
 
 
-def _pairs_by_key(schedules: list, key) -> list[tuple]:
+def _pairs_by_key(scope: Scope, key) -> list[tuple]:
     """Overlapping pairs within each group, computed in memory.
 
     Grouped first so the comparison is quadratic in a room's own day rather
     than in the whole exam week — a room holds a handful of sittings a day, and
     the grouping is what keeps this from being quadratic in the hundreds.
+
+    **`key` returning None skips the row**, and review found the previous
+    version getting this wrong in a way that mattered: the detectors return a
+    tuple like `(row.room_id, row.exam_date)`, which is never itself None, so
+    an unroomed sitting grouped under `(None, date)` and every pair of
+    not-yet-roomed sittings on one day was reported as a hard room clash. A
+    school builds a schedule before it assigns halls, so that blocked publish
+    on the ordinary case. The detectors now return None explicitly when the
+    dimension they group by is unset.
+
+    **At least one side of every pair must belong to the exam under check.**
+    `scope.schedules` deliberately includes other exams' sittings, because a
+    room or invigilator clash is by definition with some other exam — but a
+    clash purely *between two other exams* is not this exam's to resolve, and
+    reporting it here blocked a publish over something the caller could not
+    fix. Review found that too.
     """
+    own_ids = {row.pk for row in _own(scope)}
+
     grouped: dict = defaultdict(list)
-    for row in schedules:
+    for row in scope.schedules:
         group = key(row)
-        if group is not None:
-            grouped[group].append(row)
+        if group is None:
+            continue
+        grouped[group].append(row)
 
     pairs = []
     for rows in grouped.values():
@@ -285,6 +304,8 @@ def _pairs_by_key(schedules: list, key) -> list[tuple]:
                     # Sorted by start, so once one candidate starts at or after
                     # this row's end, every later one does too.
                     break
+                if earlier.pk not in own_ids and later.pk not in own_ids:
+                    continue
                 pairs.append((earlier, later))
     return pairs
 
@@ -292,7 +313,12 @@ def _pairs_by_key(schedules: list, key) -> list[tuple]:
 def _room_double_bookings(scope: Scope) -> list[Conflict]:
     """§11 — a room is single-booked. Hard: two cohorts cannot share a hall."""
     findings = []
-    for earlier, later in _pairs_by_key(scope.schedules, lambda row: (row.room_id, row.exam_date)):
+    for earlier, later in _pairs_by_key(
+        scope,
+        # None, not a tuple containing None: an unroomed sitting occupies no
+        # room and must not be compared with another unroomed one.
+        lambda row: (row.room_id, row.exam_date) if row.room_id else None,
+    ):
         room = scope.room_label.get(earlier.room_id, "this room")
         findings.append(
             Conflict(
@@ -313,7 +339,8 @@ def _invigilator_double_bookings(scope: Scope) -> list[Conflict]:
     """§11 — an invigilator is single-booked. Hard: they can only be in one hall."""
     findings = []
     for earlier, later in _pairs_by_key(
-        scope.schedules, lambda row: (row.invigilator_staff_id, row.exam_date)
+        scope,
+        lambda row: (row.invigilator_staff_id, row.exam_date) if row.invigilator_staff_id else None,
     ):
         who = scope.staff_label.get(earlier.invigilator_staff_id, "This invigilator")
         findings.append(
@@ -340,7 +367,9 @@ def _student_collisions(scope: Scope) -> list[Conflict]:
     would miss exactly that case while appearing to check it.
     """
     findings = []
-    for earlier, later in _pairs_by_key(scope.schedules, lambda row: row.exam_date):
+    # Every sitting has a date, so no row is skipped here — the collision is
+    # between rosters, which the body below resolves.
+    for earlier, later in _pairs_by_key(scope, lambda row: row.exam_date):
         if earlier.section_id == later.section_id:
             # The same section sitting two overlapping papers is the same
             # collision, reported once with a clearer message below.

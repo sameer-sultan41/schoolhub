@@ -295,21 +295,36 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "update": "exams.schedule.update",
         "partial_update": "exams.schedule.update",
         "destroy": "exams.schedule.update",
+        # Publishing releases a timetable to every student in the tenant and
+        # fires §12's announcement. It was missing from this map in review, so
+        # it fell back to `required_permission` — the bare *view* key.
+        "publish": "exams.schedule.update",
     }
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
-    STAFF_ONLY_ACTIONS = frozenset({"create", "update", "partial_update", "destroy"})
+    # **Everything that is not a read.** Written as "read actions are the
+    # exception" rather than as a list of writes, because review found `publish`
+    # missing from the list-of-writes version — the same privilege-escalation
+    # class as PR #42's `:bulk-mark`, in the module whose own docstring warns
+    # about it. A new action now defaults to staff-only and has to be named
+    # here to become portal-readable, which is the direction that fails safe.
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
 
     def get_permissions(self):
-        """Add `DenyRestrictedPrincipals` to the write actions only.
+        """Add `DenyRestrictedPrincipals` to everything except the portal reads.
 
         DRF resolves `permission_classes` per view, not per action, so a viewset
         serving both a portal read and a staff write has to choose here. See the
         module docstring for why the service check cannot close this alone.
+
+        Defaulting to *staff* and listing the readable actions is deliberate: a
+        list of write actions has to be updated every time one is added, and
+        forgetting is silent. Forgetting to add a read here is a 403 someone
+        reports immediately.
         """
-        if self.action in self.STAFF_ONLY_ACTIONS:
-            return [permission() for permission in STAFF_PERMISSIONS]
-        return super().get_permissions()
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return super().get_permissions()
+        return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
         return (
@@ -358,6 +373,18 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     def partial_update(self, request: Request, *args, **kwargs):
         kwargs["partial"] = True
         return self.update(request, *args, **kwargs)
+
+    def perform_destroy(self, instance) -> None:
+        """A completed sitting cannot be deleted either.
+
+        `update` already refused one; review found `destroy` falling through to
+        the mixin's soft delete with no check, which made DELETE the way around
+        a rule PATCH enforced. A completed sitting is a paper students have sat
+        — `cancelled` is the state for calling one off, and it keeps the row
+        visible to whoever saw it.
+        """
+        services.assert_schedule_is_editable(instance)
+        super().perform_destroy(instance)
 
     @extend_schema(request=None, responses={200: ExamScheduleSerializer(many=True)})
     def publish(self, request: Request, pk: str | None = None):
@@ -414,13 +441,15 @@ class AdmitCardViewSet(
     }
     http_method_names = ["get", "post", "head", "options"]
 
-    STAFF_ONLY_ACTIONS = frozenset({"issue", "revoke"})
+    # Read actions named, everything else staff-only — see
+    # `ExamScheduleViewSet.get_permissions` for why the set is inverted.
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
 
     def get_permissions(self):
-        """Add `DenyRestrictedPrincipals` to the write actions only — as above."""
-        if self.action in self.STAFF_ONLY_ACTIONS:
-            return [permission() for permission in STAFF_PERMISSIONS]
-        return super().get_permissions()
+        """Add `DenyRestrictedPrincipals` to everything except the portal reads."""
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return super().get_permissions()
+        return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
         return super().get_queryset().select_related("student")

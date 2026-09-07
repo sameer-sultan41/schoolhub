@@ -258,7 +258,7 @@ schedule publish, and the admit-card batch.
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
 | §11 scheduling | One sitting per (exam-subject, section) · `end_time > start_time` · a section must belong to the exam-subject's class · a completed or cancelled sitting cannot be rescheduled · admit cards need a published schedule · a revocation needs a reason (CHECK, not only a service rule) |
 | §5.2 clash engine | `conflicts.py` — hard: room double-booked, invigilator double-booked, a student sitting two papers at once, a sitting outside the exam's own dates, a sitting on a non-working day or holiday. Soft: an over-capacity room, a sitting on a weekday the sections have published lessons. Every write returns the whole list; only hard findings block `:publish-schedule` |
-| §12 notifications | Two of six wired — `exams.schedule-published` and `exams.admit-card-issued`, both to the scheduled students and their portal-enabled guardians, on commit, in **one** `notify()` call per exam. The other four wait on `marks`, `results` and `report_cards` |
+| §12 notifications | Two of six wired — `exams.schedule-published` (one `notify()` for the whole exam, on commit) and `exams.admit-card-issued` (one per card, because §12's template names the card number, with guardians fetched once and grouped rather than queried per card). The admit-card one fires after the **render**, not at issue: it says the card is ready to download, which is only true once a document exists. The other four wait on `marks`, `results` and `report_cards` |
 | §5.5 grading | `grading.py` — `percentage_for` (ROUND_HALF_UP, one decimal place), `assert_scale_is_complete`, `band_for` (boundary resolves to the upper band), `gpa_for` (None unless the scale type is `gpa` or `hybrid`) |
 | §7.1 lifecycle | `exams.status` starts at `draft` and is **read-only on the wire**. Configuration is frozen past `scheduled`; only a draft exam may be deleted |
 | Feature flag | `module.examinations`, `default_enabled=False` |
@@ -325,6 +325,46 @@ schedule publish, and the admit-card batch.
   visible to a student who already saw it, and — the load-bearing half — is
   excluded from every clash check and from the occupancy constraints, because a
   room freed by a cancellation is free.
+
+### Corrected in review
+
+Seven findings. Three describe rules the module now depends on:
+
+- **`:publish-schedule` had no restricted-principal guard.** `publish` was
+  missing from `required_permission_map`, so it inherited `required_permission`
+  — the bare *view* key every portal user holds — and from
+  `STAFF_ONLY_ACTIONS`, so `DenyRestrictedPrincipals` never applied. This is the
+  same class as PR #42's `:bulk-mark`, in the module whose own docstring warns
+  about it, which is the argument for the structural half of the fix: both
+  portal-readable viewsets now name their **readable** actions
+  (`PORTAL_READABLE_ACTIONS`) and everything else is staff-only. A list of
+  writes must be updated whenever one is added and forgetting is silent;
+  forgetting to add a read is a 403 someone reports the same day.
+- **The clash engine's null guard never fired.** `_pairs_by_key` checked
+  `if group is not None`, but every detector returns a *tuple* — `(room_id,
+  exam_date)` — which is never itself None. So an unroomed sitting grouped
+  under `(None, date)`, and every pair of not-yet-roomed sittings on one day was
+  reported as a **hard** room clash. A school builds a schedule before it
+  assigns halls, so publish was unreachable on the ordinary case. The detectors
+  now return None explicitly when the dimension they group by is unset.
+- **One exam's clash list reported other exams' clashes.** `scope.schedules`
+  includes other exams deliberately — a room clash is by definition with some
+  other exam — but pairs were formed over the whole merged list, so a clash
+  purely *between two others* blocked this exam's publish over something its
+  caller could not fix. At least one side of every pair must now belong to the
+  exam under check.
+
+And four smaller ones: `DELETE` on a sitting fell through to the mixin's soft
+delete with no `assert_schedule_is_editable`, making it the way around a rule
+`PATCH` enforced; `exams.admit-card-issued` was registered with templates and
+documented as wired while nothing called `notify()` for it; `issue_admit_cards`
+reported `len(created)` rather than the change in row count, which overstates
+under exactly the race `ignore_conflicts=True` exists to absorb; and the render
+job called the single-card `student_sittings` inside its loop — two queries per
+card, so three hundred cards was six hundred round trips, the shape
+`conflicts.collect_scope`'s own docstring warns against. `services.sittings_by_student`
+answers the whole batch in two queries, and a test asserts it agrees with the
+single form.
 
 ### Deliberately not built in this PR
 

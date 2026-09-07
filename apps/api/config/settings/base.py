@@ -284,6 +284,7 @@ CELERY_TASK_ROUTES = {
     # The schedule announcement is the opposite: a student who misses it misses
     # a paper, which is the same reason attendance's absence alert is here.
     "apps.examinations.tasks.notify_schedule_published": {"queue": "transactional"},
+    "apps.examinations.tasks.notify_admit_cards_issued": {"queue": "transactional"},
     "core.idempotency.tasks.*": {"queue": "bulk"},
     "core.jobs.tasks.*": {"queue": "bulk"},
     # notifications.md §5 names three lanes (emergency / transactional / bulk);

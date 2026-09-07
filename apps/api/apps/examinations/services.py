@@ -445,7 +445,24 @@ def issue_admit_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     # register.
     AdmitCard.objects.bulk_create(created, ignore_conflicts=True)
 
-    return {"issued": len(created), "already_issued": len(existing), "students": len(students)}
+    # Counted from the database, not from `len(created)`. Review found the
+    # latter overstating under exactly the race `ignore_conflicts` exists to
+    # absorb: the loser of a concurrent double-issue attempted N rows, inserted
+    # none, and reported N. `bulk_create(ignore_conflicts=True)` cannot say
+    # which of its objects landed — on PostgreSQL the returned instances have
+    # no reliable primary keys — so the honest number comes from a re-count.
+    total_now = AdmitCard.objects.alive().filter(exam=exam).count()
+    issued = total_now - len(existing)
+
+    return {
+        "issued": issued,
+        "already_issued": len(existing),
+        "students": len(students),
+        # What this run *tried* to create, so a caller that sees `issued` come
+        # back lower knows a concurrent run took the difference rather than
+        # that students were skipped.
+        "attempted": len(created),
+    }
 
 
 @transaction.atomic
@@ -488,3 +505,52 @@ def student_sittings(*, exam: Exam, student) -> list:
         .select_related("exam_subject__subject", "room")
         .order_by("exam_date", "start_time")
     )
+
+
+def sittings_by_student(*, exam: Exam, students: list) -> dict:
+    """Every student's sittings for an exam, in two queries flat.
+
+    The batch form of `student_sittings`. Review found the admit-card render job
+    calling the single form once per card — two queries each, so a batch of
+    three hundred cards was six hundred round trips, which is exactly what
+    `conflicts.collect_scope`'s own docstring warns against and what
+    `ENGINEERING_STANDARDS.md` §3 calls an N+1.
+
+    Returns `{student_id: [ExamSchedule, ...]}`, ordered as a card prints them.
+    A student with no scheduled paper is absent from the mapping rather than
+    present with an empty list, so a caller has to decide what that means —
+    `documents.admit_card_html` prints "no papers scheduled yet".
+    """
+    from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+    sections_by_student: dict = {}
+    enrollments = (
+        StudentEnrollment.objects.alive()
+        .filter(student__in=students, status=EnrollmentStatus.ACTIVE)
+        .values_list("student_id", "section_id")
+    )
+    for student_id, section_id in enrollments:
+        sections_by_student.setdefault(student_id, set()).add(section_id)
+
+    schedules_by_section: dict = {}
+    sittings = (
+        ExamSchedule.objects.alive()
+        .filter(exam_subject__exam=exam, status__in=OCCUPYING_SCHEDULE_STATUSES)
+        .select_related("exam_subject__subject", "room")
+        .order_by("exam_date", "start_time")
+    )
+    for sitting in sittings:
+        schedules_by_section.setdefault(sitting.section_id, []).append(sitting)
+
+    answers: dict = {}
+    for student_id, section_ids in sections_by_student.items():
+        rows = [
+            sitting
+            for section_id in section_ids
+            for sitting in schedules_by_section.get(section_id, [])
+        ]
+        if rows:
+            # Re-sorted because a student in two sections has two already-sorted
+            # lists concatenated, which is not itself sorted.
+            answers[student_id] = sorted(rows, key=lambda row: (row.exam_date, row.start_time))
+    return answers

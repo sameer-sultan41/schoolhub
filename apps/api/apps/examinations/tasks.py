@@ -50,7 +50,7 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
     """
     from apps.examinations import documents, uploads
     from apps.examinations.models import AdmitCard, AdmitCardStatus, Exam
-    from apps.examinations.services import student_sittings
+    from apps.examinations.services import sittings_by_student
     from core.documents import render_pdf
     from core.files.services import create_ready_file
     from core.tenancy.context import tenant_atomic
@@ -72,17 +72,22 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
                 .exclude(status=AdmitCardStatus.REVOKED)
                 .select_related("student")
             )
+            # Every card's sittings, fetched once. Review found the single-card
+            # `student_sittings` being called inside the loop below — two
+            # queries per card, so three hundred cards was six hundred round
+            # trips. `collect_scope`'s docstring in `conflicts.py` warns against
+            # exactly this shape; the same rule applies to a render batch.
+            sittings = sittings_by_student(exam=exam, students=[card.student for card in cards])
 
         total = len(cards) or 1
         for index, card in enumerate(cards, start=1):
             try:
                 with tenant_atomic(uuid.UUID(tenant_id)):
-                    sittings = student_sittings(exam=exam, student=card.student)
                     document = documents.admit_card_html(
                         card=card,
                         exam=exam,
                         student=card.student,
-                        sittings=sittings,
+                        sittings=sittings.get(card.student_id, []),
                         school_name=school_name,
                     )
                     file = create_ready_file(
@@ -118,6 +123,14 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
 
             if index % PROGRESS_EVERY == 0:
                 update_progress(job=job, progress=int(index / total * 100))
+
+        # §12's admit-card announcement, and it goes here rather than beside
+        # `issue_admit_cards`: the notification tells a guardian the card is
+        # "ready" and downloadable, which is only true once a document exists.
+        # Review found it registered with templates, documented as wired, and
+        # called from nowhere — a catalogue entry that persisted no rows.
+        if rendered:
+            notify_admit_cards_issued.delay(tenant_id=tenant_id, exam_id=str(exam.pk))
 
         mark_succeeded(
             job=job,
@@ -196,3 +209,98 @@ def notify_schedule_published(*, tenant_id: str, exam_id: str) -> dict[str, int]
             return {"notified": 0}
 
     return {"notified": len(recipients)}
+
+
+@shared_task(base=TenantAwareTask)
+def notify_admit_cards_issued(*, tenant_id: str, exam_id: str) -> dict[str, int]:
+    """§12's admit-card announcement, once the documents exist.
+
+    Enqueued by `render_admit_cards_task` rather than by the endpoint, because
+    the message says the card is ready to download and that is only true after
+    a render. One `notify()` call per recipient list, for the reason
+    `notify_schedule_published` gives.
+
+    **Per-recipient context is not attempted.** §12's template names
+    `student.first_name` and `admit_card_no`, which differ per card — so this
+    sends one message per *card holder* rather than one for the whole exam, and
+    the fan-out is a list of one. That is a real cost (a query per card's
+    guardians would be worse, so the guardians are fetched once and grouped),
+    accepted because a card number in the body is what makes the message
+    actionable rather than a notice to go and look.
+    """
+    from apps.examinations import notifications
+    from apps.examinations.models import AdmitCard, AdmitCardStatus, Exam
+    from apps.student_management.models import StudentGuardian
+    from core.notifications.services import Recipient, notify
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    sent = 0
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        exam = Exam.objects.alive().filter(pk=exam_id).first()
+        if exam is None:
+            return {"notified": 0}
+        school_name = Tenant.objects.get(pk=tenant_id).name
+        cards = list(
+            AdmitCard.objects.alive()
+            .filter(exam=exam, status=AdmitCardStatus.ISSUED, file__isnull=False)
+            .select_related("student")
+        )
+        if not cards:
+            return {"notified": 0}
+
+        # Guardians for every card holder, in one query and grouped — never one
+        # query per card.
+        guardians: dict = {}
+        links = (
+            StudentGuardian.objects.alive()
+            .filter(
+                student__in=[card.student for card in cards],
+                has_portal_access=True,
+                guardian__deleted_at__isnull=True,
+                guardian__user_id__isnull=False,
+            )
+            .values_list("student_id", "guardian__user_id")
+        )
+        for student_id, user_id in links:
+            guardians.setdefault(student_id, []).append(user_id)
+
+        for card in cards:
+            recipients = [
+                Recipient(user_id=user_id)
+                for user_id in dict.fromkeys(
+                    [
+                        *([card.student.user_id] if card.student.user_id else []),
+                        *guardians.get(card.student_id, []),
+                    ]
+                )
+            ]
+            if not recipients:
+                # A student with no portal account and no portal-enabled
+                # guardian is an ordinary state; §12 names no fallback.
+                continue
+            try:
+                notify(
+                    notifications.ADMIT_CARD_ISSUED,
+                    tenant_id=uuid.UUID(tenant_id),
+                    recipients=recipients,
+                    context={
+                        "exam.name": exam.name,
+                        "school.name": school_name,
+                        "student.first_name": card.student.first_name,
+                        "admit_card_no": card.admit_card_no,
+                    },
+                    source_type="admit_cards",
+                    source_id=card.pk,
+                )
+                sent += len(recipients)
+            except Exception:
+                # One card's announcement failing must not cost the rest of the
+                # hall theirs. The card itself is issued either way.
+                logger.exception(
+                    "%s failed for admit card %s",
+                    notifications.ADMIT_CARD_ISSUED,
+                    card.admit_card_no,
+                )
+
+    return {"notified": sent}
