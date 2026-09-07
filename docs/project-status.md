@@ -19,7 +19,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | 0 — Foundation | tenancy, auth/RBAC, [`school-organization`](03-modules/school-organization.md) | Done in substance — tenancy/RBAC/audit/API plumbing in `apps/api/core/`, `school_organization` Django app shipped and merged |
 | 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **Both full-stack complete** — `student-management` (PRs 1-4) and `staff-management` (this PR), see the per-module matrix below |
 | 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **Backend complete.** `academics` and `timetable` shipped; `attendance` shipped as three stacked PRs (marking → leave → staff/reports). Dashboard screens for the tier are still outstanding. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
-| 3 — High-stakes | [`examinations`](03-modules/examinations.md), [`fees-finance`](03-modules/fees-finance.md) | **In progress.** `examinations` is shipping as five stacked PRs (setup → scheduling/admit cards → marks → results/report cards → reports/question banks); PRs A, B, C and D have landed. `fees-finance` is **blocked on its own spec** — it has a vouchers/receipts spec-only PR and no core module doc, so there is nothing to build from |
+| 3 — High-stakes | [`examinations`](03-modules/examinations.md), [`fees-finance`](03-modules/fees-finance.md) | **`examinations` backend complete** — all five stacked PRs landed (setup → scheduling/admit cards → marks → results/report cards → reports/question banks), all 11 §15 tables, all §4 keys, all six §12 notifications. `fees-finance` is **blocked on its own spec** — it has a vouchers/receipts spec-only PR and no core module doc, so there is nothing to build from |
 | 4–7 | communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started |
 
 ## Per-module implementation matrix
@@ -33,7 +33,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | timetable | done (rooms/periods CRUD, draft slot grid with `meta.conflicts` on every edit, `:validate` / `:publish` with supersede-by-end-dating, `GET /timetables/my` for teacher/student/guardian, substitutions + `:approve`/`:reject`) | done (week grid editor, conflict panel, publish action, My timetable, substitutions queue) | live-lane API journeys + one build-and-publish browser CUJ | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
 | attendance | **done** (register `:bulk-mark` with idempotent re-submission, the §5.5 lock window, corrections, guardian alerts, nightly lock sweep; the five leave tables, §7.2's escalating chain, auto-marking `on_leave`; staff attendance with `:check-out`, §13's six reports with a 202 export lane, and the absent-teacher cover feed into timetable) | — (backend-only; the dashboard agent owns screens) | live-lane API journeys for marking (mark → re-submit → read back, rejected row, future date) leave (submit → approve → auto-mark, self-approval refused, cancel, overlap) and staff/reports (record a day, check out, run a report, export as a job) | done |
-| examinations | **in progress** (PR A: grading scales with validated bands, exams, per-class subject configuration. PR B: sittings with a date/time clash engine, schedule publish, the idempotent admit-card batch and its PDF job. PR C: the marks grid with its four entry gates, the lock/unlock lifecycle, the sheet import and §6's missing-entries dashboard. PR D: result processing, the approval gate with segregation of duties, publishing, per-student withholding, and versioned report cards with an attendance snapshot) | — (backend-only; the dashboard agent owns screens) | — (arrives with the marks and results PRs, where there is a journey worth driving) | done |
+| examinations | **done** (PR A: grading scales with validated bands, exams, per-class subject configuration. PR B: sittings with a date/time clash engine, schedule publish, the idempotent admit-card batch and its PDF job. PR C: the marks grid with its four entry gates, the lock/unlock lifecycle, the sheet import and §6's missing-entries dashboard. PR D: result processing, the approval gate with segregation of duties, publishing, per-student withholding, and versioned report cards with an attendance snapshot. PR E: §13's five reports with a 202 export lane, question banks with §7.2's approval gate, and deterministic paper assembly) | — (backend-only; the dashboard agent owns screens) | — (the live lane still wants a process → approve → publish journey; noted as the module's one remaining gap) | done |
 | everything else (12 modules) | — | — | — | done (spec exists; nothing implemented) |
 
 ---
@@ -315,6 +315,21 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   **No RBAC registry change:** result processing takes the standard `create`
   verb rather than a new `process` one, since processing is precisely what
   creates `results` rows.
+- **PR #54's review found two silent failures, and the shape they share is
+  worth carrying.** Neither raised an error; both just quietly returned less
+  than they should have. (1) `Question` had no `filter_assigned_to_user` while
+  its sibling `QuestionBank` did, and `scope_queryset` falls through to
+  `.none()` for an `assigned`-scoped principal on a model with no hook — so a
+  teacher who could see their own bank got an **empty list** of the questions
+  in it, including on the `:approve` route that stands between an AI draft and
+  a student. **Any new model reachable by an `assigned`-scoped role needs the
+  hook, and the test has to exercise the *nested* routes, not just the parent's
+  list** — that omission is exactly why this survived review twice.
+  (2) Paper assembly checked satisfiability synchronously and then selected
+  asynchronously with no lock, silently slicing `[:count]` — producing a short
+  exam paper with the job marked succeeded. Now locked, and a shortfall fails
+  the job. **The generalisation: a check in the request and the work in a job
+  are two different moments, and only the one holding the lock is a guarantee.**
 - **PR #53's review found the result lifecycle taking no row locks**, and the
   finding's sharpest part was that the module was inconsistent with itself:
   `set_default_scale` and `bulk_enter_marks` took `select_for_update()` while
@@ -327,6 +342,34 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   `lock_exam` on the row all the actions have in common, plus returning the
   moved ids *from under the lock* rather than pre-collecting them in the view —
   which was the same race producing a duplicate guardian notification.
+- **`examinations` is backend-complete: all 11 tables, all §4 keys, all six §12
+  notifications, every one with a caller.** The last PR added §13's five reports
+  behind one `kind`-parameterised endpoint with a 202 export lane, question
+  banks, and paper assembly.
+- **§7.2's AI approval gate is asymmetric, and that asymmetry is the reusable
+  part.** A question a teacher wrote is approved by authorship — asking them to
+  approve their own would be friction with no safeguard. An `ai_generated`
+  question arrives `is_approved=False` whatever the client sent, and needs a
+  *named* human; the CHECK enforcing attribution is scoped to `ai_generated`,
+  because demanding an approver on a manual question would block ordinary
+  creation. `is_approved` is read-only on the serializer **and** forced in
+  `create`. **Every later module that takes AI output should copy this shape**:
+  the flag defaults to "no approval needed", the AI path overrides it, and the
+  constraint demands a signature only where a signature means something.
+  `marks` deliberately has *no* `source` column for the same reason — AI-EXM-02
+  suggests to a teacher, and the confirmed value is a person's.
+- **Paper assembly is deterministic rather than random**, ordered by
+  `usage_count` then creation. That buys two things at once: reuse spreads
+  across a bank, and re-running a blueprint over an unchanged bank produces the
+  same paper — so a teacher who regenerates after fixing a typo does not get a
+  different exam. Randomness would have looked more natural and been worse.
+- **`examinations` now has two functions answering "what marks are missing", and
+  they disagree on purpose.** §6's dashboard (`marks_entry_progress`) computes
+  an *expected* roll from enrolments, so a subject nobody has started shows as
+  outstanding. §13's report (`reports.marks_entry_status`) counts what exists,
+  so it exports over one queryset alongside the other reports. The dashboard is
+  for chasing; the report is a record of what was entered. Both docstrings say
+  which is which, because the alternative is someone "fixing" the discrepancy.
 - **`examinations`' result cycle settled four rulings a school will argue
   about**, each tested rather than left to emerge. An **absent** student is
   `outcome=absent`, not a zero — a zero ranks them last and drags the section's

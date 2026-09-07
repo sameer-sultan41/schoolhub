@@ -23,8 +23,9 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.examinations import services, uploads
+from apps.examinations import reports, services, uploads
 from apps.examinations.models import (
+    CHOICE_QUESTION_TYPES,
     AdmitCard,
     Exam,
     ExamSchedule,
@@ -33,6 +34,10 @@ from apps.examinations.models import (
     GradingScale,
     Marks,
     MarksStatus,
+    Question,
+    QuestionBank,
+    QuestionDifficulty,
+    QuestionSource,
     ReportCard,
     Result,
 )
@@ -40,6 +45,7 @@ from apps.examinations.services import ENTRY_SETTABLE_STATUSES
 from apps.school_organization.models import AcademicSession, Class, Section, Subject, Term
 from apps.staff_management.models import Staff
 from apps.timetable.models import Room
+from core.exports import tabular
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
 
@@ -605,3 +611,136 @@ class SendResultsBackSerializer(serializers.Serializer):
     """
 
     reason = serializers.CharField(max_length=500)
+
+
+class QuestionBankSerializer(serializers.ModelSerializer):
+    """`question_banks` — §5.8."""
+
+    subject_id = _fk(Subject, source="subject")
+    class_id = _fk(Class, source="school_class", required=False, allow_null=True)
+    question_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = QuestionBank
+        fields = (
+            "id",
+            "subject_id",
+            "class_id",
+            "name",
+            "description",
+            "status",
+            "question_count",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = READ_ONLY_FIELDS
+
+
+class QuestionSerializer(serializers.ModelSerializer):
+    """`questions` — §5.8, with §7.2's approval gate on the wire.
+
+    `is_approved` and `approved_by` are **read-only**. §7.2 makes approval a
+    permission-gated act (`exams.question.approve`), so a client that could set
+    the flag on create would be the whole gate defeated — an AI draft could
+    arrive pre-approved. `:approve` is the only way it becomes true for an
+    `ai_generated` question.
+
+    `usage_count` is read-only for the same shape of reason: it is the only
+    record that a question reached a paper (§15 gives assembled papers no
+    table), so nothing but assembly may write it.
+    """
+
+    question_bank_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = Question
+        fields = (
+            "id",
+            "question_bank_id",
+            "question_text",
+            "question_type",
+            "difficulty",
+            "default_marks",
+            "options",
+            "answer_key",
+            "topic",
+            "source",
+            "is_approved",
+            "usage_count",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (*READ_ONLY_FIELDS, "is_approved", "usage_count")
+
+    def validate(self, attrs: dict) -> dict:
+        question_type = _value(attrs, self.instance, "question_type")
+        options = _value(attrs, self.instance, "options")
+
+        if question_type in CHOICE_QUESTION_TYPES and not options:
+            raise serializers.ValidationError(
+                {
+                    "options": (
+                        "A multiple-choice or true/false question needs its choices — "
+                        "without them a paper would print a stem with nothing under it."
+                    )
+                }
+            )
+        if options is not None and not isinstance(options, list):
+            raise serializers.ValidationError(
+                {"options": "Options are a list of choices, in the order they should print."}
+            )
+        return attrs
+
+    def create(self, validated_data: dict):
+        """§7.2 — an AI draft arrives **unapproved**, whatever the client sent.
+
+        Forced here rather than left to the model default, because the default
+        is `True` (a teacher writing a question has already exercised the
+        judgement) and an AI draft is the one case where that is wrong.
+        AGENTS.md invariant 5 is the rule; this line is where it applies.
+        """
+        if validated_data.get("source") == QuestionSource.AI_GENERATED:
+            validated_data["is_approved"] = False
+            validated_data["approved_by"] = None
+        return super().create(validated_data)
+
+
+class PaperSectionSerializer(serializers.Serializer):
+    """One section of §6's paper blueprint."""
+
+    title = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    difficulty = serializers.ChoiceField(choices=QuestionDifficulty.choices)
+    topic = serializers.CharField(max_length=150, required=False, allow_null=True)
+    count = serializers.IntegerField(min_value=1, max_value=200)
+    marks_each = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False, allow_null=True
+    )
+
+
+class AssemblePaperSerializer(serializers.Serializer):
+    """The body of `POST /question-banks/{id}:assemble-paper` (§16)."""
+
+    title = serializers.CharField(max_length=150)
+    sections = serializers.ListField(child=PaperSectionSerializer(), allow_empty=False)
+
+
+class ExamReportQuerySerializer(serializers.Serializer):
+    """The query for `GET /reports/exam-summary`, and the body of its export.
+
+    `exam_id` is required for every report except question-bank usage, which is
+    about a bank rather than an exam. Validated here rather than in the service
+    so the message names the field.
+    """
+
+    kind = serializers.ChoiceField(choices=[(kind, kind) for kind in reports.REPORT_KINDS])
+    exam_id = _fk(Exam, source="exam", required=False, allow_null=True)
+    format = serializers.ChoiceField(
+        choices=[(key, key) for key in tabular.FORMATS], required=False, default="csv"
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs["kind"] != "question-bank-usage" and attrs.get("exam") is None:
+            raise serializers.ValidationError(
+                {"exam_id": f"The {attrs['kind']} report is about one exam, so name it."}
+            )
+        return attrs

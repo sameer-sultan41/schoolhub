@@ -19,7 +19,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from apps.examinations import conflicts, grading, processing
+from apps.examinations import conflicts, grading, processing, reports
 from apps.examinations.models import (
     OCCUPYING_SCHEDULE_STATUSES,
     AdmitCard,
@@ -32,6 +32,9 @@ from apps.examinations.models import (
     GradingScale,
     Marks,
     MarksStatus,
+    Question,
+    QuestionBank,
+    QuestionSource,
     ReportCard,
     ReportCardStatus,
     Result,
@@ -1576,3 +1579,241 @@ def publish_report_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     # Same reasoning as `publish_exam_results`: the caller notifies on what
     # moved, and only this function knows that under the lock.
     return {"published": len(ready), "published_ids": [str(card.pk) for card in ready]}
+
+
+# --- §5.8 question banks and paper assembly -------------------------------
+
+
+def assert_question_is_approvable(question: Question) -> None:
+    """§7.2 — the gate AI output passes through.
+
+    An already-approved question is a no-op rather than a conflict: pressing
+    approve twice is a retry. What is refused is approving a *manual* question,
+    because there is nothing to approve — `is_approved` is already true, and
+    offering the action would suggest a gate that is not there.
+    """
+    if question.source != QuestionSource.AI_GENERATED:
+        raise Conflict(
+            "Only AI-generated questions go through approval. A question a teacher wrote is "
+            "usable as soon as it is saved."
+        )
+
+
+@transaction.atomic
+def approve_question(*, question: Question, actor_id: uuid.UUID) -> Question:
+    """§7.2 — a human puts their name to an AI draft.
+
+    AGENTS.md invariant 5 in one function: no AI output reaches a student
+    without a permission-gated human approval, and `approved_by` is what makes
+    that auditable rather than merely asserted.
+    """
+    assert_question_is_approvable(question)
+    if question.is_approved:
+        return question
+    question.is_approved = True
+    question.approved_by = actor_id
+    question.updated_by = actor_id
+    question.save(update_fields=["is_approved", "approved_by", "updated_by", "updated_at"])
+    return question
+
+
+def assert_blueprint_is_satisfiable(*, bank: QuestionBank, sections: list[dict]) -> list[dict]:
+    """§6 — assemble a paper "by difficulty/topic blueprint".
+
+    Returns the shortfalls rather than raising, so the caller can report **all**
+    of them at once. A teacher whose blueprint asks for eight hard questions
+    from a bank holding three needs to know that about every section of the
+    paper, not to fix one and resubmit.
+
+    Only **approved** questions count. An unapproved AI draft is not available
+    to a paper by definition (§7.2), and counting it would make a blueprint look
+    satisfiable and then assemble a paper that is short.
+    """
+    available = (
+        Question.objects.alive()
+        .filter(question_bank=bank, is_approved=True)
+        .values_list("pk", "difficulty", "topic")
+    )
+    # **Two indexes, not one dict keyed on `(difficulty, topic)`.** The first
+    # version added every question under both `(difficulty, topic)` and
+    # `(difficulty, None)`, which are the *same key* for a question with no
+    # topic — so a question with no topic was counted twice and a blueprint looked
+    # satisfiable when it was not. CI caught it. Keeping the two pools separate
+    # makes the double-count unrepresentable rather than merely avoided.
+    by_difficulty: dict = {}
+    by_topic: dict = {}
+    for pk, difficulty, topic in available:
+        by_difficulty.setdefault(difficulty, set()).add(pk)
+        if topic:
+            by_topic.setdefault((difficulty, topic), set()).add(pk)
+
+    shortfalls = []
+    for index, section in enumerate(sections):
+        difficulty = section["difficulty"]
+        topic = section.get("topic")
+        count = section["count"]
+        # A section naming no topic draws from every topic at that difficulty;
+        # one naming a topic draws only from it. That is the narrower claim, so
+        # it gets the narrower pool.
+        have = (
+            len(by_topic.get((difficulty, topic), set()))
+            if topic
+            else len(by_difficulty.get(difficulty, set()))
+        )
+        if have < count:
+            shortfalls.append(
+                {
+                    "index": index,
+                    "difficulty": difficulty,
+                    "topic": topic,
+                    "requested": count,
+                    "available": have,
+                }
+            )
+    return shortfalls
+
+
+def select_paper_questions(*, bank: QuestionBank, sections: list[dict]) -> list[dict]:
+    """Pick the questions a blueprint asks for. **Deterministic** — no randomness.
+
+    Ordered by `usage_count` then creation, so the least-used approved question
+    is chosen first. That is a real property rather than an arbitrary one: it
+    spreads reuse across a bank, which is what makes §6's usage tracking worth
+    keeping, and it means two assemblies of the same blueprint over an unchanged
+    bank produce the same paper — so a teacher who regenerates after a typo does
+    not get a different exam.
+
+    A question already taken by an earlier section is not offered again: a paper
+    with the same question twice is a paper somebody has to reprint.
+
+    **`select_for_update`, and a re-check that each section was actually
+    filled.** The endpoint's satisfiability check runs synchronously and this
+    runs later, in the job's own transaction — so between the two, a concurrent
+    assembly on the same bank can take the questions, or a teacher can unapprove
+    one. Review found the original silently slicing `[:count]` and producing a
+    **short exam paper** with the job marked succeeded. Nobody would have
+    noticed until a hall of students had a paper missing its last section.
+
+    So the pool is locked for the duration, and a shortfall raises rather than
+    truncating: `assemble_paper_task` records it as a job failure, which is the
+    outcome a teacher can act on.
+    """
+    taken: set = set()
+    chosen: list[dict] = []
+
+    for index, section in enumerate(sections):
+        difficulty = section["difficulty"]
+        topic = section.get("topic")
+        count = section["count"]
+        candidates = (
+            Question.objects.alive()
+            .select_for_update()
+            .filter(question_bank=bank, is_approved=True, difficulty=difficulty)
+            .exclude(pk__in=taken)
+        )
+        if topic:
+            candidates = candidates.filter(topic=topic)
+        picked = list(candidates.order_by("usage_count", "created_at")[:count])
+
+        if len(picked) < count:
+            raise DomainRuleViolation(
+                {
+                    "sections": (
+                        f"Section {index + 1} asked for {count} {difficulty} question(s)"
+                        + (f" on {topic}" if topic else "")
+                        + f" but only {len(picked)} approved question(s) were available when "
+                        "the paper was assembled. The bank changed after the blueprint was "
+                        "accepted — re-check it and try again."
+                    )
+                }
+            )
+
+        taken.update(question.pk for question in picked)
+        chosen.append(
+            {
+                "title": section.get("title") or f"Section {len(chosen) + 1}",
+                "questions": picked,
+                "marks_each": section.get("marks_each"),
+            }
+        )
+    return chosen
+
+
+@transaction.atomic
+def record_paper_usage(*, questions: list, actor_id: uuid.UUID) -> int:
+    """§6's usage tracking — one `bulk_update`, never a save per question.
+
+    Incremented rather than derived because §15 records that assembled papers
+    are stored as files with **no table** to join against, so there is nothing
+    to count from. That makes this column the only record that a question was
+    used, which is why it is written in the same transaction as the assembly.
+    """
+    if not questions:
+        return 0
+    for question in questions:
+        question.usage_count += 1
+        question.updated_by = actor_id
+    Question.objects.bulk_update(questions, ["usage_count", "updated_by"], batch_size=500)
+    return len(questions)
+
+
+# --- §13's reports --------------------------------------------------------
+
+# Past this many rows the endpoint hands the caller a job instead of building
+# the report inline. The same ceiling `attendance` uses, and for the same
+# reason: a term-scale register is not a request anyone should hold open.
+SYNCHRONOUS_REPORT_ROW_LIMIT = 1000
+
+
+def assert_report_kind(kind: str) -> None:
+    if kind not in reports.REPORT_KINDS:
+        raise DomainRuleViolation(
+            {
+                "kind": (
+                    f"Unknown report {kind!r}. Available: " + ", ".join(reports.REPORT_KINDS) + "."
+                )
+            }
+        )
+
+
+def build_report_rows(*, kind: str, exam_id, user, limit: int | None = None) -> list[dict]:
+    """Build one §13 report's rows under `user`'s record scope.
+
+    Shared by the endpoint and the export job so the two can never disagree —
+    which matters more here than usual, because a principal reads the inline
+    report and the exported spreadsheet as the same document.
+
+    `limit` caps how many rows are *materialised*, so the endpoint can decide
+    "inline or job?" without paying for the answer: it asks for one more row
+    than the synchronous ceiling, and getting that many back is enough to know.
+    Checking the threshold after building the whole thing is precisely the cost
+    the 202-and-a-job pattern exists to avoid — the mistake `attendance`'s
+    review caught there.
+
+    **The scope is applied here, from the user**, not by the caller. A report is
+    read as authoritative, so an export must not widen what its requester could
+    see inline.
+    """
+    from core.rbac.permissions import scope_queryset
+
+    assert_report_kind(kind)
+
+    if kind == "question-bank-usage":
+        scoped = scope_queryset(QuestionBank.objects.alive(), user, campus_field=None)
+        return reports.question_bank_usage(scoped, limit=limit)
+
+    if kind in ("subject-performance", "marks-entry-status"):
+        scoped = scope_queryset(Marks.objects.alive(), user, campus_field="student__campus_id")
+        builder = (
+            reports.subject_performance
+            if kind == "subject-performance"
+            else reports.marks_entry_status
+        )
+        return builder(scoped, exam_id=exam_id, limit=limit)
+
+    scoped = scope_queryset(Result.objects.alive(), user, campus_field="student__campus_id")
+    if kind == "result-register":
+        return reports.result_register(scoped, exam_id=exam_id, limit=limit)
+    if kind == "pass-fail-analysis":
+        return reports.pass_fail_analysis(scoped, exam_id=exam_id, limit=limit)
+    return reports.grade_distribution(scoped, exam_id=exam_id, limit=limit)

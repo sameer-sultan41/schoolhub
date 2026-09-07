@@ -24,6 +24,7 @@ from rest_framework.routers import SimpleRouter
 
 from apps.examinations.views import (
     AdmitCardViewSet,
+    ExamReportView,
     ExamScheduleViewSet,
     ExamSubjectViewSet,
     ExamViewSet,
@@ -31,6 +32,8 @@ from apps.examinations.views import (
     GradingScaleViewSet,
     MarksImportViewSet,
     MarksViewSet,
+    QuestionBankViewSet,
+    QuestionViewSet,
     ReportCardViewSet,
     ResultViewSet,
 )
@@ -44,8 +47,36 @@ router.register("admit-cards", AdmitCardViewSet, basename="admit-cards")
 router.register("marks", MarksViewSet, basename="marks")
 router.register("results", ResultViewSet, basename="results")
 router.register("report-cards", ReportCardViewSet, basename="report-cards")
+router.register("question-banks", QuestionBankViewSet, basename="question-banks")
 
 urlpatterns = [
+    path(
+        "reports/exam-summary",
+        ExamReportView.as_view(),
+        name="exam-report-summary",
+    ),
+    path(
+        "question-banks/<uuid:pk>:assemble-paper",
+        QuestionBankViewSet.as_view({"post": "assemble_paper"}),
+        name="question-banks-assemble-paper",
+    ),
+    path(
+        "question-banks/<uuid:bank_pk>/questions",
+        QuestionViewSet.as_view({"get": "list", "post": "create"}),
+        name="questions",
+    ),
+    path(
+        "question-banks/<uuid:bank_pk>/questions/<uuid:pk>",
+        QuestionViewSet.as_view(
+            {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
+        ),
+        name="questions-detail",
+    ),
+    path(
+        "question-banks/<uuid:bank_pk>/questions/<uuid:pk>:approve",
+        QuestionViewSet.as_view({"post": "approve"}),
+        name="questions-approve",
+    ),
     path(
         "exams/<uuid:pk>:process-results",
         ResultViewSet.as_view({"post": "process"}),

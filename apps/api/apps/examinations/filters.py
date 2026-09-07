@@ -22,6 +22,8 @@ from apps.examinations.models import (
     ExamSubject,
     GradingScale,
     Marks,
+    Question,
+    QuestionBank,
     ReportCard,
     Result,
 )
@@ -120,3 +122,27 @@ class ReportCardFilterSet(django_filters.FilterSet):
     class Meta:
         model = ReportCard
         fields = {"status": ["exact"]}
+
+
+class QuestionBankFilterSet(django_filters.FilterSet):
+    subject_id = django_filters.UUIDFilter(field_name="subject_id")
+    class_id = django_filters.UUIDFilter(field_name="school_class_id")
+
+    class Meta:
+        model = QuestionBank
+        fields = {"status": ["exact"]}
+
+
+class QuestionFilterSet(django_filters.FilterSet):
+    # The blueprint's own axes, so a teacher can see the pool a section will
+    # draw from before assembling anything.
+    topic = django_filters.CharFilter(field_name="topic", lookup_expr="iexact")
+
+    class Meta:
+        model = Question
+        fields = {
+            "difficulty": ["exact"],
+            "question_type": ["exact"],
+            "source": ["exact"],
+            "is_approved": ["exact"],
+        }

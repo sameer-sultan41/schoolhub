@@ -1930,6 +1930,197 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/question-banks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/question-banks` — §5.8.
+         *
+         *     Staff-only, every action: §4 grants no portal role a question-bank key, and
+         *     a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+         *     attribute rather than inverting a readable set — there is nothing
+         *     portal-readable to carve out, and pretending otherwise would suggest a
+         *     portal path that does not exist.
+         */
+        get: operations["question_banks_list"];
+        put?: never;
+        /**
+         * @description `/question-banks` — §5.8.
+         *
+         *     Staff-only, every action: §4 grants no portal role a question-bank key, and
+         *     a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+         *     attribute rather than inverting a readable set — there is nothing
+         *     portal-readable to carve out, and pretending otherwise would suggest a
+         *     portal path that does not exist.
+         */
+        post: operations["question_banks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/question-banks/{bank_pk}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/question-banks/{bank_id}/questions` — §5.8's questions.
+         *
+         *     Nested under their bank for the reason grade bands are: a question is
+         *     meaningless apart from its bank, and the blueprint reasons about a bank's
+         *     whole pool — so the bank belongs in the URL rather than the body.
+         */
+        get: operations["question_banks_questions_list"];
+        put?: never;
+        /**
+         * @description `/question-banks/{bank_id}/questions` — §5.8's questions.
+         *
+         *     Nested under their bank for the reason grade bands are: a question is
+         *     meaningless apart from its bank, and the blueprint reasons about a bank's
+         *     whole pool — so the bank belongs in the URL rather than the body.
+         */
+        post: operations["question_banks_questions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/question-banks/{bank_pk}/questions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/question-banks/{bank_id}/questions` — §5.8's questions.
+         *
+         *     Nested under their bank for the reason grade bands are: a question is
+         *     meaningless apart from its bank, and the blueprint reasons about a bank's
+         *     whole pool — so the bank belongs in the URL rather than the body.
+         */
+        get: operations["question_banks_questions_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description `/question-banks/{bank_id}/questions` — §5.8's questions.
+         *
+         *     Nested under their bank for the reason grade bands are: a question is
+         *     meaningless apart from its bank, and the blueprint reasons about a bank's
+         *     whole pool — so the bank belongs in the URL rather than the body.
+         */
+        delete: operations["question_banks_questions_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description `/question-banks/{bank_id}/questions` — §5.8's questions.
+         *
+         *     Nested under their bank for the reason grade bands are: a question is
+         *     meaningless apart from its bank, and the blueprint reasons about a bank's
+         *     whole pool — so the bank belongs in the URL rather than the body.
+         */
+        patch: operations["question_banks_questions_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/question-banks/{bank_pk}/questions/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /questions/{id}:approve` — §7.2's gate.
+         *
+         *     AGENTS.md invariant 5 in one endpoint: no AI output reaches a student
+         *     without a permission-gated human approval, and `approved_by` is what
+         *     makes that auditable rather than merely asserted.
+         */
+        post: operations["question_banks_questions_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/question-banks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/question-banks` — §5.8.
+         *
+         *     Staff-only, every action: §4 grants no portal role a question-bank key, and
+         *     a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+         *     attribute rather than inverting a readable set — there is nothing
+         *     portal-readable to carve out, and pretending otherwise would suggest a
+         *     portal path that does not exist.
+         */
+        get: operations["question_banks_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description `/question-banks` — §5.8.
+         *
+         *     Staff-only, every action: §4 grants no portal role a question-bank key, and
+         *     a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+         *     attribute rather than inverting a readable set — there is nothing
+         *     portal-readable to carve out, and pretending otherwise would suggest a
+         *     portal path that does not exist.
+         */
+        delete: operations["question_banks_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description `/question-banks` — §5.8.
+         *
+         *     Staff-only, every action: §4 grants no portal role a question-bank key, and
+         *     a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+         *     attribute rather than inverting a readable set — there is nothing
+         *     portal-readable to carve out, and pretending otherwise would suggest a
+         *     portal path that does not exist.
+         */
+        patch: operations["question_banks_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/question-banks/{id}:assemble-paper": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /question-banks/{id}:assemble-paper` — 202 + a paper PDF (§16).
+         *
+         *     The blueprint is checked for satisfiability **before** a job is created,
+         *     and every shortfall is reported at once: a teacher whose blueprint asks
+         *     for eight hard questions from a bank holding three needs to know that
+         *     about each section of the paper, not to fix one and resubmit.
+         */
+        post: operations["question_banks_:assemble_paper_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/report-cards": {
         parameters: {
             query?: never;
@@ -2034,6 +2225,31 @@ export interface paths {
          *     the distinction the *reader* least expects.
          */
         post: operations["reports_attendance_summary_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/exam-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Inline under the ceiling, 202 + a job above it (api-architecture §2.7).
+         *
+         *     `build_report_rows` is asked for one row *more* than the ceiling, so the
+         *     decision costs one extra row rather than the whole report. Checking
+         *     after building it is precisely the cost the 202 pattern exists to avoid
+         *     — the mistake `attendance`'s review caught in the same place.
+         */
+        get: operations["reports_exam_summary_retrieve"];
+        put?: never;
+        /** @description Queue an export, whatever the size (§16, §13). */
+        post: operations["reports_exam_summary_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3919,6 +4135,11 @@ export interface components {
          * @enum {string}
          */
         AppliesToEnum: "staff" | "student" | "both";
+        /** @description The body of `POST /question-banks/{id}:assemble-paper` (§16). */
+        AssemblePaper: {
+            title: string;
+            sections: components["schemas"]["PaperSection"][];
+        };
         /** @description `attendance_corrections` — the request half. Decisions are colon-actions. */
         AttendanceCorrection: {
             /** Format: uuid */
@@ -3992,7 +4213,7 @@ export interface components {
          *     every one is a flat list under a date range and a record scope.
          */
         AttendanceReportQuery: {
-            kind: components["schemas"]["KindEnum"];
+            kind: components["schemas"]["AttendanceReportQueryKindEnum"];
             /** Format: date */
             start_date: string;
             /** Format: date */
@@ -4004,6 +4225,16 @@ export interface components {
             /** @default csv */
             format: components["schemas"]["FormatEnum"];
         };
+        /**
+         * @description * `daily-register` - daily-register
+         *     * `student-summary` - student-summary
+         *     * `defaulters` - defaulters
+         *     * `student-late-arrivals` - student-late-arrivals
+         *     * `staff-punctuality` - staff-punctuality
+         *     * `leave` - leave
+         * @enum {string}
+         */
+        AttendanceReportQueryKindEnum: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
         /**
          * @description * `manual` - Manual
          *     * `system` - System
@@ -4368,6 +4599,30 @@ export interface components {
             readonly updated_at: string;
         };
         /**
+         * @description The query for `GET /reports/exam-summary`, and the body of its export.
+         *
+         *     `exam_id` is required for every report except question-bank usage, which is
+         *     about a bank rather than an exam. Validated here rather than in the service
+         *     so the message names the field.
+         */
+        ExamReportQuery: {
+            kind: components["schemas"]["ExamReportQueryKindEnum"];
+            /** Format: uuid */
+            exam_id?: string | null;
+            /** @default csv */
+            format: components["schemas"]["FormatEnum"];
+        };
+        /**
+         * @description * `result-register` - result-register
+         *     * `pass-fail-analysis` - pass-fail-analysis
+         *     * `subject-performance` - subject-performance
+         *     * `marks-entry-status` - marks-entry-status
+         *     * `grade-distribution` - grade-distribution
+         *     * `question-bank-usage` - question-bank-usage
+         * @enum {string}
+         */
+        ExamReportQueryKindEnum: "result-register" | "pass-fail-analysis" | "subject-performance" | "marks-entry-status" | "grade-distribution" | "question-bank-usage";
+        /**
          * @description `exam_schedules` — one section's sitting of one paper (§5.2).
          *
          *     `status` is writable here, unlike on `Exam`: §5.2's transitions are
@@ -4695,16 +4950,6 @@ export interface components {
         InviteRequest: {
             role_ids?: string[];
         };
-        /**
-         * @description * `daily-register` - daily-register
-         *     * `student-summary` - student-summary
-         *     * `defaulters` - defaulters
-         *     * `student-late-arrivals` - student-late-arrivals
-         *     * `staff-punctuality` - staff-punctuality
-         *     * `leave` - leave
-         * @enum {string}
-         */
-        KindEnum: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
         /** @description One step of §7.2's chain, nested on the request it belongs to. */
         LeaveApproval: {
             /** Format: uuid */
@@ -5132,6 +5377,26 @@ export interface components {
                 };
             };
         };
+        PaginatedQuestionBankList: {
+            data?: components["schemas"]["QuestionBank"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedQuestionList: {
+            data?: components["schemas"]["Question"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedReportCardList: {
             data?: components["schemas"]["ReportCard"][];
             meta?: {
@@ -5318,6 +5583,15 @@ export interface components {
                     page_size?: number;
                 };
             };
+        };
+        /** @description One section of §6's paper blueprint. */
+        PaperSection: {
+            title?: string;
+            difficulty: components["schemas"]["QuestionDifficultyEnum"];
+            topic?: string | null;
+            count: number;
+            /** Format: decimal */
+            marks_each?: string | null;
         };
         PatchedAcademicSession: {
             /** Format: uuid */
@@ -5732,6 +6006,61 @@ export interface components {
             readonly approved_at?: string | null;
             /** Format: date-time */
             readonly executed_at?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description `questions` — §5.8, with §7.2's approval gate on the wire.
+         *
+         *     `is_approved` and `approved_by` are **read-only**. §7.2 makes approval a
+         *     permission-gated act (`exams.question.approve`), so a client that could set
+         *     the flag on create would be the whole gate defeated — an AI draft could
+         *     arrive pre-approved. `:approve` is the only way it becomes true for an
+         *     `ai_generated` question.
+         *
+         *     `usage_count` is read-only for the same shape of reason: it is the only
+         *     record that a question reached a paper (§15 gives assembled papers no
+         *     table), so nothing but assembly may write it.
+         */
+        PatchedQuestion: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            readonly question_bank_id?: string;
+            question_text?: string;
+            question_type?: components["schemas"]["QuestionTypeEnum"];
+            difficulty?: components["schemas"]["QuestionDifficultyEnum"];
+            /** Format: decimal */
+            default_marks?: string;
+            /** @description Required for mcq and true_false. */
+            options?: unknown;
+            answer_key?: unknown;
+            /** @description The blueprint filter (§6). */
+            topic?: string | null;
+            source?: components["schemas"]["QuestionSourceEnum"];
+            /** @description False on creation for ai_generated; flipped by :approve. */
+            readonly is_approved?: boolean;
+            readonly usage_count?: number;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /** @description `question_banks` — §5.8. */
+        PatchedQuestionBank: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            subject_id?: string;
+            /** Format: uuid */
+            class_id?: string | null;
+            name?: string;
+            description?: string | null;
+            status?: components["schemas"]["QuestionBankStatusEnum"];
+            /** @default 0 */
+            readonly question_count: number;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -6206,6 +6535,91 @@ export interface components {
          * @enum {string}
          */
         QualificationTypeEnum: "degree" | "diploma" | "certification" | "training" | "license";
+        /**
+         * @description `questions` — §5.8, with §7.2's approval gate on the wire.
+         *
+         *     `is_approved` and `approved_by` are **read-only**. §7.2 makes approval a
+         *     permission-gated act (`exams.question.approve`), so a client that could set
+         *     the flag on create would be the whole gate defeated — an AI draft could
+         *     arrive pre-approved. `:approve` is the only way it becomes true for an
+         *     `ai_generated` question.
+         *
+         *     `usage_count` is read-only for the same shape of reason: it is the only
+         *     record that a question reached a paper (§15 gives assembled papers no
+         *     table), so nothing but assembly may write it.
+         */
+        Question: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly question_bank_id: string;
+            question_text: string;
+            question_type: components["schemas"]["QuestionTypeEnum"];
+            difficulty?: components["schemas"]["QuestionDifficultyEnum"];
+            /** Format: decimal */
+            default_marks?: string;
+            /** @description Required for mcq and true_false. */
+            options?: unknown;
+            answer_key?: unknown;
+            /** @description The blueprint filter (§6). */
+            topic?: string | null;
+            source?: components["schemas"]["QuestionSourceEnum"];
+            /** @description False on creation for ai_generated; flipped by :approve. */
+            readonly is_approved: boolean;
+            readonly usage_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description `question_banks` — §5.8. */
+        QuestionBank: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: uuid */
+            class_id?: string | null;
+            name: string;
+            description?: string | null;
+            status?: components["schemas"]["QuestionBankStatusEnum"];
+            /** @default 0 */
+            readonly question_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `active` - Active
+         *     * `archived` - Archived
+         * @enum {string}
+         */
+        QuestionBankStatusEnum: "active" | "archived";
+        /**
+         * @description * `easy` - Easy
+         *     * `medium` - Medium
+         *     * `hard` - Hard
+         * @enum {string}
+         */
+        QuestionDifficultyEnum: "easy" | "medium" | "hard";
+        /**
+         * @description * `manual` - Manual
+         *     * `ai_generated` - AI generated
+         *     * `imported` - Imported
+         * @enum {string}
+         */
+        QuestionSourceEnum: "manual" | "ai_generated" | "imported";
+        /**
+         * @description * `mcq` - Multiple choice
+         *     * `true_false` - True or false
+         *     * `short_answer` - Short answer
+         *     * `long_answer` - Long answer
+         *     * `fill_blank` - Fill in the blank
+         *     * `numerical` - Numerical
+         * @enum {string}
+         */
+        QuestionTypeEnum: "mcq" | "true_false" | "short_answer" | "long_answer" | "fill_blank" | "numerical";
         /**
          * @description Documents ``RefreshView``'s actual response body for the OpenAPI schema.
          *
@@ -10345,6 +10759,336 @@ export interface operations {
             };
         };
     };
+    question_banks_list: {
+        parameters: {
+            query?: {
+                class_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `active` - Active
+                 *     * `archived` - Archived
+                 */
+                status?: "active" | "archived";
+                subject_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedQuestionBankList"];
+                };
+            };
+        };
+    };
+    question_banks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionBank"];
+                "application/x-www-form-urlencoded": components["schemas"]["QuestionBank"];
+                "multipart/form-data": components["schemas"]["QuestionBank"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionBank"];
+                };
+            };
+        };
+    };
+    question_banks_questions_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /**
+                 * @description * `easy` - Easy
+                 *     * `medium` - Medium
+                 *     * `hard` - Hard
+                 */
+                difficulty?: "easy" | "hard" | "medium";
+                is_approved?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `mcq` - Multiple choice
+                 *     * `true_false` - True or false
+                 *     * `short_answer` - Short answer
+                 *     * `long_answer` - Long answer
+                 *     * `fill_blank` - Fill in the blank
+                 *     * `numerical` - Numerical
+                 */
+                question_type?: "fill_blank" | "long_answer" | "mcq" | "numerical" | "short_answer" | "true_false";
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `manual` - Manual
+                 *     * `ai_generated` - AI generated
+                 *     * `imported` - Imported
+                 */
+                source?: "ai_generated" | "imported" | "manual";
+                topic?: string;
+            };
+            header?: never;
+            path: {
+                bank_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedQuestionList"];
+                };
+            };
+        };
+    };
+    question_banks_questions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bank_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Question"];
+                "application/x-www-form-urlencoded": components["schemas"]["Question"];
+                "multipart/form-data": components["schemas"]["Question"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"];
+                };
+            };
+        };
+    };
+    question_banks_questions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bank_pk: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"];
+                };
+            };
+        };
+    };
+    question_banks_questions_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bank_pk: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    question_banks_questions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bank_pk: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedQuestion"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedQuestion"];
+                "multipart/form-data": components["schemas"]["PatchedQuestion"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"];
+                };
+            };
+        };
+    };
+    "question_banks_questions_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bank_pk: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"];
+                };
+            };
+        };
+    };
+    question_banks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this question bank. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionBank"];
+                };
+            };
+        };
+    };
+    question_banks_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this question bank. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    question_banks_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this question bank. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedQuestionBank"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedQuestionBank"];
+                "multipart/form-data": components["schemas"]["PatchedQuestionBank"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionBank"];
+                };
+            };
+        };
+    };
+    "question_banks_:assemble_paper_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssemblePaper"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssemblePaper"];
+                "multipart/form-data": components["schemas"]["AssemblePaper"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     report_cards_list: {
         parameters: {
             query?: {
@@ -10486,6 +11230,72 @@ export interface operations {
         };
         responses: {
             /** @description A job resource; poll GET /jobs/{id}. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reports_exam_summary_retrieve: {
+        parameters: {
+            query: {
+                exam_id?: string | null;
+                /**
+                 * @description * `csv` - csv
+                 *     * `xlsx` - xlsx
+                 *     * `pdf` - pdf
+                 */
+                format?: "csv" | "xlsx" | "pdf";
+                /**
+                 * @description * `result-register` - result-register
+                 *     * `pass-fail-analysis` - pass-fail-analysis
+                 *     * `subject-performance` - subject-performance
+                 *     * `marks-entry-status` - marks-entry-status
+                 *     * `grade-distribution` - grade-distribution
+                 *     * `question-bank-usage` - question-bank-usage
+                 */
+                kind: "result-register" | "pass-fail-analysis" | "subject-performance" | "marks-entry-status" | "grade-distribution" | "question-bank-usage";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report's rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many rows to serve inline; a job resource. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reports_exam_summary_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExamReportQuery"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExamReportQuery"];
+                "multipart/form-data": components["schemas"]["ExamReportQuery"];
+            };
+        };
+        responses: {
+            /** @description No response body */
             202: {
                 headers: {
                     [name: string]: unknown;

@@ -242,6 +242,9 @@ tsvector
 TTFB
 Turbopack
 unallocated
+unapprove
+unapproved
+unapproves
 unauditable
 unconfigured
 undoable
