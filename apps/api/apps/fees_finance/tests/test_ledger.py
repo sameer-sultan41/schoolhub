@@ -32,7 +32,7 @@ from apps.fees_finance.models import LedgerAccountType, LedgerEntry, LedgerRefer
 from apps.fees_finance.services import ensure_system_accounts
 from apps.fees_finance.tests.factories import LedgerAccountFactory, TenantFactory, posting
 from core.api.exceptions import DomainRuleViolation
-from core.tenancy.context import tenant_context
+from core.tenancy.context import tenant_atomic, tenant_context
 
 
 class LedgerTestCase(TestCase):
@@ -402,7 +402,13 @@ class TransactionGuardTests(TransactionTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.tenant = TenantFactory()
-        with tenant_context(self.tenant.id), transaction.atomic():
+        # `tenant_atomic`, not `tenant_context` + `atomic`. Outside an already
+        # open transaction — which is exactly where a TransactionTestCase runs —
+        # `set_database_tenant`'s `SET LOCAL` has no transaction to attach to
+        # and is lost, and the INSERT is then refused by the RLS policy rather
+        # than by anything this test is about. `tenant_atomic` opens the
+        # transaction first, which is what it exists for.
+        with tenant_atomic(self.tenant.id):
             self.accounts = ensure_system_accounts(tenant_id=self.tenant.pk)
 
     def test_posting_outside_a_transaction_is_refused(self) -> None:
