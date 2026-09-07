@@ -683,9 +683,19 @@ def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
     from apps.staff_management.models import EmploymentStatus, Staff
     from core.rbac.permissions import user_scopes
 
-    scopes = user_scopes(user).get("exams.marks.create") or []
+    # `user_scopes` is keyed by **scope type**, not by permission key — the
+    # shape `attendance.assert_marker_may_mark_section` already reads. Keying it
+    # by permission returned nothing and made every caller look unscoped, which
+    # is how CI caught this.
+    scopes = user_scopes(user)
     if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
         return
+    if RecordScope.ASSIGNED not in scopes:
+        # `own` alone cannot enter marks: a student scoring their own paper is
+        # not a workflow §5 describes.
+        raise DomainRuleViolation(
+            {"exam_subject_id": "You are not assigned to enter marks for this subject."}
+        )
 
     staff_ids = list(
         Staff.objects.alive()
@@ -1040,6 +1050,11 @@ def import_marks_row(
 ) -> dict[str, str] | None:
     """Write one imported marks row. Returns None, or a row-level error.
 
+    The error's `row` is stringified, matching
+    `attendance.import_attendance_row`. Not because a number is wrong in JSON,
+    but because a client consuming both importers' job payloads should not get
+    an int from one and a string from the other.
+
     **Per-row, unlike `bulk_enter_marks`, and that difference is deliberate.**
     A grid submit is one act of judgement over one class, so a bad cell rejects
     the whole thing. An import is a file of hundreds a school is migrating or
@@ -1056,12 +1071,12 @@ def import_marks_row(
     """
     admission_number = (row.get("admission_number") or "").strip()
     if not admission_number:
-        return {"row": row_number, "field": "admission_number", "issue": "Missing."}
+        return {"row": str(row_number), "field": "admission_number", "issue": "Missing."}
 
     student = students_by_number.get(admission_number)
     if student is None:
         return {
-            "row": row_number,
+            "row": str(row_number),
             "field": "admission_number",
             "issue": (
                 f"No active enrolment for {admission_number!r} in a class this exam-subject covers."
@@ -1070,23 +1085,23 @@ def import_marks_row(
 
     theory, error = _import_decimal(row.get("theory_marks", ""), "theory_marks")
     if error:
-        return {"row": row_number, "field": "theory_marks", "issue": error}
+        return {"row": str(row_number), "field": "theory_marks", "issue": error}
     practical, error = _import_decimal(row.get("practical_marks", ""), "practical_marks")
     if error:
-        return {"row": row_number, "field": "practical_marks", "issue": error}
+        return {"row": str(row_number), "field": "practical_marks", "issue": error}
 
     is_absent = (row.get("is_absent") or "").strip().lower() in _TRUTHY
     is_exempt = (row.get("is_exempt") or "").strip().lower() in _TRUTHY
 
     if is_absent and (theory is not None or practical is not None):
         return {
-            "row": row_number,
+            "row": str(row_number),
             "field": "is_absent",
             "issue": "An absent student cannot also have a mark.",
         }
     if is_absent and is_exempt:
         return {
-            "row": row_number,
+            "row": str(row_number),
             "field": "is_exempt",
             "issue": "Absent and exempt are different claims; a row cannot assert both.",
         }
@@ -1097,7 +1112,7 @@ def import_marks_row(
         )
     except DomainRuleViolation as exc:
         field, issue = next(iter(exc.detail.items()))
-        return {"row": row_number, "field": field, "issue": str(issue)}
+        return {"row": str(row_number), "field": field, "issue": str(issue)}
 
     Marks.objects.update_or_create(
         tenant=exam_subject.tenant,
