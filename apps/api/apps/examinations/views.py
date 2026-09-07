@@ -39,12 +39,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.db import transaction
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.examinations import conflicts, processing, services, tasks
 from apps.examinations.filters import (
@@ -54,6 +56,8 @@ from apps.examinations.filters import (
     ExamSubjectFilterSet,
     GradingScaleFilterSet,
     MarksFilterSet,
+    QuestionBankFilterSet,
+    QuestionFilterSet,
     ReportCardFilterSet,
     ResultFilterSet,
 )
@@ -65,6 +69,8 @@ from apps.examinations.models import (
     GradeBand,
     GradingScale,
     Marks,
+    Question,
+    QuestionBank,
     ReportCard,
     ReportCardStatus,
     Result,
@@ -73,7 +79,9 @@ from apps.examinations.models import (
 from apps.examinations.serializers import (
     AdmitCardRevokeSerializer,
     AdmitCardSerializer,
+    AssemblePaperSerializer,
     BulkMarksEntrySerializer,
+    ExamReportQuerySerializer,
     ExamScheduleSerializer,
     ExamSerializer,
     ExamSubjectSerializer,
@@ -81,12 +89,14 @@ from apps.examinations.serializers import (
     GradingScaleSerializer,
     MarksImportRequestSerializer,
     MarksSerializer,
+    QuestionBankSerializer,
+    QuestionSerializer,
     ReportCardSerializer,
     ResultSerializer,
     ResultWithholdSerializer,
     SendResultsBackSerializer,
 )
-from core.api.exceptions import Conflict
+from core.api.exceptions import Conflict, DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
@@ -1024,3 +1034,255 @@ class ReportCardViewSet(
         return ActionResponse.ok(
             outcome, message=f"{outcome['published']} report card(s) published."
         )
+
+
+class QuestionBankViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/question-banks` — §5.8.
+
+    Staff-only, every action: §4 grants no portal role a question-bank key, and
+    a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+    attribute rather than inverting a readable set — there is nothing
+    portal-readable to carve out, and pretending otherwise would suggest a
+    portal path that does not exist.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = QuestionBank.objects
+    serializer_class = QuestionBankSerializer
+    filterset_class = QuestionBankFilterSet
+    search_fields = ["name", "description"]
+    ordering_fields = ["name", "created_at"]
+    scope_campus_field = None
+    required_feature = FEATURE
+    required_permission = "exams.question-bank.view"
+    required_permission_map = {
+        "create": "exams.question-bank.create",
+        "update": "exams.question-bank.update",
+        "partial_update": "exams.question-bank.update",
+        "destroy": "exams.question-bank.delete",
+        "assemble_paper": "exams.question-bank.update",
+    }
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related("subject", "school_class")
+            .annotate(question_count=Count("questions", filter=Q(questions__deleted_at=None)))
+        )
+
+    @extend_schema(request=AssemblePaperSerializer, responses={202: None})
+    def assemble_paper(self, request: Request, pk: str | None = None):
+        """`POST /question-banks/{id}:assemble-paper` — 202 + a paper PDF (§16).
+
+        The blueprint is checked for satisfiability **before** a job is created,
+        and every shortfall is reported at once: a teacher whose blueprint asks
+        for eight hard questions from a bank holding three needs to know that
+        about each section of the paper, not to fix one and resubmit.
+        """
+        bank = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = AssemblePaperSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        sections = serializer.validated_data["sections"]
+
+        shortfalls = services.assert_blueprint_is_satisfiable(bank=bank, sections=sections)
+        if shortfalls:
+            raise DomainRuleViolation(
+                f"{len(shortfalls)} section(s) of this blueprint cannot be filled from the "
+                "bank's approved questions.",
+                meta={"sections": shortfalls},
+            )
+
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="exams.assemble-paper",
+            payload={
+                "question_bank_id": str(bank.pk),
+                "title": serializer.validated_data["title"],
+                # Decimals are not JSON, and a job payload is JSONB.
+                "sections": [
+                    {
+                        **section,
+                        "marks_each": (
+                            str(section["marks_each"])
+                            if section.get("marks_each") is not None
+                            else None
+                        ),
+                    }
+                    for section in sections
+                ],
+                "requested_by": str(request.user.pk),
+            },
+            actor_id=request.user.pk,
+        )
+        transaction.on_commit(
+            lambda: tasks.assemble_paper_task.delay(
+                tenant_id=str(request.tenant.pk),
+                job_id=str(job.pk),
+                actor_id=str(request.user.pk),
+            )
+        )
+        record_audit(request, "generate", bank, after={"job_id": str(job.pk)})
+        return ActionResponse.accepted(str(job.pk), message="Paper assembly queued.")
+
+
+class QuestionViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/question-banks/{bank_id}/questions` — §5.8's questions.
+
+    Nested under their bank for the reason grade bands are: a question is
+    meaningless apart from its bank, and the blueprint reasons about a bank's
+    whole pool — so the bank belongs in the URL rather than the body.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = Question.objects
+    serializer_class = QuestionSerializer
+    filterset_class = QuestionFilterSet
+    search_fields = ["question_text", "topic"]
+    ordering_fields = ["created_at", "usage_count", "difficulty"]
+    scope_campus_field = None
+    required_feature = FEATURE
+    required_permission = "exams.question-bank.view"
+    required_permission_map = {
+        "create": "exams.question-bank.create",
+        "update": "exams.question-bank.update",
+        "partial_update": "exams.question-bank.update",
+        "destroy": "exams.question-bank.delete",
+        "approve": "exams.question.approve",
+    }
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_bank(self) -> QuestionBank:
+        """The bank named in the URL, 404 if it is not this tenant's.
+
+        Resolved through the tenant-scoped manager, so a foreign bank id is a
+        404 and never a 403 — a 403 would confirm the bank exists (AGENTS.md
+        invariant 2).
+        """
+        return get_object_or_404(QuestionBank.objects.alive(), pk=self.kwargs["bank_pk"])
+
+    def get_queryset(self):
+        return super().get_queryset().filter(question_bank=self.get_bank())
+
+    def perform_create(self, serializer) -> None:
+        instance = serializer.save(
+            tenant=self.request.tenant,
+            question_bank=self.get_bank(),
+            created_by=self.request.user.pk,
+            updated_by=self.request.user.pk,
+        )
+        record_audit(self.request, "create", instance, after=serializer.data)
+
+    @extend_schema(request=None, responses={200: QuestionSerializer})
+    def approve(self, request: Request, bank_pk: str | None = None, pk: str | None = None):
+        """`POST /questions/{id}:approve` — §7.2's gate.
+
+        AGENTS.md invariant 5 in one endpoint: no AI output reaches a student
+        without a permission-gated human approval, and `approved_by` is what
+        makes that auditable rather than merely asserted.
+        """
+        question = get_object_or_404(self.get_queryset(), pk=pk)
+        before = {"is_approved": question.is_approved}
+
+        services.approve_question(question=question, actor_id=request.user.pk)
+
+        record_audit(request, "approve", question, before=before, after={"is_approved": True})
+        return ActionResponse.ok(
+            QuestionSerializer(question).data, message="Question approved for use."
+        )
+
+
+class ExamReportView(TenantScopedViewSetMixin, APIView):
+    """`GET/POST /reports/exam-summary` — §13's five reports.
+
+    One `kind`-parameterised endpoint rather than five routes, matching
+    `attendance`'s report view: the shape of the response differs per kind but
+    the *contract* — scoped rows, inline under a ceiling, a job above it —
+    does not, and five routes would be five places to keep that consistent.
+
+    `GET` serves inline; `POST` queues an export in any of the three formats
+    `core.exports.tabular` renders. The `POST` needs the export key, not the
+    view key: §4 lists `exams.result.export` separately.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    required_feature = FEATURE
+    required_permission = "exams.result.view"
+    required_permission_map = {"post": "exams.result.export"}
+    serializer_class = ExamReportQuerySerializer
+
+    @extend_schema(
+        parameters=[ExamReportQuerySerializer],
+        responses={
+            200: OpenApiResponse(description="The report's rows."),
+            202: OpenApiResponse(description="Too many rows to serve inline; a job resource."),
+        },
+    )
+    def get(self, request: Request) -> Response:
+        """Inline under the ceiling, 202 + a job above it (api-architecture §2.7).
+
+        `build_report_rows` is asked for one row *more* than the ceiling, so the
+        decision costs one extra row rather than the whole report. Checking
+        after building it is precisely the cost the 202 pattern exists to avoid
+        — the mistake `attendance`'s review caught in the same place.
+        """
+        serializer = ExamReportQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        exam = serializer.validated_data.get("exam")
+
+        rows = services.build_report_rows(
+            kind=serializer.validated_data["kind"],
+            exam_id=exam.pk if exam is not None else None,
+            user=request.user,
+            limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1,
+        )
+        if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
+            return self._queue_export(
+                request,
+                kind=serializer.validated_data["kind"],
+                exam=exam,
+                fmt=serializer.validated_data["format"],
+                message=(
+                    "This report is too large to return inline; it is being exported instead."
+                ),
+            )
+        return ActionResponse.ok(rows)
+
+    @extend_schema(request=ExamReportQuerySerializer, responses={202: None})
+    def post(self, request: Request) -> Response:
+        """Queue an export, whatever the size (§16, §13)."""
+        serializer = ExamReportQuerySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self._queue_export(
+            request,
+            kind=serializer.validated_data["kind"],
+            exam=serializer.validated_data.get("exam"),
+            fmt=serializer.validated_data["format"],
+            message="Report queued; poll the job for the file.",
+        )
+
+    def _queue_export(self, request: Request, *, kind: str, exam, fmt: str, message: str):
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="exams.report-export",
+            payload={
+                "kind": kind,
+                "exam_id": str(exam.pk) if exam is not None else None,
+                "format": fmt,
+                # The requester, so the job can rebuild the *same* record scope.
+                # A report is read as authoritative, and an export must not
+                # widen what its requester could see inline.
+                "requested_by": str(request.user.pk),
+            },
+            actor_id=request.user.pk,
+        )
+        transaction.on_commit(
+            lambda: tasks.export_exam_report_task.delay(
+                tenant_id=str(request.tenant.pk),
+                job_id=str(job.pk),
+                actor_id=str(request.user.pk),
+            )
+        )
+        record_audit(request, "export", job)
+        return ActionResponse.accepted(str(job.pk), message=message)

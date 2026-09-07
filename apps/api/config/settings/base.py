@@ -245,6 +245,10 @@ SPECTACULAR_SETTINGS = {
         "ResultStatusEnum": "apps.examinations.models.ResultStatus",
         "ResultOutcomeEnum": "apps.examinations.models.ResultOutcome",
         "ReportCardStatusEnum": "apps.examinations.models.ReportCardStatus",
+        "QuestionBankStatusEnum": "apps.examinations.models.QuestionBankStatus",
+        "QuestionTypeEnum": "apps.examinations.models.QuestionType",
+        "QuestionDifficultyEnum": "apps.examinations.models.QuestionDifficulty",
+        "QuestionSourceEnum": "apps.examinations.models.QuestionSource",
     },
 }
 
@@ -300,6 +304,8 @@ CELERY_TASK_ROUTES = {
     "apps.examinations.tasks.notify_results_pending_approval": {"queue": "transactional"},
     "apps.examinations.tasks.notify_results_published": {"queue": "transactional"},
     "apps.examinations.tasks.notify_report_cards_ready": {"queue": "transactional"},
+    "apps.examinations.tasks.assemble_paper_task": {"queue": "bulk"},
+    "apps.examinations.tasks.export_exam_report_task": {"queue": "bulk"},
     "core.idempotency.tasks.*": {"queue": "bulk"},
     "core.jobs.tasks.*": {"queue": "bulk"},
     # notifications.md §5 names three lanes (emergency / transactional / bulk);

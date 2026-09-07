@@ -890,3 +890,136 @@ def notify_report_cards_ready(*, tenant_id: str, exam_id: str, card_ids: list[st
             return {"notified": 0}
 
     return {"notified": len(recipients)}
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def assemble_paper_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§16's `:assemble-paper` — 202 + a job producing a paper PDF.
+
+    Deterministic, so re-running the same blueprint over an unchanged bank
+    produces the same paper: `select_paper_questions` orders by `usage_count`
+    then creation rather than sampling. A teacher who regenerates after fixing a
+    typo in the title should not get a different exam.
+
+    `record_paper_usage` runs in the same transaction as the selection, because
+    §15 records that assembled papers are stored as files with **no table** to
+    join against — so `usage_count` is the only record that a question was used,
+    and a crash between the two would lose it.
+
+    **The selection re-checks satisfiability under a row lock**, and that is not
+    belt-and-braces with the endpoint's check — it is the one that holds. The
+    endpoint checks so a teacher gets an immediate, readable refusal; this runs
+    later, and between the two a concurrent assembly can take the questions or
+    someone can unapprove one. A shortfall here fails the **job** rather than
+    truncating, because a paper missing its last section, marked succeeded, is
+    discovered by a hall of students.
+    """
+    from apps.examinations import documents, services, uploads
+    from apps.examinations.models import QuestionBank
+    from core.documents import render_pdf
+    from core.files.services import create_ready_file
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    try:
+        payload = job.payload
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            bank = (
+                QuestionBank.objects.alive()
+                .select_related("subject")
+                .get(pk=payload["question_bank_id"])
+            )
+            school_name = Tenant.objects.get(pk=tenant_id).name
+            sections = services.select_paper_questions(bank=bank, sections=payload["sections"])
+            total_marks = sum(
+                (section.get("marks_each") or question.default_marks)
+                for section in sections
+                for question in section["questions"]
+            )
+            document = documents.exam_paper_html(
+                bank=bank,
+                sections=sections,
+                title=payload["title"],
+                total_marks=total_marks,
+                school_name=school_name,
+            )
+            file = create_ready_file(
+                tenant_id=uuid.UUID(tenant_id),
+                purpose=uploads.EXAM_PAPER.key,
+                original_name=f"{payload['title']}.pdf",
+                mime_type="application/pdf",
+                data=render_pdf(document),
+                actor_id=uuid.UUID(actor_id),
+            )
+            used = services.record_paper_usage(
+                questions=[question for section in sections for question in section["questions"]],
+                actor_id=uuid.UUID(actor_id),
+            )
+
+        mark_succeeded(
+            job=job,
+            result={
+                "result_file_id": str(file.pk),
+                "questions": used,
+                "total_marks": str(total_marks),
+            },
+        )
+    except Exception as exc:
+        mark_failed(job=job, error=str(exc))
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def export_exam_report_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§13's export lane — the same rows the synchronous endpoint returns.
+
+    The rows are recomputed here rather than carried in the job payload: a
+    payload big enough to hold a school's result register is a payload big
+    enough to be the reason the export exists.
+
+    **The scope is recomputed too, from the requesting user.** A report is read
+    as authoritative, so an export must not widen what its requester could see
+    inline — which it would if the job re-queried without the record scope the
+    endpoint applied. That is `attendance`'s export task's reasoning, and the
+    same `build_report_rows` shape carries it.
+    """
+    from apps.examinations import services, uploads
+    from core.exports import tabular
+    from core.files.services import create_ready_file
+    from core.rbac.models import User
+    from core.tenancy.context import tenant_atomic
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    try:
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            payload = job.payload
+            requester = User.objects.get(pk=payload["requested_by"])
+            # No `limit`: the job is the unbounded path, which is the whole
+            # reason the endpoint hands it anything over the inline ceiling.
+            rows = services.build_report_rows(
+                kind=payload["kind"], exam_id=payload.get("exam_id"), user=requester
+            )
+            fmt = payload.get("format", "csv")
+            title = payload["kind"].replace("-", " ").capitalize()
+            data, mime_type, extension = tabular.render(rows, fmt=fmt, title=title)
+
+            file = create_ready_file(
+                tenant_id=uuid.UUID(tenant_id),
+                purpose=uploads.RESULT_EXPORT.key,
+                original_name=f"exams-{payload['kind']}.{extension}",
+                mime_type=mime_type,
+                data=data,
+                actor_id=uuid.UUID(actor_id),
+            )
+        mark_succeeded(
+            job=job,
+            result={"result_file_id": str(file.pk), "rows": len(rows), "format": fmt},
+        )
+    except Exception as exc:
+        mark_failed(job=job, error=str(exc))

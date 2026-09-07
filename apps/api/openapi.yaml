@@ -4468,6 +4468,513 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/question-banks:
+    get:
+      operationId: question_banks_list
+      description: |-
+        `/question-banks` — §5.8.
+
+        Staff-only, every action: §4 grants no portal role a question-bank key, and
+        a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+        attribute rather than inverting a readable set — there is nothing
+        portal-readable to carve out, and pretending otherwise would suggest a
+        portal path that does not exist.
+      parameters:
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - archived
+        description: |-
+          * `active` - Active
+          * `archived` - Archived
+      - in: query
+        name: subject_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - question-banks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedQuestionBankList'
+          description: ''
+    post:
+      operationId: question_banks_create
+      description: |-
+        `/question-banks` — §5.8.
+
+        Staff-only, every action: §4 grants no portal role a question-bank key, and
+        a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+        attribute rather than inverting a readable set — there is nothing
+        portal-readable to carve out, and pretending otherwise would suggest a
+        portal path that does not exist.
+      tags:
+      - question-banks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionBank'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuestionBank'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuestionBank'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionBank'
+          description: ''
+  /api/v1/question-banks/{bank_pk}/questions:
+    get:
+      operationId: question_banks_questions_list
+      description: |-
+        `/question-banks/{bank_id}/questions` — §5.8's questions.
+
+        Nested under their bank for the reason grade bands are: a question is
+        meaningless apart from its bank, and the blueprint reasons about a bank's
+        whole pool — so the bank belongs in the URL rather than the body.
+      parameters:
+      - in: path
+        name: bank_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: difficulty
+        schema:
+          type: string
+          enum:
+          - easy
+          - hard
+          - medium
+        description: |-
+          * `easy` - Easy
+          * `medium` - Medium
+          * `hard` - Hard
+      - in: query
+        name: is_approved
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: question_type
+        schema:
+          type: string
+          enum:
+          - fill_blank
+          - long_answer
+          - mcq
+          - numerical
+          - short_answer
+          - true_false
+        description: |-
+          * `mcq` - Multiple choice
+          * `true_false` - True or false
+          * `short_answer` - Short answer
+          * `long_answer` - Long answer
+          * `fill_blank` - Fill in the blank
+          * `numerical` - Numerical
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: source
+        schema:
+          type: string
+          enum:
+          - ai_generated
+          - imported
+          - manual
+        description: |-
+          * `manual` - Manual
+          * `ai_generated` - AI generated
+          * `imported` - Imported
+      - in: query
+        name: topic
+        schema:
+          type: string
+      tags:
+      - question-banks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedQuestionList'
+          description: ''
+    post:
+      operationId: question_banks_questions_create
+      description: |-
+        `/question-banks/{bank_id}/questions` — §5.8's questions.
+
+        Nested under their bank for the reason grade bands are: a question is
+        meaningless apart from its bank, and the blueprint reasons about a bank's
+        whole pool — so the bank belongs in the URL rather than the body.
+      parameters:
+      - in: path
+        name: bank_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - question-banks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Question'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Question'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Question'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+          description: ''
+  /api/v1/question-banks/{bank_pk}/questions/{id}:
+    get:
+      operationId: question_banks_questions_retrieve
+      description: |-
+        `/question-banks/{bank_id}/questions` — §5.8's questions.
+
+        Nested under their bank for the reason grade bands are: a question is
+        meaningless apart from its bank, and the blueprint reasons about a bank's
+        whole pool — so the bank belongs in the URL rather than the body.
+      parameters:
+      - in: path
+        name: bank_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - question-banks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+          description: ''
+    patch:
+      operationId: question_banks_questions_partial_update
+      description: |-
+        `/question-banks/{bank_id}/questions` — §5.8's questions.
+
+        Nested under their bank for the reason grade bands are: a question is
+        meaningless apart from its bank, and the blueprint reasons about a bank's
+        whole pool — so the bank belongs in the URL rather than the body.
+      parameters:
+      - in: path
+        name: bank_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - question-banks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestion'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+          description: ''
+    delete:
+      operationId: question_banks_questions_destroy
+      description: |-
+        `/question-banks/{bank_id}/questions` — §5.8's questions.
+
+        Nested under their bank for the reason grade bands are: a question is
+        meaningless apart from its bank, and the blueprint reasons about a bank's
+        whole pool — so the bank belongs in the URL rather than the body.
+      parameters:
+      - in: path
+        name: bank_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - question-banks
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/question-banks/{bank_pk}/questions/{id}:approve:
+    post:
+      operationId: question_banks_questions_:approve_create
+      description: |-
+        `POST /questions/{id}:approve` — §7.2's gate.
+
+        AGENTS.md invariant 5 in one endpoint: no AI output reaches a student
+        without a permission-gated human approval, and `approved_by` is what
+        makes that auditable rather than merely asserted.
+      parameters:
+      - in: path
+        name: bank_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - question-banks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+          description: ''
+  /api/v1/question-banks/{id}:
+    get:
+      operationId: question_banks_retrieve
+      description: |-
+        `/question-banks` — §5.8.
+
+        Staff-only, every action: §4 grants no portal role a question-bank key, and
+        a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+        attribute rather than inverting a readable set — there is nothing
+        portal-readable to carve out, and pretending otherwise would suggest a
+        portal path that does not exist.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this question bank.
+        required: true
+      tags:
+      - question-banks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionBank'
+          description: ''
+    patch:
+      operationId: question_banks_partial_update
+      description: |-
+        `/question-banks` — §5.8.
+
+        Staff-only, every action: §4 grants no portal role a question-bank key, and
+        a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+        attribute rather than inverting a readable set — there is nothing
+        portal-readable to carve out, and pretending otherwise would suggest a
+        portal path that does not exist.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this question bank.
+        required: true
+      tags:
+      - question-banks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestionBank'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestionBank'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestionBank'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionBank'
+          description: ''
+    delete:
+      operationId: question_banks_destroy
+      description: |-
+        `/question-banks` — §5.8.
+
+        Staff-only, every action: §4 grants no portal role a question-bank key, and
+        a bank holds answer keys. So this keeps `STAFF_PERMISSIONS` as a class
+        attribute rather than inverting a readable set — there is nothing
+        portal-readable to carve out, and pretending otherwise would suggest a
+        portal path that does not exist.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this question bank.
+        required: true
+      tags:
+      - question-banks
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/question-banks/{id}:assemble-paper:
+    post:
+      operationId: question_banks_:assemble_paper_create
+      description: |-
+        `POST /question-banks/{id}:assemble-paper` — 202 + a paper PDF (§16).
+
+        The blueprint is checked for satisfiability **before** a job is created,
+        and every shortfall is reported at once: a teacher whose blueprint asks
+        for eight hard questions from a bank holding three needs to know that
+        about each section of the paper, not to fix one and resubmit.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - question-banks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssemblePaper'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssemblePaper'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssemblePaper'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
   /api/v1/report-cards:
     get:
       operationId: report_cards_list
@@ -4734,6 +5241,88 @@ paths:
       responses:
         '202':
           description: A job resource; poll GET /jobs/{id}.
+  /api/v1/reports/exam-summary:
+    get:
+      operationId: reports_exam_summary_retrieve
+      description: |-
+        Inline under the ceiling, 202 + a job above it (api-architecture §2.7).
+
+        `build_report_rows` is asked for one row *more* than the ceiling, so the
+        decision costs one extra row rather than the whole report. Checking
+        after building it is precisely the cost the 202 pattern exists to avoid
+        — the mistake `attendance`'s review caught in the same place.
+      parameters:
+      - in: query
+        name: exam_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+      - in: query
+        name: format
+        schema:
+          enum:
+          - csv
+          - xlsx
+          - pdf
+          type: string
+          default: csv
+          minLength: 1
+        description: |-
+          * `csv` - csv
+          * `xlsx` - xlsx
+          * `pdf` - pdf
+      - in: query
+        name: kind
+        schema:
+          enum:
+          - result-register
+          - pass-fail-analysis
+          - subject-performance
+          - marks-entry-status
+          - grade-distribution
+          - question-bank-usage
+          type: string
+          minLength: 1
+        description: |-
+          * `result-register` - result-register
+          * `pass-fail-analysis` - pass-fail-analysis
+          * `subject-performance` - subject-performance
+          * `marks-entry-status` - marks-entry-status
+          * `grade-distribution` - grade-distribution
+          * `question-bank-usage` - question-bank-usage
+        required: true
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: The report's rows.
+        '202':
+          description: Too many rows to serve inline; a job resource.
+    post:
+      operationId: reports_exam_summary_create
+      description: Queue an export, whatever the size (§16, §13).
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExamReportQuery'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExamReportQuery'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExamReportQuery'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
   /api/v1/results:
     get:
       operationId: results_list
@@ -9032,6 +9621,20 @@ components:
         * `staff` - Staff
         * `student` - Student
         * `both` - Both
+    AssemblePaper:
+      type: object
+      description: The body of `POST /question-banks/{id}:assemble-paper` (§16).
+      properties:
+        title:
+          type: string
+          maxLength: 150
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperSection'
+      required:
+      - sections
+      - title
     AttendanceCorrection:
       type: object
       description: '`attendance_corrections` — the request half. Decisions are colon-actions.'
@@ -9156,7 +9759,7 @@ components:
         every one is a flat list under a date range and a record scope.
       properties:
         kind:
-          $ref: '#/components/schemas/KindEnum'
+          $ref: '#/components/schemas/AttendanceReportQueryKindEnum'
         start_date:
           type: string
           format: date
@@ -9178,6 +9781,22 @@ components:
       required:
       - kind
       - start_date
+    AttendanceReportQueryKindEnum:
+      enum:
+      - daily-register
+      - student-summary
+      - defaulters
+      - student-late-arrivals
+      - staff-punctuality
+      - leave
+      type: string
+      description: |-
+        * `daily-register` - daily-register
+        * `student-summary` - student-summary
+        * `defaulters` - defaulters
+        * `student-late-arrivals` - student-late-arrivals
+        * `staff-punctuality` - staff-punctuality
+        * `leave` - leave
     AttendanceSourceEnum:
       enum:
       - manual
@@ -9954,6 +10573,43 @@ components:
       - name
       - status
       - updated_at
+    ExamReportQuery:
+      type: object
+      description: |-
+        The query for `GET /reports/exam-summary`, and the body of its export.
+
+        `exam_id` is required for every report except question-bank usage, which is
+        about a bank rather than an exam. Validated here rather than in the service
+        so the message names the field.
+      properties:
+        kind:
+          $ref: '#/components/schemas/ExamReportQueryKindEnum'
+        exam_id:
+          type: string
+          format: uuid
+          nullable: true
+        format:
+          allOf:
+          - $ref: '#/components/schemas/FormatEnum'
+          default: csv
+      required:
+      - kind
+    ExamReportQueryKindEnum:
+      enum:
+      - result-register
+      - pass-fail-analysis
+      - subject-performance
+      - marks-entry-status
+      - grade-distribution
+      - question-bank-usage
+      type: string
+      description: |-
+        * `result-register` - result-register
+        * `pass-fail-analysis` - pass-fail-analysis
+        * `subject-performance` - subject-performance
+        * `marks-entry-status` - marks-entry-status
+        * `grade-distribution` - grade-distribution
+        * `question-bank-usage` - question-bank-usage
     ExamSchedule:
       type: object
       description: |-
@@ -10580,22 +11236,6 @@ components:
           items:
             type: string
             format: uuid
-    KindEnum:
-      enum:
-      - daily-register
-      - student-summary
-      - defaulters
-      - student-late-arrivals
-      - staff-punctuality
-      - leave
-      type: string
-      description: |-
-        * `daily-register` - daily-register
-        * `student-summary` - student-summary
-        * `defaulters` - defaulters
-        * `student-late-arrivals` - student-late-arrivals
-        * `staff-punctuality` - staff-punctuality
-        * `leave` - leave
     LeaveApproval:
       type: object
       description: One step of §7.2's chain, nested on the request it belongs to.
@@ -11447,6 +12087,48 @@ components:
                   type: integer
                 total_pages:
                   type: integer
+    PaginatedQuestionBankList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionBank'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedQuestionList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Question'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedReportCardList:
       type: object
       properties:
@@ -11825,6 +12507,31 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaperSection:
+      type: object
+      description: One section of §6's paper blueprint.
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        difficulty:
+          $ref: '#/components/schemas/QuestionDifficultyEnum'
+        topic:
+          type: string
+          nullable: true
+          maxLength: 150
+        count:
+          type: integer
+          maximum: 200
+          minimum: 1
+        marks_each:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - count
+      - difficulty
     PatchedAcademicSession:
       type: object
       properties:
@@ -12575,6 +13282,102 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedQuestion:
+      type: object
+      description: |-
+        `questions` — §5.8, with §7.2's approval gate on the wire.
+
+        `is_approved` and `approved_by` are **read-only**. §7.2 makes approval a
+        permission-gated act (`exams.question.approve`), so a client that could set
+        the flag on create would be the whole gate defeated — an AI draft could
+        arrive pre-approved. `:approve` is the only way it becomes true for an
+        `ai_generated` question.
+
+        `usage_count` is read-only for the same shape of reason: it is the only
+        record that a question reached a paper (§15 gives assembled papers no
+        table), so nothing but assembly may write it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        question_bank_id:
+          type: string
+          format: uuid
+          readOnly: true
+        question_text:
+          type: string
+        question_type:
+          $ref: '#/components/schemas/QuestionTypeEnum'
+        difficulty:
+          $ref: '#/components/schemas/QuestionDifficultyEnum'
+        default_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        options:
+          nullable: true
+          description: Required for mcq and true_false.
+        answer_key:
+          nullable: true
+        topic:
+          type: string
+          nullable: true
+          description: The blueprint filter (§6).
+          maxLength: 150
+        source:
+          $ref: '#/components/schemas/QuestionSourceEnum'
+        is_approved:
+          type: boolean
+          readOnly: true
+          description: False on creation for ai_generated; flipped by :approve.
+        usage_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedQuestionBank:
+      type: object
+      description: '`question_banks` — §5.8.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        subject_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/QuestionBankStatusEnum'
+        question_count:
+          type: integer
+          readOnly: true
+          default: 0
         created_at:
           type: string
           format: date-time
@@ -13488,6 +14291,162 @@ components:
         * `certification` - Certification
         * `training` - Training
         * `license` - License
+    Question:
+      type: object
+      description: |-
+        `questions` — §5.8, with §7.2's approval gate on the wire.
+
+        `is_approved` and `approved_by` are **read-only**. §7.2 makes approval a
+        permission-gated act (`exams.question.approve`), so a client that could set
+        the flag on create would be the whole gate defeated — an AI draft could
+        arrive pre-approved. `:approve` is the only way it becomes true for an
+        `ai_generated` question.
+
+        `usage_count` is read-only for the same shape of reason: it is the only
+        record that a question reached a paper (§15 gives assembled papers no
+        table), so nothing but assembly may write it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        question_bank_id:
+          type: string
+          format: uuid
+          readOnly: true
+        question_text:
+          type: string
+        question_type:
+          $ref: '#/components/schemas/QuestionTypeEnum'
+        difficulty:
+          $ref: '#/components/schemas/QuestionDifficultyEnum'
+        default_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        options:
+          nullable: true
+          description: Required for mcq and true_false.
+        answer_key:
+          nullable: true
+        topic:
+          type: string
+          nullable: true
+          description: The blueprint filter (§6).
+          maxLength: 150
+        source:
+          $ref: '#/components/schemas/QuestionSourceEnum'
+        is_approved:
+          type: boolean
+          readOnly: true
+          description: False on creation for ai_generated; flipped by :approve.
+        usage_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_approved
+      - question_bank_id
+      - question_text
+      - question_type
+      - updated_at
+      - usage_count
+    QuestionBank:
+      type: object
+      description: '`question_banks` — §5.8.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        subject_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/QuestionBankStatusEnum'
+        question_count:
+          type: integer
+          readOnly: true
+          default: 0
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - question_count
+      - subject_id
+      - updated_at
+    QuestionBankStatusEnum:
+      enum:
+      - active
+      - archived
+      type: string
+      description: |-
+        * `active` - Active
+        * `archived` - Archived
+    QuestionDifficultyEnum:
+      enum:
+      - easy
+      - medium
+      - hard
+      type: string
+      description: |-
+        * `easy` - Easy
+        * `medium` - Medium
+        * `hard` - Hard
+    QuestionSourceEnum:
+      enum:
+      - manual
+      - ai_generated
+      - imported
+      type: string
+      description: |-
+        * `manual` - Manual
+        * `ai_generated` - AI generated
+        * `imported` - Imported
+    QuestionTypeEnum:
+      enum:
+      - mcq
+      - true_false
+      - short_answer
+      - long_answer
+      - fill_blank
+      - numerical
+      type: string
+      description: |-
+        * `mcq` - Multiple choice
+        * `true_false` - True or false
+        * `short_answer` - Short answer
+        * `long_answer` - Long answer
+        * `fill_blank` - Fill in the blank
+        * `numerical` - Numerical
     RefreshResponse:
       type: object
       description: |-

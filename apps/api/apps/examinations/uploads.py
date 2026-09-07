@@ -40,3 +40,22 @@ REPORT_CARD = registry.register(
     mime_types={"application/pdf"},
     max_size_bytes=5 * MEGABYTE,
 )
+
+EXAM_PAPER = registry.register(
+    "exams.exam-paper",
+    "An assembled exam paper, rendered from a question bank (§5.8).",
+    mime_types={"application/pdf"},
+    max_size_bytes=10 * MEGABYTE,
+)
+
+# §13's exports, in all three of the formats `core.exports.tabular` renders.
+RESULT_EXPORT = registry.register(
+    "exams.result-export",
+    "A generated §13 examinations report (CSV, XLSX or PDF).",
+    mime_types={
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/pdf",
+    },
+    max_size_bytes=50 * MEGABYTE,
+)

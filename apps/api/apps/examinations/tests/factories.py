@@ -38,6 +38,10 @@ from apps.examinations.models import (
     GradingScale,
     Marks,
     MarksStatus,
+    Question,
+    QuestionBank,
+    QuestionDifficulty,
+    QuestionType,
     ReportCard,
     Result,
     ResultOutcome,
@@ -82,6 +86,8 @@ __all__ = [
     "ExamSubjectFactory",
     "GradeBandFactory",
     "MarksFactory",
+    "QuestionBankFactory",
+    "QuestionFactory",
     "ReportCardFactory",
     "ResultFactory",
     "GradingScaleFactory",
@@ -313,3 +319,25 @@ class ReportCardFactory(factory.django.DjangoModelFactory):
         model = ReportCard
 
     version = 1
+
+
+class QuestionBankFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = QuestionBank
+
+    name = factory.Sequence(lambda n: f"Bank {n}")
+    # No SubFactory for subject/class: both must belong to the same tenant.
+
+
+class QuestionFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Question
+
+    question_text = factory.Sequence(lambda n: f"What is the answer to question {n}?")
+    question_type = QuestionType.SHORT_ANSWER
+    difficulty = QuestionDifficulty.MEDIUM
+    default_marks = Decimal("2.00")
+    # `short_answer` by default, so the options CHECK does not force every
+    # caller to supply choices it does not care about. A test about MCQs sets
+    # both the type and the options together, which is the pairing the
+    # constraint exists to enforce.

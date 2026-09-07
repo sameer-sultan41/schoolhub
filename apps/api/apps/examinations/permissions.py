@@ -33,8 +33,9 @@ declared in a module doc §4 before being added, which `process` never was.
 Keys arrive with the PR that ships an endpoint for them, so
 `tests/test_endpoint_contracts.py` never sees a registered key with nothing
 behind it. Registered so far: the exam and grading-scale keys (PR A), the
-schedule and admit-card keys (PR B), the marks keys (PR C), and the result and
-report-card keys (PR D).
+schedule and admit-card keys (PR B), the marks keys (PR C), the result and
+report-card keys (PR D), and the question-bank and export keys (PR E). **§4's
+table is now fully registered.**
 """
 
 from core.rbac.registry import registry
@@ -237,4 +238,51 @@ registry.register(
     "exams.report-card.publish",
     "Publish generated report cards to the portals.",
     ("principal", "school_admin"),
+)
+
+# §4 gives question banks to `teacher` and `exam_staff`, and the *record scope*
+# narrows a teacher to the subjects they currently teach — resolved through
+# `academics.TeacherSubjectAllocation` by
+# `QuestionBank.filter_assigned_to_user`, which is what makes §4's "(assigned
+# subject)" parenthetical mean something.
+QUESTION_AUTHORS = ("teacher", "exam_staff")
+QUESTION_BANK_VIEWERS = (
+    "teacher",
+    "class_teacher",
+    "exam_staff",
+    "school_admin",
+    "principal",
+    "vice_principal",
+)
+
+registry.register(
+    "exams.question-bank.view",
+    "Read question banks and their questions (record-scoped by subject).",
+    QUESTION_BANK_VIEWERS,
+)
+registry.register(
+    "exams.question-bank.create",
+    "Create a question bank, and author questions in one.",
+    QUESTION_AUTHORS,
+)
+registry.register(
+    "exams.question-bank.update",
+    "Edit a bank or its questions, and assemble a paper from it.",
+    QUESTION_AUTHORS,
+)
+registry.register(
+    "exams.question-bank.delete",
+    "Delete a question bank or a question.",
+    QUESTION_AUTHORS,
+)
+registry.register(
+    "exams.question.approve",
+    "Approve an AI-generated question into a bank (§7.2, AGENTS.md invariant 5).",
+    ("teacher", "vice_principal"),
+)
+
+registry.register(
+    "exams.result.export",
+    "Export §13's examination reports (CSV, XLSX or PDF).",
+    ("exam_staff", "principal", "school_admin"),
 )

@@ -221,3 +221,72 @@ def report_card_html(*, card, exam, student, result, subject_rows, school_name: 
        Principal: ____________________</p>
   </body>
 </html>"""
+
+
+_PAPER_STYLES = """
+@page { size: A4; margin: 18mm; }
+body { font-family: serif; font-size: 11.5pt; color: #000; line-height: 1.45; }
+h1 { font-size: 16pt; text-align: center; margin: 0 0 1mm; }
+.meta { text-align: center; font-size: 10pt; color: #333; margin: 0 0 3mm; }
+.rubric { border: 0.6pt solid #000; padding: 3mm; font-size: 10pt; margin-bottom: 6mm; }
+h2 { font-size: 12.5pt; margin: 6mm 0 2mm; border-bottom: 0.4pt solid #666; }
+ol { padding-left: 8mm; }
+li { margin-bottom: 3.5mm; page-break-inside: avoid; }
+.marks { float: right; font-size: 10pt; color: #333; }
+.options { list-style-type: lower-alpha; margin: 1.5mm 0 0 0; padding-left: 7mm; }
+.options li { margin-bottom: 1mm; }
+"""
+
+
+def exam_paper_html(*, bank, sections, title: str, total_marks, school_name: str) -> str:
+    """An assembled exam paper — §5.8, §7.2's final step.
+
+    `sections` is what `services.select_paper_questions` returned: already
+    chosen, ordered and de-duplicated, so nothing here queries or decides.
+
+    **MCQ options render as a list; every other type renders as a stem with
+    space beneath.** A short-answer question printed with lettered choices under
+    it is a paper that confuses a hall of students, and `options` is null for
+    those types by design — so the branch is on the data rather than on a flag
+    somebody has to set.
+    """
+    body = ""
+    for section in sections:
+        body += f"<h2>{html.text(section['title'])}</h2><ol>"
+        for question in section["questions"]:
+            marks = section.get("marks_each") or question.default_marks
+            body += (
+                f'<li><span class="marks">[{html.text(marks)}]</span>'
+                f"{html.text(question.question_text)}"
+            )
+            options = question.options if isinstance(question.options, list) else None
+            if options:
+                body += '<ol class="options">'
+                body += "".join(f"<li>{html.text(option)}</li>" for option in options)
+                body += "</ol>"
+            body += "</li>"
+        body += "</ol>"
+
+    if not body:
+        # A paper with no questions is a blueprint that matched nothing. The
+        # service refuses that before it gets here, so this is a belt-and-braces
+        # message rather than an expected state.
+        body = "<p>No questions were selected for this paper.</p>"
+
+    return f"""<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>{html.text(title)}</title>
+    <style>{_PAPER_STYLES}</style>
+  </head>
+  <body>
+    <h1>{html.text(title)}</h1>
+    <p class="meta">{html.text(school_name)} &middot;
+       {html.text(bank.subject.name)} &middot;
+       Total marks: {html.text(total_marks)}</p>
+    <div class="rubric">
+      Answer all questions. Marks for each question are shown in brackets.
+    </div>
+    {body}
+  </body>
+</html>"""
