@@ -17,14 +17,27 @@ import uuid
 
 from django.db import transaction
 
-from apps.examinations import grading
+from apps.examinations import conflicts, grading
 from apps.examinations.models import (
+    OCCUPYING_SCHEDULE_STATUSES,
+    AdmitCard,
+    AdmitCardStatus,
     Exam,
+    ExamSchedule,
     ExamStatus,
+    ExamSubject,
     GradeBand,
     GradingScale,
+    ScheduleStatus,
 )
-from apps.school_organization.models import AcademicSession, Class, ClassSubject, Subject, Term
+from apps.school_organization.models import (
+    AcademicSession,
+    Class,
+    ClassSubject,
+    Section,
+    Subject,
+    Term,
+)
 from core.api.exceptions import Conflict, DomainRuleViolation
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
@@ -246,3 +259,298 @@ def set_default_scale(*, scale: GradingScale, actor_id: uuid.UUID) -> GradingSca
 def default_scale() -> GradingScale | None:
     """The tenant's default grading scale, or None if none is set."""
     return GradingScale.objects.alive().filter(is_default=True).first()
+
+
+# --- §5.2 scheduling -------------------------------------------------------
+
+
+def assert_schedule_is_editable(schedule: ExamSchedule) -> None:
+    """A completed sitting is history; a cancelled one is a decision already made.
+
+    Not a permission check — the caller may hold `exams.schedule.update` and
+    still be refused, because the objection is to the row's state. Editing a
+    completed sitting would move a date students have already sat.
+    """
+    if schedule.status != ScheduleStatus.SCHEDULED:
+        raise Conflict(
+            f"This sitting is {schedule.get_status_display().lower()} and can no longer be "
+            "rescheduled."
+        )
+
+
+def assert_section_studies_the_class(*, exam_subject: ExamSubject, section: Section) -> None:
+    """A sitting must pair an exam-subject with a section of *that* class.
+
+    Nothing else stops a Grade 8 paper being scheduled for a Grade 3 section:
+    both ids arrive from the client and each is individually valid. The
+    resulting sitting would print on those students' admit cards and produce
+    marks rows against a paper they never studied.
+    """
+    if section.school_class_id != exam_subject.school_class_id:
+        raise DomainRuleViolation(
+            {
+                "section_id": (
+                    "This section is not in the class this exam-subject is configured for."
+                )
+            }
+        )
+
+
+@transaction.atomic
+def save_schedule_with_conflicts(*, schedule: ExamSchedule, actor_id: uuid.UUID) -> list[dict]:
+    """Persist a sitting and return every clash it now participates in.
+
+    **Saves first, then reports.** §5.2 wants a clash *list*, and a schedule
+    mid-build is allowed to be imperfect — an exam-staff journey (§8) is
+    "resolves the two room clashes the checker flags", which requires the
+    clashing state to be storable. `:publish-schedule` is where hard conflicts
+    become blocking, exactly as `timetable`'s draft grid and `:publish` divide
+    the same responsibility.
+    """
+    schedule.updated_by = actor_id
+    schedule.save()
+    return conflicts.detect_conflicts(exam=schedule.exam_subject.exam)
+
+
+@transaction.atomic
+def publish_exam_schedule(*, exam: Exam, actor_id: uuid.UUID) -> dict:
+    """§16's `POST /exams/{id}:publish-schedule` — release the timetable.
+
+    Refuses on any **hard** conflict and reports all of them at once, because a
+    school fixing one clash at a time discovers the next only after saving. Soft
+    conflicts are returned alongside the success: an over-capacity hall the
+    school intends to split should not block a publish, and §5.5's hard/soft
+    split exists for exactly this decision.
+
+    Moves the exam to `scheduled`, which is what makes admit cards issuable —
+    §5.3 issues them per exam per section, and there is nothing to print before
+    a sitting has a date, a time and a room.
+    """
+    findings = conflicts.detect_conflicts(exam=exam)
+    hard = [finding for finding in findings if finding["severity"] == "hard"]
+    if hard:
+        raise DomainRuleViolation(
+            (f"{len(hard)} clash(es) must be resolved before this schedule can be published."),
+            meta={"conflicts": findings},
+        )
+
+    if not ExamSchedule.objects.alive().filter(exam_subject__exam=exam).exists():
+        raise DomainRuleViolation(
+            {"exam_id": "This exam has no sittings scheduled yet, so there is nothing to publish."}
+        )
+
+    exam.status = ExamStatus.SCHEDULED
+    exam.updated_by = actor_id
+    exam.save(update_fields=["status", "updated_by", "updated_at"])
+    return {"status": exam.status, "conflicts": findings}
+
+
+# --- §5.3 admit cards ------------------------------------------------------
+
+# `{exam sequence}-{admission number}`, which is what an invigilator reads off a
+# card and checks against a list. Derived rather than random so a lost card can
+# be re-derived from the student's own admission number, and prefixed by the
+# exam so two exams' cards for the same student never collide.
+ADMIT_CARD_NUMBER_TEMPLATE = "{prefix}-{admission_number}"
+
+
+def admit_card_number(*, exam: Exam, admission_number: str) -> str:
+    """The number printed on one student's card for one exam.
+
+    The prefix is the exam's first eight id characters rather than its name: a
+    name is edited, contains spaces and non-ASCII, and is not unique across
+    sessions — none of which a number a student writes on a paper can afford.
+    """
+    return ADMIT_CARD_NUMBER_TEMPLATE.format(
+        prefix=str(exam.pk)[:8].upper(), admission_number=admission_number
+    )
+
+
+def assert_exam_is_issuable(exam: Exam) -> None:
+    """§5.3 — admit cards need a published schedule to print.
+
+    A card carries the student's own sitting dates, times and rooms (§5.3's
+    "delivered as PDFs"), so issuing before the schedule is published would
+    print a document that is about to change. `draft` is the refusal that
+    matters; anything from `scheduled` onward has dates.
+    """
+    if exam.status == ExamStatus.DRAFT:
+        raise Conflict(
+            "This exam's schedule has not been published, so an admit card would print "
+            "dates that are still being edited. Publish the schedule first."
+        )
+
+
+def admit_card_candidates(*, exam: Exam) -> list:
+    """The students an exam issues cards to — one query, plus one for the ids.
+
+    Resolved from **active enrollments in the sections this exam is actually
+    scheduled for**, not from every student in the school. A school runs
+    Grade 8's midterm without issuing Grade 3 a card, and a student who has
+    withdrawn since the exam was configured is not sitting it.
+    """
+    from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
+
+    section_ids = (
+        ExamSchedule.objects.alive()
+        .filter(exam_subject__exam=exam, status__in=OCCUPYING_SCHEDULE_STATUSES)
+        .values_list("section_id", flat=True)
+    )
+    student_ids = (
+        StudentEnrollment.objects.alive()
+        .filter(section_id__in=list(section_ids), status=EnrollmentStatus.ACTIVE)
+        .values_list("student_id", flat=True)
+    )
+    return list(
+        Student.objects.alive().filter(pk__in=list(student_ids)).order_by("admission_number")
+    )
+
+
+@transaction.atomic
+def issue_admit_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
+    """§5.3's batch issue. Idempotent: a re-run tops up rather than colliding.
+
+    **A re-run is the normal case, not an error.** A student admitted after the
+    first batch needs a card, and §8's exam-staff journey is "issues admit cards
+    in one batch" — which in practice means pressing the button again after the
+    roll changes. So this creates only what is missing and reports both numbers.
+
+    A **revoked** card is deliberately not re-created. Revocation is a policy
+    decision someone made (§5.3's fee-clearance case), and a top-up run
+    silently reinstating it would undo that decision without anyone asking.
+    """
+    assert_exam_is_issuable(exam)
+
+    students = admit_card_candidates(exam=exam)
+    existing = set(AdmitCard.objects.alive().filter(exam=exam).values_list("student_id", flat=True))
+    missing = [student for student in students if student.pk not in existing]
+
+    created = [
+        AdmitCard(
+            tenant=exam.tenant,
+            exam=exam,
+            student=student,
+            admit_card_no=admit_card_number(exam=exam, admission_number=student.admission_number),
+            status=AdmitCardStatus.GENERATED,
+            created_by=actor_id,
+            updated_by=actor_id,
+        )
+        for student in missing
+    ]
+    # `ignore_conflicts`: two exam staff pressing the button at once both read
+    # the same "missing" set, and `admit_cards_one_per_student_per_exam` lets
+    # exactly one of them insert each row. The loser's duplicates are dropped
+    # rather than turning a legitimate retry into a 409 — the same reasoning
+    # `attendance.bulk_mark_student_attendance` applies to a re-submitted
+    # register.
+    AdmitCard.objects.bulk_create(created, ignore_conflicts=True)
+
+    # Counted from the database, not from `len(created)`. Review found the
+    # latter overstating under exactly the race `ignore_conflicts` exists to
+    # absorb: the loser of a concurrent double-issue attempted N rows, inserted
+    # none, and reported N. `bulk_create(ignore_conflicts=True)` cannot say
+    # which of its objects landed — on PostgreSQL the returned instances have
+    # no reliable primary keys — so the honest number comes from a re-count.
+    total_now = AdmitCard.objects.alive().filter(exam=exam).count()
+    issued = total_now - len(existing)
+
+    return {
+        "issued": issued,
+        "already_issued": len(existing),
+        "students": len(students),
+        # What this run *tried* to create, so a caller that sees `issued` come
+        # back lower knows a concurrent run took the difference rather than
+        # that students were skipped.
+        "attempted": len(created),
+    }
+
+
+@transaction.atomic
+def revoke_admit_card(*, card: AdmitCard, reason: str, actor_id: uuid.UUID) -> AdmitCard:
+    """§5.3 — revoke an issued card, with a reason.
+
+    The reason is required by a CHECK constraint as well as here: a revocation
+    nobody can explain is the one a parent will ask about, and "why" is the part
+    that has to survive into the audit log.
+    """
+    if card.status == AdmitCardStatus.REVOKED:
+        raise Conflict("This admit card is already revoked.")
+    card.status = AdmitCardStatus.REVOKED
+    card.revoked_reason = reason
+    card.updated_by = actor_id
+    card.save(update_fields=["status", "revoked_reason", "updated_by", "updated_at"])
+    return card
+
+
+def student_sittings(*, exam: Exam, student) -> list:
+    """The sittings one student attends for an exam — what their card prints.
+
+    Resolved through the student's active enrollment, so a card lists only the
+    papers their own section sits rather than every paper in the exam.
+    """
+    from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+    section_ids = (
+        StudentEnrollment.objects.alive()
+        .filter(student=student, status=EnrollmentStatus.ACTIVE)
+        .values_list("section_id", flat=True)
+    )
+    return list(
+        ExamSchedule.objects.alive()
+        .filter(
+            exam_subject__exam=exam,
+            section_id__in=list(section_ids),
+            status__in=OCCUPYING_SCHEDULE_STATUSES,
+        )
+        .select_related("exam_subject__subject", "room")
+        .order_by("exam_date", "start_time")
+    )
+
+
+def sittings_by_student(*, exam: Exam, students: list) -> dict:
+    """Every student's sittings for an exam, in two queries flat.
+
+    The batch form of `student_sittings`. Review found the admit-card render job
+    calling the single form once per card — two queries each, so a batch of
+    three hundred cards was six hundred round trips, which is exactly what
+    `conflicts.collect_scope`'s own docstring warns against and what
+    `ENGINEERING_STANDARDS.md` §3 calls an N+1.
+
+    Returns `{student_id: [ExamSchedule, ...]}`, ordered as a card prints them.
+    A student with no scheduled paper is absent from the mapping rather than
+    present with an empty list, so a caller has to decide what that means —
+    `documents.admit_card_html` prints "no papers scheduled yet".
+    """
+    from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+    sections_by_student: dict = {}
+    enrollments = (
+        StudentEnrollment.objects.alive()
+        .filter(student__in=students, status=EnrollmentStatus.ACTIVE)
+        .values_list("student_id", "section_id")
+    )
+    for student_id, section_id in enrollments:
+        sections_by_student.setdefault(student_id, set()).add(section_id)
+
+    schedules_by_section: dict = {}
+    sittings = (
+        ExamSchedule.objects.alive()
+        .filter(exam_subject__exam=exam, status__in=OCCUPYING_SCHEDULE_STATUSES)
+        .select_related("exam_subject__subject", "room")
+        .order_by("exam_date", "start_time")
+    )
+    for sitting in sittings:
+        schedules_by_section.setdefault(sitting.section_id, []).append(sitting)
+
+    answers: dict = {}
+    for student_id, section_ids in sections_by_student.items():
+        rows = [
+            sitting
+            for section_id in section_ids
+            for sitting in schedules_by_section.get(section_id, [])
+        ]
+        if rows:
+            # Re-sorted because a student in two sections has two already-sorted
+            # lists concatenated, which is not itself sorted.
+            answers[student_id] = sorted(rows, key=lambda row: (row.exam_date, row.start_time))
+    return answers

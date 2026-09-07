@@ -9,12 +9,22 @@ their scale (`/grading-scales/{id}/grade-bands`), and `SimpleRouter` cannot
 express a nested collection. Two `path()` entries — collection and detail — are
 the whole of what the nesting costs, and they are clearer than a router plugin
 for one resource. `scale_pk` is the kwarg `GradeBandViewSet.get_scale` reads.
+
+**Two colon-actions sit under `/exams` but belong to other viewsets.**
+`:publish-schedule` is `ExamScheduleViewSet.publish` and `:issue-admit-cards` is
+`AdmitCardViewSet.issue`, because in both cases the *exam* is what the caller
+addresses while the logic and the permission key belong to the resource being
+produced. §16 declares both paths this way, and routing them from the owning
+viewset keeps each action's `required_permission_map` beside the rest of its
+resource's.
 """
 
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
 from apps.examinations.views import (
+    AdmitCardViewSet,
+    ExamScheduleViewSet,
     ExamSubjectViewSet,
     ExamViewSet,
     GradeBandViewSet,
@@ -25,8 +35,25 @@ router = SimpleRouter(trailing_slash=False)
 router.register("grading-scales", GradingScaleViewSet, basename="grading-scales")
 router.register("exams", ExamViewSet, basename="exams")
 router.register("exam-subjects", ExamSubjectViewSet, basename="exam-subjects")
+router.register("exam-schedules", ExamScheduleViewSet, basename="exam-schedules")
+router.register("admit-cards", AdmitCardViewSet, basename="admit-cards")
 
 urlpatterns = [
+    path(
+        "exams/<uuid:pk>:publish-schedule",
+        ExamScheduleViewSet.as_view({"post": "publish"}),
+        name="exams-publish-schedule",
+    ),
+    path(
+        "exams/<uuid:pk>:issue-admit-cards",
+        AdmitCardViewSet.as_view({"post": "issue"}),
+        name="exams-issue-admit-cards",
+    ),
+    path(
+        "admit-cards/<uuid:pk>:revoke",
+        AdmitCardViewSet.as_view({"post": "revoke"}),
+        name="admit-cards-revoke",
+    ),
     path(
         "grading-scales/<uuid:pk>:set-default",
         GradingScaleViewSet.as_view({"post": "set_default"}),

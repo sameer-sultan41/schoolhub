@@ -23,25 +23,37 @@ separately:
 
 from __future__ import annotations
 
+import datetime
+
+from django.utils import timezone
 from rest_framework import status
 
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
     AcademicSessionFactory,
+    AdmitCardFactory,
+    CampusFactory,
     ClassFactory,
     ClassSubjectFactory,
     ExamFactory,
+    ExamScheduleFactory,
     ExamSubjectFactory,
+    RoomFactory,
+    SectionFactory,
+    StudentFactory,
     SubjectFactory,
     TenantFactory,
     complete_scale,
     enable_feature,
+    exam_week,
 )
 from core.tenancy.context import tenant_context
 
 SCALES = "/api/v1/grading-scales"
 EXAMS = "/api/v1/exams"
 EXAM_SUBJECTS = "/api/v1/exam-subjects"
+EXAM_SCHEDULES = "/api/v1/exam-schedules"
+ADMIT_CARDS = "/api/v1/admit-cards"
 
 
 class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
@@ -77,6 +89,29 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             )
             self.foreign_band = self.foreign_scale.bands.first()
             self.foreign_session = session
+
+            foreign_campus = CampusFactory(tenant=self.other_tenant)
+            foreign_section = SectionFactory(
+                tenant=self.other_tenant, school_class=school_class, campus=foreign_campus
+            )
+            foreign_room = RoomFactory(tenant=self.other_tenant, campus=foreign_campus)
+            self.foreign_exam.starts_on = timezone.localdate()
+            self.foreign_exam.ends_on = timezone.localdate() + datetime.timedelta(days=5)
+            self.foreign_exam.save(update_fields=["starts_on", "ends_on"])
+            self.foreign_schedule = ExamScheduleFactory(
+                tenant=self.other_tenant,
+                exam_subject=self.foreign_exam_subject,
+                section=foreign_section,
+                exam_date=timezone.localdate(),
+                room=foreign_room,
+            )
+            foreign_student = StudentFactory(tenant=self.other_tenant, campus=foreign_campus)
+            self.foreign_card = AdmitCardFactory(
+                tenant=self.other_tenant,
+                exam=self.foreign_exam,
+                student=foreign_student,
+                admit_card_no="FOREIGN-1",
+            )
 
     def assert404(self, response) -> None:
         self.assertEqual(
@@ -244,3 +279,109 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             leaked = GradeBand.objects.alive().filter(grading_scale=self.foreign_scale).count()
 
         self.assertEqual(leaked, 0)
+
+    # --- exam schedules ---------------------------------------------------
+
+    def test_retrieving_a_foreign_sitting_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{EXAM_SCHEDULES}/{self.foreign_schedule.pk}"))
+
+    def test_patching_a_foreign_sitting_is_a_404(self) -> None:
+        self.assert404(
+            self.client.patch(
+                f"{EXAM_SCHEDULES}/{self.foreign_schedule.pk}",
+                {"start_time": "07:00"},
+                format="json",
+            )
+        )
+
+    def test_deleting_a_foreign_sitting_is_a_404(self) -> None:
+        self.assert404(self.client.delete(f"{EXAM_SCHEDULES}/{self.foreign_schedule.pk}"))
+
+    def test_listing_sittings_never_shows_another_tenant_s(self) -> None:
+        response = self.client.get(EXAM_SCHEDULES)
+
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(self.foreign_schedule.pk), ids)
+
+    def test_publishing_a_foreign_exam_s_schedule_is_a_404(self) -> None:
+        """Succeeding here would release another school's timetable to its
+        students and fire its notifications."""
+        self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:publish-schedule"))
+
+    # --- admit cards ------------------------------------------------------
+
+    def test_retrieving_a_foreign_admit_card_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{ADMIT_CARDS}/{self.foreign_card.pk}"))
+
+    def test_listing_admit_cards_never_shows_another_tenant_s(self) -> None:
+        response = self.client.get(ADMIT_CARDS)
+
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(self.foreign_card.pk), ids)
+
+    def test_issuing_cards_for_a_foreign_exam_is_a_404(self) -> None:
+        self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:issue-admit-cards"))
+
+    def test_revoking_a_foreign_admit_card_is_a_404(self) -> None:
+        self.assert404(
+            self.client.post(
+                f"{ADMIT_CARDS}/{self.foreign_card.pk}:revoke",
+                {"reason": "not mine to revoke"},
+                format="json",
+            )
+        )
+
+    def test_scheduling_against_a_foreign_exam_subject_does_not_validate(self) -> None:
+        """A 400, not a 404: the exam-subject id arrives in the body and fails
+        the serializer's tenant-scoped queryset."""
+        response = self.client.post(
+            EXAM_SCHEDULES,
+            {
+                "exam_subject_id": str(self.foreign_exam_subject.pk),
+                "section_id": str(self.section.pk),
+                "exam_date": str(timezone.localdate()),
+                "start_time": "09:00",
+                "end_time": "11:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_foreign_sitting_never_enters_this_tenant_s_clash_list(self) -> None:
+        """The engine compares against other exams *on the same dates*, which is
+        exactly the query a missing tenant scope would leak through — a room
+        double-booking reported against another school's hall.
+        """
+        from apps.examinations import conflicts
+
+        with tenant_context(self.tenant.id):
+            own_exam = ExamFactory(
+                tenant=self.tenant, academic_session=self.session, grading_scale=self.scale
+            )
+            own_subject = ExamSubjectFactory(
+                tenant=self.tenant,
+                exam=own_exam,
+                school_class=self.school_class,
+                subject=self.subject,
+            )
+        day = exam_week(self.tenant, own_exam)
+        with tenant_context(self.tenant.id):
+            # Same date and the same *room code* as the foreign sitting, in a
+            # room of this tenant's own — so anything that matched across
+            # tenants would report a double-booking here.
+            own_room = RoomFactory(tenant=self.tenant, campus=self.campus)
+            ExamScheduleFactory(
+                tenant=self.tenant,
+                exam_subject=own_subject,
+                section=self.section,
+                exam_date=day,
+                room=own_room,
+            )
+            findings = conflicts.detect_conflicts(exam=own_exam)
+
+        self.assertEqual(
+            [f for f in findings if f["severity"] == "hard"],
+            [],
+            f"a foreign tenant's sitting leaked into the clash list: {findings}",
+        )

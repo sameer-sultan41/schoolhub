@@ -25,12 +25,16 @@ from rest_framework import serializers
 
 from apps.examinations import services
 from apps.examinations.models import (
+    AdmitCard,
     Exam,
+    ExamSchedule,
     ExamSubject,
     GradeBand,
     GradingScale,
 )
-from apps.school_organization.models import AcademicSession, Class, Subject, Term
+from apps.school_organization.models import AcademicSession, Class, Section, Subject, Term
+from apps.staff_management.models import Staff
+from apps.timetable.models import Room
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
 
@@ -286,3 +290,90 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class ExamScheduleSerializer(serializers.ModelSerializer):
+    """`exam_schedules` — one section's sitting of one paper (§5.2).
+
+    `status` is writable here, unlike on `Exam`: §5.2's transitions are
+    `completed` and `cancelled`, neither of which gates anything a client could
+    escalate through — a cancelled sitting frees its room, which is the point,
+    and marking one complete is an operational note. The exam's own lifecycle is
+    the one with an approval gate behind it.
+    """
+
+    exam_subject_id = _fk(ExamSubject, source="exam_subject")
+    section_id = _fk(Section, source="section")
+    room_id = _fk(Room, source="room", required=False, allow_null=True)
+    invigilator_staff_id = _fk(Staff, source="invigilator_staff", required=False, allow_null=True)
+
+    class Meta:
+        model = ExamSchedule
+        fields = (
+            "id",
+            "exam_subject_id",
+            "section_id",
+            "exam_date",
+            "start_time",
+            "end_time",
+            "room_id",
+            "invigilator_staff_id",
+            "status",
+            "instructions",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = READ_ONLY_FIELDS
+
+    def validate(self, attrs: dict) -> dict:
+        exam_subject = _value(attrs, self.instance, "exam_subject")
+        section = _value(attrs, self.instance, "section")
+        start_time = _value(attrs, self.instance, "start_time")
+        end_time = _value(attrs, self.instance, "end_time")
+
+        if start_time is not None and end_time is not None and end_time <= start_time:
+            raise serializers.ValidationError({"end_time": "A sitting must end after it starts."})
+
+        services.assert_section_studies_the_class(exam_subject=exam_subject, section=section)
+        return attrs
+
+
+class AdmitCardSerializer(serializers.ModelSerializer):
+    """`admit_cards` — read-only on the wire (§5.3).
+
+    Every field a client might want to set is set by the module: the number is
+    generated so two students can never share one, `file` is written by the
+    render job, and `status`/`issued_*` move through `:issue-admit-cards` and
+    `:revoke`. There is no create or update endpoint — §16 declares a `GET` and
+    two colon-actions, and nothing else.
+    """
+
+    exam_id = serializers.UUIDField(read_only=True)
+    student_id = serializers.UUIDField(read_only=True)
+    file_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = AdmitCard
+        fields = (
+            "id",
+            "exam_id",
+            "student_id",
+            "admit_card_no",
+            "file_id",
+            "status",
+            "issued_at",
+            "revoked_reason",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class AdmitCardRevokeSerializer(serializers.Serializer):
+    """The body of `POST /admit-cards/{id}:revoke`.
+
+    The reason is required, not optional: a CHECK constraint enforces it too,
+    because a revocation nobody can explain is the one a parent will ask about.
+    """
+
+    reason = serializers.CharField(max_length=255)
