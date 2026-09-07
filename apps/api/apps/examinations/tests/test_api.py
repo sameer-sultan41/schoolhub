@@ -29,12 +29,12 @@ from apps.examinations.tests.factories import (
     UserFactory,
     authenticate,
     complete_scale,
+    disable_feature,
     grant,
 )
 from apps.school_organization.models import SessionStatus
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
-from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
 SCALES = "/api/v1/grading-scales"
 EXAMS = "/api/v1/exams"
@@ -470,11 +470,7 @@ class FeatureFlagTests(ExaminationsAPITestCase):
         """A module disabled for a tenant answers 403 `module_disabled`, not
         404: the tenant's admin needs to know the module exists and is off."""
         self.allow_everything()
-        with tenant_context(self.tenant.id):
-            flag = FeatureFlag.all_tenants.get(key="module.examinations")
-            TenantFeatureOverride.all_tenants.filter(tenant=self.tenant, feature_flag=flag).update(
-                is_enabled=False
-            )
+        disable_feature(self.tenant, "module.examinations")
 
         for url in (SCALES, EXAMS, EXAM_SUBJECTS):
             with self.subTest(url=url):

@@ -55,6 +55,8 @@ from apps.student_management.tests.factories import (
     StudentGuardianFactory,
 )
 from apps.timetable.tests.factories import RoomFactory, enable_feature
+from core.tenancy.context import tenant_context
+from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
 __all__ = [
     "STANDARD_BANDS",
@@ -80,6 +82,7 @@ __all__ = [
     "UserFactory",
     "authenticate",
     "complete_scale",
+    "disable_feature",
     "enable_feature",
     "grant",
 ]
@@ -165,3 +168,24 @@ class ExamSubjectFactory(factory.django.DjangoModelFactory):
     pass_marks = Decimal("40.00")
     has_practical = False
     subject_weightage_percent = Decimal("100.00")
+
+
+def disable_feature(tenant, key: str) -> None:
+    """Force `key` off for `tenant`, so the module gate can be asserted.
+
+    The mirror of `enable_feature`, which the base fixture calls in `setUp` —
+    a test asserting the gate has to undo that rather than skip it, because a
+    fixture that never enabled the module would fail every *other* assertion
+    for the same reason and prove nothing about the gate.
+
+    Note the field is `enabled`, not `is_enabled`, and `FeatureFlag` has only
+    the plain `objects` manager: the flag catalogue is platform-level, not
+    tenant-owned, and it is the *override* that carries the tenant.
+    """
+    flag = FeatureFlag.objects.get(key=key)
+    with tenant_context(tenant.id):
+        TenantFeatureOverride.objects.update_or_create(
+            tenant=tenant,
+            feature_flag=flag,
+            defaults={"enabled": False, "reason": "examinations feature-gate test"},
+        )
