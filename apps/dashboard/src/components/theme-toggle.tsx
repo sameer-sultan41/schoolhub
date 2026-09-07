@@ -52,7 +52,12 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={t("label")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("label")}
+          className="[&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110"
+        >
           <Icon aria-hidden="true" className="size-4" />
         </Button>
       </DropdownMenuTrigger>

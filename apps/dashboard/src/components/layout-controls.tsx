@@ -137,7 +137,12 @@ export function LayoutControls() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={t("trigger")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("trigger")}
+          className="[&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110"
+        >
           <Settings2 aria-hidden="true" className="size-4" />
         </Button>
       </PopoverTrigger>

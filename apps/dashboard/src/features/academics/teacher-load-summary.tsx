@@ -2,6 +2,7 @@
 
 import {
   Badge,
+  BadgeDot,
   Card,
   CardContent,
   DataTable,
@@ -64,9 +65,15 @@ export function TeacherLoadSummary({ academicSessionId }: TeacherLoadSummaryProp
       header: t("loadSummary.columns.status"),
       cell: (row) =>
         row.over_norm ? (
-          <Badge variant="danger">{t("loadSummary.overNorm")}</Badge>
+          <Badge variant="danger" appearance="soft">
+            <BadgeDot />
+            {t("loadSummary.overNorm")}
+          </Badge>
         ) : (
-          <Badge variant="success">{t("loadSummary.withinNorm")}</Badge>
+          <Badge variant="success" appearance="soft">
+            <BadgeDot />
+            {t("loadSummary.withinNorm")}
+          </Badge>
         ),
     },
   ];

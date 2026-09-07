@@ -3,7 +3,9 @@
 import { collectPages } from "@schoolhub/api-client";
 import {
   Badge,
+  BadgeDot,
   Button,
+  EmptyState,
   Select,
   SelectContent,
   SelectItem,
@@ -11,6 +13,7 @@ import {
   SelectValue,
 } from "@schoolhub/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Clock, LayoutGrid } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -269,7 +272,11 @@ export function WeekGridScreen() {
       </div>
 
       {!isReady ? (
-        <p className="text-sm text-muted-foreground">{t("grid.pickSection")}</p>
+        <EmptyState
+          icon={LayoutGrid}
+          title={t("grid.pickSectionTitle")}
+          description={t("grid.pickSection")}
+        />
       ) : slots.error ? (
         <ApiErrorAlert error={slots.error} />
       ) : (
@@ -381,9 +388,15 @@ export function WeekGridScreen() {
                                   {slot.room_id ? (roomNames.get(slot.room_id) ?? EMPTY) : EMPTY}
                                 </span>
                                 {slot.status === "draft" ? (
-                                  <Badge variant="outline">{t("grid.draft")}</Badge>
+                                  <Badge variant="outline" appearance="soft">
+                                    <BadgeDot />
+                                    {t("grid.draft")}
+                                  </Badge>
                                 ) : (
-                                  <Badge variant="success">{t("grid.publishedBadge")}</Badge>
+                                  <Badge variant="success" appearance="soft">
+                                    <BadgeDot />
+                                    {t("grid.publishedBadge")}
+                                  </Badge>
                                 )}
                               </span>
                             ) : (
@@ -401,9 +414,11 @@ export function WeekGridScreen() {
               </tbody>
             </table>
             {periodRows.length === 0 ? (
-              <p className="rounded-[var(--sh-radius)] border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-                {t("grid.noPeriods")}
-              </p>
+              <EmptyState
+                icon={Clock}
+                title={t("grid.noPeriodsTitle")}
+                description={t("grid.noPeriods")}
+              />
             ) : null}
           </div>
         </>

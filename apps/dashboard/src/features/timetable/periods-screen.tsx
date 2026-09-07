@@ -322,7 +322,7 @@ function DeletePeriodDialog({ period }: { period: PeriodRecord }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="danger" size="sm">
+        <Button variant="outline-danger" size="sm">
           {t("periods.actions.delete")}
         </Button>
       </DialogTrigger>

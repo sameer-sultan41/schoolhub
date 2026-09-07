@@ -717,6 +717,7 @@
       "overNorm": "Over norm",
       "withinNorm": "Within norm",
       "pickSession": "Choose a single academic session to see per-teacher load.",
+      "pickSessionTitle": "Pick a session",
       "columns": {
         "allocations": "Allocations",
         "weeklyPeriods": "Weekly periods",
@@ -882,6 +883,7 @@
       "summary": "Build a section's week, period by period, and publish it once it is clear of conflicts.",
       "caption": "Weekly timetable grid",
       "pickSection": "Pick an academic session and a section to build its week.",
+      "pickSectionTitle": "Pick a section",
       "break": "Break",
       "notScheduled": "Not scheduled",
       "noSubject": "No subject",
@@ -891,7 +893,8 @@
       "draft": "Draft",
       "publishedBadge": "Published",
       "published": "Published {count} periods.",
-      "noPeriods": "No periods have been set up yet. Add the bell schedule first."
+      "noPeriods": "No periods have been set up yet. Add the bell schedule first.",
+      "noPeriodsTitle": "No periods yet"
     },
     "conflicts": {
       "title": "Conflicts",

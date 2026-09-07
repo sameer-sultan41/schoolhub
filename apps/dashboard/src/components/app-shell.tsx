@@ -87,7 +87,16 @@ function DashboardNav({ groups, pathname }: { groups: NavGroup[]; pathname: stri
                         <Icon aria-hidden="true" />
                         <span>{label}</span>
                       </SidebarMenuButton>
-                      <SidebarMenuBadge id={badgeId}>{t("planned")}</SidebarMenuBadge>
+                      {/* A pill, not the bare numeral-style badge SidebarMenuBadge ships
+                          with by default: "Soon" is a word, not a count, and floating
+                          unstyled text beside a disabled item read as leftover/unstyled UI
+                          rather than an intentional label. */}
+                      <SidebarMenuBadge
+                        id={badgeId}
+                        className="rounded-full bg-sidebar-foreground/10 px-1.5 text-[0.625rem] font-semibold tracking-wide text-sidebar-foreground/70 uppercase"
+                      >
+                        {t("planned")}
+                      </SidebarMenuBadge>
                     </SidebarMenuItem>
                   );
                 }

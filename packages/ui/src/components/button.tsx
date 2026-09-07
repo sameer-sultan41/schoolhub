@@ -21,6 +21,13 @@ const buttonVariants = cva(
         outline: "border border-border bg-transparent text-foreground hover:bg-muted",
         ghost: "bg-transparent text-foreground hover:bg-muted",
         danger: "bg-danger text-danger-foreground hover:opacity-90",
+        // A row-level "Remove" trigger, not the confirm inside the dialog it opens: the
+        // same weight as `outline` (quiet, same shape/size as a neighbouring Edit button)
+        // but tinted danger so it still reads as destructive at a glance. Repeating a
+        // solid `danger` button down every row of a table reads as a wall of alarm and
+        // makes the one true point-of-no-return button — the confirm inside the dialog —
+        // no louder than the thing that merely opens it.
+        "outline-danger": "border border-danger/40 bg-transparent text-danger hover:bg-danger/10",
         link: "bg-transparent text-primary underline-offset-4 hover:underline",
       },
       size: {

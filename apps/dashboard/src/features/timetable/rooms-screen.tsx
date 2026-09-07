@@ -326,7 +326,7 @@ function DeleteRoomDialog({ room }: { room: RoomRecord }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="danger" size="sm">
+        <Button variant="outline-danger" size="sm">
           {t("rooms.actions.delete")}
         </Button>
       </DialogTrigger>

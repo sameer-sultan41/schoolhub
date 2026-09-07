@@ -111,7 +111,13 @@ export function IdCardBatchAction({ selectedIds, onDone }: IdCardBatchActionProp
           <AlertDescription>{mutationError}</AlertDescription>
         </Alert>
       ) : null}
+      {/* outline, not the default primary: "New student" is this screen's one primary
+          action, and a bulk action tied to a selection shouldn't compete with it for the
+          same visual weight — especially at 0 selected, where a solid brand-coloured
+          button just to say "there's nothing to act on yet" reads as more important
+          than it is. */}
       <Button
+        variant="outline"
         size="sm"
         disabled={selectedIds.length === 0 || generateMutation.isPending}
         onClick={() => {

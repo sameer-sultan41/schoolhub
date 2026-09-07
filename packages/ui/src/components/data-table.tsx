@@ -447,7 +447,16 @@ export function DataTable<TRow>({
             : rows.map((row) => (
                 <TableRow
                   key={getRowId(row)}
-                  className={cn(onRowClick && "cursor-pointer hover:bg-muted")}
+                  // even:, not a computed index-based className: `rows` is already the
+                  // page's own array order, so the CSS nth-child equivalent is exactly
+                  // right and needs no row-index threading through this map. surface-sunken,
+                  // not muted — muted is already claimed by this row's own hover state and
+                  // by Button's ghost/outline variants, so reusing it here would make a
+                  // zebra row indistinguishable from a hovered one.
+                  className={cn(
+                    "even:bg-surface-sunken",
+                    onRowClick && "cursor-pointer hover:bg-muted",
+                  )}
                   // tabIndex as a plain conditional attribute VALUE, not a conditional prop
                   // spread: eslint-plugin-jsx-a11y's static rules
                   // (no-noninteractive-element-interactions and friends) inspect JSX

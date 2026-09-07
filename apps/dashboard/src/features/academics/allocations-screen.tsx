@@ -21,7 +21,7 @@ import {
 } from "@schoolhub/ui";
 import { isOffsetPagination } from "@schoolhub/types";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { UserCheck } from "lucide-react";
+import { Gauge, UserCheck } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
 import { ApiErrorAlert } from "@/components/api-error-alert";
@@ -379,7 +379,11 @@ export function AllocationsScreen() {
       />
 
       {academicSessionId === ALL ? (
-        <p className="text-sm text-muted-foreground">{t("loadSummary.pickSession")}</p>
+        <EmptyState
+          icon={Gauge}
+          title={t("loadSummary.pickSessionTitle")}
+          description={t("loadSummary.pickSession")}
+        />
       ) : (
         <TeacherLoadSummary academicSessionId={academicSessionId} />
       )}
@@ -482,7 +486,7 @@ function DeleteAllocationDialog({ allocation }: { allocation: TeacherAllocationR
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="danger" size="sm">
+        <Button variant="outline-danger" size="sm">
           {t("allocations.actions.delete")}
         </Button>
       </DialogTrigger>
