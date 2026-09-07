@@ -193,7 +193,18 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
   CI is the source of truth for pass/fail.
 - **Never add a `Co-Authored-By` trailer or any AI attribution** to a commit or PR.
 - When behaviour changes, update the module doc in the same PR. The docs are the
-  review baseline.
+  review baseline. This also covers new flows and feature details, not just
+  edits to existing behaviour — a new module, endpoint, or user-facing flow gets
+  its own doc (or a new section of one) in the same PR that ships it, not a
+  follow-up.
+- **A repeated multi-step task becomes a skill, not muscle memory.** If you find
+  yourself re-deriving the same non-obvious procedure a second time — bringing
+  up the local stack, a recurring release or data-migration checklist, a
+  multi-repo sync — capture it instead of repeating the discovery. For "how do I
+  run/launch this app" flows, use `/run-skill-generator` once the manual steps
+  are proven to work. For other repeated procedures, write a scoped
+  `.claude/skills/<name>/SKILL.md` covering the exact commands, env, and
+  gotchas found the hard way.
 
 ## Toolchains
 
