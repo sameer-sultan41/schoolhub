@@ -59,15 +59,33 @@ describe("DashboardPage", () => {
     }
   });
 
-  it("puts the band full width above a two-column grid of the slower panels", async () => {
+  it("keeps the band and the head counts full width, and pairs each chart with a panel", async () => {
     const ui = await DashboardPage();
     const { container } = render(ui, { wrapper: PreferencesTestWrapper });
 
-    const grid = container.querySelector(".lg\\:grid-cols-2");
-    expect(grid).not.toBeNull();
-    expect(grid?.contains(screen.getByTestId("now-band"))).toBe(false);
-    expect(grid?.contains(screen.getByTestId("teacher-load"))).toBe(true);
-    expect(grid?.contains(screen.getByTestId("quick-actions"))).toBe(true);
+    // Two grids, each two-thirds chart and one-third panel. This used to be one
+    // `lg:grid-cols-2` holding both charts; the screen was recomposed into hero,
+    // figures, then panels, and the assertion had not moved with it.
+    const grids = [...container.querySelectorAll(".lg\\:grid-cols-3")];
+    expect(grids).toHaveLength(2);
+
+    // The band answers "what is happening now" and the counts "how big is this
+    // school" — both are read across, so neither is boxed into a column.
+    for (const fullWidth of ["now-band", "school-shape"]) {
+      const node = screen.getByTestId(fullWidth);
+      expect(grids.some((grid) => grid.contains(node))).toBe(false);
+    }
+
+    const [teaching, capacity] = grids;
+    expect(teaching?.contains(screen.getByTestId("teacher-load"))).toBe(true);
+    expect(teaching?.contains(screen.getByTestId("pending-work"))).toBe(true);
+    expect(capacity?.contains(screen.getByTestId("capacity"))).toBe(true);
+    expect(capacity?.contains(screen.getByTestId("quick-actions"))).toBe(true);
+
+    // The chart takes the wide side of its own grid, not the panel beside it.
+    for (const grid of grids) {
+      expect(grid.querySelectorAll(".lg\\:col-span-2")).toHaveLength(1);
+    }
   });
 
   it("sets the page title via metadata", async () => {
