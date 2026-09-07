@@ -1036,6 +1036,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/fee-heads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/fee-heads` — §5.1's chargeable categories. */
+        get: operations["fee_heads_list"];
+        put?: never;
+        /** @description `/fee-heads` — §5.1's chargeable categories. */
+        post: operations["fee_heads_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fee-heads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/fee-heads` — §5.1's chargeable categories. */
+        get: operations["fee_heads_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `/fee-heads` — §5.1's chargeable categories. */
+        delete: operations["fee_heads_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `/fee-heads` — §5.1's chargeable categories. */
+        patch: operations["fee_heads_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/fee-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/fee-schedules` — §5.1's structure lines and installment schedule. */
+        get: operations["fee_schedules_list"];
+        put?: never;
+        /** @description `/fee-schedules` — §5.1's structure lines and installment schedule. */
+        post: operations["fee_schedules_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fee-schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/fee-schedules` — §5.1's structure lines and installment schedule. */
+        get: operations["fee_schedules_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `/fee-schedules` — §5.1's structure lines and installment schedule. */
+        delete: operations["fee_schedules_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `/fee-schedules` — §5.1's structure lines and installment schedule. */
+        patch: operations["fee_schedules_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/fee-structures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/fee-structures` — §5.1's named fee set, with its §6 lifecycle. */
+        get: operations["fee_structures_list"];
+        put?: never;
+        /** @description `/fee-structures` — §5.1's named fee set, with its §6 lifecycle. */
+        post: operations["fee_structures_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fee-structures/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/fee-structures` — §5.1's named fee set, with its §6 lifecycle. */
+        get: operations["fee_structures_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `/fee-structures` — §5.1's named fee set, with its §6 lifecycle. */
+        delete: operations["fee_structures_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `/fee-structures` — §5.1's named fee set, with its §6 lifecycle. */
+        patch: operations["fee_structures_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/fee-structures/{id}:activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /fee-structures/{id}:activate`.
+         *
+         *     The two checks it runs — at least one schedule, no other active
+         *     structure at the same scope — are both about a set of rows, so neither
+         *     can be a constraint. See `services.activate_fee_structure`.
+         */
+        post: operations["fee_structures_:activate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fee-structures/{id}:archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /fee-structures/{id}:archive`.
+         *
+         *     Invoices already priced from this structure are untouched — archiving
+         *     stops it being used again, it does not rewrite history.
+         */
+        post: operations["fee_structures_:archive_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files": {
         parameters: {
             query?: never;
@@ -1777,6 +1933,100 @@ export interface paths {
         get: operations["leave_types_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/ledger-accounts` — §5.8's per-tenant chart of accounts. */
+        get: operations["ledger_accounts_list"];
+        put?: never;
+        /** @description `/ledger-accounts` — §5.8's per-tenant chart of accounts. */
+        post: operations["ledger_accounts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger-accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/ledger-accounts` — §5.8's per-tenant chart of accounts. */
+        get: operations["ledger_accounts_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `/ledger-accounts` — §5.8's per-tenant chart of accounts. */
+        delete: operations["ledger_accounts_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `/ledger-accounts` — §5.8's per-tenant chart of accounts. */
+        patch: operations["ledger_accounts_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/ledger-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/ledger-entries` — the general ledger, read-only. See the module docstring. */
+        get: operations["ledger_entries_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger-entries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/ledger-entries` — the general ledger, read-only. See the module docstring. */
+        get: operations["ledger_entries_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger-entries:post-journal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /ledger-entries:post-journal` — §8's hand-written journal entry.
+         *
+         *     A colon-action rather than a POST to the collection, because the unit of
+         *     a posting is the balanced *set* of lines. One line at a time could never
+         *     be validated.
+         */
+        post: operations["ledger_entries:post_journal_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4736,6 +4986,100 @@ export interface components {
          * @enum {string}
          */
         ExitTypeEnum: "resigned" | "retired" | "terminated";
+        /**
+         * @description * `one_time` - One time
+         *     * `monthly` - Monthly
+         *     * `per_term` - Per term
+         *     * `annual` - Annual
+         * @enum {string}
+         */
+        FeeFrequencyEnum: "one_time" | "monthly" | "per_term" | "annual";
+        FeeHead: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            code: string;
+            category?: components["schemas"]["FeeHeadCategoryEnum"];
+            /** Format: uuid */
+            ledger_account: string;
+            is_refundable?: boolean;
+            /** @description Inactive heads are excluded from new structures. */
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `tuition` - Tuition
+         *     * `admission` - Admission
+         *     * `transport` - Transport
+         *     * `library` - Library
+         *     * `exam` - Exam
+         *     * `fine` - Fine
+         *     * `other` - Other
+         * @enum {string}
+         */
+        FeeHeadCategoryEnum: "tuition" | "admission" | "transport" | "library" | "exam" | "fine" | "other";
+        FeeSchedule: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            fee_structure: string;
+            /** Format: uuid */
+            fee_head: string;
+            /** Format: decimal */
+            amount: string;
+            frequency?: components["schemas"]["FeeFrequencyEnum"];
+            /**
+             * Format: uuid
+             * @description Required when frequency is per_term.
+             */
+            term?: string | null;
+            /** @description Day-of-month due rule for monthly schedules. */
+            due_day?: number | null;
+            /**
+             * Format: date
+             * @description Fixed due date for one_time and annual schedules.
+             */
+            due_date?: string | null;
+            /** @description Grace days and fixed/percent late fee, tenant-configured. Read by the overdue sweep; absent means no automatic late fee. */
+            late_fee_policy?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        FeeStructure: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            /** Format: uuid */
+            academic_session: string;
+            /**
+             * Format: uuid
+             * @description Null means the structure applies session-wide.
+             */
+            school_class?: string | null;
+            /**
+             * Format: uuid
+             * @description Null means all campuses.
+             */
+            campus?: string | null;
+            readonly status: components["schemas"]["FeeStructureStatusEnum"];
+            readonly schedules: components["schemas"]["FeeSchedule"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `active` - Active
+         *     * `archived` - Archived
+         * @enum {string}
+         */
+        FeeStructureStatusEnum: "draft" | "active" | "archived";
         File: {
             /** Format: uuid */
             readonly id: string;
@@ -5055,6 +5399,102 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        LedgerAccount: {
+            /** Format: uuid */
+            readonly id: string;
+            code: string;
+            name: string;
+            account_type: components["schemas"]["LedgerAccountTypeEnum"];
+            /** Format: uuid */
+            parent?: string | null;
+            /** @description Seeded at provisioning; cannot be deleted (see the delete constraint). */
+            readonly is_system: boolean;
+            /** @description Archived accounts reject new postings but keep their history. */
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `asset` - Asset
+         *     * `liability` - Liability
+         *     * `equity` - Equity
+         *     * `income` - Income
+         *     * `expense` - Expense
+         * @enum {string}
+         */
+        LedgerAccountTypeEnum: "asset" | "liability" | "equity" | "income" | "expense";
+        /**
+         * @description Read-only. Postings are made by `ledger.post_transaction`, never by a POST.
+         *
+         *     There is no create path on this serializer on purpose: a client that could
+         *     insert a single line could insert an unbalanced posting, and the balance rule
+         *     is about the set. `LedgerEntryViewSet` exposes list and retrieve only.
+         */
+        LedgerEntry: {
+            /** Format: uuid */
+            readonly id: string;
+            /**
+             * Format: uuid
+             * @description Groups the balanced lines of one posting. Assigned by ledger.post_transaction.
+             */
+            readonly transaction_id: string;
+            /**
+             * Format: date
+             * @description Posting date, which is not always the creation date.
+             */
+            readonly entry_date: string;
+            /** Format: uuid */
+            readonly ledger_account: string;
+            readonly account_code: string;
+            readonly account_name: string;
+            /** Format: decimal */
+            readonly debit: string;
+            /** Format: decimal */
+            readonly credit: string;
+            readonly reference_type: components["schemas"]["LedgerReferenceTypeEnum"];
+            /**
+             * Format: uuid
+             * @description The origin record, per reference_type. Null for a manual journal, which has no platform record behind it.
+             */
+            readonly reference_id: string | null;
+            readonly memo: string | null;
+            /**
+             * Format: uuid
+             * @description Set when a reversal supersedes this posting. The only mutable column.
+             */
+            readonly reversed_by_transaction_id: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /** @description One line of a manual journal entry. */
+        LedgerLine: {
+            /** Format: uuid */
+            ledger_account: string;
+            /**
+             * Format: decimal
+             * @default 0.00
+             */
+            debit: string;
+            /**
+             * Format: decimal
+             * @default 0.00
+             */
+            credit: string;
+            memo?: string | null;
+        };
+        /**
+         * @description * `payment` - Payment
+         *     * `refund` - Refund
+         *     * `expense` - Expense
+         *     * `payroll_run` - Payroll run
+         *     * `fine` - Fine
+         *     * `manual` - Manual journal
+         *     * `reversal` - Reversal
+         * @enum {string}
+         */
+        LedgerReferenceTypeEnum: "payment" | "refund" | "expense" | "payroll_run" | "fine" | "manual" | "reversal";
         /**
          * @description Email/username + password login.
          *
@@ -5067,6 +5507,13 @@ export interface components {
             password: string;
             /** @description Tenant slug. Required only when the identifier exists at more than one school. */
             school?: string;
+        };
+        /** @description `POST /ledger-entries:post-journal` — §8's hand-written journal entry. */
+        ManualJournal: {
+            /** Format: date */
+            entry_date: string;
+            memo: string;
+            lines: components["schemas"]["LedgerLine"][];
         };
         /**
          * @description `marks` — read shape for `GET /marks` (§16).
@@ -5274,6 +5721,36 @@ export interface components {
                 };
             };
         };
+        PaginatedFeeHeadList: {
+            data?: components["schemas"]["FeeHead"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedFeeScheduleList: {
+            data?: components["schemas"]["FeeSchedule"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedFeeStructureList: {
+            data?: components["schemas"]["FeeStructure"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedFileList: {
             data?: components["schemas"]["File"][];
             meta?: {
@@ -5337,6 +5814,26 @@ export interface components {
         };
         PaginatedLeaveTypeList: {
             data?: components["schemas"]["LeaveType"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedLedgerAccountList: {
+            data?: components["schemas"]["LedgerAccount"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedLedgerEntryList: {
+            data?: components["schemas"]["LedgerEntry"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -5814,6 +6311,74 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedFeeHead: {
+            /** Format: uuid */
+            readonly id?: string;
+            name?: string;
+            code?: string;
+            category?: components["schemas"]["FeeHeadCategoryEnum"];
+            /** Format: uuid */
+            ledger_account?: string;
+            is_refundable?: boolean;
+            /** @description Inactive heads are excluded from new structures. */
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedFeeSchedule: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            fee_structure?: string;
+            /** Format: uuid */
+            fee_head?: string;
+            /** Format: decimal */
+            amount?: string;
+            frequency?: components["schemas"]["FeeFrequencyEnum"];
+            /**
+             * Format: uuid
+             * @description Required when frequency is per_term.
+             */
+            term?: string | null;
+            /** @description Day-of-month due rule for monthly schedules. */
+            due_day?: number | null;
+            /**
+             * Format: date
+             * @description Fixed due date for one_time and annual schedules.
+             */
+            due_date?: string | null;
+            /** @description Grace days and fixed/percent late fee, tenant-configured. Read by the overdue sweep; absent means no automatic late fee. */
+            late_fee_policy?: unknown;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedFeeStructure: {
+            /** Format: uuid */
+            readonly id?: string;
+            name?: string;
+            /** Format: uuid */
+            academic_session?: string;
+            /**
+             * Format: uuid
+             * @description Null means the structure applies session-wide.
+             */
+            school_class?: string | null;
+            /**
+             * Format: uuid
+             * @description Null means all campuses.
+             */
+            campus?: string | null;
+            readonly status?: components["schemas"]["FeeStructureStatusEnum"];
+            readonly schedules?: components["schemas"]["FeeSchedule"][];
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         /**
          * @description `grade_bands` — one band of a grading scale (§5.5).
          *
@@ -5922,6 +6487,23 @@ export interface components {
              * @description staff(id).
              */
             house_master_staff_id?: string | null;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedLedgerAccount: {
+            /** Format: uuid */
+            readonly id?: string;
+            code?: string;
+            name?: string;
+            account_type?: components["schemas"]["LedgerAccountTypeEnum"];
+            /** Format: uuid */
+            parent?: string | null;
+            /** @description Seeded at provisioning; cannot be deleted (see the delete constraint). */
+            readonly is_system?: boolean;
+            /** @description Archived accounts reject new postings but keep their history. */
             is_active?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
@@ -9512,6 +10094,432 @@ export interface operations {
             };
         };
     };
+    fee_heads_list: {
+        parameters: {
+            query?: {
+                category?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                is_refundable?: boolean;
+                ledger_account_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFeeHeadList"];
+                };
+            };
+        };
+    };
+    fee_heads_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeHead"];
+                "application/x-www-form-urlencoded": components["schemas"]["FeeHead"];
+                "multipart/form-data": components["schemas"]["FeeHead"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeHead"];
+                };
+            };
+        };
+    };
+    fee_heads_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee head. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeHead"];
+                };
+            };
+        };
+    };
+    fee_heads_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee head. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    fee_heads_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee head. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedFeeHead"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedFeeHead"];
+                "multipart/form-data": components["schemas"]["PatchedFeeHead"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeHead"];
+                };
+            };
+        };
+    };
+    fee_schedules_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                fee_head_id?: string;
+                fee_structure_id?: string;
+                frequency?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                term_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFeeScheduleList"];
+                };
+            };
+        };
+    };
+    fee_schedules_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeSchedule"];
+                "application/x-www-form-urlencoded": components["schemas"]["FeeSchedule"];
+                "multipart/form-data": components["schemas"]["FeeSchedule"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeSchedule"];
+                };
+            };
+        };
+    };
+    fee_schedules_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee schedule. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeSchedule"];
+                };
+            };
+        };
+    };
+    fee_schedules_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee schedule. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    fee_schedules_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee schedule. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedFeeSchedule"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedFeeSchedule"];
+                "multipart/form-data": components["schemas"]["PatchedFeeSchedule"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeSchedule"];
+                };
+            };
+        };
+    };
+    fee_structures_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                campus_id?: string;
+                class_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFeeStructureList"];
+                };
+            };
+        };
+    };
+    fee_structures_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeStructure"];
+                "application/x-www-form-urlencoded": components["schemas"]["FeeStructure"];
+                "multipart/form-data": components["schemas"]["FeeStructure"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeStructure"];
+                };
+            };
+        };
+    };
+    fee_structures_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee structure. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeStructure"];
+                };
+            };
+        };
+    };
+    fee_structures_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee structure. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    fee_structures_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee structure. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedFeeStructure"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedFeeStructure"];
+                "multipart/form-data": components["schemas"]["PatchedFeeStructure"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeStructure"];
+                };
+            };
+        };
+    };
+    "fee_structures_:activate_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeStructure"];
+                };
+            };
+        };
+    };
+    "fee_structures_:archive_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeStructure"];
+                };
+            };
+        };
+    };
     files_list: {
         parameters: {
             query?: {
@@ -10522,6 +11530,232 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeaveType"];
+                };
+            };
+        };
+    };
+    ledger_accounts_list: {
+        parameters: {
+            query?: {
+                account_type?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                is_system?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                parent_id?: string;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedLedgerAccountList"];
+                };
+            };
+        };
+    };
+    ledger_accounts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerAccount"];
+                "application/x-www-form-urlencoded": components["schemas"]["LedgerAccount"];
+                "multipart/form-data": components["schemas"]["LedgerAccount"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    ledger_accounts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this ledger account. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    ledger_accounts_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this ledger account. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ledger_accounts_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this ledger account. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedLedgerAccount"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedLedgerAccount"];
+                "multipart/form-data": components["schemas"]["PatchedLedgerAccount"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    ledger_entries_list: {
+        parameters: {
+            query?: {
+                account?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                date__gte?: string;
+                date__lte?: string;
+                is_reversed?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                reference_id?: string;
+                reference_type?: string;
+                /** @description A search term. */
+                search?: string;
+                transaction_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedLedgerEntryList"];
+                };
+            };
+        };
+    };
+    ledger_entries_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this ledger entry. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerEntry"];
+                };
+            };
+        };
+    };
+    "ledger_entries:post_journal_create": {
+        parameters: {
+            query?: {
+                account?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                date__gte?: string;
+                date__lte?: string;
+                is_reversed?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                reference_id?: string;
+                reference_type?: string;
+                /** @description A search term. */
+                search?: string;
+                transaction_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualJournal"];
+                "application/x-www-form-urlencoded": components["schemas"]["ManualJournal"];
+                "multipart/form-data": components["schemas"]["ManualJournal"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedLedgerEntryList"];
                 };
             };
         };
