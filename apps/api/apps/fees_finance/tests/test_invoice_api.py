@@ -206,12 +206,16 @@ class PortalAccessTests(FeesFinanceAPITestCase):
         super().setUp()
         with tenant_context(self.tenant.id):
             self.mine = FeeInvoiceFactory(
-                tenant=self.tenant, student=self.student, academic_session=self.session
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                period_label="2026-09",
             )
             self.theirs = FeeInvoiceFactory(
                 tenant=self.tenant,
                 student=self.students[1],
                 academic_session=self.session,
+                period_label="2026-09",
             )
         grant(
             self.guardian_user,
@@ -242,12 +246,17 @@ class PortalAccessTests(FeesFinanceAPITestCase):
         Showing a parent a charge that may still change is worse than showing
         them nothing."""
         with tenant_context(self.tenant.id):
+            # A distinct `period_label`: this student already has an invoice
+            # from setUp with both `fee_structure` and `period_label` null, and
+            # NULLS NOT DISTINCT means a second such row is a genuine duplicate
+            # — the guard refusing it here is the guard working.
             FeeInvoiceFactory(
                 tenant=self.tenant,
                 student=self.student,
                 academic_session=self.session,
                 status=InvoiceStatus.DRAFT,
                 invoice_no="INV-DRAFT-1",
+                period_label="2026-10",
             )
 
         response = self.client.get("/api/v1/fee-invoices")
