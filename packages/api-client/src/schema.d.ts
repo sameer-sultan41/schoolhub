@@ -602,6 +602,86 @@ export interface paths {
         patch: operations["designations_partial_update"];
         trace?: never;
     };
+    "/api/v1/discounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/discounts` — §5.3's student-level reductions.
+         *
+         *     Portal-readable for the same reason invoices are: a parent shown a reduced
+         *     bill has to be able to see the reduction that explains it.
+         */
+        get: operations["discounts_list"];
+        put?: never;
+        /**
+         * @description `/discounts` — §5.3's student-level reductions.
+         *
+         *     Portal-readable for the same reason invoices are: a parent shown a reduced
+         *     bill has to be able to see the reduction that explains it.
+         */
+        post: operations["discounts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/discounts` — §5.3's student-level reductions.
+         *
+         *     Portal-readable for the same reason invoices are: a parent shown a reduced
+         *     bill has to be able to see the reduction that explains it.
+         */
+        get: operations["discounts_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description `/discounts` — §5.3's student-level reductions.
+         *
+         *     Portal-readable for the same reason invoices are: a parent shown a reduced
+         *     bill has to be able to see the reduction that explains it.
+         */
+        patch: operations["discounts_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/discounts/{id}:revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /discounts/{id}:revoke`.
+         *
+         *     Forward-looking: invoices already priced with this grant keep their
+         *     figures. Re-pricing an issued invoice would change what a parent was
+         *     told they owe, which belongs in an adjustment line rather than a silent
+         *     rewrite.
+         */
+        post: operations["discounts_:revoke_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/exam-schedules": {
         parameters: {
             query?: never;
@@ -1073,6 +1153,149 @@ export interface paths {
         patch: operations["fee_heads_partial_update"];
         trace?: never;
     };
+    "/api/v1/fee-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/fee-invoices` — §5.2's invoices, readable by the family they concern.
+         *
+         *     **Portal-readable, and it uses `get_permissions` rather than a class
+         *     attribute.** §3 gives a guardian and student a view of their own invoices,
+         *     so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+         *     them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+         *     and it has to be resolved per action because **DRF resolves
+         *     `permission_classes` per view, not per action** — the privilege-escalation
+         *     finding PR #42 produced, where a viewset-wide portal exemption covered a
+         *     bulk write too. Generating a term's invoices for a whole school is not a
+         *     scoped read of one child's row.
+         *
+         *     A restricted principal is additionally held to *issued* invoices. A draft is
+         *     a working document the accountant has not handed over, and showing a parent
+         *     a charge that may still change is worse than showing them nothing.
+         */
+        get: operations["fee_invoices_list"];
+        put?: never;
+        /**
+         * @description `/fee-invoices` — §5.2's invoices, readable by the family they concern.
+         *
+         *     **Portal-readable, and it uses `get_permissions` rather than a class
+         *     attribute.** §3 gives a guardian and student a view of their own invoices,
+         *     so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+         *     them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+         *     and it has to be resolved per action because **DRF resolves
+         *     `permission_classes` per view, not per action** — the privilege-escalation
+         *     finding PR #42 produced, where a viewset-wide portal exemption covered a
+         *     bulk write too. Generating a term's invoices for a whole school is not a
+         *     scoped read of one child's row.
+         *
+         *     A restricted principal is additionally held to *issued* invoices. A draft is
+         *     a working document the accountant has not handed over, and showing a parent
+         *     a charge that may still change is worse than showing them nothing.
+         */
+        post: operations["fee_invoices_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fee-invoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/fee-invoices` — §5.2's invoices, readable by the family they concern.
+         *
+         *     **Portal-readable, and it uses `get_permissions` rather than a class
+         *     attribute.** §3 gives a guardian and student a view of their own invoices,
+         *     so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+         *     them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+         *     and it has to be resolved per action because **DRF resolves
+         *     `permission_classes` per view, not per action** — the privilege-escalation
+         *     finding PR #42 produced, where a viewset-wide portal exemption covered a
+         *     bulk write too. Generating a term's invoices for a whole school is not a
+         *     scoped read of one child's row.
+         *
+         *     A restricted principal is additionally held to *issued* invoices. A draft is
+         *     a working document the accountant has not handed over, and showing a parent
+         *     a charge that may still change is worse than showing them nothing.
+         */
+        get: operations["fee_invoices_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description `/fee-invoices` — §5.2's invoices, readable by the family they concern.
+         *
+         *     **Portal-readable, and it uses `get_permissions` rather than a class
+         *     attribute.** §3 gives a guardian and student a view of their own invoices,
+         *     so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+         *     them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+         *     and it has to be resolved per action because **DRF resolves
+         *     `permission_classes` per view, not per action** — the privilege-escalation
+         *     finding PR #42 produced, where a viewset-wide portal exemption covered a
+         *     bulk write too. Generating a term's invoices for a whole school is not a
+         *     scoped read of one child's row.
+         *
+         *     A restricted principal is additionally held to *issued* invoices. A draft is
+         *     a working document the accountant has not handed over, and showing a parent
+         *     a charge that may still change is worse than showing them nothing.
+         */
+        patch: operations["fee_invoices_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/fee-invoices/{id}:cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /fee-invoices/{id}:cancel` — void it and release its period. */
+        post: operations["fee_invoices_:cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fee-invoices:generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /fee-invoices:generate` — 202 + job.
+         *
+         *     Idempotency-Key honoured through `replay_or_execute`, which is the
+         *     platform's contract for a money mutation (§11's closing line). The
+         *     run itself is also idempotent at the database — the duplicate guard
+         *     means a re-run skips what is already billed — so the two layers cover
+         *     different failures: the key stops a double *submit*, the index stops a
+         *     double *bill*.
+         */
+        post: operations["fee_invoices:generate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/fee-schedules": {
         parameters: {
             query?: never;
@@ -1288,6 +1511,59 @@ export interface paths {
          *     uploading a new file, not mutating this one.
          */
         post: operations["files_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/fines` — §5.3's penalties, folded onto the next invoice. */
+        get: operations["fines_list"];
+        put?: never;
+        /** @description `/fines` — §5.3's penalties, folded onto the next invoice. */
+        post: operations["fines_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fines/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/fines` — §5.3's penalties, folded onto the next invoice. */
+        get: operations["fines_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description `/fines` — §5.3's penalties, folded onto the next invoice. */
+        patch: operations["fines_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/fines/{id}:waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /fines/{id}:waive` — §4's `fees.fine.waive`. */
+        post: operations["fines_:waive_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2620,6 +2896,42 @@ export interface paths {
         head?: never;
         /** @description `rooms` — physical rooms, labs and halls (§5.4). */
         patch: operations["rooms_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/scholarships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/scholarships` — §5.3's awards and their lifecycle. */
+        get: operations["scholarships_list"];
+        put?: never;
+        /** @description `/scholarships` — §5.3's awards and their lifecycle. */
+        post: operations["scholarships_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scholarships/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/scholarships` — §5.3's awards and their lifecycle. */
+        get: operations["scholarships_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description `/scholarships` — §5.3's awards and their lifecycle. */
+        patch: operations["scholarships_partial_update"];
         trace?: never;
     };
     "/api/v1/school-settings": {
@@ -4594,6 +4906,9 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        CancelInvoice: {
+            reason: string;
+        };
         ChangePassword: {
             current_password: string;
             new_password: string;
@@ -4718,6 +5033,38 @@ export interface components {
             /** @description Optional seniority ordering. */
             level?: number | null;
             is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        Discount: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            student: string;
+            /** Format: uuid */
+            academic_session: string;
+            name: string;
+            discount_type: components["schemas"]["FeeGrantValueTypeEnum"];
+            /**
+             * Format: decimal
+             * @description Percent (0-100) or a fixed amount.
+             */
+            value: string;
+            /**
+             * Format: uuid
+             * @description Null applies the discount to every head.
+             */
+            fee_head?: string | null;
+            /** Format: date */
+            valid_from?: string | null;
+            /** Format: date */
+            valid_to?: string | null;
+            readonly status: components["schemas"]["FeeDiscountStatusEnum"];
+            reason?: string | null;
+            /** Format: uuid */
+            readonly approved_by: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -4987,6 +5334,13 @@ export interface components {
          */
         ExitTypeEnum: "resigned" | "retired" | "terminated";
         /**
+         * @description * `active` - Active
+         *     * `expired` - Expired
+         *     * `revoked` - Revoked
+         * @enum {string}
+         */
+        FeeDiscountStatusEnum: "active" | "expired" | "revoked";
+        /**
          * @description * `one_time` - One time
          *     * `monthly` - Monthly
          *     * `per_term` - Per term
@@ -4994,6 +5348,12 @@ export interface components {
          * @enum {string}
          */
         FeeFrequencyEnum: "one_time" | "monthly" | "per_term" | "annual";
+        /**
+         * @description * `percent` - Percent
+         *     * `fixed` - Fixed amount
+         * @enum {string}
+         */
+        FeeGrantValueTypeEnum: "percent" | "fixed";
         FeeHead: {
             /** Format: uuid */
             readonly id: string;
@@ -5021,6 +5381,93 @@ export interface components {
          * @enum {string}
          */
         FeeHeadCategoryEnum: "tuition" | "admission" | "transport" | "library" | "exam" | "fine" | "other";
+        FeeInvoice: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly invoice_no: string;
+            /** Format: uuid */
+            student: string;
+            readonly student_name: string;
+            /**
+             * Format: uuid
+             * @description Class/section at billing time. A snapshot, not a live lookup.
+             */
+            student_enrollment?: string | null;
+            /** Format: uuid */
+            academic_session: string;
+            /**
+             * Format: uuid
+             * @description Null for an ad-hoc invoice raised outside any structure.
+             */
+            fee_structure?: string | null;
+            /** @description e.g. "2026-09" or "Term 1". Part of the duplicate guard. */
+            period_label?: string | null;
+            /** Format: date */
+            issue_date: string;
+            /** Format: date */
+            due_date: string;
+            readonly status: components["schemas"]["FeeInvoiceStatusEnum"];
+            /** Format: decimal */
+            readonly subtotal: string;
+            /** Format: decimal */
+            readonly discount_total: string;
+            /** Format: decimal */
+            readonly fine_total: string;
+            /** Format: decimal */
+            readonly paid_total: string;
+            /** Format: decimal */
+            readonly balance_due: string;
+            readonly canceled_reason: string | null;
+            readonly lines: components["schemas"]["FeeInvoiceLine"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        FeeInvoiceLine: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly fee_head: string;
+            readonly fee_head_code: string;
+            readonly description: string;
+            /** Format: decimal */
+            readonly amount: string;
+            /** Format: decimal */
+            readonly discount_amount: string;
+            /**
+             * Format: double
+             * @description What this line actually costs, computed rather than stored.
+             *
+             *     A stored net could drift from `amount - discount_amount`, and the header
+             *     already carries the totals a client sums. One derived field is cheaper
+             *     than a fourth column the CHECK constraints would have to police.
+             */
+            readonly net_amount: number;
+            readonly source_type: components["schemas"]["FeeInvoiceLineSourceEnum"];
+            /**
+             * Format: uuid
+             * @description The fee_schedules or fines row per source_type. Null for an adjustment.
+             */
+            readonly source_id: string | null;
+        };
+        /**
+         * @description * `schedule` - Fee schedule
+         *     * `fine` - Fine
+         *     * `adjustment` - Adjustment
+         * @enum {string}
+         */
+        FeeInvoiceLineSourceEnum: "schedule" | "fine" | "adjustment";
+        /**
+         * @description * `draft` - Draft
+         *     * `issued` - Issued
+         *     * `partially_paid` - Partially paid
+         *     * `paid` - Paid
+         *     * `overdue` - Overdue
+         *     * `canceled` - Canceled
+         * @enum {string}
+         */
+        FeeInvoiceStatusEnum: "draft" | "issued" | "partially_paid" | "paid" | "overdue" | "canceled";
         FeeSchedule: {
             /** Format: uuid */
             readonly id: string;
@@ -5109,6 +5556,48 @@ export interface components {
          * @enum {string}
          */
         FileStatusEnum: "pending" | "ready" | "quarantined";
+        Fine: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            student: string;
+            /** Format: uuid */
+            fee_head: string;
+            fine_type?: components["schemas"]["FineTypeEnum"];
+            /** Format: decimal */
+            amount: string;
+            reason: string;
+            /** @description Originating module slug, e.g. `library`. Null for a hand-raised fine. */
+            source_module?: string | null;
+            /** Format: uuid */
+            source_reference?: string | null;
+            readonly status: components["schemas"]["FineStatusEnum"];
+            /** Format: uuid */
+            readonly waived_by: string | null;
+            readonly waived_reason: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `pending` - Pending
+         *     * `invoiced` - Invoiced
+         *     * `paid` - Paid
+         *     * `waived` - Waived
+         * @enum {string}
+         */
+        FineStatusEnum: "pending" | "invoiced" | "paid" | "waived";
+        /**
+         * @description * `late_fee` - Late fee
+         *     * `library` - Library
+         *     * `transport` - Transport
+         *     * `damage` - Damage
+         *     * `discipline` - Discipline
+         *     * `other` - Other
+         * @enum {string}
+         */
+        FineTypeEnum: "late_fee" | "library" | "transport" | "damage" | "discipline" | "other";
         /**
          * @description * `csv` - csv
          *     * `xlsx` - xlsx
@@ -5124,6 +5613,22 @@ export interface components {
          * @enum {string}
          */
         GenderEnum: "male" | "female" | "other" | "unspecified";
+        /**
+         * @description `POST /fee-invoices:generate` — one structure, one period.
+         *
+         *     Exactly one of `period_start` (a calendar month) or `term` names the period.
+         *     A per-term run takes its whole window from the term, so accepting both would
+         *     leave `period_start` silently ignored — and a caller who passed the wrong
+         *     month would get correct-looking invoices for a period they did not ask for.
+         */
+        GenerateInvoices: {
+            /** Format: uuid */
+            fee_structure: string;
+            /** Format: date */
+            period_start?: string | null;
+            /** Format: uuid */
+            term?: string | null;
+        };
         /**
          * @description `grade_bands` — one band of a grading scale (§5.5).
          *
@@ -5681,6 +6186,16 @@ export interface components {
                 };
             };
         };
+        PaginatedDiscountList: {
+            data?: components["schemas"]["Discount"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedEmergencyContactList: {
             data?: components["schemas"]["EmergencyContact"][];
             meta?: {
@@ -5731,6 +6246,16 @@ export interface components {
                 };
             };
         };
+        PaginatedFeeInvoiceList: {
+            data?: components["schemas"]["FeeInvoice"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedFeeScheduleList: {
             data?: components["schemas"]["FeeSchedule"][];
             meta?: {
@@ -5753,6 +6278,16 @@ export interface components {
         };
         PaginatedFileList: {
             data?: components["schemas"]["File"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedFineList: {
+            data?: components["schemas"]["Fine"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -5922,6 +6457,16 @@ export interface components {
                     page_size?: number;
                     total_count?: number;
                     total_pages?: number;
+                };
+            };
+        };
+        PaginatedScholarshipList: {
+            data?: components["schemas"]["Scholarship"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
                 };
             };
         };
@@ -6210,6 +6755,38 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedDiscount: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            student?: string;
+            /** Format: uuid */
+            academic_session?: string;
+            name?: string;
+            discount_type?: components["schemas"]["FeeGrantValueTypeEnum"];
+            /**
+             * Format: decimal
+             * @description Percent (0-100) or a fixed amount.
+             */
+            value?: string;
+            /**
+             * Format: uuid
+             * @description Null applies the discount to every head.
+             */
+            fee_head?: string | null;
+            /** Format: date */
+            valid_from?: string | null;
+            /** Format: date */
+            valid_to?: string | null;
+            readonly status?: components["schemas"]["FeeDiscountStatusEnum"];
+            reason?: string | null;
+            /** Format: uuid */
+            readonly approved_by?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         /** @description `exams` — an examination event (§5.1). */
         PatchedExam: {
             /** Format: uuid */
@@ -6327,6 +6904,49 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedFeeInvoice: {
+            /** Format: uuid */
+            readonly id?: string;
+            readonly invoice_no?: string;
+            /** Format: uuid */
+            student?: string;
+            readonly student_name?: string;
+            /**
+             * Format: uuid
+             * @description Class/section at billing time. A snapshot, not a live lookup.
+             */
+            student_enrollment?: string | null;
+            /** Format: uuid */
+            academic_session?: string;
+            /**
+             * Format: uuid
+             * @description Null for an ad-hoc invoice raised outside any structure.
+             */
+            fee_structure?: string | null;
+            /** @description e.g. "2026-09" or "Term 1". Part of the duplicate guard. */
+            period_label?: string | null;
+            /** Format: date */
+            issue_date?: string;
+            /** Format: date */
+            due_date?: string;
+            readonly status?: components["schemas"]["FeeInvoiceStatusEnum"];
+            /** Format: decimal */
+            readonly subtotal?: string;
+            /** Format: decimal */
+            readonly discount_total?: string;
+            /** Format: decimal */
+            readonly fine_total?: string;
+            /** Format: decimal */
+            readonly paid_total?: string;
+            /** Format: decimal */
+            readonly balance_due?: string;
+            readonly canceled_reason?: string | null;
+            readonly lines?: components["schemas"]["FeeInvoiceLine"][];
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         PatchedFeeSchedule: {
             /** Format: uuid */
             readonly id?: string;
@@ -6374,6 +6994,30 @@ export interface components {
             campus?: string | null;
             readonly status?: components["schemas"]["FeeStructureStatusEnum"];
             readonly schedules?: components["schemas"]["FeeSchedule"][];
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedFine: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            student?: string;
+            /** Format: uuid */
+            fee_head?: string;
+            fine_type?: components["schemas"]["FineTypeEnum"];
+            /** Format: decimal */
+            amount?: string;
+            reason?: string;
+            /** @description Originating module slug, e.g. `library`. Null for a hand-raised fine. */
+            source_module?: string | null;
+            /** Format: uuid */
+            source_reference?: string | null;
+            readonly status?: components["schemas"]["FineStatusEnum"];
+            /** Format: uuid */
+            readonly waived_by?: string | null;
+            readonly waived_reason?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -6695,6 +7339,31 @@ export interface components {
             building?: string | null;
             floor?: string | null;
             is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedScholarship: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            student?: string;
+            /** Format: uuid */
+            academic_session?: string;
+            name?: string;
+            scholarship_type?: components["schemas"]["ScholarshipTypeEnum"];
+            coverage_type?: components["schemas"]["FeeGrantValueTypeEnum"];
+            /**
+             * Format: decimal
+             * @description Percent (0-100) or a fixed amount for the session.
+             */
+            value?: string;
+            sponsor?: string | null;
+            status?: components["schemas"]["ScholarshipStatusEnum"];
+            /** Format: uuid */
+            readonly approved_by?: string | null;
+            notes?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -7364,6 +8033,49 @@ export interface components {
          * @enum {string}
          */
         RoomTypeEnum: "classroom" | "lab" | "library" | "auditorium" | "sports" | "office" | "other";
+        Scholarship: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            student: string;
+            /** Format: uuid */
+            academic_session: string;
+            name: string;
+            scholarship_type?: components["schemas"]["ScholarshipTypeEnum"];
+            coverage_type: components["schemas"]["FeeGrantValueTypeEnum"];
+            /**
+             * Format: decimal
+             * @description Percent (0-100) or a fixed amount for the session.
+             */
+            value: string;
+            sponsor?: string | null;
+            status?: components["schemas"]["ScholarshipStatusEnum"];
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            notes?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `applied` - Applied
+         *     * `approved` - Approved
+         *     * `active` - Active
+         *     * `ended` - Ended
+         *     * `revoked` - Revoked
+         * @enum {string}
+         */
+        ScholarshipStatusEnum: "applied" | "approved" | "active" | "ended" | "revoked";
+        /**
+         * @description * `merit` - Merit
+         *     * `need` - Need
+         *     * `sports` - Sports
+         *     * `staff_ward` - Staff ward
+         *     * `other` - Other
+         * @enum {string}
+         */
+        ScholarshipTypeEnum: "merit" | "need" | "sports" | "staff_ward" | "other";
         /**
          * @description School profile and academic configuration (module doc §16, singleton resource).
          *
@@ -8110,6 +8822,16 @@ export interface components {
          * @enum {string}
          */
         VisibilityEnum: "private" | "public";
+        /**
+         * @description Shared by `:waive` and `:revoke`. A reason is not optional.
+         *
+         *     §4 gates both behind `fees.*.waive`, and the models' `is_attributable`
+         *     CHECKs refuse a waived row with no reason — so asking for it here turns a
+         *     409 naming a constraint into a field error naming the field.
+         */
+        Waive: {
+            reason: string;
+        };
         WithdrawRequest: {
             reason: string;
             /** Format: date */
@@ -9425,6 +10147,141 @@ export interface operations {
             };
         };
     };
+    discounts_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                discount_type?: string;
+                fee_head_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+                student?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDiscountList"];
+                };
+            };
+        };
+    };
+    discounts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Discount"];
+                "application/x-www-form-urlencoded": components["schemas"]["Discount"];
+                "multipart/form-data": components["schemas"]["Discount"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Discount"];
+                };
+            };
+        };
+    };
+    discounts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this discount. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Discount"];
+                };
+            };
+        };
+    };
+    discounts_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this discount. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDiscount"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDiscount"];
+                "multipart/form-data": components["schemas"]["PatchedDiscount"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Discount"];
+                };
+            };
+        };
+    };
+    "discounts_:revoke_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Waive"];
+                "application/x-www-form-urlencoded": components["schemas"]["Waive"];
+                "multipart/form-data": components["schemas"]["Waive"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Discount"];
+                };
+            };
+        };
+    };
     exam_schedules_list: {
         parameters: {
             query?: {
@@ -10222,6 +11079,168 @@ export interface operations {
             };
         };
     };
+    fee_invoices_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                due_date__gte?: string;
+                due_date__lte?: string;
+                fee_structure_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                outstanding?: boolean;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                period_label?: string;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+                student?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFeeInvoiceList"];
+                };
+            };
+        };
+    };
+    fee_invoices_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeInvoice"];
+                "application/x-www-form-urlencoded": components["schemas"]["FeeInvoice"];
+                "multipart/form-data": components["schemas"]["FeeInvoice"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeInvoice"];
+                };
+            };
+        };
+    };
+    fee_invoices_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee invoice. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeInvoice"];
+                };
+            };
+        };
+    };
+    fee_invoices_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee invoice. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedFeeInvoice"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedFeeInvoice"];
+                "multipart/form-data": components["schemas"]["PatchedFeeInvoice"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeInvoice"];
+                };
+            };
+        };
+    };
+    "fee_invoices_:cancel_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelInvoice"];
+                "application/x-www-form-urlencoded": components["schemas"]["CancelInvoice"];
+                "multipart/form-data": components["schemas"]["CancelInvoice"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeInvoice"];
+                };
+            };
+        };
+    };
+    "fee_invoices:generate_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateInvoices"];
+                "application/x-www-form-urlencoded": components["schemas"]["GenerateInvoices"];
+                "multipart/form-data": components["schemas"]["GenerateInvoices"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     fee_schedules_list: {
         parameters: {
             query?: {
@@ -10653,6 +11672,141 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    fines_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                fee_head_id?: string;
+                fine_type?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                source_module?: string;
+                status?: string;
+                student?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFineList"];
+                };
+            };
+        };
+    };
+    fines_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Fine"];
+                "application/x-www-form-urlencoded": components["schemas"]["Fine"];
+                "multipart/form-data": components["schemas"]["Fine"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fine"];
+                };
+            };
+        };
+    };
+    fines_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fine. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fine"];
+                };
+            };
+        };
+    };
+    fines_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fine. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedFine"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedFine"];
+                "multipart/form-data": components["schemas"]["PatchedFine"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fine"];
+                };
+            };
+        };
+    };
+    "fines_:waive_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Waive"];
+                "application/x-www-form-urlencoded": components["schemas"]["Waive"];
+                "multipart/form-data": components["schemas"]["Waive"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fine"];
+                };
             };
         };
     };
@@ -12764,6 +13918,114 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    scholarships_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                scholarship_type?: string;
+                /** @description A search term. */
+                search?: string;
+                sponsor?: string;
+                status?: string;
+                student?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedScholarshipList"];
+                };
+            };
+        };
+    };
+    scholarships_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Scholarship"];
+                "application/x-www-form-urlencoded": components["schemas"]["Scholarship"];
+                "multipart/form-data": components["schemas"]["Scholarship"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scholarship"];
+                };
+            };
+        };
+    };
+    scholarships_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this scholarship. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scholarship"];
+                };
+            };
+        };
+    };
+    scholarships_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this scholarship. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedScholarship"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedScholarship"];
+                "multipart/form-data": components["schemas"]["PatchedScholarship"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scholarship"];
                 };
             };
         };

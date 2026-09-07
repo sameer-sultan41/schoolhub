@@ -106,6 +106,66 @@ class FeeFrequency(models.TextChoices):
     ANNUAL = "annual", "Annual"
 
 
+class InvoiceStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    ISSUED = "issued", "Issued"
+    PARTIALLY_PAID = "partially_paid", "Partially paid"
+    PAID = "paid", "Paid"
+    OVERDUE = "overdue", "Overdue"
+    CANCELED = "canceled", "Canceled"
+
+
+class InvoiceLineSource(models.TextChoices):
+    SCHEDULE = "schedule", "Fee schedule"
+    FINE = "fine", "Fine"
+    ADJUSTMENT = "adjustment", "Adjustment"
+
+
+class GrantValueType(models.TextChoices):
+    """Shared by discounts and scholarships — §15 gives both the same two shapes."""
+
+    PERCENT = "percent", "Percent"
+    FIXED = "fixed", "Fixed amount"
+
+
+class DiscountStatus(models.TextChoices):
+    ACTIVE = "active", "Active"
+    EXPIRED = "expired", "Expired"
+    REVOKED = "revoked", "Revoked"
+
+
+class ScholarshipType(models.TextChoices):
+    MERIT = "merit", "Merit"
+    NEED = "need", "Need"
+    SPORTS = "sports", "Sports"
+    STAFF_WARD = "staff_ward", "Staff ward"
+    OTHER = "other", "Other"
+
+
+class ScholarshipStatus(models.TextChoices):
+    APPLIED = "applied", "Applied"
+    APPROVED = "approved", "Approved"
+    ACTIVE = "active", "Active"
+    ENDED = "ended", "Ended"
+    REVOKED = "revoked", "Revoked"
+
+
+class FineType(models.TextChoices):
+    LATE_FEE = "late_fee", "Late fee"
+    LIBRARY = "library", "Library"
+    TRANSPORT = "transport", "Transport"
+    DAMAGE = "damage", "Damage"
+    DISCIPLINE = "discipline", "Discipline"
+    OTHER = "other", "Other"
+
+
+class FineStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    INVOICED = "invoiced", "Invoiced"
+    PAID = "paid", "Paid"
+    WAIVED = "waived", "Waived"
+
+
 class LedgerAccount(TenantOwnedModel):
     """One line of the tenant's chart of accounts.
 
@@ -462,3 +522,475 @@ class FeeSchedule(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.fee_head_id} {self.amount} {self.frequency}"
+
+
+class Discount(TenantOwnedModel):
+    """A student-level reduction, granted for a session and optionally one head.
+
+    `fee_head` NULL means every head, which is the sibling-discount case. Scoped
+    to a session rather than open-ended so a grant does not silently carry into
+    next year's higher prices — §6's "sibling-aware structures via discounts"
+    depends on a grant being re-considered each session.
+
+    `approved_by` is not decoration: §4 puts granting behind
+    `fees.discount.create` and waiving behind `fees.discount.waive`, and a
+    reduction nobody is recorded as having authorised is the finding an auditor
+    writes up. The constraint below makes that attributable at the database.
+    """
+
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="fee_discounts"
+    )
+    academic_session = models.ForeignKey(
+        "school_organization.AcademicSession", on_delete=models.PROTECT, related_name="discounts"
+    )
+    name = models.CharField(max_length=120)
+    discount_type = models.CharField(max_length=10, choices=GrantValueType.choices)
+    value = models.DecimalField(
+        max_digits=12, decimal_places=2, help_text="Percent (0-100) or a fixed amount."
+    )
+    fee_head = models.ForeignKey(
+        FeeHead,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="discounts",
+        help_text="Null applies the discount to every head.",
+    )
+    valid_from = models.DateField(null=True, blank=True)
+    valid_to = models.DateField(null=True, blank=True)
+    status = models.CharField(
+        max_length=15, choices=DiscountStatus.choices, default=DiscountStatus.ACTIVE
+    )
+    reason = models.TextField(null=True, blank=True)
+    approved_by = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        db_table = "discounts"
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(value__gt=0),
+                name="discounts_value_positive",
+            ),
+            # A percent grant above 100 would take a line below zero, and the
+            # line-level floor would silently absorb it — so the nonsense is
+            # caught where it is entered rather than where it is applied.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(discount_type=GrantValueType.PERCENT) | models.Q(value__lte=100)
+                ),
+                name="discounts_percent_within_range",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(valid_from__isnull=True)
+                    | models.Q(valid_to__isnull=True)
+                    | models.Q(valid_to__gte=models.F("valid_from"))
+                ),
+                name="discounts_validity_ordered",
+            ),
+            # Same "is attributable" shape as examinations'
+            # results_approval_is_attributable: an active reduction must name
+            # who granted it. A revoked or expired one need not, because those
+            # are end states a sweep can reach on its own.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status=DiscountStatus.ACTIVE) | models.Q(approved_by__isnull=False)
+                ),
+                name="discounts_active_is_attributable",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "student", "academic_session", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} for {self.student_id}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — a student's own grants, a guardian's children's.
+
+        Delegates to `Student.filter_owned_by_user` rather than restating the
+        guardian join: that hook already unions a student's own row with the
+        children they hold a live, portal-enabled link to, and a second copy of
+        that predicate is a second place for revoked portal access to be
+        forgotten.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+
+class Scholarship(TenantOwnedModel):
+    """An award covering part of a session's fees, with a lifecycle and a sponsor.
+
+    Separate from `Discount` despite the arithmetic being identical, because the
+    *lifecycle* differs and that is what the table is for: a scholarship is
+    applied for, approved, becomes active, and ends, and a school reports on
+    awards by type and sponsor. Folding the two together would mean a
+    `discount_type` column carrying `merit` and a status enum with five values
+    that mean nothing for a sibling discount.
+
+    Applied per session and always across all heads — §15 gives no `fee_head_id`
+    here, unlike `discounts`, because an award covers a proportion of what a
+    student owes rather than a specific charge.
+    """
+
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="scholarships"
+    )
+    academic_session = models.ForeignKey(
+        "school_organization.AcademicSession",
+        on_delete=models.PROTECT,
+        related_name="scholarships",
+    )
+    name = models.CharField(max_length=120)
+    scholarship_type = models.CharField(
+        max_length=20, choices=ScholarshipType.choices, default=ScholarshipType.MERIT
+    )
+    coverage_type = models.CharField(max_length=10, choices=GrantValueType.choices)
+    value = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Percent (0-100) or a fixed amount for the session.",
+    )
+    sponsor = models.CharField(max_length=120, null=True, blank=True)
+    status = models.CharField(
+        max_length=15, choices=ScholarshipStatus.choices, default=ScholarshipStatus.APPROVED
+    )
+    approved_by = models.UUIDField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = "scholarships"
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(value__gt=0),
+                name="scholarships_value_positive",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(coverage_type=GrantValueType.PERCENT) | models.Q(value__lte=100)
+                ),
+                name="scholarships_percent_within_range",
+            ),
+            # `applied` is the one status with no approver yet — that is what
+            # "applied" means. Every state past it must name one.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status=ScholarshipStatus.APPLIED) | models.Q(approved_by__isnull=False)
+                ),
+                name="scholarships_decision_is_attributable",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "student", "academic_session", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} for {self.student_id}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — see `Discount.filter_owned_by_user`."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+
+class Fine(TenantOwnedModel):
+    """A charge raised outside the fee structure, folded onto the next invoice.
+
+    `source_module` / `source_reference` are the inbound edge §18 declares from
+    library, transport and this module's own overdue sweep. Nothing produces
+    them yet except the late-fee sweep — the other modules are Tier 7 — and the
+    columns ship now precisely so those modules drop in without a migration.
+
+    `status` is what keeps a fine from being billed twice: generation picks up
+    `pending` rows and moves them to `invoiced` in the same transaction as the
+    line it creates. A waiver is a terminal state requiring both an actor and a
+    reason, by constraint — §4 puts it behind `fees.fine.waive`, and a waived
+    charge nobody is recorded as having waived is exactly the audit finding the
+    permission exists to prevent.
+    """
+
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="fines"
+    )
+    fee_head = models.ForeignKey(FeeHead, on_delete=models.PROTECT, related_name="fines")
+    fine_type = models.CharField(max_length=20, choices=FineType.choices, default=FineType.OTHER)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField()
+    source_module = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+        help_text="Originating module slug, e.g. `library`. Null for a hand-raised fine.",
+    )
+    source_reference = models.UUIDField(null=True, blank=True)
+    status = models.CharField(max_length=15, choices=FineStatus.choices, default=FineStatus.PENDING)
+    waived_by = models.UUIDField(null=True, blank=True)
+    waived_reason = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = "fines"
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="fines_amount_positive",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status=FineStatus.WAIVED)
+                    | (models.Q(waived_by__isnull=False) & ~models.Q(waived_reason=""))
+                ),
+                name="fines_waiver_is_attributable",
+            ),
+            # A cross-module fine is idempotent on its origin: the library
+            # raising the same overdue charge twice must be refused, not billed
+            # twice. Partial over live rows with a source, so hand-raised fines
+            # (both columns null) are unaffected — and NULLS NOT DISTINCT is
+            # unnecessary here because the condition already excludes nulls.
+            models.UniqueConstraint(
+                fields=["tenant", "source_module", "source_reference"],
+                name="fines_source_unique",
+                condition=models.Q(
+                    deleted_at__isnull=True,
+                    source_module__isnull=False,
+                    source_reference__isnull=False,
+                ),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "student", "status"]),
+            models.Index(fields=["tenant", "source_module", "source_reference"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.fine_type} {self.amount} for {self.student_id}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — see `Discount.filter_owned_by_user`."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+
+class FeeInvoice(TenantOwnedModel):
+    """What one student owes for one period, with its totals denormalized.
+
+    **The totals are a CHECK, not a convention.** `balance_due` must equal
+    `subtotal - discount_total + fine_total - paid_total` at all times, because
+    a parent reads the balance and an accountant reads the components, and a
+    denormalized total that can drift is an invoice the two of them read
+    differently. Every service that touches money on this row recomputes all
+    five together.
+
+    **The duplicate guard is the load-bearing index.** A partial unique on
+    `(tenant, student, fee_structure, period_label)` over rows that are not
+    canceled, with NULLS NOT DISTINCT — `fee_structure` is null on an ad-hoc
+    invoice and `period_label` on a one-time charge, and under PostgreSQL's
+    default those nulls would make every such invoice unique from every other,
+    which is precisely the double-billing the guard exists to stop. Excluding
+    `canceled` is what makes "cancel and re-issue" a workable correction rather
+    than a dead end.
+
+    `student_enrollment` records the class and section at billing time. Held as
+    a snapshot FK rather than resolved live because a student who changes
+    section mid-term must not retroactively change which class's prices their
+    issued invoice was built from.
+    """
+
+    invoice_no = models.CharField(max_length=30)
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="fee_invoices"
+    )
+    student_enrollment = models.ForeignKey(
+        "student_management.StudentEnrollment",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="fee_invoices",
+        help_text="Class/section at billing time. A snapshot, not a live lookup.",
+    )
+    academic_session = models.ForeignKey(
+        "school_organization.AcademicSession", on_delete=models.PROTECT, related_name="fee_invoices"
+    )
+    fee_structure = models.ForeignKey(
+        FeeStructure,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="invoices",
+        help_text="Null for an ad-hoc invoice raised outside any structure.",
+    )
+    period_label = models.CharField(
+        max_length=40,
+        null=True,
+        blank=True,
+        help_text='e.g. "2026-09" or "Term 1". Part of the duplicate guard.',
+    )
+    issue_date = models.DateField()
+    due_date = models.DateField()
+    status = models.CharField(
+        max_length=20, choices=InvoiceStatus.choices, default=InvoiceStatus.DRAFT
+    )
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    fine_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    paid_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    balance_due = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    canceled_reason = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = "fee_invoices"
+        ordering = ["-issue_date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "invoice_no"],
+                name="fee_invoices_no_unique",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "student", "fee_structure", "period_label"],
+                name="fee_invoices_no_duplicate_period",
+                condition=models.Q(deleted_at__isnull=True)
+                & ~models.Q(status=InvoiceStatus.CANCELED),
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                condition=models.Q(due_date__gte=models.F("issue_date")),
+                name="fee_invoices_due_after_issue",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(subtotal__gte=0)
+                    & models.Q(discount_total__gte=0)
+                    & models.Q(fine_total__gte=0)
+                    & models.Q(paid_total__gte=0)
+                ),
+                name="fee_invoices_no_negative_totals",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    balance_due=(
+                        models.F("subtotal")
+                        - models.F("discount_total")
+                        + models.F("fine_total")
+                        - models.F("paid_total")
+                    )
+                ),
+                name="fee_invoices_balance_is_derived",
+            ),
+            # A discount cannot exceed what is being charged; if it could, the
+            # balance would go negative and the school would appear to owe the
+            # parent.
+            models.CheckConstraint(
+                condition=models.Q(discount_total__lte=models.F("subtotal")),
+                name="fee_invoices_discount_within_subtotal",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status=InvoiceStatus.CANCELED)
+                    | (models.Q(canceled_reason__isnull=False) & ~models.Q(canceled_reason=""))
+                ),
+                name="fee_invoices_cancellation_is_attributable",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "student", "status"]),
+            # Aging reads this: buckets are a date comparison across every
+            # unpaid invoice in the tenant.
+            models.Index(fields=["tenant", "due_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.invoice_no} ({self.balance_due})"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — §4 gives a guardian and student their own.
+
+        Delegates to `Student.filter_owned_by_user`, the same delegation
+        `StudentAttendance` and examinations' `Result` use, and for the same
+        reason: `has_portal_access` gates that hook, so a guardian whose access
+        was revoked stops seeing their child's fees without a second predicate
+        having to remember to check.
+
+        No `filter_assigned_to_user` hook exists and none is wanted — an invoice
+        has no "assigned" notion. Worth stating, because `scope_queryset` falls
+        through to `.none()` for an `assigned`-scoped principal on a model
+        without one: silent empty results with no error to explain them.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+
+class FeeInvoiceLine(TenantOwnedModel):
+    """One charge on an invoice, with the origin that produced it.
+
+    `source_type` / `source_id` are polymorphic rather than two nullable FKs,
+    matching `ledger_entries`' reasoning: the origin is read for display and for
+    §13's registers, never joined in a hot path.
+
+    `discount_amount` is the portion of the student's grants applied to *this*
+    line, held per line rather than only in the header so a parent can see which
+    charge was reduced. The header's `discount_total` is the sum of these, and
+    `services` writes both together.
+    """
+
+    fee_invoice = models.ForeignKey(FeeInvoice, on_delete=models.CASCADE, related_name="lines")
+    fee_head = models.ForeignKey(FeeHead, on_delete=models.PROTECT, related_name="invoice_lines")
+    description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    source_type = models.CharField(
+        max_length=20, choices=InvoiceLineSource.choices, default=InvoiceLineSource.SCHEDULE
+    )
+    source_id = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="The fee_schedules or fines row per source_type. Null for an adjustment.",
+    )
+
+    class Meta:
+        db_table = "fee_invoice_lines"
+        ordering = ["fee_head__code"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=0) & models.Q(discount_amount__gte=0),
+                name="fee_invoice_lines_no_negative_amounts",
+            ),
+            # The line-level floor §11 asks for. A grant larger than the charge
+            # is clamped by the service; this refuses the state outright, so a
+            # bug there cannot produce a line the school owes money on.
+            models.CheckConstraint(
+                condition=models.Q(discount_amount__lte=models.F("amount")),
+                name="fee_invoice_lines_discount_within_amount",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "fee_invoice"]),
+            models.Index(fields=["tenant", "source_type", "source_id"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.description} {self.amount}"

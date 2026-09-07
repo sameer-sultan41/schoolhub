@@ -1628,6 +1628,207 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/discounts:
+    get:
+      operationId: discounts_list
+      description: |-
+        `/discounts` — §5.3's student-level reductions.
+
+        Portal-readable for the same reason invoices are: a parent shown a reduced
+        bill has to be able to see the reduction that explains it.
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: discount_type
+        schema:
+          type: string
+      - in: query
+        name: fee_head_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - discounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDiscountList'
+          description: ''
+    post:
+      operationId: discounts_create
+      description: |-
+        `/discounts` — §5.3's student-level reductions.
+
+        Portal-readable for the same reason invoices are: a parent shown a reduced
+        bill has to be able to see the reduction that explains it.
+      tags:
+      - discounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Discount'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Discount'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Discount'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discount'
+          description: ''
+  /api/v1/discounts/{id}:
+    get:
+      operationId: discounts_retrieve
+      description: |-
+        `/discounts` — §5.3's student-level reductions.
+
+        Portal-readable for the same reason invoices are: a parent shown a reduced
+        bill has to be able to see the reduction that explains it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this discount.
+        required: true
+      tags:
+      - discounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discount'
+          description: ''
+    patch:
+      operationId: discounts_partial_update
+      description: |-
+        `/discounts` — §5.3's student-level reductions.
+
+        Portal-readable for the same reason invoices are: a parent shown a reduced
+        bill has to be able to see the reduction that explains it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this discount.
+        required: true
+      tags:
+      - discounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscount'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscount'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscount'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discount'
+          description: ''
+  /api/v1/discounts/{id}:revoke:
+    post:
+      operationId: discounts_:revoke_create
+      description: |-
+        `POST /discounts/{id}:revoke`.
+
+        Forward-looking: invoices already priced with this grant keep their
+        figures. Re-pricing an issued invoice would change what a parent was
+        told they owe, which belongs in an adjustment line rather than a silent
+        rewrite.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - discounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Waive'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Waive'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Waive'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discount'
+          description: ''
   /api/v1/exam-schedules:
     get:
       operationId: exam_schedules_list
@@ -2771,6 +2972,290 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/fee-invoices:
+    get:
+      operationId: fee_invoices_list
+      description: |-
+        `/fee-invoices` — §5.2's invoices, readable by the family they concern.
+
+        **Portal-readable, and it uses `get_permissions` rather than a class
+        attribute.** §3 gives a guardian and student a view of their own invoices,
+        so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+        them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+        and it has to be resolved per action because **DRF resolves
+        `permission_classes` per view, not per action** — the privilege-escalation
+        finding PR #42 produced, where a viewset-wide portal exemption covered a
+        bulk write too. Generating a term's invoices for a whole school is not a
+        scoped read of one child's row.
+
+        A restricted principal is additionally held to *issued* invoices. A draft is
+        a working document the accountant has not handed over, and showing a parent
+        a charge that may still change is worse than showing them nothing.
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: due_date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: due_date__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: fee_structure_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: outstanding
+        schema:
+          type: boolean
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: period_label
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - fee-invoices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFeeInvoiceList'
+          description: ''
+    post:
+      operationId: fee_invoices_create
+      description: |-
+        `/fee-invoices` — §5.2's invoices, readable by the family they concern.
+
+        **Portal-readable, and it uses `get_permissions` rather than a class
+        attribute.** §3 gives a guardian and student a view of their own invoices,
+        so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+        them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+        and it has to be resolved per action because **DRF resolves
+        `permission_classes` per view, not per action** — the privilege-escalation
+        finding PR #42 produced, where a viewset-wide portal exemption covered a
+        bulk write too. Generating a term's invoices for a whole school is not a
+        scoped read of one child's row.
+
+        A restricted principal is additionally held to *issued* invoices. A draft is
+        a working document the accountant has not handed over, and showing a parent
+        a charge that may still change is worse than showing them nothing.
+      tags:
+      - fee-invoices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeInvoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FeeInvoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FeeInvoice'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeInvoice'
+          description: ''
+  /api/v1/fee-invoices/{id}:
+    get:
+      operationId: fee_invoices_retrieve
+      description: |-
+        `/fee-invoices` — §5.2's invoices, readable by the family they concern.
+
+        **Portal-readable, and it uses `get_permissions` rather than a class
+        attribute.** §3 gives a guardian and student a view of their own invoices,
+        so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+        them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+        and it has to be resolved per action because **DRF resolves
+        `permission_classes` per view, not per action** — the privilege-escalation
+        finding PR #42 produced, where a viewset-wide portal exemption covered a
+        bulk write too. Generating a term's invoices for a whole school is not a
+        scoped read of one child's row.
+
+        A restricted principal is additionally held to *issued* invoices. A draft is
+        a working document the accountant has not handed over, and showing a parent
+        a charge that may still change is worse than showing them nothing.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee invoice.
+        required: true
+      tags:
+      - fee-invoices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeInvoice'
+          description: ''
+    patch:
+      operationId: fee_invoices_partial_update
+      description: |-
+        `/fee-invoices` — §5.2's invoices, readable by the family they concern.
+
+        **Portal-readable, and it uses `get_permissions` rather than a class
+        attribute.** §3 gives a guardian and student a view of their own invoices,
+        so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+        them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+        and it has to be resolved per action because **DRF resolves
+        `permission_classes` per view, not per action** — the privilege-escalation
+        finding PR #42 produced, where a viewset-wide portal exemption covered a
+        bulk write too. Generating a term's invoices for a whole school is not a
+        scoped read of one child's row.
+
+        A restricted principal is additionally held to *issued* invoices. A draft is
+        a working document the accountant has not handed over, and showing a parent
+        a charge that may still change is worse than showing them nothing.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee invoice.
+        required: true
+      tags:
+      - fee-invoices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeInvoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeInvoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeInvoice'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeInvoice'
+          description: ''
+  /api/v1/fee-invoices/{id}:cancel:
+    post:
+      operationId: fee_invoices_:cancel_create
+      description: '`POST /fee-invoices/{id}:cancel` — void it and release its period.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - fee-invoices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelInvoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelInvoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelInvoice'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeInvoice'
+          description: ''
+  /api/v1/fee-invoices:generate:
+    post:
+      operationId: fee_invoices:generate_create
+      description: |-
+        `POST /fee-invoices:generate` — 202 + job.
+
+        Idempotency-Key honoured through `replay_or_execute`, which is the
+        platform's contract for a money mutation (§11's closing line). The
+        run itself is also idempotent at the database — the duplicate guard
+        means a re-run skips what is already billed — so the two layers cover
+        different failures: the key stops a double *submit*, the index stops a
+        double *bill*.
+      tags:
+      - fee-invoices:generate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateInvoices'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenerateInvoices'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenerateInvoices'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
   /api/v1/fee-schedules:
     get:
       operationId: fee_schedules_list
@@ -3314,6 +3799,184 @@ paths:
       responses:
         '200':
           description: '{''download_url'': str}'
+  /api/v1/fines:
+    get:
+      operationId: fines_list
+      description: '`/fines` — §5.3''s penalties, folded onto the next invoice.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: fee_head_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: fine_type
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: source_module
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - fines
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFineList'
+          description: ''
+    post:
+      operationId: fines_create
+      description: '`/fines` — §5.3''s penalties, folded onto the next invoice.'
+      tags:
+      - fines
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Fine'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Fine'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Fine'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fine'
+          description: ''
+  /api/v1/fines/{id}:
+    get:
+      operationId: fines_retrieve
+      description: '`/fines` — §5.3''s penalties, folded onto the next invoice.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fine.
+        required: true
+      tags:
+      - fines
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fine'
+          description: ''
+    patch:
+      operationId: fines_partial_update
+      description: '`/fines` — §5.3''s penalties, folded onto the next invoice.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fine.
+        required: true
+      tags:
+      - fines
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFine'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFine'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFine'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fine'
+          description: ''
+  /api/v1/fines/{id}:waive:
+    post:
+      operationId: fines_:waive_create
+      description: '`POST /fines/{id}:waive` — §4''s `fees.fine.waive`.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - fines
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Waive'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Waive'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Waive'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fine'
+          description: ''
   /api/v1/grading-scales:
     get:
       operationId: grading_scales_list
@@ -6531,6 +7194,150 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/scholarships:
+    get:
+      operationId: scholarships_list
+      description: '`/scholarships` — §5.3''s awards and their lifecycle.'
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: scholarship_type
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: sponsor
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - scholarships
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedScholarshipList'
+          description: ''
+    post:
+      operationId: scholarships_create
+      description: '`/scholarships` — §5.3''s awards and their lifecycle.'
+      tags:
+      - scholarships
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Scholarship'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Scholarship'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Scholarship'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scholarship'
+          description: ''
+  /api/v1/scholarships/{id}:
+    get:
+      operationId: scholarships_retrieve
+      description: '`/scholarships` — §5.3''s awards and their lifecycle.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this scholarship.
+        required: true
+      tags:
+      - scholarships
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scholarship'
+          description: ''
+    patch:
+      operationId: scholarships_partial_update
+      description: '`/scholarships` — §5.3''s awards and their lifecycle.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this scholarship.
+        required: true
+      tags:
+      - scholarships
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedScholarship'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedScholarship'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedScholarship'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scholarship'
+          description: ''
   /api/v1/school-settings:
     get:
       operationId: school_settings_retrieve
@@ -10895,6 +11702,14 @@ components:
       - id
       - name
       - updated_at
+    CancelInvoice:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 2000
+      required:
+      - reason
     ChangePassword:
       type: object
       properties:
@@ -11165,6 +11980,73 @@ components:
       - id
       - name
       - updated_at
+    Discount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+        academic_session:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        discount_type:
+          $ref: '#/components/schemas/FeeGrantValueTypeEnum'
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          description: Percent (0-100) or a fixed amount.
+        fee_head:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null applies the discount to every head.
+        valid_from:
+          type: string
+          format: date
+          nullable: true
+        valid_to:
+          type: string
+          format: date
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FeeDiscountStatusEnum'
+          readOnly: true
+        reason:
+          type: string
+          nullable: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session
+      - approved_by
+      - created_at
+      - discount_type
+      - id
+      - name
+      - status
+      - student
+      - updated_at
+      - value
     DocumentVerificationDecisionEnum:
       enum:
       - verified
@@ -11689,6 +12571,16 @@ components:
         * `resigned` - resigned
         * `retired` - retired
         * `terminated` - terminated
+    FeeDiscountStatusEnum:
+      enum:
+      - active
+      - expired
+      - revoked
+      type: string
+      description: |-
+        * `active` - Active
+        * `expired` - Expired
+        * `revoked` - Revoked
     FeeFrequencyEnum:
       enum:
       - one_time
@@ -11701,6 +12593,14 @@ components:
         * `monthly` - Monthly
         * `per_term` - Per term
         * `annual` - Annual
+    FeeGrantValueTypeEnum:
+      enum:
+      - percent
+      - fixed
+      type: string
+      description: |-
+        * `percent` - Percent
+        * `fixed` - Fixed amount
     FeeHead:
       type: object
       properties:
@@ -11757,6 +12657,194 @@ components:
         * `exam` - Exam
         * `fine` - Fine
         * `other` - Other
+    FeeInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        invoice_no:
+          type: string
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+          readOnly: true
+        student_enrollment:
+          type: string
+          format: uuid
+          nullable: true
+          description: Class/section at billing time. A snapshot, not a live lookup.
+        academic_session:
+          type: string
+          format: uuid
+        fee_structure:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null for an ad-hoc invoice raised outside any structure.
+        period_label:
+          type: string
+          nullable: true
+          description: e.g. "2026-09" or "Term 1". Part of the duplicate guard.
+          maxLength: 40
+        issue_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FeeInvoiceStatusEnum'
+          readOnly: true
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        discount_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        fine_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        paid_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        balance_due:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        canceled_reason:
+          type: string
+          readOnly: true
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeInvoiceLine'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session
+      - balance_due
+      - canceled_reason
+      - created_at
+      - discount_total
+      - due_date
+      - fine_total
+      - id
+      - invoice_no
+      - issue_date
+      - lines
+      - paid_total
+      - status
+      - student
+      - student_name
+      - subtotal
+      - updated_at
+    FeeInvoiceLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fee_head:
+          type: string
+          format: uuid
+          readOnly: true
+        fee_head_code:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        discount_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        net_amount:
+          type: number
+          format: double
+          description: |-
+            What this line actually costs, computed rather than stored.
+
+            A stored net could drift from `amount - discount_amount`, and the header
+            already carries the totals a client sums. One derived field is cheaper
+            than a fourth column the CHECK constraints would have to police.
+          readOnly: true
+        source_type:
+          allOf:
+          - $ref: '#/components/schemas/FeeInvoiceLineSourceEnum'
+          readOnly: true
+        source_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: The fee_schedules or fines row per source_type. Null for an
+            adjustment.
+      required:
+      - amount
+      - description
+      - discount_amount
+      - fee_head
+      - fee_head_code
+      - id
+      - net_amount
+      - source_id
+      - source_type
+    FeeInvoiceLineSourceEnum:
+      enum:
+      - schedule
+      - fine
+      - adjustment
+      type: string
+      description: |-
+        * `schedule` - Fee schedule
+        * `fine` - Fine
+        * `adjustment` - Adjustment
+    FeeInvoiceStatusEnum:
+      enum:
+      - draft
+      - issued
+      - partially_paid
+      - paid
+      - overdue
+      - canceled
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `issued` - Issued
+        * `partially_paid` - Partially paid
+        * `paid` - Paid
+        * `overdue` - Overdue
+        * `canceled` - Canceled
     FeeSchedule:
       type: object
       properties:
@@ -11946,6 +13034,97 @@ components:
         * `pending` - Pending
         * `ready` - Ready
         * `quarantined` - Quarantined
+    Fine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+        fee_head:
+          type: string
+          format: uuid
+        fine_type:
+          $ref: '#/components/schemas/FineTypeEnum'
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        reason:
+          type: string
+        source_module:
+          type: string
+          nullable: true
+          description: Originating module slug, e.g. `library`. Null for a hand-raised
+            fine.
+          maxLength: 30
+        source_reference:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FineStatusEnum'
+          readOnly: true
+        waived_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        waived_reason:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - fee_head
+      - id
+      - reason
+      - status
+      - student
+      - updated_at
+      - waived_by
+      - waived_reason
+    FineStatusEnum:
+      enum:
+      - pending
+      - invoiced
+      - paid
+      - waived
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `invoiced` - Invoiced
+        * `paid` - Paid
+        * `waived` - Waived
+    FineTypeEnum:
+      enum:
+      - late_fee
+      - library
+      - transport
+      - damage
+      - discipline
+      - other
+      type: string
+      description: |-
+        * `late_fee` - Late fee
+        * `library` - Library
+        * `transport` - Transport
+        * `damage` - Damage
+        * `discipline` - Discipline
+        * `other` - Other
     FormatEnum:
       enum:
       - csv
@@ -11968,6 +13147,29 @@ components:
         * `female` - Female
         * `other` - Other
         * `unspecified` - Unspecified
+    GenerateInvoices:
+      type: object
+      description: |-
+        `POST /fee-invoices:generate` — one structure, one period.
+
+        Exactly one of `period_start` (a calendar month) or `term` names the period.
+        A per-term run takes its whole window from the term, so accepting both would
+        leave `period_start` silently ignored — and a caller who passed the wrong
+        month would get correct-looking invoices for a period they did not ask for.
+      properties:
+        fee_structure:
+          type: string
+          format: uuid
+        period_start:
+          type: string
+          format: date
+          nullable: true
+        term:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - fee_structure
     GradeBand:
       type: object
       description: |-
@@ -13045,6 +14247,27 @@ components:
                   type: integer
                 total_pages:
                   type: integer
+    PaginatedDiscountList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Discount'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedEmergencyContactList:
       type: object
       properties:
@@ -13150,6 +14373,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedFeeInvoiceList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeInvoice'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedFeeScheduleList:
       type: object
       properties:
@@ -13199,6 +14443,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/File'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedFineList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fine'
         meta:
           type: object
           properties:
@@ -13548,6 +14813,27 @@ components:
                 total_count:
                   type: integer
                 total_pages:
+                  type: integer
+    PaginatedScholarshipList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scholarship'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
                   type: integer
     PaginatedSectionList:
       type: object
@@ -14129,6 +15415,62 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedDiscount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+        academic_session:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        discount_type:
+          $ref: '#/components/schemas/FeeGrantValueTypeEnum'
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          description: Percent (0-100) or a fixed amount.
+        fee_head:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null applies the discount to every head.
+        valid_from:
+          type: string
+          format: date
+          nullable: true
+        valid_to:
+          type: string
+          format: date
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FeeDiscountStatusEnum'
+          readOnly: true
+        reason:
+          type: string
+          nullable: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedExam:
       type: object
       description: '`exams` — an examination event (§5.1).'
@@ -14330,6 +15672,92 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedFeeInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        invoice_no:
+          type: string
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+          readOnly: true
+        student_enrollment:
+          type: string
+          format: uuid
+          nullable: true
+          description: Class/section at billing time. A snapshot, not a live lookup.
+        academic_session:
+          type: string
+          format: uuid
+        fee_structure:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null for an ad-hoc invoice raised outside any structure.
+        period_label:
+          type: string
+          nullable: true
+          description: e.g. "2026-09" or "Term 1". Part of the duplicate guard.
+          maxLength: 40
+        issue_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FeeInvoiceStatusEnum'
+          readOnly: true
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        discount_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        fine_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        paid_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        balance_due:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        canceled_reason:
+          type: string
+          readOnly: true
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeInvoiceLine'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedFeeSchedule:
       type: object
       properties:
@@ -14409,6 +15837,58 @@ components:
           items:
             $ref: '#/components/schemas/FeeSchedule'
           readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedFine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+        fee_head:
+          type: string
+          format: uuid
+        fine_type:
+          $ref: '#/components/schemas/FineTypeEnum'
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        reason:
+          type: string
+        source_module:
+          type: string
+          nullable: true
+          description: Originating module slug, e.g. `library`. Null for a hand-raised
+            fine.
+          maxLength: 30
+        source_reference:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FineStatusEnum'
+          readOnly: true
+        waived_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        waived_reason:
+          type: string
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -14996,6 +16476,53 @@ components:
           maxLength: 20
         is_active:
           type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedScholarship:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+        academic_session:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        scholarship_type:
+          $ref: '#/components/schemas/ScholarshipTypeEnum'
+        coverage_type:
+          $ref: '#/components/schemas/FeeGrantValueTypeEnum'
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          description: Percent (0-100) or a fixed amount for the session.
+        sponsor:
+          type: string
+          nullable: true
+          maxLength: 120
+        status:
+          $ref: '#/components/schemas/ScholarshipStatusEnum'
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        notes:
+          type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -16292,6 +17819,91 @@ components:
         * `auditorium` - Auditorium
         * `sports` - Sports
         * `office` - Office
+        * `other` - Other
+    Scholarship:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+        academic_session:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        scholarship_type:
+          $ref: '#/components/schemas/ScholarshipTypeEnum'
+        coverage_type:
+          $ref: '#/components/schemas/FeeGrantValueTypeEnum'
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          description: Percent (0-100) or a fixed amount for the session.
+        sponsor:
+          type: string
+          nullable: true
+          maxLength: 120
+        status:
+          $ref: '#/components/schemas/ScholarshipStatusEnum'
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session
+      - approved_by
+      - coverage_type
+      - created_at
+      - id
+      - name
+      - student
+      - updated_at
+      - value
+    ScholarshipStatusEnum:
+      enum:
+      - applied
+      - approved
+      - active
+      - ended
+      - revoked
+      type: string
+      description: |-
+        * `applied` - Applied
+        * `approved` - Approved
+        * `active` - Active
+        * `ended` - Ended
+        * `revoked` - Revoked
+    ScholarshipTypeEnum:
+      enum:
+      - merit
+      - need
+      - sports
+      - staff_ward
+      - other
+      type: string
+      description: |-
+        * `merit` - Merit
+        * `need` - Need
+        * `sports` - Sports
+        * `staff_ward` - Staff ward
         * `other` - Other
     SchoolSettings:
       type: object
@@ -17789,6 +19401,20 @@ components:
       description: |-
         * `private` - Private
         * `public` - Public
+    Waive:
+      type: object
+      description: |-
+        Shared by `:waive` and `:revoke`. A reason is not optional.
+
+        §4 gates both behind `fees.*.waive`, and the models' `is_attributable`
+        CHECKs refuse a waived row with no reason — so asking for it here turns a
+        409 naming a constraint into a field error naming the field.
+      properties:
+        reason:
+          type: string
+          maxLength: 2000
+      required:
+      - reason
     WithdrawRequest:
       type: object
       properties:

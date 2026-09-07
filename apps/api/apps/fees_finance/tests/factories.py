@@ -19,30 +19,49 @@ fixture is a state the application could actually reach.
 from __future__ import annotations
 
 import datetime
+import uuid
 from decimal import Decimal
 
 import factory
 
 from apps.fees_finance.models import (
+    Discount,
+    DiscountStatus,
     FeeFrequency,
     FeeHead,
+    FeeHeadCategory,
+    FeeInvoice,
+    FeeInvoiceLine,
     FeeSchedule,
     FeeStructure,
     FeeStructureStatus,
+    Fine,
+    FineStatus,
+    GrantValueType,
+    InvoiceStatus,
     LedgerAccount,
     LedgerAccountType,
     LedgerReferenceType,
+    Scholarship,
+    ScholarshipStatus,
 )
 from apps.school_organization.tests.factories import (
     AcademicSessionFactory,
     CampusFactory,
     ClassFactory,
+    SectionFactory,
     SubjectFactory,
     TenantFactory,
     TermFactory,
     UserFactory,
     authenticate,
     grant,
+)
+from apps.student_management.tests.factories import (
+    GuardianFactory,
+    StudentEnrollmentFactory,
+    StudentFactory,
+    StudentGuardianFactory,
 )
 from core.tenancy.context import tenant_context
 from core.tenancy.models import FeatureFlag, TenantFeatureOverride
@@ -51,10 +70,20 @@ __all__ = [
     "AcademicSessionFactory",
     "CampusFactory",
     "ClassFactory",
+    "DiscountFactory",
     "FeeHeadFactory",
+    "FeeInvoiceFactory",
+    "FeeInvoiceLineFactory",
     "FeeScheduleFactory",
     "FeeStructureFactory",
+    "FineFactory",
+    "GuardianFactory",
     "LedgerAccountFactory",
+    "ScholarshipFactory",
+    "SectionFactory",
+    "StudentEnrollmentFactory",
+    "StudentFactory",
+    "StudentGuardianFactory",
     "SubjectFactory",
     "TenantFactory",
     "TermFactory",
@@ -62,6 +91,7 @@ __all__ = [
     "authenticate",
     "disable_feature",
     "enable_feature",
+    "fine_head",
     "grant",
     "income_account",
     "posting",
@@ -181,4 +211,82 @@ def disable_feature(tenant, key: str) -> None:
             tenant=tenant,
             feature_flag=flag,
             defaults={"enabled": False, "reason": "fees-finance test fixture"},
+        )
+
+
+class DiscountFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Discount
+
+    name = factory.Sequence(lambda n: f"Discount {n}")
+    discount_type = GrantValueType.PERCENT
+    value = Decimal("10.00")
+    status = DiscountStatus.ACTIVE
+    # `discounts_active_is_attributable` refuses an active grant with no
+    # approver, so the default has to carry one or every fixture fails on the
+    # constraint rather than on what its test asserts.
+    approved_by = factory.LazyFunction(uuid.uuid4)
+
+
+class ScholarshipFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Scholarship
+
+    name = factory.Sequence(lambda n: f"Scholarship {n}")
+    coverage_type = GrantValueType.PERCENT
+    value = Decimal("25.00")
+    status = ScholarshipStatus.APPROVED
+    approved_by = factory.LazyFunction(uuid.uuid4)
+
+
+class FineFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Fine
+
+    amount = Decimal("250.00")
+    reason = "Overdue library book"
+    status = FineStatus.PENDING
+
+
+class FeeInvoiceFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = FeeInvoice
+
+    invoice_no = factory.Sequence(lambda n: f"INV-TEST-{n:05d}")
+    issue_date = datetime.date(2026, 9, 1)
+    due_date = datetime.date(2026, 9, 10)
+    status = InvoiceStatus.ISSUED
+    subtotal = Decimal("1000.00")
+    discount_total = Decimal("0.00")
+    fine_total = Decimal("0.00")
+    paid_total = Decimal("0.00")
+    # `fee_invoices_balance_is_derived` is a CHECK, so a factory whose default
+    # balance disagreed with its components would fail on every use.
+    balance_due = factory.LazyAttribute(
+        lambda o: o.subtotal - o.discount_total + o.fine_total - o.paid_total
+    )
+
+
+class FeeInvoiceLineFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = FeeInvoiceLine
+
+    description = "Tuition"
+    amount = Decimal("1000.00")
+    discount_amount = Decimal("0.00")
+
+
+def fine_head(tenant, account: LedgerAccount) -> FeeHead:
+    """A fee head in the `fine` category, which is what a fine requires.
+
+    `FineSerializer.validate_fee_head` refuses anything else — §15 says a fine's
+    head is category `fine`, and it is a service rule rather than a CHECK
+    because `category` lives on the other table.
+    """
+    with tenant_context(tenant.id):
+        return FeeHeadFactory(
+            tenant=tenant,
+            ledger_account=account,
+            category=FeeHeadCategory.FINE,
+            code=f"FINE{uuid.uuid4().hex[:6].upper()}",
         )
