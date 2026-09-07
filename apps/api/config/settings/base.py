@@ -229,6 +229,13 @@ SPECTACULAR_SETTINGS = {
         "AttendanceCorrectionStatusEnum": "apps.attendance.models.CorrectionStatus",
         "AttendanceSourceEnum": "apps.attendance.models.AttendanceSource",
         "AttendanceCorrectionSubjectTypeEnum": "apps.attendance.models.CorrectionSubjectType",
+        # Same reasoning for examinations, which adds three more `status`/type
+        # sets. Registered as each module PR ships the enum, not all at once —
+        # an override pointing at a symbol that does not exist yet fails schema
+        # generation rather than deferring gracefully.
+        "ExamStatusEnum": "apps.examinations.models.ExamStatus",
+        "ExamTypeEnum": "apps.examinations.models.ExamType",
+        "GradingScaleTypeEnum": "apps.examinations.models.ScaleType",
     },
 }
 
