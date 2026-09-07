@@ -324,11 +324,14 @@ class TeacherSubstitution(TenantOwnedModel):
         help_text=("Ad-hoc room change for this date only (§6). Null = keep the slot's room."),
     )
     reason = models.CharField(max_length=200, null=True, blank=True)
-    leave_request_id = models.UUIDField(
+    leave_request = models.ForeignKey(
+        "attendance.LeaveRequest",
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
-        help_text="leave_requests(id) — a plain UUID, not an FK: the attendance "
-        "module that owns that table has not shipped yet.",
+        related_name="substitutions",
+        db_column="leave_request_id",
+        help_text="The approved staff leave this cover is for, when there is one.",
     )
     status = models.CharField(
         max_length=20, choices=SubstitutionStatus.choices, default=SubstitutionStatus.PROPOSED

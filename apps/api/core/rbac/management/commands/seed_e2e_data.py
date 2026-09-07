@@ -20,6 +20,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.academics.models import TeacherSubjectAllocation
+from apps.attendance.models import LeaveAppliesTo, LeaveType
 from apps.school_organization.models import (
     AcademicSession,
     Campus,
@@ -165,6 +166,7 @@ E2E_ASSEMBLY_PERIOD_SEQUENCE = 5
 E2E_SCHOOL_ADMIN_EMAIL = "e2e-school-admin@schoolhub.test"
 E2E_PRINCIPAL_EMAIL = "e2e-principal@schoolhub.test"
 E2E_STUDENT_EMAIL = "e2e-student@schoolhub.test"
+E2E_CLASS_TEACHER_EMAIL = "e2e-class-teacher@schoolhub.test"
 # The exact keys apps/student_management/permissions.py grants `school_admin` for this
 # journey — not the full registry. Plus the school_organization *.view keys `school_admin`
 # also holds via ALL_STAFF there (apps/school_organization/permissions.py) — confirmed
@@ -227,6 +229,30 @@ E2E_SCHOOL_ADMIN_PERMISSIONS = [
     "timetable.room.update",
     "timetable.room.delete",
     "timetable.substitution.create",
+    # Attendance (apps/attendance/permissions.py) — the keys that file grants
+    # `school_admin`, and no more. It is in STUDENT_ATTENDANCE_VIEWERS, LEADERSHIP
+    # (correction.approve) and REPORT_READERS.
+    #
+    # Deliberately NOT `attendance.student-attendance.mark`: §4 grants marking to
+    # `teacher`/`class_teacher` only, and granting it here would let the live lane
+    # assert a permission the module does not actually give this role. The live
+    # marking spec runs as this identity and *does* need it — which is why it is
+    # granted below on the teacher identity instead, not widened here.
+    #
+    # Deliberately NOT `attendance.leave-request.approve` either: the submitter is
+    # a guardian identity and the approver must differ (§11), so the two keys are
+    # deliberately held by two different seeded users.
+    "attendance.student-attendance.view",
+    "attendance.correction.create",
+    "attendance.correction.approve",
+    "attendance.leave-request.view",
+    "attendance.leave-request.create",
+    "attendance.report.view",
+    "attendance.report.export",
+    # Staff attendance is `hr_staff`/`school_admin` in §4, and the live lane's
+    # admin identity is the one that records a day and checks a teacher out.
+    "attendance.staff-attendance.view",
+    "attendance.staff-attendance.mark",
     # The curriculum editor's Subject select and the allocation grid's Teacher select are
     # plain `GET /subjects` / `GET /staff` calls, each behind its own module's view key —
     # same reason the school_organization *.view keys above are here rather than assumed.
@@ -247,6 +273,35 @@ E2E_PRINCIPAL_PERMISSIONS = [
     "school.campus.view",
     "school.academic-session.view",
     "school.class.view",
+    "school.section.view",
+    # §7.2's escalation target. Two approver identities, not one, because a
+    # request past the threshold needs two *different* people — one person
+    # deciding both levels is refused (services.decide_leave_step), which is what
+    # stops the escalation being theatre.
+    "attendance.leave-request.view",
+    "attendance.leave-request.approve",
+]
+# A `class_teacher` identity, and it exists for one reason: **§4 grants
+# `attendance.student-attendance.mark` to `teacher`/`class_teacher` and to nobody
+# else.** The school-admin fixture above deliberately does not hold it, so the
+# live marking lane needs a real identity that does rather than a widened admin
+# that would let the spec assert a permission the module does not actually grant.
+#
+# `all`-scoped rather than `assigned`, unlike a production class teacher: the
+# live specs build a run-unique section per test (live-attendance-register.ts),
+# so there is no fixed section to point `class_teacher_staff_id` at. The scope
+# being wider than production's is fine here precisely because these specs assert
+# *marking behaviour*, and the narrower `assigned` path is asserted in the Django
+# suite (`MarkerScopeTests`) where the section is under the test's control.
+E2E_CLASS_TEACHER_PERMISSIONS = [
+    "attendance.student-attendance.view",
+    "attendance.student-attendance.mark",
+    # §7.2's level-1 approver. It must not be the school admin: that identity
+    # submits the request in the live lane and §11 forbids deciding your own.
+    "attendance.leave-request.view",
+    "attendance.leave-request.approve",
+    # The register resolves its roster and section from these two.
+    "students.student.view",
     "school.section.view",
 ]
 # The one key restricted principals (student, guardian) may hold at all — auth-and-rbac.md
@@ -317,6 +372,17 @@ class Command(BaseCommand):
             first_name="E2E",
             last_name="Principal",
         )
+        class_teacher_role = ensure_role_with_permissions(
+            tenant, "class_teacher", "Class Teacher", E2E_CLASS_TEACHER_PERMISSIONS
+        )
+        ensure_seed_user(
+            tenant,
+            class_teacher_role,
+            email=E2E_CLASS_TEACHER_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name="E2E",
+            last_name="Class Teacher",
+        )
         student_role = ensure_role_with_permissions(
             tenant, "student", "Student", E2E_STUDENT_PERMISSIONS, is_restricted_principal=True
         )
@@ -382,6 +448,15 @@ class Command(BaseCommand):
                 tenant, slots=slots, absent_staff=teacher, substitute_staff=substitute
             )
 
+            # Attendance. The leave catalogue is seeded rather than created by a
+            # test because **no endpoint can create one**: attendance.md §4 keys
+            # no leave-type permission and the writes belong to hr-leave's
+            # `hr.leave-type.*` (Tier 6). See apps/attendance/views.py's
+            # LeaveTypeViewSet docstring for the full reasoning. Until that lands,
+            # this is where a tenant's leave types come from.
+            self._ensure_attendance_enabled(tenant)
+            self._ensure_leave_types(tenant)
+
         # The *other* tenant needs the academics flag too, and for a reason easy to get
         # backwards: `TenantScopedViewSetMixin` checks `required_feature` *before*
         # `required_permission` (apps/academics/views.py's header), so a cross-tenant probe
@@ -396,6 +471,9 @@ class Command(BaseCommand):
             # answered 403 `module_disabled` by the feature gate before it ever reached
             # the row lookup that is what an isolation spec actually asserts.
             self._ensure_timetable_enabled(other_tenant)
+            # And once more for attendance, for the same 403-before-404 reason.
+            self._ensure_attendance_enabled(other_tenant)
+            self._ensure_leave_types(other_tenant)
 
         # TODO(website-cms): no public-content/CMS backend module exists yet
         # (apps/api/config/api_v1.py routes only core.rbac and
@@ -462,6 +540,46 @@ class Command(BaseCommand):
             feature_flag=flag,
             defaults={"enabled": True, "reason": "e2e live-lane fixture"},
         )
+
+    def _ensure_attendance_enabled(self, tenant: Tenant) -> None:
+        """`module.attendance` defaults off (apps/attendance/features.py).
+
+        Same `update_or_create`-not-`get_or_create` reasoning as
+        `_ensure_students_module_enabled`, and called for both tenants for the
+        same 403-before-404 reason `_ensure_timetable_enabled` is.
+        """
+        flag = FeatureFlag.objects.get(key="module.attendance")
+        TenantFeatureOverride.objects.update_or_create(
+            tenant=tenant,
+            feature_flag=flag,
+            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
+        )
+
+    def _ensure_leave_types(self, tenant: Tenant) -> list[LeaveType]:
+        """The two §6 names, one of which requires an attachment.
+
+        Two rather than one so a spec can prove the `requires_attachment` refusal
+        against a real type instead of mutating a shared row out from under
+        another worker.
+        """
+        specs = (
+            ("Sick Leave", "SICK", True),
+            ("Casual Leave", "CASUAL", False),
+        )
+        seeded = []
+        for name, code, requires_attachment in specs:
+            leave_type, _ = LeaveType.objects.update_or_create(
+                tenant=tenant,
+                code=code,
+                defaults={
+                    "name": name,
+                    "applies_to": LeaveAppliesTo.BOTH,
+                    "requires_attachment": requires_attachment,
+                    "is_active": True,
+                },
+            )
+            seeded.append(leave_type)
+        return seeded
 
     def _ensure_staff_module_enabled(self, tenant: Tenant) -> None:
         """`module.staff` defaults off, and the academics lane needs it on.

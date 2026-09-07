@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('school_organization', '0002_rls_policies'),
         ('tenancy', '0005_tenantsettings_hr'),
-        ('timetable', '0002_rls_policies'),
+        ('timetable', '0003_leave_request_fk'),
     ]
 
     operations = [

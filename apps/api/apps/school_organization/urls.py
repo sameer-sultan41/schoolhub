@@ -17,6 +17,7 @@ from apps.school_organization.views import (
     CampusViewSet,
     ClassViewSet,
     DepartmentViewSet,
+    HolidayCalendarView,
     HouseViewSet,
     SchoolSettingsView,
     SectionViewSet,
@@ -36,6 +37,7 @@ router.register("houses", HouseViewSet, basename="houses")
 
 urlpatterns = [
     path("school-settings", SchoolSettingsView.as_view(), name="school-settings"),
+    path("holiday-calendar", HolidayCalendarView.as_view(), name="holiday-calendar"),
     path(
         "academic-sessions/<uuid:pk>:activate",
         AcademicSessionViewSet.as_view({"post": "activate"}),

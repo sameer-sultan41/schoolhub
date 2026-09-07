@@ -18,6 +18,16 @@ export const E2E_SCHOOL_ADMIN_EMAIL = "e2e-school-admin@schoolhub.test";
 export const E2E_STUDENT_EMAIL = "e2e-student@schoolhub.test";
 
 /**
+ * Mirrors seed_e2e_data.py's E2E_CLASS_TEACHER_EMAIL — the only seeded identity
+ * holding `attendance.student-attendance.mark`. §4 grants marking to
+ * `teacher`/`class_teacher` and to nobody else, so the school-admin fixture
+ * deliberately does not have it: a widened admin would let a spec assert a
+ * permission the module does not actually grant. Also §7.2's level-1 leave
+ * approver.
+ */
+export const E2E_CLASS_TEACHER_EMAIL = "e2e-class-teacher@schoolhub.test";
+
+/**
  * Mirrors seed_e2e_data.py's E2E_PRINCIPAL_EMAIL — a `principal` identity holding
  * `academics.promotion.approve` and deliberately *not* `.execute`.
  *

@@ -135,6 +135,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attendance-corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        get: operations["attendance_corrections_list"];
+        put?: never;
+        /**
+         * Request a correction to a locked attendance record
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        post: operations["attendance_corrections_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance-corrections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        get: operations["attendance_corrections_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance-corrections/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a correction request
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        post: operations["attendance_corrections_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attendance-corrections/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a correction request
+         * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
+         *
+         *     Append-only from the API's point of view: §16 declares list, create and the
+         *     two decisions, and nothing else. A correction is not edited after the fact —
+         *     that is the whole reason it exists as a row rather than as a direct update.
+         */
+        post: operations["attendance_corrections_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -595,6 +697,68 @@ export interface paths {
         patch: operations["guardians_partial_update"];
         trace?: never;
     };
+    "/api/v1/holiday-calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` — §16's declared calendar resource.
+         *
+         *     A projection of ``tenant_settings.academic``, not its own table: see
+         *     ``apps/school_organization/calendar.py``'s header for why the calendar is
+         *     JSONB configuration rather than an entity. It exists as a route separate from
+         *     ``/school-settings`` because §16 declares it separately, and because
+         *     ``it_admin`` adjusting an unplanned closure mid-year (§8) is a different and
+         *     far more frequent act than editing the school profile. It shares the settings
+         *     permission keys, which §4 already describes as covering "academic
+         *     configuration (calendar, timezone, locale, currency)" — inventing
+         *     ``school.holiday-calendar.*`` would put keys in the registry that no module
+         *     doc declares and no seeded role holds.
+         *
+         *     PUT rather than PATCH, and §16 says PUT: each list named in the body is
+         *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
+         *     holiday, which is exactly what a cancelled closure needs.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
+         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
+         *     plain ``APIView``, so without it ``request.tenant`` is never set and
+         *     ``RequiresModuleFeature`` fails closed on every request.
+         */
+        get: operations["holiday_calendar_retrieve"];
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` — §16's declared calendar resource.
+         *
+         *     A projection of ``tenant_settings.academic``, not its own table: see
+         *     ``apps/school_organization/calendar.py``'s header for why the calendar is
+         *     JSONB configuration rather than an entity. It exists as a route separate from
+         *     ``/school-settings`` because §16 declares it separately, and because
+         *     ``it_admin`` adjusting an unplanned closure mid-year (§8) is a different and
+         *     far more frequent act than editing the school profile. It shares the settings
+         *     permission keys, which §4 already describes as covering "academic
+         *     configuration (calendar, timezone, locale, currency)" — inventing
+         *     ``school.holiday-calendar.*`` would put keys in the registry that no module
+         *     doc declares and no seeded role holds.
+         *
+         *     PUT rather than PATCH, and §16 says PUT: each list named in the body is
+         *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
+         *     holiday, which is exactly what a cancelled closure needs.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
+         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
+         *     plain ``APIView``, so without it ``request.tenant`` is never set and
+         *     ``RequiresModuleFeature`` fails closed on every request.
+         */
+        put: operations["holiday_calendar_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/houses": {
         parameters: {
             query?: never;
@@ -677,6 +841,306 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leave-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `leave_requests` — the **student** half (§5.4, §7.2).
+         *
+         *     Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+         *     grants `attendance.leave-request.create` to `student` and `guardian`, and the
+         *     record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+         *     `Student.filter_owned_by_user` — is what keeps a guardian to their own
+         *     children.
+         *
+         *     **Staff leave requests are not served here.** The table holds both kinds
+         *     because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+         *     leave is keyed `hr.leave-request.*` in a namespace this module must not
+         *     register on another's behalf. Every write here sets
+         *     `requester_type = student`, and the queryset is filtered to student requests
+         *     so an `all`-scoped principal cannot read staff leave through an
+         *     attendance-keyed endpoint before hr-leave has decided its visibility rules.
+         *
+         *     No PATCH: §16 declares list, create and the three colon-actions. Editing a
+         *     pending request in place would move dates an approver had already seen.
+         */
+        get: operations["leave_requests_list"];
+        put?: never;
+        /**
+         * Submit a student leave request
+         * @description `leave_requests` — the **student** half (§5.4, §7.2).
+         *
+         *     Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+         *     grants `attendance.leave-request.create` to `student` and `guardian`, and the
+         *     record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+         *     `Student.filter_owned_by_user` — is what keeps a guardian to their own
+         *     children.
+         *
+         *     **Staff leave requests are not served here.** The table holds both kinds
+         *     because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+         *     leave is keyed `hr.leave-request.*` in a namespace this module must not
+         *     register on another's behalf. Every write here sets
+         *     `requester_type = student`, and the queryset is filtered to student requests
+         *     so an `all`-scoped principal cannot read staff leave through an
+         *     attendance-keyed endpoint before hr-leave has decided its visibility rules.
+         *
+         *     No PATCH: §16 declares list, create and the three colon-actions. Editing a
+         *     pending request in place would move dates an approver had already seen.
+         */
+        post: operations["leave_requests_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `leave_requests` — the **student** half (§5.4, §7.2).
+         *
+         *     Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+         *     grants `attendance.leave-request.create` to `student` and `guardian`, and the
+         *     record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+         *     `Student.filter_owned_by_user` — is what keeps a guardian to their own
+         *     children.
+         *
+         *     **Staff leave requests are not served here.** The table holds both kinds
+         *     because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+         *     leave is keyed `hr.leave-request.*` in a namespace this module must not
+         *     register on another's behalf. Every write here sets
+         *     `requester_type = student`, and the queryset is filtered to student requests
+         *     so an `all`-scoped principal cannot read staff leave through an
+         *     attendance-keyed endpoint before hr-leave has decided its visibility rules.
+         *
+         *     No PATCH: §16 declares list, create and the three colon-actions. Editing a
+         *     pending request in place would move dates an approver had already seen.
+         */
+        get: operations["leave_requests_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve the current step of a leave request
+         * @description `leave_requests` — the **student** half (§5.4, §7.2).
+         *
+         *     Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+         *     grants `attendance.leave-request.create` to `student` and `guardian`, and the
+         *     record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+         *     `Student.filter_owned_by_user` — is what keeps a guardian to their own
+         *     children.
+         *
+         *     **Staff leave requests are not served here.** The table holds both kinds
+         *     because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+         *     leave is keyed `hr.leave-request.*` in a namespace this module must not
+         *     register on another's behalf. Every write here sets
+         *     `requester_type = student`, and the queryset is filtered to student requests
+         *     so an `all`-scoped principal cannot read staff leave through an
+         *     attendance-keyed endpoint before hr-leave has decided its visibility rules.
+         *
+         *     No PATCH: §16 declares list, create and the three colon-actions. Editing a
+         *     pending request in place would move dates an approver had already seen.
+         */
+        post: operations["leave_requests_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{id}:cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a leave request before it starts
+         * @description `leave_requests` — the **student** half (§5.4, §7.2).
+         *
+         *     Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+         *     grants `attendance.leave-request.create` to `student` and `guardian`, and the
+         *     record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+         *     `Student.filter_owned_by_user` — is what keeps a guardian to their own
+         *     children.
+         *
+         *     **Staff leave requests are not served here.** The table holds both kinds
+         *     because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+         *     leave is keyed `hr.leave-request.*` in a namespace this module must not
+         *     register on another's behalf. Every write here sets
+         *     `requester_type = student`, and the queryset is filtered to student requests
+         *     so an `all`-scoped principal cannot read staff leave through an
+         *     attendance-keyed endpoint before hr-leave has decided its visibility rules.
+         *
+         *     No PATCH: §16 declares list, create and the three colon-actions. Editing a
+         *     pending request in place would move dates an approver had already seen.
+         */
+        post: operations["leave_requests_:cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a leave request
+         * @description `leave_requests` — the **student** half (§5.4, §7.2).
+         *
+         *     Like `StudentAttendanceViewSet`, this omits `DenyRestrictedPrincipals`: §4
+         *     grants `attendance.leave-request.create` to `student` and `guardian`, and the
+         *     record scope — `LeaveRequest.filter_owned_by_user`, which delegates to
+         *     `Student.filter_owned_by_user` — is what keeps a guardian to their own
+         *     children.
+         *
+         *     **Staff leave requests are not served here.** The table holds both kinds
+         *     because `hr-leave` §15 and `attendance` §15 describe one table, but staff
+         *     leave is keyed `hr.leave-request.*` in a namespace this module must not
+         *     register on another's behalf. Every write here sets
+         *     `requester_type = student`, and the queryset is filtered to student requests
+         *     so an `all`-scoped principal cannot read staff leave through an
+         *     attendance-keyed endpoint before hr-leave has decided its visibility rules.
+         *
+         *     No PATCH: §16 declares list, create and the three colon-actions. Editing a
+         *     pending request in place would move dates an approver had already seen.
+         */
+        post: operations["leave_requests_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `leave_types` — **read-only here**, and the reason is a spec conflict worth stating.
+         *
+         *     §16 of this module lists `GET/POST/PATCH /api/v1/leave-types` (and
+         *     `/leave-policies`, `/leave-balances`). §4 of this module declares **no
+         *     permission key for any of them** — its table has keys for attendance,
+         *     corrections, leave *requests* and reports, and nothing else. The keys that do
+         *     govern them are `hr.leave-type.*`, `hr.leave-policy.*` and
+         *     `hr.leave-balance.*`, declared by `hr-leave.md` §4.
+         *
+         *     Registering another module's `hr.*` keys from this app would break the
+         *     registry the day hr-leave ships its own `permissions.py` (duplicate key), and
+         *     inventing `attendance.leave-type.*` would put keys in the registry that no
+         *     module doc declares — the thing `timetable/views.py`'s docstring explicitly
+         *     refuses to do. So the split is by *what §4 can key*:
+         *
+         *     - **Reading** the catalogue is part of working with leave requests, so this
+         *       list takes `attendance.leave-request.view`. That is exactly the move
+         *       `timetable` makes for `/periods` and `/rooms`, which §4 there also leaves
+         *       unkeyed: reading the scaffolding falls under the key for the thing it is
+         *       scaffolding for. `.view` rather than `.create`, because §4 grants `.view`
+         *       to requesters *and* approvers — an approver reading a request needs the
+         *       type's name, and a key only requesters hold would have hidden it from the
+         *       one person who has to decide.
+         *     - **Writing** leave types, and the whole of `/leave-policies` and
+         *       `/leave-balances`, is HR configuration and ships with hr-leave (Tier 6),
+         *       which "adds no tables" precisely because this module's migration created
+         *       them.
+         *
+         *     The consequence is real and recorded in the module doc's §20: until hr-leave
+         *     lands, a tenant's leave types come from the seeds rather than from the API.
+         */
+        get: operations["leave_types_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `leave_types` — **read-only here**, and the reason is a spec conflict worth stating.
+         *
+         *     §16 of this module lists `GET/POST/PATCH /api/v1/leave-types` (and
+         *     `/leave-policies`, `/leave-balances`). §4 of this module declares **no
+         *     permission key for any of them** — its table has keys for attendance,
+         *     corrections, leave *requests* and reports, and nothing else. The keys that do
+         *     govern them are `hr.leave-type.*`, `hr.leave-policy.*` and
+         *     `hr.leave-balance.*`, declared by `hr-leave.md` §4.
+         *
+         *     Registering another module's `hr.*` keys from this app would break the
+         *     registry the day hr-leave ships its own `permissions.py` (duplicate key), and
+         *     inventing `attendance.leave-type.*` would put keys in the registry that no
+         *     module doc declares — the thing `timetable/views.py`'s docstring explicitly
+         *     refuses to do. So the split is by *what §4 can key*:
+         *
+         *     - **Reading** the catalogue is part of working with leave requests, so this
+         *       list takes `attendance.leave-request.view`. That is exactly the move
+         *       `timetable` makes for `/periods` and `/rooms`, which §4 there also leaves
+         *       unkeyed: reading the scaffolding falls under the key for the thing it is
+         *       scaffolding for. `.view` rather than `.create`, because §4 grants `.view`
+         *       to requesters *and* approvers — an approver reading a request needs the
+         *       type's name, and a key only requesters hold would have hidden it from the
+         *       one person who has to decide.
+         *     - **Writing** leave types, and the whole of `/leave-policies` and
+         *       `/leave-balances`, is HR configuration and ships with hr-leave (Tier 6),
+         *       which "adds no tables" precisely because this module's migration created
+         *       them.
+         *
+         *     The consequence is real and recorded in the module doc's §20: until hr-leave
+         *     lands, a tenant's leave types come from the seeds rather than from the API.
+         */
+        get: operations["leave_types_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/periods": {
         parameters: {
             query?: never;
@@ -712,6 +1176,51 @@ export interface paths {
         head?: never;
         /** @description `periods` — the bell schedule (§5.1). */
         patch: operations["periods_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/reports/attendance-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run an attendance report
+         * @description `GET /api/v1/reports/attendance-summary` — §13's six reports (§16).
+         *
+         *     **One endpoint with a `kind`, not six routes.** §16 declares exactly one
+         *     report URL, and the six differ in their rows rather than their shape: every
+         *     one is a flat list under a date range and a record scope.
+         *
+         *     **Small results come back inline; large ones return 202 and a job**
+         *     (api-architecture.md §2.7). The threshold is on row count rather than on the
+         *     report kind, because the same kind is both: a daily register is one section's
+         *     day, and the same query over a term is students x days.
+         *
+         *     Record scope is applied by `tasks.build_report_rows`, which the export job
+         *     calls too — so an exported CSV can never show more than the requester could
+         *     read inline. §13's closing line makes that a requirement, and a report is
+         *     read as authoritative, which is exactly why it is the worst place to lose a
+         *     scope.
+         */
+        get: operations["reports_attendance_summary_retrieve"];
+        put?: never;
+        /**
+         * Export an attendance report as CSV
+         * @description Always a job, however small, in `format` (§6: CSV, XLSX or PDF).
+         *
+         *     §13 lists export as its own capability and §4 keys it separately
+         *     (`attendance.report.export`), so an export is a deliberate act with its
+         *     own permission — not "the same report, but bigger". Returning the bytes
+         *     inline for a small one would make the two paths differ by size, which is
+         *     the distinction the *reader* least expects.
+         */
+        post: operations["reports_attendance_summary_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/rooms": {
@@ -847,6 +1356,128 @@ export interface paths {
         put?: never;
         /** @description Staff master records (module doc §5.1). */
         post: operations["staff_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+         *
+         *     `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+         *     grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+         *     no restricted principal at all. A student has no business reading a teacher's
+         *     arrival time.
+         *
+         *     That "every staff role (own)" is the widest `own` grant on the platform, and
+         *     it is why `POST` is keyed separately: reading your own punctuality and
+         *     recording someone else's are different acts, and §4 keys the second to
+         *     `hr_staff`/`school_admin`.
+         *
+         *     **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+         *     staff member to record their own arrival, which no student may do; recording
+         *     it as `manual` would make §13's report unable to tell a self-report from an
+         *     HR-verified one.
+         */
+        get: operations["staff_attendance_list"];
+        put?: never;
+        /**
+         * Record a staff member's attendance for a date
+         * @description `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+         *
+         *     `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+         *     grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+         *     no restricted principal at all. A student has no business reading a teacher's
+         *     arrival time.
+         *
+         *     That "every staff role (own)" is the widest `own` grant on the platform, and
+         *     it is why `POST` is keyed separately: reading your own punctuality and
+         *     recording someone else's are different acts, and §4 keys the second to
+         *     `hr_staff`/`school_admin`.
+         *
+         *     **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+         *     staff member to record their own arrival, which no student may do; recording
+         *     it as `manual` would make §13's report unable to tell a self-report from an
+         *     HR-verified one.
+         */
+        post: operations["staff_attendance_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-attendance/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+         *
+         *     `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+         *     grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+         *     no restricted principal at all. A student has no business reading a teacher's
+         *     arrival time.
+         *
+         *     That "every staff role (own)" is the widest `own` grant on the platform, and
+         *     it is why `POST` is keyed separately: reading your own punctuality and
+         *     recording someone else's are different acts, and §4 keys the second to
+         *     `hr_staff`/`school_admin`.
+         *
+         *     **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+         *     staff member to record their own arrival, which no student may do; recording
+         *     it as `manual` would make §13's report unable to tell a self-report from an
+         *     HR-verified one.
+         */
+        get: operations["staff_attendance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-attendance/{id}:check-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a staff member's departure
+         * @description `staff_attendance` — §5.2, and §16's `POST /staff-attendance` + `:check-out`.
+         *
+         *     `DenyRestrictedPrincipals` on every action, unlike the student register: §4
+         *     grants `attendance.staff-attendance.view` to "every staff role (own)" and to
+         *     no restricted principal at all. A student has no business reading a teacher's
+         *     arrival time.
+         *
+         *     That "every staff role (own)" is the widest `own` grant on the platform, and
+         *     it is why `POST` is keyed separately: reading your own punctuality and
+         *     recording someone else's are different acts, and §4 keys the second to
+         *     `hr_staff`/`school_admin`.
+         *
+         *     **Self check-in is `source="self"`, and only for yourself.** §5.2 allows a
+         *     staff member to record their own arrival, which no student may do; recording
+         *     it as `manual` would make §13's report unable to tell a self-report from an
+         *     HR-verified one.
+         */
+        post: operations["staff_attendance_:check_out_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1058,6 +1689,119 @@ export interface paths {
         put?: never;
         /** @description `GET/POST /staff/{staff_pk}/qualifications`. */
         post: operations["staff_qualifications_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `student_attendance` — the register (§5.1), read here and written by `:bulk-mark`.
+         *
+         *     Cursor paginated, per §16 — the project default
+         *     (``DEFAULT_PAGINATION_CLASS``), so nothing is declared here. No
+         *     ``CountedCursorPagination``: this is the append-heavy table cursor pagination
+         *     exists to serve (core/api/pagination.py names it), and a `COUNT(*)` over a
+         *     term of registers on every page is exactly the cost it was chosen to avoid.
+         */
+        get: operations["student_attendance_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a historical attendance register (CSV or .xlsx)
+         * @description `POST /student-attendance-imports` -> `202` + job — §9's migration import.
+         *
+         *     **The endpoint §16 does not list, for the key §4 did not table.** §9 names
+         *     both in prose — a "CSV import of historical attendance during tenant
+         *     onboarding", with `attendance.student-attendance.import` "granted to
+         *     `it_admin` during migration" — and §4's table omitted the row. The key is
+         *     registered in `permissions.py` and §4 is updated in the same PR, which is the
+         *     direction AGENTS.md's doc rule points; the alternative was leaving a
+         *     documented capability permanently unreachable.
+         *
+         *     No list or retrieve: the job is the only handle a caller needs, and
+         *     `GET /jobs/{id}` is where the row-level error report §9's journey asks for
+         *     shows up.
+         *
+         *     Keyed to `it_admin` rather than to the marking roles, deliberately. A teacher
+         *     marks today; an IT admin migrates a previous system's history once. Giving
+         *     the import key to `teacher` would make "rewrite any past register, bypassing
+         *     the lock window and the correction workflow" a routine classroom permission.
+         */
+        post: operations["student_attendance_imports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `student_attendance` — the register (§5.1), read here and written by `:bulk-mark`.
+         *
+         *     Cursor paginated, per §16 — the project default
+         *     (``DEFAULT_PAGINATION_CLASS``), so nothing is declared here. No
+         *     ``CountedCursorPagination``: this is the append-heavy table cursor pagination
+         *     exists to serve (core/api/pagination.py names it), and a `COUNT(*)` over a
+         *     term of registers on every page is exactly the cost it was chosen to avoid.
+         */
+        get: operations["student_attendance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance:bulk-mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a section's register for one date
+         * @description `POST /student-attendance:bulk-mark` (§16).
+         *
+         *     Wrapped in ``replay_or_execute`` because §6's "offline-tolerant
+         *     re-submission" is precisely what ``Idempotency-Key`` is for: a teacher's
+         *     phone that times out and retries gets the first response back rather than
+         *     re-running the upsert. The upsert makes the retry safe either way — this
+         *     makes it *identical*, which is what a client comparing counts needs.
+         */
+        post: operations["student_attendance:bulk_mark_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2228,6 +2972,116 @@ export interface components {
          * @enum {string}
          */
         AcademicSessionStatusEnum: "planned" | "active" | "closed" | "archived";
+        /**
+         * @description * `staff` - Staff
+         *     * `student` - Student
+         *     * `both` - Both
+         * @enum {string}
+         */
+        AppliesToEnum: "staff" | "student" | "both";
+        /** @description `attendance_corrections` — the request half. Decisions are colon-actions. */
+        AttendanceCorrection: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly subject_type: components["schemas"]["AttendanceCorrectionSubjectTypeEnum"];
+            /** Format: uuid */
+            student_attendance_id: string;
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly requested_by: string;
+            /** @description Status and times before the change. */
+            readonly old_values: unknown;
+            /** @description Proposed status and times. */
+            new_values: unknown;
+            /** @description Mandatory justification (§6). */
+            reason: string;
+            readonly status: components["schemas"]["AttendanceCorrectionStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id); must differ from requested_by (§11).
+             */
+            readonly reviewed_by: string | null;
+            /** Format: date-time */
+            readonly reviewed_at: string | null;
+            readonly review_note: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `pending` - Pending
+         *     * `approved` - Approved
+         *     * `rejected` - Rejected
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        AttendanceCorrectionStatusEnum: "pending" | "approved" | "rejected" | "cancelled";
+        /**
+         * @description * `student` - Student
+         *     * `staff` - Staff
+         * @enum {string}
+         */
+        AttendanceCorrectionSubjectTypeEnum: "student" | "staff";
+        /**
+         * @description `POST /student-attendance-imports` (multipart) — §9's onboarding migration.
+         *
+         *     The file rides in the job's own payload rather than through `core.files`'
+         *     two-step presigned flow, for the reason `StudentImportRequestSerializer`
+         *     gives: that flow exists for binary media served back to users later, and an
+         *     import file is read once into the job and never needs a signed URL.
+         *
+         *     `academic_session_id` is required and not defaulted to the current session —
+         *     unlike every other endpoint in this module. A historical register belongs to
+         *     a *past* session by definition, so falling back to "current" would file three
+         *     years of history under this year and be almost impossible to unpick.
+         */
+        AttendanceImportRequest: {
+            /** Format: uri */
+            file: string;
+            /** Format: uuid */
+            academic_session_id: string;
+        };
+        /**
+         * @description Query parameters for `GET /reports/attendance-summary` (§13, §16).
+         *
+         *     One endpoint with a `kind`, not six routes: §16 declares exactly one report
+         *     URL, and the six reports differ in their rows rather than in their shape —
+         *     every one is a flat list under a date range and a record scope.
+         */
+        AttendanceReportQuery: {
+            kind: components["schemas"]["KindEnum"];
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date?: string;
+            /** Format: uuid */
+            section_id?: string | null;
+            /** Format: decimal */
+            threshold?: string;
+            /** @default csv */
+            format: components["schemas"]["FormatEnum"];
+        };
+        /**
+         * @description * `manual` - Manual
+         *     * `system` - System
+         *     * `import` - Import
+         *     * `device` - Device
+         * @enum {string}
+         */
+        AttendanceSourceEnum: "manual" | "system" | "import" | "device";
+        /**
+         * @description * `present` - Present
+         *     * `absent` - Absent
+         *     * `late` - Late
+         *     * `half_day` - Half day
+         *     * `excused` - Excused
+         *     * `on_leave` - On leave
+         * @enum {string}
+         */
+        AttendanceStatusEnum: "present" | "absent" | "late" | "half_day" | "excused" | "on_leave";
         BackgroundJob: {
             /** Format: uuid */
             readonly id: string;
@@ -2255,6 +3109,42 @@ export interface components {
          * @enum {string}
          */
         BackgroundJobStatusEnum: "queued" | "running" | "succeeded" | "failed";
+        /**
+         * @description `POST /student-attendance:bulk-mark` — one section, one date, one period.
+         *
+         *     `academic_session_id` is optional and falls back to the tenant's current
+         *     session: a school runs one at a time and the register UI has no reason to
+         *     carry its id around. `period_id` omitted means daily mode, which is §19's
+         *     recommended default.
+         */
+        BulkMark: {
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            academic_session_id?: string;
+            /** Format: uuid */
+            period_id?: string | null;
+            /** Format: date */
+            attendance_date: string;
+            entries: components["schemas"]["BulkMarkEntry"][];
+        };
+        /**
+         * @description One student's row in a submitted register.
+         *
+         *     `late_minutes` is deliberately **absent** rather than read-only: a client
+         *     sending it should not have it silently accepted-and-ignored under a name it
+         *     recognises. §11 computes it, and `services._resolve_times` is where.
+         */
+        BulkMarkEntry: {
+            /** Format: uuid */
+            student_id: string;
+            status: components["schemas"]["AttendanceStatusEnum"];
+            /** Format: time */
+            check_in_time?: string | null;
+            /** Format: time */
+            check_out_time?: string | null;
+            remarks?: string | null;
+        };
         Campus: {
             /** Format: uuid */
             readonly id: string;
@@ -2306,6 +3196,16 @@ export interface components {
             /** Format: uuid */
             target_academic_session_id: string;
         };
+        /**
+         * @description Body for `:approve` / `:reject` — an optional note, nothing else.
+         *
+         *     The decision itself is the route, not a field: a single endpoint taking
+         *     `{"approve": bool}` would make the permission check unable to tell the two
+         *     apart, and §4 grants them together only by coincidence.
+         */
+        CorrectionDecision: {
+            review_note?: string | null;
+        };
         CreatePromotionBatch: {
             /** Format: uuid */
             from_academic_session_id: string;
@@ -2349,6 +3249,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `full` - Full day
+         *     * `first_half` - First half
+         *     * `second_half` - Second half
+         * @enum {string}
+         */
+        DayPartEnum: "full" | "first_half" | "second_half";
         Department: {
             /** Format: uuid */
             readonly id: string;
@@ -2529,6 +3436,13 @@ export interface components {
          */
         FileStatusEnum: "pending" | "ready" | "quarantined";
         /**
+         * @description * `csv` - csv
+         *     * `xlsx` - xlsx
+         *     * `pdf` - pdf
+         * @enum {string}
+         */
+        FormatEnum: "csv" | "xlsx" | "pdf";
+        /**
          * @description * `male` - Male
          *     * `female` - Female
          *     * `other` - Other
@@ -2562,6 +3476,43 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description ``GET/PUT /api/v1/holiday-calendar`` (§16).
+         *
+         *     PUT replaces each list it names wholesale, which is why this is a PUT and not
+         *     a PATCH: merging entry by entry would leave no way to *remove* a holiday, and
+         *     removing one is exactly what a cancelled closure needs.
+         */
+        HolidayCalendar: {
+            /** @description 0=Monday. Omit to leave the configured week unchanged. */
+            working_days?: number[];
+            holidays?: components["schemas"]["HolidayEntry"][];
+        };
+        /**
+         * @description One holiday or holiday range — module doc §5.8.
+         *
+         *     ``campus_id`` is a plain ``UUIDField`` rather than a ``PrimaryKeyRelatedField``
+         *     because these entries live inside JSONB, where there is no foreign key to do
+         *     the ownership check for us. ``validate_campus_id`` does it explicitly, or a
+         *     smuggled foreign id would be stored unchallenged and then silently ignored by
+         *     ``calendar.holiday_name`` — a closure an admin believes they configured and
+         *     which never takes effect.
+         *
+         *     ``start_date``/``end_date`` rather than §16's filter names ``from``/``to``:
+         *     ``from`` is a Python keyword, so it can be neither a serializer attribute nor
+         *     a comfortable key for any Python that later reads the stored entry. §16 uses
+         *     ``from``/``to`` for *query parameters*, which is a different namespace, and
+         *     those filters are not built (the resource is a singleton document).
+         */
+        HolidayEntry: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date?: string;
+            name: string;
+            /** Format: uuid */
+            campus_id?: string | null;
+        };
         House: {
             /** Format: uuid */
             readonly id: string;
@@ -2593,6 +3544,121 @@ export interface components {
             role_ids?: string[];
         };
         /**
+         * @description * `daily-register` - daily-register
+         *     * `student-summary` - student-summary
+         *     * `defaulters` - defaulters
+         *     * `student-late-arrivals` - student-late-arrivals
+         *     * `staff-punctuality` - staff-punctuality
+         *     * `leave` - leave
+         * @enum {string}
+         */
+        KindEnum: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
+        /** @description One step of §7.2's chain, nested on the request it belongs to. */
+        LeaveApproval: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description 1-based step order. */
+            readonly level: number;
+            /** @description e.g. attendance.leave-request.approve. */
+            readonly required_permission: string;
+            /**
+             * Format: uuid
+             * @description users(id); set on decision, differs from submitted_by.
+             */
+            readonly approver_id: string | null;
+            readonly decision: components["schemas"]["LeaveApprovalDecisionEnum"];
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            readonly note: string | null;
+        };
+        /**
+         * @description * `pending` - Pending
+         *     * `approved` - Approved
+         *     * `rejected` - Rejected
+         *     * `skipped` - Skipped
+         * @enum {string}
+         */
+        LeaveApprovalDecisionEnum: "pending" | "approved" | "rejected" | "skipped";
+        /**
+         * @description Body for `:approve` / `:reject` — an optional note, nothing else.
+         *
+         *     The decision is the route rather than a field, for the reason
+         *     `CorrectionDecisionSerializer` gives: one endpoint taking `{"approve": bool}`
+         *     could not be permission-gated differently for the two outcomes.
+         */
+        LeaveDecision: {
+            note?: string | null;
+        };
+        /**
+         * @description `leave_requests` — the student half (§16).
+         *
+         *     `days_count` is read-only because §11 computes it net of holidays, and
+         *     `status`/`current_approval_level`/`decided_at` because they move only through
+         *     the colon-actions. A writable `days_count` would let a client understate a
+         *     fortnight to duck the escalation threshold.
+         *
+         *     The chain is nested rather than fetched separately: a requester's first
+         *     question is "how many people have to say yes", and §16 declares no
+         *     `/leave-requests/{id}/approvals` sub-resource to ask it with.
+         */
+        LeaveRequest: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly requester_type: components["schemas"]["AttendanceCorrectionSubjectTypeEnum"];
+            /** Format: uuid */
+            student_id: string;
+            /**
+             * Format: uuid
+             * @description users(id); a guardian may submit for a student.
+             */
+            readonly submitted_by: string;
+            /** Format: uuid */
+            leave_type_id: string;
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            day_part?: components["schemas"]["DayPartEnum"];
+            /**
+             * Format: decimal
+             * @description Computed net of holidays (§11).
+             */
+            readonly days_count: string;
+            reason: string;
+            /** Format: uuid */
+            attachment_file_id?: string | null;
+            readonly status: components["schemas"]["AttendanceCorrectionStatusEnum"];
+            /** @description Step pointer into the tenant's approval chain (§7.2). */
+            readonly current_approval_level: number;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            readonly approvals: components["schemas"]["LeaveApproval"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description `leave_types` — read-only here. See views.py for why writes are hr-leave's. */
+        LeaveType: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description e.g. "Sick Leave". */
+            readonly name: string;
+            readonly code: string;
+            readonly applies_to: components["schemas"]["AppliesToEnum"];
+            /** @description Staff payroll relevance only; meaningless for a student. */
+            readonly is_paid: boolean;
+            /** @description e.g. a medical note (§6). */
+            readonly requires_attachment: boolean;
+            /** @description Null = unlimited. */
+            readonly max_consecutive_days: number | null;
+            readonly is_active: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
          * @description Email/username + password login.
          *
          *     Deliberately returns the same generic error for unknown accounts and wrong
@@ -2607,6 +3673,16 @@ export interface components {
         };
         PaginatedAcademicSessionList: {
             data?: components["schemas"]["AcademicSession"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedAttendanceCorrectionList: {
+            data?: components["schemas"]["AttendanceCorrection"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -2711,6 +3787,26 @@ export interface components {
                 };
             };
         };
+        PaginatedLeaveRequestList: {
+            data?: components["schemas"]["LeaveRequest"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedLeaveTypeList: {
+            data?: components["schemas"]["LeaveType"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedPeriodList: {
             data?: components["schemas"]["Period"][];
             meta?: {
@@ -2755,6 +3851,16 @@ export interface components {
                 };
             };
         };
+        PaginatedStaffAttendanceList: {
+            data?: components["schemas"]["StaffAttendance"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedStaffDocumentList: {
             data?: components["schemas"]["StaffDocument"][];
             meta?: {
@@ -2778,6 +3884,16 @@ export interface components {
         };
         PaginatedStaffQualificationList: {
             data?: components["schemas"]["StaffQualification"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedStudentAttendanceList: {
+            data?: components["schemas"]["StudentAttendance"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -3330,7 +4446,7 @@ export interface components {
             readonly id?: string;
             name?: string;
             code?: string;
-            subject_type?: components["schemas"]["SubjectTypeEnum"];
+            subject_type?: components["schemas"]["SubjectSubjectTypeEnum"];
             /** Format: uuid */
             department_id?: string | null;
             description?: string | null;
@@ -3725,6 +4841,78 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description `staff_attendance` — §5.2.
+         *
+         *     The three computed columns are read-only for the reason the student
+         *     serializer's are: §11 computes them, and §13's punctuality report is a
+         *     payroll input that is only worth reading if every row was measured the same
+         *     way. `is_locked` is the effective lock, not the nightly-swept column — the
+         *     same fix the student serializer carries.
+         */
+        StaffAttendance: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            staff_id: string;
+            /**
+             * Format: date
+             * @description Calendar date in the tenant's timezone.
+             */
+            attendance_date: string;
+            status: components["schemas"]["StaffAttendanceStatusEnum"];
+            /** Format: time */
+            check_in_time?: string | null;
+            /**
+             * Format: time
+             * @description Must be later than check_in_time (§11).
+             */
+            check_out_time?: string | null;
+            /** @description Computed server-side from the tenant work-day window; never client-supplied. */
+            readonly late_minutes: number | null;
+            /** @description Computed server-side, like late_minutes. */
+            readonly early_departure_minutes: number | null;
+            /**
+             * Format: uuid
+             * @description Set when status is on_leave; written by hr-leave's approval flow.
+             */
+            readonly leave_request_id: string | null;
+            source?: components["schemas"]["StaffAttendanceSourceEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) — the recording actor.
+             */
+            readonly marked_by: string;
+            readonly is_locked: boolean;
+            remarks?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `manual` - Manual
+         *     * `self` - Self check-in
+         *     * `import` - Import
+         *     * `device` - Device
+         * @enum {string}
+         */
+        StaffAttendanceSourceEnum: "manual" | "self" | "import" | "device";
+        /**
+         * @description * `present` - Present
+         *     * `absent` - Absent
+         *     * `late` - Late
+         *     * `half_day` - Half day
+         *     * `on_leave` - On leave
+         *     * `holiday` - Holiday
+         * @enum {string}
+         */
+        StaffAttendanceStatusEnum: "present" | "absent" | "late" | "half_day" | "on_leave" | "holiday";
+        /** @description Body for `POST /staff-attendance/{id}:check-out` (§16). */
+        StaffCheckOut: {
+            /** Format: time */
+            check_out_time: string;
+        };
         StaffDocument: {
             /** Format: uuid */
             readonly id: string;
@@ -3829,6 +5017,60 @@ export interface components {
             medical_notes?: string | null;
             address?: unknown;
             custom_fields?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description `student_attendance` — read shape. Rows are written by `:bulk-mark`. */
+        StudentAttendance: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            student_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            academic_session_id: string;
+            /** Format: uuid */
+            period_id?: string | null;
+            /**
+             * Format: date
+             * @description Calendar date in the tenant's timezone.
+             */
+            attendance_date: string;
+            status: components["schemas"]["AttendanceStatusEnum"];
+            /**
+             * Format: time
+             * @description Set for a late arrival.
+             */
+            check_in_time?: string | null;
+            /**
+             * Format: time
+             * @description Set for an early departure or a half day.
+             */
+            check_out_time?: string | null;
+            /** @description Computed server-side from the tenant day window (§11); never client-supplied. */
+            readonly late_minutes: number | null;
+            /** Format: uuid */
+            readonly leave_request_id: string;
+            readonly source: components["schemas"]["AttendanceSourceEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) — the marking actor.
+             */
+            readonly marked_by: string;
+            /**
+             * @description The *effective* lock state, not the persisted column.
+             *
+             *     `is_locked` is swept nightly, so between the window passing and the sweep
+             *     running the column says False while every write path answers 409 — the
+             *     service checks `row.is_locked or is_locked(row.attendance_date)`. A client
+             *     rendering the column alone offered an edit that could not succeed. Same
+             *     expression, one source.
+             */
+            readonly is_locked: boolean;
+            remarks?: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -3994,7 +5236,7 @@ export interface components {
             readonly id: string;
             name: string;
             code: string;
-            subject_type?: components["schemas"]["SubjectTypeEnum"];
+            subject_type?: components["schemas"]["SubjectSubjectTypeEnum"];
             /** Format: uuid */
             department_id?: string | null;
             description?: string | null;
@@ -4010,7 +5252,7 @@ export interface components {
          *     * `co_curricular` - Co-curricular
          * @enum {string}
          */
-        SubjectTypeEnum: "core" | "elective" | "co_curricular";
+        SubjectSubjectTypeEnum: "core" | "elective" | "co_curricular";
         TeacherAllocation: {
             /** Format: uuid */
             readonly id: string;
@@ -4071,7 +5313,7 @@ export interface components {
             reason?: string | null;
             /**
              * Format: uuid
-             * @description leave_requests(id) — a plain UUID, not an FK: the attendance module that owns that table has not shipped yet.
+             * @description The approved staff leave this cover is for, when there is one.
              */
             readonly leave_request_id: string | null;
             readonly status: components["schemas"]["TeacherSubstitutionStatusEnum"];
@@ -4456,6 +5698,148 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    attendance_corrections_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `pending` - Pending
+                 *     * `approved` - Approved
+                 *     * `rejected` - Rejected
+                 *     * `cancelled` - Cancelled
+                 */
+                status?: "approved" | "cancelled" | "pending" | "rejected";
+                student_attendance_id?: string;
+                /**
+                 * @description * `student` - Student
+                 *     * `staff` - Staff
+                 */
+                subject_type?: "staff" | "student";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAttendanceCorrectionList"];
+                };
+            };
+        };
+    };
+    attendance_corrections_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceCorrection"];
+                "application/x-www-form-urlencoded": components["schemas"]["AttendanceCorrection"];
+                "multipart/form-data": components["schemas"]["AttendanceCorrection"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCorrection"];
+                };
+            };
+        };
+    };
+    attendance_corrections_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this attendance correction. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCorrection"];
+                };
+            };
+        };
+    };
+    "attendance_corrections_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CorrectionDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["CorrectionDecision"];
+                "multipart/form-data": components["schemas"]["CorrectionDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCorrection"];
+                };
+            };
+        };
+    };
+    "attendance_corrections_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CorrectionDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["CorrectionDecision"];
+                "multipart/form-data": components["schemas"]["CorrectionDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceCorrection"];
+                };
             };
         };
     };
@@ -5576,6 +6960,50 @@ export interface operations {
             };
         };
     };
+    holiday_calendar_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
+                };
+            };
+        };
+    };
+    holiday_calendar_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HolidayCalendar"];
+                "application/x-www-form-urlencoded": components["schemas"]["HolidayCalendar"];
+                "multipart/form-data": components["schemas"]["HolidayCalendar"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
+                };
+            };
+        };
+    };
     houses_list: {
         parameters: {
             query?: {
@@ -5775,6 +7203,229 @@ export interface operations {
             };
         };
     };
+    leave_requests_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                date__gte?: string;
+                date__lte?: string;
+                leave_type_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `staff` - Staff
+                 *     * `student` - Student
+                 */
+                requester_type?: "staff" | "student";
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `pending` - Pending
+                 *     * `approved` - Approved
+                 *     * `rejected` - Rejected
+                 *     * `cancelled` - Cancelled
+                 */
+                status?: "approved" | "cancelled" | "pending" | "rejected";
+                student_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedLeaveRequestList"];
+                };
+            };
+        };
+    };
+    leave_requests_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LeaveRequest"];
+                "multipart/form-data": components["schemas"]["LeaveRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequest"];
+                };
+            };
+        };
+    };
+    leave_requests_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this leave request. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequest"];
+                };
+            };
+        };
+    };
+    "leave_requests_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LeaveDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["LeaveDecision"];
+                "multipart/form-data": components["schemas"]["LeaveDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequest"];
+                };
+            };
+        };
+    };
+    "leave_requests_:cancel_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequest"];
+                };
+            };
+        };
+    };
+    "leave_requests_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LeaveDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["LeaveDecision"];
+                "multipart/form-data": components["schemas"]["LeaveDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveRequest"];
+                };
+            };
+        };
+    };
+    leave_types_list: {
+        parameters: {
+            query?: {
+                /**
+                 * @description * `staff` - Staff
+                 *     * `student` - Student
+                 *     * `both` - Both
+                 */
+                applies_to?: "both" | "staff" | "student";
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedLeaveTypeList"];
+                };
+            };
+        };
+    };
+    leave_types_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this leave type. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveType"];
+                };
+            };
+        };
+    };
     periods_list: {
         parameters: {
             query?: {
@@ -5898,6 +7549,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Period"];
                 };
+            };
+        };
+    };
+    reports_attendance_summary_retrieve: {
+        parameters: {
+            query: {
+                end_date?: string;
+                /**
+                 * @description * `csv` - csv
+                 *     * `xlsx` - xlsx
+                 *     * `pdf` - pdf
+                 */
+                format?: "csv" | "xlsx" | "pdf";
+                /**
+                 * @description * `daily-register` - daily-register
+                 *     * `student-summary` - student-summary
+                 *     * `defaulters` - defaulters
+                 *     * `student-late-arrivals` - student-late-arrivals
+                 *     * `staff-punctuality` - staff-punctuality
+                 *     * `leave` - leave
+                 */
+                kind: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
+                section_id?: string | null;
+                start_date: string;
+                threshold?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report's rows, under `data`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reports_attendance_summary_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceReportQuery"];
+                "application/x-www-form-urlencoded": components["schemas"]["AttendanceReportQuery"];
+                "multipart/form-data": components["schemas"]["AttendanceReportQuery"];
+            };
+        };
+        responses: {
+            /** @description A job resource; poll GET /jobs/{id}. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6302,6 +8015,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_attendance_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                date?: string;
+                date__gte?: string;
+                date__lte?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `manual` - Manual
+                 *     * `self` - Self check-in
+                 *     * `import` - Import
+                 *     * `device` - Device
+                 */
+                source?: "device" | "import" | "manual" | "self";
+                staff_id?: string;
+                /**
+                 * @description * `present` - Present
+                 *     * `absent` - Absent
+                 *     * `late` - Late
+                 *     * `half_day` - Half day
+                 *     * `on_leave` - On leave
+                 *     * `holiday` - Holiday
+                 */
+                status?: "absent" | "half_day" | "holiday" | "late" | "on_leave" | "present";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStaffAttendanceList"];
+                };
+            };
+        };
+    };
+    staff_attendance_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAttendance"];
+                "application/x-www-form-urlencoded": components["schemas"]["StaffAttendance"];
+                "multipart/form-data": components["schemas"]["StaffAttendance"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffAttendance"];
+                };
+            };
+        };
+    };
+    staff_attendance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this staff attendance. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffAttendance"];
+                };
+            };
+        };
+    };
+    "staff_attendance_:check_out_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffCheckOut"];
+                "application/x-www-form-urlencoded": components["schemas"]["StaffCheckOut"];
+                "multipart/form-data": components["schemas"]["StaffCheckOut"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffAttendance"];
                 };
             };
         };
@@ -6763,6 +8598,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StaffQualification"];
+                };
+            };
+        };
+    };
+    student_attendance_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                date?: string;
+                date__gte?: string;
+                date__lte?: string;
+                is_locked?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                period_id?: string;
+                /** @description A search term. */
+                search?: string;
+                section_id?: string;
+                /**
+                 * @description * `present` - Present
+                 *     * `absent` - Absent
+                 *     * `late` - Late
+                 *     * `half_day` - Half day
+                 *     * `excused` - Excused
+                 *     * `on_leave` - On leave
+                 */
+                status?: "absent" | "excused" | "half_day" | "late" | "on_leave" | "present";
+                student_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStudentAttendanceList"];
+                };
+            };
+        };
+    };
+    student_attendance_imports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["AttendanceImportRequest"];
+            };
+        };
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}} */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    student_attendance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this student attendance. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentAttendance"];
+                };
+            };
+        };
+    };
+    "student_attendance:bulk_mark_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkMark"];
+                "application/x-www-form-urlencoded": components["schemas"]["BulkMark"];
+                "multipart/form-data": components["schemas"]["BulkMark"];
+            };
+        };
+        responses: {
+            /** @description The marked rows, plus `meta.marked`/`meta.updated` counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStudentAttendanceList"];
                 };
             };
         };

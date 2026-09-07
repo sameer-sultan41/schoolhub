@@ -212,6 +212,7 @@ Shoulds
 signups
 simplejwt
 smallint
+spreadsheetml
 sslmode
 stockouts
 subnetting
@@ -234,9 +235,11 @@ tsvector
 TTFB
 Turbopack
 unallocated
+unconfigured
 undoable
 ungated
 unindexed
+unmarkable
 unmetered
 unmoderated
 unparseable

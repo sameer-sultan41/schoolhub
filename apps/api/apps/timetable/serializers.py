@@ -226,11 +226,12 @@ class TeacherSubstitutionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        # `leave_request_id` is read-only rather than writable: nothing can
-        # populate it yet. §7.2 has the absence signal arriving from attendance,
-        # whose `leave_requests` table has not shipped — a writable field would
-        # accept any UUID and validate it against nothing. Attendance sets it
-        # through the service when that module lands.
+        # `leave_request_id` stays read-only now that `leave_requests` exists and
+        # it is a real foreign key. The reason changed but the answer did not:
+        # §7.2 has the absence signal arriving *from* attendance, so the link is
+        # set by that module's service when it proposes cover — a client naming
+        # one on a hand-created substitution would be asserting a connection
+        # nothing checked.
         read_only_fields = (*READ_ONLY_FIELDS, "status", "leave_request_id")
 
     def validate_substitute_staff_id(self, value: Staff) -> Staff:
