@@ -4,13 +4,22 @@ Thin by design: every rule that needs more than the request body lives in
 `services`, so the API, the result-processing job and the marks importer all
 apply the same checks.
 
-**Every viewset here is staff-only.** §4 gives `student` and `guardian` nothing
-in this PR — their access begins with schedules, admit cards and published
-results, which arrive in the PRs that ship those tables. When it does, it will
-need `get_permissions`, not a class attribute: a viewset serving both a portal
-read and a staff write cannot express that with `permission_classes` alone,
-because DRF resolves it per view. That is PR #42's privilege-escalation finding,
-and this module is the next place with the same shape.
+**Two viewsets are portal-readable, and both use `get_permissions`.** §3 gives
+a `student`/`guardian` a view of exam schedules and admit cards, so
+`ExamScheduleViewSet` and `AdmitCardViewSet` drop `DenyRestrictedPrincipals`
+**for reads only** and let the record scope narrow them, through each model's
+`filter_owned_by_user`.
+
+Their write actions keep the guard, and it has to be `get_permissions` rather
+than a class attribute because **DRF resolves `permission_classes` per view, not
+per action**. That is PR #42's privilege-escalation finding — a viewset-wide
+portal exemption on `student_attendance` covered `:bulk-mark` too — and it
+generalises exactly here: scheduling a sitting or issuing a hall's worth of
+cards is not a scoped read of one child's row.
+
+Nor can the service check close it alone. `assert_exam_is_issuable` objects to
+the *exam's state*, not to who is asking, so a restricted principal holding
+`exams.admit-card.issue` would pass it. The principal check has to sit in front.
 
 **`scope_campus_field = None` on all three.** An exam, a grading scale and a
 subject configuration are school-wide: an exam is set for Grade 8, not for Grade
@@ -29,19 +38,33 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
-from apps.examinations import services
+from apps.examinations import conflicts, services, tasks
 from apps.examinations.filters import (
+    AdmitCardFilterSet,
     ExamFilterSet,
+    ExamScheduleFilterSet,
     ExamSubjectFilterSet,
     GradingScaleFilterSet,
 )
-from apps.examinations.models import Exam, ExamSubject, GradeBand, GradingScale
+from apps.examinations.models import (
+    AdmitCard,
+    Exam,
+    ExamSchedule,
+    ExamSubject,
+    GradeBand,
+    GradingScale,
+)
 from apps.examinations.serializers import (
+    AdmitCardRevokeSerializer,
+    AdmitCardSerializer,
+    ExamScheduleSerializer,
     ExamSerializer,
     ExamSubjectSerializer,
     GradeBandSerializer,
@@ -50,6 +73,8 @@ from apps.examinations.serializers import (
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.idempotency.services import replay_or_execute
+from core.jobs.services import create_job
 from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey
 
 if TYPE_CHECKING:
@@ -63,6 +88,10 @@ STAFF_PERMISSIONS = [
     HasPermissionKey,
     DenyRestrictedPrincipals,
 ]
+
+# Students and guardians reach the two viewsets that use this, and only for
+# reads. The record scope, not the permission class, is what narrows them.
+PORTAL_READABLE_PERMISSIONS = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
 
 
 class GradingScaleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -234,3 +263,231 @@ class ExamSubjectViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     def perform_destroy(self, instance) -> None:
         services.assert_exam_is_configurable(instance.exam)
         super().perform_destroy(instance)
+
+
+class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/exam-schedules` — §5.2's sittings.
+
+    **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+    imperfect: §8's exam-staff journey is "resolves the two room clashes the
+    checker flags", which requires the clashing state to be storable and the
+    whole list to come back at once. `:publish-schedule` is where hard clashes
+    become blocking — the same division `timetable`'s draft grid and its
+    `:publish` already draw.
+
+    Portal-readable for reads only; see the module docstring.
+    """
+
+    permission_classes = PORTAL_READABLE_PERMISSIONS
+    queryset = ExamSchedule.objects
+    serializer_class = ExamScheduleSerializer
+    filterset_class = ExamScheduleFilterSet
+    ordering_fields = ["exam_date", "start_time"]
+    # `own` is a join through enrollments and the guardian link, not a column
+    # here — the model hook owns it and takes precedence over this fallback,
+    # which is left None so a mistaken single-column reading cannot apply.
+    scope_own_field = None
+    scope_campus_field = "section__campus_id"
+    required_feature = FEATURE
+    required_permission = "exams.schedule.view"
+    required_permission_map = {
+        "create": "exams.schedule.create",
+        "update": "exams.schedule.update",
+        "partial_update": "exams.schedule.update",
+        "destroy": "exams.schedule.update",
+    }
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    STAFF_ONLY_ACTIONS = frozenset({"create", "update", "partial_update", "destroy"})
+
+    def get_permissions(self):
+        """Add `DenyRestrictedPrincipals` to the write actions only.
+
+        DRF resolves `permission_classes` per view, not per action, so a viewset
+        serving both a portal read and a staff write has to choose here. See the
+        module docstring for why the service check cannot close this alone.
+        """
+        if self.action in self.STAFF_ONLY_ACTIONS:
+            return [permission() for permission in STAFF_PERMISSIONS]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related("exam_subject__exam", "exam_subject__subject", "section", "room")
+        )
+
+    def _conflict_meta(self, schedule: ExamSchedule) -> dict:
+        """§5.2's clash list, for the exam the edited sitting belongs to.
+
+        Exam-scoped rather than sitting-scoped: a room or invigilator clash is
+        by definition with some *other* sitting, and a caller editing one cell
+        needs the whole list to act on — §8's journey is "resolves the two room
+        clashes the checker flags", plural.
+        """
+        return {"conflicts": conflicts.detect_conflicts(exam=schedule.exam_subject.exam)}
+
+    def create(self, request: Request, *args, **kwargs):
+        """201 with `meta.conflicts` — a clash list, not a refusal."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+
+        # A bare Response, not ActionResponse.ok: that helper wraps its argument
+        # in {"data": ...}, so an already-enveloped payload nests twice.
+        # EnvelopeJSONRenderer passes a pre-shaped {"data", "meta"} through and
+        # injects request_id — the same shape timetable's slot grid returns.
+        return Response(
+            {"data": serializer.data, "meta": self._conflict_meta(serializer.instance)},
+            status=201,
+        )
+
+    def update(self, request: Request, *args, **kwargs):
+        """200 with `meta.conflicts`, on the same reasoning as `create`."""
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        services.assert_schedule_is_editable(instance)
+
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        return Response({"data": serializer.data, "meta": self._conflict_meta(serializer.instance)})
+
+    def partial_update(self, request: Request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    @extend_schema(request=None, responses={200: ExamScheduleSerializer(many=True)})
+    def publish(self, request: Request, pk: str | None = None):
+        """`POST /exams/{id}:publish-schedule` — release the timetable (§5.2).
+
+        Routed under `/exams` rather than `/exam-schedules` because it is the
+        *exam* that moves state: a schedule is published as a whole, not sitting
+        by sitting, and §6 calls it "schedule publish to portals".
+        """
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        outcome = services.publish_exam_schedule(exam=exam, actor_id=request.user.pk)
+        record_audit(request, "publish", exam, after={"status": outcome["status"]})
+
+        transaction.on_commit(
+            lambda: tasks.notify_schedule_published.delay(
+                tenant_id=str(request.tenant.pk), exam_id=str(exam.pk)
+            )
+        )
+        return ActionResponse.ok(
+            {"status": outcome["status"], "conflicts": outcome["conflicts"]},
+            message="Schedule published. Students and guardians have been notified.",
+        )
+
+
+class AdmitCardViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/admit-cards` — §5.3's issued cards.
+
+    **No create or update.** §16 declares a `GET` plus two colon-actions and
+    nothing else: a card's number is generated so two students can never share
+    one, its file is written by a job, and its status moves through
+    `:issue-admit-cards` and `:revoke`. A per-row create would bypass all three.
+
+    Portal-readable for reads only; see the module docstring.
+    """
+
+    permission_classes = PORTAL_READABLE_PERMISSIONS
+    queryset = AdmitCard.objects
+    serializer_class = AdmitCardSerializer
+    filterset_class = AdmitCardFilterSet
+    search_fields = ["admit_card_no"]
+    ordering_fields = ["admit_card_no", "created_at"]
+    scope_own_field = None
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "exams.admit-card.view"
+    required_permission_map = {
+        "issue": "exams.admit-card.issue",
+        "revoke": "exams.admit-card.issue",
+    }
+    http_method_names = ["get", "post", "head", "options"]
+
+    STAFF_ONLY_ACTIONS = frozenset({"issue", "revoke"})
+
+    def get_permissions(self):
+        """Add `DenyRestrictedPrincipals` to the write actions only — as above."""
+        if self.action in self.STAFF_ONLY_ACTIONS:
+            return [permission() for permission in STAFF_PERMISSIONS]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("student")
+
+    @extend_schema(request=None, responses={202: None})
+    def issue(self, request: Request, pk: str | None = None):
+        """`POST /exams/{id}:issue-admit-cards` — 202 + a job (§16).
+
+        The **rows** are created synchronously so the caller learns immediately
+        how many cards this run added, and only the PDFs are deferred: a hall's
+        worth of WeasyPrint renders is not work an exam clerk holds a request
+        open for (api-architecture.md §2.7).
+
+        Accepts `Idempotency-Key`, because a clerk's double-click on a batch
+        action should replay the first answer rather than start a second render
+        of three hundred documents.
+        """
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+
+        def execute():
+            outcome = services.issue_admit_cards(exam=exam, actor_id=request.user.pk)
+            job = create_job(
+                tenant_id=request.tenant.pk,
+                job_type="exams.admit-cards",
+                payload={"exam_id": str(exam.pk), "requested_by": str(request.user.pk)},
+                actor_id=request.user.pk,
+            )
+            transaction.on_commit(
+                lambda: tasks.render_admit_cards_task.delay(
+                    tenant_id=str(request.tenant.pk),
+                    job_id=str(job.pk),
+                    actor_id=str(request.user.pk),
+                )
+            )
+            record_audit(request, "issue", exam, after=outcome)
+            return ActionResponse.accepted(
+                str(job.pk),
+                message=(
+                    f"{outcome['issued']} admit card(s) created and queued for rendering; "
+                    f"{outcome['already_issued']} already existed."
+                ),
+            )
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="exams:issue-admit-cards",
+            execute=execute,
+        )
+
+    @extend_schema(request=AdmitCardRevokeSerializer, responses={200: AdmitCardSerializer})
+    def revoke(self, request: Request, pk: str | None = None):
+        """`POST /admit-cards/{id}:revoke` — withdraw a card, with a reason (§5.3)."""
+        card = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = AdmitCardRevokeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        before = {"status": card.status}
+
+        services.revoke_admit_card(
+            card=card, reason=serializer.validated_data["reason"], actor_id=request.user.pk
+        )
+
+        record_audit(
+            request,
+            "update",
+            card,
+            before=before,
+            after={"status": card.status, "revoked_reason": card.revoked_reason},
+        )
+        return ActionResponse.ok(AdmitCardSerializer(card).data, message="Admit card revoked.")

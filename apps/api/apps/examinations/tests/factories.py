@@ -20,19 +20,24 @@ produces a valid scale and every test starts from it.
 
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal
 
 import factory
 
 from apps.academics.tests.factories import TeacherAllocationFactory
 from apps.examinations.models import (
+    AdmitCard,
+    AdmitCardStatus,
     Exam,
+    ExamSchedule,
     ExamStatus,
     ExamSubject,
     ExamType,
     GradeBand,
     GradingScale,
     ScaleType,
+    ScheduleStatus,
 )
 from apps.school_organization.tests.factories import (
     AcademicSessionFactory,
@@ -59,12 +64,16 @@ from core.tenancy.context import tenant_context
 from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
 __all__ = [
+    "AFTERNOON",
+    "MORNING",
     "STANDARD_BANDS",
     "AcademicSessionFactory",
     "CampusFactory",
     "ClassFactory",
     "ClassSubjectFactory",
     "ExamFactory",
+    "AdmitCardFactory",
+    "ExamScheduleFactory",
     "ExamSubjectFactory",
     "GradeBandFactory",
     "GradingScaleFactory",
@@ -83,6 +92,7 @@ __all__ = [
     "authenticate",
     "complete_scale",
     "disable_feature",
+    "exam_week",
     "enable_feature",
     "grant",
 ]
@@ -189,3 +199,57 @@ def disable_feature(tenant, key: str) -> None:
             feature_flag=flag,
             defaults={"enabled": False, "reason": "examinations feature-gate test"},
         )
+
+
+# One ordinary exam morning: a two-hour paper, then a second slot that does not
+# touch it. Fixed times rather than derived from `now()` so a test asserting an
+# overlap is asserting arithmetic, not the hour CI happens to run at.
+MORNING = (datetime.time(9, 0), datetime.time(11, 0))
+AFTERNOON = (datetime.time(13, 0), datetime.time(15, 0))
+
+
+class ExamScheduleFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ExamSchedule
+
+    start_time = MORNING[0]
+    end_time = MORNING[1]
+    status = ScheduleStatus.SCHEDULED
+    # No SubFactory for exam_subject/section/room/invigilator: each must belong
+    # to the same tenant and agree with the others (the section must be in the
+    # exam-subject's class), so callers wire them explicitly — the convention
+    # every factory here follows. `exam_date` likewise: a sitting outside its
+    # exam's own window is a *conflict* the engine reports, and a factory
+    # default would produce it silently.
+
+
+class AdmitCardFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = AdmitCard
+
+    admit_card_no = factory.Sequence(lambda n: f"TEST-{n:06d}")
+    status = AdmitCardStatus.GENERATED
+
+
+def exam_week(tenant, exam, *, days: int = 5):
+    """Give `exam` a date window starting on the next working day.
+
+    Derived from the calendar rather than hardcoded because `conflicts` reports
+    a sitting on a weekend or holiday as a **hard** finding: a fixture pinned to
+    a fixed date would fail on the calendar two days in seven, which is the
+    flakiness `attendance`'s `MARKING_DATE` comment already warns about.
+    """
+    from django.utils import timezone
+
+    from apps.school_organization import calendar
+
+    with tenant_context(tenant.id):
+        day = timezone.localdate()
+        for _ in range(14):
+            if calendar.is_working_day(day):
+                break
+            day += datetime.timedelta(days=1)
+        exam.starts_on = day
+        exam.ends_on = day + datetime.timedelta(days=days)
+        exam.save(update_fields=["starts_on", "ends_on", "updated_at"])
+    return day

@@ -295,6 +295,142 @@ paths:
           description: ''
         '409':
           description: Not active
+  /api/v1/admit-cards:
+    get:
+      operationId: admit_cards_list
+      description: |-
+        `/admit-cards` — §5.3's issued cards.
+
+        **No create or update.** §16 declares a `GET` plus two colon-actions and
+        nothing else: a card's number is generated so two students can never share
+        one, its file is written by a job, and its status moves through
+        `:issue-admit-cards` and `:revoke`. A per-row create would bypass all three.
+
+        Portal-readable for reads only; see the module docstring.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: exam_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - generated
+          - issued
+          - revoked
+        description: |-
+          * `generated` - Generated
+          * `issued` - Issued
+          * `revoked` - Revoked
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - admit-cards
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdmitCardList'
+          description: ''
+  /api/v1/admit-cards/{id}:
+    get:
+      operationId: admit_cards_retrieve
+      description: |-
+        `/admit-cards` — §5.3's issued cards.
+
+        **No create or update.** §16 declares a `GET` plus two colon-actions and
+        nothing else: a card's number is generated so two students can never share
+        one, its file is written by a job, and its status moves through
+        `:issue-admit-cards` and `:revoke`. A per-row create would bypass all three.
+
+        Portal-readable for reads only; see the module docstring.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this admit card.
+        required: true
+      tags:
+      - admit-cards
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdmitCard'
+          description: ''
+  /api/v1/admit-cards/{id}:revoke:
+    post:
+      operationId: admit_cards_:revoke_create
+      description: '`POST /admit-cards/{id}:revoke` — withdraw a card, with a reason
+        (§5.3).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admit-cards
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdmitCardRevoke'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdmitCardRevoke'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdmitCardRevoke'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdmitCard'
+          description: ''
   /api/v1/attendance-corrections:
     get:
       operationId: attendance_corrections_list
@@ -1492,6 +1628,238 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/exam-schedules:
+    get:
+      operationId: exam_schedules_list
+      description: |-
+        `/exam-schedules` — §5.2's sittings.
+
+        **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+        imperfect: §8's exam-staff journey is "resolves the two room clashes the
+        checker flags", which requires the clashing state to be storable and the
+        whole list to come back at once. `:publish-schedule` is where hard clashes
+        become blocking — the same division `timetable`'s draft grid and its
+        `:publish` already draw.
+
+        Portal-readable for reads only; see the module docstring.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: exam_date
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: exam_date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: exam_date__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: exam_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: exam_subject_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: invigilator_staff_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: room_id
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - completed
+          - scheduled
+        description: |-
+          * `scheduled` - Scheduled
+          * `completed` - Completed
+          * `cancelled` - Cancelled
+      tags:
+      - exam-schedules
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExamScheduleList'
+          description: ''
+    post:
+      operationId: exam_schedules_create
+      description: 201 with `meta.conflicts` — a clash list, not a refusal.
+      tags:
+      - exam-schedules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExamSchedule'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExamSchedule'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExamSchedule'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSchedule'
+          description: ''
+  /api/v1/exam-schedules/{id}:
+    get:
+      operationId: exam_schedules_retrieve
+      description: |-
+        `/exam-schedules` — §5.2's sittings.
+
+        **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+        imperfect: §8's exam-staff journey is "resolves the two room clashes the
+        checker flags", which requires the clashing state to be storable and the
+        whole list to come back at once. `:publish-schedule` is where hard clashes
+        become blocking — the same division `timetable`'s draft grid and its
+        `:publish` already draw.
+
+        Portal-readable for reads only; see the module docstring.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam schedule.
+        required: true
+      tags:
+      - exam-schedules
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSchedule'
+          description: ''
+    patch:
+      operationId: exam_schedules_partial_update
+      description: |-
+        `/exam-schedules` — §5.2's sittings.
+
+        **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+        imperfect: §8's exam-staff journey is "resolves the two room clashes the
+        checker flags", which requires the clashing state to be storable and the
+        whole list to come back at once. `:publish-schedule` is where hard clashes
+        become blocking — the same division `timetable`'s draft grid and its
+        `:publish` already draw.
+
+        Portal-readable for reads only; see the module docstring.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam schedule.
+        required: true
+      tags:
+      - exam-schedules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExamSchedule'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExamSchedule'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExamSchedule'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSchedule'
+          description: ''
+    delete:
+      operationId: exam_schedules_destroy
+      description: |-
+        `/exam-schedules` — §5.2's sittings.
+
+        **`meta.conflicts` on every write.** A schedule mid-build is allowed to be
+        imperfect: §8's exam-staff journey is "resolves the two room clashes the
+        checker flags", which requires the clashing state to be storable and the
+        whole list to come back at once. `:publish-schedule` is where hard clashes
+        become blocking — the same division `timetable`'s draft grid and its
+        `:publish` already draw.
+
+        Portal-readable for reads only; see the module docstring.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam schedule.
+        required: true
+      tags:
+      - exam-schedules
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/exam-subjects:
     get:
       operationId: exam_subjects_list
@@ -1903,6 +2271,137 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/exams/{id}:issue-admit-cards:
+    post:
+      operationId: exams_:issue_admit_cards_create
+      description: |-
+        `POST /exams/{id}:issue-admit-cards` — 202 + a job (§16).
+
+        The **rows** are created synchronously so the caller learns immediately
+        how many cards this run added, and only the PDFs are deferred: a hall's
+        worth of WeasyPrint renders is not work an exam clerk holds a request
+        open for (api-architecture.md §2.7).
+
+        Accepts `Idempotency-Key`, because a clerk's double-click on a batch
+        action should replay the first answer rather than start a second render
+        of three hundred documents.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
+  /api/v1/exams/{id}:publish-schedule:
+    post:
+      operationId: exams_:publish_schedule_create
+      description: |-
+        `POST /exams/{id}:publish-schedule` — release the timetable (§5.2).
+
+        Routed under `/exams` rather than `/exam-schedules` because it is the
+        *exam* that moves state: a schedule is published as a whole, not sitting
+        by sitting, and §6 calls it "schedule publish to portals".
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: exam_date
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: exam_date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: exam_date__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: exam_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: exam_subject_id
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: invigilator_staff_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: room_id
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - completed
+          - scheduled
+        description: |-
+          * `scheduled` - Scheduled
+          * `completed` - Completed
+          * `cancelled` - Cancelled
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExamScheduleList'
+          description: ''
   /api/v1/files:
     get:
       operationId: files_list
@@ -7733,6 +8232,92 @@ components:
         * `active` - Active
         * `closed` - Closed
         * `archived` - Archived
+    AdmitCard:
+      type: object
+      description: |-
+        `admit_cards` — read-only on the wire (§5.3).
+
+        Every field a client might want to set is set by the module: the number is
+        generated so two students can never share one, `file` is written by the
+        render job, and `status`/`issued_*` move through `:issue-admit-cards` and
+        `:revoke`. There is no create or update endpoint — §16 declares a `GET` and
+        two colon-actions, and nothing else.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        admit_card_no:
+          type: string
+          readOnly: true
+        file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AdmitCardStatusEnum'
+          readOnly: true
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        revoked_reason:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - admit_card_no
+      - created_at
+      - exam_id
+      - file_id
+      - id
+      - issued_at
+      - revoked_reason
+      - status
+      - student_id
+      - updated_at
+    AdmitCardRevoke:
+      type: object
+      description: |-
+        The body of `POST /admit-cards/{id}:revoke`.
+
+        The reason is required, not optional: a CHECK constraint enforces it too,
+        because a revocation nobody can explain is the one a parent will ask about.
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    AdmitCardStatusEnum:
+      enum:
+      - generated
+      - issued
+      - revoked
+      type: string
+      description: |-
+        * `generated` - Generated
+        * `issued` - Issued
+        * `revoked` - Revoked
     AppliesToEnum:
       enum:
       - staff
@@ -8650,6 +9235,78 @@ components:
       - name
       - status
       - updated_at
+    ExamSchedule:
+      type: object
+      description: |-
+        `exam_schedules` — one section's sitting of one paper (§5.2).
+
+        `status` is writable here, unlike on `Exam`: §5.2's transitions are
+        `completed` and `cancelled`, neither of which gates anything a client could
+        escalate through — a cancelled sitting frees its room, which is the point,
+        and marking one complete is an operational note. The exam's own lifecycle is
+        the one with an approval gate behind it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_subject_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        exam_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        room_id:
+          type: string
+          format: uuid
+          nullable: true
+        invigilator_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ExamScheduleStatusEnum'
+        instructions:
+          type: string
+          nullable: true
+          description: Printed on admit cards (§5.3).
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - end_time
+      - exam_date
+      - exam_subject_id
+      - id
+      - section_id
+      - start_time
+      - updated_at
+    ExamScheduleStatusEnum:
+      enum:
+      - scheduled
+      - completed
+      - cancelled
+      type: string
+      description: |-
+        * `scheduled` - Scheduled
+        * `completed` - Completed
+        * `cancelled` - Cancelled
     ExamStatusEnum:
       enum:
       - draft
@@ -9484,6 +10141,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedAdmitCardList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdmitCard'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedAttendanceCorrectionList:
       type: object
       properties:
@@ -9638,6 +10316,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Exam'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedExamScheduleList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExamSchedule'
         meta:
           type: object
           properties:
@@ -10482,6 +11181,59 @@ components:
         description:
           type: string
           nullable: true
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedExamSchedule:
+      type: object
+      description: |-
+        `exam_schedules` — one section's sitting of one paper (§5.2).
+
+        `status` is writable here, unlike on `Exam`: §5.2's transitions are
+        `completed` and `cancelled`, neither of which gates anything a client could
+        escalate through — a cancelled sitting frees its room, which is the point,
+        and marking one complete is an operational note. The exam's own lifecycle is
+        the one with an approval gate behind it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_subject_id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        exam_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        room_id:
+          type: string
+          format: uuid
+          nullable: true
+        invigilator_staff_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ExamScheduleStatusEnum'
+        instructions:
+          type: string
+          nullable: true
+          description: Printed on admit cards (§5.3).
           maxLength: 500
         created_at:
           type: string

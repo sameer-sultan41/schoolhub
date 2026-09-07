@@ -19,7 +19,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | 0 — Foundation | tenancy, auth/RBAC, [`school-organization`](03-modules/school-organization.md) | Done in substance — tenancy/RBAC/audit/API plumbing in `apps/api/core/`, `school_organization` Django app shipped and merged |
 | 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **Both full-stack complete** — `student-management` (PRs 1-4) and `staff-management` (this PR), see the per-module matrix below |
 | 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **Backend complete.** `academics` and `timetable` shipped; `attendance` shipped as three stacked PRs (marking → leave → staff/reports). Dashboard screens for the tier are still outstanding. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
-| 3 — High-stakes | [`examinations`](03-modules/examinations.md), [`fees-finance`](03-modules/fees-finance.md) | **In progress.** `examinations` is shipping as five stacked PRs (setup → scheduling/admit cards → marks → results/report cards → reports/question banks); PR A has landed. `fees-finance` is **blocked on its own spec** — it has a vouchers/receipts spec-only PR and no core module doc, so there is nothing to build from |
+| 3 — High-stakes | [`examinations`](03-modules/examinations.md), [`fees-finance`](03-modules/fees-finance.md) | **In progress.** `examinations` is shipping as five stacked PRs (setup → scheduling/admit cards → marks → results/report cards → reports/question banks); PRs A and B have landed. `fees-finance` is **blocked on its own spec** — it has a vouchers/receipts spec-only PR and no core module doc, so there is nothing to build from |
 | 4–7 | communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started |
 
 ## Per-module implementation matrix
@@ -33,7 +33,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | timetable | done (rooms/periods CRUD, draft slot grid with `meta.conflicts` on every edit, `:validate` / `:publish` with supersede-by-end-dating, `GET /timetables/my` for teacher/student/guardian, substitutions + `:approve`/`:reject`) | done (week grid editor, conflict panel, publish action, My timetable, substitutions queue) | live-lane API journeys + one build-and-publish browser CUJ | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
 | attendance | **done** (register `:bulk-mark` with idempotent re-submission, the §5.5 lock window, corrections, guardian alerts, nightly lock sweep; the five leave tables, §7.2's escalating chain, auto-marking `on_leave`; staff attendance with `:check-out`, §13's six reports with a 202 export lane, and the absent-teacher cover feed into timetable) | — (backend-only; the dashboard agent owns screens) | live-lane API journeys for marking (mark → re-submit → read back, rejected row, future date) leave (submit → approve → auto-mark, self-approval refused, cancel, overlap) and staff/reports (record a day, check out, run a report, export as a job) | done |
-| examinations | **in progress** (PR A: grading scales with validated bands, exams, per-class subject configuration) | — (backend-only; the dashboard agent owns screens) | — (arrives with the marks and results PRs, where there is a journey worth driving) | done |
+| examinations | **in progress** (PR A: grading scales with validated bands, exams, per-class subject configuration. PR B: sittings with a date/time clash engine, schedule publish, the idempotent admit-card batch and its PDF job) | — (backend-only; the dashboard agent owns screens) | — (arrives with the marks and results PRs, where there is a journey worth driving) | done |
 | everything else (12 modules) | — | — | — | done (spec exists; nothing implemented) |
 
 ---
@@ -315,6 +315,43 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   **No RBAC registry change:** result processing takes the standard `create`
   verb rather than a new `process` one, since processing is precisely what
   creates `results` rows.
+- **`examinations` needed its own clash engine, and that is not duplication for
+  its own sake.** `timetable/conflicts.py` is keyed on `(day_of_week,
+  period_id)` — a cell in a weekly grid whose times come from the period it
+  names — so a clash there is an equality test on a key tuple. An exam sitting
+  is a wall-clock interval on a calendar date, so a clash is an *overlap* test
+  and two sittings can conflict without sharing any key. Every detector in that
+  file reads `TimetableSlot` attributes, and its own header records that its
+  duplication with the database constraints is load-bearing. What
+  `apps/examinations/conflicts.py` copies is the **pattern** — a frozen
+  `Conflict` naming every row involved, one prefetching `collect_scope`, pure
+  detectors with no query inside any of them, hard findings blocking publish
+  while soft ones only warn — asserted with `assertNumQueries` so a later
+  refactor that reintroduces an N+1 fails rather than merely slows. **The
+  generalisation for the next module: copy the shape, not the code, when the
+  row shape differs.**
+- **Two rulings inside that engine are worth carrying forward.** Overlap is
+  half-open (`a.start < b.end and b.start < a.end`), because back-to-back
+  sittings are the normal shape of an exam day and the closed reading reports a
+  false conflict on every one of them. And a sitting on a holiday is a **hard**
+  finding rather than a soft one: the alternative is a hall of students arriving
+  at a locked school, and a school that genuinely opens for an exam edits its
+  working week — which is a real change rather than an override. It reads the
+  same `school_organization.calendar` `attendance` refuses to mark against.
+- **`exam_schedules.status = cancelled` is a status, not a soft delete**, and
+  the reason generalises: a cancelled sitting stays visible to a student who
+  already saw it, *and* is excluded from every clash check and both occupancy
+  constraints, because a room freed by a cancellation is free. A `deleted_at`
+  would have given the second property and lost the first.
+- **The admit-card batch is idempotent and creates rows synchronously.** §8's
+  journey is "issues admit cards in one batch", which in practice means pressing
+  the button again after the roll changes — so a re-run tops up and reports both
+  counts rather than colliding on the unique index. Only the PDFs are deferred
+  to a job, which renders whatever has no `file_id`; that is what makes a
+  partial failure fixable by re-running rather than by unpicking half a batch.
+  **A revoked card is never reinstated by a top-up run** — revocation is a
+  decision someone made, and silently undoing it would reverse that decision
+  without anyone asking.
 - **The grading scale is the one rule in `examinations` a constraint cannot
   hold.** §11 wants bands "contiguous, non-overlapping, and fully covering
   0–100%", which is a statement about a *set* of rows: a band is only wrong

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import django_filters
 
-from apps.examinations.models import Exam, ExamSubject, GradingScale
+from apps.examinations.models import AdmitCard, Exam, ExamSchedule, ExamSubject, GradingScale
 
 
 class GradingScaleFilterSet(django_filters.FilterSet):
@@ -54,3 +54,28 @@ class ExamSubjectFilterSet(django_filters.FilterSet):
     class Meta:
         model = ExamSubject
         fields = {"has_practical": ["exact"]}
+
+
+class ExamScheduleFilterSet(django_filters.FilterSet):
+    exam_subject_id = django_filters.UUIDFilter(field_name="exam_subject_id")
+    section_id = django_filters.UUIDFilter(field_name="section_id")
+    room_id = django_filters.UUIDFilter(field_name="room_id")
+    invigilator_staff_id = django_filters.UUIDFilter(field_name="invigilator_staff_id")
+    # Not on the model: a sitting names its exam only through its exam-subject,
+    # and "show me this exam's timetable" is the question every caller actually
+    # asks. Spelling it out here beats making a client send
+    # `exam_subject__exam_id`, which is a join path rather than a contract.
+    exam_id = django_filters.UUIDFilter(field_name="exam_subject__exam_id")
+
+    class Meta:
+        model = ExamSchedule
+        fields = {"exam_date": ["exact", "gte", "lte"], "status": ["exact"]}
+
+
+class AdmitCardFilterSet(django_filters.FilterSet):
+    exam_id = django_filters.UUIDFilter(field_name="exam_id")
+    student_id = django_filters.UUIDFilter(field_name="student_id")
+
+    class Meta:
+        model = AdmitCard
+        fields = {"status": ["exact"]}
