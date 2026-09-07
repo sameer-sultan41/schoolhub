@@ -35,6 +35,7 @@ and keeps the default.
 from __future__ import annotations
 
 from django.db import models, transaction
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -43,46 +44,75 @@ from rest_framework.response import Response
 
 from apps.fees_finance import services
 from apps.fees_finance.filters import (
+    DiscountFilterSet,
     FeeHeadFilterSet,
+    FeeInvoiceFilterSet,
     FeeScheduleFilterSet,
     FeeStructureFilterSet,
+    FineFilterSet,
     LedgerAccountFilterSet,
     LedgerEntryFilterSet,
+    ScholarshipFilterSet,
 )
 from apps.fees_finance.ledger import LedgerLine
 from apps.fees_finance.models import (
+    Discount,
     FeeHead,
+    FeeInvoice,
     FeeSchedule,
     FeeStructure,
+    Fine,
+    InvoiceStatus,
     LedgerAccount,
     LedgerEntry,
+    Scholarship,
+    ScholarshipStatus,
 )
 from apps.fees_finance.serializers import (
+    CancelInvoiceSerializer,
+    DiscountSerializer,
     FeeHeadSerializer,
+    FeeInvoiceSerializer,
     FeeScheduleSerializer,
     FeeStructureSerializer,
+    FineSerializer,
+    GenerateInvoicesSerializer,
     LedgerAccountSerializer,
     LedgerEntrySerializer,
     ManualJournalSerializer,
+    ScholarshipSerializer,
+    WaiveSerializer,
 )
+from apps.fees_finance.tasks import generate_invoices_task
+from apps.school_organization.models import Term
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
+from core.jobs.services import create_job
 from core.money import ZERO
-from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey, scope_queryset
+from core.rbac.permissions import (
+    DenyRestrictedPrincipals,
+    HasPermissionKey,
+    is_restricted_principal,
+    scope_queryset,
+)
 
 FEATURE = "module.fees_finance"
 
-# No portal-readable viewset ships in this PR. Guardians and students reach
-# invoices and receipts in PR B, where the record scope narrows them; a chart of
-# accounts and a fee structure have no per-family reading.
+# A chart of accounts and a fee structure have no per-family reading, so the
+# PR A viewsets are staff-only outright.
 STAFF_PERMISSIONS = [
     IsAuthenticated,
     RequiresModuleFeature,
     HasPermissionKey,
     DenyRestrictedPrincipals,
 ]
+
+# Students and guardians reach the four PR B viewsets that use this, and only
+# for reads. The record scope, not the permission class, is what narrows them —
+# see `FeeInvoiceViewSet.get_permissions` for why it cannot be a class attribute.
+PORTAL_READABLE_PERMISSIONS = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
 
 
 class LedgerAccountViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -365,3 +395,310 @@ class FeeScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         services.assert_structure_is_editable(structure=instance.fee_structure)
         record_audit(self.request, "delete", instance)
         super().perform_destroy(instance)
+
+
+class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/fee-invoices` — §5.2's invoices, readable by the family they concern.
+
+    **Portal-readable, and it uses `get_permissions` rather than a class
+    attribute.** §3 gives a guardian and student a view of their own invoices,
+    so reads drop `DenyRestrictedPrincipals` and let the record scope narrow
+    them through `FeeInvoice.filter_owned_by_user`. Every write keeps the guard,
+    and it has to be resolved per action because **DRF resolves
+    `permission_classes` per view, not per action** — the privilege-escalation
+    finding PR #42 produced, where a viewset-wide portal exemption covered a
+    bulk write too. Generating a term's invoices for a whole school is not a
+    scoped read of one child's row.
+
+    A restricted principal is additionally held to *issued* invoices. A draft is
+    a working document the accountant has not handed over, and showing a parent
+    a charge that may still change is worse than showing them nothing.
+    """
+
+    queryset = FeeInvoice.objects
+    serializer_class = FeeInvoiceSerializer
+    filterset_class = FeeInvoiceFilterSet
+    search_fields = ["invoice_no", "student__first_name", "student__last_name"]
+    ordering_fields = ["issue_date", "due_date", "balance_due", "created_at"]
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "fees.invoice.view"
+    required_permission_map = {
+        "create": "fees.invoice.create",
+        "generate": "fees.invoice.create",
+        "update": "fees.invoice.update",
+        "partial_update": "fees.invoice.update",
+        "destroy": "fees.invoice.update",
+        "cancel": "fees.invoice.update",
+    }
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+
+    def get_permissions(self):
+        """Reads may be portal calls; writes never are.
+
+        Inverted deliberately — the staff set is the default and the portal
+        exemption is the narrow case. A new action added later inherits the
+        guard rather than the exemption, which is the safe direction for the
+        mistake to go.
+        """
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        queryset = (
+            super()
+            .get_queryset()
+            .select_related("student", "fee_structure", "academic_session")
+            .prefetch_related("lines__fee_head")
+        )
+        if is_restricted_principal(self.request.user):
+            return queryset.exclude(status=InvoiceStatus.DRAFT)
+        return queryset
+
+    @extend_schema(request=GenerateInvoicesSerializer, responses={202: None})
+    def generate(self, request: Request) -> Response:
+        """`POST /fee-invoices:generate` — 202 + job.
+
+        Idempotency-Key honoured through `replay_or_execute`, which is the
+        platform's contract for a money mutation (§11's closing line). The
+        run itself is also idempotent at the database — the duplicate guard
+        means a re-run skips what is already billed — so the two layers cover
+        different failures: the key stops a double *submit*, the index stops a
+        double *bill*.
+        """
+        serializer = GenerateInvoicesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        structure = get_object_or_404(
+            FeeStructure.objects.select_related("academic_session"),
+            pk=payload["fee_structure"],
+        )
+        services.assert_structure_is_billable(structure=structure)
+        if payload.get("term"):
+            # Resolved through the tenant-scoped manager, so a foreign term is a
+            # 404 rather than a term silently belonging to another school.
+            get_object_or_404(Term.objects, pk=payload["term"])
+
+        def execute() -> Response:
+            job = create_job(
+                tenant_id=request.tenant.pk,
+                job_type="fees.generate-invoices",
+                payload={
+                    "fee_structure_id": str(structure.pk),
+                    "period_start": (
+                        payload["period_start"].isoformat() if payload.get("period_start") else None
+                    ),
+                    "term_id": str(payload["term"]) if payload.get("term") else None,
+                    "requested_by": str(request.user.pk),
+                },
+                actor_id=request.user.pk,
+                idempotency_key=request.headers.get("Idempotency-Key"),
+            )
+            record_audit(request, "create", job, after={"job_type": job.job_type})
+            transaction.on_commit(
+                lambda: generate_invoices_task.delay(
+                    tenant_id=str(request.tenant.pk),
+                    job_id=str(job.pk),
+                    actor_id=str(request.user.pk),
+                )
+            )
+            return ActionResponse.accepted(str(job.pk), message="Invoice generation queued.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="fee-invoices:generate",
+            execute=execute,
+        )
+
+    @extend_schema(request=CancelInvoiceSerializer, responses={200: FeeInvoiceSerializer})
+    def cancel(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /fee-invoices/{id}:cancel` — void it and release its period."""
+        serializer = CancelInvoiceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        invoice = self.get_object()
+
+        canceled = services.cancel_invoice(
+            invoice=invoice,
+            reason=serializer.validated_data["reason"],
+            actor_id=request.user.pk,
+        )
+        record_audit(request, "update", canceled, after={"status": canceled.status})
+        return ActionResponse.ok(self.get_serializer(canceled).data, message="Invoice canceled.")
+
+
+class DiscountViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/discounts` — §5.3's student-level reductions.
+
+    Portal-readable for the same reason invoices are: a parent shown a reduced
+    bill has to be able to see the reduction that explains it.
+    """
+
+    queryset = Discount.objects
+    serializer_class = DiscountSerializer
+    filterset_class = DiscountFilterSet
+    search_fields = ["name", "student__first_name", "student__last_name"]
+    ordering_fields = ["created_at", "value"]
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "fees.discount.view"
+    required_permission_map = {
+        "create": "fees.discount.create",
+        "update": "fees.discount.create",
+        "partial_update": "fees.discount.create",
+        "destroy": "fees.discount.waive",
+        "revoke": "fees.discount.waive",
+    }
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("student", "fee_head")
+
+    def perform_create(self, serializer):
+        """Stamp the granter from the request, never from the body.
+
+        `discounts_active_is_attributable` refuses an active grant with no
+        approver, and taking the value from the request is what makes that
+        attribution mean something — a client-supplied `approved_by` would let a
+        reduction name someone who never saw it.
+        """
+        instance = serializer.save(
+            tenant=self.request.tenant,
+            created_by=self.request.user.pk,
+            updated_by=self.request.user.pk,
+            approved_by=self.request.user.pk,
+        )
+        record_audit(self.request, "create", instance)
+
+    @extend_schema(request=WaiveSerializer, responses={200: DiscountSerializer})
+    def revoke(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /discounts/{id}:revoke`.
+
+        Forward-looking: invoices already priced with this grant keep their
+        figures. Re-pricing an issued invoice would change what a parent was
+        told they owe, which belongs in an adjustment line rather than a silent
+        rewrite.
+        """
+        serializer = WaiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        discount = self.get_object()
+
+        revoked = services.revoke_discount(
+            discount=discount,
+            reason=serializer.validated_data["reason"],
+            actor_id=request.user.pk,
+        )
+        record_audit(request, "update", revoked, after={"status": revoked.status})
+        return ActionResponse.ok(self.get_serializer(revoked).data, message="Discount revoked.")
+
+
+class ScholarshipViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/scholarships` — §5.3's awards and their lifecycle."""
+
+    queryset = Scholarship.objects
+    serializer_class = ScholarshipSerializer
+    filterset_class = ScholarshipFilterSet
+    search_fields = ["name", "sponsor", "student__first_name", "student__last_name"]
+    ordering_fields = ["created_at", "value"]
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "fees.discount.view"
+    required_permission_map = {
+        "create": "fees.scholarship.create",
+        "update": "fees.scholarship.create",
+        "partial_update": "fees.scholarship.create",
+    }
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("student")
+
+    def perform_create(self, serializer):
+        """An award past `applied` must name its approver — see the CHECK.
+
+        `applied` is the one status with no approver, because that is what
+        "applied" means: the school has not decided yet. Anything else is a
+        decision, and a decision nobody is recorded as having made is the
+        finding an auditor writes up.
+        """
+        status = serializer.validated_data.get("status", ScholarshipStatus.APPROVED)
+        approver = None if status == ScholarshipStatus.APPLIED else self.request.user.pk
+        instance = serializer.save(
+            tenant=self.request.tenant,
+            created_by=self.request.user.pk,
+            updated_by=self.request.user.pk,
+            approved_by=approver,
+        )
+        record_audit(self.request, "create", instance)
+
+    def perform_update(self, serializer):
+        """Deciding an applied award stamps the approver at that moment."""
+        status = serializer.validated_data.get("status", serializer.instance.status)
+        approver = serializer.instance.approved_by
+        if status != ScholarshipStatus.APPLIED and approver is None:
+            approver = self.request.user.pk
+        instance = serializer.save(updated_by=self.request.user.pk, approved_by=approver)
+        record_audit(self.request, "update", instance)
+
+
+class FineViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/fines` — §5.3's penalties, folded onto the next invoice."""
+
+    queryset = Fine.objects
+    serializer_class = FineSerializer
+    filterset_class = FineFilterSet
+    search_fields = ["reason", "student__first_name", "student__last_name"]
+    ordering_fields = ["created_at", "amount"]
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "fees.fine.view"
+    required_permission_map = {
+        "create": "fees.fine.create",
+        "update": "fees.fine.create",
+        "partial_update": "fees.fine.create",
+        "waive": "fees.fine.waive",
+    }
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("student", "fee_head")
+
+    @extend_schema(request=WaiveSerializer, responses={200: FineSerializer})
+    def waive(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /fines/{id}:waive` — §4's `fees.fine.waive`."""
+        serializer = WaiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        fine = self.get_object()
+
+        waived = services.waive_fine(
+            fine=fine,
+            reason=serializer.validated_data["reason"],
+            actor_id=request.user.pk,
+        )
+        record_audit(request, "update", waived, after={"status": waived.status})
+        return ActionResponse.ok(self.get_serializer(waived).data, message="Fine waived.")

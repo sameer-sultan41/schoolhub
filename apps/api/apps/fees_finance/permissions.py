@@ -30,7 +30,14 @@ Two scope notes that are easy to get backwards:
 
 Keys arrive with the PR that ships an endpoint for them, so
 `tests/test_endpoint_contracts.py` never sees a registered key with nothing
-behind it. Registered so far: fee-structure and ledger (PR A).
+behind it. Registered so far: fee-structure and ledger (PR A); invoice, discount,
+scholarship and fine (PR B).
+
+One more gap key, on the same footing as PR A's two: `fees.discount.view` and
+`fees.fine.view` are granted in prose by §3 (a guardian "views children's
+invoices, outstanding balance") and §13's discount/fine registers, while §4
+lists only the `create` and `waive` halves. A parent who can see a bill but not
+the discount that explains it is being shown a number they cannot check.
 """
 
 from core.rbac.registry import registry
@@ -50,6 +57,27 @@ STRUCTURE_VIEWERS = ("school_admin", "accountant", "finance_staff", "principal",
 # books they are accountable for; nobody else has a reason to read raw journal
 # lines, and §13's reports are the shaped view every other role gets.
 LEDGER_VIEWERS = ("accountant", "school_owner")
+
+# The portal side of §3's role table. A `student`/`guardian` reads their own
+# invoices and their own fines; the *record scope*, not the key, is what narrows
+# them — see each model's `filter_owned_by_user`.
+PORTAL = ("student", "guardian")
+INVOICE_VIEWERS = (
+    "accountant",
+    "finance_staff",
+    "school_admin",
+    "school_owner",
+    "principal",
+    *PORTAL,
+)
+# Grants and fines are staff-visible plus the family they concern: a parent has
+# to be able to see the discount that explains their bill, and the fine that
+# explains the rest of it.
+GRANT_VIEWERS = ("accountant", "finance_staff", "school_admin", "school_owner", *PORTAL)
+# §4 — "`fees.discount.waive` / `fees.fine.waive` … `accountant`,
+# `school_owner`". Forgiving money owed is the owner's call or the accountant's;
+# §3 is explicit that `finance_staff` "cannot approve refunds or waivers".
+WAIVERS = ("accountant", "school_owner")
 
 registry.register(
     "fees.fee-structure.view",
@@ -82,12 +110,69 @@ registry.register(
     ACCOUNTANTS,
 )
 
+# --- Invoicing (PR B) ----------------------------------------------------- #
+
+registry.register(
+    "fees.invoice.view",
+    "View fee invoices and their lines.",
+    INVOICE_VIEWERS,
+)
+registry.register(
+    "fees.invoice.create",
+    "Generate invoices in bulk, or raise one ad hoc.",
+    FINANCE_STAFF,
+)
+registry.register(
+    "fees.invoice.update",
+    "Cancel or adjust an invoice.",
+    ACCOUNTANTS,
+)
+registry.register(
+    "fees.discount.create",
+    "Grant a student-level discount.",
+    STRUCTURE_AUTHORS,
+)
+registry.register(
+    "fees.discount.view",
+    "View discounts and scholarships.",
+    GRANT_VIEWERS,
+)
+registry.register(
+    "fees.discount.waive",
+    "Revoke a discount or waive an invoice line.",
+    WAIVERS,
+)
+registry.register(
+    "fees.scholarship.create",
+    "Award or decide a scholarship.",
+    STRUCTURE_AUTHORS,
+)
+registry.register(
+    "fees.fine.view",
+    "View fines raised against students.",
+    GRANT_VIEWERS,
+)
+registry.register(
+    "fees.fine.create",
+    "Raise a fine against a student.",
+    FINANCE_STAFF,
+)
+registry.register(
+    "fees.fine.waive",
+    "Waive a pending fine.",
+    WAIVERS,
+)
+
 # Referenced by the module docstring's scope note; keeps ruff from flagging the
 # tuple as unused while PR B is what first needs it.
 __all__ = [
     "ACCOUNTANTS",
     "FINANCE_STAFF",
+    "GRANT_VIEWERS",
+    "INVOICE_VIEWERS",
     "LEDGER_VIEWERS",
+    "PORTAL",
     "STRUCTURE_AUTHORS",
     "STRUCTURE_VIEWERS",
+    "WAIVERS",
 ]

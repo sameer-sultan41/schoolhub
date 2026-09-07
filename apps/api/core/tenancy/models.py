@@ -86,6 +86,14 @@ class TenantSettings(TimestampedModel):
         "A dedicated namespace rather than folding into `academic` — later "
         "HR/leave and payroll modules (Tier 3/6) have a home here too.",
     )
+    finance = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Fees/finance config, e.g. invoice_number_pattern, "
+        "receipt_number_pattern, late-fee defaults. Its own namespace for the "
+        "reason `hr` gives: a module's settings should not crowd another's, and "
+        "`academic` is already the busiest key on this row.",
+    )
 
     objects = TenantScopedManager()
     all_tenants = AllTenantsManager()

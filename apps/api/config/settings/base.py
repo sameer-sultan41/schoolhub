@@ -259,6 +259,14 @@ SPECTACULAR_SETTINGS = {
         "FeeHeadCategoryEnum": "apps.fees_finance.models.FeeHeadCategory",
         "FeeStructureStatusEnum": "apps.fees_finance.models.FeeStructureStatus",
         "FeeFrequencyEnum": "apps.fees_finance.models.FeeFrequency",
+        "FeeInvoiceStatusEnum": "apps.fees_finance.models.InvoiceStatus",
+        "FeeInvoiceLineSourceEnum": "apps.fees_finance.models.InvoiceLineSource",
+        "FeeGrantValueTypeEnum": "apps.fees_finance.models.GrantValueType",
+        "FeeDiscountStatusEnum": "apps.fees_finance.models.DiscountStatus",
+        "ScholarshipTypeEnum": "apps.fees_finance.models.ScholarshipType",
+        "ScholarshipStatusEnum": "apps.fees_finance.models.ScholarshipStatus",
+        "FineTypeEnum": "apps.fees_finance.models.FineType",
+        "FineStatusEnum": "apps.fees_finance.models.FineStatus",
     },
 }
 
@@ -309,6 +317,10 @@ CELERY_TASK_ROUTES = {
     # heaviest jobs on the platform.
     "apps.examinations.tasks.process_results_task": {"queue": "bulk"},
     "apps.examinations.tasks.generate_report_cards_task": {"queue": "bulk"},
+    # Billing a term for a whole school is bulk work by definition; §7.1 makes
+    # generation a background job precisely so nobody watches it.
+    "apps.fees_finance.tasks.generate_invoices_task": {"queue": "bulk"},
+    "apps.fees_finance.tasks.send_fee_reminders": {"queue": "bulk"},
     # The three result announcements are the opposite: a student waiting on a
     # result, and an approver blocking every downstream step.
     "apps.examinations.tasks.notify_results_pending_approval": {"queue": "transactional"},
@@ -372,6 +384,19 @@ CELERY_BEAT_SCHEDULE = {
     "remind-marks-entry": {
         "task": "apps.examinations.tasks.remind_marks_entry",
         "schedule": crontab(hour="6", minute="30"),
+    },
+    # 07:00, after the marks reminder and before a school day starts in the
+    # timezones this platform serves. The offsets are §12's T-7/T-1, overridable
+    # per tenant through `TenantSettings.finance["reminder_days"]` — see
+    # `apps.fees_finance.tasks.DEFAULT_REMINDER_DAYS`.
+    #
+    # This tick also moves due invoices to `overdue`, and it notifies **on that
+    # transition** rather than on current status. A sweep that alerted on
+    # current status re-sent every guardian the same message on each run, which
+    # is the bug attendance's review found.
+    "send-fee-reminders": {
+        "task": "apps.fees_finance.tasks.send_fee_reminders",
+        "schedule": crontab(hour="7", minute="0"),
     },
 }
 
