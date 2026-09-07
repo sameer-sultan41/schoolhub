@@ -289,13 +289,16 @@ class FeeStructure(TenantOwnedModel):
 
     Both narrowings are nullable and mean "all": a session-wide structure has
     `class_id IS NULL`, an all-campus one has `campus_id IS NULL`. That makes
-    the uniqueness rule below a five-column one over NULL-able columns, and
-    PostgreSQL treats NULLs as distinct in a unique index — so two session-wide
-    structures with the same name would *both* be allowed. The name is included
-    in the key precisely so the collision that matters ("two structures called
-    the same thing at the same scope") is still caught; `services` holds the
-    narrower rule that two *active* structures must not overlap in scope, which
-    no index can express.
+    the uniqueness rule below span nullable columns, and PostgreSQL treats NULLs
+    as *distinct* by default — so two session-wide structures with the same name
+    would both be allowed, which is precisely the collision the index exists to
+    stop. `nulls_distinct=False` is what makes "no class" a value that can
+    collide with "no class" rather than a wildcard that never matches.
+
+    `services` still holds the narrower rule that no two *active* structures may
+    cover one scope, which no index can express: the key includes `name`, so two
+    differently named structures at one scope are legitimately storable and only
+    one of them may be active.
 
     `status` is the lifecycle: a `draft` structure is editable and invoices
     nothing, `active` is what invoice generation reads, `archived` keeps last
@@ -337,6 +340,11 @@ class FeeStructure(TenantOwnedModel):
                 fields=["tenant", "academic_session", "school_class", "campus", "name"],
                 name="fee_structures_scope_name_unique",
                 condition=models.Q(deleted_at__isnull=True),
+                # NULLS NOT DISTINCT (PostgreSQL 15+). `class_id`/`campus_id`
+                # NULL means "all", which has to be a value that collides with
+                # itself — the default would make every session-wide structure
+                # unique from every other and the guard would never fire.
+                nulls_distinct=False,
             ),
         ]
         indexes = [
@@ -400,6 +408,11 @@ class FeeSchedule(TenantOwnedModel):
                 fields=["tenant", "fee_structure", "fee_head", "frequency", "term"],
                 name="fee_schedules_line_unique",
                 condition=models.Q(deleted_at__isnull=True),
+                # NULLS NOT DISTINCT, and load-bearing for the *common* case:
+                # `term` is NULL for every non-per-term line, so under the
+                # default a structure could carry the same monthly charge twice
+                # and bill it twice.
+                nulls_distinct=False,
             ),
             models.CheckConstraint(
                 condition=models.Q(amount__gt=0),

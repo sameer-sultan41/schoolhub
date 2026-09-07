@@ -142,6 +142,20 @@ class FeeStructureConstraintTests(FinanceModelTestCase):
             self._structure, name="Grade 8 — 2026-27", school_class=self.school_class
         )
 
+    def test_two_session_wide_structures_cannot_share_a_name_either(self) -> None:
+        """The case NULLS NOT DISTINCT exists for.
+
+        `class_id` and `campus_id` NULL both mean "all", so they have to be a
+        value that collides with itself. Under PostgreSQL's default a unique
+        index treats every NULL as distinct, which would have made every
+        session-wide structure unique from every other and this guard a no-op
+        for the broadest scope a school can define.
+        """
+        with tenant_context(self.tenant.id):
+            self._structure(name="Whole school", school_class=None, campus=None)
+
+        self.assertRefused(self._structure, name="Whole school", school_class=None, campus=None)
+
     def test_the_same_name_for_a_different_class_is_fine(self) -> None:
         """Scope is part of the key: two classes priced separately is the normal
         case, not a collision."""
@@ -175,10 +189,29 @@ class FeeScheduleConstraintTests(FinanceModelTestCase):
         )
 
     def test_one_line_per_structure_head_frequency_and_term(self) -> None:
+        """The common case, and the one NULLS NOT DISTINCT rescues.
+
+        `term` is NULL on every non-per-term line, so under PostgreSQL's default
+        a structure could carry the same monthly charge twice — and bill it
+        twice, every month, to a whole class.
+        """
         with tenant_context(self.tenant.id):
             self._schedule()
 
         self.assertRefused(self._schedule)
+
+    def test_the_same_head_at_a_different_frequency_is_a_separate_line(self) -> None:
+        """The control: an annual registration charge alongside a monthly
+        tuition charge on the same head is legitimate."""
+        with tenant_context(self.tenant.id):
+            self._schedule()
+            annual = self._schedule(
+                frequency=FeeFrequency.ANNUAL,
+                due_day=None,
+                due_date=datetime.date(2027, 4, 1),
+            )
+
+        self.assertEqual(annual.frequency, FeeFrequency.ANNUAL)
 
     def test_a_zero_amount_is_refused(self) -> None:
         """A schedule charging nothing is either a configuration error or a

@@ -20,7 +20,7 @@ import uuid
 from decimal import Decimal
 
 from django.db import ProgrammingError, connection, transaction
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
 from apps.fees_finance.ledger import (
     LedgerLine,
@@ -135,22 +135,6 @@ class PostingRuleTests(LedgerTestCase):
 
         self.assertEqual(caught.exception.meta["unknown_account_ids"], [str(unknown)])
 
-    def test_posting_outside_a_transaction_is_a_programming_error(self) -> None:
-        """A confirmed payment whose posting rolled back separately is
-        unreconcilable, so the engine refuses rather than opening its own
-        transaction — the same reasoning `allocate_number` uses."""
-        with tenant_context(self.tenant.id), self.assertRaises(RuntimeError) as caught:
-            post_transaction(
-                entry_date=datetime.date(2026, 9, 1),
-                lines=[
-                    LedgerLine(ledger_account_id=self.cash.pk, debit=Decimal("10.00")),
-                    LedgerLine(ledger_account_id=self.fee_income.pk, credit=Decimal("10.00")),
-                ],
-                reference_type=LedgerReferenceType.MANUAL,
-            )
-
-        self.assertIn("same transaction", str(caught.exception))
-
     def test_a_balanced_posting_lands_both_lines_under_one_transaction_id(self) -> None:
         transaction_id = self._post(amount=Decimal("250.00"))
 
@@ -186,6 +170,18 @@ class PostingRuleTests(LedgerTestCase):
 
 class AppendOnlyTests(LedgerTestCase):
     """Each case reaches one layer deeper than the last."""
+
+    def _raw(self, sql: str) -> None:
+        """Run `sql` on a raw cursor inside its own atomic block.
+
+        Extracted so each caller can put `assertRaises` *outside* it. A
+        permission denial poisons the transaction, and if `assertRaises`
+        swallowed the error while still inside `atomic`, the block would exit
+        cleanly and then fail releasing its savepoint on a dead connection — an
+        `InFailedSqlTransaction` instead of the assertion the test is for.
+        """
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute(sql)
 
     def test_an_entry_cannot_be_saved_twice_through_the_model(self) -> None:
         """Layer 1: the instance path. A full save() rewrites every column."""
@@ -236,25 +232,15 @@ class AppendOnlyTests(LedgerTestCase):
         code paths remembering to be careful.
         """
         self._post()
-        with (
-            tenant_context(self.tenant.id),
-            transaction.atomic(),
-            self.assertRaises(ProgrammingError) as caught,
-            connection.cursor() as cursor,
-        ):
-            cursor.execute("UPDATE ledger_entries SET memo = 'tampered'")
+        with tenant_context(self.tenant.id), self.assertRaises(ProgrammingError) as caught:
+            self._raw("UPDATE ledger_entries SET memo = 'tampered'")
 
         self.assertIn("permission denied", str(caught.exception).lower())
 
     def test_raw_sql_delete_is_refused_by_the_database_itself(self) -> None:
         self._post()
-        with (
-            tenant_context(self.tenant.id),
-            transaction.atomic(),
-            self.assertRaises(ProgrammingError) as caught,
-            connection.cursor() as cursor,
-        ):
-            cursor.execute("DELETE FROM ledger_entries")
+        with tenant_context(self.tenant.id), self.assertRaises(ProgrammingError) as caught:
+            self._raw("DELETE FROM ledger_entries")
 
         self.assertIn("permission denied", str(caught.exception).lower())
 
@@ -397,3 +383,43 @@ class TrialBalanceTests(LedgerTestCase):
             }
 
         self.assertEqual(rows["1000"]["total_debit"], Decimal("100.00"))
+
+
+class TransactionGuardTests(TransactionTestCase):
+    """`post_transaction` refuses to run outside the caller's transaction.
+
+    A `TransactionTestCase`, and it has to be: `TestCase` wraps every method in
+    a transaction, so `in_atomic_block` is always true there and the guard could
+    never fire — a case that can only pass is worse than no case at all.
+
+    The rule itself is the one `core.tenancy.sequences.allocate_number` states:
+    a confirmed payment whose ledger posting rolled back separately is
+    unreconcilable, and by then the receipt is in a parent's hand. So the engine
+    refuses rather than quietly opening its own transaction, which would defeat
+    the guarantee while looking like it worked.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        with tenant_context(self.tenant.id), transaction.atomic():
+            self.accounts = ensure_system_accounts(tenant_id=self.tenant.pk)
+
+    def test_posting_outside_a_transaction_is_refused(self) -> None:
+        with tenant_context(self.tenant.id), self.assertRaises(RuntimeError) as caught:
+            post_transaction(
+                entry_date=datetime.date(2026, 9, 1),
+                lines=[
+                    LedgerLine(ledger_account_id=self.accounts["1000"].pk, debit=Decimal("10.00")),
+                    LedgerLine(ledger_account_id=self.accounts["4000"].pk, credit=Decimal("10.00")),
+                ],
+                reference_type=LedgerReferenceType.MANUAL,
+            )
+
+        self.assertIn("same transaction", str(caught.exception))
+
+    def test_reversing_outside_a_transaction_is_refused(self) -> None:
+        with tenant_context(self.tenant.id), self.assertRaises(RuntimeError) as caught:
+            reverse_transaction(transaction_id=uuid.uuid4(), entry_date=datetime.date(2026, 9, 1))
+
+        self.assertIn("caller's transaction", str(caught.exception))

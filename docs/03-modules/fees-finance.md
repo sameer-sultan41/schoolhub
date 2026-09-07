@@ -381,13 +381,29 @@ same way `core.tenancy.sequences.allocate_number` does and for the same class of
 reason: a confirmed payment whose posting rolled back separately is
 unreconcilable, and by then the receipt is in a parent's hand.
 
-**`fee_structures`' uniqueness deliberately cannot express the real rule.** Its
-index is `(tenant, session, class, campus, name)`, and PostgreSQL treats NULLs
-as distinct — so two session-wide structures at the same scope are
-database-legal as long as their names differ. That is why `name` is in the key
-at all, and why `services.activate_fee_structure` holds the narrower rule: no
-*two active* structures may cover one scope. An index cannot say that, and
-invoice generation would otherwise have to guess which price applies.
+**Both duplicate guards need `NULLS NOT DISTINCT`, and the tests are what
+found it.** `fee_structures` is unique on
+`(tenant, session, class, campus, name)` and `fee_schedules` on
+`(tenant, structure, head, frequency, term)` — and in both, a nullable column
+carries real meaning: `class_id`/`campus_id` NULL means "all campuses / all
+classes", and `term` is NULL on every non-per-term line. PostgreSQL treats
+NULLs as *distinct* in a unique index by default, so both guards were no-ops
+for exactly their most common input: two identical session-wide structures, or
+the same monthly charge priced twice into one structure and then billed twice,
+every month, to a whole class.
+
+`nulls_distinct=False` (PostgreSQL 15+, Django 5.0+) makes "no class" a value
+that collides with itself. Worth recording because the first version of this
+module shipped the constraints without it and the model docstring even
+*described* the NULL-distinctness while drawing the wrong conclusion from it —
+the constraint tests are what turned that into a failure rather than a
+production surprise.
+
+`services.activate_fee_structure` still holds the narrower rule the index
+cannot express: no two *active* structures may cover one scope. The key includes
+`name`, so two differently named structures at one scope are legitimately
+storable and only one of them may be active — otherwise invoice generation would
+have to guess which price applies.
 
 **`ledger_entries.reference_type` is NOT NULL, narrowing the entities doc.**
 Every posting has an origin: the enum carries `manual` for an accountant's

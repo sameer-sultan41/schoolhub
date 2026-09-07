@@ -12,6 +12,9 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
 from apps.fees_finance.models import (
     FeeFrequency,
     FeeStructure,
@@ -33,6 +36,16 @@ from apps.fees_finance.tests.factories import (
     posting,
 )
 from core.tenancy.context import tenant_context
+
+
+def _fields(response) -> set[str]:
+    """The field names in an error envelope.
+
+    `error.details` is a flat list of `{field, issue}` — see
+    `core/api/exceptions._flatten_details`, and the `DomainRuleViolation`
+    docstring for why structured payloads go in `meta` instead.
+    """
+    return {entry["field"] for entry in response.json()["error"]["details"]}
 
 
 class LedgerAccountEndpointTests(FeesFinanceAPITestCase):
@@ -57,8 +70,12 @@ class LedgerAccountEndpointTests(FeesFinanceAPITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, 422)
-        self.assertIn("parent", response.json()["error"]["details"])
+        # A serializer ValidationError is a 400 by design; 422 is for a
+        # DomainRuleViolation, which this is not — the field simply does not
+        # validate. `details` is a flat list of {field, issue}, per
+        # core/api/exceptions._flatten_details.
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("parent", _fields(response))
 
     def test_a_child_account_under_a_matching_parent_is_accepted(self) -> None:
         response = self.client.post(
@@ -129,16 +146,29 @@ class LedgerEntryEndpointTests(FeesFinanceAPITestCase):
     def test_a_page_of_entries_does_not_cost_a_query_per_row(self) -> None:
         """The serializer renders each entry's account code and name, so
         without `select_related` a page is an N+1 over the module's
-        highest-volume table."""
-        for _ in range(5):
+        highest-volume table.
+
+        Asserted as "the count does not grow with the row count" rather than
+        against a fixed number. The absolute figure includes session, tenant and
+        permission-cache lookups that have nothing to do with this endpoint, and
+        pinning it would make the test fail on an unrelated change while still
+        not proving the thing it is named for.
+        """
+        posting(self.tenant, debit_account=self.cash, credit_account=self.fee_income)
+        self.client.get("/api/v1/ledger-entries")  # warm the permission caches
+
+        with CaptureQueriesContext(connection) as few:
+            self.client.get("/api/v1/ledger-entries")
+
+        for _ in range(9):
             posting(self.tenant, debit_account=self.cash, credit_account=self.fee_income)
 
-        with self.assertNumQueries(6):
-            # 1 session/user, 1 tenant, 1 permission keys, 1 scopes, 1 count,
-            # 1 page — and crucially not one more per row.
+        with CaptureQueriesContext(connection) as many:
             response = self.client.get("/api/v1/ledger-entries")
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["data"]), 20)
+        self.assertEqual(len(many), len(few))
 
     def test_a_manual_journal_posts_a_balanced_transaction(self) -> None:
         response = self.client.post(
@@ -258,7 +288,7 @@ class FeeHeadEndpointTests(FeesFinanceAPITestCase):
         )
 
         self.assertEqual(response.status_code, 422)
-        self.assertIn("ledger_account", response.json()["error"]["details"])
+        self.assertIn("ledger_account", _fields(response))
 
     def test_a_head_mapped_to_income_is_created(self) -> None:
         response = self.client.post(
@@ -397,16 +427,26 @@ class FeeStructureEndpointTests(FeesFinanceAPITestCase):
 
     def test_a_list_of_structures_does_not_cost_a_query_per_structure(self) -> None:
         """`schedules` is nested on the serializer, so without the prefetch this
-        is an N+1 over the screen an accountant opens first."""
-        for index in range(4):
-            structure = self._structure(name=f"S{index}")
-            self._priced(structure)
+        is an N+1 over the screen an accountant opens first.
 
-        with self.assertNumQueries(7):
+        Compared at two sizes rather than against a fixed number, for the reason
+        `test_a_page_of_entries_does_not_cost_a_query_per_row` gives.
+        """
+        self._priced(self._structure(name="S0"))
+        self.client.get("/api/v1/fee-structures")  # warm the permission caches
+
+        with CaptureQueriesContext(connection) as few:
+            self.client.get("/api/v1/fee-structures")
+
+        for index in range(1, 6):
+            self._priced(self._structure(name=f"S{index}"))
+
+        with CaptureQueriesContext(connection) as many:
             response = self.client.get("/api/v1/fee-structures")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["data"]), 4)
+        self.assertEqual(len(response.json()["data"]), 6)
+        self.assertEqual(len(many), len(few))
 
 
 class FeeScheduleEndpointTests(FeesFinanceAPITestCase):
@@ -442,7 +482,7 @@ class FeeScheduleEndpointTests(FeesFinanceAPITestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("term", response.json()["error"]["details"])
+        self.assertIn("term", _fields(response))
 
     def test_a_line_cannot_be_added_to_an_active_structure(self) -> None:
         """Invoices have been priced from it; an edited schedule would silently
