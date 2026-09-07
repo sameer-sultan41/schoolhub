@@ -112,7 +112,13 @@ class FeesFinanceAPITestCase(APITestCase):
                 end_date=TERM_END,
             )
             self.school_class = ClassFactory(tenant=self.tenant, level=8)
-            self.section = SectionFactory(tenant=self.tenant, school_class=self.school_class)
+            # `campus` explicitly: SectionFactory provides no default, by the
+            # same convention StudentFactory documents — every FK must belong to
+            # the same tenant, so callers wire them up rather than letting a
+            # SubFactory create a stray one.
+            self.section = SectionFactory(
+                tenant=self.tenant, school_class=self.school_class, campus=self.campus
+            )
 
             self.students = [
                 StudentFactory(tenant=self.tenant, campus=self.campus) for _ in range(3)
