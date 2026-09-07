@@ -1634,10 +1634,18 @@ def assert_blueprint_is_satisfiable(*, bank: QuestionBank, sections: list[dict])
         .filter(question_bank=bank, is_approved=True)
         .values_list("pk", "difficulty", "topic")
     )
-    pool: dict = {}
+    # **Two indexes, not one dict keyed on `(difficulty, topic)`.** The first
+    # version added every question under both `(difficulty, topic)` and
+    # `(difficulty, None)`, which are the *same key* for a question with no
+    # topic — so a question with no topic was counted twice and a blueprint looked
+    # satisfiable when it was not. CI caught it. Keeping the two pools separate
+    # makes the double-count unrepresentable rather than merely avoided.
+    by_difficulty: dict = {}
+    by_topic: dict = {}
     for pk, difficulty, topic in available:
-        pool.setdefault((difficulty, topic), []).append(pk)
-        pool.setdefault((difficulty, None), []).append(pk)
+        by_difficulty.setdefault(difficulty, set()).add(pk)
+        if topic:
+            by_topic.setdefault((difficulty, topic), set()).add(pk)
 
     shortfalls = []
     for index, section in enumerate(sections):
@@ -1647,7 +1655,11 @@ def assert_blueprint_is_satisfiable(*, bank: QuestionBank, sections: list[dict])
         # A section naming no topic draws from every topic at that difficulty;
         # one naming a topic draws only from it. That is the narrower claim, so
         # it gets the narrower pool.
-        have = len(pool.get((difficulty, topic), []))
+        have = (
+            len(by_topic.get((difficulty, topic), set()))
+            if topic
+            else len(by_difficulty.get(difficulty, set()))
+        )
         if have < count:
             shortfalls.append(
                 {
