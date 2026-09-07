@@ -74,15 +74,26 @@ export function useTableParams<TFilter extends string>({
    */
   const resetPage = { page: null };
 
-  // Read into a plain record so `query` below depends on a value, not on the
-  // searchParams object, whose identity changes on every navigation.
-  const filterValues = filterKeys.map((key) => `${key}=${searchParams.get(key) ?? ""}`).join("&");
+  // Flattened to a STRING so `query` below depends on a value rather than on the
+  // searchParams object, whose identity changes on every navigation and would rebuild
+  // the memo — and the request — on any URL change at all.
+  //
+  // `URLSearchParams`, not a hand-rolled `key=value` join: it percent-encodes, so a
+  // filter value carrying `&` or `=` survives the round trip. The join-then-resplit
+  // this replaces would have torn such a value into the wrong keys, and `setText`
+  // writes arbitrary strings — a free-text filter is one field away from finding it.
+  // Insertion order follows `filterKeys`, so the string stays a stable memo key.
+  const filterValues = new URLSearchParams(
+    filterKeys.flatMap((key): [string, string][] => {
+      const value = searchParams.get(key);
+      return value ? [[key, value]] : [];
+    }),
+  ).toString();
 
   const query = useMemo(() => {
     const params: Record<string, string | number> = {};
-    for (const pair of filterValues.split("&")) {
-      const [key, value] = pair.split("=");
-      if (key && value) params[key] = value;
+    for (const [key, value] of new URLSearchParams(filterValues)) {
+      params[key] = value;
     }
     if (search) params.search = search;
     if (sortBy) params.ordering = sortType === "desc" ? `-${sortBy}` : sortBy;
