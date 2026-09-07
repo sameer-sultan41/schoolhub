@@ -1392,7 +1392,8 @@ class TeacherSubstitutionOrderingTests(TimetableAPITestCase):
             "date": (self.monday, self.tuesday, self.wednesday),
             # confirmed, declined, proposed — the stored values, not the labels.
             "status": (self.tuesday, self.wednesday, self.monday),
-            "absent_staff_last_name": (self.wednesday, self.tuesday, self.monday),
+            # Qureshi (tuesday), Raza (wednesday), Zheng (monday).
+            "absent_staff_last_name": (self.tuesday, self.wednesday, self.monday),
             "substitute_staff_last_name": (self.monday, self.tuesday, self.wednesday),
         }
 

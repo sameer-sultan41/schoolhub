@@ -110,13 +110,15 @@ describe("StudentsTable", () => {
     expect(screen.getByText(/Reference: req-1/)).toBeInTheDocument();
   });
 
-  it("disables the Next button when there is no next page", async () => {
+  it("disables both arrows on a roster that fits in one page", async () => {
     mockGet.mockResolvedValue(offsetPage([STUDENT], {}, "req-list"));
 
     renderWithProviders(<StudentsTable />);
 
-    const nextButton = await screen.findByRole("button", { name: "Next" });
-    expect(nextButton).toBeDisabled();
+    // Disabled rather than absent: a control that vanishes at the end of a list moves
+    // everything beside it, and the reader has to work out whether it was ever there.
+    expect(await screen.findByRole("button", { name: "Next page" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
   });
 
   it("clicking a row navigates to that student's detail page", async () => {

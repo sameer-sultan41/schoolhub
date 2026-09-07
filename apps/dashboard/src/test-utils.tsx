@@ -7,12 +7,14 @@ import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import { NextIntlClientProvider } from "next-intl";
 import { ThemeProvider } from "next-themes";
 import type { ReactElement, ReactNode } from "react";
+import { PREFERENCE_DEFAULTS } from "@/lib/preferences/preferences-config";
+import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
 import messages from "../messages/en.json";
 
 /**
  * Shared render wrapper: real English messages, a retry-disabled QueryClient, and the
- * motion and tooltip providers `components/providers.tsx` mounts in production — a
- * component tested under a different provider tree is not the component that ships.
+ * motion, tooltip and preference providers the app mounts in production — a component
+ * tested under a different provider tree is not the component that ships.
  *
  * `reducedMotion="always"` is a deliberate difference from production: animations settle
  * immediately, so assertions never race a transition, and every test exercises the
@@ -39,7 +41,14 @@ export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
                   file down. Context only: it renders no element, so `container` is
                   still what the component under test produced, which is why this one
                   belongs here and `ThemeProvider` does not. */}
-              <TooltipProvider>{children}</TooltipProvider>
+              {/* Seeded with the defaults, which is what a viewer who has never opened
+                  the layout popover has. It lives in the root layout rather than in
+                  `components/providers.tsx` — the values come from cookies read on the
+                  server — so a component reaching for `usePreference` threw here while
+                  working perfectly in the app. */}
+              <PreferencesProvider initialValues={PREFERENCE_DEFAULTS}>
+                <TooltipProvider>{children}</TooltipProvider>
+              </PreferencesProvider>
             </QueryClientProvider>
           </LazyMotion>
         </MotionConfig>
