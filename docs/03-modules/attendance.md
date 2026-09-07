@@ -343,11 +343,14 @@ rather than worked around, because the workaround would be a key nobody declared
   approves is honest; a hand-rolled ranking would be a worse version of a
   feature the doc already specifies properly.
 - ~~**Exports are CSV only.**~~ **All three of §6's formats now ship** —
-  `exports.py` renders one row shape as CSV, XLSX or PDF. Only the PDF carries a
-  row cap (`PDF_ROW_LIMIT`, 2000): a 40,000-row register is hundreds of pages
-  nobody opens, and the caller is told rather than handed a truncated document
-  that looks complete. PDF values are HTML-escaped — these are student and staff
-  names, and one containing `&` would otherwise break the table silently.
+  `core/exports/tabular.py` renders one row shape as CSV, XLSX or PDF (it began
+  as this module's own `exports.py` and moved to `core/` when `examinations`
+  became its second caller). Only the PDF carries a row cap (`PDF_ROW_LIMIT`,
+  2000): a 40,000-row register is hundreds of pages nobody opens, and the caller
+  is told rather than handed a truncated document that looks complete. PDF
+  values are escaped through `core.documents.html`, which is escape-by-default
+  — these are student and staff names, and one containing `&` would otherwise
+  break the table silently.
   **CSV and XLSX values are neutralised against formula injection**: `remarks` is
   free text a teacher types, so a remark reading `=HYPERLINK(...)` executes when
   the export is opened in Excel or Sheets — a client-side execution vector that

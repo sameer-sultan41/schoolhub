@@ -33,6 +33,7 @@ Bibi
 Bilal
 blockable
 bonafide
+Brien
 bursty
 BYPASSRLS
 Chandni
@@ -141,6 +142,7 @@ nspname
 officedocument
 openxmlformats
 overdues
+pango
 permissioned
 pgbouncer
 pgcrypto

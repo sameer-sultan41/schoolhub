@@ -9,6 +9,7 @@ refresh the job row from the database rather than polling.
 from __future__ import annotations
 
 import io
+from unittest.mock import patch
 
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -20,6 +21,7 @@ from apps.school_organization.tests.factories import (
     authenticate,
     grant,
 )
+from apps.student_management import services
 from apps.student_management.tests.factories import StudentFactory, enable_feature
 from core.files.models import File
 from core.jobs.models import BackgroundJob, JobStatus
@@ -201,3 +203,33 @@ class IdCardGenerateTests(StudentManagementJobsAPITestCase):
         response = self.client.post("/api/v1/id-cards:generate", {"student_ids": []}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_a_name_containing_markup_does_not_rewrite_the_card(self) -> None:
+        """The renderer f-string'd names straight into its template.
+
+        A pupil recorded as `O'Brien & Sons` produced a card with a broken
+        heading, and one whose surname contained a tag rewrote the layout —
+        which on an ID card is a document that no longer says what it claims.
+        Escaping is now `core.documents.html`'s, which has no way to opt out.
+        """
+        self.allow("students.id-card.generate")
+        with tenant_context(self.tenant.id):
+            student = StudentFactory(
+                tenant=self.tenant,
+                campus=self.campus,
+                first_name="Ayesha",
+                last_name="<b>O'Brien</b> & Sons",
+            )
+
+        # The HTML is captured rather than the PDF inspected: WeasyPrint renders
+        # broken markup happily, so a PDF that came back is not evidence the
+        # name was escaped. What the renderer was *handed* is.
+        with patch("core.documents.render_pdf", return_value=b"%PDF-stub") as render:
+            _, count = services.render_id_cards_pdf(
+                student_ids=[student.pk], tenant_id=self.tenant.pk
+            )
+
+        self.assertEqual(count, 1)
+        document = render.call_args.args[0]
+        self.assertNotIn("<b>O", document)
+        self.assertIn("&lt;b&gt;O&#x27;Brien&lt;/b&gt; &amp; Sons", document)
