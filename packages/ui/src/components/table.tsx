@@ -1,7 +1,11 @@
 import type { ComponentProps } from "react";
 import { cn } from "../lib/cn";
 
-export interface TableProps extends ComponentProps<"table"> {
+// `frame` is Omit-ted from the native props on purpose: `<table>` carries a deprecated
+// HTML4 `frame` attribute typed as `string`, and narrowing it to a two-value union is a
+// type error rather than an override. Nothing in this repo sets the HTML one, and the
+// browser ignores it in a standards-mode document.
+export interface TableProps extends Omit<ComponentProps<"table">, "frame"> {
   /**
    * Who draws the border around the table.
    *
