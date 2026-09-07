@@ -114,6 +114,14 @@ class Scope:
     staff_label: dict = field(default_factory=dict)
     section_students: dict = field(default_factory=dict)
     timetabled_weekdays: set = field(default_factory=set)
+    # `(exam_date, campus_id) -> (is_working_day, holiday_name)`, resolved once
+    # per distinct pair. `school_organization.calendar` reads
+    # `tenant_settings.academic` on **every** call, so asking it per sitting is
+    # a query per row — the N+1 this file's no-query rule exists to stop, and
+    # the one CI caught. Precomputing here makes the cost scale with the exam's
+    # *dates* (a week) rather than with its sittings (hundreds), and keeps
+    # `calendar` as the single source of truth rather than reimplementing it.
+    working_day: dict = field(default_factory=dict)
 
 
 def _overlaps(
@@ -130,6 +138,7 @@ def collect_scope(*, exam: Exam) -> Scope:
     implementation — for each sitting, ask whether its room is free — is one
     round trip per sitting, and an exam week for a whole school is hundreds.
     """
+    from apps.school_organization import calendar
     from apps.school_organization.models import Section
     from apps.staff_management.models import Staff
     from apps.student_management.models import EnrollmentStatus, StudentEnrollment
@@ -191,6 +200,21 @@ def collect_scope(*, exam: Exam) -> Scope:
         .distinct()
     )
 
+    # Distinct (date, campus) pairs across this exam's own sittings only: the
+    # working-day check is a finding against *this* exam, not against another
+    # that happens to share the day.
+    section_campus = {pk: section.campus_id for pk, section in sections.items()}
+    working_day = {}
+    for row in own:
+        key = (row.exam_date, section_campus.get(row.section_id))
+        if key in working_day:
+            continue
+        holiday = calendar.holiday_name(row.exam_date, campus_id=key[1])
+        working_day[key] = (
+            calendar.is_working_day(row.exam_date, campus_id=key[1]),
+            holiday,
+        )
+
     return Scope(
         exam=exam,
         schedules=schedules,
@@ -198,10 +222,11 @@ def collect_scope(*, exam: Exam) -> Scope:
         room_capacity={pk: room.capacity for pk, room in rooms.items()},
         room_label={pk: room.code for pk, room in rooms.items()},
         section_label={pk: section.name for pk, section in sections.items()},
-        section_campus={pk: section.campus_id for pk, section in sections.items()},
+        section_campus=section_campus,
         staff_label={pk: f"{member.first_name} {member.last_name}" for pk, member in staff.items()},
         section_students=dict(section_students),
         timetabled_weekdays=timetabled_weekdays,
+        working_day=working_day,
     )
 
 
@@ -392,15 +417,16 @@ def _non_working_days(scope: Scope) -> list[Conflict]:
     because the alternative is a hall of students arriving at a locked school:
     a school that genuinely opens for an exam adds the day to its working week
     or removes the holiday, which is a real edit rather than an override.
-    """
-    from apps.school_organization import calendar
 
+    Reads `scope.working_day`, precomputed per distinct (date, campus) pair —
+    see that field's comment for why calling the calendar here would be an N+1.
+    """
     findings = []
     for row in _own(scope):
         campus_id = scope.section_campus.get(row.section_id)
-        if calendar.is_working_day(row.exam_date, campus_id=campus_id):
+        is_working, name = scope.working_day.get((row.exam_date, campus_id), (True, None))
+        if is_working:
             continue
-        name = calendar.holiday_name(row.exam_date, campus_id=campus_id)
         reason = f"a holiday ({name})" if name else "not a working day"
         findings.append(
             Conflict(

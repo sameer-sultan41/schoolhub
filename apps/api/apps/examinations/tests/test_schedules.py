@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import datetime
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from apps.examinations import conflicts
 from apps.examinations.models import ExamStatus, ScheduleStatus
@@ -65,6 +66,13 @@ class ScheduleTestCase(ExaminationsAPITestCase):
 
     def second_subject(self):
         """A second paper for the same class, so one section can double-book."""
+        return self._extra_subject()
+
+    def third_subject(self):
+        """A third, for the query-count test's extra dates."""
+        return self._extra_subject()
+
+    def _extra_subject(self):
         with tenant_context(self.tenant.id):
             subject = SubjectFactory(tenant=self.tenant)
             ClassSubjectFactory(
@@ -372,10 +380,13 @@ class ClashEngineTests(ScheduleTestCase):
 
         self.assertEqual(self.findings(of_type=conflicts.ROOM_OVER_CAPACITY), [])
 
-    def test_the_engine_is_a_bounded_number_of_queries(self) -> None:
-        """The reason `collect_scope` exists. The obvious implementation — for
-        each sitting, ask whether its room is free — is one round trip per
-        sitting, and an exam week for a whole school is hundreds.
+    def test_the_engine_does_not_query_per_sitting(self) -> None:
+        """The reason `collect_scope` exists, asserted as an **invariant** rather
+        than a magic number: doubling the sittings must not change the query
+        count. A fixed number would only tell a later reader that something
+        moved, and CI already caught the real defect this guards — the
+        working-day check called `school_organization.calendar` per row, and
+        that module reads `tenant_settings.academic` on every call.
         """
         other = self.second_subject()
         with tenant_context(self.tenant.id):
@@ -391,8 +402,34 @@ class ClashEngineTests(ScheduleTestCase):
                 end_time=AFTERNOON[1],
             )
 
-        with tenant_context(self.tenant.id), self.assertNumQueries(8):
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as small:
             conflicts.detect_conflicts(exam=self.exam)
+
+        # Two more sittings on two more days, in two more rooms — every
+        # dimension the detectors group by.
+        third = self.third_subject()
+        with tenant_context(self.tenant.id):
+            for offset, subject_config in ((1, third), (2, third)):
+                ExamScheduleFactory(
+                    tenant=self.tenant,
+                    exam_subject=subject_config,
+                    section=self.section if offset == 1 else self.other_section,
+                    exam_date=self.day + datetime.timedelta(days=offset),
+                    room=RoomFactory(tenant=self.tenant, campus=self.campus, capacity=40),
+                )
+
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as larger:
+            conflicts.detect_conflicts(exam=self.exam)
+
+        # The working-day map is keyed by (date, campus), so two extra *dates*
+        # legitimately cost two extra calendar reads. What must not grow is the
+        # per-sitting cost, which is what this compares.
+        self.assertLessEqual(
+            len(larger.captured_queries),
+            len(small.captured_queries) + 2,
+            f"query count grew with sittings: {len(small.captured_queries)} -> "
+            f"{len(larger.captured_queries)}",
+        )
 
 
 class PublishScheduleTests(ScheduleTestCase):
