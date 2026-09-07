@@ -48,8 +48,28 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `exams.question-bank.create` / `update` / `delete` | Manage question banks and questions | `teacher`, `exam_staff` |
 | `exams.question.approve` | Approve AI-generated questions into a bank | `teacher` (assigned subject), `vice_principal` |
 | `exams.result.export` | Export result data | `exam_staff`, `principal`, `school_admin` |
+| `exams.grading-scale.view` | Read grading scales and bands (needed to render any grade) | all staff |
+| `exams.schedule.view` | View exam schedules | all staff, `student`, `guardian` |
+| `exams.admit-card.view` | View issued admit cards | `exam_staff`, leadership, `student`, `guardian` |
+| `exams.result.create` | Run result processing (not approval) | `exam_staff`, `school_admin` |
+| `exams.question-bank.view` | Read question banks and questions | `teacher`, `exam_staff`, leadership |
 
 The approver of a result cannot be the user who ran processing (segregation of duties, RBAC doc §2.4).
+
+The last five rows were added during implementation. Each names a capability this
+document already granted in prose while the table omitted the key, so the capability
+was documented and unreachable: §3 says a `student`/`guardian` "views admit cards,
+exam schedules, published results, and report cards" and §12 notifies both about a
+published schedule and an issued admit card; §5.5 computes every grade from a scale a
+client has to be able to read; §13 reports on question-bank usage; and §3 says
+`exam_staff` "runs result processing (not approval)" while the table listed only
+approve, publish, view and export. This is the same correction
+`attendance.student-attendance.import` needed, and the same resolution: register the
+key and add the row, rather than invent a key the document never mentions.
+
+Result processing takes the standard `create` verb rather than a new `process` one —
+processing is precisely what creates `results` rows, and `core/rbac/registry.py` asks
+that a new verb be declared in a module doc §4 before being added.
 
 ## 5. Main Features
 
@@ -218,3 +238,67 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - Grace marks / moderation policy: schema supports a per-exam adjustment recorded on `results`; policy details need client confirmation (recommendation).
 - Term-consolidated report cards (weighted across exams) recommended as the default output; per-exam cards remain available.
 - Re-evaluation/rechecking requests by guardians and online exam delivery (students answering in-app) are future enhancements, not initial scope; question banks are designed so online delivery can be added later (recommendation).
+
+## 20. Implementation status
+
+Built as five stacked PRs. This section is updated by each.
+
+**PR A — setup (this PR).** Grading scales with validated bands, exams, and
+per-class subject configuration.
+
+### Built
+
+| Area | State |
+| ---- | ----- |
+| Entities | 4 of §15's 11 tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects` — tenant-owned with RLS policies |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects` |
+| §4 permissions | `exams.exam.{view,create,update,delete}` and `exams.grading-scale.{view,create,update}`. The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
+| §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
+| §5.5 grading | `grading.py` — `percentage_for` (ROUND_HALF_UP, one decimal place), `assert_scale_is_complete`, `band_for` (boundary resolves to the upper band), `gpa_for` (None unless the scale type is `gpa` or `hybrid`) |
+| §7.1 lifecycle | `exams.status` starts at `draft` and is **read-only on the wire**. Configuration is frozen past `scheduled`; only a draft exam may be deleted |
+| Feature flag | `module.examinations`, `default_enabled=False` |
+| Tests | Models (constraints), grading (the maths and every band-rule refusal), API (endpoints, permissions, the feature gate), cross-tenant (one case per endpoint, all asserting 404) |
+
+### Three decisions worth carrying forward
+
+- **§11's band rule cannot be a constraint, and the split is deliberate.**
+  "Contiguous, non-overlapping, covering 0–100%" is a statement about a *set* of
+  rows — a band is only wrong relative to its neighbours — so no CHECK can hold
+  it, and enforcing coverage per row would make a scale impossible to build,
+  since the first band inserted would violate it. The database holds each band's
+  own range and label uniqueness; `grading.assert_scale_is_complete` holds the
+  rest, and is called **when an exam attaches a scale**, not on every band write.
+  That placement is the whole point: early enough that an admin fixes it on a
+  form, rather than at result processing, where the same problem is a failed job
+  over a whole school's marks.
+- **A band's ends are both inclusive, so `band_for` resolves a boundary upward.**
+  A student on exactly 80.0 gets the better grade. Decided and tested here rather
+  than left to emerge from row ordering, because it is the kind of thing a school
+  has to be able to explain to a parent.
+- **`is_default` moves through `:set-default`, not a PATCH.** The partial unique
+  `grading_scales_one_default` refuses two live defaults, so making a scale the
+  default is two writes in one transaction. A `PATCH {"is_default": true}` would
+  409 against whichever scale currently holds it — describing the constraint
+  rather than the caller's intent.
+
+### Deliberately not built in this PR
+
+Everything from §15's remaining seven tables onward: `exam_schedules` and
+`admit_cards` (PR B), `marks` (PR C), `results` and `report_cards` (PR D),
+`question_banks` and `questions` plus §13's reports (PR E).
+
+`exam_schedules` will need its **own** clash engine rather than reusing
+`timetable/conflicts.py`. That engine is keyed on `(day_of_week, period_id)` — a
+weekly grid cell — while an exam sitting is a wall-clock interval on a calendar
+date, and its own docstring notes that its duplication with the database
+constraints is load-bearing. What transfers is the pattern (a `Conflict`
+dataclass, one prefetching `collect_scope`, pure detectors, hard conflicts
+blocking publish), not the code.
+
+§14's four AI capabilities (AI-EXM-01 to 04) and §16's
+`POST /question-banks/{id}:generate-questions` are **out of scope for this
+module**: `core/ai` does not exist and AGENTS.md hard rule 6 forbids reaching a
+provider SDK directly. The `questions.source = ai_generated` /
+`is_approved = false` shape will ship with PR E precisely so the generator drops
+in later without a migration, and AGENTS.md invariant 5 ("AI drafts, humans
+publish") is already satisfied by the `:approve` gate §7.2 describes.

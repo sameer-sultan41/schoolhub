@@ -4,7 +4,15 @@
 > **Summary:** Column-level specifications for the examination domain: exam definitions, per-class subject configuration, schedules, tenant grading scales/bands, marks, processed results, report cards, admit cards, and the question bank. Every table below is tenant-owned.
 > **Co-load with:** `../../03-modules/examinations.md` · `../../02-architecture/multi-tenancy.md` · `academics.md`
 
-Every table implicitly carries `id UUID PK`, `tenant_id FK`, `created_at/updated_at`, `created_by/updated_by`, `deleted_at` (soft delete) per the platform convention — these are not repeated below; exceptions are stated per table. Referenced tables owned elsewhere: `students` ([`people.md`](people.md)); `staff` ([`people.md`](people.md)); `classes`, `sections`, `subjects`, `academic_sessions`, `terms`, `rooms` ([`academics.md`](academics.md)); `users`, `files` ([`tenancy.md`](tenancy.md)).
+Every table implicitly carries `id UUID PK`, `tenant_id FK`, `created_at/updated_at`, `created_by/updated_by`, `deleted_at` (soft delete) per the platform convention — these are not repeated below; exceptions are stated per table. Referenced tables owned elsewhere: `students` ([`people.md`](people.md)); `staff` ([`people.md`](people.md)); `classes`, `sections`, `subjects`, `class_subjects`, `academic_sessions`, `terms` ([`academics.md`](academics.md)); `rooms` ([`academics.md`](academics.md)); `users`, `files` ([`tenancy.md`](tenancy.md)).
+
+**Implementation note on the owning apps.** The entity docs group these under
+`academics.md`, but in code `classes`, `sections`, `subjects`, `class_subjects`,
+`academic_sessions` and `terms` are owned by the `school_organization` Django app
+and `rooms` by `timetable` — `academics` itself owns only
+`teacher_subject_allocations` and `student_promotions`. Every FK in
+`apps/examinations` points at the real owning app; the grouping above is the
+domain view, not the module layout.
 
 ### exams
 

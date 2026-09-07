@@ -1492,6 +1492,417 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/exam-subjects:
+    get:
+      operationId: exam_subjects_list
+      description: '`/exam-subjects` — §5.1''s per-class marks structure.'
+      parameters:
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: exam_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: has_practical
+        schema:
+          type: boolean
+      - in: query
+        name: is_locked
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: subject_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - exam-subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExamSubjectList'
+          description: ''
+    post:
+      operationId: exam_subjects_create
+      description: '`/exam-subjects` — §5.1''s per-class marks structure.'
+      tags:
+      - exam-subjects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExamSubject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExamSubject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExamSubject'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSubject'
+          description: ''
+  /api/v1/exam-subjects/{id}:
+    get:
+      operationId: exam_subjects_retrieve
+      description: '`/exam-subjects` — §5.1''s per-class marks structure.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam subject.
+        required: true
+      tags:
+      - exam-subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSubject'
+          description: ''
+    patch:
+      operationId: exam_subjects_partial_update
+      description: '`/exam-subjects` — §5.1''s per-class marks structure.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam subject.
+        required: true
+      tags:
+      - exam-subjects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExamSubject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExamSubject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExamSubject'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExamSubject'
+          description: ''
+    delete:
+      operationId: exam_subjects_destroy
+      description: '`/exam-subjects` — §5.1''s per-class marks structure.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam subject.
+        required: true
+      tags:
+      - exam-subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/exams:
+    get:
+      operationId: exams_list
+      description: |-
+        `/exams` — §5.1's examination events.
+
+        `status` is read-only on the serializer: §7.1's transitions are separate,
+        permission-gated, audited actions, and a client that could PATCH the column
+        could publish results without passing the approval gate.
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: ends_on
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: ends_on__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: ends_on__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: exam_type
+        schema:
+          type: string
+          enum:
+          - custom
+          - final
+          - midterm
+          - practical
+          - unit_test
+        description: |-
+          * `unit_test` - Unit test
+          * `midterm` - Midterm
+          * `final` - Final
+          * `practical` - Practical
+          * `custom` - Custom
+      - in: query
+        name: grading_scale_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: starts_on
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: starts_on__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: starts_on__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - approved
+          - archived
+          - draft
+          - marks_entry
+          - ongoing
+          - processing
+          - published
+          - scheduled
+        description: |-
+          * `draft` - Draft
+          * `scheduled` - Scheduled
+          * `ongoing` - Ongoing
+          * `marks_entry` - Marks entry
+          * `processing` - Processing
+          * `approved` - Approved
+          * `published` - Published
+          * `archived` - Archived
+      - in: query
+        name: term_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExamList'
+          description: ''
+    post:
+      operationId: exams_create
+      description: |-
+        `/exams` — §5.1's examination events.
+
+        `status` is read-only on the serializer: §7.1's transitions are separate,
+        permission-gated, audited actions, and a client that could PATCH the column
+        could publish results without passing the approval gate.
+      tags:
+      - exams
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Exam'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Exam'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Exam'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exam'
+          description: ''
+  /api/v1/exams/{id}:
+    get:
+      operationId: exams_retrieve
+      description: |-
+        `/exams` — §5.1's examination events.
+
+        `status` is read-only on the serializer: §7.1's transitions are separate,
+        permission-gated, audited actions, and a client that could PATCH the column
+        could publish results without passing the approval gate.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam.
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exam'
+          description: ''
+    patch:
+      operationId: exams_partial_update
+      description: |-
+        `/exams` — §5.1's examination events.
+
+        `status` is read-only on the serializer: §7.1's transitions are separate,
+        permission-gated, audited actions, and a client that could PATCH the column
+        could publish results without passing the approval gate.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam.
+        required: true
+      tags:
+      - exams
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExam'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExam'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExam'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exam'
+          description: ''
+    delete:
+      operationId: exams_destroy
+      description: |-
+        `/exams` — §5.1's examination events.
+
+        `status` is read-only on the serializer: §7.1's transitions are separate,
+        permission-gated, audited actions, and a client that could PATCH the column
+        could publish results without passing the approval gate.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this exam.
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/files:
     get:
       operationId: files_list
@@ -1664,6 +2075,396 @@ paths:
       responses:
         '200':
           description: '{''download_url'': str}'
+  /api/v1/grading-scales:
+    get:
+      operationId: grading_scales_list
+      description: '`/grading-scales` — §5.5''s tenant grading models.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_default
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: scale_type
+        schema:
+          type: string
+          enum:
+          - gpa
+          - hybrid
+          - letter
+          - percentage
+        description: |-
+          * `percentage` - Percentage
+          * `letter` - Letter grades
+          * `gpa` - GPA
+          * `hybrid` - Hybrid (letter and GPA)
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - grading-scales
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGradingScaleList'
+          description: ''
+    post:
+      operationId: grading_scales_create
+      description: '`/grading-scales` — §5.5''s tenant grading models.'
+      tags:
+      - grading-scales
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradingScale'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GradingScale'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GradingScale'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradingScale'
+          description: ''
+  /api/v1/grading-scales/{id}:
+    get:
+      operationId: grading_scales_retrieve
+      description: '`/grading-scales` — §5.5''s tenant grading models.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this grading scale.
+        required: true
+      tags:
+      - grading-scales
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradingScale'
+          description: ''
+    patch:
+      operationId: grading_scales_partial_update
+      description: '`/grading-scales` — §5.5''s tenant grading models.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this grading scale.
+        required: true
+      tags:
+      - grading-scales
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGradingScale'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGradingScale'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGradingScale'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradingScale'
+          description: ''
+    delete:
+      operationId: grading_scales_destroy
+      description: '`/grading-scales` — §5.5''s tenant grading models.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this grading scale.
+        required: true
+      tags:
+      - grading-scales
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/grading-scales/{id}:set-default:
+    post:
+      operationId: grading_scales_:set_default_create
+      description: |-
+        `POST /grading-scales/{id}:set-default`.
+
+        A colon-action rather than `PATCH {"is_default": true}` because it is
+        two writes: `grading_scales_one_default` refuses two live defaults, so
+        the outgoing scale has to be cleared in the same transaction. A PATCH
+        would 409 against whichever scale currently holds it, which describes
+        the constraint rather than the caller's intent.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - grading-scales
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradingScale'
+          description: ''
+  /api/v1/grading-scales/{scale_pk}/grade-bands:
+    get:
+      operationId: grading_scales_grade_bands_list
+      description: |-
+        `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+
+        The scale comes from the URL. Writes deliberately do **not** run
+        `assert_scale_is_complete`: a scale is built one band at a time, and every
+        intermediate state fails that rule — the first band inserted covers 0-49
+        and nothing else. Completeness is checked where it matters, when an exam
+        attaches the scale (`services.assert_scale_usable`).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: path
+        name: scale_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - grading-scales
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGradeBandList'
+          description: ''
+    post:
+      operationId: grading_scales_grade_bands_create
+      description: |-
+        `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+
+        The scale comes from the URL. Writes deliberately do **not** run
+        `assert_scale_is_complete`: a scale is built one band at a time, and every
+        intermediate state fails that rule — the first band inserted covers 0-49
+        and nothing else. Completeness is checked where it matters, when an exam
+        attaches the scale (`services.assert_scale_usable`).
+      parameters:
+      - in: path
+        name: scale_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - grading-scales
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeBand'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GradeBand'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GradeBand'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeBand'
+          description: ''
+  /api/v1/grading-scales/{scale_pk}/grade-bands/{id}:
+    get:
+      operationId: grading_scales_grade_bands_retrieve
+      description: |-
+        `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+
+        The scale comes from the URL. Writes deliberately do **not** run
+        `assert_scale_is_complete`: a scale is built one band at a time, and every
+        intermediate state fails that rule — the first band inserted covers 0-49
+        and nothing else. Completeness is checked where it matters, when an exam
+        attaches the scale (`services.assert_scale_usable`).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: scale_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - grading-scales
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeBand'
+          description: ''
+    patch:
+      operationId: grading_scales_grade_bands_partial_update
+      description: |-
+        `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+
+        The scale comes from the URL. Writes deliberately do **not** run
+        `assert_scale_is_complete`: a scale is built one band at a time, and every
+        intermediate state fails that rule — the first band inserted covers 0-49
+        and nothing else. Completeness is checked where it matters, when an exam
+        attaches the scale (`services.assert_scale_usable`).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: scale_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - grading-scales
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGradeBand'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGradeBand'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGradeBand'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeBand'
+          description: ''
+    delete:
+      operationId: grading_scales_grade_bands_destroy
+      description: |-
+        `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+
+        The scale comes from the URL. Writes deliberately do **not** run
+        `assert_scale_is_complete`: a scale is built one band at a time, and every
+        intermediate state fails that rule — the first band inserted covers 0-49
+        and nothing else. Completeness is checked where it matters, when an exam
+        attaches the scale (`services.assert_scale_usable`).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: scale_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - grading-scales
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/guardians:
     get:
       operationId: guardians_list
@@ -7788,6 +8589,175 @@ components:
       - class_id
       - enrollment_date
       - section_id
+    Exam:
+      type: object
+      description: '`exams` — an examination event (§5.1).'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        term_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          description: e.g. "Term 1 Midterm".
+          maxLength: 150
+        exam_type:
+          $ref: '#/components/schemas/ExamTypeEnum'
+        grading_scale_id:
+          type: string
+          format: uuid
+        weightage_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Contribution to a consolidated term or session result.
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ExamStatusEnum'
+          readOnly: true
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session_id
+      - created_at
+      - exam_type
+      - id
+      - name
+      - status
+      - updated_at
+    ExamStatusEnum:
+      enum:
+      - draft
+      - scheduled
+      - ongoing
+      - marks_entry
+      - processing
+      - approved
+      - published
+      - archived
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `scheduled` - Scheduled
+        * `ongoing` - Ongoing
+        * `marks_entry` - Marks entry
+        * `processing` - Processing
+        * `approved` - Approved
+        * `published` - Published
+        * `archived` - Archived
+    ExamSubject:
+      type: object
+      description: '`exam_subjects` — per-class marks structure for one subject (§5.1).'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        max_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        pass_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        has_practical:
+          type: boolean
+        practical_max_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        practical_pass_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        subject_weightage_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Weight within this exam's aggregate.
+        marks_entry_opens_at:
+          type: string
+          format: date-time
+          nullable: true
+        marks_entry_closes_at:
+          type: string
+          format: date-time
+          nullable: true
+        marks_locked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Set by :lock-marks; cleared by :unlock-marks.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - class_id
+      - created_at
+      - exam_id
+      - id
+      - marks_locked_at
+      - max_marks
+      - pass_marks
+      - subject_id
+      - updated_at
+    ExamTypeEnum:
+      enum:
+      - unit_test
+      - midterm
+      - final
+      - practical
+      - custom
+      type: string
+      description: |-
+        * `unit_test` - Unit test
+        * `midterm` - Midterm
+        * `final` - Final
+        * `practical` - Practical
+        * `custom` - Custom
     ExitRequest:
       type: object
       properties:
@@ -7913,6 +8883,139 @@ components:
         * `female` - Female
         * `other` - Other
         * `unspecified` - Unspecified
+    GradeBand:
+      type: object
+      description: |-
+        `grade_bands` — one band of a grading scale (§5.5).
+
+        The scale is taken from the URL on the nested route, not from the body, so
+        `grading_scale_id` is read-only: a band posted to one scale's collection
+        naming another scale in its payload is a request with two answers.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        grading_scale_id:
+          type: string
+          format: uuid
+          readOnly: true
+        label:
+          type: string
+          description: e.g. A+, B, Pass.
+          maxLength: 10
+        min_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Inclusive.
+        max_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Inclusive.
+        grade_point:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          nullable: true
+          description: For GPA scales.
+        is_passing:
+          type: boolean
+        remark:
+          type: string
+          nullable: true
+          maxLength: 100
+        sort_order:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - grading_scale_id
+      - id
+      - label
+      - max_percent
+      - min_percent
+      - updated_at
+    GradingScale:
+      type: object
+      description: |-
+        `grading_scales` — a tenant's grading model (§5.5).
+
+        `bands` is nested read-only. A scale is only meaningful with its bands, and
+        a client rendering a result needs both in one round trip; writes go through
+        the nested `/grade-bands` route so each band gets its own validation and its
+        own audit entry.
+
+        `is_default` is read-only here and moves through `:set-default` instead. The
+        partial unique index refuses two live defaults, so a plain PATCH setting it
+        true would 409 against whichever scale currently holds it — the caller's
+        intent is "make this the default", which is two writes, not one.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        scale_type:
+          $ref: '#/components/schemas/GradingScaleTypeEnum'
+        gpa_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          nullable: true
+          description: e.g. 4.00 or 5.00. Required for a gpa or hybrid scale.
+        is_default:
+          type: boolean
+          readOnly: true
+          description: One default per tenant; used when an exam names no scale.
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        bands:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradeBand'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - bands
+      - created_at
+      - id
+      - is_default
+      - name
+      - updated_at
+    GradingScaleTypeEnum:
+      enum:
+      - percentage
+      - letter
+      - gpa
+      - hybrid
+      type: string
+      description: |-
+        * `percentage` - Percentage
+        * `letter` - Letter grades
+        * `gpa` - GPA
+        * `hybrid` - Hybrid (letter and GPA)
     Guardian:
       type: object
       properties:
@@ -8528,6 +9631,48 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedExamList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Exam'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedExamSubjectList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExamSubject'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedFileList:
       type: object
       properties:
@@ -8535,6 +9680,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/File'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedGradeBandList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradeBand'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedGradingScaleList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradingScale'
         meta:
           type: object
           properties:
@@ -9243,6 +10430,229 @@ components:
           description: Optional seniority ordering.
         is_active:
           type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedExam:
+      type: object
+      description: '`exams` — an examination event (§5.1).'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_session_id:
+          type: string
+          format: uuid
+        term_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          description: e.g. "Term 1 Midterm".
+          maxLength: 150
+        exam_type:
+          $ref: '#/components/schemas/ExamTypeEnum'
+        grading_scale_id:
+          type: string
+          format: uuid
+        weightage_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Contribution to a consolidated term or session result.
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ExamStatusEnum'
+          readOnly: true
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedExamSubject:
+      type: object
+      description: '`exam_subjects` — per-class marks structure for one subject (§5.1).'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        max_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        pass_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        has_practical:
+          type: boolean
+        practical_max_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        practical_pass_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        subject_weightage_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Weight within this exam's aggregate.
+        marks_entry_opens_at:
+          type: string
+          format: date-time
+          nullable: true
+        marks_entry_closes_at:
+          type: string
+          format: date-time
+          nullable: true
+        marks_locked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Set by :lock-marks; cleared by :unlock-marks.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedGradeBand:
+      type: object
+      description: |-
+        `grade_bands` — one band of a grading scale (§5.5).
+
+        The scale is taken from the URL on the nested route, not from the body, so
+        `grading_scale_id` is read-only: a band posted to one scale's collection
+        naming another scale in its payload is a request with two answers.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        grading_scale_id:
+          type: string
+          format: uuid
+          readOnly: true
+        label:
+          type: string
+          description: e.g. A+, B, Pass.
+          maxLength: 10
+        min_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Inclusive.
+        max_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          description: Inclusive.
+        grade_point:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          nullable: true
+          description: For GPA scales.
+        is_passing:
+          type: boolean
+        remark:
+          type: string
+          nullable: true
+          maxLength: 100
+        sort_order:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedGradingScale:
+      type: object
+      description: |-
+        `grading_scales` — a tenant's grading model (§5.5).
+
+        `bands` is nested read-only. A scale is only meaningful with its bands, and
+        a client rendering a result needs both in one round trip; writes go through
+        the nested `/grade-bands` route so each band gets its own validation and its
+        own audit entry.
+
+        `is_default` is read-only here and moves through `:set-default` instead. The
+        partial unique index refuses two live defaults, so a plain PATCH setting it
+        true would 409 against whichever scale currently holds it — the caller's
+        intent is "make this the default", which is two writes, not one.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        scale_type:
+          $ref: '#/components/schemas/GradingScaleTypeEnum'
+        gpa_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          nullable: true
+          description: e.g. 4.00 or 5.00. Required for a gpa or hybrid scale.
+        is_default:
+          type: boolean
+          readOnly: true
+          description: One default per tenant; used when an exam names no scale.
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        bands:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradeBand'
+          readOnly: true
         created_at:
           type: string
           format: date-time

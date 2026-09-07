@@ -533,6 +533,110 @@ export interface paths {
         patch: operations["designations_partial_update"];
         trace?: never;
     };
+    "/api/v1/exam-subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/exam-subjects` — §5.1's per-class marks structure. */
+        get: operations["exam_subjects_list"];
+        put?: never;
+        /** @description `/exam-subjects` — §5.1's per-class marks structure. */
+        post: operations["exam_subjects_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exam-subjects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/exam-subjects` — §5.1's per-class marks structure. */
+        get: operations["exam_subjects_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `/exam-subjects` — §5.1's per-class marks structure. */
+        delete: operations["exam_subjects_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `/exam-subjects` — §5.1's per-class marks structure. */
+        patch: operations["exam_subjects_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/exams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/exams` — §5.1's examination events.
+         *
+         *     `status` is read-only on the serializer: §7.1's transitions are separate,
+         *     permission-gated, audited actions, and a client that could PATCH the column
+         *     could publish results without passing the approval gate.
+         */
+        get: operations["exams_list"];
+        put?: never;
+        /**
+         * @description `/exams` — §5.1's examination events.
+         *
+         *     `status` is read-only on the serializer: §7.1's transitions are separate,
+         *     permission-gated, audited actions, and a client that could PATCH the column
+         *     could publish results without passing the approval gate.
+         */
+        post: operations["exams_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/exams` — §5.1's examination events.
+         *
+         *     `status` is read-only on the serializer: §7.1's transitions are separate,
+         *     permission-gated, audited actions, and a client that could PATCH the column
+         *     could publish results without passing the approval gate.
+         */
+        get: operations["exams_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description `/exams` — §5.1's examination events.
+         *
+         *     `status` is read-only on the serializer: §7.1's transitions are separate,
+         *     permission-gated, audited actions, and a client that could PATCH the column
+         *     could publish results without passing the approval gate.
+         */
+        delete: operations["exams_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description `/exams` — §5.1's examination events.
+         *
+         *     `status` is read-only on the serializer: §7.1's transitions are separate,
+         *     permission-gated, audited actions, and a client that could PATCH the column
+         *     could publish results without passing the approval gate.
+         */
+        patch: operations["exams_partial_update"];
+        trace?: never;
+    };
     "/api/v1/files": {
         parameters: {
             query?: never;
@@ -633,6 +737,145 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/grading-scales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/grading-scales` — §5.5's tenant grading models. */
+        get: operations["grading_scales_list"];
+        put?: never;
+        /** @description `/grading-scales` — §5.5's tenant grading models. */
+        post: operations["grading_scales_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/grading-scales/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/grading-scales` — §5.5's tenant grading models. */
+        get: operations["grading_scales_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `/grading-scales` — §5.5's tenant grading models. */
+        delete: operations["grading_scales_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `/grading-scales` — §5.5's tenant grading models. */
+        patch: operations["grading_scales_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/grading-scales/{id}:set-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /grading-scales/{id}:set-default`.
+         *
+         *     A colon-action rather than `PATCH {"is_default": true}` because it is
+         *     two writes: `grading_scales_one_default` refuses two live defaults, so
+         *     the outgoing scale has to be cleared in the same transaction. A PATCH
+         *     would 409 against whichever scale currently holds it, which describes
+         *     the constraint rather than the caller's intent.
+         */
+        post: operations["grading_scales_:set_default_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/grading-scales/{scale_pk}/grade-bands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+         *
+         *     The scale comes from the URL. Writes deliberately do **not** run
+         *     `assert_scale_is_complete`: a scale is built one band at a time, and every
+         *     intermediate state fails that rule — the first band inserted covers 0-49
+         *     and nothing else. Completeness is checked where it matters, when an exam
+         *     attaches the scale (`services.assert_scale_usable`).
+         */
+        get: operations["grading_scales_grade_bands_list"];
+        put?: never;
+        /**
+         * @description `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+         *
+         *     The scale comes from the URL. Writes deliberately do **not** run
+         *     `assert_scale_is_complete`: a scale is built one band at a time, and every
+         *     intermediate state fails that rule — the first band inserted covers 0-49
+         *     and nothing else. Completeness is checked where it matters, when an exam
+         *     attaches the scale (`services.assert_scale_usable`).
+         */
+        post: operations["grading_scales_grade_bands_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/grading-scales/{scale_pk}/grade-bands/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+         *
+         *     The scale comes from the URL. Writes deliberately do **not** run
+         *     `assert_scale_is_complete`: a scale is built one band at a time, and every
+         *     intermediate state fails that rule — the first band inserted covers 0-49
+         *     and nothing else. Completeness is checked where it matters, when an exam
+         *     attaches the scale (`services.assert_scale_usable`).
+         */
+        get: operations["grading_scales_grade_bands_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+         *
+         *     The scale comes from the URL. Writes deliberately do **not** run
+         *     `assert_scale_is_complete`: a scale is built one band at a time, and every
+         *     intermediate state fails that rule — the first band inserted covers 0-49
+         *     and nothing else. Completeness is checked where it matters, when an exam
+         *     attaches the scale (`services.assert_scale_usable`).
+         */
+        delete: operations["grading_scales_grade_bands_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description `/grading-scales/{scale_id}/grade-bands` — §5.5's bands.
+         *
+         *     The scale comes from the URL. Writes deliberately do **not** run
+         *     `assert_scale_is_complete`: a scale is built one band at a time, and every
+         *     intermediate state fails that rule — the first band inserted covers 0-49
+         *     and nothing else. Completeness is checked where it matters, when an exam
+         *     attaches the scale (`services.assert_scale_usable`).
+         */
+        patch: operations["grading_scales_grade_bands_partial_update"];
         trace?: never;
     };
     "/api/v1/guardians": {
@@ -3392,6 +3635,94 @@ export interface components {
             roll_number?: string | null;
             capacity_override_reason?: string | null;
         };
+        /** @description `exams` — an examination event (§5.1). */
+        Exam: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            academic_session_id: string;
+            /** Format: uuid */
+            term_id?: string | null;
+            /** @description e.g. "Term 1 Midterm". */
+            name: string;
+            exam_type: components["schemas"]["ExamTypeEnum"];
+            /** Format: uuid */
+            grading_scale_id?: string;
+            /**
+             * Format: decimal
+             * @description Contribution to a consolidated term or session result.
+             */
+            weightage_percent?: string;
+            /** Format: date */
+            starts_on?: string | null;
+            /** Format: date */
+            ends_on?: string | null;
+            readonly status: components["schemas"]["ExamStatusEnum"];
+            description?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `scheduled` - Scheduled
+         *     * `ongoing` - Ongoing
+         *     * `marks_entry` - Marks entry
+         *     * `processing` - Processing
+         *     * `approved` - Approved
+         *     * `published` - Published
+         *     * `archived` - Archived
+         * @enum {string}
+         */
+        ExamStatusEnum: "draft" | "scheduled" | "ongoing" | "marks_entry" | "processing" | "approved" | "published" | "archived";
+        /** @description `exam_subjects` — per-class marks structure for one subject (§5.1). */
+        ExamSubject: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            exam_id: string;
+            /** Format: uuid */
+            class_id: string;
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: decimal */
+            max_marks: string;
+            /** Format: decimal */
+            pass_marks: string;
+            has_practical?: boolean;
+            /** Format: decimal */
+            practical_max_marks?: string | null;
+            /** Format: decimal */
+            practical_pass_marks?: string | null;
+            /**
+             * Format: decimal
+             * @description Weight within this exam's aggregate.
+             */
+            subject_weightage_percent?: string;
+            /** Format: date-time */
+            marks_entry_opens_at?: string | null;
+            /** Format: date-time */
+            marks_entry_closes_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Set by :lock-marks; cleared by :unlock-marks.
+             */
+            readonly marks_locked_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `unit_test` - Unit test
+         *     * `midterm` - Midterm
+         *     * `final` - Final
+         *     * `practical` - Practical
+         *     * `custom` - Custom
+         * @enum {string}
+         */
+        ExamTypeEnum: "unit_test" | "midterm" | "final" | "practical" | "custom";
         ExitRequest: {
             /** Format: date */
             exit_date: string;
@@ -3450,6 +3781,83 @@ export interface components {
          * @enum {string}
          */
         GenderEnum: "male" | "female" | "other" | "unspecified";
+        /**
+         * @description `grade_bands` — one band of a grading scale (§5.5).
+         *
+         *     The scale is taken from the URL on the nested route, not from the body, so
+         *     `grading_scale_id` is read-only: a band posted to one scale's collection
+         *     naming another scale in its payload is a request with two answers.
+         */
+        GradeBand: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly grading_scale_id: string;
+            /** @description e.g. A+, B, Pass. */
+            label: string;
+            /**
+             * Format: decimal
+             * @description Inclusive.
+             */
+            min_percent: string;
+            /**
+             * Format: decimal
+             * @description Inclusive.
+             */
+            max_percent: string;
+            /**
+             * Format: decimal
+             * @description For GPA scales.
+             */
+            grade_point?: string | null;
+            is_passing?: boolean;
+            remark?: string | null;
+            sort_order?: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description `grading_scales` — a tenant's grading model (§5.5).
+         *
+         *     `bands` is nested read-only. A scale is only meaningful with its bands, and
+         *     a client rendering a result needs both in one round trip; writes go through
+         *     the nested `/grade-bands` route so each band gets its own validation and its
+         *     own audit entry.
+         *
+         *     `is_default` is read-only here and moves through `:set-default` instead. The
+         *     partial unique index refuses two live defaults, so a plain PATCH setting it
+         *     true would 409 against whichever scale currently holds it — the caller's
+         *     intent is "make this the default", which is two writes, not one.
+         */
+        GradingScale: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            scale_type?: components["schemas"]["GradingScaleTypeEnum"];
+            /**
+             * Format: decimal
+             * @description e.g. 4.00 or 5.00. Required for a gpa or hybrid scale.
+             */
+            gpa_max?: string | null;
+            /** @description One default per tenant; used when an exam names no scale. */
+            readonly is_default: boolean;
+            description?: string | null;
+            readonly bands: components["schemas"]["GradeBand"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `percentage` - Percentage
+         *     * `letter` - Letter grades
+         *     * `gpa` - GPA
+         *     * `hybrid` - Hybrid (letter and GPA)
+         * @enum {string}
+         */
+        GradingScaleTypeEnum: "percentage" | "letter" | "gpa" | "hybrid";
         Guardian: {
             /** Format: uuid */
             readonly id: string;
@@ -3756,8 +4164,48 @@ export interface components {
                 };
             };
         };
+        PaginatedExamList: {
+            data?: components["schemas"]["Exam"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedExamSubjectList: {
+            data?: components["schemas"]["ExamSubject"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedFileList: {
             data?: components["schemas"]["File"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedGradeBandList: {
+            data?: components["schemas"]["GradeBand"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedGradingScaleList: {
+            data?: components["schemas"]["GradingScale"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -4111,6 +4559,142 @@ export interface components {
             /** @description Optional seniority ordering. */
             level?: number | null;
             is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /** @description `exams` — an examination event (§5.1). */
+        PatchedExam: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            academic_session_id?: string;
+            /** Format: uuid */
+            term_id?: string | null;
+            /** @description e.g. "Term 1 Midterm". */
+            name?: string;
+            exam_type?: components["schemas"]["ExamTypeEnum"];
+            /** Format: uuid */
+            grading_scale_id?: string;
+            /**
+             * Format: decimal
+             * @description Contribution to a consolidated term or session result.
+             */
+            weightage_percent?: string;
+            /** Format: date */
+            starts_on?: string | null;
+            /** Format: date */
+            ends_on?: string | null;
+            readonly status?: components["schemas"]["ExamStatusEnum"];
+            description?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /** @description `exam_subjects` — per-class marks structure for one subject (§5.1). */
+        PatchedExamSubject: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            exam_id?: string;
+            /** Format: uuid */
+            class_id?: string;
+            /** Format: uuid */
+            subject_id?: string;
+            /** Format: decimal */
+            max_marks?: string;
+            /** Format: decimal */
+            pass_marks?: string;
+            has_practical?: boolean;
+            /** Format: decimal */
+            practical_max_marks?: string | null;
+            /** Format: decimal */
+            practical_pass_marks?: string | null;
+            /**
+             * Format: decimal
+             * @description Weight within this exam's aggregate.
+             */
+            subject_weightage_percent?: string;
+            /** Format: date-time */
+            marks_entry_opens_at?: string | null;
+            /** Format: date-time */
+            marks_entry_closes_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Set by :lock-marks; cleared by :unlock-marks.
+             */
+            readonly marks_locked_at?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description `grade_bands` — one band of a grading scale (§5.5).
+         *
+         *     The scale is taken from the URL on the nested route, not from the body, so
+         *     `grading_scale_id` is read-only: a band posted to one scale's collection
+         *     naming another scale in its payload is a request with two answers.
+         */
+        PatchedGradeBand: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** Format: uuid */
+            readonly grading_scale_id?: string;
+            /** @description e.g. A+, B, Pass. */
+            label?: string;
+            /**
+             * Format: decimal
+             * @description Inclusive.
+             */
+            min_percent?: string;
+            /**
+             * Format: decimal
+             * @description Inclusive.
+             */
+            max_percent?: string;
+            /**
+             * Format: decimal
+             * @description For GPA scales.
+             */
+            grade_point?: string | null;
+            is_passing?: boolean;
+            remark?: string | null;
+            sort_order?: number;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /**
+         * @description `grading_scales` — a tenant's grading model (§5.5).
+         *
+         *     `bands` is nested read-only. A scale is only meaningful with its bands, and
+         *     a client rendering a result needs both in one round trip; writes go through
+         *     the nested `/grade-bands` route so each band gets its own validation and its
+         *     own audit entry.
+         *
+         *     `is_default` is read-only here and moves through `:set-default` instead. The
+         *     partial unique index refuses two live defaults, so a plain PATCH setting it
+         *     true would 409 against whichever scale currently holds it — the caller's
+         *     intent is "make this the default", which is two writes, not one.
+         */
+        PatchedGradingScale: {
+            /** Format: uuid */
+            readonly id?: string;
+            name?: string;
+            scale_type?: components["schemas"]["GradingScaleTypeEnum"];
+            /**
+             * Format: decimal
+             * @description e.g. 4.00 or 5.00. Required for a gpa or hybrid scale.
+             */
+            gpa_max?: string | null;
+            /** @description One default per tenant; used when an exam names no scale. */
+            readonly is_default?: boolean;
+            description?: string | null;
+            readonly bands?: components["schemas"]["GradeBand"][];
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -6693,6 +7277,287 @@ export interface operations {
             };
         };
     };
+    exam_subjects_list: {
+        parameters: {
+            query?: {
+                class_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                exam_id?: string;
+                has_practical?: boolean;
+                is_locked?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                subject_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedExamSubjectList"];
+                };
+            };
+        };
+    };
+    exam_subjects_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExamSubject"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExamSubject"];
+                "multipart/form-data": components["schemas"]["ExamSubject"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSubject"];
+                };
+            };
+        };
+    };
+    exam_subjects_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam subject. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSubject"];
+                };
+            };
+        };
+    };
+    exam_subjects_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam subject. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exam_subjects_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam subject. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedExamSubject"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedExamSubject"];
+                "multipart/form-data": components["schemas"]["PatchedExamSubject"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSubject"];
+                };
+            };
+        };
+    };
+    exams_list: {
+        parameters: {
+            query?: {
+                academic_session_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                ends_on?: string;
+                ends_on__gte?: string;
+                ends_on__lte?: string;
+                /**
+                 * @description * `unit_test` - Unit test
+                 *     * `midterm` - Midterm
+                 *     * `final` - Final
+                 *     * `practical` - Practical
+                 *     * `custom` - Custom
+                 */
+                exam_type?: "custom" | "final" | "midterm" | "practical" | "unit_test";
+                grading_scale_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                starts_on?: string;
+                starts_on__gte?: string;
+                starts_on__lte?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `scheduled` - Scheduled
+                 *     * `ongoing` - Ongoing
+                 *     * `marks_entry` - Marks entry
+                 *     * `processing` - Processing
+                 *     * `approved` - Approved
+                 *     * `published` - Published
+                 *     * `archived` - Archived
+                 */
+                status?: "approved" | "archived" | "draft" | "marks_entry" | "ongoing" | "processing" | "published" | "scheduled";
+                term_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedExamList"];
+                };
+            };
+        };
+    };
+    exams_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Exam"];
+                "application/x-www-form-urlencoded": components["schemas"]["Exam"];
+                "multipart/form-data": components["schemas"]["Exam"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exam"];
+                };
+            };
+        };
+    };
+    exams_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exam"];
+                };
+            };
+        };
+    };
+    exams_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exams_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this exam. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedExam"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedExam"];
+                "multipart/form-data": components["schemas"]["PatchedExam"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exam"];
+                };
+            };
+        };
+    };
     files_list: {
         parameters: {
             query?: {
@@ -6826,6 +7691,287 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    grading_scales_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_default?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `percentage` - Percentage
+                 *     * `letter` - Letter grades
+                 *     * `gpa` - GPA
+                 *     * `hybrid` - Hybrid (letter and GPA)
+                 */
+                scale_type?: "gpa" | "hybrid" | "letter" | "percentage";
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedGradingScaleList"];
+                };
+            };
+        };
+    };
+    grading_scales_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradingScale"];
+                "application/x-www-form-urlencoded": components["schemas"]["GradingScale"];
+                "multipart/form-data": components["schemas"]["GradingScale"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScale"];
+                };
+            };
+        };
+    };
+    grading_scales_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this grading scale. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScale"];
+                };
+            };
+        };
+    };
+    grading_scales_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this grading scale. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    grading_scales_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this grading scale. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedGradingScale"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedGradingScale"];
+                "multipart/form-data": components["schemas"]["PatchedGradingScale"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScale"];
+                };
+            };
+        };
+    };
+    "grading_scales_:set_default_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScale"];
+                };
+            };
+        };
+    };
+    grading_scales_grade_bands_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                scale_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedGradeBandList"];
+                };
+            };
+        };
+    };
+    grading_scales_grade_bands_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scale_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeBand"];
+                "application/x-www-form-urlencoded": components["schemas"]["GradeBand"];
+                "multipart/form-data": components["schemas"]["GradeBand"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeBand"];
+                };
+            };
+        };
+    };
+    grading_scales_grade_bands_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                scale_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeBand"];
+                };
+            };
+        };
+    };
+    grading_scales_grade_bands_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                scale_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    grading_scales_grade_bands_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                scale_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedGradeBand"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedGradeBand"];
+                "multipart/form-data": components["schemas"]["PatchedGradeBand"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeBand"];
+                };
             };
         };
     };
