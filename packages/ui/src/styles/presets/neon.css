@@ -1,0 +1,204 @@
+/*
+ * Neon — an instrument-panel palette: neon cyan on graphite, adapted from a
+ * WattVision-style electrical-monitoring spec (#121212 / #1E1E1E / #00E5FF /
+ * #32D74B / #FF453A, sRGB) and converted to this repo's OKLCH `--sh-*` tier.
+ *
+ * Only `--sh-*` is written here. Never a `--color-*` name: those are aliases
+ * declared in theme.css's `@theme inline` block, and pointing one somewhere else
+ * would create the second source of truth that file exists to prevent.
+ *
+ * The source spec is dark-only, on the argument that a white ground is tiring to
+ * read data on for hours. This app is not dark-only — it has a light/dark toggle
+ * and a website that never toggles — so the light arm below is a derivation, not
+ * a transcription: it keeps the hue identity (cyan primary, lime positive, cool
+ * graphite neutrals) and re-steps every lightness until it carries text. The cyan
+ * in particular cannot survive: #00E5FF is L 0.844, which carries nothing on white,
+ * so light mode uses a deep teal at the same hue.
+ *
+ * Deliberately NOT overridden, matching the other presets:
+ *   - --sh-color-ring, which is `var(--sh-color-primary)` and follows along.
+ *   - the elevation scale, the platform tier, and the type stack.
+ * Status hues ARE overridden here, unlike the other presets: this palette's whole
+ * identity is its signal colours, and the spec names them explicitly. Each was
+ * re-checked for contrast rather than copied.
+ *
+ * Chart ramp: six categorical slots, validated in both arms with the CVD checker
+ * (adjacent-pair ΔE, chroma floor, contrast). Slots are interleaved around the
+ * wheel — cyan, amber, violet, green, magenta, blue — because adjacent slots are
+ * what a reader actually has to tell apart. Light mode separates the last pair by
+ * lightness as well as hue; at equal lightness they collapse under protanopia
+ * (ΔE 6.7, below the floor).
+ *
+ * Measured contrast:
+ *   dark   foreground on background          18.73:1
+ *          muted-foreground on background     6.52:1
+ *          primary on background             12.18:1
+ *          ink on primary                    10.91:1
+ *          danger on background               5.50:1
+ *   light  foreground on surface             16.61:1
+ *          muted-foreground on surface        4.87:1
+ *          white on primary                   4.84:1
+ *          white on danger                    4.50:1
+ *          white on accent                    4.51:1
+ *
+ * Specificity, low to high:
+ *   1. :root — theme.css, the Ink & Brass default
+ *   2. :root[data-theme-preset="neon"] — this file
+ *   3. the inline style on the TenantTheme wrapper — tenant branding, applied only
+ *      under the "tenant" preset (tenant-theme.tsx)
+ */
+
+:root[data-theme-preset="neon"] {
+  /* The spec's 16px card radius. */
+  --sh-radius: 1rem;
+
+  --sh-color-background: oklch(0.985 0.004 225);
+  --sh-color-foreground: oklch(0.235 0.014 250);
+  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface-foreground: oklch(0.235 0.014 250);
+  --sh-color-surface-raised: oklch(1 0 0);
+  --sh-color-surface-sunken: oklch(0.962 0.006 225);
+
+  --sh-color-muted: oklch(0.966 0.005 225);
+  --sh-color-muted-foreground: oklch(0.55 0.015 250);
+  --sh-color-border: oklch(0.905 0.008 225);
+
+  --sh-color-primary: oklch(0.53 0.135 225);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  --sh-color-secondary: oklch(0.945 0.014 225);
+  --sh-color-secondary-foreground: oklch(0.35 0.09 225);
+  --sh-color-accent: oklch(0.55 0.15 152);
+  --sh-color-accent-foreground: oklch(1 0 0);
+
+  --sh-color-success: oklch(0.55 0.15 152);
+  --sh-color-success-foreground: oklch(1 0 0);
+  --sh-color-warning: oklch(0.575 0.15 68);
+  --sh-color-warning-foreground: oklch(1 0 0);
+  --sh-color-danger: oklch(0.59 0.185 28.3);
+  --sh-color-danger-foreground: oklch(1 0 0);
+  --sh-color-info: oklch(0.52 0.14 262);
+  --sh-color-info-foreground: oklch(1 0 0);
+
+  --sh-color-overlay: oklch(0.235 0.014 250);
+
+  --sh-color-chart-1: oklch(0.53 0.135 225);
+  --sh-color-chart-2: oklch(0.575 0.15 68);
+  --sh-color-chart-3: oklch(0.5 0.19 292);
+  --sh-color-chart-4: oklch(0.55 0.15 152);
+  --sh-color-chart-5: oklch(0.64 0.17 342);
+  --sh-color-chart-6: oklch(0.44 0.15 258);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.53 0.135 225) 0%,
+    oklch(0.44 0.15 258) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(1 0 0);
+}
+
+/*
+ * Declared twice with identical values, matching theme.css: the media arm covers a
+ * viewer who has not chosen (`:not(.light)` lets an explicit light choice win), the
+ * class arm covers the dashboard's toggle. A divergence here is invisible until
+ * someone toggles.
+ *
+ * This arm is the spec as written — the values below are its own hexes in OKLCH.
+ */
+/* dark-mode token block */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset="neon"]:not(.light) {
+    --sh-color-background: oklch(0.182 0 0);
+    --sh-color-foreground: oklch(1 0 0);
+    --sh-color-surface: oklch(0.235 0 0);
+    --sh-color-surface-foreground: oklch(1 0 0);
+    --sh-color-surface-raised: oklch(0.278 0 0);
+    --sh-color-surface-sunken: oklch(0.155 0 0);
+
+    --sh-color-muted: oklch(0.264 0 0);
+    --sh-color-muted-foreground: oklch(0.681 0.007 286);
+    --sh-color-border: oklch(0.294 0.004 286);
+
+    --sh-color-primary: oklch(0.844 0.146 209.3);
+    --sh-color-primary-foreground: oklch(0.19 0.03 220);
+    --sh-color-secondary: oklch(0.294 0.02 220);
+    --sh-color-secondary-foreground: oklch(0.844 0.146 209.3);
+    --sh-color-accent: oklch(0.77 0.224 145);
+    --sh-color-accent-foreground: oklch(0.19 0.03 145);
+
+    --sh-color-success: oklch(0.77 0.224 145);
+    --sh-color-success-foreground: oklch(0.19 0.03 145);
+    --sh-color-warning: oklch(0.8 0.15 72);
+    --sh-color-warning-foreground: oklch(0.19 0.03 72);
+    --sh-color-danger: oklch(0.663 0.224 28.3);
+    /* Ink, not white: the spec's #FF453A is light enough that white on it is 3.41:1,
+       below AA. Dark ink on the same red is 5.46:1, and keeps the colour this palette
+       is identified by — matching what accent and warning already do in this arm. */
+    --sh-color-danger-foreground: oklch(0.19 0.03 28);
+    --sh-color-info: oklch(0.7 0.15 255);
+    --sh-color-info-foreground: oklch(0.19 0.03 255);
+
+    --sh-color-overlay: oklch(0.09 0 0);
+
+    --sh-color-chart-1: oklch(0.844 0.146 209.3);
+    --sh-color-chart-2: oklch(0.8 0.15 72);
+    --sh-color-chart-3: oklch(0.72 0.16 292);
+    --sh-color-chart-4: oklch(0.77 0.2 145);
+    --sh-color-chart-5: oklch(0.72 0.18 340);
+    --sh-color-chart-6: oklch(0.7 0.15 255);
+
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.42 0.09 215) 0%,
+      oklch(0.3 0.07 235) 100%
+    );
+    --sh-color-spotlight-foreground: oklch(1 0 0);
+  }
+}
+
+:root[data-theme-preset="neon"].dark {
+  --sh-color-background: oklch(0.182 0 0);
+  --sh-color-foreground: oklch(1 0 0);
+  --sh-color-surface: oklch(0.235 0 0);
+  --sh-color-surface-foreground: oklch(1 0 0);
+  --sh-color-surface-raised: oklch(0.278 0 0);
+  --sh-color-surface-sunken: oklch(0.155 0 0);
+
+  --sh-color-muted: oklch(0.264 0 0);
+  --sh-color-muted-foreground: oklch(0.681 0.007 286);
+  --sh-color-border: oklch(0.294 0.004 286);
+
+  --sh-color-primary: oklch(0.844 0.146 209.3);
+  --sh-color-primary-foreground: oklch(0.19 0.03 220);
+  --sh-color-secondary: oklch(0.294 0.02 220);
+  --sh-color-secondary-foreground: oklch(0.844 0.146 209.3);
+  --sh-color-accent: oklch(0.77 0.224 145);
+  --sh-color-accent-foreground: oklch(0.19 0.03 145);
+
+  --sh-color-success: oklch(0.77 0.224 145);
+  --sh-color-success-foreground: oklch(0.19 0.03 145);
+  --sh-color-warning: oklch(0.8 0.15 72);
+  --sh-color-warning-foreground: oklch(0.19 0.03 72);
+  --sh-color-danger: oklch(0.663 0.224 28.3);
+  /* Ink, not white: the spec's #FF453A is light enough that white on it is 3.41:1,
+     below AA. Dark ink on the same red is 5.46:1, and keeps the colour this palette
+     is identified by — matching what accent and warning already do in this arm. */
+  --sh-color-danger-foreground: oklch(0.19 0.03 28);
+  --sh-color-info: oklch(0.7 0.15 255);
+  --sh-color-info-foreground: oklch(0.19 0.03 255);
+
+  --sh-color-overlay: oklch(0.09 0 0);
+
+  --sh-color-chart-1: oklch(0.844 0.146 209.3);
+  --sh-color-chart-2: oklch(0.8 0.15 72);
+  --sh-color-chart-3: oklch(0.72 0.16 292);
+  --sh-color-chart-4: oklch(0.77 0.2 145);
+  --sh-color-chart-5: oklch(0.72 0.18 340);
+  --sh-color-chart-6: oklch(0.7 0.15 255);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.42 0.09 215) 0%,
+    oklch(0.3 0.07 235) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(1 0 0);
+}

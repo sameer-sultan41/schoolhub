@@ -25,6 +25,42 @@
       "dark": "تاریک",
       "system": "سسٹم کے مطابق"
     },
+    "preferences": {
+      "trigger": "ترجیحات",
+      "title": "ترجیحات",
+      "description": "یہ ڈیش بورڈ آپ کے لیے کس ترتیب میں دکھایا جائے۔",
+      "reset": "طے شدہ ترتیب پر واپس لائیں",
+      "preset": {
+        "label": "رنگ",
+        "tenant": "اسکول کے رنگ",
+        "ink-brass": "انک اینڈ برَاس",
+        "tangerine": "ٹینجرین",
+        "soft-pop": "سافٹ پاپ",
+        "brutalist": "بروٹالسٹ",
+        "neon": "نیون"
+      },
+      "sidebarVariant": {
+        "label": "سائیڈ بار",
+        "sidebar": "کنارے سے ملا ہوا",
+        "inset": "اندر کی جانب",
+        "floating": "تیرتا ہوا"
+      },
+      "sidebarCollapse": {
+        "label": "سکڑنے پر",
+        "icon": "آئیکن",
+        "offcanvas": "پوشیدہ"
+      },
+      "contentLayout": {
+        "label": "مواد کی چوڑائی",
+        "full-width": "پوری چوڑائی",
+        "centered": "درمیان میں"
+      },
+      "navbarStyle": {
+        "label": "ہیڈر",
+        "sticky": "قائم رہے",
+        "scroll": "اسکرول ہو جائے"
+      }
+    },
     "groups": {
       "overview": "جائزہ",
       "people": "افراد",
@@ -159,7 +195,8 @@
     "columns": {
       "admissionNumber": "داخلہ نمبر",
       "name": "نام",
-      "status": "حیثیت"
+      "status": "حیثیت",
+      "admissionDate": "داخلے کی تاریخ"
     },
     "filters": {
       "search": "تلاش",
@@ -408,7 +445,8 @@
       "employeeNumber": "ملازم نمبر",
       "name": "نام",
       "staffType": "قسم",
-      "employmentStatus": "حیثیت"
+      "employmentStatus": "حیثیت",
+      "email": "ای میل"
     },
     "filters": {
       "search": "تلاش",
@@ -704,7 +742,8 @@
         "students": "طلبہ",
         "decision": "فیصلہ",
         "status": "حیثیت",
-        "actions": "اقدامات"
+        "actions": "اقدامات",
+        "startedAt": "شروع ہوا"
       },
       "fields": {
         "fromSession": "کس سیشن سے",
@@ -1026,7 +1065,20 @@
     "new": "نیا",
     "edit": "ترمیم",
     "import": "درآمد",
-    "clearFilters": "فلٹر ہٹائیں"
+    "clearFilters": "فلٹر ہٹائیں",
+    "sortAscending": "{column} کے حساب سے ترتیب دیں، الف سے ی",
+    "sortDescending": "{column} کے حساب سے ترتیب دیں، ی سے الف",
+    "rowsPerPage": "فی صفحہ قطاریں",
+    "pageOf": "صفحہ {page} از {pages}",
+    "totalRows": "کل {count}",
+    "pageRange": "{count} میں سے {from}–{to}",
+    "pagination": "صفحہ بندی",
+    "previousPage": "پچھلا صفحہ",
+    "nextPage": "اگلا صفحہ",
+    "goToPage": "صفحہ {page} پر جائیں",
+    "morePages": "مزید صفحات",
+    "columns": "کالم",
+    "toggleColumns": "کالم دکھائیں یا چھپائیں"
   },
   "errors": {
     "validation_error": "براہ کرم نشان زد خانوں کو درست کریں۔",

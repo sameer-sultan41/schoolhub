@@ -27,7 +27,12 @@ export const metadata: Metadata = { title: "Dashboard" };
  * parts of this screen their role can actually answer for.
  *
  * The layout puts the one question a school actually asks at 9am — what is happening
- * right now — across the top, at full width, and everything slower underneath it.
+ * right now — across the top, at full width. The figures follow immediately, then the
+ * slower panels.
+ *
+ * The bands below are asymmetric on purpose. A horizontal bar chart needs the width more
+ * than a five-item queue or a column of action links does, and the even 2x2 this replaced
+ * gave both the same, so the charts were cramped while the panels ran short.
  */
 export default async function DashboardPage() {
   const t = await getTranslations("dashboard");
@@ -38,14 +43,23 @@ export default async function DashboardPage() {
 
       <NowBand />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <TeacherLoadChart />
+      {/* Promoted from the foot of the screen: a reader who wants the shape of the school
+          should not have to scroll past two charts to reach it. */}
+      <SchoolShapePanel />
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <TeacherLoadChart />
+        </div>
         <PendingWorkPanel />
-        <CapacityChart />
-        <QuickActions />
       </div>
 
-      <SchoolShapePanel />
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <CapacityChart />
+        </div>
+        <QuickActions />
+      </div>
     </div>
   );
 }

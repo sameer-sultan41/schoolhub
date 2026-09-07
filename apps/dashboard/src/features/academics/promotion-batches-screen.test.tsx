@@ -1,21 +1,39 @@
-import { ApiError, type ApiResult } from "@schoolhub/api-client";
+import { ApiError } from "@schoolhub/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PromotionBatchRecord } from "@/features/academics/academics-types";
 import { PromotionBatchesScreen } from "@/features/academics/promotion-batches-screen";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { offsetPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 jest.mock("@/hooks/use-session", () => ({
   usePermission: jest.fn(() => false),
   useAnyPermission: jest.fn(() => false),
 }));
+
+/**
+ * The router has to ROUND-TRIP, not swallow the write.
+ *
+ * Filters, sort, hidden columns and page live in the URL now (`useTableParams` →
+ * `useSearchParam`), so `replace` is what applies a page click and `useSearchParams` is
+ * where the next render reads it back from. A `replace: jest.fn()` that stores nothing
+ * would leave the screen on page one forever, and the pager assertions below would pass
+ * against a table that never moved. `usePathname` is still here for `AcademicsNav`, and
+ * `push` stays a plain spy: row navigation leaves this screen rather than changing its
+ * query.
+ */
 const mockPush = jest.fn();
+let mockSearchParams = new URLSearchParams();
+const mockReplace = jest.fn((url: string) => {
+  mockSearchParams = new URLSearchParams(url.split("?")[1] ?? "");
+});
+const mockRouter = { replace: mockReplace, push: mockPush, prefetch: jest.fn() };
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
   usePathname: () => "/academics/promotions",
+  useRouter: () => mockRouter,
+  useSearchParams: () => mockSearchParams,
 }));
 
 /** The two reference lists, in mutable bindings so one test can hold them in the
@@ -44,23 +62,38 @@ jest.mock("@/features/academics/promotion-batch-form", () => ({
 const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
 const mockUsePermission = usePermission as jest.MockedFunction<typeof usePermission>;
 
+/** A batch id is a v4 UUID; the column shows its first eight characters and keeps the
+ * rest on the cell's `title`. A short stand-in would let the truncation break unnoticed. */
+const BATCH_ID = "9f3c2a10-5b7e-4d21-8c66-1f0a9d4e77b2";
+const BATCH_ID_SHOWN = "9f3c2a10";
+const SECOND_BATCH_ID = "c4a71e88-2f60-4b9a-93d5-6e0b8c21af74";
+const SECOND_BATCH_ID_SHOWN = "c4a71e88";
+
+/**
+ * Three days before the clock `renderWithProviders` installs (2026-01-01), so the
+ * "Started" column reads "3 days ago" on any machine on any day.
+ *
+ * The screen passes next-intl's `now` into `formatRelativeTime` precisely so a test can
+ * pin it — measuring against `new Date()` would make the cell read something different
+ * every week the suite ran.
+ */
+const THREE_DAYS_AGO = "2025-12-29T00:00:00.000Z";
+
 const ROW: PromotionBatchRecord = {
-  batch_id: "batch-1",
+  batch_id: BATCH_ID,
   from_academic_session_id: "sess1",
   to_academic_session_id: "sess2",
   from_class_id: "class8",
   status: "pending_approval",
   students: 30,
-  started_at: "2026-04-01T00:00:00Z",
+  started_at: THREE_DAYS_AGO,
 };
 
-function page(items: unknown[], nextCursor: string | null = null): ApiResult<unknown> {
-  return {
-    data: items,
-    meta: { pagination: { next_cursor: nextCursor, previous_cursor: null, page_size: 25 } },
-    requestId: "req-list",
-    status: 200,
-  };
+/** Two pages of batches, so the pager has somewhere to go. */
+const FIRST_OF_TWO_PAGES = { total_count: 30, page_size: 25 };
+
+function renderScreen() {
+  return renderWithProviders(<PromotionBatchesScreen />);
 }
 
 describe("PromotionBatchesScreen", () => {
@@ -68,39 +101,53 @@ describe("PromotionBatchesScreen", () => {
     mockGet.mockReset();
     mockPush.mockReset();
     mockUsePermission.mockReturnValue(false);
+    // The URL is state now, and it survives a render — reset it or the page a previous
+    // test navigated to leaks into the next one.
+    mockReplace.mockClear();
+    mockSearchParams = new URLSearchParams();
     mockSessions = { data: SESSIONS };
     mockClasses = { data: CLASSES };
   });
 
   it("renders one row per batch, with its session pair, student count and status", async () => {
-    mockGet.mockResolvedValue(page([ROW]));
+    mockGet.mockResolvedValue(offsetPage([ROW]));
 
-    renderWithProviders(<PromotionBatchesScreen />);
+    renderScreen();
 
-    expect(await screen.findByText("batch-1")).toBeInTheDocument();
-    expect(screen.getByText("Grade 8")).toBeInTheDocument();
-    expect(screen.getByText("2025-26 → 2026-27")).toBeInTheDocument();
-    expect(screen.getByText("30")).toBeInTheDocument();
-    expect(screen.getByText("Pending approval")).toBeInTheDocument();
+    const cell = await screen.findByText(BATCH_ID_SHOWN);
+    // The whole id stays one hover away, for pasting into a support thread.
+    expect(cell).toHaveAttribute("title", BATCH_ID);
+
+    const row = within(cell.closest("tr") as HTMLElement);
+    expect(row.getByText("Grade 8")).toBeInTheDocument();
+    expect(row.getByText("2025-26 → 2026-27")).toBeInTheDocument();
+    expect(row.getByText("30")).toBeInTheDocument();
+    expect(row.getByText("Pending approval")).toBeInTheDocument();
+    // "3 days ago" is what a rollover batch is read by; the exact moment rides in the
+    // tooltip on the same cell.
+    expect(row.getByText("3 days ago")).toBeInTheDocument();
   });
 
   it("navigates to the batch review when a row is clicked", async () => {
-    mockGet.mockResolvedValue(page([ROW]));
+    mockGet.mockResolvedValue(offsetPage([ROW]));
 
-    renderWithProviders(<PromotionBatchesScreen />);
+    renderScreen();
 
-    const cell = await screen.findByText("batch-1");
+    const cell = await screen.findByText(BATCH_ID_SHOWN);
     fireEvent.click(cell.closest("tr") as HTMLElement);
 
-    expect(mockPush).toHaveBeenCalledWith("/academics/promotions/batch-1");
+    expect(mockPush).toHaveBeenCalledWith(`/academics/promotions/${BATCH_ID}`);
   });
 
   it("shows the translated empty state", async () => {
-    mockGet.mockResolvedValue(page([]));
+    mockGet.mockResolvedValue(offsetPage([]));
 
-    renderWithProviders(<PromotionBatchesScreen />);
+    renderScreen();
 
     expect(await screen.findByText("No promotion batches yet")).toBeInTheDocument();
+    // No row range either: "1–0 of 0" under an empty state that has already said there
+    // is nothing here is a second, worse way of saying the same thing.
+    expect(screen.queryByText(/of 0/)).not.toBeInTheDocument();
   });
 
   it("renders the ApiError envelope in the table's error slot on failure", async () => {
@@ -114,7 +161,7 @@ describe("PromotionBatchesScreen", () => {
       }),
     );
 
-    renderWithProviders(<PromotionBatchesScreen />);
+    renderScreen();
 
     expect(await screen.findByText(/You do not have permission to do that\./)).toBeInTheDocument();
     expect(screen.getByText(/Reference: req-12/)).toBeInTheDocument();
@@ -125,29 +172,29 @@ describe("PromotionBatchesScreen", () => {
   });
 
   it("hides the create-batch control without the create permission", async () => {
-    mockGet.mockResolvedValue(page([ROW]));
+    mockGet.mockResolvedValue(offsetPage([ROW]));
 
-    renderWithProviders(<PromotionBatchesScreen />);
+    renderScreen();
 
-    await screen.findByText("batch-1");
+    await screen.findByText(BATCH_ID_SHOWN);
     expect(screen.queryByTestId("promotion-batch-form")).not.toBeInTheDocument();
   });
 
   it("shows the create-batch control when permitted", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([ROW]));
+    mockGet.mockResolvedValue(offsetPage([ROW]));
 
-    renderWithProviders(<PromotionBatchesScreen />);
+    renderScreen();
 
     expect(await screen.findByTestId("promotion-batch-form")).toBeInTheDocument();
   });
 
   it("filters by class and by status", async () => {
-    mockGet.mockResolvedValue(page([ROW]));
+    mockGet.mockResolvedValue(offsetPage([ROW]));
     const user = userEvent.setup();
 
-    renderWithProviders(<PromotionBatchesScreen />);
-    await screen.findByText("batch-1");
+    renderScreen();
+    await screen.findByText(BATCH_ID_SHOWN);
 
     await user.click(screen.getByRole("combobox", { name: "Class" }));
     await user.click(await screen.findByRole("option", { name: "Grade 8" }));
@@ -165,11 +212,11 @@ describe("PromotionBatchesScreen", () => {
   });
 
   it("filters by the source and target sessions", async () => {
-    mockGet.mockResolvedValue(page([ROW]));
+    mockGet.mockResolvedValue(offsetPage([ROW]));
     const user = userEvent.setup();
 
-    renderWithProviders(<PromotionBatchesScreen />);
-    await screen.findByText("batch-1");
+    renderScreen();
+    await screen.findByText(BATCH_ID_SHOWN);
 
     await user.click(screen.getByRole("combobox", { name: "From session" }));
     await user.click(await screen.findByRole("option", { name: "2025-26" }));
@@ -184,54 +231,72 @@ describe("PromotionBatchesScreen", () => {
     });
   });
 
-  it("pages forward by cursor", async () => {
-    mockGet.mockResolvedValue(page([ROW], "cursor-2"));
+  it("asks the server for the page number the reader picks", async () => {
+    mockGet.mockResolvedValue(offsetPage([ROW], FIRST_OF_TWO_PAGES));
 
-    renderWithProviders(<PromotionBatchesScreen />);
-    await screen.findByText("batch-1");
+    renderScreen();
+    await screen.findByText(BATCH_ID_SHOWN);
+    expect(screen.getByText("1–25 of 30")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
 
     await waitFor(() => {
-      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.cursor).toBe("cursor-2");
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
     });
+    // The range follows the reader's own page, not the `page: 1` the (kept-previous)
+    // response still carries while the second page is in flight.
+    expect(await screen.findByText("26–30 of 30")).toBeInTheDocument();
   });
 
   it("falls back to em dashes for the class and session names while the reference lists load", async () => {
     mockSessions = { data: undefined };
     mockClasses = { data: undefined };
-    mockGet.mockResolvedValue(page([ROW]));
+    mockGet.mockResolvedValue(offsetPage([ROW]));
     const user = userEvent.setup();
 
-    renderWithProviders(<PromotionBatchesScreen />);
+    renderScreen();
 
-    const cell = await screen.findByText("batch-1");
+    const cell = await screen.findByText(BATCH_ID_SHOWN);
     const row = cell.closest("tr") as HTMLElement;
     expect(within(row).getByText("—")).toBeInTheDocument();
     expect(within(row).getByText("— → —")).toBeInTheDocument();
+    // The count, the status and the start date all live on the row itself, so none of
+    // them waits on a lookup.
     expect(within(row).getByText("30")).toBeInTheDocument();
+    expect(within(row).getByText("3 days ago")).toBeInTheDocument();
 
     await user.click(screen.getByRole("combobox", { name: "From session" }));
-    expect(screen.getAllByRole("option")).toHaveLength(1);
-    expect(screen.getByRole("option", { name: "All" })).toBeInTheDocument();
+
+    // Scoped to the open listbox: the rows-per-page control at the foot of the card is
+    // a native <select>, and its 25/50/100 children carry the `option` role too.
+    const listbox = within(screen.getByRole("listbox"));
+    expect(listbox.getAllByRole("option")).toHaveLength(1);
+    expect(listbox.getByRole("option", { name: "All" })).toBeInTheDocument();
   });
 
   it("steps back to the first page, where Previous is no longer offered", async () => {
-    mockGet.mockResolvedValueOnce(page([ROW], "cursor-2"));
-    mockGet.mockResolvedValueOnce(page([{ ...ROW, batch_id: "batch-2" }]));
-    mockGet.mockResolvedValue(page([ROW], "cursor-2"));
+    mockGet.mockResolvedValueOnce(offsetPage([ROW], FIRST_OF_TWO_PAGES));
+    mockGet.mockResolvedValueOnce(
+      offsetPage([{ ...ROW, batch_id: SECOND_BATCH_ID }], { ...FIRST_OF_TWO_PAGES, page: 2 }),
+    );
+    mockGet.mockResolvedValue(offsetPage([ROW], FIRST_OF_TWO_PAGES));
 
-    renderWithProviders(<PromotionBatchesScreen />);
-    await screen.findByText("batch-1");
+    renderScreen();
+    await screen.findByText(BATCH_ID_SHOWN);
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    // Await the second page's own row, not the request: Previous is guarded while
-    // a page is still in flight, so the click below has to land after it settles.
-    expect(await screen.findByText("batch-2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
+    // Await the second page's own row, not the request: the click below has to land on
+    // a pager that has already moved.
+    expect(await screen.findByText(SECOND_BATCH_ID_SHOWN)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous page" }));
 
-    expect(await screen.findByText("batch-1")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(await screen.findByText(BATCH_ID_SHOWN)).toBeInTheDocument();
+    await waitFor(() => {
+      // Page one is the absence of the parameter, not `page=1`.
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBeUndefined();
+    });
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
   });
 });

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { StaffTable } from "@/features/staff/staff-table";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { offsetPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 // StaffTable never calls useSession itself — it renders <Can>, which reads
@@ -34,8 +34,22 @@ jest.mock("@/features/staff/use-designations", () => ({
   }),
 }));
 const mockPush = jest.fn();
+/**
+ * The router has to ROUND-TRIP, not swallow the write.
+ *
+ * Filters, sort and page live in the URL now (`useTableParams` -> `useSearchParam`), so
+ * `replace` is what applies a page click and `useSearchParams` is where the next render
+ * reads it back from. A `replace: jest.fn()` that stored nothing would leave the screen
+ * on page one forever, and every pager assertion below would pass against a table that
+ * never moved.
+ */
+let mockSearchParams = new URLSearchParams();
+const mockReplace = jest.fn((url: string) => {
+  mockSearchParams = new URLSearchParams(url.split("?")[1] ?? "");
+});
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, prefetch: jest.fn() }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 // eslint-disable-next-line @typescript-eslint/unbound-method -- mocked jest.fn(), never bound to `this`
@@ -49,18 +63,22 @@ const STAFF_MEMBER = {
   last_name: "Ahmed",
   staff_type: "teaching",
   employment_status: "active",
+  joining_date: "2024-08-01",
+  email: "bilal.ahmed@demo.localhost",
+  // The list serializer sends these beside their ids so the directory can name a
+  // campus, a department and a designation without three lookup requests. Department
+  // is null here on purpose — it is optional on a staff record, and the dash is what
+  // the cell must render for it.
+  campus_name: "Main Campus",
+  department_name: null,
+  designation_name: "Senior Teacher",
 };
 
 function mockStaffAndDepartments(staffPage: ApiResult<unknown>) {
   mockGet.mockImplementation((path: string) => {
     if (path === "/staff") return Promise.resolve(staffPage);
     if (path === "/departments") {
-      return Promise.resolve({
-        data: [],
-        meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-        requestId: "req-departments",
-        status: 200,
-      });
+      return Promise.resolve(offsetPage([], {}, "req-departments"));
     }
     throw new Error(`unexpected path ${path}`);
   });
@@ -70,6 +88,10 @@ describe("StaffTable", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockPush.mockReset();
+    // The URL is state now, and it survives a render — reset it or the page a previous
+    // test navigated to leaks into the next one.
+    mockReplace.mockClear();
+    mockSearchParams = new URLSearchParams();
     mockUsePermission.mockReturnValue(false);
   });
 
@@ -81,12 +103,7 @@ describe("StaffTable", () => {
   });
 
   it("renders rows once data resolves", async () => {
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([STAFF_MEMBER], {}, "req-list"));
 
     renderWithProviders(<StaffTable />);
 
@@ -95,12 +112,7 @@ describe("StaffTable", () => {
   });
 
   it("shows the translated empty state when the result set is empty", async () => {
-    mockStaffAndDepartments({
-      data: [],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([], {}, "req-list"));
 
     renderWithProviders(<StaffTable />);
 
@@ -125,12 +137,7 @@ describe("StaffTable", () => {
   });
 
   it("clicking a row navigates to that staff member's detail page", async () => {
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([STAFF_MEMBER], {}, "req-list"));
 
     renderWithProviders(<StaffTable />);
 
@@ -140,36 +147,26 @@ describe("StaffTable", () => {
     expect(mockPush).toHaveBeenCalledWith("/staff/st1");
   });
 
-  it("clicking Next fetches the next page by cursor when one is available", async () => {
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: "page-2", previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+  it("clicking a page number asks the server for that page", async () => {
+    // Two pages' worth: the pager only renders numbers when there is somewhere to go.
+    mockStaffAndDepartments(
+      offsetPage([STAFF_MEMBER], { total_count: 30, page_size: 25 }, "req-list"),
+    );
 
     renderWithProviders(<StaffTable />);
-
     await screen.findByText("EMP-0001");
-    const nextButton = screen.getByRole("button", { name: "Next" });
-    expect(nextButton).not.toBeDisabled();
-    fireEvent.click(nextButton);
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
 
     await waitFor(() => {
       const staffCalls = mockGet.mock.calls.filter((call) => call[0] === "/staff");
-      const lastCall = staffCalls.at(-1)?.[1];
-      expect(lastCall?.query?.cursor).toBe("page-2");
+      expect(staffCalls.at(-1)?.[1]?.query?.page).toBe(2);
     });
   });
 
   it("debounces the search input before it reaches the query", async () => {
     jest.useFakeTimers();
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([STAFF_MEMBER], {}, "req-list"));
 
     renderWithProviders(<StaffTable />);
     await screen.findByText("EMP-0001");
@@ -197,12 +194,7 @@ describe("StaffTable", () => {
   });
 
   it("changing the staff-type filter re-fetches with the selected type", async () => {
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([STAFF_MEMBER], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StaffTable />);
@@ -219,12 +211,7 @@ describe("StaffTable", () => {
   });
 
   it("changing the campus filter re-fetches with the selected campus", async () => {
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([STAFF_MEMBER], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StaffTable />);
@@ -243,20 +230,12 @@ describe("StaffTable", () => {
   it("changing the department filter re-fetches with the selected department", async () => {
     mockGet.mockImplementation((path: string) => {
       if (path === "/staff") {
-        return Promise.resolve({
-          data: [STAFF_MEMBER],
-          meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-          requestId: "req-list",
-          status: 200,
-        });
+        return Promise.resolve(offsetPage([STAFF_MEMBER], {}, "req-list"));
       }
       if (path === "/departments") {
-        return Promise.resolve({
-          data: [{ id: "dpt1", name: "Mathematics" }],
-          meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-          requestId: "req-departments",
-          status: 200,
-        });
+        return Promise.resolve(
+          offsetPage([{ id: "dpt1", name: "Mathematics" }], {}, "req-departments"),
+        );
       }
       throw new Error(`unexpected path ${path}`);
     });
@@ -276,12 +255,7 @@ describe("StaffTable", () => {
   });
 
   it("changing the employment-status filter re-fetches with the selected status", async () => {
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([STAFF_MEMBER], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StaffTable />);
@@ -298,12 +272,7 @@ describe("StaffTable", () => {
   });
 
   it("changing the designation filter re-fetches with the selected designation", async () => {
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([STAFF_MEMBER], {}, "req-list"));
 
     const user = userEvent.setup();
     renderWithProviders(<StaffTable />);
@@ -319,43 +288,37 @@ describe("StaffTable", () => {
     });
   });
 
-  it("clicking Previous returns to the prior page", async () => {
-    mockStaffAndDepartments({
-      data: [STAFF_MEMBER],
-      meta: { pagination: { next_cursor: "page-2", previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+  it("Previous returns to the page before, and is disabled on the first", async () => {
+    mockStaffAndDepartments(
+      offsetPage([STAFF_MEMBER], { total_count: 30, page_size: 25 }, "req-list"),
+    );
 
     renderWithProviders(<StaffTable />);
     await screen.findByText("EMP-0001");
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    const previousButton = await screen.findByRole("button", { name: "Previous" });
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
     await waitFor(() => {
-      expect(previousButton).not.toBeDisabled();
+      const staffCalls = mockGet.mock.calls.filter((call) => call[0] === "/staff");
+      expect(staffCalls.at(-1)?.[1]?.query?.page).toBe(2);
     });
 
-    const staffCallsBeforePrevious = mockGet.mock.calls.filter(
-      (call) => call[0] === "/staff",
-    ).length;
-    fireEvent.click(previousButton);
+    const previous = screen.getByRole("button", { name: "Previous page" });
+    await waitFor(() => {
+      expect(previous).not.toBeDisabled();
+    });
+    fireEvent.click(previous);
 
     await waitFor(() => {
       const staffCalls = mockGet.mock.calls.filter((call) => call[0] === "/staff");
-      expect(staffCalls.length).toBeGreaterThan(staffCallsBeforePrevious);
-      const lastCall = staffCalls.at(-1)?.[1];
-      expect(lastCall?.query?.cursor).toBeUndefined();
+      // Page one is the absence of the parameter, not page=1.
+      expect(staffCalls.at(-1)?.[1]?.query?.page).toBeUndefined();
     });
   });
 
   it("hides the create and import actions without the matching permission", async () => {
-    mockStaffAndDepartments({
-      data: [],
-      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-      requestId: "req-list",
-      status: 200,
-    });
+    mockStaffAndDepartments(offsetPage([], {}, "req-list"));
 
     renderWithProviders(<StaffTable />);
 

@@ -1,9 +1,9 @@
-import { ApiError, type ApiResult } from "@schoolhub/api-client";
+import { ApiError } from "@schoolhub/api-client";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SubstitutionForm } from "@/features/timetable/substitution-form";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { cursorPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() },
@@ -46,15 +46,6 @@ const PUBLISHED_SLOT = {
   updated_at: "2026-04-01T00:00:00Z",
 };
 
-function page(items: unknown[]): ApiResult<unknown> {
-  return {
-    data: items,
-    meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 25 } },
-    requestId: "req-list",
-    status: 200,
-  };
-}
-
 /** Open the dialog and narrow down to one candidate period. 2026-09-08 is a
  * Tuesday, which is `day_of_week` 1 in the API's Monday-based numbering. */
 async function openAndNarrow(user: ReturnType<typeof userEvent.setup>) {
@@ -70,7 +61,7 @@ describe("SubstitutionForm", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockPost.mockReset();
-    mockGet.mockResolvedValue(page([PUBLISHED_SLOT]));
+    mockGet.mockResolvedValue(cursorPage([PUBLISHED_SLOT]));
   });
 
   it("asks only for the section's published slots on that date's weekday", async () => {
@@ -93,7 +84,7 @@ describe("SubstitutionForm", () => {
     // the row it replaces rather than deleting it. Proposing cover against one
     // would be cover for a class that no longer meets.
     mockGet.mockResolvedValue(
-      page([{ ...PUBLISHED_SLOT, id: "slot0", effective_to: "2026-08-31" }, PUBLISHED_SLOT]),
+      cursorPage([{ ...PUBLISHED_SLOT, id: "slot0", effective_to: "2026-08-31" }, PUBLISHED_SLOT]),
     );
     const user = userEvent.setup();
     renderWithProviders(<SubstitutionForm />);

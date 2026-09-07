@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 from typing import TYPE_CHECKING
 
+from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -70,7 +71,7 @@ from apps.student_management.tasks import (
     import_students_task,
 )
 from core.api.exceptions import DomainRuleViolation
-from core.api.pagination import CountedCursorPagination
+from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import attach_celery_task_id, create_job
@@ -80,15 +81,44 @@ from core.rbac.permissions import has_permission_key
 class StudentViewSet(TenantModelViewSet):
     """Student master records (module doc §5.1-2)."""
 
-    # Counted: "how many students does this school have" is a question the dashboard and
-    # every staff user asks, and a school's roll is bounded — a COUNT over one tenant's
-    # rows is indexed and cheap. See CountedCursorPagination for why it is not the default.
-    pagination_class = CountedCursorPagination
+    # Page numbers: a roll is navigated by position — jump to the last page, back to
+    # page 3 — which a cursor cannot report. A school's roll is bounded, so the COUNT
+    # each page pays for is over one tenant's indexed rows. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     queryset = Student.objects
     serializer_class = StudentSerializer
     filterset_class = StudentFilterSet
     search_fields = ["first_name", "last_name", "preferred_name", "admission_number"]
-    ordering_fields = ["last_name", "admission_date", "created_at"]
+    # Every column the roll renders. Five are index-backed for a tenant: `last_name`
+    # leads `students_tenant_name_idx`, `status` has `students_tenant_status_idx`,
+    # `admission_date` has `students_tenant_admitted_idx`, `admission_number` has the
+    # partial unique index (and the list is already filtered to `deleted_at IS NULL`,
+    # which is that index's own condition), and `created_at` is indexed on its own.
+    #
+    # The rest table-scan the tenant's roll and sort it in memory: `first_name` is the
+    # second column of the name index, never a prefix; `date_of_birth` has no index;
+    # `campus_name` and `house_name` are joined. Bounded by one school's roll, which is
+    # why they are offered at all — revisit if a tenant's roll outgrows an in-memory
+    # sort. `house_name` is nullable (a student need not be in a house), so those rows
+    # land last ascending, first descending.
+    ordering_fields = [
+        "last_name",
+        "first_name",
+        "admission_number",
+        "admission_date",
+        "status",
+        "date_of_birth",
+        "campus_name",
+        "house_name",
+        "created_at",
+    ]
+    #: Entries in ordering_fields that are annotations from get_queryset, not model
+    #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
+    ordering_annotations = ("campus_name", "house_name")
+    # Student.Meta.ordering. Declared here too because DRF's ordering filter reads the
+    # *view's* default, not the model's, and a list with no view default lets the
+    # paginator page an unordered result.
+    ordering = ["last_name", "first_name"]
     scope_own_field = "user_id"
     required_feature = "module.students"
     required_permission = "students.student.view"
@@ -106,7 +136,25 @@ class StudentViewSet(TenantModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("campus", "house")
+        """Campus and house are annotated so they can be sorted without a `__`.
+
+        This is the viewset where the `SELECT DISTINCT` hazard is least theoretical:
+        both ``Student.filter_owned_by_user`` (a guardian's children) and
+        ``filter_assigned_to_user`` (a class teacher's section) end in ``.distinct()``,
+        and Postgres refuses ``SELECT DISTINCT`` with an ``ORDER BY`` on a joined
+        column that is not in the select list. `campus__name` in `ordering_fields`
+        would therefore work for an admin and 500 for a class teacher. An annotation
+        is in the select list; the alias is safe for both.
+
+        ``select_related`` is what keeps this to the two joins the serializer already
+        needed rather than one query per row.
+        """
+        return (
+            super()
+            .get_queryset()
+            .select_related("campus", "house")
+            .annotate(campus_name=F("campus__name"), house_name=F("house__name"))
+        )
 
     def perform_create(self, serializer) -> None:
         """Delegate to the service so the API, the importer and Celery jobs agree.
@@ -448,6 +496,12 @@ class StudentGuardianLinkViewSet(
     required_permission = "students.guardian.view"
     required_permission_map = {"create": "students.guardian.create"}
     scope_campus_field = "student__campus_id"
+    # Nested under one student, so the list is a handful of rows and only ever read in
+    # its own order — `created_at` alone is the allowlist rather than a shortcoming.
+    # Declared explicitly because OrderingFilter is a project-wide default: a list view
+    # with no allowlist does not get "no sorting", it gets every serializer field.
+    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         return self.scoped_child_queryset()
@@ -530,6 +584,11 @@ class StudentDocumentLinkViewSet(
     required_permission = "students.document.view"
     required_permission_map = {"create": "students.document.create"}
     scope_campus_field = "student__campus_id"
+
+    # Same shape as the guardians link above: nested under one student, read in its own
+    # order. Declared so the allowlist is explicit rather than DRF's serializer fallback.
+    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         return self.scoped_child_queryset()
@@ -620,6 +679,10 @@ class StudentTransferViewSet(
     queryset = StudentTransfer.objects
     serializer_class = StudentTransferSerializer
     required_feature = "module.students"
+    # A transfer is read by its state and its date, which is what a person deciding on
+    # one sorts by. No related-field sorts: nothing renders the student's name here yet.
+    ordering_fields = ["status", "created_at"]
+    ordering = ["-created_at"]
     required_permission = "students.student.view"
     required_permission_map = {
         "create": "students.transfer.create",

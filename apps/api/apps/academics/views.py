@@ -22,14 +22,16 @@ import uuid
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.db.models import Count, Min
+from django.db.models import Count, F, Min
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
+from rest_framework.filters import OrderingFilter as DRFOrderingFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -54,6 +56,7 @@ from apps.school_organization.models import AcademicSession, ClassSubject
 from apps.school_organization.services import map_subject_to_class
 from apps.school_organization.views import BlockingDestroyMixin
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.api.filters import StableOrderingFilter
 from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
@@ -78,7 +81,38 @@ class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
     serializer_class = CurriculumSerializer
     filterset_class = CurriculumFilterSet
     search_fields = ["elective_group", "notes"]
-    ordering_fields = ["created_at"]
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
+    # Everything the dashboard's curriculum grid renders.
+    # `session_name`/`class_name`/`subject_name`/`campus_name` are the
+    # annotations from `get_queryset`, never `academic_session__name` and
+    # friends: `scope_queryset` hands an OWN/ASSIGNED principal a `.distinct()`
+    # queryset, and Postgres rejects `SELECT DISTINCT` ordered by a joined column
+    # that is not in the select list. An annotation is in the select list, so it
+    # sorts for every principal instead of 500-ing for some.
+    # Index-backed: only `created_at` (its own index). class_subjects_session_idx
+    # leads with (tenant, academic_session, school_class) and
+    # class_subjects_subject_idx with (tenant, subject), and neither can order by
+    # a *name* that lives on the other table anyway.
+    # Table scans: `weekly_periods`, `is_elective` and `elective_group` (nothing
+    # indexes any of them; `elective_group` is nullable, so non-elective rows sort
+    # last ascending), plus the four annotated names, each a sort over a join —
+    # `campus_name` over a left join, since `campus_id` NULL means "every campus".
+    # Allowed because one session's grid is hundreds of rows, not millions.
+    ordering_fields = [
+        "weekly_periods",
+        "is_elective",
+        "elective_group",
+        "session_name",
+        "class_name",
+        "subject_name",
+        "campus_name",
+        "created_at",
+    ]
+    #: Entries in ordering_fields that are annotations from get_queryset, not model
+    #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
+    ordering_annotations = ("session_name", "class_name", "subject_name", "campus_name")
     scope_campus_field = "campus_id"
     required_feature = FEATURE
     required_permission = "academics.curriculum.view"
@@ -92,10 +126,19 @@ class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
+        # select_related keeps the list off a session/class/subject/campus fetch
+        # per row; the annotations are what `?ordering=<...>_name` sorts on, and
+        # they reuse those same joins rather than adding their own.
         return (
             super()
             .get_queryset()
             .select_related("academic_session", "school_class", "subject", "campus")
+            .annotate(
+                session_name=F("academic_session__name"),
+                class_name=F("school_class__name"),
+                subject_name=F("subject__name"),
+                campus_name=F("campus__name"),
+            )
         )
 
     def perform_create(self, serializer) -> None:
@@ -217,7 +260,40 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = TeacherSubjectAllocation.objects
     serializer_class = TeacherAllocationSerializer
     filterset_class = TeacherAllocationFilterSet
-    ordering_fields = ["created_at", "effective_from"]
+    # Everything the dashboard's allocation table renders.
+    # `section_name`/`subject_name`/`staff_last_name` are the annotations from
+    # `get_queryset`, never `section__name` and friends — and this is the viewset
+    # where that matters most: `filter_owned_by_user` below is the `own` scope a
+    # teacher gets, so a `__` here would sort fine for an admin and, the moment
+    # that hook is narrowed with a `.distinct()` (the shape
+    # `Student.filter_owned_by_user` already has), raise ProgrammingError for
+    # every teacher. An annotation is in the select list, so DISTINCT cannot
+    # reject it.
+    # Index-backed: only `created_at` (its own index). tsa_tenant_staff_idx leads
+    # with (tenant, staff, academic_session) and tsa_section_subject_idx with
+    # (tenant, section, subject); neither orders by a name on the joined table.
+    # Table scans: `is_primary` (tsa_one_primary_per_section_subject indexes only
+    # the current primaries, not the ordering of everything else),
+    # `weekly_periods`, `effective_from` and `effective_to` — all unindexed and
+    # all nullable, so allocations with no override or no end date sort last
+    # ascending and first descending — plus the three annotated names, each a
+    # sort over a join.
+    ordering_fields = [
+        "is_primary",
+        "weekly_periods",
+        "effective_from",
+        "effective_to",
+        "section_name",
+        "subject_name",
+        "staff_last_name",
+        "created_at",
+    ]
+    #: Entries in ordering_fields that are annotations from get_queryset, not model
+    #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
+    ordering_annotations = ("section_name", "subject_name", "staff_last_name")
+    # Page numbers, not a cursor: this list is bounded by one school's size and a
+    # reader navigates it by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     # "own" for a teacher means their own allocations, joined through
     # staff.user_id — TeacherSubjectAllocation.filter_owned_by_user.
     scope_own_field = "staff__user_id"
@@ -234,8 +310,18 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
+        # select_related keeps the list off a session/section/subject/staff fetch
+        # per row; the annotations are what `?ordering=section_name`,
+        # `subject_name` and `staff_last_name` sort on, over those same joins.
         return (
-            super().get_queryset().select_related("academic_session", "section", "subject", "staff")
+            super()
+            .get_queryset()
+            .select_related("academic_session", "section", "subject", "staff")
+            .annotate(
+                section_name=F("section__name"),
+                subject_name=F("subject__name"),
+                staff_last_name=F("staff__last_name"),
+            )
         )
 
     def create(self, request: Request, *args, **kwargs) -> Response:
@@ -305,6 +391,65 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return ActionResponse.ok(sorted(by_staff.values(), key=lambda e: e["name"]))
 
 
+class AggregateOrderingFilter(StableOrderingFilter):
+    """`StableOrderingFilter` with a GROUP BY-safe tiebreaker, for the batch list.
+
+    The global backend appends `pk` to every ordering so that a page boundary is
+    never ambiguous. That is right for a queryset of rows and wrong for a queryset
+    of *groups*, and the way it is wrong is silent rather than loud.
+
+    `PromotionBatchViewSet.get_queryset` is a
+    `.values(...).annotate(Count, Min)` aggregate, and Django adds any `order_by`
+    column that is not already selected to the GROUP BY — documented under
+    `values()`, and visible in `SQLCompiler.get_group_by`, which extends the
+    grouping with every non-`Ref` ordering expression. `student_promotions.id` is
+    not in the `values()` set, so `?ordering=status` would group by the primary
+    key; Postgres advertises `allows_group_by_selected_pks`, so Django's
+    `collapse_group_by` then drops every other column from the GROUP BY as
+    functionally dependent on it. Nothing raises. The response is a 200 and the
+    batch list quietly becomes one row per *student*, each reporting
+    `students: 1` and its own `created_at` as `started_at`.
+
+    So the tiebreaker here is `batch_id`, which identifies a batch and is already
+    in the `values()` set — ordering by it adds nothing to the GROUP BY that the
+    grouping did not already contain. It is total in every case that is not
+    itself corrupt: a batch splits into two rows only if its own status ever
+    diverges, which `PromotionBatchSerializer` documents as the honest rendering
+    of a broken batch rather than something to hide behind a chosen winner.
+
+    An allowlist entry that is an annotation is also dropped for a queryset that
+    does not carry it — see `get_ordering` for the one route where that happens.
+    """
+
+    def get_ordering(self, request, queryset, view):
+        # `DRFOrderingFilter`, not `super()`: the base's validation of the request
+        # against `ordering_fields` is wanted, only the `pk` append is not.
+        ordering = DRFOrderingFilter.get_ordering(self, request, queryset, view)
+        if not ordering:
+            # No `?ordering=`: `get_queryset`'s own `-started_at` stands.
+            return ordering
+
+        # `PromotionBatchViewSet.retrieve` runs this same backend over the *row*
+        # queryset, which has no `students`/`started_at` on it — `order_by` on a
+        # name a queryset cannot resolve raises FieldError, which is a 500 off a
+        # query parameter. Drop what is not there, the same way the base drops a
+        # field that is not on the allowlist.
+        annotated = set(getattr(view, "ordering_annotations", ()) or ())
+        present = set(queryset.query.annotations)
+        ordering = [
+            field
+            for field in ordering
+            if field.lstrip("-") not in annotated or field.lstrip("-") in present
+        ]
+        if not ordering:
+            return ordering
+
+        if any(field.lstrip("-") == "batch_id" for field in ordering):
+            return ordering
+
+        return [*ordering, "batch_id"]
+
+
 class PromotionBatchViewSet(
     TenantScopedViewSetMixin, mixins.ListModelMixin, viewsets.GenericViewSet
 ):
@@ -335,6 +480,33 @@ class PromotionBatchViewSet(
     # cursor cannot order a `values()` aggregate by the `-created_at` the default
     # paginator wants anyway.
     pagination_class = PageNumberPagination
+    # The project default with its `pk` tiebreaker swapped for a group-safe one —
+    # see AggregateOrderingFilter for what `ORDER BY id` does to this aggregate.
+    # Derived from the setting rather than retyped so a future change to
+    # DEFAULT_FILTER_BACKENDS reaches this list too.
+    filter_backends = [
+        AggregateOrderingFilter if backend is StableOrderingFilter else backend
+        for backend in api_settings.DEFAULT_FILTER_BACKENDS
+    ]
+    # This endpoint declared no allowlist at all, so DRF fell back to every
+    # serializer field — including `students` and `started_at`, and the sort that
+    # produced was worse than slow (see AggregateOrderingFilter).
+    #
+    # Only columns the aggregate can actually order by belong here: a member of
+    # the `values()` set, or one of the annotations below. Anything else — a bare
+    # `created_at`, say — joins the GROUP BY and silently un-groups the list, which
+    # is why `created_at` is absent here while every other list in this file has it.
+    #
+    # `status` is grouped on already, so ordering by it costs only the sort.
+    # `students` (Count) and `started_at` (Min) are post-aggregation expressions:
+    # Postgres has to build every group before it can order them, so no index can
+    # ever serve these two. They are declared anyway because they are the columns
+    # the dashboard's batch table is read by, and the set being sorted is roughly
+    # one row per class per rollover.
+    ordering_fields = ["status", "students", "started_at"]
+    #: Entries in ordering_fields that are annotations from get_queryset, not model
+    #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
+    ordering_annotations = ("students", "started_at")
     scope_campus_field = "student__campus_id"
     required_feature = FEATURE
     required_permission = "academics.promotion.view"
@@ -349,7 +521,13 @@ class PromotionBatchViewSet(
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        """One row per batch, aggregated. Two queries, never one per batch."""
+        """One row per batch, aggregated. Two queries, never one per batch.
+
+        The trailing `-started_at` is the list's default order and stays that way:
+        with no `?ordering=` the filter backend returns nothing and leaves this
+        `order_by` alone. `students` and `started_at` are the annotations
+        `ordering_fields` above exposes.
+        """
         return (
             super()
             .get_queryset()

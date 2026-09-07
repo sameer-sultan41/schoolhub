@@ -36,8 +36,12 @@ export interface StaffRecord {
   photo_file_id: string | null;
   staff_type: StaffType;
   campus_id: string;
+  /** Read-only, sent with every row so the directory can name these without a lookup. */
+  campus_name: string;
   department_id: string | null;
+  department_name: string | null;
   designation_id: string | null;
+  designation_name: string | null;
   reports_to_staff_id: string | null;
   employment_type: EmploymentType;
   employment_status: EmploymentStatus;

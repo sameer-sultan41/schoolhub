@@ -50,13 +50,13 @@ export function TeacherLoadSummary({ academicSessionId }: TeacherLoadSummaryProp
     {
       id: "allocations",
       header: t("loadSummary.columns.allocations"),
-      className: "tabular-nums",
+      numeric: "measure",
       cell: (row) => row.allocations,
     },
     {
       id: "weeklyPeriods",
       header: t("loadSummary.columns.weeklyPeriods"),
-      className: "tabular-nums",
+      numeric: "measure",
       cell: (row) => row.weekly_periods,
     },
     {

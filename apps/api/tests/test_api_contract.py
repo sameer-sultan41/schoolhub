@@ -13,6 +13,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.school_organization.tests.factories import (
+    AcademicSessionFactory,
     CampusFactory,
     TenantFactory,
     UserFactory,
@@ -36,19 +37,26 @@ CLIENT_KNOWN_SERVER_CODES = {
 }
 
 
-class PaginationEnvelopeTests(APITestCase):
+class CursorEnvelopeTests(APITestCase):
+    """The cursor envelope, on an endpoint that still uses one.
+
+    Most admin lists moved to page numbers (api-architecture.md §2.4); cursor pagination
+    stays the default for everything else, so it still needs pinning. Academic sessions
+    are one of the lists that kept it.
+    """
+
     def setUp(self) -> None:
         super().setUp()
         self.tenant = TenantFactory()
         self.user = UserFactory(tenant=self.tenant)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
-        grant(self.user, "school.campus.view")
+        grant(self.user, "school.academic-session.view")
         with tenant_context(self.tenant.id):
             for _ in range(3):
-                CampusFactory(tenant=self.tenant)
+                AcademicSessionFactory(tenant=self.tenant)
 
     def test_cursor_page_exposes_the_documented_keys(self):
-        response = self.client.get("/api/v1/campuses?page_size=2")
+        response = self.client.get("/api/v1/academic-sessions?page_size=2")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         pagination = response.json()["meta"]["pagination"]
@@ -61,25 +69,70 @@ class PaginationEnvelopeTests(APITestCase):
         cheap enough to count". A null would collapse "this endpoint does not report a
         total" into "the total is unknown", and the dashboard renders those differently.
         """
-        pagination = self.client.get("/api/v1/campuses?page_size=2").json()["meta"]["pagination"]
+        pagination = self.client.get("/api/v1/academic-sessions?page_size=2").json()["meta"][
+            "pagination"
+        ]
 
         self.assertNotIn("total_count", pagination)
 
     def test_next_cursor_is_a_token_the_client_can_send_back(self):
         """A URL here would be unusable: the contract is `?cursor=<token>`."""
-        first = self.client.get("/api/v1/campuses?page_size=2").json()
+        first = self.client.get("/api/v1/academic-sessions?page_size=2").json()
         token = first["meta"]["pagination"]["next_cursor"]
 
-        self.assertIsNotNone(token, "three campuses at page_size=2 must paginate")
+        self.assertIsNotNone(token, "three sessions at page_size=2 must paginate")
         self.assertNotIn("://", token, "the cursor must be a token, not a URL")
 
-        second = self.client.get(f"/api/v1/campuses?page_size=2&cursor={token}")
+        second = self.client.get(f"/api/v1/academic-sessions?page_size=2&cursor={token}")
 
         self.assertEqual(second.status_code, status.HTTP_200_OK)
         self.assertEqual(len(second.json()["data"]), 1)
         first_ids = {row["id"] for row in first["data"]}
         second_ids = {row["id"] for row in second.json()["data"]}
         self.assertEqual(first_ids & second_ids, set(), "pages must not overlap")
+
+
+class OffsetEnvelopeTests(APITestCase):
+    """The page-number envelope, which the generated client had wrong until now.
+
+    `PageNumberPagination` overrode `get_paginated_response` but not
+    `get_paginated_response_schema`, so openapi.yaml documented DRF's stock
+    `{count, next, previous, results}` while the API sent `{data, meta.pagination}`.
+    `packages/api-client` is generated from that file, so its type for every
+    page-numbered endpoint was wrong. This is the assertion that keeps them in step.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        self.user = UserFactory(tenant=self.tenant)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+        grant(self.user, "school.campus.view")
+        with tenant_context(self.tenant.id):
+            for _ in range(3):
+                CampusFactory(tenant=self.tenant)
+
+    def test_offset_page_exposes_the_documented_keys(self):
+        response = self.client.get("/api/v1/campuses?page_size=2")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        pagination = response.json()["meta"]["pagination"]
+        self.assertEqual(set(pagination), {"page", "page_size", "total_count", "total_pages"})
+
+    def test_the_total_is_the_whole_set_not_the_page(self):
+        pagination = self.client.get("/api/v1/campuses?page_size=2").json()["meta"]["pagination"]
+
+        self.assertEqual(pagination["page"], 1)
+        self.assertEqual(pagination["total_count"], 3)
+        self.assertEqual(pagination["total_pages"], 2)
+
+    def test_a_page_number_addresses_a_page_directly(self):
+        """The reason this pagination exists: a cursor cannot be asked for page 2."""
+        second = self.client.get("/api/v1/campuses?page_size=2&page=2")
+
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(second.json()["data"]), 1)
+        self.assertEqual(second.json()["meta"]["pagination"]["page"], 2)
 
 
 class ErrorCodeContractTests(APITestCase):

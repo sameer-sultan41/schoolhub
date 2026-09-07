@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { TableRouteLoading } from "@/components/route-loading";
 import { ScreenHeader } from "@/components/screen-header";
 import { StudentsTable } from "@/features/students/students-table";
 
@@ -18,7 +20,13 @@ export default async function StudentsPage() {
     <div className="space-y-6">
       <ScreenHeader title={t("title")} description={t("summary")} />
 
-      <StudentsTable />
+      {/* StudentsTable reads its filters, sort and page size from the search params,
+          so it must sit behind a Suspense boundary for this route to prerender — the
+          same reason the login route wraps its form. The fallback is the table
+          skeleton the route already shows, so nothing new flashes. */}
+      <Suspense fallback={<TableRouteLoading columns={4} />}>
+        <StudentsTable />
+      </Suspense>
     </div>
   );
 }

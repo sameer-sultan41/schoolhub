@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { PreferencesTestWrapper } from "@/test-utils";
 import { TenantTheme } from "./tenant-theme";
 
 describe("TenantTheme", () => {
@@ -7,6 +8,7 @@ describe("TenantTheme", () => {
       <TenantTheme branding={{ primary_color: "#0f766e", radius: "0.75rem" }}>
         <span>content</span>
       </TenantTheme>,
+      { wrapper: PreferencesTestWrapper },
     );
 
     const wrapper = screen.getByText("content").parentElement;
@@ -19,6 +21,7 @@ describe("TenantTheme", () => {
       <TenantTheme branding={null}>
         <span>content</span>
       </TenantTheme>,
+      { wrapper: PreferencesTestWrapper },
     );
 
     expect(screen.getByText("content")).toBeInTheDocument();

@@ -3695,9 +3695,10 @@ export interface components {
             data?: components["schemas"]["Campus"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3705,9 +3706,10 @@ export interface components {
             data?: components["schemas"]["Class"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3715,9 +3717,10 @@ export interface components {
             data?: components["schemas"]["Curriculum"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3725,9 +3728,10 @@ export interface components {
             data?: components["schemas"]["Department"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3735,9 +3739,10 @@ export interface components {
             data?: components["schemas"]["Designation"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3775,9 +3780,10 @@ export interface components {
             data?: components["schemas"]["House"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3805,34 +3811,32 @@ export interface components {
             data?: components["schemas"]["Period"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
         PaginatedPromotionBatchList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["PromotionBatch"][];
+            data?: components["schemas"]["PromotionBatch"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
         };
         PaginatedRoomList: {
             data?: components["schemas"]["Room"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3840,9 +3844,10 @@ export interface components {
             data?: components["schemas"]["Section"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3870,10 +3875,10 @@ export interface components {
             data?: components["schemas"]["Staff"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
                     total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3921,10 +3926,10 @@ export interface components {
             data?: components["schemas"]["Student"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
                     total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3942,9 +3947,10 @@ export interface components {
             data?: components["schemas"]["Subject"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3952,9 +3958,10 @@ export interface components {
             data?: components["schemas"]["TeacherAllocation"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -3962,9 +3969,10 @@ export interface components {
             data?: components["schemas"]["TeacherSubstitution"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -4314,10 +4322,13 @@ export interface components {
             staff_type?: components["schemas"]["StaffTypeEnum"];
             /** Format: uuid */
             campus_id?: string;
+            readonly campus_name?: string;
             /** Format: uuid */
             department_id?: string | null;
+            readonly department_name?: string | null;
             /** Format: uuid */
             designation_id?: string | null;
+            readonly designation_name?: string | null;
             /** Format: uuid */
             reports_to_staff_id?: string | null;
             employment_type?: components["schemas"]["EmploymentTypeEnum"];
@@ -4384,8 +4395,10 @@ export interface components {
             photo_file_id?: string | null;
             /** Format: uuid */
             campus_id?: string;
+            readonly campus_name?: string;
             /** Format: uuid */
             house_id?: string | null;
+            readonly house_name?: string | null;
             readonly status?: components["schemas"]["StudentStatusEnum"];
             /** Format: date */
             admission_date?: string;
@@ -4800,10 +4813,13 @@ export interface components {
             staff_type: components["schemas"]["StaffTypeEnum"];
             /** Format: uuid */
             campus_id: string;
+            readonly campus_name: string;
             /** Format: uuid */
             department_id?: string | null;
+            readonly department_name: string | null;
             /** Format: uuid */
             designation_id?: string | null;
+            readonly designation_name: string | null;
             /** Format: uuid */
             reports_to_staff_id?: string | null;
             employment_type?: components["schemas"]["EmploymentTypeEnum"];
@@ -4985,8 +5001,10 @@ export interface components {
             photo_file_id?: string | null;
             /** Format: uuid */
             campus_id: string;
+            readonly campus_name: string;
             /** Format: uuid */
             house_id?: string | null;
+            readonly house_name: string | null;
             readonly status: components["schemas"]["StudentStatusEnum"];
             /** Format: date */
             admission_date: string;
@@ -5933,12 +5951,12 @@ export interface operations {
     campuses_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_active?: boolean;
                 is_primary?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -6090,12 +6108,12 @@ export interface operations {
                 academic_session_id?: string;
                 campus_id?: string;
                 class_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 elective_group?: string;
                 is_elective?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -6241,12 +6259,12 @@ export interface operations {
     classes_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_active?: boolean;
                 level?: number;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -6396,8 +6414,6 @@ export interface operations {
         parameters: {
             query?: {
                 campus_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 /**
                  * @description * `academic` - Academic
                  *     * `administrative` - Administrative
@@ -6406,6 +6422,8 @@ export interface operations {
                 is_active?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -6554,10 +6572,10 @@ export interface operations {
     designations_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -6989,11 +7007,11 @@ export interface operations {
     houses_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_active?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -7412,11 +7430,11 @@ export interface operations {
         parameters: {
             query?: {
                 campus_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_break?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -7600,11 +7618,11 @@ export interface operations {
         parameters: {
             query?: {
                 campus_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_active?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /**
@@ -7781,11 +7799,11 @@ export interface operations {
             query?: {
                 campus_id?: string;
                 class_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_active?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -7935,8 +7953,6 @@ export interface operations {
         parameters: {
             query?: {
                 campus_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 department_id?: string;
                 designation_id?: string;
                 /**
@@ -7950,6 +7966,8 @@ export interface operations {
                 employment_status?: "active" | "on_leave" | "resigned" | "retired" | "suspended" | "terminated";
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -9288,11 +9306,11 @@ export interface operations {
                 academic_session_id?: string;
                 campus_id?: string;
                 class_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 house_id?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -9694,12 +9712,12 @@ export interface operations {
     subjects_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 department_id?: string;
                 is_active?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -9855,11 +9873,11 @@ export interface operations {
         parameters: {
             query?: {
                 academic_session_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_primary?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -10002,13 +10020,13 @@ export interface operations {
         parameters: {
             query?: {
                 absent_staff_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 date?: string;
                 date__gte?: string;
                 date__lte?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */

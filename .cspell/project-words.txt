@@ -21,6 +21,7 @@ appendonly
 approvable
 appuser
 Areeba
+arhamkhnz
 ASVS
 authid
 AWSCURRENT
@@ -33,6 +34,7 @@ Bibi
 Bilal
 blockable
 bonafide
+bookmarkable
 Brien
 bursty
 BYPASSRLS
@@ -88,6 +90,7 @@ greenvalley
 greppable
 healthcheck
 healthz
+hideable
 Hira
 homeroom
 hotspots
@@ -267,6 +270,7 @@ wildcarded
 wireframes
 wordprocessingml
 xact
+Yusuf
 Zain
 Zainab
 اردو

@@ -147,6 +147,12 @@ class Student(TenantOwnedModel):
             models.Index(
                 fields=["tenant", "last_name", "first_name"], name="students_tenant_name_idx"
             ),
+            # The roll is sortable by admission date from the dashboard, and without
+            # this the sort is a scan of the tenant's whole roll followed by an
+            # in-memory sort. Tenant-prefixed like every index here: the leading
+            # column is what makes it usable under RLS, which narrows to one tenant
+            # before anything else is evaluated.
+            models.Index(fields=["tenant", "admission_date"], name="students_tenant_admitted_idx"),
         ]
         # No GIN index on custom_fields (people.md's own recommendation): nothing
         # queries it yet, and GinIndex would pull django.contrib.postgres into

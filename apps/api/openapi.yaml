@@ -608,12 +608,6 @@ paths:
       operationId: campuses_list
       description: Campuses/branches of the school (module doc §5.2).
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: is_active
         schema:
@@ -628,6 +622,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -805,12 +805,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: elective_group
         schema:
@@ -825,6 +819,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -982,12 +982,6 @@ paths:
       operationId: classes_list
       description: Grade levels; ``level`` is the promotion ladder (module doc §5.5).
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: is_active
         schema:
@@ -1002,6 +996,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -1169,12 +1169,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: department_type
         schema:
@@ -1195,6 +1189,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -1357,18 +1357,18 @@ paths:
       operationId: designations_list
       description: Tenant-defined designation catalog (module doc §5.4).
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - name: ordering
         required: false
         in: query
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -1928,12 +1928,6 @@ paths:
       description: Houses/groups used for sports, discipline and points (module doc
         §5.7).
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: is_active
         schema:
@@ -1944,6 +1938,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -2641,12 +2641,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: is_break
         schema:
@@ -2657,6 +2651,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -2906,12 +2906,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: is_active
         schema:
@@ -2922,6 +2916,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -3146,12 +3146,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: is_active
         schema:
@@ -3162,6 +3156,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -3329,12 +3329,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: department_id
         schema:
@@ -3369,6 +3363,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -5239,12 +5239,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: house_id
         schema:
@@ -5256,6 +5250,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -5786,12 +5786,6 @@ paths:
       operationId: subjects_list
       description: The tenant's subject catalog (module doc §5.6).
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: department_id
         schema:
@@ -5807,6 +5801,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -5986,12 +5986,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: is_primary
         schema:
@@ -6002,6 +5996,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -6167,12 +6167,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: date
         schema:
@@ -6194,6 +6188,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -8415,13 +8415,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedClassList:
       type: object
@@ -8436,13 +8436,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedCurriculumList:
       type: object
@@ -8457,13 +8457,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedDepartmentList:
       type: object
@@ -8478,13 +8478,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedDesignationList:
       type: object
@@ -8499,13 +8499,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedEmergencyContactList:
       type: object
@@ -8583,13 +8583,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedLeaveRequestList:
       type: object
@@ -8646,37 +8646,35 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedPromotionBatchList:
       type: object
-      required:
-      - count
-      - results
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
+        data:
           type: array
           items:
             $ref: '#/components/schemas/PromotionBatch'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedRoomList:
       type: object
       properties:
@@ -8690,13 +8688,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedSectionList:
       type: object
@@ -8711,13 +8709,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedStaffAttendanceList:
       type: object
@@ -8774,15 +8772,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
                   type: integer
                 total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedStaffQualificationList:
       type: object
@@ -8881,15 +8877,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
                   type: integer
                 total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedStudentTransferList:
       type: object
@@ -8925,13 +8919,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedTeacherAllocationList:
       type: object
@@ -8946,13 +8940,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedTeacherSubstitutionList:
       type: object
@@ -8967,13 +8961,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedTermList:
       type: object
@@ -9641,13 +9635,24 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         department_id:
           type: string
           format: uuid
           nullable: true
+        department_name:
+          type: string
+          readOnly: true
+          nullable: true
         designation_id:
           type: string
           format: uuid
+          nullable: true
+        designation_name:
+          type: string
+          readOnly: true
           nullable: true
         reports_to_staff_id:
           type: string
@@ -9798,9 +9803,16 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         house_id:
           type: string
           format: uuid
+          nullable: true
+        house_name:
+          type: string
+          readOnly: true
           nullable: true
         status:
           allOf:
@@ -10588,13 +10600,24 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         department_id:
           type: string
           format: uuid
           nullable: true
+        department_name:
+          type: string
+          readOnly: true
+          nullable: true
         designation_id:
           type: string
           format: uuid
+          nullable: true
+        designation_name:
+          type: string
+          readOnly: true
           nullable: true
         reports_to_staff_id:
           type: string
@@ -10650,7 +10673,10 @@ components:
           readOnly: true
       required:
       - campus_id
+      - campus_name
       - created_at
+      - department_name
+      - designation_name
       - employment_status
       - exit_date
       - exit_reason
@@ -10976,9 +11002,16 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         house_id:
           type: string
           format: uuid
+          nullable: true
+        house_name:
+          type: string
+          readOnly: true
           nullable: true
         status:
           allOf:
@@ -11023,10 +11056,12 @@ components:
       required:
       - admission_date
       - campus_id
+      - campus_name
       - created_at
       - date_of_birth
       - first_name
       - gender
+      - house_name
       - id
       - last_name
       - status

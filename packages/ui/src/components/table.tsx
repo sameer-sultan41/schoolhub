@@ -1,9 +1,30 @@
 import type { ComponentProps } from "react";
 import { cn } from "../lib/cn";
 
-export function Table({ className, ...props }: ComponentProps<"table">) {
+// `frame` is Omit-ted from the native props on purpose: `<table>` carries a deprecated
+// HTML4 `frame` attribute typed as `string`, and narrowing it to a two-value union is a
+// type error rather than an override. Nothing in this repo sets the HTML one, and the
+// browser ignores it in a standards-mode document.
+export interface TableProps extends Omit<ComponentProps<"table">, "frame"> {
+  /**
+   * Who draws the border around the table.
+   *
+   * `bordered` (the default) is the standalone case: the table is its own object on the
+   * page, so it carries its own frame. `none` is for a table already inside one —
+   * `DataTable` puts its filter row, its table and its pager inside a single card, and a
+   * second border 1px inside the first reads as a mistake rather than as structure.
+   */
+  frame?: "bordered" | "none";
+}
+
+export function Table({ className, frame = "bordered", ...props }: TableProps) {
   return (
-    <div className="relative w-full overflow-x-auto rounded-[var(--sh-radius)] border border-border">
+    <div
+      className={cn(
+        "relative w-full overflow-x-auto",
+        frame === "bordered" && "rounded-[var(--sh-radius)] border border-border",
+      )}
+    >
       <table className={cn("w-full border-collapse text-sm", className)} {...props} />
     </div>
   );

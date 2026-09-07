@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { PreferencesTestWrapper } from "@/test-utils";
 import DashboardPage from "./page";
 
 jest.mock("@/features/dashboard/now-band", () => ({
@@ -39,7 +40,7 @@ jest.mock("next-intl/server", () => ({
 describe("DashboardPage", () => {
   it("renders the heading, exactly one WovenRule, and every panel", async () => {
     const ui = await DashboardPage();
-    const { container } = render(ui);
+    const { container } = render(ui, { wrapper: PreferencesTestWrapper });
 
     expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByText("Today at a glance")).toBeInTheDocument();
@@ -60,7 +61,7 @@ describe("DashboardPage", () => {
 
   it("puts the band full width above a two-column grid of the slower panels", async () => {
     const ui = await DashboardPage();
-    const { container } = render(ui);
+    const { container } = render(ui, { wrapper: PreferencesTestWrapper });
 
     const grid = container.querySelector(".lg\\:grid-cols-2");
     expect(grid).not.toBeNull();
