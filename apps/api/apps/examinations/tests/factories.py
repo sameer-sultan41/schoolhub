@@ -36,6 +36,8 @@ from apps.examinations.models import (
     ExamType,
     GradeBand,
     GradingScale,
+    Marks,
+    MarksStatus,
     ScaleType,
     ScheduleStatus,
 )
@@ -76,6 +78,7 @@ __all__ = [
     "ExamScheduleFactory",
     "ExamSubjectFactory",
     "GradeBandFactory",
+    "MarksFactory",
     "GradingScaleFactory",
     "GuardianFactory",
     "RoomFactory",
@@ -93,6 +96,7 @@ __all__ = [
     "complete_scale",
     "disable_feature",
     "exam_week",
+    "open_marks_entry",
     "enable_feature",
     "grant",
 ]
@@ -253,3 +257,35 @@ def exam_week(tenant, exam, *, days: int = 5):
         exam.ends_on = day + datetime.timedelta(days=days)
         exam.save(update_fields=["starts_on", "ends_on", "updated_at"])
     return day
+
+
+class MarksFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Marks
+
+    status = MarksStatus.DRAFT
+    is_absent = False
+    is_exempt = False
+    # No SubFactory for exam_subject/student: both must belong to the same
+    # tenant and the student must be enrolled in a class the exam-subject
+    # covers, so callers wire them explicitly. `entered_by` is a plain UUID
+    # column, so callers pass a real user's pk.
+
+
+def open_marks_entry(exam_subject, *, opens_at=None, closes_at=None) -> None:
+    """Put an exam-subject's entry window around now, so marks can be entered.
+
+    A window is optional on the model — unset means always open — but a test
+    asserting the *window* needs one that is actually current, and computing it
+    from `timezone.now()` at each call site is how two tests end up disagreeing
+    about what "open" means.
+    """
+    from django.utils import timezone
+
+    now = timezone.now()
+    with tenant_context(exam_subject.tenant_id):
+        exam_subject.marks_entry_opens_at = opens_at or (now - datetime.timedelta(days=1))
+        exam_subject.marks_entry_closes_at = closes_at or (now + datetime.timedelta(days=1))
+        exam_subject.save(
+            update_fields=["marks_entry_opens_at", "marks_entry_closes_at", "updated_at"]
+        )

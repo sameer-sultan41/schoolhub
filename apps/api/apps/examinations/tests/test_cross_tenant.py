@@ -38,6 +38,7 @@ from apps.examinations.tests.factories import (
     ExamFactory,
     ExamScheduleFactory,
     ExamSubjectFactory,
+    MarksFactory,
     RoomFactory,
     SectionFactory,
     StudentFactory,
@@ -54,6 +55,8 @@ EXAMS = "/api/v1/exams"
 EXAM_SUBJECTS = "/api/v1/exam-subjects"
 EXAM_SCHEDULES = "/api/v1/exam-schedules"
 ADMIT_CARDS = "/api/v1/admit-cards"
+MARKS = "/api/v1/marks"
+BULK_ENTRY = "/api/v1/marks:bulk-entry"
 
 
 class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
@@ -106,6 +109,12 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
                 room=foreign_room,
             )
             foreign_student = StudentFactory(tenant=self.other_tenant, campus=foreign_campus)
+            self.foreign_marks = MarksFactory(
+                tenant=self.other_tenant,
+                exam_subject=self.foreign_exam_subject,
+                student=StudentFactory(tenant=self.other_tenant, campus=foreign_campus),
+                entered_by=self.user.pk,
+            )
             self.foreign_card = AdmitCardFactory(
                 tenant=self.other_tenant,
                 exam=self.foreign_exam,
@@ -385,3 +394,57 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             [],
             f"a foreign tenant's sitting leaked into the clash list: {findings}",
         )
+
+    # --- marks ------------------------------------------------------------
+
+    def test_retrieving_a_foreign_marks_row_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{MARKS}/{self.foreign_marks.pk}"))
+
+    def test_listing_marks_never_shows_another_tenant_s(self) -> None:
+        response = self.client.get(MARKS)
+
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(self.foreign_marks.pk), ids)
+
+    def test_entering_marks_against_a_foreign_exam_subject_does_not_validate(self) -> None:
+        """A 400, not a 404: the exam-subject id arrives in the body and fails
+        the serializer's tenant-scoped queryset. The message says the id is
+        invalid, never that it belongs to another school."""
+        response = self.client.post(
+            BULK_ENTRY,
+            {
+                "exam_subject_id": str(self.foreign_exam_subject.pk),
+                "entries": [{"student_id": str(self.students[0].pk), "theory_marks": "50.00"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn(str(self.other_tenant.pk), str(response.json()))
+
+    def test_locking_a_foreign_exam_subject_is_a_404(self) -> None:
+        self.assert404(
+            self.client.post(f"/api/v1/exam-subjects/{self.foreign_exam_subject.pk}:lock-marks")
+        )
+
+    def test_unlocking_a_foreign_exam_subject_is_a_404(self) -> None:
+        self.assert404(
+            self.client.post(f"/api/v1/exam-subjects/{self.foreign_exam_subject.pk}:unlock-marks")
+        )
+
+    def test_reading_a_foreign_exam_s_marks_progress_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{EXAMS}/{self.foreign_exam.pk}/marks-progress"))
+
+    def test_importing_into_a_foreign_exam_subject_does_not_validate(self) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        response = self.client.post(
+            "/api/v1/marks-imports",
+            {
+                "exam_subject_id": str(self.foreign_exam_subject.pk),
+                "file": SimpleUploadedFile("m.csv", b"admission_number\n", "text/csv"),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

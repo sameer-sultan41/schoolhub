@@ -4,12 +4,17 @@ This PR wires the two §12 rows it can resolve recipients for — a published ex
 schedule and an issued admit card — both fanning out to the students sitting the
 exam and their portal-enabled guardians.
 
-The remaining four wait on the PRs that create the thing being announced:
-`exams.marks-entry-reminder` needs `marks` and an entry window with something
-missing from it (PR C); `exams.result-approval-pending`, `exams.result-published`
-and `exams.report-card-ready` need `results` and `report_cards` (PR D). Naming
+PR C adds `exams.marks-entry-reminder`. The remaining three —
+`exams.result-approval-pending`, `exams.result-published` and
+`exams.report-card-ready` — wait on `results` and `report_cards` (PR D). Naming
 them here rather than leaving them absent is the same practice
 `timetable/notifications.py` follows for its two deferred rows.
+
+**Every trigger registered here is called from somewhere.** PR B's review found
+`exams.admit-card-issued` registered with templates, documented as wired, and
+called from nowhere — a catalogue entry that persisted no rows. A registration
+with no caller is worse than an omission, because the doc then claims a
+capability the code does not have.
 
 `NotificationCategory.EXAMS` already exists in `core/notifications/models.py`, so
 no catalogue change ships with this module.
@@ -75,4 +80,41 @@ for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
             "{{ school.name }}"
         ),
         variables=_ADMIT_CARD_VARS,
+    )
+
+MARKS_ENTRY_REMINDER = "exams.marks-entry-reminder"
+
+_REMINDER_VARS = {
+    "exam.name",
+    "school.name",
+    "subject.name",
+    "class.name",
+    "outstanding",
+    "closes_at",
+}
+
+catalog.register(
+    MARKS_ENTRY_REMINDER,
+    template_code=MARKS_ENTRY_REMINDER,
+    category=NotificationCategory.EXAMS,
+    # Normal, not high: this is a deadline two days out, not something a
+    # recipient has to act on within the hour. §12 puts it on in-app and email
+    # only, with no push, which is the same judgement.
+    priority=NotificationPriority.NORMAL,
+    channels={NotificationChannel.EMAIL},
+    variables=_REMINDER_VARS,
+    description="A teacher still has marks outstanding as an entry window closes.",
+)
+
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
+    templates.register(
+        MARKS_ENTRY_REMINDER,
+        channel=_channel,
+        subject="{{ outstanding }} marks still to enter for {{ subject.name }}",
+        body=(
+            "{{ class.name }} {{ subject.name }} has {{ outstanding }} student(s) with no "
+            "submitted marks for {{ exam.name }}. Entry closes {{ closes_at }}.\n\n"
+            "{{ school.name }}"
+        ),
+        variables=_REMINDER_VARS,
     )

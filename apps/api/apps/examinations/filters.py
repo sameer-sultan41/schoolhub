@@ -15,7 +15,14 @@ from __future__ import annotations
 
 import django_filters
 
-from apps.examinations.models import AdmitCard, Exam, ExamSchedule, ExamSubject, GradingScale
+from apps.examinations.models import (
+    AdmitCard,
+    Exam,
+    ExamSchedule,
+    ExamSubject,
+    GradingScale,
+    Marks,
+)
 
 
 class GradingScaleFilterSet(django_filters.FilterSet):
@@ -79,3 +86,15 @@ class AdmitCardFilterSet(django_filters.FilterSet):
     class Meta:
         model = AdmitCard
         fields = {"status": ["exact"]}
+
+
+class MarksFilterSet(django_filters.FilterSet):
+    exam_subject_id = django_filters.UUIDFilter(field_name="exam_subject_id")
+    student_id = django_filters.UUIDFilter(field_name="student_id")
+    # A grid is loaded per exam-subject, but "everything outstanding for this
+    # exam" is the chase list §6 describes, and it crosses subjects.
+    exam_id = django_filters.UUIDFilter(field_name="exam_subject__exam_id")
+
+    class Meta:
+        model = Marks
+        fields = {"status": ["exact"], "is_absent": ["exact"], "is_exempt": ["exact"]}
