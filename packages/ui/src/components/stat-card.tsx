@@ -61,9 +61,11 @@ export function StatCard({
           // load for every module that has not shipped.
           <p className="text-sm text-muted-foreground">{unavailableLabel}</p>
         ) : (
-          // Fraunces at a large optical size, with tabular figures so a row of tiles
-          // aligns. This is the one place the type itself is doing the work.
-          <p className="font-heading text-3xl leading-none font-semibold text-foreground tabular-nums">
+          // The numeric face, not the display serif this used to wear: a figure is
+          // data, and a monospace with true tabular digits keeps a row of tiles
+          // aligned and stops a value that updates in place from reflowing its tile.
+          // The label above is still set in the body face — only the number changes.
+          <p className="font-numeric text-3xl leading-none font-bold text-foreground tabular-nums">
             {value}
           </p>
         )}

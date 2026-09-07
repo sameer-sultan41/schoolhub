@@ -1,10 +1,10 @@
-import { ApiError, type ApiResult } from "@schoolhub/api-client";
+import { ApiError } from "@schoolhub/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CurriculumScreen } from "@/features/academics/curriculum-screen";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { offsetPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() },
@@ -15,7 +15,26 @@ jest.mock("@/hooks/use-session", () => ({
   usePermission: jest.fn(() => false),
   useAnyPermission: jest.fn(() => false),
 }));
-jest.mock("next/navigation", () => ({ usePathname: () => "/academics" }));
+
+/**
+ * The router has to ROUND-TRIP, not swallow the write.
+ *
+ * Filters, sort, hidden columns and page live in the URL now (`useTableParams` →
+ * `useSearchParam`), so `replace` is what applies a page click and `useSearchParams` is
+ * where the next render reads it back from. A `replace: jest.fn()` that stores nothing
+ * would leave the screen on page one forever, and the pager assertions below would pass
+ * against a table that never moved. `usePathname` is still here for `AcademicsNav`.
+ */
+let mockSearchParams = new URLSearchParams();
+const mockReplace = jest.fn((url: string) => {
+  mockSearchParams = new URLSearchParams(url.split("?")[1] ?? "");
+});
+const mockRouter = { replace: mockReplace, push: jest.fn(), prefetch: jest.fn() };
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/academics",
+  useRouter: () => mockRouter,
+  useSearchParams: () => mockSearchParams,
+}));
 
 /** The four reference lists, in mutable bindings so one test can hold them in
  * the `data: undefined` state the grid paints before they arrive — every name in
@@ -81,20 +100,18 @@ const ELECTIVE_ROW = {
   weekly_periods: 3,
 };
 
-function page(items: unknown[], nextCursor: string | null = null): ApiResult<unknown> {
-  return {
-    data: items,
-    meta: { pagination: { next_cursor: nextCursor, previous_cursor: null, page_size: 25 } },
-    requestId: "req-list",
-    status: 200,
-  };
-}
+/** Two pages of a 30-row curriculum, so the pager has somewhere to go. */
+const FIRST_OF_TWO_PAGES = { total_count: 30, page_size: 25 };
 
 describe("CurriculumScreen", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockDelete.mockReset();
     mockUsePermission.mockReturnValue(false);
+    // The URL is state now, and it survives a render — reset it or the page a previous
+    // test navigated to leaks into the next one.
+    mockReplace.mockClear();
+    mockSearchParams = new URLSearchParams();
     mockSessions = { data: SESSIONS };
     mockClasses = { data: CLASSES };
     mockCampuses = { data: CAMPUSES };
@@ -110,20 +127,21 @@ describe("CurriculumScreen", () => {
   });
 
   it("renders a core row with its resolved session, class, subject and campus names", async () => {
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
 
     renderWithProviders(<CurriculumScreen />);
 
-    expect(await screen.findByText("Mathematics")).toBeInTheDocument();
-    expect(screen.getByText("2026-27")).toBeInTheDocument();
-    expect(screen.getByText("Grade 7")).toBeInTheDocument();
-    expect(screen.getByText("Main Campus")).toBeInTheDocument();
-    expect(screen.getByText("Core")).toBeInTheDocument();
-    expect(screen.getByText("5")).toBeInTheDocument();
+    const cell = await screen.findByText("Mathematics");
+    const row = within(cell.closest("tr") as HTMLElement);
+    expect(row.getByText("2026-27")).toBeInTheDocument();
+    expect(row.getByText("Grade 7")).toBeInTheDocument();
+    expect(row.getByText("Main Campus")).toBeInTheDocument();
+    expect(row.getByText("Core")).toBeInTheDocument();
+    expect(row.getByText("5")).toBeInTheDocument();
   });
 
   it("labels an elective with its group and shows a campus-wide row as all campuses", async () => {
-    mockGet.mockResolvedValue(page([ELECTIVE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([ELECTIVE_ROW]));
 
     renderWithProviders(<CurriculumScreen />);
 
@@ -132,11 +150,14 @@ describe("CurriculumScreen", () => {
   });
 
   it("shows the translated empty state when the session has no mappings", async () => {
-    mockGet.mockResolvedValue(page([]));
+    mockGet.mockResolvedValue(offsetPage([]));
 
     renderWithProviders(<CurriculumScreen />);
 
     expect(await screen.findByText("No subjects mapped yet")).toBeInTheDocument();
+    // No row range either: "1–0 of 0" under an empty state that has already said there
+    // is nothing here is a second, worse way of saying the same thing.
+    expect(screen.queryByText(/of 0/)).not.toBeInTheDocument();
   });
 
   it("renders the ApiError envelope and the request id on a failed list", async () => {
@@ -161,7 +182,7 @@ describe("CurriculumScreen", () => {
   });
 
   it("hides every mutating control without the matching permission", async () => {
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
 
     renderWithProviders(<CurriculumScreen />);
 
@@ -174,7 +195,7 @@ describe("CurriculumScreen", () => {
 
   it("shows the create, clone, edit and remove controls when permitted", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
 
     renderWithProviders(<CurriculumScreen />);
 
@@ -187,12 +208,17 @@ describe("CurriculumScreen", () => {
     expect(screen.getByRole("button", { name: "Remove" })).toBeInTheDocument();
   });
 
-  it("sends the chosen session as a filter and resets the cursor", async () => {
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+  it("sends the chosen session as a filter and steps back to the first page", async () => {
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW], FIRST_OF_TWO_PAGES));
     const user = userEvent.setup();
 
     renderWithProviders(<CurriculumScreen />);
     await screen.findByText("Mathematics");
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
+    await waitFor(() => {
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
+    });
 
     await user.click(screen.getByRole("combobox", { name: "Academic session" }));
     await user.click(await screen.findByRole("option", { name: "2026-27" }));
@@ -202,10 +228,14 @@ describe("CurriculumScreen", () => {
         academic_session_id: "sess1",
       });
     });
+    // Narrowing the list while sitting on page 2 has to send the reader home: the
+    // shorter result set may not have a page 2 at all, and page one is the absence of
+    // the parameter rather than `page=1`.
+    expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBeUndefined();
   });
 
   it("sends is_elective as a string filter when the type filter narrows", async () => {
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
     const user = userEvent.setup();
 
     renderWithProviders(<CurriculumScreen />);
@@ -219,22 +249,26 @@ describe("CurriculumScreen", () => {
     });
   });
 
-  it("pages forward by cursor", async () => {
-    mockGet.mockResolvedValue(page([CORE_ROW], "cursor-2"));
+  it("asks the server for the page number the reader picks", async () => {
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW], FIRST_OF_TWO_PAGES));
 
     renderWithProviders(<CurriculumScreen />);
     await screen.findByText("Mathematics");
+    expect(screen.getByText("1–25 of 30")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
 
     await waitFor(() => {
-      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.cursor).toBe("cursor-2");
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
     });
+    // The range follows the reader's own page, not the `page: 1` the (kept-previous)
+    // response still carries while the second page is in flight.
+    expect(await screen.findByText("26–30 of 30")).toBeInTheDocument();
   });
 
   it("deletes a mapping from the confirmation dialog", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
     mockDelete.mockResolvedValue({ data: null, meta: undefined, requestId: null, status: 204 });
     const user = userEvent.setup();
 
@@ -256,7 +290,7 @@ describe("CurriculumScreen", () => {
 
   it("keeps the delete dialog open and renders the envelope when the server refuses", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
     mockDelete.mockRejectedValue(
       new ApiError({
         code: "domain_rule_violation",
@@ -282,7 +316,7 @@ describe("CurriculumScreen", () => {
     mockClasses = { data: undefined };
     mockCampuses = { data: undefined };
     mockSubjects = { data: undefined };
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
     const user = userEvent.setup();
 
     renderWithProviders(<CurriculumScreen />);
@@ -290,19 +324,24 @@ describe("CurriculumScreen", () => {
     const cell = await screen.findByText("5");
     const row = cell.closest("tr") as HTMLElement;
     // Session, class, subject and campus are all id lookups into lists that have
-    // not arrived yet; the period count lives on the row itself.
+    // not arrived yet; the period count lives on the row itself, and the kind is
+    // read off `is_elective`.
     expect(within(row).getAllByText("—")).toHaveLength(4);
     expect(within(row).getByText("Core")).toBeInTheDocument();
 
     await user.click(screen.getByRole("combobox", { name: "Academic session" }));
-    expect(screen.getAllByRole("option")).toHaveLength(1);
-    expect(screen.getByRole("option", { name: "All" })).toBeInTheDocument();
+
+    // Scoped to the open listbox: the rows-per-page control at the foot of the card is
+    // a native <select>, and its 25/50/100 children carry the `option` role too.
+    const listbox = within(screen.getByRole("listbox"));
+    expect(listbox.getAllByRole("option")).toHaveLength(1);
+    expect(listbox.getByRole("option", { name: "All" })).toBeInTheDocument();
   });
 
   it("names the subject with an em dash in the delete dialog when the subject list has not arrived", async () => {
     mockSubjects = { data: undefined };
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
     const user = userEvent.setup();
 
     renderWithProviders(<CurriculumScreen />);
@@ -317,7 +356,7 @@ describe("CurriculumScreen", () => {
   });
 
   it("labels an elective that belongs to no group as a plain elective", async () => {
-    mockGet.mockResolvedValue(page([{ ...ELECTIVE_ROW, elective_group: null }]));
+    mockGet.mockResolvedValue(offsetPage([{ ...ELECTIVE_ROW, elective_group: null }]));
 
     renderWithProviders(<CurriculumScreen />);
 
@@ -326,7 +365,7 @@ describe("CurriculumScreen", () => {
   });
 
   it("filters by class and by campus", async () => {
-    mockGet.mockResolvedValue(page([CORE_ROW]));
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
     const user = userEvent.setup();
 
     renderWithProviders(<CurriculumScreen />);
@@ -347,22 +386,48 @@ describe("CurriculumScreen", () => {
     });
   });
 
-  it("steps back to the first page, where Previous is no longer offered", async () => {
-    mockGet.mockResolvedValueOnce(page([CORE_ROW], "cursor-2"));
-    mockGet.mockResolvedValueOnce(page([{ ...CORE_ROW, id: "cs9", weekly_periods: 9 }]));
-    mockGet.mockResolvedValue(page([CORE_ROW], "cursor-2"));
+  it("drops a column the reader hides, header and cells together", async () => {
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW]));
+    const user = userEvent.setup();
 
     renderWithProviders(<CurriculumScreen />);
-    await screen.findByText("5");
+    await screen.findByText("Main Campus");
+    // Asserted before the menu is touched, so the negatives below cannot pass because
+    // the label was wrong all along.
+    expect(screen.getByRole("button", { name: "Sort by Campus, A to Z" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    // Await the second page's own row, not the request: Previous is guarded while
-    // a page is still in flight, so the click below has to land after it settles.
-    expect(await screen.findByText("9")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Columns" }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Campus" }));
+    // The menu stays open after a tick (choosing columns is a comparison), and while it
+    // is open Radix hides the rest of the page from the accessibility tree — so the
+    // assertions below have to wait for it to close or they would pass for the wrong
+    // reason.
+    await user.keyboard("{Escape}");
 
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.queryByText("Main Campus")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sort by Campus, A to Z" }),
+    ).not.toBeInTheDocument();
+  });
 
-    expect(await screen.findByText("5")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+  it("steps back to the first page, where Previous is no longer offered", async () => {
+    mockGet.mockResolvedValue(offsetPage([CORE_ROW], FIRST_OF_TWO_PAGES));
+
+    renderWithProviders(<CurriculumScreen />);
+    await screen.findByText("Mathematics");
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
+    await waitFor(() => {
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous page" }));
+
+    await waitFor(() => {
+      // Page one is the absence of the parameter, not `page=1`.
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBeUndefined();
+    });
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
   });
 });

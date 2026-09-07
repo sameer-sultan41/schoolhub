@@ -96,6 +96,10 @@ class Room(TenantOwnedModel):
         ]
         indexes = [
             models.Index(fields=["tenant", "campus", "room_type"], name="rooms_campus_type_idx"),
+            # `name` is the column a reader sorts a room list by, and the existing
+            # index leads with campus and room type — no help for an ordering that
+            # names neither.
+            models.Index(fields=["tenant", "name"], name="rooms_tenant_name_idx"),
         ]
 
     def __str__(self) -> str:

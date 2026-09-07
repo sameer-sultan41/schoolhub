@@ -64,6 +64,89 @@ test.describe("staff list", () => {
   });
 });
 
+test.describe("the table's own controls", () => {
+  // Twelve members over a page size of ten: enough for a second page and no more, so
+  // the window never elides and every assertion below is about the pager rather than
+  // about `getPageNumbers`, which has its own unit tests.
+  const TWELVE = Array.from({ length: 12 }, (_, index) =>
+    buildStaff({
+      id: `staff-${String(index + 1).padStart(4, "0")}`,
+      first_name: ["Amina", "Bilal", "Iqra"][index % 3] ?? "Amina",
+      last_name: ["Qureshi", "Sethi", "Raza"][index % 3] ?? "Qureshi",
+      employee_number: `EMP-${String(index + 1).padStart(4, "0")}`,
+      campus_id: CAMPUS.id,
+    }),
+  );
+
+  test("pages by number, and the page survives a reload", async ({
+    page,
+    mockApi,
+    staffPage,
+    signedIn: _signedIn,
+  }) => {
+    mockApi.use(schoolOrganizationModule({ campuses: [CAMPUS] }), staffModule({ staff: TWELVE }));
+    await staffPage.goto({ path: "/staff?page_size=10" });
+
+    await expect(staffPage.pageButton(1)).toHaveAttribute("aria-current", "page");
+    await expect(staffPage.previousPage).toBeDisabled();
+    // Ten of twelve: the tenth row is on this page, the eleventh is not.
+    await expect(staffPage.row("EMP-0010")).toBeVisible();
+    await expect(staffPage.row("EMP-0011")).toHaveCount(0);
+
+    await staffPage.pageButton(2).click();
+
+    await expect(staffPage.row("EMP-0011")).toBeVisible();
+    await expect(staffPage.row("EMP-0010")).toHaveCount(0);
+    await expect(staffPage.pageButton(2)).toHaveAttribute("aria-current", "page");
+    await expect(staffPage.nextPage).toBeDisabled();
+
+    // The page is in the URL, which is the whole reason it is not in React state: a
+    // colleague sent this link, or the reader pressed refresh, and either way they
+    // land where they were.
+    await page.reload();
+    await expect(staffPage.row("EMP-0011")).toBeVisible();
+  });
+
+  test("sorting returns to the first page", async ({ mockApi, staffPage, signedIn: _signedIn }) => {
+    mockApi.use(schoolOrganizationModule({ campuses: [CAMPUS] }), staffModule({ staff: TWELVE }));
+    await staffPage.goto({ path: "/staff?page_size=10&page=2" });
+
+    await expect(staffPage.row("EMP-0011")).toBeVisible();
+
+    await staffPage.sortBy("Name").click();
+
+    // Staying on page 2 of a re-sorted list shows rows the reader did not ask for, and
+    // on a shorter list shows nothing at all.
+    await expect(staffPage.pageButton(1)).toHaveAttribute("aria-current", "page");
+  });
+
+  test("a hidden column stays hidden across a reload", async ({
+    page,
+    mockApi,
+    staffPage,
+    signedIn: _signedIn,
+  }) => {
+    mockApi.use(schoolOrganizationModule({ campuses: [CAMPUS] }), staffModule({ staff: TWELVE }));
+    await staffPage.goto();
+
+    const before = await staffPage.columnHeaders.count();
+    await expect(staffPage.columnHeaders.filter({ hasText: "Department" })).toBeVisible();
+
+    await staffPage.columnsMenuTrigger.click();
+    // Two toggles without reopening: the menu stays open on purpose, because choosing
+    // which columns to see is a comparison rather than a single choice.
+    await staffPage.columnToggle("Department").click();
+    await staffPage.columnToggle("Designation").click();
+    await page.keyboard.press("Escape");
+
+    await expect(staffPage.columnHeaders).toHaveCount(before - 2);
+    await expect(staffPage.columnHeaders.filter({ hasText: "Department" })).toHaveCount(0);
+
+    await page.reload();
+    await expect(staffPage.columnHeaders).toHaveCount(before - 2);
+  });
+});
+
 test.describe("creating a staff member", () => {
   test("submits the required fields and lands on the new record's detail page", async ({
     page,

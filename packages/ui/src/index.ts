@@ -9,7 +9,7 @@ export type { AlertProps } from "./components/alert";
 
 export { Avatar, AvatarFallback, AvatarImage } from "./components/avatar";
 
-export { Badge, badgeVariants } from "./components/badge";
+export { Badge, BadgeDot, badgeVariants } from "./components/badge";
 export type { BadgeProps } from "./components/badge";
 
 export { Button, buttonVariants } from "./components/button";
@@ -40,8 +40,24 @@ export type {
   ChartTooltipContentProps,
 } from "./components/chart";
 
+export { Checkbox } from "./components/checkbox";
+export type { CheckboxProps } from "./components/checkbox";
+
 export { DataTable } from "./components/data-table";
-export type { DataTableColumn, DataTableProps } from "./components/data-table";
+export { DataTableColumnsMenu } from "./components/data-table-columns-menu";
+export type {
+  DataTableColumn,
+  DataTableColumnVisibility,
+  DataTableCursorPagination,
+  DataTablePagePagination,
+  DataTablePageSize,
+  DataTableProps,
+  DataTableSort,
+} from "./components/data-table";
+
+export { Pagination } from "./components/pagination";
+export type { PaginationProps } from "./components/pagination";
+export { getPageNumbers, PAGE_WINDOW_SIZE } from "./lib/page-numbers";
 
 export { EmptyState } from "./components/empty-state";
 export type { EmptyStateProps } from "./components/empty-state";
@@ -101,6 +117,9 @@ export { Input } from "./components/input";
 export type { InputProps } from "./components/input";
 
 export { Label } from "./components/label";
+
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./components/popover";
+export type { PopoverContentProps } from "./components/popover";
 
 export {
   Select,
@@ -176,7 +195,13 @@ export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/tabs";
 export { Textarea } from "./components/textarea";
 export type { TextareaProps } from "./components/textarea";
 
+export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";
+export type { ToggleGroupItemProps, ToggleGroupProps } from "./components/toggle-group";
+
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip";
+
+export { THEME_PRESETS } from "./styles/presets";
+export type { ThemePreset } from "./styles/presets";
 
 export { brandingToCssText, brandingToCssVariables, sanitizeCssValue } from "./lib/branding";
 export { cn } from "./lib/cn";

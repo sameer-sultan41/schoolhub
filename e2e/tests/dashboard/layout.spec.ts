@@ -65,12 +65,16 @@ test.describe("keyboard shortcut", () => {
     const nav = dashboardPage.nav;
     const openBox = await nav.boundingBox();
     expect(openBox).not.toBeNull();
+    const openWidth = openBox?.width ?? 0;
 
-    // Collapsed on desktop moves the sidebar off-canvas (translated out of the viewport,
-    // not display:none), so toBeVisible() alone can't tell open from collapsed here —
-    // the bounding box's x position is what actually changes.
+    // WIDTH, not x. Collapsing used to translate the whole sidebar off-canvas, and this
+    // test read its x position because that was the only thing that moved. Collapse mode
+    // is a layout preference now and defaults to `icon`, which keeps the rail on screen
+    // at x=0 and narrows it to `--sidebar-width-icon` instead — so the old assertion
+    // failed against a sidebar that was collapsing perfectly well. Width is what changes
+    // under either mode.
     await page.keyboard.press("Control+b");
-    await expect.poll(async () => (await nav.boundingBox())?.x).toBeLessThan(-100);
+    await expect.poll(async () => (await nav.boundingBox())?.width).toBeLessThan(openWidth / 2);
 
     // The regression this test exists for: SidebarProvider's own toggleSidebar/setOpen
     // were plain (non-memoised) functions, so the keydown listener — attached once, its
@@ -80,9 +84,7 @@ test.describe("keyboard shortcut", () => {
     // it already held and React silently dropped it: the sidebar collapsed once and
     // then never came back.
     await page.keyboard.press("Control+b");
-    await expect
-      .poll(async () => (await nav.boundingBox())?.x)
-      .toBeGreaterThan((openBox?.x ?? 0) - 10);
+    await expect.poll(async () => (await nav.boundingBox())?.width).toBeGreaterThan(openWidth - 10);
   });
 });
 

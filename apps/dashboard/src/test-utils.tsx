@@ -1,17 +1,20 @@
 import type { ApiResult } from "@schoolhub/api-client";
-import type { AuthenticatedUser } from "@schoolhub/types";
+import type { AuthenticatedUser, CursorPagination, OffsetPagination } from "@schoolhub/types";
+import { TooltipProvider } from "@schoolhub/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import { NextIntlClientProvider } from "next-intl";
 import { ThemeProvider } from "next-themes";
 import type { ReactElement, ReactNode } from "react";
+import { PREFERENCE_DEFAULTS } from "@/lib/preferences/preferences-config";
+import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
 import messages from "../messages/en.json";
 
 /**
  * Shared render wrapper: real English messages, a retry-disabled QueryClient, and the
- * motion providers `components/providers.tsx` mounts in production — a component tested
- * under a different provider tree is not the component that ships.
+ * motion, tooltip and preference providers the app mounts in production — a component
+ * tested under a different provider tree is not the component that ships.
  *
  * `reducedMotion="always"` is a deliberate difference from production: animations settle
  * immediately, so assertions never race a transition, and every test exercises the
@@ -20,6 +23,18 @@ import messages from "../messages/en.json";
  *
  * `ThemeProvider` is NOT here; see `renderWithTheme` below for why.
  */
+/**
+ * Just the preferences context, for a component that needs nothing else.
+ *
+ * `TenantTheme` and the dashboard page render under a bare `render()` on purpose —
+ * neither wants a QueryClient, and the page mocks `next-intl/server` rather than taking
+ * the real provider — but both read `usePreference`, which throws without a store above
+ * them. Pass it as RTL's `wrapper`.
+ */
+export function PreferencesTestWrapper({ children }: { children: ReactNode }) {
+  return <PreferencesProvider initialValues={PREFERENCE_DEFAULTS}>{children}</PreferencesProvider>;
+}
+
 export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -31,7 +46,22 @@ export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
               screen that reaches for it instead of `m` fails here rather than shipping
               the 34kb bundle it was meant to avoid. */}
           <LazyMotion features={domAnimation} strict>
-            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+            <QueryClientProvider client={queryClient}>
+              {/* Mirrors `components/providers.tsx`. Radix's Tooltip.Root throws
+                  without it, so a cell that pairs a relative date with the absolute
+                  one in a tooltip — the house pattern — took its whole screen's test
+                  file down. Context only: it renders no element, so `container` is
+                  still what the component under test produced, which is why this one
+                  belongs here and `ThemeProvider` does not. */}
+              {/* Seeded with the defaults, which is what a viewer who has never opened
+                  the layout popover has. It lives in the root layout rather than in
+                  `components/providers.tsx` — the values come from cookies read on the
+                  server — so a component reaching for `usePreference` threw here while
+                  working perfectly in the app. */}
+              <PreferencesProvider initialValues={PREFERENCE_DEFAULTS}>
+                <TooltipProvider>{children}</TooltipProvider>
+              </PreferencesProvider>
+            </QueryClientProvider>
           </LazyMotion>
         </MotionConfig>
       </NextIntlClientProvider>
@@ -95,5 +125,85 @@ export function makeUser(overrides: Partial<AuthenticatedUser> = {}): Authentica
     roles: [],
     permissions: [],
     ...overrides,
+  };
+}
+
+/**
+ * Pagination envelopes for tests.
+ *
+ * Every table test used to spell `meta: { pagination: { next_cursor: null,
+ * previous_cursor: null, page_size: 25 } }` out by hand, once per mocked response —
+ * dozens of literals across eight files, all describing a shape none of those endpoints
+ * returns any more. Moving admin lists to page numbers meant editing every one of them,
+ * which is the argument for this file: the shape is written once, and the next change to
+ * it is one edit rather than a search.
+ *
+ * The two builders are separate rather than one with a mode, because a test asserting
+ * page-number behaviour against a cursor envelope is a test that cannot fail for the
+ * right reason. Picking the wrong builder is a type error at the call site instead.
+ */
+
+interface Envelope<TItem, TPagination> {
+  data: TItem[];
+  meta: { pagination: TPagination };
+  requestId: string;
+  status: number;
+}
+
+/**
+ * A page-number response — what every admin list returns now.
+ *
+ * `total_count` and `total_pages` default to describing a single complete page of the
+ * items given, which is what most tests want and none of them should have to state.
+ * Override them to test a pager that has somewhere to go.
+ */
+export function offsetPage<TItem>(
+  items: TItem[],
+  overrides: Partial<OffsetPagination> = {},
+  requestId = "req-test",
+): Envelope<TItem, OffsetPagination> {
+  const pageSize = overrides.page_size ?? 25;
+  const totalCount = overrides.total_count ?? items.length;
+  return {
+    data: items,
+    meta: {
+      pagination: {
+        page: 1,
+        page_size: pageSize,
+        total_count: totalCount,
+        total_pages: Math.max(1, Math.ceil(totalCount / pageSize)),
+        ...overrides,
+      },
+    },
+    requestId,
+    status: 200,
+  };
+}
+
+/**
+ * A cursor response — for the endpoints that kept one (academic sessions, guardians,
+ * timetable slots, documents, transfers).
+ *
+ * `total_count` is deliberately absent unless asked for: on a cursor endpoint it is
+ * opt-in server-side, and a fixture that always supplied one would let a component
+ * depending on it pass here and fail against the real API.
+ */
+export function cursorPage<TItem>(
+  items: TItem[],
+  overrides: Partial<CursorPagination> = {},
+  requestId = "req-test",
+): Envelope<TItem, CursorPagination> {
+  return {
+    data: items,
+    meta: {
+      pagination: {
+        next_cursor: null,
+        previous_cursor: null,
+        page_size: 25,
+        ...overrides,
+      },
+    },
+    requestId,
+    status: 200,
   };
 }

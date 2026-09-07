@@ -71,6 +71,17 @@ class StaffSerializer(serializers.ModelSerializer):
     # validated_data) and validate_employee_number rejects a changed value on
     # update with a specific message — mirrors StudentSerializer.admission_number.
     employee_number = serializers.CharField(max_length=32, required=False)
+    # The directory renders a campus, a department and a designation, not three
+    # UUIDs. Same reasoning as StudentSerializer's campus_name: read through the FK
+    # so retrieve and create work too, and lean on the select_related get_queryset
+    # already does. Department and designation are both optional on a staff record.
+    campus_name = serializers.CharField(source="campus.name", read_only=True)
+    department_name = serializers.CharField(
+        source="department.name", read_only=True, allow_null=True
+    )
+    designation_name = serializers.CharField(
+        source="designation.name", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Staff
@@ -85,8 +96,11 @@ class StaffSerializer(serializers.ModelSerializer):
             "photo_file_id",
             "staff_type",
             "campus_id",
+            "campus_name",
             "department_id",
+            "department_name",
             "designation_id",
+            "designation_name",
             "reports_to_staff_id",
             "employment_type",
             "employment_status",

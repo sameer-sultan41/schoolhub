@@ -134,6 +134,7 @@
 
   --font-sans: var(--sh-font-body);
   --font-heading: var(--sh-font-heading);
+  --font-numeric: var(--sh-font-numeric);
 
   --radius-token: var(--sh-radius);
 
@@ -386,6 +387,24 @@
   --sh-font-body:
     var(--font-inter), var(--font-noto-nastaliq-urdu), ui-sans-serif, system-ui, sans-serif;
   --sh-font-heading: var(--font-fraunces), var(--sh-font-body);
+  /*
+   * The face figures wear: a monospace with true tabular digits, so a column of
+   * numbers aligns on the decimal and a value that changes in place does not
+   * reflow the tile around it.
+   *
+   * Deliberately NOT in branding.ts TOKEN_MAP, unlike body_font/heading_font. A
+   * tenant picking a proportional display face here would silently undo the
+   * alignment this token exists for; numeral alignment is a legibility property,
+   * not a brand one.
+   *
+   * Nastaliq stays in the stack for the same per-character reason as --sh-font-body:
+   * Urdu renders Western Arabic digits in this ICU build, so the mono face covers
+   * the digits, but a currency symbol or unit inside a formatted value can still be
+   * Urdu and must not fall through to whatever the OS picks.
+   */
+  --sh-font-numeric:
+    var(--font-jetbrains-mono), var(--font-noto-nastaliq-urdu), ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
   /* 0.625rem rather than the previous 0.5rem — a deliberately softer, more rounded feel
      across cards/buttons/inputs, matching this palette's "soft, clear" brief. */
   --sh-radius: 0.625rem;

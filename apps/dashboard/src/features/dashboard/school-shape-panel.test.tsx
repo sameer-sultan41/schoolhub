@@ -3,7 +3,7 @@ import type { PermissionKey } from "@schoolhub/types";
 import { screen, waitFor } from "@testing-library/react";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { apiResult, renderWithProviders } from "@/test-utils";
+import { apiResult, cursorPage, offsetPage, renderWithProviders } from "@/test-utils";
 import { SchoolShapePanel } from "./school-shape-panel";
 
 // `<Can>` is this panel's only permission surface — it never calls `useSession` itself.
@@ -34,21 +34,24 @@ function rows(count: number) {
   return Array.from({ length: count }, (_, index) => ({ id: `id-${String(index)}` }));
 }
 
-/** A single-row page carrying (or deliberately omitting) the server's own total. */
-function countedPage(total: number | undefined): ApiResult<{ id: string }[]> {
-  return {
-    data: rows(1),
-    meta: {
-      pagination: {
-        next_cursor: "abc",
-        previous_cursor: null,
-        page_size: 1,
-        ...(total === undefined ? {} : { total_count: total }),
-      },
-    },
-    requestId: null,
-    status: 200,
-  };
+/**
+ * A single-row page carrying the server's own total — what `/students` and `/staff`
+ * send now that both page by number.
+ */
+function countedPage(total: number): ApiResult<{ id: string }[]> {
+  return offsetPage(rows(1), { page_size: 1, total_count: total }, "req-count");
+}
+
+/**
+ * A single-row page with NO total.
+ *
+ * A cursor envelope, because that is the only shape that can omit one: counting is
+ * opt-in per cursor endpoint, so a list that does not count leaves the field out
+ * entirely rather than sending null. Neither tile points at such an endpoint today —
+ * this is the guard for the day one does.
+ */
+function uncountedPage(): ApiResult<{ id: string }[]> {
+  return cursorPage(rows(1), { next_cursor: "abc", page_size: 1 }, "req-count");
 }
 
 /** Grant exactly this list; every other key answers false, as `<Can>` would in production. */
@@ -58,7 +61,11 @@ function signIn(permissions: PermissionKey[]) {
 
 function respond({ studentTotal }: { studentTotal?: number } = { studentTotal: 1280 }) {
   mockGet.mockImplementation((path: string) => {
-    if (path === "/students") return Promise.resolve(countedPage(studentTotal));
+    if (path === "/students") {
+      return Promise.resolve(
+        studentTotal === undefined ? uncountedPage() : countedPage(studentTotal),
+      );
+    }
     if (path === "/staff") return Promise.resolve(countedPage(97));
     if (path === "/classes") return Promise.resolve(apiResult(rows(12)));
     if (path === "/sections") return Promise.resolve(apiResult(rows(34)));

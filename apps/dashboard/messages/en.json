@@ -25,6 +25,42 @@
       "dark": "Dark",
       "system": "Match system"
     },
+    "preferences": {
+      "trigger": "Preferences",
+      "title": "Preferences",
+      "description": "How this dashboard is laid out for you.",
+      "reset": "Reset to defaults",
+      "preset": {
+        "label": "Colours",
+        "tenant": "School colours",
+        "ink-brass": "Ink & Brass",
+        "tangerine": "Tangerine",
+        "soft-pop": "Soft Pop",
+        "brutalist": "Brutalist",
+        "neon": "Neon"
+      },
+      "sidebarVariant": {
+        "label": "Sidebar",
+        "sidebar": "Flush",
+        "inset": "Inset",
+        "floating": "Floating"
+      },
+      "sidebarCollapse": {
+        "label": "When collapsed",
+        "icon": "Icons",
+        "offcanvas": "Hidden"
+      },
+      "contentLayout": {
+        "label": "Content width",
+        "full-width": "Full width",
+        "centered": "Centred"
+      },
+      "navbarStyle": {
+        "label": "Header",
+        "sticky": "Stays put",
+        "scroll": "Scrolls away"
+      }
+    },
     "groups": {
       "overview": "Overview",
       "people": "People",
@@ -159,7 +195,8 @@
     "columns": {
       "admissionNumber": "Admission #",
       "name": "Name",
-      "status": "Status"
+      "status": "Status",
+      "admissionDate": "Admitted"
     },
     "filters": {
       "search": "Search",
@@ -408,7 +445,8 @@
       "employeeNumber": "Employee #",
       "name": "Name",
       "staffType": "Type",
-      "employmentStatus": "Status"
+      "employmentStatus": "Status",
+      "email": "Email"
     },
     "filters": {
       "search": "Search",
@@ -704,7 +742,8 @@
         "students": "Students",
         "decision": "Decision",
         "status": "Status",
-        "actions": "Actions"
+        "actions": "Actions",
+        "startedAt": "Started"
       },
       "fields": {
         "fromSession": "From session",
@@ -1026,7 +1065,20 @@
     "new": "New",
     "edit": "Edit",
     "import": "Import",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "sortAscending": "Sort by {column}, A to Z",
+    "sortDescending": "Sort by {column}, Z to A",
+    "rowsPerPage": "Rows per page",
+    "pageOf": "Page {page} of {pages}",
+    "totalRows": "{count} in total",
+    "pageRange": "{from}–{to} of {count}",
+    "pagination": "Pagination",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "goToPage": "Go to page {page}",
+    "morePages": "More pages",
+    "columns": "Columns",
+    "toggleColumns": "Show or hide columns"
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",

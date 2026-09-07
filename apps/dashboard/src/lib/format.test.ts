@@ -1,4 +1,12 @@
-import { formatCount, formatDate, formatMinorUnits, formatPercent } from "@/lib/format";
+import {
+  formatCount,
+  formatDate,
+  formatDateTime,
+  formatMinorUnits,
+  formatPercent,
+  formatRelativeTime,
+  formatTime,
+} from "@/lib/format";
 
 describe("formatMinorUnits", () => {
   it("converts minor units to major units under the given currency", () => {
@@ -52,5 +60,65 @@ describe("formatDate", () => {
 
   it("returns the raw string unchanged when it cannot be parsed", () => {
     expect(formatDate("not-a-date", "en")).toBe("not-a-date");
+  });
+});
+
+describe("formatTime", () => {
+  it("drops the seconds DRF serialises a TimeField with", () => {
+    expect(formatTime("08:00:00", "en")).toBe("08:00");
+    expect(formatTime("13:45:00", "en")).toBe("13:45");
+  });
+
+  it("accepts a time that already has no seconds", () => {
+    expect(formatTime("08:00", "en")).toBe("08:00");
+  });
+
+  it("returns anything unparseable unchanged rather than inventing a time", () => {
+    expect(formatTime("", "en")).toBe("");
+    expect(formatTime("not a time", "en")).toBe("not a time");
+    expect(formatTime("25:99:00", "en")).toBe("25:99:00");
+  });
+
+  it("reads the clock fields back out in UTC, so the local zone cannot shift the hour", () => {
+    // Without the explicit timeZone this would render as 03:00 for a viewer in UTC-5.
+    expect(formatTime("08:00:00", "en")).toBe("08:00");
+  });
+});
+
+describe("formatDateTime", () => {
+  it("renders a date and a time together", () => {
+    const iso = "2026-04-01T14:30:00Z";
+    const expected = new Intl.DateTimeFormat("en", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(iso));
+    expect(formatDateTime(iso, "en")).toBe(expected);
+  });
+
+  it("returns an unparseable value unchanged rather than showing Invalid Date", () => {
+    expect(formatDateTime("nonsense", "en")).toBe("nonsense");
+  });
+});
+
+describe("formatRelativeTime", () => {
+  const now = new Date("2026-04-01T12:00:00Z");
+
+  it("picks the coarsest unit that still says something true", () => {
+    expect(formatRelativeTime("2026-03-29T12:00:00Z", "en", now)).toBe("3 days ago");
+    expect(formatRelativeTime("2026-04-01T09:00:00Z", "en", now)).toBe("3 hours ago");
+    expect(formatRelativeTime("2026-01-01T12:00:00Z", "en", now)).toBe("3 months ago");
+    expect(formatRelativeTime("2024-04-01T12:00:00Z", "en", now)).toBe("2 years ago");
+  });
+
+  it("says 'now' rather than 'in 0 seconds' for something that just happened", () => {
+    expect(formatRelativeTime("2026-04-01T11:59:59Z", "en", now)).toBe("now");
+  });
+
+  it("handles a future timestamp", () => {
+    expect(formatRelativeTime("2026-04-03T12:00:00Z", "en", now)).toBe("in 2 days");
+  });
+
+  it("returns an unparseable value unchanged", () => {
+    expect(formatRelativeTime("nonsense", "en", now)).toBe("nonsense");
   });
 });

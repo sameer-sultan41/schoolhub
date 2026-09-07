@@ -203,6 +203,10 @@ class Staff(TenantOwnedModel):
             models.Index(
                 fields=["tenant", "last_name", "first_name"], name="staff_tenant_name_idx"
             ),
+            # Same reasoning as students_tenant_admitted_idx: the directory offers a
+            # sort on joining date, and this is what keeps it off a full scan of the
+            # tenant's staff.
+            models.Index(fields=["tenant", "joining_date"], name="staff_tenant_joined_idx"),
         ]
 
     def __str__(self) -> str:

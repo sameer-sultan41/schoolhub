@@ -1,10 +1,10 @@
-import { ApiError, type ApiResult } from "@schoolhub/api-client";
+import { ApiError } from "@schoolhub/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RoomsScreen } from "@/features/timetable/rooms-screen";
 import { usePermission } from "@/hooks/use-session";
 import { apiClient } from "@/lib/auth";
-import { renderWithProviders } from "@/test-utils";
+import { offsetPage, renderWithProviders } from "@/test-utils";
 
 jest.mock("@/lib/auth", () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() },
@@ -13,7 +13,27 @@ jest.mock("@/hooks/use-session", () => ({
   usePermission: jest.fn(() => false),
   useAnyPermission: jest.fn(() => false),
 }));
-jest.mock("next/navigation", () => ({ usePathname: () => "/timetable/rooms" }));
+
+/**
+ * The router has to ROUND-TRIP, not swallow the write.
+ *
+ * Filters, sort and page live in the URL now (`useTableParams` → `useSearchParam`), so
+ * `replace` is what applies a page click and `useSearchParams` is where the next render
+ * reads it back from. A `replace: jest.fn()` that stores nothing would leave the screen
+ * on page one forever, and the pager assertions below would pass against a table that
+ * never moved. `usePathname` is still here for `TimetableNav`.
+ */
+let mockSearchParams = new URLSearchParams();
+const mockReplace = jest.fn((url: string) => {
+  mockSearchParams = new URLSearchParams(url.split("?")[1] ?? "");
+});
+const mockRouter = { replace: mockReplace, push: jest.fn(), prefetch: jest.fn() };
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/timetable/rooms",
+  useRouter: () => mockRouter,
+  useSearchParams: () => mockSearchParams,
+}));
+
 jest.mock("@/features/timetable/use-timetable-reference-data", () => ({
   useCampusOptions: () => ({ data: [{ id: "campus1", name: "Main Campus", code: "MAIN" }] }),
 }));
@@ -55,57 +75,61 @@ const RETIRED_HALL = {
   is_active: false,
 };
 
-function page(items: unknown[], nextCursor: string | null = null): ApiResult<unknown> {
-  return {
-    data: items,
-    meta: { pagination: { next_cursor: nextCursor, previous_cursor: null, page_size: 25 } },
-    requestId: "req-list",
-    status: 200,
-  };
-}
-
 describe("RoomsScreen", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockDelete.mockReset();
     mockUsePermission.mockReturnValue(false);
+    mockSearchParams = new URLSearchParams();
   });
 
   it("renders a room with its type, capacity and location", async () => {
-    mockGet.mockResolvedValue(page([LAB]));
+    mockGet.mockResolvedValue(offsetPage([LAB]));
     renderWithProviders(<RoomsScreen />);
 
-    expect(await screen.findByText("Physics Lab")).toBeInTheDocument();
-    expect(screen.getByText("L-12")).toBeInTheDocument();
-    expect(screen.getByText("Lab")).toBeInTheDocument();
-    expect(screen.getByText("30")).toBeInTheDocument();
-    expect(screen.getByText("Science Block · 1")).toBeInTheDocument();
-    expect(screen.getByText("In service")).toBeInTheDocument();
+    // Scoped to the row: type and status are chips rather than bare cells now, and a
+    // screen-wide query would not say which row it had found them in.
+    const row = await screen.findByRole("row", { name: /Physics Lab/ });
+    expect(within(row).getByText("L-12")).toBeInTheDocument();
+    expect(within(row).getByText("Physics Lab")).toBeInTheDocument();
+    expect(within(row).getByText("Lab")).toBeInTheDocument();
+    expect(within(row).getByText("Main Campus")).toBeInTheDocument();
+    expect(within(row).getByText("30")).toBeInTheDocument();
+    expect(within(row).getByText("Science Block · 1")).toBeInTheDocument();
+    expect(within(row).getByText("In service")).toBeInTheDocument();
   });
 
   it("renders a retired room with no capacity as out of service", async () => {
-    mockGet.mockResolvedValue(page([RETIRED_HALL]));
+    mockGet.mockResolvedValue(offsetPage([RETIRED_HALL]));
     renderWithProviders(<RoomsScreen />);
 
     expect(await screen.findByText("Old Hall")).toBeInTheDocument();
     expect(screen.getByText("Out of service")).toBeInTheDocument();
     const row = screen.getByRole("row", { name: /Old Hall/ });
-    expect(within(row).getAllByText("—").length).toBeGreaterThan(0);
+    // Exactly two dashes: the missing capacity and the missing building/floor. The
+    // campus is still known, so it must not be a third.
+    expect(within(row).getAllByText("—")).toHaveLength(2);
+    expect(within(row).getByText("Main Campus")).toBeInTheDocument();
   });
 
   it("shows the translated empty state", async () => {
-    mockGet.mockResolvedValue(page([]));
+    mockGet.mockResolvedValue(offsetPage([]));
     renderWithProviders(<RoomsScreen />);
 
     expect(await screen.findByText("No rooms yet")).toBeInTheDocument();
+    // The row range is suppressed on an empty result: "0–0 of 0" beneath an empty state
+    // that has already said there is nothing here is noise.
+    expect(screen.queryByText("0–0 of 0")).not.toBeInTheDocument();
   });
 
   it("filters by room type", async () => {
-    mockGet.mockResolvedValue(page([LAB]));
+    mockGet.mockResolvedValue(offsetPage([LAB]));
     const user = userEvent.setup();
     renderWithProviders(<RoomsScreen />);
     await screen.findByText("Physics Lab");
 
+    // The filter row sits inside the table's card now, but the select is still named by
+    // its label, so the reader reaches it exactly as before.
     await user.click(screen.getByRole("combobox", { name: "Room type" }));
     await user.click(await screen.findByRole("option", { name: "Lab" }));
 
@@ -114,20 +138,26 @@ describe("RoomsScreen", () => {
     });
   });
 
-  it("pages forward by cursor", async () => {
-    mockGet.mockResolvedValue(page([LAB], "cursor-2"));
+  it("clicking a page number asks the server for that page", async () => {
+    // Two pages' worth: the pager only renders numbers when there is somewhere to go.
+    mockGet.mockResolvedValue(offsetPage([LAB], { total_count: 30, page_size: 25 }));
     renderWithProviders(<RoomsScreen />);
     await screen.findByText("Physics Lab");
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    // With a page number on screen, where the reader is in the list is finally a fact
+    // the summary can state — it said nothing at all under cursor paging.
+    expect(screen.getByText("1–25 of 30")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to page 2" }));
 
     await waitFor(() => {
-      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.cursor).toBe("cursor-2");
+      expect(mockGet.mock.calls.at(-1)?.[1]?.query?.page).toBe(2);
     });
   });
 
   it("hides every mutating control without permission", async () => {
-    mockGet.mockResolvedValue(page([LAB]));
+    mockGet.mockResolvedValue(offsetPage([LAB]));
     renderWithProviders(<RoomsScreen />);
 
     await screen.findByText("Physics Lab");
@@ -138,7 +168,7 @@ describe("RoomsScreen", () => {
 
   it("removes a room", async () => {
     mockUsePermission.mockReturnValue(true);
-    mockGet.mockResolvedValue(page([LAB]));
+    mockGet.mockResolvedValue(offsetPage([LAB]));
     mockDelete.mockResolvedValue({ data: null, meta: undefined, requestId: null, status: 204 });
     const user = userEvent.setup();
     renderWithProviders(<RoomsScreen />);

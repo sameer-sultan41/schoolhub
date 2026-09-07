@@ -33,7 +33,11 @@ export interface StudentRecord {
   gender: StudentGender;
   photo_file_id: string | null;
   campus_id: string;
+  /** Read-only, sent with every row so a roster can name a campus without a lookup. */
+  campus_name: string;
   house_id: string | null;
+  /** Null when the student is in no house. */
+  house_name: string | null;
   status: StudentStatus;
   admission_date: string;
   blood_group: string | null;

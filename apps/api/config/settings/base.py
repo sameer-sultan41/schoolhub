@@ -173,7 +173,10 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 25,
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
-        "rest_framework.filters.OrderingFilter",
+        # Not DRF's OrderingFilter: a cursor paginator adopts whatever the ordering
+        # backend returns as its cursor key, and none of the columns people sort by is
+        # unique. See core.api.filters.StableOrderingFilter.
+        "core.api.filters.StableOrderingFilter",
         "rest_framework.filters.SearchFilter",
     ),
     "EXCEPTION_HANDLER": "core.api.exceptions.envelope_exception_handler",

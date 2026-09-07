@@ -53,6 +53,16 @@ class StudentSerializer(serializers.ModelSerializer):
     # changed value on update via validate_admission_number below. A
     # client-supplied value on create is simply ignored, not an error.
     admission_number = serializers.CharField(max_length=32, required=False)
+    # The roll renders a campus and a house, not two UUIDs, and it was the only
+    # consumer of these relations — so the names come down with the row rather than
+    # costing the dashboard a second request per lookup table. Read through the FK
+    # rather than off the list queryset's `campus_name`/`house_name` annotations:
+    # those exist only on the list (they are what `?ordering=` sorts on), and a
+    # serializer that read them would raise on retrieve and create. `get_queryset`
+    # already applies select_related to both, so the list pays no extra query.
+    campus_name = serializers.CharField(source="campus.name", read_only=True)
+    # Nullable: a student need not be in a house.
+    house_name = serializers.CharField(source="house.name", read_only=True, allow_null=True)
 
     class Meta:
         model = Student
@@ -67,7 +77,9 @@ class StudentSerializer(serializers.ModelSerializer):
             "gender",
             "photo_file_id",
             "campus_id",
+            "campus_name",
             "house_id",
+            "house_name",
             "status",
             "admission_date",
             "blood_group",

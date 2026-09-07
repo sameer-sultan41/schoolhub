@@ -28,6 +28,43 @@ export class StaffPage extends BasePage {
     return this.page.getByLabel("Search");
   }
 
+  // ---- Table controls ----
+  //
+  // These live inside the table's own card now — the filter row, the header and the
+  // pager share one border — but each is still reached by its accessible name, so the
+  // reframing is invisible from here. That is the point of pinning names, not structure.
+
+  /** A column header's sort control. Its name says what pressing it will DO. */
+  sortBy(column: string): Locator {
+    return this.page.getByRole("button", { name: new RegExp(`sort by ${column}`, "i") });
+  }
+
+  get columnsMenuTrigger(): Locator {
+    return this.page.getByRole("button", { name: "Columns" });
+  }
+
+  /** One row of the show/hide menu. Ticked means the column is visible. */
+  columnToggle(column: string): Locator {
+    return this.page.getByRole("menuitemcheckbox", { name: column });
+  }
+
+  get columnHeaders(): Locator {
+    return this.table.getByRole("columnheader");
+  }
+
+  /** A numbered page button — `common.goToPage` names it "Go to page N". */
+  pageButton(page: number): Locator {
+    return this.page.getByRole("button", { name: `Go to page ${String(page)}` });
+  }
+
+  get nextPage(): Locator {
+    return this.page.getByRole("button", { name: "Next page" });
+  }
+
+  get previousPage(): Locator {
+    return this.page.getByRole("button", { name: "Previous page" });
+  }
+
   // ---- Create/edit form ----
 
   // getByRole, not getByLabel — see LoginPage's identical comment: FormField renders

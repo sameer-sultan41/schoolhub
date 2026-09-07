@@ -1,5 +1,5 @@
 import { id } from "@/data/factories";
-import { fail, ok, paginated } from "../envelope";
+import { fail, ok, pagedList } from "../envelope";
 import type { MockModule } from "../router";
 
 /** Trimmed to the fields the dashboard reads; extend as the UI grows. */
@@ -64,7 +64,7 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     const campuses = [...(options.campuses ?? [buildCampus()])];
     const departments = [...(options.departments ?? [buildDepartment()])];
 
-    api.get("/campuses", () => paginated(campuses));
+    api.get("/campuses", () => pagedList(campuses));
 
     api.get("/campuses/:campusId", (request) => {
       const match = campuses.find((campus) => campus.id === request.params["campusId"]);
@@ -86,6 +86,6 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
       return ok(created, { status: 201 });
     });
 
-    api.get("/departments", () => paginated(departments));
+    api.get("/departments", () => pagedList(departments));
   };
 }

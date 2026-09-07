@@ -1,0 +1,149 @@
+/*
+ * Soft Pop — adapted from arhamkhnz/next-shadcn-admin-dashboard (MIT), remapped onto this
+ * repo's `--sh-*` tier. Upstream ships OKLCH already, so the values below are its own;
+ * only the variable names changed.
+ *
+ * Only `--sh-*` is written here. Never a `--color-*` name: those are aliases declared in
+ * theme.css's `@theme inline` block, and pointing one somewhere else would create the
+ * second source of truth that file exists to prevent.
+ *
+ * Deliberately NOT overridden, so they stay identical across every preset:
+ *   - success / warning / danger / info. A status colour is not a matter of taste, and
+ *     upstream's own `--destructive` for one preset is pure black, which is
+ *     indistinguishable from its foreground.
+ *   - --sh-color-ring, which is `var(--sh-color-primary)` and so already follows the
+ *     preset.
+ *   - the elevation scale, the platform tier, and the type stack.
+ *
+ * Specificity, low to high:
+ *   1. :root — theme.css, the Ink & Brass default
+ *   2. :root[data-theme-preset="soft-pop"] — this file
+ *   3. the inline style on the TenantTheme wrapper — tenant branding, applied only
+ *      under the "tenant" preset (tenant-theme.tsx)
+ *
+ * Measured contrast (see the generator note in the PR body):
+ *   light foreground on background             19.80:1
+ *   light surface-foreground on surface        21.00:1
+ *   light primary-foreground on primary         6.29:1
+ *   light muted-foreground on surface          12.63:1
+ *   light secondary-foreground on secondary     8.44:1
+ *   light accent-foreground on accent           9.78:1
+ *   dark  foreground on background             21.00:1
+ *   dark  surface-foreground on surface        16.20:1
+ *   dark  primary-foreground on primary         7.04:1
+ *   dark  muted-foreground on surface          10.09:1
+ *   dark  secondary-foreground on secondary    11.28:1
+ *   dark  accent-foreground on accent          14.57:1
+ */
+
+:root[data-theme-preset="soft-pop"] {
+  --sh-radius: 1rem;
+
+  --sh-color-background: oklch(0.9789 0.0082 121.6272);
+  --sh-color-foreground: oklch(0 0 0);
+  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface-foreground: oklch(0 0 0);
+  --sh-color-surface-raised: oklch(1 0 0);
+  --sh-color-surface-sunken: oklch(0.973 0 0);
+
+  --sh-color-muted: oklch(0.9551 0 0);
+  --sh-color-muted-foreground: oklch(0.3211 0 0);
+  --sh-color-border: oklch(0 0 0);
+
+  --sh-color-primary: oklch(0.5106 0.2301 276.9656);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  --sh-color-secondary: oklch(0.7038 0.123 182.5025);
+  --sh-color-secondary-foreground: oklch(0 0 0);
+  --sh-color-accent: oklch(0.7686 0.1647 70.0804);
+  --sh-color-accent-foreground: oklch(0 0 0);
+
+  --sh-color-chart-1: oklch(0.5106 0.2301 276.9656);
+  --sh-color-chart-2: oklch(0.7038 0.123 182.5025);
+  --sh-color-chart-3: oklch(0.7686 0.1647 70.0804);
+  --sh-color-chart-4: oklch(0.6559 0.2118 354.3084);
+  --sh-color-chart-5: oklch(0.7227 0.192 149.5793);
+  --sh-color-chart-6: oklch(0.6927 0.192 207.579);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.5106 0.2301 276.9656) 0%,
+    oklch(0.5356 0.2301 300.966) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(1 0 0);
+}
+
+/*
+ * Declared twice with identical values, matching theme.css: the media arm covers a viewer
+ * who has not chosen (`:not(.light)` lets an explicit light choice win), the class arm
+ * covers the dashboard's toggle. A divergence here is invisible until someone toggles.
+ */
+/* dark-mode token block */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset="soft-pop"]:not(.light) {
+    --sh-color-background: oklch(0 0 0);
+    --sh-color-foreground: oklch(1 0 0);
+    --sh-color-surface: oklch(0.2455 0.0217 257.2823);
+    --sh-color-surface-foreground: oklch(1 0 0);
+    --sh-color-surface-raised: oklch(0.2455 0.0217 257.2823);
+    --sh-color-surface-sunken: oklch(0.2135 0.0217 257.282);
+
+    --sh-color-muted: oklch(0.3211 0 0);
+    --sh-color-muted-foreground: oklch(0.8452 0 0);
+    --sh-color-border: oklch(0.4459 0 0);
+
+    --sh-color-primary: oklch(0.6801 0.1583 276.9349);
+    --sh-color-primary-foreground: oklch(0 0 0);
+    --sh-color-secondary: oklch(0.7845 0.1325 181.912);
+    --sh-color-secondary-foreground: oklch(0 0 0);
+    --sh-color-accent: oklch(0.879 0.1534 91.6054);
+    --sh-color-accent-foreground: oklch(0 0 0);
+
+    --sh-color-chart-1: oklch(0.6801 0.1583 276.9349);
+    --sh-color-chart-2: oklch(0.7845 0.1325 181.912);
+    --sh-color-chart-3: oklch(0.879 0.1534 91.6054);
+    --sh-color-chart-4: oklch(0.7253 0.1752 349.7607);
+    --sh-color-chart-5: oklch(0.8003 0.1821 151.711);
+    --sh-color-chart-6: oklch(0.7703 0.1821 209.711);
+
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.6801 0.1583 276.9349) 0%,
+      oklch(0.7051 0.1583 300.935) 100%
+    );
+    --sh-color-spotlight-foreground: oklch(0 0 0);
+  }
+}
+
+:root[data-theme-preset="soft-pop"].dark {
+  --sh-color-background: oklch(0 0 0);
+  --sh-color-foreground: oklch(1 0 0);
+  --sh-color-surface: oklch(0.2455 0.0217 257.2823);
+  --sh-color-surface-foreground: oklch(1 0 0);
+  --sh-color-surface-raised: oklch(0.2455 0.0217 257.2823);
+  --sh-color-surface-sunken: oklch(0.2135 0.0217 257.282);
+
+  --sh-color-muted: oklch(0.3211 0 0);
+  --sh-color-muted-foreground: oklch(0.8452 0 0);
+  --sh-color-border: oklch(0.4459 0 0);
+
+  --sh-color-primary: oklch(0.6801 0.1583 276.9349);
+  --sh-color-primary-foreground: oklch(0 0 0);
+  --sh-color-secondary: oklch(0.7845 0.1325 181.912);
+  --sh-color-secondary-foreground: oklch(0 0 0);
+  --sh-color-accent: oklch(0.879 0.1534 91.6054);
+  --sh-color-accent-foreground: oklch(0 0 0);
+
+  --sh-color-chart-1: oklch(0.6801 0.1583 276.9349);
+  --sh-color-chart-2: oklch(0.7845 0.1325 181.912);
+  --sh-color-chart-3: oklch(0.879 0.1534 91.6054);
+  --sh-color-chart-4: oklch(0.7253 0.1752 349.7607);
+  --sh-color-chart-5: oklch(0.8003 0.1821 151.711);
+  --sh-color-chart-6: oklch(0.7703 0.1821 209.711);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.6801 0.1583 276.9349) 0%,
+    oklch(0.7051 0.1583 300.935) 100%
+  );
+  --sh-color-spotlight-foreground: oklch(0 0 0);
+}
