@@ -23,7 +23,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.examinations import services
+from apps.examinations import services, uploads
 from apps.examinations.models import (
     AdmitCard,
     Exam,
@@ -31,7 +31,10 @@ from apps.examinations.models import (
     ExamSubject,
     GradeBand,
     GradingScale,
+    Marks,
+    MarksStatus,
 )
+from apps.examinations.services import ENTRY_SETTABLE_STATUSES
 from apps.school_organization.models import AcademicSession, Class, Section, Subject, Term
 from apps.staff_management.models import Staff
 from apps.timetable.models import Room
@@ -377,3 +380,113 @@ class AdmitCardRevokeSerializer(serializers.Serializer):
     """
 
     reason = serializers.CharField(max_length=255)
+
+
+class MarksSerializer(serializers.ModelSerializer):
+    """`marks` — read shape for `GET /marks` (§16).
+
+    Writes go through `:bulk-entry`, not through this serializer: §16 declares a
+    `GET` and one colon-action, and a per-row create would bypass the window,
+    the lock, the allocation check and the eligible-roll check that the grid
+    path applies together.
+
+    `status` is readable but not settable here for the same reason — `locked` is
+    `:lock-marks`'s to set, and a client that could write it would close its own
+    window.
+    """
+
+    exam_subject_id = serializers.UUIDField(read_only=True)
+    student_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = Marks
+        fields = (
+            "id",
+            "exam_subject_id",
+            "student_id",
+            "theory_marks",
+            "practical_marks",
+            "is_absent",
+            "is_exempt",
+            "status",
+            "remarks",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class MarksEntrySerializer(serializers.Serializer):
+    """One cell of the grid `:bulk-entry` submits.
+
+    `student_id` is a plain `UUIDField`, not a `PrimaryKeyRelatedField`: the
+    service checks eligibility against the exam-subject's own roll and reports
+    an ineligible student through `error.meta.rows` with its index, which is
+    what a grid needs in order to highlight the cell. A related field would
+    turn the first bad id into a flat 400 naming no row.
+    """
+
+    student_id = serializers.UUIDField()
+    theory_marks = serializers.DecimalField(
+        max_digits=6, decimal_places=2, required=False, allow_null=True
+    )
+    practical_marks = serializers.DecimalField(
+        max_digits=6, decimal_places=2, required=False, allow_null=True
+    )
+    is_absent = serializers.BooleanField(required=False, default=False)
+    is_exempt = serializers.BooleanField(required=False, default=False)
+    status = serializers.ChoiceField(
+        choices=[(value, value) for value in ENTRY_SETTABLE_STATUSES],
+        required=False,
+        default=MarksStatus.DRAFT,
+    )
+    remarks = serializers.CharField(
+        max_length=255, required=False, allow_null=True, allow_blank=True
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs.get("is_absent") and (
+            attrs.get("theory_marks") is not None or attrs.get("practical_marks") is not None
+        ):
+            raise serializers.ValidationError(
+                {"is_absent": "An absent student cannot also have a mark."}
+            )
+        if attrs.get("is_absent") and attrs.get("is_exempt"):
+            raise serializers.ValidationError(
+                {"is_exempt": ("Absent and exempt are different claims; a row cannot assert both.")}
+            )
+        return attrs
+
+
+class BulkMarksEntrySerializer(serializers.Serializer):
+    """The body of `POST /marks:bulk-entry` — one exam-subject's whole grid."""
+
+    exam_subject_id = _fk(ExamSubject, source="exam_subject")
+    entries = serializers.ListField(child=MarksEntrySerializer(), allow_empty=False)
+
+    def validate_entries(self, value: list[dict]) -> list[dict]:
+        seen = set()
+        for entry in value:
+            if entry["student_id"] in seen:
+                raise serializers.ValidationError(
+                    f"Student {entry['student_id']} appears twice in this submission."
+                )
+            seen.add(entry["student_id"])
+        return value
+
+
+class MarksImportRequestSerializer(serializers.Serializer):
+    """The body of `POST /marks-imports` — a multipart CSV or .xlsx upload."""
+
+    exam_subject_id = _fk(ExamSubject, source="exam_subject")
+    file = serializers.FileField()
+
+    def validate_file(self, value):
+        spec = uploads.MARKS_IMPORT
+        if value.size > spec.max_size_bytes:
+            raise serializers.ValidationError(
+                f"This file is larger than the {spec.max_size_bytes // (1024 * 1024)} MB limit."
+            )
+        if not value.name.lower().endswith((".csv", ".xlsx")):
+            raise serializers.ValidationError("Upload a .csv or .xlsx marks sheet.")
+        return value

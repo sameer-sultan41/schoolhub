@@ -68,6 +68,10 @@ ALL_KEYS = (
     "exams.schedule.update",
     "exams.admit-card.view",
     "exams.admit-card.issue",
+    "exams.marks.create",
+    "exams.marks.update",
+    "exams.marks.import",
+    "exams.marks.lock",
 )
 
 

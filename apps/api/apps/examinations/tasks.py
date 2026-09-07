@@ -21,6 +21,7 @@ from django.utils import timezone
 
 from core.jobs.models import BackgroundJob
 from core.jobs.services import mark_failed, mark_running, mark_succeeded, update_progress
+from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.tasks import TenantAwareTask
 
 logger = logging.getLogger(__name__)
@@ -304,3 +305,176 @@ def notify_admit_cards_issued(*, tenant_id: str, exam_id: str) -> dict[str, int]
                 )
 
     return {"notified": sent}
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§9's marks import, row by row.
+
+    Row-by-row rather than bulk, and that is the trade §6 asks for: "re-import
+    failed rows only" needs a per-row verdict, which a `bulk_create` cannot
+    give. The row count buys the error report.
+
+    Progress is reported as it goes, because a school's whole marks sheet is
+    long enough that a caller polling `GET /jobs/{id}` needs to see it moving.
+    """
+    import base64
+
+    from apps.examinations import services
+    from apps.examinations.models import ExamSubject
+    from core.tenancy.context import tenant_atomic
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    try:
+        payload = job.payload
+        data = base64.b64decode(payload["content_base64"])
+        rows = services.parse_marks_import(filename=payload["filename"], data=data)
+
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            exam_subject = (
+                ExamSubject.objects.alive()
+                .select_related("exam")
+                .get(pk=payload["exam_subject_id"])
+            )
+            # Built once for the whole file. Looked up per row it would be one
+            # query each, and a six-hundred-row sheet is a real size.
+            students = services.import_candidates_by_admission_number(exam_subject=exam_subject)
+
+        errors: list[dict[str, str]] = []
+        succeeded = 0
+        total = len(rows) or 1
+        for index, row in enumerate(rows, start=1):
+            with tenant_atomic(uuid.UUID(tenant_id)):
+                # +1 for the header line, so the row numbers in the error report
+                # match what a spreadsheet editor shows.
+                error = services.import_marks_row(
+                    row=row,
+                    row_number=index + 1,
+                    exam_subject=exam_subject,
+                    students_by_number=students,
+                    actor_id=uuid.UUID(actor_id),
+                )
+            if error:
+                errors.append(error)
+            else:
+                succeeded += 1
+            if index % PROGRESS_EVERY == 0:
+                update_progress(job=job, progress=int(index / total * 100))
+
+        mark_succeeded(
+            job=job,
+            result={"rows": len(rows), "succeeded": succeeded, "errors": errors},
+        )
+    except Exception as exc:
+        # The job row is the only place a caller polling GET /jobs/{id} can
+        # learn this failed, so the failure is recorded rather than raised into
+        # a retry.
+        mark_failed(job=job, error=str(exc))
+
+
+# How close a window has to be to closing before the reminder fires. Two days,
+# so a teacher who has not started still has a working day to do it in — a
+# reminder on the closing morning is a reminder about a deadline already missed.
+REMINDER_LEAD_DAYS = 2
+
+
+def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
+    """§12's `exams.marks-entry-reminder`, for one tenant.
+
+    Fires for exam-subjects whose window closes within `REMINDER_LEAD_DAYS` and
+    which still have marks outstanding — measured against the *expected* roll,
+    so a subject nobody has started counts and one that is merely unsubmitted
+    does too.
+
+    **Recipients are the allocated subject teachers**, from
+    `academics.TeacherSubjectAllocation`, which is the same table
+    `Marks.filter_assigned_to_user` resolves entry rights through. §12 says
+    "teachers with pending entries", and a broadcast to all staff would be the
+    kind of notification people learn to ignore.
+    """
+    import datetime
+
+    from django.utils import timezone
+
+    from apps.academics.models import TeacherSubjectAllocation
+    from apps.examinations import notifications
+    from apps.examinations.models import Exam, ExamStatus
+    from apps.examinations.services import marks_entry_progress
+    from core.notifications.services import Recipient, notify
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    horizon = timezone.now() + datetime.timedelta(days=REMINDER_LEAD_DAYS)
+    sent = 0
+
+    with tenant_atomic(tenant_id):
+        school_name = Tenant.objects.get(pk=tenant_id).name
+        exams = list(
+            Exam.objects.alive().filter(
+                status__in=[ExamStatus.SCHEDULED, ExamStatus.ONGOING, ExamStatus.MARKS_ENTRY]
+            )
+        )
+        for exam in exams:
+            for entry in marks_entry_progress(exam=exam):
+                if entry["is_locked"] or entry["closes_at"] is None:
+                    continue
+                if entry["closes_at"] > horizon or entry["closes_at"] < timezone.now():
+                    continue
+                if entry["submitted"] >= entry["expected"]:
+                    continue
+
+                # `marks_entry_progress` carries `subject_id`/`class_id` so
+                # this does not re-fetch the exam-subject per row — the N+1
+                # shape PR B's review caught twice.
+                teachers = list(
+                    TeacherSubjectAllocation.objects.alive()
+                    .filter(
+                        subject_id=entry["subject_id"],
+                        section__school_class_id=entry["class_id"],
+                        effective_to__isnull=True,
+                        staff__user_id__isnull=False,
+                    )
+                    .values_list("staff__user_id", flat=True)
+                )
+                recipients = [Recipient(user_id=user_id) for user_id in dict.fromkeys(teachers)]
+                if not recipients:
+                    continue
+                try:
+                    notify(
+                        notifications.MARKS_ENTRY_REMINDER,
+                        tenant_id=tenant_id,
+                        recipients=recipients,
+                        context={
+                            "exam.name": exam.name,
+                            "school.name": school_name,
+                            "subject.name": entry["subject_name"],
+                            "class.name": entry["class_name"],
+                            "outstanding": str(entry["expected"] - entry["submitted"]),
+                            "closes_at": entry["closes_at"].isoformat(),
+                        },
+                        source_type="exam_subjects",
+                        source_id=entry["exam_subject_id"],
+                    )
+                    sent += len(recipients)
+                except Exception:
+                    logger.exception(
+                        "%s failed for exam-subject %s",
+                        notifications.MARKS_ENTRY_REMINDER,
+                        entry["exam_subject_id"],
+                    )
+    return sent
+
+
+@shared_task
+def remind_marks_entry() -> dict[str, int]:
+    """Daily, tenant by tenant.
+
+    Tenant by tenant through `for_each_tenant` rather than one cross-tenant
+    query: under RLS an unbound read does not raise, it silently matches zero
+    rows, so the sweep shape is what makes this do anything at all. The same
+    reason `attendance.lock_expired_attendance` is written this way.
+    """
+    return for_each_tenant(remind_tenant_marks_entry, job="exams-marks-reminder")

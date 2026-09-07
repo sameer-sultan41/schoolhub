@@ -720,6 +720,45 @@ export interface paths {
         patch: operations["exam_subjects_partial_update"];
         trace?: never;
     };
+    "/api/v1/exam-subjects/{id}:lock-marks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /exam-subjects/{id}:lock-marks` (§16). */
+        post: operations["exam_subjects_:lock_marks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exam-subjects/{id}:unlock-marks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /exam-subjects/{id}:unlock-marks` (§16).
+         *
+         *     Behind `exams.marks.lock`, and audited — §6 asks for both, because
+         *     reopening a window is how a settled mark changes.
+         */
+        post: operations["exam_subjects_:unlock_marks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/exams": {
         parameters: {
             query?: never;
@@ -785,6 +824,29 @@ export interface paths {
          *     could publish results without passing the approval gate.
          */
         patch: operations["exams_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/exams/{id}/marks-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /exams/{id}/marks-progress` — §6's missing-entries dashboard.
+         *
+         *     A plain `GET` rather than a report `kind`, because it is operational
+         *     rather than analytical: an exam clerk chasing outstanding entries wants
+         *     it beside the exam, and §13 lists "marks-entry status" as its own row.
+         */
+        get: operations["exams_marks_progress_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/exams/{id}:issue-admit-cards": {
@@ -1579,6 +1641,116 @@ export interface paths {
         get: operations["leave_types_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/marks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/marks` — §5.4's entry, read here and written through `:bulk-entry`.
+         *
+         *     **Staff-only, every action.** §4 grants no portal role a marks key: a
+         *     student sees *results*, and §5.6 gates those behind publishing. So this
+         *     viewset keeps `STAFF_PERMISSIONS` as a class attribute rather than
+         *     inverting a readable set — there is nothing portal-readable to carve out,
+         *     and pretending otherwise would suggest a portal path that does not exist.
+         *
+         *     **No create or update.** §16 declares `GET /marks` plus `:bulk-entry`, and a
+         *     per-row create would bypass the four checks the grid path applies together:
+         *     the entry window, the subject lock, the teacher's allocation, and the
+         *     eligible roll.
+         */
+        get: operations["marks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/marks-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /marks-imports` — §9's marks sheet, as 202 + a job.
+         *
+         *     A pure job-launcher: no queryset, no record scope. The uploaded file is
+         *     handed to the task base64-encoded in the job payload, matching
+         *     `attendance`'s importer — a file small enough to be a marks sheet is small
+         *     enough to carry, and staging it in object storage first would add a failure
+         *     mode between the upload and the parse.
+         */
+        post: operations["marks_imports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/marks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/marks` — §5.4's entry, read here and written through `:bulk-entry`.
+         *
+         *     **Staff-only, every action.** §4 grants no portal role a marks key: a
+         *     student sees *results*, and §5.6 gates those behind publishing. So this
+         *     viewset keeps `STAFF_PERMISSIONS` as a class attribute rather than
+         *     inverting a readable set — there is nothing portal-readable to carve out,
+         *     and pretending otherwise would suggest a portal path that does not exist.
+         *
+         *     **No create or update.** §16 declares `GET /marks` plus `:bulk-entry`, and a
+         *     per-row create would bypass the four checks the grid path applies together:
+         *     the entry window, the subject lock, the teacher's allocation, and the
+         *     eligible roll.
+         */
+        get: operations["marks_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/marks:bulk-entry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /marks:bulk-entry` — one exam-subject's grid (§16).
+         *
+         *     Accepts `Idempotency-Key`: §16 calls this an idempotent grid submit, and
+         *     a teacher on a school Wi-Fi genuinely does re-send. The service is an
+         *     upsert either way, so the header buys a replayed *response* rather than
+         *     correctness — which matters because the response carries the counts the
+         *     UI shows.
+         */
+        post: operations["marks:bulk_entry_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3633,6 +3805,12 @@ export interface components {
             check_out_time?: string | null;
             remarks?: string | null;
         };
+        /** @description The body of `POST /marks:bulk-entry` — one exam-subject's whole grid. */
+        BulkMarksEntry: {
+            /** Format: uuid */
+            exam_subject_id: string;
+            entries: components["schemas"]["MarksEntry"][];
+        };
         Campus: {
             /** Format: uuid */
             readonly id: string;
@@ -4365,6 +4543,87 @@ export interface components {
             /** @description Tenant slug. Required only when the identifier exists at more than one school. */
             school?: string;
         };
+        /**
+         * @description `marks` — read shape for `GET /marks` (§16).
+         *
+         *     Writes go through `:bulk-entry`, not through this serializer: §16 declares a
+         *     `GET` and one colon-action, and a per-row create would bypass the window,
+         *     the lock, the allocation check and the eligible-roll check that the grid
+         *     path applies together.
+         *
+         *     `status` is readable but not settable here for the same reason — `locked` is
+         *     `:lock-marks`'s to set, and a client that could write it would close its own
+         *     window.
+         */
+        Marks: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly exam_subject_id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            /**
+             * Format: decimal
+             * @description Null when the student was absent or exempt.
+             */
+            readonly theory_marks: string | null;
+            /** Format: decimal */
+            readonly practical_marks: string | null;
+            /** @description Mutually exclusive with a mark (§11). */
+            readonly is_absent: boolean;
+            /** @description Excluded from the aggregate rather than scored zero. */
+            readonly is_exempt: boolean;
+            readonly status: components["schemas"]["MarksStatusEnum"];
+            readonly remarks: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description One cell of the grid `:bulk-entry` submits.
+         *
+         *     `student_id` is a plain `UUIDField`, not a `PrimaryKeyRelatedField`: the
+         *     service checks eligibility against the exam-subject's own roll and reports
+         *     an ineligible student through `error.meta.rows` with its index, which is
+         *     what a grid needs in order to highlight the cell. A related field would
+         *     turn the first bad id into a flat 400 naming no row.
+         */
+        MarksEntry: {
+            /** Format: uuid */
+            student_id: string;
+            /** Format: decimal */
+            theory_marks?: string | null;
+            /** Format: decimal */
+            practical_marks?: string | null;
+            /** @default false */
+            is_absent: boolean;
+            /** @default false */
+            is_exempt: boolean;
+            /** @default draft */
+            status: components["schemas"]["MarksEntryStatusEnum"];
+            remarks?: string | null;
+        };
+        /**
+         * @description * `draft` - draft
+         *     * `submitted` - submitted
+         * @enum {string}
+         */
+        MarksEntryStatusEnum: "draft" | "submitted";
+        /** @description The body of `POST /marks-imports` — a multipart CSV or .xlsx upload. */
+        MarksImportRequest: {
+            /** Format: uuid */
+            exam_subject_id: string;
+            /** Format: uri */
+            file: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `submitted` - Submitted
+         *     * `locked` - Locked
+         * @enum {string}
+         */
+        MarksStatusEnum: "draft" | "submitted" | "locked";
         PaginatedAcademicSessionList: {
             data?: components["schemas"]["AcademicSession"][];
             meta?: {
@@ -4553,6 +4812,16 @@ export interface components {
         };
         PaginatedLeaveTypeList: {
             data?: components["schemas"]["LeaveType"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedMarksList: {
+            data?: components["schemas"]["Marks"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -7969,6 +8238,46 @@ export interface operations {
             };
         };
     };
+    "exam_subjects_:lock_marks_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "exam_subjects_:unlock_marks_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     exams_list: {
         parameters: {
             query?: {
@@ -8118,6 +8427,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Exam"];
                 };
+            };
+        };
+    };
+    exams_marks_progress_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9196,6 +9525,113 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LeaveType"];
                 };
+            };
+        };
+    };
+    marks_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                exam_id?: string;
+                exam_subject_id?: string;
+                is_absent?: boolean;
+                is_exempt?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `submitted` - Submitted
+                 *     * `locked` - Locked
+                 */
+                status?: "draft" | "locked" | "submitted";
+                student_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMarksList"];
+                };
+            };
+        };
+    };
+    marks_imports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["MarksImportRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    marks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this marks. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Marks"];
+                };
+            };
+        };
+    };
+    "marks:bulk_entry_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkMarksEntry"];
+                "application/x-www-form-urlencoded": components["schemas"]["BulkMarksEntry"];
+                "multipart/form-data": components["schemas"]["BulkMarksEntry"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

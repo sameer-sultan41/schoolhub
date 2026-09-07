@@ -29,6 +29,8 @@ from apps.examinations.views import (
     ExamViewSet,
     GradeBandViewSet,
     GradingScaleViewSet,
+    MarksImportViewSet,
+    MarksViewSet,
 )
 
 router = SimpleRouter(trailing_slash=False)
@@ -37,8 +39,34 @@ router.register("exams", ExamViewSet, basename="exams")
 router.register("exam-subjects", ExamSubjectViewSet, basename="exam-subjects")
 router.register("exam-schedules", ExamScheduleViewSet, basename="exam-schedules")
 router.register("admit-cards", AdmitCardViewSet, basename="admit-cards")
+router.register("marks", MarksViewSet, basename="marks")
 
 urlpatterns = [
+    path(
+        "marks:bulk-entry",
+        MarksViewSet.as_view({"post": "bulk_entry"}),
+        name="marks-bulk-entry",
+    ),
+    path(
+        "marks-imports",
+        MarksImportViewSet.as_view({"post": "create"}),
+        name="marks-imports",
+    ),
+    path(
+        "exam-subjects/<uuid:pk>:lock-marks",
+        MarksViewSet.as_view({"post": "lock"}),
+        name="exam-subjects-lock-marks",
+    ),
+    path(
+        "exam-subjects/<uuid:pk>:unlock-marks",
+        MarksViewSet.as_view({"post": "unlock"}),
+        name="exam-subjects-unlock-marks",
+    ),
+    path(
+        "exams/<uuid:pk>/marks-progress",
+        MarksViewSet.as_view({"get": "progress"}),
+        name="exams-marks-progress",
+    ),
     path(
         "exams/<uuid:pk>:publish-schedule",
         ExamScheduleViewSet.as_view({"post": "publish"}),

@@ -42,6 +42,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -52,6 +53,7 @@ from apps.examinations.filters import (
     ExamScheduleFilterSet,
     ExamSubjectFilterSet,
     GradingScaleFilterSet,
+    MarksFilterSet,
 )
 from apps.examinations.models import (
     AdmitCard,
@@ -60,15 +62,19 @@ from apps.examinations.models import (
     ExamSubject,
     GradeBand,
     GradingScale,
+    Marks,
 )
 from apps.examinations.serializers import (
     AdmitCardRevokeSerializer,
     AdmitCardSerializer,
+    BulkMarksEntrySerializer,
     ExamScheduleSerializer,
     ExamSerializer,
     ExamSubjectSerializer,
     GradeBandSerializer,
     GradingScaleSerializer,
+    MarksImportRequestSerializer,
+    MarksSerializer,
 )
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
@@ -520,3 +526,180 @@ class AdmitCardViewSet(
             after={"status": card.status, "revoked_reason": card.revoked_reason},
         )
         return ActionResponse.ok(AdmitCardSerializer(card).data, message="Admit card revoked.")
+
+
+class MarksViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/marks` — §5.4's entry, read here and written through `:bulk-entry`.
+
+    **Staff-only, every action.** §4 grants no portal role a marks key: a
+    student sees *results*, and §5.6 gates those behind publishing. So this
+    viewset keeps `STAFF_PERMISSIONS` as a class attribute rather than
+    inverting a readable set — there is nothing portal-readable to carve out,
+    and pretending otherwise would suggest a portal path that does not exist.
+
+    **No create or update.** §16 declares `GET /marks` plus `:bulk-entry`, and a
+    per-row create would bypass the four checks the grid path applies together:
+    the entry window, the subject lock, the teacher's allocation, and the
+    eligible roll.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = Marks.objects
+    serializer_class = MarksSerializer
+    filterset_class = MarksFilterSet
+    ordering_fields = ["created_at"]
+    # `own` and `assigned` are both joins, not columns here — the model hooks
+    # own them and take precedence over these fallbacks, which are left None so
+    # a mistaken single-column reading cannot silently apply instead.
+    scope_own_field = None
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "exams.marks.create"
+    required_permission_map = {
+        "bulk_entry": "exams.marks.create",
+        "lock": "exams.marks.lock",
+        "unlock": "exams.marks.lock",
+    }
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("student", "exam_subject__subject")
+
+    @extend_schema(request=BulkMarksEntrySerializer, responses={200: None})
+    def bulk_entry(self, request: Request):
+        """`POST /marks:bulk-entry` — one exam-subject's grid (§16).
+
+        Accepts `Idempotency-Key`: §16 calls this an idempotent grid submit, and
+        a teacher on a school Wi-Fi genuinely does re-send. The service is an
+        upsert either way, so the header buys a replayed *response* rather than
+        correctness — which matters because the response carries the counts the
+        UI shows.
+        """
+        serializer = BulkMarksEntrySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        exam_subject = serializer.validated_data["exam_subject"]
+
+        def execute():
+            outcome = services.bulk_enter_marks(
+                exam_subject=exam_subject,
+                entries=serializer.validated_data["entries"],
+                user=request.user,
+                actor_id=request.user.pk,
+            )
+            record_audit(request, "create", exam_subject, after=outcome)
+            return ActionResponse.ok(
+                None,
+                message=(f"{outcome['entered']} entered, {outcome['updated']} updated."),
+            )
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="marks:bulk-entry",
+            execute=execute,
+        )
+
+    @extend_schema(request=None, responses={200: None})
+    def lock(self, request: Request, pk: str | None = None):
+        """`POST /exam-subjects/{id}:lock-marks` (§16)."""
+        exam_subject = get_object_or_404(ExamSubject.objects.alive(), pk=pk)
+        outcome = services.lock_marks(exam_subject=exam_subject, actor_id=request.user.pk)
+        record_audit(request, "lock", exam_subject, after=outcome)
+        return ActionResponse.ok(
+            outcome,
+            message=(
+                "Marks were already locked."
+                if outcome["already_locked"]
+                else f"{outcome['locked_rows']} row(s) locked."
+            ),
+        )
+
+    @extend_schema(request=None, responses={200: None})
+    def unlock(self, request: Request, pk: str | None = None):
+        """`POST /exam-subjects/{id}:unlock-marks` (§16).
+
+        Behind `exams.marks.lock`, and audited — §6 asks for both, because
+        reopening a window is how a settled mark changes.
+        """
+        exam_subject = get_object_or_404(ExamSubject.objects.alive(), pk=pk)
+        outcome = services.unlock_marks(exam_subject=exam_subject, actor_id=request.user.pk)
+        record_audit(request, "update", exam_subject, after=outcome)
+        return ActionResponse.ok(
+            outcome,
+            message=(
+                "Marks were not locked."
+                if outcome["already_unlocked"]
+                else f"{outcome['unlocked_rows']} row(s) reopened."
+            ),
+        )
+
+    @extend_schema(responses={200: None})
+    def progress(self, request: Request, pk: str | None = None):
+        """`GET /exams/{id}/marks-progress` — §6's missing-entries dashboard.
+
+        A plain `GET` rather than a report `kind`, because it is operational
+        rather than analytical: an exam clerk chasing outstanding entries wants
+        it beside the exam, and §13 lists "marks-entry status" as its own row.
+        """
+        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        return ActionResponse.ok(services.marks_entry_progress(exam=exam))
+
+
+class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
+    """`POST /marks-imports` — §9's marks sheet, as 202 + a job.
+
+    A pure job-launcher: no queryset, no record scope. The uploaded file is
+    handed to the task base64-encoded in the job payload, matching
+    `attendance`'s importer — a file small enough to be a marks sheet is small
+    enough to carry, and staging it in object storage first would add a failure
+    mode between the upload and the parse.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    required_feature = FEATURE
+    required_permission = "exams.marks.import"
+    parser_classes = [MultiPartParser]
+    serializer_class = MarksImportRequestSerializer
+
+    @extend_schema(request=MarksImportRequestSerializer, responses={202: None})
+    def create(self, request: Request):
+        import base64
+
+        serializer = MarksImportRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        exam_subject = serializer.validated_data["exam_subject"]
+        upload = serializer.validated_data["file"]
+
+        # The window and lock are checked *here*, before a job is created, so a
+        # clerk importing into a locked subject is told immediately rather than
+        # by polling a job that fails.
+        services.assert_exam_accepts_marks(exam_subject.exam)
+        services.assert_marks_window_open(exam_subject)
+
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="exams.marks-import",
+            payload={
+                "exam_subject_id": str(exam_subject.pk),
+                "filename": upload.name,
+                "content_base64": base64.b64encode(upload.read()).decode(),
+                "requested_by": str(request.user.pk),
+            },
+            actor_id=request.user.pk,
+        )
+        transaction.on_commit(
+            lambda: tasks.import_marks_task.delay(
+                tenant_id=str(request.tenant.pk),
+                job_id=str(job.pk),
+                actor_id=str(request.user.pk),
+            )
+        )
+        record_audit(request, "import", exam_subject, after={"job_id": str(job.pk)})
+        return ActionResponse.accepted(
+            str(job.pk), message="Marks sheet queued. Poll the job for the row-level report."
+        )

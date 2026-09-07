@@ -19,7 +19,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | 0 — Foundation | tenancy, auth/RBAC, [`school-organization`](03-modules/school-organization.md) | Done in substance — tenancy/RBAC/audit/API plumbing in `apps/api/core/`, `school_organization` Django app shipped and merged |
 | 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **Both full-stack complete** — `student-management` (PRs 1-4) and `staff-management` (this PR), see the per-module matrix below |
 | 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **Backend complete.** `academics` and `timetable` shipped; `attendance` shipped as three stacked PRs (marking → leave → staff/reports). Dashboard screens for the tier are still outstanding. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
-| 3 — High-stakes | [`examinations`](03-modules/examinations.md), [`fees-finance`](03-modules/fees-finance.md) | **In progress.** `examinations` is shipping as five stacked PRs (setup → scheduling/admit cards → marks → results/report cards → reports/question banks); PRs A and B have landed. `fees-finance` is **blocked on its own spec** — it has a vouchers/receipts spec-only PR and no core module doc, so there is nothing to build from |
+| 3 — High-stakes | [`examinations`](03-modules/examinations.md), [`fees-finance`](03-modules/fees-finance.md) | **In progress.** `examinations` is shipping as five stacked PRs (setup → scheduling/admit cards → marks → results/report cards → reports/question banks); PRs A, B and C have landed. `fees-finance` is **blocked on its own spec** — it has a vouchers/receipts spec-only PR and no core module doc, so there is nothing to build from |
 | 4–7 | communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started |
 
 ## Per-module implementation matrix
@@ -33,7 +33,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | timetable | done (rooms/periods CRUD, draft slot grid with `meta.conflicts` on every edit, `:validate` / `:publish` with supersede-by-end-dating, `GET /timetables/my` for teacher/student/guardian, substitutions + `:approve`/`:reject`) | done (week grid editor, conflict panel, publish action, My timetable, substitutions queue) | live-lane API journeys + one build-and-publish browser CUJ | done |
 | fees-finance | — | — | — | partial (vouchers/receipts/birthday cards spec'd, no core module doc build-out) |
 | attendance | **done** (register `:bulk-mark` with idempotent re-submission, the §5.5 lock window, corrections, guardian alerts, nightly lock sweep; the five leave tables, §7.2's escalating chain, auto-marking `on_leave`; staff attendance with `:check-out`, §13's six reports with a 202 export lane, and the absent-teacher cover feed into timetable) | — (backend-only; the dashboard agent owns screens) | live-lane API journeys for marking (mark → re-submit → read back, rejected row, future date) leave (submit → approve → auto-mark, self-approval refused, cancel, overlap) and staff/reports (record a day, check out, run a report, export as a job) | done |
-| examinations | **in progress** (PR A: grading scales with validated bands, exams, per-class subject configuration. PR B: sittings with a date/time clash engine, schedule publish, the idempotent admit-card batch and its PDF job) | — (backend-only; the dashboard agent owns screens) | — (arrives with the marks and results PRs, where there is a journey worth driving) | done |
+| examinations | **in progress** (PR A: grading scales with validated bands, exams, per-class subject configuration. PR B: sittings with a date/time clash engine, schedule publish, the idempotent admit-card batch and its PDF job. PR C: the marks grid with its four entry gates, the lock/unlock lifecycle, the sheet import and §6's missing-entries dashboard) | — (backend-only; the dashboard agent owns screens) | — (arrives with the marks and results PRs, where there is a journey worth driving) | done |
 | everything else (12 modules) | — | — | — | done (spec exists; nothing implemented) |
 
 ---
@@ -315,6 +315,21 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   **No RBAC registry change:** result processing takes the standard `create`
   verb rather than a new `process` one, since processing is precisely what
   creates `results` rows.
+- **`examinations` has two write paths for marks that behave oppositely, and
+  the difference is the design.** `:bulk-entry` rejects the whole grid on one
+  bad cell and reports each through `error.meta.rows`; the sheet import commits
+  row by row and returns a per-row error report. A grid is one act of judgement
+  over one class, so a teacher who believes they saved forty marks and saved
+  thirty-nine is worse off than one told which cell is wrong. An import is a
+  file a school is migrating, and §6 asks to "re-import failed rows only",
+  which a whole-file rejection cannot serve. **The generalisation: partial
+  commit is right for a migration and wrong for a judgement.**
+- **Unlike `attendance`'s import, examinations' applies the same rules as its
+  grid** — window, lock, maximum. Worth recording because the two importers sit
+  in adjacent modules and a reader who has met one will expect the other's
+  exemptions. Attendance's rows are historical *by construction*, so its
+  calendar and lock gates would reject the whole file; examinations' rows are
+  this exam's marks arriving by a different door.
 - **PR #51's review found the #42 privilege-escalation class again, in the
   module whose own docstring warns about it.** `:publish-schedule` was missing
   from `ExamScheduleViewSet.required_permission_map`, so it inherited

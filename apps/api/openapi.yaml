@@ -2023,6 +2023,46 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/exam-subjects/{id}:lock-marks:
+    post:
+      operationId: exam_subjects_:lock_marks_create
+      description: '`POST /exam-subjects/{id}:lock-marks` (§16).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exam-subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/exam-subjects/{id}:unlock-marks:
+    post:
+      operationId: exam_subjects_:unlock_marks_create
+      description: |-
+        `POST /exam-subjects/{id}:unlock-marks` (§16).
+
+        Behind `exams.marks.lock`, and audited — §6 asks for both, because
+        reopening a window is how a settled mark changes.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exam-subjects
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/exams:
     get:
       operationId: exams_list
@@ -2270,6 +2310,29 @@ paths:
       - jwtAuth: []
       responses:
         '204':
+          description: No response body
+  /api/v1/exams/{id}/marks-progress:
+    get:
+      operationId: exams_marks_progress_retrieve
+      description: |-
+        `GET /exams/{id}/marks-progress` — §6's missing-entries dashboard.
+
+        A plain `GET` rather than a report `kind`, because it is operational
+        rather than analytical: an exam clerk chasing outstanding entries wants
+        it beside the exam, and §13 lists "marks-entry status" as its own row.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
           description: No response body
   /api/v1/exams/{id}:issue-admit-cards:
     post:
@@ -3931,6 +3994,182 @@ paths:
               schema:
                 $ref: '#/components/schemas/LeaveType'
           description: ''
+  /api/v1/marks:
+    get:
+      operationId: marks_list
+      description: |-
+        `/marks` — §5.4's entry, read here and written through `:bulk-entry`.
+
+        **Staff-only, every action.** §4 grants no portal role a marks key: a
+        student sees *results*, and §5.6 gates those behind publishing. So this
+        viewset keeps `STAFF_PERMISSIONS` as a class attribute rather than
+        inverting a readable set — there is nothing portal-readable to carve out,
+        and pretending otherwise would suggest a portal path that does not exist.
+
+        **No create or update.** §16 declares `GET /marks` plus `:bulk-entry`, and a
+        per-row create would bypass the four checks the grid path applies together:
+        the entry window, the subject lock, the teacher's allocation, and the
+        eligible roll.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: exam_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: exam_subject_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: is_absent
+        schema:
+          type: boolean
+      - in: query
+        name: is_exempt
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - draft
+          - locked
+          - submitted
+        description: |-
+          * `draft` - Draft
+          * `submitted` - Submitted
+          * `locked` - Locked
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - marks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMarksList'
+          description: ''
+  /api/v1/marks-imports:
+    post:
+      operationId: marks_imports_create
+      description: |-
+        `POST /marks-imports` — §9's marks sheet, as 202 + a job.
+
+        A pure job-launcher: no queryset, no record scope. The uploaded file is
+        handed to the task base64-encoded in the job payload, matching
+        `attendance`'s importer — a file small enough to be a marks sheet is small
+        enough to carry, and staging it in object storage first would add a failure
+        mode between the upload and the parse.
+      tags:
+      - marks-imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MarksImportRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
+  /api/v1/marks/{id}:
+    get:
+      operationId: marks_retrieve
+      description: |-
+        `/marks` — §5.4's entry, read here and written through `:bulk-entry`.
+
+        **Staff-only, every action.** §4 grants no portal role a marks key: a
+        student sees *results*, and §5.6 gates those behind publishing. So this
+        viewset keeps `STAFF_PERMISSIONS` as a class attribute rather than
+        inverting a readable set — there is nothing portal-readable to carve out,
+        and pretending otherwise would suggest a portal path that does not exist.
+
+        **No create or update.** §16 declares `GET /marks` plus `:bulk-entry`, and a
+        per-row create would bypass the four checks the grid path applies together:
+        the entry window, the subject lock, the teacher's allocation, and the
+        eligible roll.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this marks.
+        required: true
+      tags:
+      - marks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Marks'
+          description: ''
+  /api/v1/marks:bulk-entry:
+    post:
+      operationId: marks:bulk_entry_create
+      description: |-
+        `POST /marks:bulk-entry` — one exam-subject's grid (§16).
+
+        Accepts `Idempotency-Key`: §16 calls this an idempotent grid submit, and
+        a teacher on a school Wi-Fi genuinely does re-send. The service is an
+        upsert either way, so the header buys a replayed *response* rather than
+        correctness — which matters because the response carries the counts the
+        UI shows.
+      tags:
+      - marks:bulk-entry
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkMarksEntry'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BulkMarksEntry'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BulkMarksEntry'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/periods:
     get:
       operationId: periods_list
@@ -8629,6 +8868,21 @@ components:
       required:
       - status
       - student_id
+    BulkMarksEntry:
+      type: object
+      description: The body of `POST /marks:bulk-entry` — one exam-subject's whole
+        grid.
+      properties:
+        exam_subject_id:
+          type: string
+          format: uuid
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarksEntry'
+      required:
+      - entries
+      - exam_subject_id
     Campus:
       type: object
       properties:
@@ -10120,6 +10374,152 @@ components:
       required:
       - identifier
       - password
+    Marks:
+      type: object
+      description: |-
+        `marks` — read shape for `GET /marks` (§16).
+
+        Writes go through `:bulk-entry`, not through this serializer: §16 declares a
+        `GET` and one colon-action, and a per-row create would bypass the window,
+        the lock, the allocation check and the eligible-roll check that the grid
+        path applies together.
+
+        `status` is readable but not settable here for the same reason — `locked` is
+        `:lock-marks`'s to set, and a client that could write it would close its own
+        window.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_subject_id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        theory_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          description: Null when the student was absent or exempt.
+        practical_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        is_absent:
+          type: boolean
+          readOnly: true
+          description: Mutually exclusive with a mark (§11).
+        is_exempt:
+          type: boolean
+          readOnly: true
+          description: Excluded from the aggregate rather than scored zero.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MarksStatusEnum'
+          readOnly: true
+        remarks:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - exam_subject_id
+      - id
+      - is_absent
+      - is_exempt
+      - practical_marks
+      - remarks
+      - status
+      - student_id
+      - theory_marks
+      - updated_at
+    MarksEntry:
+      type: object
+      description: |-
+        One cell of the grid `:bulk-entry` submits.
+
+        `student_id` is a plain `UUIDField`, not a `PrimaryKeyRelatedField`: the
+        service checks eligibility against the exam-subject's own roll and reports
+        an ineligible student through `error.meta.rows` with its index, which is
+        what a grid needs in order to highlight the cell. A related field would
+        turn the first bad id into a flat 400 naming no row.
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        theory_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        practical_marks:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        is_absent:
+          type: boolean
+          default: false
+        is_exempt:
+          type: boolean
+          default: false
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MarksEntryStatusEnum'
+          default: draft
+        remarks:
+          type: string
+          nullable: true
+          maxLength: 255
+      required:
+      - student_id
+    MarksEntryStatusEnum:
+      enum:
+      - draft
+      - submitted
+      type: string
+      description: |-
+        * `draft` - draft
+        * `submitted` - submitted
+    MarksImportRequest:
+      type: object
+      description: The body of `POST /marks-imports` — a multipart CSV or .xlsx upload.
+      properties:
+        exam_subject_id:
+          type: string
+          format: uuid
+        file:
+          type: string
+          format: uri
+      required:
+      - exam_subject_id
+      - file
+    MarksStatusEnum:
+      enum:
+      - draft
+      - submitted
+      - locked
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `submitted` - Submitted
+        * `locked` - Locked
     PaginatedAcademicSessionList:
       type: object
       properties:
@@ -10505,6 +10905,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LeaveType'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedMarksList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Marks'
         meta:
           type: object
           properties:

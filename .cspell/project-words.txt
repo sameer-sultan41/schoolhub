@@ -246,6 +246,7 @@ unconfigured
 undoable
 ungated
 unindexed
+unioned
 unmarkable
 unmetered
 unmoderated

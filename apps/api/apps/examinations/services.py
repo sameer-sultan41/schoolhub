@@ -14,8 +14,10 @@ that ship their tables.
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.examinations import conflicts, grading
 from apps.examinations.models import (
@@ -28,6 +30,8 @@ from apps.examinations.models import (
     ExamSubject,
     GradeBand,
     GradingScale,
+    Marks,
+    MarksStatus,
     ScheduleStatus,
 )
 from apps.school_organization.models import (
@@ -39,6 +43,7 @@ from apps.school_organization.models import (
     Term,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.rbac.models import RecordScope
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
 # structure changed, the scale swapped — while it is still in one of these
@@ -554,3 +559,577 @@ def sittings_by_student(*, exam: Exam, students: list) -> dict:
             # lists concatenated, which is not itself sorted.
             answers[student_id] = sorted(rows, key=lambda row: (row.exam_date, row.start_time))
     return answers
+
+
+# --- §5.4 marks entry ------------------------------------------------------
+
+# The statuses a caller may set through `:bulk-entry`. `locked` is not among
+# them: locking is `:lock-marks`, which is permission-gated and audited, and a
+# grid submit that could set it would let a teacher close their own window.
+ENTRY_SETTABLE_STATUSES = (MarksStatus.DRAFT, MarksStatus.SUBMITTED)
+
+# The exam statuses during which marks may be written at all. §7.1 sends a
+# rejected exam back to `marks_entry`, and that transition is what re-opens
+# entry — not an edit that slips past the gate.
+MARKS_WRITABLE_EXAM_STATUSES = frozenset(
+    {ExamStatus.SCHEDULED, ExamStatus.ONGOING, ExamStatus.MARKS_ENTRY}
+)
+
+MARKS_WRITE_FIELDS = (
+    "theory_marks",
+    "practical_marks",
+    "is_absent",
+    "is_exempt",
+    "status",
+    "remarks",
+    "entered_by",
+    "updated_by",
+)
+
+
+def assert_marks_window_open(exam_subject: ExamSubject) -> None:
+    """§6's entry window and §5.4's lock, as one gate.
+
+    Three refusals, and the messages differ because the remedies differ: a
+    window that has not opened is a date to wait for, a closed one is a date to
+    extend, and a locked subject needs `:unlock-marks` and the key that
+    guards it. A single "entry is closed" would leave a teacher guessing which.
+
+    An **unset** window means always open. A school that has not configured
+    entry dates has not asked to be gated, and refusing on a null would make
+    the window mandatory — which §6 does not say and no migration set.
+    """
+    if exam_subject.marks_locked_at is not None:
+        raise Conflict(
+            "Marks for this subject are locked. They can only be changed after an unlock, "
+            "which is audited."
+        )
+
+    now = timezone.now()
+    if exam_subject.marks_entry_opens_at and now < exam_subject.marks_entry_opens_at:
+        opens = exam_subject.marks_entry_opens_at
+        raise Conflict(f"Marks entry for this subject opens {opens:%Y-%m-%d %H:%M}.")
+    if exam_subject.marks_entry_closes_at and now > exam_subject.marks_entry_closes_at:
+        raise Conflict(
+            f"Marks entry for this subject closed "
+            f"{exam_subject.marks_entry_closes_at:%Y-%m-%d %H:%M}. Ask for the window to be "
+            "reopened."
+        )
+
+
+def assert_exam_accepts_marks(exam: Exam) -> None:
+    """§7.1 — marks may not be written once results are approved or published.
+
+    The one-way gate the whole result cycle depends on. Editing a mark after
+    approval would leave a published result that no longer follows from its
+    inputs, and nothing in the data would record that it happened. §7.1's
+    "changes requested" path sends the exam back to `marks_entry`, and *that*
+    transition is what re-opens entry.
+    """
+    if exam.status not in MARKS_WRITABLE_EXAM_STATUSES:
+        raise Conflict(
+            f"This exam is {exam.get_status_display().lower()}, so its marks are closed. "
+            "Send the results back for correction to reopen entry."
+        )
+
+
+def assert_marks_within_maximum(
+    *, exam_subject: ExamSubject, theory_marks, practical_marks
+) -> None:
+    """§11 — `0 <= obtained <= max_marks` per component.
+
+    The upper half of the rule, which no CHECK can hold: it compares this row
+    against a column on `exam_subjects`. The message names the maximum, because
+    "out of range" leaves a teacher with a grid of forty cells and no idea which
+    bound they crossed.
+    """
+    if theory_marks is not None and theory_marks > exam_subject.max_marks:
+        raise DomainRuleViolation(
+            {
+                "theory_marks": (
+                    f"{theory_marks} is above this subject's maximum of {exam_subject.max_marks}."
+                )
+            }
+        )
+    if practical_marks is None:
+        return
+    if not exam_subject.has_practical:
+        raise DomainRuleViolation({"practical_marks": "This subject has no practical component."})
+    if (
+        exam_subject.practical_max_marks is not None
+        and practical_marks > exam_subject.practical_max_marks
+    ):
+        raise DomainRuleViolation(
+            {
+                "practical_marks": (
+                    f"{practical_marks} is above this subject's practical maximum of "
+                    f"{exam_subject.practical_max_marks}."
+                )
+            }
+        )
+
+
+def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
+    """§4 — a teacher may only enter marks for a class-subject they are on.
+
+    Resolved through `academics.TeacherSubjectAllocation`, the table academics
+    built for exactly this. An `all`- or `campus`-scoped caller returns early:
+    many `exam_staff` and admin users have no `Staff` row at all, so requiring
+    an allocation would break the legitimate case — the same early return
+    `attendance.assert_marker_may_mark_section` makes, and the same reason the
+    principal check has to sit in the *view* rather than inside here.
+    """
+    from apps.academics.models import TeacherSubjectAllocation
+    from apps.staff_management.models import EmploymentStatus, Staff
+    from core.rbac.permissions import user_scopes
+
+    scopes = user_scopes(user).get("exams.marks.create") or []
+    if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
+        return
+
+    staff_ids = list(
+        Staff.objects.alive()
+        .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+        .values_list("pk", flat=True)
+    )
+    if not staff_ids:
+        raise DomainRuleViolation(
+            {
+                "exam_subject_id": (
+                    "Marks entry is scoped to the class-subjects you teach, and this account "
+                    "has no active staff record."
+                )
+            }
+        )
+
+    teaches = (
+        TeacherSubjectAllocation.objects.alive()
+        .filter(
+            staff_id__in=staff_ids,
+            subject_id=exam_subject.subject_id,
+            section__school_class_id=exam_subject.school_class_id,
+            effective_to__isnull=True,
+        )
+        .exists()
+    )
+    if not teaches:
+        raise DomainRuleViolation(
+            {
+                "exam_subject_id": (
+                    "You are not currently allocated to teach this subject to this class, so "
+                    "you cannot enter its marks."
+                )
+            }
+        )
+
+
+def _entry_students(*, exam_subject: ExamSubject) -> dict:
+    """The students eligible for this exam-subject's marks, by id.
+
+    Eligibility is an **active enrollment in a section of the exam-subject's
+    class**, in the exam's session. A student who has withdrawn since the exam
+    was configured is not marked, and a student from another year group is not
+    silently accepted because their id was posted.
+    """
+    from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
+
+    student_ids = (
+        StudentEnrollment.objects.alive()
+        .filter(
+            academic_session_id=exam_subject.exam.academic_session_id,
+            school_class_id=exam_subject.school_class_id,
+            status=EnrollmentStatus.ACTIVE,
+        )
+        .values_list("student_id", flat=True)
+    )
+    return {
+        student.pk: student for student in Student.objects.alive().filter(pk__in=list(student_ids))
+    }
+
+
+@transaction.atomic
+def bulk_enter_marks(
+    *, exam_subject: ExamSubject, entries: list[dict], user, actor_id: uuid.UUID
+) -> dict:
+    """§16's `POST /marks:bulk-entry` — one exam-subject's grid.
+
+    **Upsert, not insert.** §16 calls this an "idempotent grid submit", and a
+    teacher's browser genuinely does re-send: `bulk_create` would hit
+    `marks_one_per_student_per_exam_subject` on the second attempt and fail the
+    whole grid.
+
+    **A rejected row rejects the whole submission**, reported through
+    `error.meta.rows`. That is the opposite of `attendance`'s per-row *import*
+    and the same as its `:bulk-mark`, deliberately: a grid is one act of
+    judgement over one class, and a teacher who believes they saved forty marks
+    and actually saved thirty-nine is worse off than one who is told which cell
+    is wrong. Partial commit is never the outcome.
+
+    `select_for_update` on the rows that already exist: two devices submitting
+    the same grid within milliseconds both read "no row" otherwise, and the
+    unique index turns the loser into a 500 rather than an update.
+    """
+    assert_exam_accepts_marks(exam_subject.exam)
+    assert_marks_window_open(exam_subject)
+    assert_marker_may_enter(user=user, exam_subject=exam_subject)
+
+    eligible = _entry_students(exam_subject=exam_subject)
+    rejected: list[dict] = []
+    accepted: list[dict] = []
+
+    for index, entry in enumerate(entries):
+        student_id = entry["student_id"]
+        if student_id not in eligible:
+            rejected.append(
+                {
+                    "index": index,
+                    "student_id": str(student_id),
+                    "field": "student_id",
+                    "issue": (
+                        "This student has no active enrolment in a class this exam-subject covers."
+                    ),
+                }
+            )
+            continue
+        try:
+            assert_marks_within_maximum(
+                exam_subject=exam_subject,
+                theory_marks=entry.get("theory_marks"),
+                practical_marks=entry.get("practical_marks"),
+            )
+        except DomainRuleViolation as exc:
+            field, issue = next(iter(exc.detail.items()))
+            rejected.append(
+                {
+                    "index": index,
+                    "student_id": str(student_id),
+                    "field": field,
+                    "issue": str(issue),
+                }
+            )
+            continue
+        accepted.append(entry)
+
+    if rejected:
+        raise DomainRuleViolation(
+            f"{len(rejected)} of {len(entries)} rows were rejected; nothing was saved.",
+            meta={"rows": rejected},
+        )
+
+    existing = {
+        row.student_id: row
+        for row in Marks.objects.alive()
+        .select_for_update()
+        .filter(exam_subject=exam_subject, student_id__in=[e["student_id"] for e in accepted])
+    }
+
+    created = 0
+    updated = 0
+    for entry in accepted:
+        row = existing.get(entry["student_id"])
+        values = {
+            "theory_marks": entry.get("theory_marks"),
+            "practical_marks": entry.get("practical_marks"),
+            "is_absent": entry.get("is_absent", False),
+            "is_exempt": entry.get("is_exempt", False),
+            "status": entry.get("status", MarksStatus.DRAFT),
+            "remarks": entry.get("remarks"),
+            "entered_by": actor_id,
+            "updated_by": actor_id,
+        }
+        if row is None:
+            Marks.objects.create(
+                tenant=exam_subject.tenant,
+                exam_subject=exam_subject,
+                student_id=entry["student_id"],
+                created_by=actor_id,
+                **values,
+            )
+            created += 1
+        else:
+            for field, value in values.items():
+                setattr(row, field, value)
+            row.save(update_fields=[*MARKS_WRITE_FIELDS, "updated_at"])
+            updated += 1
+
+    # Entering marks is what moves an exam into `marks_entry`. Done here rather
+    # than by a separate call so the status cannot lag behind the data — a
+    # school looking at a `scheduled` exam that already holds marks has no way
+    # to tell which is true.
+    if exam_subject.exam.status in (ExamStatus.SCHEDULED, ExamStatus.ONGOING):
+        exam_subject.exam.status = ExamStatus.MARKS_ENTRY
+        exam_subject.exam.updated_by = actor_id
+        exam_subject.exam.save(update_fields=["status", "updated_by", "updated_at"])
+
+    return {"entered": created, "updated": updated, "rows": len(accepted)}
+
+
+def marks_entry_progress(*, exam: Exam) -> list[dict]:
+    """§13's marks-entry status report, and §6's missing-entries dashboard.
+
+    Two queries flat, whatever the size of the exam: one for the expected roll
+    per exam-subject and one for what has been entered. The obvious shape — for
+    each subject, count its marks — is a query per subject, and an exam covers
+    every subject in every year group.
+    """
+    from django.db.models import Count, Q
+
+    from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+    subjects = list(
+        ExamSubject.objects.alive()
+        .filter(exam=exam)
+        .select_related("school_class", "subject")
+        .annotate(
+            entered=Count("marks", filter=Q(marks__deleted_at__isnull=True)),
+            submitted=Count(
+                "marks",
+                filter=Q(
+                    marks__deleted_at__isnull=True,
+                    marks__status__in=[MarksStatus.SUBMITTED, MarksStatus.LOCKED],
+                ),
+            ),
+        )
+    )
+
+    expected_by_class: dict = {}
+    counts = (
+        StudentEnrollment.objects.alive()
+        .filter(
+            academic_session_id=exam.academic_session_id,
+            status=EnrollmentStatus.ACTIVE,
+            school_class_id__in=[subject.school_class_id for subject in subjects],
+        )
+        .values("school_class_id")
+        .annotate(total=Count("student_id", distinct=True))
+    )
+    for row in counts:
+        expected_by_class[row["school_class_id"]] = row["total"]
+
+    return [
+        {
+            "exam_subject_id": subject.pk,
+            # `class_id` and `subject_id` are carried, not only their names, so
+            # a caller acting on a row — the reminder sweep resolving which
+            # teachers to notify — does not have to re-fetch the exam-subject
+            # per row. That re-fetch is the N+1 shape review caught twice in
+            # PR B, and the fix belongs here rather than at each call site.
+            "class_id": subject.school_class_id,
+            "subject_id": subject.subject_id,
+            "class_name": subject.school_class.name,
+            "subject_name": subject.subject.name,
+            "expected": expected_by_class.get(subject.school_class_id, 0),
+            "entered": subject.entered,
+            "submitted": subject.submitted,
+            "is_locked": subject.marks_locked_at is not None,
+            "closes_at": subject.marks_entry_closes_at,
+        }
+        for subject in subjects
+    ]
+
+
+@transaction.atomic
+def lock_marks(*, exam_subject: ExamSubject, actor_id: uuid.UUID) -> dict:
+    """§16's `:lock-marks` — close entry and stamp every row.
+
+    Both halves matter. `marks_locked_at` closes the *window*, and stamping the
+    rows `locked` is what result processing reads — a row still `draft` when its
+    subject locked was never claimed as finished, and processing it silently
+    would grade a student on a half-entered grid.
+
+    Idempotent: locking an already-locked subject is a retry, not a conflict.
+    """
+    if exam_subject.marks_locked_at is not None:
+        return {"locked_rows": 0, "already_locked": True}
+
+    locked = (
+        Marks.objects.alive()
+        .filter(exam_subject=exam_subject)
+        .update(status=MarksStatus.LOCKED, updated_by=actor_id, updated_at=timezone.now())
+    )
+    exam_subject.marks_locked_at = timezone.now()
+    exam_subject.updated_by = actor_id
+    exam_subject.save(update_fields=["marks_locked_at", "updated_by", "updated_at"])
+    return {"locked_rows": locked, "already_locked": False}
+
+
+@transaction.atomic
+def unlock_marks(*, exam_subject: ExamSubject, actor_id: uuid.UUID) -> dict:
+    """§6's re-open — "requires `exams.marks.lock` and is audited".
+
+    Rows return to `submitted`, not `draft`: they *were* submitted, and sending
+    them back to draft would lose the distinction the missing-entries dashboard
+    depends on and make every re-opened subject look unfinished.
+
+    Refused once results are approved. Unlocking then would let a mark change
+    under a result a school has already given to a parent; §7.1's route for
+    that is to send the results back, which returns the exam to `marks_entry`.
+    """
+    assert_exam_accepts_marks(exam_subject.exam)
+
+    if exam_subject.marks_locked_at is None:
+        return {"unlocked_rows": 0, "already_unlocked": True}
+
+    unlocked = (
+        Marks.objects.alive()
+        .filter(exam_subject=exam_subject, status=MarksStatus.LOCKED)
+        .update(status=MarksStatus.SUBMITTED, updated_by=actor_id, updated_at=timezone.now())
+    )
+    exam_subject.marks_locked_at = None
+    exam_subject.updated_by = actor_id
+    exam_subject.save(update_fields=["marks_locked_at", "updated_by", "updated_at"])
+    return {"unlocked_rows": unlocked, "already_unlocked": False}
+
+
+# --- §9's marks import ----------------------------------------------------
+
+# The template headers. Exact names, no column-mapping UI — the same contract
+# `student_management`'s importer and `attendance`'s set, and for the same
+# reason: a mapping screen is a feature, and inventing one here would put an
+# undocumented UI between a school and its data.
+MARKS_IMPORT_COLUMNS = (
+    "admission_number",
+    "theory_marks",
+    "practical_marks",
+    "is_absent",
+    "is_exempt",
+    "remarks",
+)
+REQUIRED_MARKS_IMPORT_COLUMNS = ("admission_number",)
+
+_TRUTHY = frozenset({"1", "true", "yes", "y", "t"})
+
+
+def parse_marks_import(*, filename: str, data: bytes) -> list[dict[str, str]]:
+    """Parse a CSV or .xlsx marks sheet into row dicts.
+
+    Delegates to `student_management`'s parser rather than growing a third copy:
+    it already handles the BOM Excel's "CSV UTF-8" adds and the
+    read-only/data-only workbook flags, both of which are silently wrong in a
+    reimplementation. `attendance.parse_attendance_import` delegates to the
+    same one.
+    """
+    from apps.student_management.services import parse_import_rows
+
+    return parse_import_rows(filename=filename, data=data)
+
+
+def _import_decimal(raw: str, field: str) -> tuple[object, str | None]:
+    """A mark from a spreadsheet cell. Returns `(value, error)`.
+
+    Blank is None, not zero — the distinction the whole import turns on. A
+    school leaves a cell empty for a student who did not sit, and reading that
+    as zero would fail them rather than mark them absent.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return None, None
+    try:
+        return Decimal(text), None
+    except ArithmeticError, ValueError:
+        return None, f"{field}: {text!r} is not a number."
+
+
+def import_marks_row(
+    *,
+    row: dict[str, str],
+    row_number: int,
+    exam_subject: ExamSubject,
+    students_by_number: dict,
+    actor_id: uuid.UUID,
+) -> dict[str, str] | None:
+    """Write one imported marks row. Returns None, or a row-level error.
+
+    **Per-row, unlike `bulk_enter_marks`, and that difference is deliberate.**
+    A grid submit is one act of judgement over one class, so a bad cell rejects
+    the whole thing. An import is a file of hundreds a school is migrating or
+    transcribing, and §6's "re-import failed rows only" needs a per-row verdict
+    — which a whole-file rejection cannot give.
+
+    **Unlike `attendance`'s import, this path applies the *same* rules the grid
+    does** — window, lock, maximum. The contrast is worth stating because a
+    reader who has met that importer will expect the exemptions: attendance's
+    rows are historical *by construction*, so its calendar and lock gates would
+    reject the entire file. These rows are this exam's marks arriving by a
+    different door, and the window is exactly as relevant as it is to a teacher
+    typing them.
+    """
+    admission_number = (row.get("admission_number") or "").strip()
+    if not admission_number:
+        return {"row": row_number, "field": "admission_number", "issue": "Missing."}
+
+    student = students_by_number.get(admission_number)
+    if student is None:
+        return {
+            "row": row_number,
+            "field": "admission_number",
+            "issue": (
+                f"No active enrolment for {admission_number!r} in a class this exam-subject covers."
+            ),
+        }
+
+    theory, error = _import_decimal(row.get("theory_marks", ""), "theory_marks")
+    if error:
+        return {"row": row_number, "field": "theory_marks", "issue": error}
+    practical, error = _import_decimal(row.get("practical_marks", ""), "practical_marks")
+    if error:
+        return {"row": row_number, "field": "practical_marks", "issue": error}
+
+    is_absent = (row.get("is_absent") or "").strip().lower() in _TRUTHY
+    is_exempt = (row.get("is_exempt") or "").strip().lower() in _TRUTHY
+
+    if is_absent and (theory is not None or practical is not None):
+        return {
+            "row": row_number,
+            "field": "is_absent",
+            "issue": "An absent student cannot also have a mark.",
+        }
+    if is_absent and is_exempt:
+        return {
+            "row": row_number,
+            "field": "is_exempt",
+            "issue": "Absent and exempt are different claims; a row cannot assert both.",
+        }
+
+    try:
+        assert_marks_within_maximum(
+            exam_subject=exam_subject, theory_marks=theory, practical_marks=practical
+        )
+    except DomainRuleViolation as exc:
+        field, issue = next(iter(exc.detail.items()))
+        return {"row": row_number, "field": field, "issue": str(issue)}
+
+    Marks.objects.update_or_create(
+        tenant=exam_subject.tenant,
+        exam_subject=exam_subject,
+        student=student,
+        defaults={
+            "theory_marks": theory,
+            "practical_marks": practical,
+            "is_absent": is_absent,
+            "is_exempt": is_exempt,
+            # `submitted`, not `draft`: a school importing a sheet is asserting
+            # these are the marks, not saving a working state. §6's re-import
+            # of failed rows lands the same way.
+            "status": MarksStatus.SUBMITTED,
+            "remarks": (row.get("remarks") or "").strip() or None,
+            "entered_by": actor_id,
+            "updated_by": actor_id,
+            "created_by": actor_id,
+        },
+    )
+    return None
+
+
+def import_candidates_by_admission_number(*, exam_subject: ExamSubject) -> dict:
+    """The eligible students keyed by admission number, for the importer.
+
+    Keyed by admission number because that is what a spreadsheet carries — a
+    school transcribing a marks sheet has the number on the paper, not a UUID.
+    Built once per file rather than looked up per row, which is what keeps a
+    six-hundred-row import from being six hundred queries.
+    """
+    return {
+        student.admission_number: student
+        for student in _entry_students(exam_subject=exam_subject).values()
+    }

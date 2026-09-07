@@ -241,6 +241,7 @@ SPECTACULAR_SETTINGS = {
         "GradingScaleTypeEnum": "apps.examinations.models.ScaleType",
         "ExamScheduleStatusEnum": "apps.examinations.models.ScheduleStatus",
         "AdmitCardStatusEnum": "apps.examinations.models.AdmitCardStatus",
+        "MarksStatusEnum": "apps.examinations.models.MarksStatus",
     },
 }
 
@@ -285,6 +286,8 @@ CELERY_TASK_ROUTES = {
     # a paper, which is the same reason attendance's absence alert is here.
     "apps.examinations.tasks.notify_schedule_published": {"queue": "transactional"},
     "apps.examinations.tasks.notify_admit_cards_issued": {"queue": "transactional"},
+    "apps.examinations.tasks.import_marks_task": {"queue": "bulk"},
+    "apps.examinations.tasks.remind_marks_entry": {"queue": "bulk"},
     "core.idempotency.tasks.*": {"queue": "bulk"},
     "core.jobs.tasks.*": {"queue": "bulk"},
     # notifications.md §5 names three lanes (emergency / transactional / bulk);
@@ -333,6 +336,14 @@ CELERY_BEAT_SCHEDULE = {
         # marking service never trusts on its own (it recomputes from the date),
         # so a late or skipped tick degrades what a client shows, never the rule.
         "schedule": crontab(hour="4", minute="10"),
+    },
+    # Early morning, so a teacher meets §12's reminder at the start of a working
+    # day rather than the end of one. The lead time is
+    # `apps.examinations.tasks.REMINDER_LEAD_DAYS` — two days, so someone who
+    # has not started still has a working day to do it in.
+    "remind-marks-entry": {
+        "task": "apps.examinations.tasks.remind_marks_entry",
+        "schedule": crontab(hour="6", minute="30"),
     },
 }
 

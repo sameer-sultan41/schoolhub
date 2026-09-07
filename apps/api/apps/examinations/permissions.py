@@ -32,8 +32,8 @@ declared in a module doc §4 before being added, which `process` never was.
 
 Keys arrive with the PR that ships an endpoint for them, so
 `tests/test_endpoint_contracts.py` never sees a registered key with nothing
-behind it. Registered so far: the exam and grading-scale keys (PR A), and the
-schedule and admit-card keys (PR B).
+behind it. Registered so far: the exam and grading-scale keys (PR A), the
+schedule and admit-card keys (PR B), and the marks keys (PR C).
 """
 
 from core.rbac.registry import registry
@@ -82,6 +82,16 @@ SCHEDULERS = ("exam_staff",)
 # schedule and their own card; the *record scope*, not the key, is what narrows
 # them (see each model's `filter_owned_by_user`).
 PORTAL = ("student", "guardian")
+# §4 gives marks entry to `teacher` and `exam_staff`. `teacher` is the load-
+# bearing half and is narrowed further by *record scope*, not by the key: the
+# `assigned` scope resolves through `academics.TeacherSubjectAllocation`, so a
+# teacher reaches only the class-subjects they currently teach. Granting the key
+# more widely and relying on the scope would be the same mistake as granting a
+# portal role a staff key.
+MARKS_ENTRANTS = ("teacher", "exam_staff")
+# Locking closes a window and stamps every row, which is a school-policy act
+# rather than a teaching one — §4 gives it to `exam_staff` and `school_admin`.
+MARKS_LOCKERS = ("exam_staff", "school_admin")
 ADMIT_CARD_VIEWERS = (
     "exam_staff",
     "school_admin",
@@ -145,4 +155,25 @@ registry.register(
     "exams.admit-card.issue",
     "Generate, issue and revoke admit cards (§5.3).",
     ("exam_staff",),
+)
+
+registry.register(
+    "exams.marks.create",
+    "Enter marks for an assigned class-subject (§5.4).",
+    MARKS_ENTRANTS,
+)
+registry.register(
+    "exams.marks.update",
+    "Edit marks already entered, while the window is open.",
+    MARKS_ENTRANTS,
+)
+registry.register(
+    "exams.marks.import",
+    "Import a marks sheet (CSV or .xlsx) for one exam-subject.",
+    ("exam_staff",),
+)
+registry.register(
+    "exams.marks.lock",
+    "Lock or reopen an exam-subject's marks window (§6 — audited).",
+    MARKS_LOCKERS,
 )

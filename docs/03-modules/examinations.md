@@ -245,20 +245,25 @@ Built as five stacked PRs. This section is updated by each.
 
 **PR A — setup.** Grading scales with validated bands, exams, and per-class
 subject configuration.
-**PR B — scheduling and admit cards (this PR).** Sittings with a clash engine,
-schedule publish, and the admit-card batch.
+**PR B — scheduling and admit cards.** Sittings with a clash engine, schedule
+publish, and the admit-card batch.
+**PR C — marks entry (this PR).** The grid, the four entry gates, the lock
+lifecycle, the sheet import and the missing-entries dashboard.
 
 ### Built
 
 | Area | State |
 | ---- | ----- |
-| Entities | 6 of §15's 11 tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards` — tenant-owned with RLS policies |
-| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` |
-| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`. The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
+| Entities | 7 of §15's 11 tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks` — tenant-owned with RLS policies |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `POST /marks:bulk-entry` (accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job) |
+| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{create,update,import,lock}`. The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
+| §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students with an active enrolment in a class the exam-subject covers |
+| §5.4 lifecycle | `draft → submitted → locked` on the row, plus `exam_subjects.marks_locked_at` on the *window*. Four gates on every write, each with its own message because each has a different remedy: the exam's status (§7.1), the entry window (§6), the subject lock, and the teacher's allocation (§4). An **unset** window means always open |
+| §6 dashboard | `GET /exams/{id}/marks-progress` — expected / entered / submitted per exam-subject, in a bounded number of queries whatever the size of the exam |
 | §11 scheduling | One sitting per (exam-subject, section) · `end_time > start_time` · a section must belong to the exam-subject's class · a completed or cancelled sitting cannot be rescheduled · admit cards need a published schedule · a revocation needs a reason (CHECK, not only a service rule) |
 | §5.2 clash engine | `conflicts.py` — hard: room double-booked, invigilator double-booked, a student sitting two papers at once, a sitting outside the exam's own dates, a sitting on a non-working day or holiday. Soft: an over-capacity room, a sitting on a weekday the sections have published lessons. Every write returns the whole list; only hard findings block `:publish-schedule` |
-| §12 notifications | Two of six wired — `exams.schedule-published` (one `notify()` for the whole exam, on commit) and `exams.admit-card-issued` (one per card, because §12's template names the card number, with guardians fetched once and grouped rather than queried per card). The admit-card one fires after the **render**, not at issue: it says the card is ready to download, which is only true once a document exists. The other four wait on `marks`, `results` and `report_cards` |
+| §12 notifications | Two of six wired — `exams.schedule-published` (one `notify()` for the whole exam, on commit) and `exams.admit-card-issued` (one per card, because §12's template names the card number, with guardians fetched once and grouped rather than queried per card). The admit-card one fires after the **render**, not at issue: it says the card is ready to download, which is only true once a document exists. PR C adds `exams.marks-entry-reminder`, to the *allocated subject teachers* of any exam-subject whose window closes within two days with marks still outstanding — §12 says "teachers with pending entries", and a broadcast to all staff is the kind of notification people learn to ignore. The other three wait on `results` and `report_cards` |
 | §5.5 grading | `grading.py` — `percentage_for` (ROUND_HALF_UP, one decimal place), `assert_scale_is_complete`, `band_for` (boundary resolves to the upper band), `gpa_for` (None unless the scale type is `gpa` or `hybrid`) |
 | §7.1 lifecycle | `exams.status` starts at `draft` and is **read-only on the wire**. Configuration is frozen past `scheduled`; only a draft exam may be deleted |
 | Feature flag | `module.examinations`, `default_enabled=False` |
@@ -326,6 +331,38 @@ schedule publish, and the admit-card batch.
   excluded from every clash check and from the occupancy constraints, because a
   room freed by a cancellation is free.
 
+- **A rejected row rejects the whole grid; a rejected row in an *import* does
+  not.** The two paths are in the same module and behave oppositely on purpose.
+  A grid is one act of judgement over one class, so partial commit is never the
+  outcome — a teacher who believes they saved forty marks and saved thirty-nine
+  is worse off than one told which cell is wrong, and the refusal carries
+  `error.meta.rows` with each bad cell's index. An import is a file a school is
+  migrating or transcribing, where §6 asks to "re-import failed rows only" —
+  which needs a per-row verdict a whole-file rejection cannot give.
+- **Unlike `attendance`'s import, this one applies the same rules as its grid.**
+  That contrast is worth stating because a reader who has met that importer will
+  expect the exemptions. Attendance's rows are historical *by construction*, so
+  its calendar and lock gates would reject the entire file. These rows are this
+  exam's marks arriving by a different door, and the window is exactly as
+  relevant as it is to a teacher typing them.
+- **Unlocking returns rows to `submitted`, not `draft`.** They *were*
+  submitted. Sending them back to draft would lose the distinction §6's
+  missing-entries dashboard depends on and make every reopened subject look
+  unfinished.
+- **A blank cell in an imported sheet is the absence of a mark, not a zero.**
+  The distinction the whole import turns on: a school leaves a cell empty for a
+  student who did not sit, and reading it as zero would fail them rather than
+  mark them absent.
+- **Entering marks is what moves an exam into `marks_entry`.** Done in the
+  service rather than by a separate call, so the status cannot lag behind the
+  data — a school looking at a `scheduled` exam that already holds marks has no
+  way to tell which is true.
+- **`marks_entry_progress` carries `class_id` and `subject_id`, not only their
+  names.** So a caller acting on a row — the reminder sweep resolving which
+  teachers to notify — does not re-fetch the exam-subject per row. That is the
+  N+1 shape PR B's review caught twice, and the fix belongs in the query rather
+  than at each call site.
+
 ### Corrected in review
 
 Seven findings. Three describe rules the module now depends on:
@@ -368,8 +405,19 @@ single form.
 
 ### Deliberately not built in this PR
 
-§15's remaining five tables: `marks` (PR C), `results` and `report_cards`
-(PR D), `question_banks` and `questions` plus §13's reports (PR E).
+§15's remaining four tables: `results` and `report_cards` (PR D),
+`question_banks` and `questions` plus §13's reports (PR E).
+
+**§14's AI-EXM-02 (AI grading assistance) is out of scope, and the schema says
+so.** `marks` has no `source` column, because there is only one source — a
+person. AI-EXM-02 suggests a score to a teacher who confirms or adjusts it, and
+the confirmed value is what reaches the table; AGENTS.md invariant 5 requires
+exactly that, and `core/ai` does not exist in any case.
+
+**§11's processing waiver is not built.** §11 calls it a recommendation —
+"blocked while any assigned exam-subject has unsubmitted marks (override with an
+audited waiver)" — and PR D is where the block itself lands. A waiver with no
+processing to waive would be a permission key guarding nothing.
 
 **§19's fee-clearance gate on admit-card issue is not built.** `fees-finance`
 does not exist, §19 makes the policy "optional, default off" and leaves its

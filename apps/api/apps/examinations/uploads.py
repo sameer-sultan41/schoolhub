@@ -7,10 +7,12 @@ others were used by a service and never registered, so every upload 422'd.
 Callers reference the returned spec's `.key`, so declaring a purpose and using
 one are the same symbol.
 
-Every purpose here is **server-generated**: nothing in this module accepts a
-client upload yet. They are registered anyway, because `create_ready_file`
-validates against the same registry, and because a purpose invented inline in a
-Celery task is a purpose nobody can find.
+`ADMIT_CARD` is server-generated — `create_ready_file` writes it with the bytes
+already in hand — and registered anyway, because that helper validates against
+this same registry and because a purpose invented inline in a Celery task is a
+purpose nobody can find. `MARKS_IMPORT` is genuinely client-uploaded, so its
+MIME list is the gate `POST /files` enforces rather than a description of what
+the server produced.
 """
 
 from core.files.purposes import MEGABYTE, registry
@@ -20,4 +22,14 @@ ADMIT_CARD = registry.register(
     "A rendered admit card for one student for one exam (§5.3).",
     mime_types={"application/pdf"},
     max_size_bytes=5 * MEGABYTE,
+)
+
+MARKS_IMPORT = registry.register(
+    "exams.marks-import",
+    "A marks sheet being imported for one exam-subject (§9).",
+    mime_types={
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+    max_size_bytes=10 * MEGABYTE,
 )

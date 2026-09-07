@@ -665,3 +665,196 @@ class AdmitCard(TenantOwnedModel):
             .values_list("student_id", flat=True)
         )
         return queryset.filter(student_id__in=student_ids)
+
+
+class MarksStatus(models.TextChoices):
+    """§5.4's entry lifecycle: draft → submitted → locked.
+
+    `draft` is a teacher's working state — saved but not claimed as finished,
+    so the missing-entries dashboard (§6) still counts it as outstanding.
+    `submitted` is the claim. `locked` is set by `:lock-marks` and is what
+    result processing requires.
+
+    The three are a *row* state, while `exam_subjects.marks_locked_at` is the
+    *window* state, and both exist on purpose: locking a subject stamps its
+    rows, but a row can be `submitted` while the subject is still open, which
+    is what lets a teacher finish Maths while Physics is still being entered.
+    """
+
+    DRAFT = "draft", "Draft"
+    SUBMITTED = "submitted", "Submitted"
+    LOCKED = "locked", "Locked"
+
+
+class Marks(TenantOwnedModel):
+    """One student's marks for one exam-subject — §5.4, and the input to §5.5.
+
+    **AI grading assistance never writes here.** `entities/examinations.md` says
+    so in its own header and AGENTS.md invariant 5 requires it: AI-EXM-02
+    suggests a score to a teacher, who confirms or adjusts it, and the confirmed
+    value is what reaches this table. There is no `source` column because there
+    is only one source — a person.
+
+    **The upper bound on a mark is a service rule, not a constraint.** A CHECK
+    cannot read `exam_subjects.max_marks` from this row, so the database holds
+    what it can — nothing negative, and marks mutually exclusive with `absent` —
+    while `services.assert_marks_within_maximum` holds the rest. That is the
+    same split `grade_bands` draws for its contiguity rule and `attendance`
+    drew for `late_minutes`.
+    """
+
+    exam_subject = models.ForeignKey(ExamSubject, on_delete=models.CASCADE, related_name="marks")
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="marks"
+    )
+    theory_marks = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Null when the student was absent or exempt.",
+    )
+    practical_marks = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    is_absent = models.BooleanField(
+        default=False, help_text="Mutually exclusive with a mark (§11)."
+    )
+    is_exempt = models.BooleanField(
+        default=False, help_text="Excluded from the aggregate rather than scored zero."
+    )
+    status = models.CharField(max_length=20, choices=MarksStatus.choices, default=MarksStatus.DRAFT)
+    entered_by = models.UUIDField(help_text="The teacher or exam staff who entered it.")
+    remarks = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = "marks"
+        ordering = ["student__admission_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "exam_subject", "student"],
+                name="marks_one_per_student_per_exam_subject",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            # The half of §11's range rule a constraint can hold. The upper
+            # bound lives in `services` because it is on another table.
+            models.CheckConstraint(
+                condition=models.Q(theory_marks__isnull=True) | models.Q(theory_marks__gte=0),
+                name="marks_theory_not_negative",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(practical_marks__isnull=True) | models.Q(practical_marks__gte=0)
+                ),
+                name="marks_practical_not_negative",
+            ),
+            # §11 — "absent flag and marks are mutually exclusive". Both columns
+            # are on this row, so this one the database can genuinely enforce:
+            # an absent student with a score is a contradiction that would
+            # otherwise reach a report card.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(is_absent=False)
+                    | models.Q(theory_marks__isnull=True, practical_marks__isnull=True)
+                ),
+                name="marks_absent_has_no_score",
+            ),
+            # Absent and exempt are different claims — "did not sit" versus "was
+            # not required to" — and a row asserting both describes neither.
+            models.CheckConstraint(
+                condition=~models.Q(is_absent=True, is_exempt=True),
+                name="marks_absent_and_exempt_are_exclusive",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "student"], name="marks_student_idx"),
+            models.Index(
+                fields=["tenant", "exam_subject", "status"], name="marks_subject_status_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.student_id} @ {self.exam_subject_id}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — a student's own marks, a guardian's children's.
+
+        Delegates to `Student.filter_owned_by_user`, which already unions a
+        student's own row with the children they hold a live, portal-enabled
+        link to. §4 grants no portal role a marks key today — results are what
+        a student sees, and §5.6 gates those behind publishing — but the hook
+        exists so that if one is ever granted, the narrowing is the same one
+        every other table in this platform uses rather than a fresh predicate.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — §4's marks-entry rights.
+
+        **Two notions of "assigned", unioned, and both are needed.**
+
+        - The *subject* teacher, through `academics.TeacherSubjectAllocation`.
+          That table's own docstring says it exists for "timetable (scheduling
+          input) and examinations (marks-entry rights)", and
+          `timetable/conflicts.py` already treats it as the source of truth for
+          who teaches what.
+        - The *class* teacher, through `sections.class_teacher_staff_id`. §3
+          gives them a review role over their homeroom's results, which is a
+          different thing from teaching the subject.
+
+        Narrowing to either alone would hide half of what each role needs. The
+        allocation side is restricted to *current* rows (`effective_to IS
+        NULL`), so a reassigned teacher stops being able to enter marks for a
+        class they no longer teach — the reason that column is end-dated rather
+        than deleted.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.academics.models import TeacherSubjectAllocation
+        from apps.staff_management.models import EmploymentStatus, Staff
+        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+        staff_ids = list(
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
+        if not staff_ids:
+            return queryset.none()
+
+        # (section, subject) pairs this user currently teaches.
+        allocations = list(
+            TeacherSubjectAllocation.objects.alive()
+            .filter(staff_id__in=staff_ids, effective_to__isnull=True)
+            .values_list("section_id", "subject_id")
+        )
+        # Sections they are class teacher of.
+        homeroom_sections = list(
+            StudentEnrollment.objects.alive()
+            .filter(status=EnrollmentStatus.ACTIVE, section__class_teacher_staff_id__in=staff_ids)
+            .values_list("section_id", flat=True)
+            .distinct()
+        )
+
+        predicate = models.Q(pk__in=[])
+        for section_id, subject_id in allocations:
+            # Marks name a student and an exam-subject, so "the section I teach"
+            # resolves through the student's active enrollment in it.
+            predicate |= models.Q(
+                exam_subject__subject_id=subject_id,
+                student__enrollments__section_id=section_id,
+                student__enrollments__status=EnrollmentStatus.ACTIVE,
+                student__enrollments__deleted_at__isnull=True,
+            )
+        if homeroom_sections:
+            predicate |= models.Q(
+                student__enrollments__section_id__in=homeroom_sections,
+                student__enrollments__status=EnrollmentStatus.ACTIVE,
+                student__enrollments__deleted_at__isnull=True,
+            )
+        return queryset.filter(predicate).distinct()
