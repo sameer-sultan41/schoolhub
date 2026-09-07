@@ -241,7 +241,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 ## 20. Implementation status
 
-Built as five stacked PRs. This section is updated by each.
+Built as five stacked PRs. This section is updated by each. **All five have landed.**
 
 **PR A — setup.** Grading scales with validated bands, exams, and per-class
 subject configuration.
@@ -249,17 +249,22 @@ subject configuration.
 publish, and the admit-card batch.
 **PR C — marks entry.** The grid, the four entry gates, the lock lifecycle,
 the sheet import and the missing-entries dashboard.
-**PR D — results and report cards (this PR).** Processing, the approval gate,
+**PR D — results and report cards.** Processing, the approval gate,
 publishing, withholding, and versioned report cards.
+**PR E — reports and question banks (this PR).** §13's five reports with the
+export lane, question banks with §7.2's approval gate, and deterministic paper
+assembly. **The module is complete.**
 
 ### Built
 
 | Area | State |
 | ---- | ----- |
-| Entities | 9 of §15's 11 tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards` — tenant-owned with RLS policies |
-| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `POST /marks:bulk-entry` (accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards` |
-| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. **All of §4's keys are now registered.** The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
+| Entities | **All 11** of §15's tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards`, `question_banks`, `questions` — tenant-owned with RLS policies |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `POST /marks:bulk-entry` (accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (five report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
+| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one has an endpoint behind it.** The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
+| §13 reports | All five — result register (ordered by rank, unranked last), pass/fail analysis per section, subject performance over `marks`, marks-entry status, grade distribution — plus question-bank usage, behind one `kind`-parameterised endpoint with a 202 export lane in all three of `core.exports.tabular`'s formats. Every one asserted at **one query** |
+| §5.8 question banks | Banks per subject (class optional — null means every level), questions with §7.2's approval gate, and deterministic blueprint assembly ordered by `usage_count` so reuse spreads and a re-run produces the same paper |
 | §5.5 processing | `processing.py` — totals with subject weightage on *both* sides of the fraction, percentage, grade band, GPA, dense ranks, and outcome. Five queries for a whole school; the per-student loop never queries |
 | §11 processing | Blocked while any exam-subject has marks outstanding, measured against the **expected roll** rather than rows that happen to exist. Recompute is idempotent and refused once approved |
 | §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.created_by`, which processing stamps. Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
@@ -405,6 +410,37 @@ publishing, withholding, and versioned report cards.
   same message on a re-publish — `attendance`'s review finding, applied ahead of
   time.
 
+- **§7.2's approval gate is asymmetric, and the asymmetry is the design.** A
+  question a teacher wrote is usable as soon as it is saved — they have already
+  exercised the judgement, and asking them to approve their own would be
+  friction with no safeguard behind it. An `ai_generated` question arrives
+  `is_approved=False` whatever the client sent, and needs a *named* human. The
+  CHECK constraint is scoped to `ai_generated` for the same reason: demanding
+  an approver on a manual question would block ordinary creation.
+  `is_approved` is read-only on the serializer **and** forced in `create` —
+  belt and braces, because a pre-approved AI question is the whole gate
+  defeated. That is AGENTS.md invariant 5 in a column.
+- **Paper assembly is deterministic, not random.** Ordered by `usage_count`
+  then creation, which buys two properties: reuse spreads across a bank (making
+  §6's usage tracking worth keeping), and two runs of the same blueprint over
+  an unchanged bank produce the same paper — so a teacher who regenerates after
+  fixing a typo in the title does not get a different exam. A question taken by
+  an earlier section is never offered to a later one.
+- **A blueprint reports every shortfall at once.** A teacher whose blueprint
+  asks for eight hard questions from a bank holding three needs to know that
+  about each section of the paper, not to fix one and resubmit — the same
+  reasoning the clash engine's whole-list return uses.
+- **`usage_count` is incremented, not derived**, and in the same transaction as
+  the selection. §15 records that assembled papers are stored as files with no
+  table to join against, so this column is the only record that a question was
+  used — a crash between selecting and recording would lose it.
+- **`marks_entry_status` (§13) and `marks_entry_progress` (§6) answer the same
+  question differently, on purpose.** The dashboard computes an *expected* roll
+  from enrolments, so a subject nobody has started shows as outstanding; the
+  report counts what exists, so it can be exported over one queryset alongside
+  the others. Where they disagree, the dashboard is for chasing and the report
+  is a record of what was entered. Both docstrings say so.
+
 ### Corrected in review
 
 Seven findings. Three describe rules the module now depends on:
@@ -472,12 +508,22 @@ ids *before* calling the service — outside the lock — so
 `publish_exam_results` and `publish_report_cards` now **return** the ids they
 actually moved, and only the winner's list is non-empty.
 
-### Deliberately not built in this PR
+### Deliberately not built
 
-§15's remaining two tables: `question_banks` and `questions`, plus §13's
-reports and exports (PR E).
+The module is otherwise complete; what follows is the full register.
 
-**§11's processing waiver is still not built**, and now that the block it would
+**§14's four AI capabilities.** AI-EXM-01 (question generation), AI-EXM-02 (grading
+assistance), AI-EXM-03 (performance analysis) and AI-EXM-04 (anomaly screening)
+all need `core/ai`, which does not exist, and AGENTS.md hard rule 6 forbids
+reaching a provider SDK directly. §16's
+`POST /question-banks/{id}:generate-questions` is the endpoint for the first of
+them and waits on the same thing. **The schema is ready for all four**:
+`questions.source = ai_generated` with `is_approved=False` and an attributable
+`approved_by` is exactly the gate §7.2 and AGENTS.md invariant 5 require, and
+`marks` deliberately has *no* `source` column because AI-EXM-02's confirmed
+value is a teacher's, not a model's.
+
+**§11's processing waiver is not built**, and now that the block it would
 waive exists, the reason is sharper: §11 calls it a recommendation and §4
 declares no key for it. A waiver is only worth designing once a school has met
 the block often enough to say what should bypass it — and an unaudited override

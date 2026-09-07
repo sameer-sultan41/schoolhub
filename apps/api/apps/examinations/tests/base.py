@@ -79,6 +79,12 @@ ALL_KEYS = (
     "exams.report-card.view",
     "exams.report-card.create",
     "exams.report-card.publish",
+    "exams.question-bank.view",
+    "exams.question-bank.create",
+    "exams.question-bank.update",
+    "exams.question-bank.delete",
+    "exams.question.approve",
+    "exams.result.export",
 )
 
 

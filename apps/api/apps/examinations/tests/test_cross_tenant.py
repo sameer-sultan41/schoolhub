@@ -39,6 +39,8 @@ from apps.examinations.tests.factories import (
     ExamScheduleFactory,
     ExamSubjectFactory,
     MarksFactory,
+    QuestionBankFactory,
+    QuestionFactory,
     ReportCardFactory,
     ResultFactory,
     RoomFactory,
@@ -61,6 +63,7 @@ MARKS = "/api/v1/marks"
 BULK_ENTRY = "/api/v1/marks:bulk-entry"
 RESULTS = "/api/v1/results"
 REPORT_CARDS = "/api/v1/report-cards"
+BANKS = "/api/v1/question-banks"
 
 
 class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
@@ -131,6 +134,10 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
                 exam=self.foreign_exam,
                 student=foreign_result_student,
                 result=self.foreign_result,
+            )
+            self.foreign_bank = QuestionBankFactory(tenant=self.other_tenant, subject=subject)
+            self.foreign_question = QuestionFactory(
+                tenant=self.other_tenant, question_bank=self.foreign_bank
             )
             self.foreign_card = AdmitCardFactory(
                 tenant=self.other_tenant,
@@ -531,3 +538,66 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
 
     def test_publishing_a_foreign_exam_s_report_cards_is_a_404(self) -> None:
         self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:publish-report-cards"))
+
+    # --- question banks ---------------------------------------------------
+
+    def test_retrieving_a_foreign_bank_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{BANKS}/{self.foreign_bank.pk}"))
+
+    def test_listing_banks_never_shows_another_tenant_s(self) -> None:
+        response = self.client.get(BANKS)
+
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(self.foreign_bank.pk), ids)
+
+    def test_listing_questions_under_a_foreign_bank_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{BANKS}/{self.foreign_bank.pk}/questions"))
+
+    def test_a_foreign_question_addressed_under_our_own_bank_is_a_404(self) -> None:
+        """A question id from another tenant, under a bank this caller does own
+        — the shape a naive `pk` lookup would let through."""
+        with tenant_context(self.tenant.id):
+            own_bank = QuestionBankFactory(tenant=self.tenant, subject=self.subject)
+
+        self.assert404(
+            self.client.get(f"{BANKS}/{own_bank.pk}/questions/{self.foreign_question.pk}")
+        )
+
+    def test_approving_a_foreign_question_is_a_404(self) -> None:
+        """The one that would matter most: approving another school's AI draft
+        would put this caller's name on their gate."""
+        with tenant_context(self.tenant.id):
+            own_bank = QuestionBankFactory(tenant=self.tenant, subject=self.subject)
+
+        self.assert404(
+            self.client.post(f"{BANKS}/{own_bank.pk}/questions/{self.foreign_question.pk}:approve")
+        )
+
+    def test_assembling_a_paper_from_a_foreign_bank_is_a_404(self) -> None:
+        self.assert404(
+            self.client.post(
+                f"{BANKS}/{self.foreign_bank.pk}:assemble-paper",
+                {"title": "P", "sections": [{"difficulty": "easy", "count": 1}]},
+                format="json",
+            )
+        )
+
+    def test_a_report_on_a_foreign_exam_returns_nothing_rather_than_its_rows(self) -> None:
+        """A 200 with an empty list, not a 404: the exam id fails the
+        serializer's tenant-scoped queryset first, so the request never reaches
+        a report at all."""
+        response = self.client.get(
+            f"/api/v1/reports/exam-summary?kind=result-register&exam_id={self.foreign_exam.pk}"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn(str(self.other_tenant.pk), str(response.json()))
+
+    def test_question_bank_usage_never_counts_another_tenant_s_bank(self) -> None:
+        from apps.examinations import reports
+        from apps.examinations.models import QuestionBank
+
+        with tenant_context(self.tenant.id):
+            rows = reports.question_bank_usage(QuestionBank.objects.alive())
+
+        self.assertNotIn(str(self.foreign_bank.pk), [str(row["question_bank_id"]) for row in rows])

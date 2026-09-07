@@ -1182,3 +1182,221 @@ class ReportCard(TenantOwnedModel):
             models.Q(result__section__class_teacher_staff_id__in=staff_ids)
             | models.Q(result__isnull=True, student_id__in=homeroom_students)
         ).distinct()
+
+
+class QuestionBankStatus(models.TextChoices):
+    """§5.8's bank states. `archived` keeps a bank's history without offering it.
+
+    Not a soft delete: a paper assembled last year cites questions from a bank,
+    and `questions.usage_count` records that it did. Deleting the bank would
+    strand both.
+    """
+
+    ACTIVE = "active", "Active"
+    ARCHIVED = "archived", "Archived"
+
+
+class QuestionType(models.TextChoices):
+    """§5.8's question types.
+
+    `mcq` and `true_false` are the two that *require* `options`, enforced by a
+    CHECK below: a multiple-choice question with no choices is not a question,
+    and a paper assembled from one would print a stem with nothing under it.
+    """
+
+    MCQ = "mcq", "Multiple choice"
+    TRUE_FALSE = "true_false", "True or false"
+    SHORT_ANSWER = "short_answer", "Short answer"
+    LONG_ANSWER = "long_answer", "Long answer"
+    FILL_BLANK = "fill_blank", "Fill in the blank"
+    NUMERICAL = "numerical", "Numerical"
+
+
+CHOICE_QUESTION_TYPES = (QuestionType.MCQ, QuestionType.TRUE_FALSE)
+
+
+class QuestionDifficulty(models.TextChoices):
+    """§5.8's three levels — the axis a paper blueprint mixes along."""
+
+    EASY = "easy", "Easy"
+    MEDIUM = "medium", "Medium"
+    HARD = "hard", "Hard"
+
+
+class QuestionSource(models.TextChoices):
+    """Where a question came from — and the reason `is_approved` exists.
+
+    `ai_generated` is declared and **unreachable today**: §14's AI-EXM-01 needs
+    `core/ai`, which does not exist, and AGENTS.md hard rule 6 forbids reaching
+    a provider SDK directly. The value ships now precisely so the generator
+    drops in later without a migration, and so the approval gate §7.2 requires
+    is already the thing standing in front of it.
+    """
+
+    MANUAL = "manual", "Manual"
+    AI_GENERATED = "ai_generated", "AI generated"
+    IMPORTED = "imported", "Imported"
+
+
+class QuestionBank(TenantOwnedModel):
+    """A collection of questions for one subject — §5.8.
+
+    `school_class` is nullable, and null means *every* level — the same reading
+    `Period.campus` and `ClassSubject.campus` already use for a nullable
+    narrowing reference. A bank of general-knowledge questions is not wrong for
+    having no year group.
+    """
+
+    subject = models.ForeignKey(
+        "school_organization.Subject", on_delete=models.PROTECT, related_name="question_banks"
+    )
+    school_class = models.ForeignKey(
+        "school_organization.Class",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        db_column="class_id",
+        help_text="Null means every level.",
+    )
+    name = models.CharField(max_length=150)
+    description = models.CharField(max_length=500, null=True, blank=True)
+    status = models.CharField(
+        max_length=20, choices=QuestionBankStatus.choices, default=QuestionBankStatus.ACTIVE
+    )
+
+    class Meta:
+        db_table = "question_banks"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "subject", "name"],
+                name="question_banks_name_unique_per_subject",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "school_class"], name="question_banks_class_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — the subjects a teacher currently teaches.
+
+        Through `academics.TeacherSubjectAllocation`, the same table
+        `Marks.filter_assigned_to_user` resolves entry rights through. §4 gives
+        `exams.question.approve` to a "`teacher` (assigned subject)", and this
+        is what makes "assigned subject" mean something.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.academics.models import TeacherSubjectAllocation
+        from apps.staff_management.models import EmploymentStatus, Staff
+
+        staff_ids = list(
+            Staff.objects.alive()
+            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values_list("pk", flat=True)
+        )
+        if not staff_ids:
+            return queryset.none()
+        subject_ids = (
+            TeacherSubjectAllocation.objects.alive()
+            .filter(staff_id__in=staff_ids, effective_to__isnull=True)
+            .values_list("subject_id", flat=True)
+        )
+        return queryset.filter(subject_id__in=list(subject_ids))
+
+
+class Question(TenantOwnedModel):
+    """One question in a bank — §5.8, and §7.2's approval gate.
+
+    **`is_approved` defaults to True and is forced False for `ai_generated`.**
+    That asymmetry is AGENTS.md invariant 5 in a column: a teacher writing a
+    question has already exercised judgement, and asking them to approve their
+    own is friction with no safeguard behind it. An AI draft has had no human
+    judgement applied, and §7.2 requires one before it can reach a paper.
+
+    `usage_count` is incremented by paper assembly rather than derived, because
+    §6 wants "usage tracking (which paper used which question)" and papers are
+    stored as files with no table to join against — a decision §15 records.
+    """
+
+    question_bank = models.ForeignKey(
+        QuestionBank, on_delete=models.CASCADE, related_name="questions"
+    )
+    question_text = models.TextField()
+    question_type = models.CharField(max_length=20, choices=QuestionType.choices)
+    difficulty = models.CharField(
+        max_length=10, choices=QuestionDifficulty.choices, default=QuestionDifficulty.MEDIUM
+    )
+    default_marks = models.DecimalField(max_digits=5, decimal_places=2, default=1)
+    options = models.JSONField(null=True, blank=True, help_text="Required for mcq and true_false.")
+    answer_key = models.JSONField(null=True, blank=True)
+    topic = models.CharField(
+        max_length=150, null=True, blank=True, help_text="The blueprint filter (§6)."
+    )
+    source = models.CharField(
+        max_length=20, choices=QuestionSource.choices, default=QuestionSource.MANUAL
+    )
+    is_approved = models.BooleanField(
+        default=True, help_text="False on creation for ai_generated; flipped by :approve."
+    )
+    approved_by = models.UUIDField(null=True, blank=True)
+    usage_count = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = "questions"
+        ordering = ["created_at"]
+        constraints = [
+            # A multiple-choice question with no choices is not a question, and
+            # a paper assembled from one would print a stem with nothing under
+            # it. Held at the database because a paper is a document that goes
+            # to a hall of students.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(question_type__in=CHOICE_QUESTION_TYPES)
+                    | models.Q(options__isnull=False)
+                ),
+                name="questions_choice_types_have_options",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(default_marks__gt=0),
+                name="questions_marks_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(usage_count__gte=0),
+                name="questions_usage_count_not_negative",
+            ),
+            # Scoped to `ai_generated`, and the scoping is the whole rule.
+            # `is_approved=True` on a *manual* question means "no approval was
+            # needed" — a teacher writing a question has already exercised the
+            # judgement — so demanding an approver there would block ordinary
+            # creation for no safeguard. On an AI draft it means somebody
+            # actually looked, and §7.2 makes that the gate, so the signature
+            # is the point.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(source=QuestionSource.AI_GENERATED)
+                    | models.Q(is_approved=False)
+                    | models.Q(approved_by__isnull=False)
+                ),
+                name="questions_ai_approval_is_attributable",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant", "question_bank", "difficulty"],
+                name="questions_bank_difficulty_idx",
+            ),
+            models.Index(
+                fields=["tenant", "question_bank", "topic"], name="questions_bank_topic_idx"
+            ),
+            models.Index(fields=["tenant", "source", "is_approved"], name="questions_source_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.question_text[:60]
