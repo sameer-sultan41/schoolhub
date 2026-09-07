@@ -1576,4 +1576,6 @@ def publish_report_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
         card.published_at = now
         card.updated_by = actor_id
     ReportCard.objects.bulk_update(ready, ["status", "published_at", "updated_by"], batch_size=500)
-    return {"published": len(ready)}
+    # Same reasoning as `publish_exam_results`: the caller notifies on what
+    # moved, and only this function knows that under the lock.
+    return {"published": len(ready), "published_ids": [str(card.pk) for card in ready]}
