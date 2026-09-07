@@ -40,7 +40,11 @@ export function formatDate(isoDate: string, locale: string): string {
  * parseable time, for the same reason `formatDate` does.
  */
 export function formatTime(wireTime: string, locale: string): string {
-  const match = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(wireTime.trim());
+  // Ranges, not just shape. `\d{2}:\d{2}` accepts "25:99", and `Date.UTC` rolls that
+  // over into 02:39 the next day rather than rejecting it — so a malformed value came
+  // back as a plausible time instead of unchanged, which is the one thing the fallback
+  // below exists to prevent.
+  const match = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec(wireTime.trim());
   if (!match) return wireTime;
   // A time alone has no date to attach it to; any date works because only the clock
   // fields are read back out. UTC so the local zone cannot shift the hour.

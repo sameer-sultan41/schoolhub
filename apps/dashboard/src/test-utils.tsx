@@ -23,6 +23,18 @@ import messages from "../messages/en.json";
  *
  * `ThemeProvider` is NOT here; see `renderWithTheme` below for why.
  */
+/**
+ * Just the preferences context, for a component that needs nothing else.
+ *
+ * `TenantTheme` and the dashboard page render under a bare `render()` on purpose —
+ * neither wants a QueryClient, and the page mocks `next-intl/server` rather than taking
+ * the real provider — but both read `usePreference`, which throws without a store above
+ * them. Pass it as RTL's `wrapper`.
+ */
+export function PreferencesTestWrapper({ children }: { children: ReactNode }) {
+  return <PreferencesProvider initialValues={PREFERENCE_DEFAULTS}>{children}</PreferencesProvider>;
+}
+
 export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
