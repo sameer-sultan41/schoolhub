@@ -20,7 +20,8 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | 1 — People | [`student-management`](03-modules/student-management.md), [`staff-management`](03-modules/staff-management.md) | **Both full-stack complete** — `student-management` (PRs 1-4) and `staff-management` (this PR), see the per-module matrix below |
 | 2 — Daily ops | [`academics`](03-modules/academics.md), [`timetable`](03-modules/timetable.md), [`attendance`](03-modules/attendance.md) | **Backend complete.** `academics` and `timetable` shipped; `attendance` shipped as three stacked PRs (marking → leave → staff/reports). Dashboard screens for the tier are still outstanding. Build order is `academics → timetable → attendance`, not the order the phase doc lists them: timetable needs academics' `teacher_subject_allocations` as its scheduling input, and attendance's period mode needs timetable |
 | 3 — High-stakes | [`examinations`](03-modules/examinations.md), [`fees-finance`](03-modules/fees-finance.md) | **`examinations` backend complete** — all five stacked PRs landed (setup → scheduling/admit cards → marks → results/report cards → reports/question banks), all 11 §15 tables, all §4 keys, all six §12 notifications. `fees-finance` is **backend complete** — all four stacked PRs landed (ledger + fee config → invoicing → collection → spend/reports), 18 of its 22 tables, all of §4's permission keys, §13's eight reports. Payroll's four tables are deliberately deferred to ship with `hr-leave`, since `payslips.lop_days` comes from that module. **Tier 3 is done.** **The earlier "blocked on its own spec" note was stale** — `03-modules/fees-finance.md` (§1-§19) and `05-database/entities/finance.md` (all 22 tables, column level) were both already complete. Payroll's four tables are deliberately deferred to ship with `hr-leave`, since `payslips.lop_days` comes from that module |
-| 4–7 | communication, parent-portal, website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started |
+| 4 — Outward | [`communication`](03-modules/communication.md), parent-portal | **`communication` in flight**, PR A of 3 open (#62): tenant-editable per-channel notification templates and per-user channel preferences, both wired into `core/notifications` (which already owns `notifications`/`delivery_logs`/`notify()` — see item 11 below) via two self-registering hooks so `core/` never imports a Tier-4 app. PR B (announcements/notices) and PR C (threads/emergency broadcast) not yet started. Plan: `docs/superpowers/plans/2026-09-08-communication-module.md`. parent-portal not started (depends on communication, examinations, fees-finance, attendance — all now done) |
+| 5–7 | website-cms, platform-admin, admissions, hr-leave, library, transport, inventory-assets, certificates-documents, reporting-analytics | Not started |
 
 ## Per-module implementation matrix
 
@@ -32,6 +33,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | academics | done (curriculum CRUD + `:clone`, teacher allocation + load summary, the promotion batch state machine with segregation of duties and idempotent execution) | — | live-lane API journeys + one promotion browser CUJ | done |
 | timetable | done (rooms/periods CRUD, draft slot grid with `meta.conflicts` on every edit, `:validate` / `:publish` with supersede-by-end-dating, `GET /timetables/my` for teacher/student/guardian, substitutions + `:approve`/`:reject`) | done (week grid editor, conflict panel, publish action, My timetable, substitutions queue) | live-lane API journeys + one build-and-publish browser CUJ | done |
 | fees-finance | **done** (PR A: the per-tenant chart of accounts, the append-only double-entry ledger with its single posting path and reversal-only corrections, and fee heads/structures/installment schedules with a draft→active→archived lifecycle. PR B: bulk invoice generation as a 202 + job with gapless numbering and a duplicate guard that makes a re-run skip rather than double-bill, proration on mid-term enrollment, discounts/scholarships/fines with attributable grants and waivers, cancellation that returns billed fines to the queue, and the nightly due/overdue sweep. PR C: payments whose receipt and ledger posting commit in the same transaction as the money, §7.3's refund workflow with the requester barred from approving, bank/wallet vouchers in A4 and 80mm thermal, and the settlement import with its at-most-once match key and exceptions queue. PR D: expenses under an approval gate that posts to the ledger on approval rather than payment, budgets whose variance is computed from posted entries so a rejected expense stops counting, and §13's eight reports behind one endpoint that serves inline under 1000 rows and hands back a job past it. Follow-up: two campus-scoped budgets on the same account and period now keep their own actual spend, attributed through the `Expense` each posting names — closing a gap the PR D review left open, since `ledger_entries` itself still carries no campus column) | — (backend-only; the dashboard agent owns screens) | — (arrives with the collection journey) | done (module doc §1-§20 + all 22 entities at column level; payroll deferred with hr-leave)
+| communication | **in flight** — PR A of 3 open (#62): `NotificationTemplateOverride` (tenant per-code/channel/locale wording, validated against the platform template's declared variable set) and `NotificationPreference` (per-user category × channel opt-in; emergency category refused closed). Extends `core/notifications`'s `notify()` to render each channel's own template (previously every channel reused the single in-app-rendered string) and to gate delivery through a registered preference resolver — both hooks self-registered from this app's `AppConfig.ready()` so `core/` still never imports a Tier-4 app; with neither hook registered, behaviour is byte-identical to before, regression-tested against attendance/fees_finance/examinations' existing `notify()` call sites. Delivery dashboard, announcements, notices, threads and emergency broadcast not yet built | — (backend-only; the dashboard agent owns screens) | — | plan only (`docs/superpowers/plans/2026-09-08-communication-module.md`); module doc and entity doc pre-date this session and are unchanged
 | attendance | **done** (register `:bulk-mark` with idempotent re-submission, the §5.5 lock window, corrections, guardian alerts, nightly lock sweep; the five leave tables, §7.2's escalating chain, auto-marking `on_leave`; staff attendance with `:check-out`, §13's six reports with a 202 export lane, and the absent-teacher cover feed into timetable) | — (backend-only; the dashboard agent owns screens) | live-lane API journeys for marking (mark → re-submit → read back, rejected row, future date) leave (submit → approve → auto-mark, self-approval refused, cancel, overlap) and staff/reports (record a day, check out, run a report, export as a job) | done |
 | examinations | **done** (PR A: grading scales with validated bands, exams, per-class subject configuration. PR B: sittings with a date/time clash engine, schedule publish, the idempotent admit-card batch and its PDF job. PR C: the marks grid with its four entry gates, the lock/unlock lifecycle, the sheet import and §6's missing-entries dashboard. PR D: result processing, the approval gate with segregation of duties, publishing, per-student withholding, and versioned report cards with an attendance snapshot. PR E: §13's five reports with a 202 export lane, question banks with §7.2's approval gate, and deterministic paper assembly) | — (backend-only; the dashboard agent owns screens) | — (the live lane still wants a process → approve → publish journey; noted as the module's one remaining gap) | done |
 | everything else (12 modules) | — | — | — | done (spec exists; nothing implemented) |
@@ -735,9 +737,39 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
      **Settled and recorded** in both `03-modules/attendance.md` §15 and
      `03-modules/hr-leave.md` §15 when attendance PR 2 shipped those tables:
      attendance owns them, hr-leave adds none.
-   - `communication` §15 and `core/notifications` both cover `notifications`
-     and `delivery_logs` — already resolved in PR 0 (see above), still to be
-     written into `entities/communication.md`.
+   - ~~`communication` §15 and `core/notifications` both cover `notifications`
+     and `delivery_logs`.~~ **Settled and recorded** — `entities/communication.md`'s
+     `notifications` section states the split explicitly: those two tables, the
+     adapters, the platform default templates and `notify()` are `core/notifications/`'s;
+     `communication` owns `notification_templates` (tenant overrides),
+     `notification_preferences`, announcements/notices/threads and the delivery
+     dashboard. `communication` PR A (in flight, item 11 below) is the first PR to
+     actually build against that split.
+11. **`communication` (Tier 4) is in flight, as three stacked PRs; PR A is open (#62).**
+   Plan: `docs/superpowers/plans/2026-09-08-communication-module.md`. PR A extends
+   `core/notifications` — which already owns `notifications`/`delivery_logs`,
+   `notify()` and the platform-default template registry (item 10's second bullet)
+   — with two hooks `communication` registers at `AppConfig.ready()`:
+   `core.notifications.templates.set_override_resolver()` (tenant-editable,
+   per-channel rendering; previously every channel reused the single
+   in-app-rendered string, which is why `DeliveryLog` gained its own `subject`/
+   `body` columns) and `core.notifications.services.set_preference_resolver()`
+   (per-user channel opt-out, with the mandatory in-app channel and every
+   `emergency`-category trigger exempt by construction). With neither hook
+   registered — the state on `main` before this PR, and every test that doesn't
+   explicitly register one — behaviour is byte-identical to today; regression-
+   tested against the three existing `notify()` callers (attendance, fees_finance,
+   examinations). `NotificationTemplateOverride` and `NotificationPreference`
+   models, services and the RLS policy migration are in; the delivery-dashboard
+   endpoints and §13 reports (Task A4) are not yet built. PR B (announcements +
+   notices, publish-approval gate, notice PDF) and PR C (message threads +
+   emergency broadcast) have not started. Scope decisions recorded in the plan's
+   Context section: locale variants deferred (no `User.locale` field yet — only
+   `en` templates are created), SMS/push/WhatsApp providers deferred (no
+   `core/integrations`, same reasoning as fees-finance's payment gateway),
+   `GET /announcements`/`GET /notices` staff-only (guardians consume via the
+   existing `GET /notifications` inbox; a guardian-facing browse endpoint is
+   recorded as parent-portal's task).
 
 ## Conventions worth re-reading before writing code
 
