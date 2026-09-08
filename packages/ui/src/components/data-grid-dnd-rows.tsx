@@ -62,7 +62,7 @@ export function DataGridRowDragHandle({ rowId }: { rowId: string }) {
   );
 }
 
-function DataGridDndRow<TData>({ row }: { row: Row<TData> }) {
+function DataGridDndRow<TData extends object>({ row }: { row: Row<TData> }) {
   const { isDragging, setNodeRef, transform, transition } = useSortable({ id: row.id });
 
   return (

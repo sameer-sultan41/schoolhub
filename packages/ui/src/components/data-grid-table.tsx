@@ -234,7 +234,7 @@ function DataGridTableBodyRowSkeletonCell<TData>({
   );
 }
 
-function DataGridTableBodyRow<TData>({
+function DataGridTableBodyRow<TData extends object>({
   children,
   row,
   dndRef,
@@ -286,7 +286,7 @@ function DataGridTableBodyRow<TData>({
   );
 }
 
-function DataGridTableBodyRowExpanded<TData>({ row }: { row: Row<TData> }) {
+function DataGridTableBodyRowExpanded<TData extends object>({ row }: { row: Row<TData> }) {
   const { table } = useDataGrid<TData>();
   const expandable = table.getAllColumns().find((column) => column.columnDef.meta?.expandedContent);
 
@@ -360,8 +360,11 @@ function DataGridTableRowSelect<TData>({ row, label }: { row: Row<TData>; label:
     <Checkbox
       label={label}
       checked={row.getIsSelected()}
+      // `Checkbox` (checkbox.tsx) is a real tri-state control — its `onCheckedChange` can
+      // report `"indeterminate"`, unlike `DropdownMenuCheckboxItem`'s own plain boolean —
+      // so unlike that dropdown item's handler, this compare is load-bearing, not redundant.
       onCheckedChange={(value) => {
-        row.toggleSelected(value);
+        row.toggleSelected(value === true);
       }}
     />
   );
@@ -381,7 +384,7 @@ function DataGridTableRowSelectAll({ label }: { label: string }) {
       }
       disabled={isLoading || recordCount === 0}
       onCheckedChange={(value) => {
-        table.toggleAllPageRowsSelected(value);
+        table.toggleAllPageRowsSelected(value === true);
       }}
     />
   );

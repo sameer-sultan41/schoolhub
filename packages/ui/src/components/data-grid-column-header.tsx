@@ -41,7 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "./dropdown-menu";
 
-export interface DataGridColumnHeaderProps<TData> {
+export interface DataGridColumnHeaderProps<TData extends object> {
   column: Column<TData>;
   title: string;
   icon?: ReactNode;
@@ -78,7 +78,7 @@ function canMove<TData>(
   return direction === "start" ? index > 0 : index < order.length - 1;
 }
 
-export function DataGridColumnHeader<TData>({
+export function DataGridColumnHeader<TData extends object>({
   column,
   title,
   icon,

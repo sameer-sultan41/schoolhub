@@ -45,7 +45,11 @@ import {
 } from "./data-grid-table";
 import { Button } from "./button";
 
-function DataGridDndHeaderCell<TData>({ header }: { header: Header<TData, unknown> }) {
+function DataGridDndHeaderCell<TData extends object>({
+  header,
+}: {
+  header: Header<TData, unknown>;
+}) {
   const { tableLayout, labels } = useDataGrid<TData>();
   const { column } = header;
   const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
