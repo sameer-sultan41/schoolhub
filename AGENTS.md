@@ -80,6 +80,23 @@ infra/             Local stack, PostgreSQL roles, Terraform, runbooks
    `packages/ui/src/components/sidebar.tsx`'s file-header comment is a worked example
    of both, including why a straight port would have broken this repo's RTL support.
 
+0d. **For a dashboard pattern shadcn's registry doesn't cover — a data grid with
+   pinning/resizing/column-drag, a full page layout, a complex widget — check the
+   Metronic Next.js template before designing one from scratch.** It's a purchased,
+   licensed admin-dashboard template covering full dashboards and pages — not part of
+   this repo or checked out on every machine, so ask a teammate for a local copy if
+   you don't already have one — and it's the same base
+   `@linkedunion/dashboard-design-kit` is itself built on, so reusing it here keeps
+   schoolhub aligned with a pattern already proven in production rather than
+   inventing a second one. **Port and adapt, never vendor the source wholesale**: it's
+   a licensed asset, not a dependency this repo can commit or redistribute, so pull in
+   one component/pattern at a time and rewrite it to this repo's own conventions —
+   the same two adaptations §0c requires of a shadcn port (logical direction, no
+   hardcoded English) apply here too, plus this repo's server-driven-data and
+   URL-backed-filter conventions where the template assumes client-side state instead.
+   `packages/ui/src/components/data-grid.tsx`'s file header is a worked example: it
+   documents every departure taken from the Metronic source and why.
+
 1. Read `docs/AGENTS.md` for locked vocabulary and invariants.
 2. `docs/context/context-map.md` maps a task type to the 3–6 docs worth loading.
    Do not read the whole specification.
