@@ -194,7 +194,7 @@ export function PromotionBatchesScreen() {
       // Soft, with a dot: one solid pill per row down a whole column reads as a wall of
       // colour, and the dot keeps five statuses separable without leaning on hue alone.
       cell: (row) => (
-        <Badge variant={PROMOTION_STATUS_BADGE[row.status]} appearance="soft">
+        <Badge variant={PROMOTION_STATUS_BADGE[row.status]} appearance="light">
           <BadgeDot />
           {t(`promotions.status.${row.status}`)}
         </Badge>

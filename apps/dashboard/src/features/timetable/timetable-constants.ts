@@ -57,19 +57,19 @@ export const SUBSTITUTION_STATUSES: SubstitutionStatusValue[] = [
  * variants map to `--sh-*` custom properties, never to a literal colour. */
 export const SUBSTITUTION_STATUS_BADGE: Record<
   SubstitutionStatusValue,
-  "secondary" | "success" | "warning" | "danger"
+  "secondary" | "success" | "warning" | "destructive"
 > = {
   proposed: "warning",
   confirmed: "success",
-  declined: "danger",
+  declined: "destructive",
   completed: "success",
   cancelled: "secondary",
 };
 
 /** `hard` reads as an error because it blocks publish; `soft` as a warning
  * because a grid mid-build is allowed to be imperfect (conflicts.py's header). */
-export const CONFLICT_SEVERITY_VARIANT: Record<ConflictSeverity, "danger" | "warning"> = {
-  hard: "danger",
+export const CONFLICT_SEVERITY_VARIANT: Record<ConflictSeverity, "destructive" | "warning"> = {
+  hard: "destructive",
   soft: "warning",
 };
 

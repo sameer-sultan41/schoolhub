@@ -107,7 +107,7 @@ export function PublicEnquiryForm({
       </div>
 
       {status === "error" ? (
-        <Alert variant="danger">
+        <Alert variant="destructive">
           <AlertDescription>
             We could not send your message. Please try again in a moment.
           </AlertDescription>

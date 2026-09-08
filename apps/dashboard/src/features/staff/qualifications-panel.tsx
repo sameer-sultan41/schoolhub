@@ -78,7 +78,7 @@ export function QualificationsPanel({ staffId }: QualificationsPanelProps) {
 
   if (qualificationsQuery.error instanceof ApiError) {
     return (
-      <Alert variant="danger">
+      <Alert variant="destructive">
         <AlertDescription>
           {tErrors.has(qualificationsQuery.error.code)
             ? tErrors(qualificationsQuery.error.code)
@@ -124,7 +124,7 @@ export function QualificationsPanel({ staffId }: QualificationsPanelProps) {
                       qualification.verification_status === "verified"
                         ? "success"
                         : qualification.verification_status === "rejected"
-                          ? "danger"
+                          ? "destructive"
                           : "warning"
                     }
                   >
@@ -250,7 +250,7 @@ function AddQualificationDialog({ staffId, onAdded }: { staffId: string; onAdded
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}

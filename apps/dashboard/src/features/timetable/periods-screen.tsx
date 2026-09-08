@@ -145,7 +145,7 @@ export function PeriodsScreen() {
         row.weekdays && row.weekdays.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {row.weekdays.map((day) => (
-              <Badge key={day} variant="outline" appearance="soft">
+              <Badge key={day} variant="outline" appearance="light">
                 {t(`weekdaysShort.${day}`)}
               </Badge>
             ))}
@@ -167,11 +167,11 @@ export function PeriodsScreen() {
       sortKey: "is_break",
       cell: (row) =>
         row.is_break ? (
-          <Badge variant="secondary" appearance="soft">
+          <Badge variant="secondary" appearance="light">
             {t("periods.break")}
           </Badge>
         ) : (
-          <Badge variant="outline" appearance="soft">
+          <Badge variant="outline" appearance="light">
             {t("periods.teaching")}
           </Badge>
         ),
@@ -336,7 +336,7 @@ function DeletePeriodDialog({ period }: { period: PeriodRecord }) {
 
         <DialogFooter>
           <Button
-            variant="danger"
+            variant="destructive"
             isLoading={mutation.isPending}
             loadingLabel={tCommon("loading")}
             onClick={() => {

@@ -90,7 +90,7 @@ export function GuardiansPanel({ studentId }: GuardiansPanelProps) {
 
   if (linksQuery.error instanceof ApiError) {
     return (
-      <Alert variant="danger">
+      <Alert variant="destructive">
         <AlertDescription>
           {tErrors.has(linksQuery.error.code)
             ? tErrors(linksQuery.error.code)
@@ -262,7 +262,7 @@ function LinkGuardianDialog({ studentId }: { studentId: string }) {
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}

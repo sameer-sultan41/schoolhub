@@ -309,7 +309,7 @@ export function SlotEditorDialog({
                 <Can permission="timetable.slot.delete">
                   <Button
                     type="button"
-                    variant="danger"
+                    variant="destructive"
                     isLoading={remove.isPending}
                     loadingLabel={tCommon("loading")}
                     onClick={() => {

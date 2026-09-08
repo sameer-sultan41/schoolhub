@@ -32,7 +32,7 @@ export function ApiErrorAlert({ error }: ApiErrorAlertProps) {
   if (!(error instanceof ApiError)) return null;
 
   return (
-    <Alert variant="danger">
+    <Alert variant="destructive">
       <AlertDescription>
         {tErrors.has(error.code) ? tErrors(error.code) : error.message}
         {error.requestId ? ` ${tErrors("requestId", { requestId: error.requestId })}` : ""}

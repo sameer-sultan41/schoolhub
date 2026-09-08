@@ -146,7 +146,7 @@ export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground tabular-nums">{batchId}</span>
           {status ? (
-            <Badge variant={PROMOTION_STATUS_BADGE[status]} appearance="soft">
+            <Badge variant={PROMOTION_STATUS_BADGE[status]} appearance="light">
               <BadgeDot />
               {t(`promotions.status.${status}`)}
             </Badge>

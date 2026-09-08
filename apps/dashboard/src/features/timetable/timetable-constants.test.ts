@@ -37,7 +37,7 @@ describe("timetable constants", () => {
   });
 
   it("reads a hard conflict as an error and a soft one as a warning", () => {
-    expect(CONFLICT_SEVERITY_VARIANT.hard).toBe("danger");
+    expect(CONFLICT_SEVERITY_VARIANT.hard).toBe("destructive");
     expect(CONFLICT_SEVERITY_VARIANT.soft).toBe("warning");
   });
 });

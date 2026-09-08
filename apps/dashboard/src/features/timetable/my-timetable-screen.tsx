@@ -168,7 +168,7 @@ export function MyTimetableScreen() {
                           {slot.section_name}
                         </span>
                         {cover ? (
-                          <Badge variant="warning" appearance="soft">
+                          <Badge variant="warning" appearance="light">
                             <BadgeDot />
                             {t("my.substituted")}
                           </Badge>

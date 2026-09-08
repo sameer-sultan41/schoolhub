@@ -88,7 +88,7 @@ export function LoginForm() {
         </div>
 
         {formError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{formError}</AlertDescription>
           </Alert>
         ) : null}

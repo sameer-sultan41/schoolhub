@@ -84,14 +84,14 @@ const LEGACY_COLUMN_IDS: Record<string, string> = {
  */
 export function getStudentStatusVariant(
   status: StudentStatus,
-): "secondary" | "success" | "warning" | "danger" {
+): "secondary" | "success" | "warning" | "destructive" {
   switch (status) {
     case "active":
       return "success";
     case "suspended":
       return "warning";
     case "withdrawn":
-      return "danger";
+      return "destructive";
     // Neither of these is a problem to flag: one moved to another school, one finished.
     case "transferred":
     case "graduated":
@@ -271,7 +271,7 @@ export function StudentsTable() {
         // reads as a wall of colour. The dot keeps the chip legible as a STATUS at a
         // glance now that its fill is only a tint.
         cell: ({ row }) => (
-          <Badge variant={getStudentStatusVariant(row.original.status)} appearance="soft">
+          <Badge variant={getStudentStatusVariant(row.original.status)} appearance="light">
             <BadgeDot />
             {t(`status.${row.original.status}`)}
           </Badge>

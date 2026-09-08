@@ -178,12 +178,12 @@ export function AllocationsScreen() {
       // colour, and the dot keeps the two roles separable without leaning on hue alone.
       cell: (row) =>
         row.is_primary ? (
-          <Badge variant="primary" appearance="soft">
+          <Badge variant="primary" appearance="light">
             <BadgeDot />
             {t("allocations.primary")}
           </Badge>
         ) : (
-          <Badge variant="secondary" appearance="soft">
+          <Badge variant="secondary" appearance="light">
             <BadgeDot />
             {t("allocations.coTeacher")}
           </Badge>
@@ -500,7 +500,7 @@ function DeleteAllocationDialog({ allocation }: { allocation: TeacherAllocationR
 
         <DialogFooter>
           <Button
-            variant="danger"
+            variant="destructive"
             isLoading={mutation.isPending}
             loadingLabel={tCommon("loading")}
             onClick={() => {

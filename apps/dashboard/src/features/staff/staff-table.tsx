@@ -57,7 +57,7 @@ const EMPTY = "—";
  */
 export function getStaffStatusVariant(
   status: EmploymentStatus,
-): "secondary" | "success" | "warning" | "danger" {
+): "secondary" | "success" | "warning" | "destructive" {
   switch (status) {
     case "active":
       return "success";
@@ -67,7 +67,7 @@ export function getStaffStatusVariant(
     case "suspended":
       return "warning";
     case "terminated":
-      return "danger";
+      return "destructive";
     // Ordinary ends of an employment, not failures.
     case "resigned":
     case "retired":
@@ -196,7 +196,7 @@ export function StaffTable() {
       // classification, not a state of health, so neither takes a hue: a green or amber
       // pill here would read as a status beside the one that actually is one.
       cell: (row) => (
-        <Badge variant="outline" appearance="soft">
+        <Badge variant="outline" appearance="light">
           {t(`staffType.${row.staff_type}`)}
         </Badge>
       ),
@@ -210,7 +210,7 @@ export function StaffTable() {
       // reads as a wall of colour. The dot keeps the chip legible as a STATUS at a
       // glance now that its fill is only a tint.
       cell: (row) => (
-        <Badge variant={getStaffStatusVariant(row.employment_status)} appearance="soft">
+        <Badge variant={getStaffStatusVariant(row.employment_status)} appearance="light">
           <BadgeDot />
           {t(`employmentStatus.${row.employment_status}`)}
         </Badge>

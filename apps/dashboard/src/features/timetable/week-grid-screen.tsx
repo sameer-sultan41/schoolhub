@@ -388,12 +388,12 @@ export function WeekGridScreen() {
                                   {slot.room_id ? (roomNames.get(slot.room_id) ?? EMPTY) : EMPTY}
                                 </span>
                                 {slot.status === "draft" ? (
-                                  <Badge variant="outline" appearance="soft">
+                                  <Badge variant="outline" appearance="light">
                                     <BadgeDot />
                                     {t("grid.draft")}
                                   </Badge>
                                 ) : (
-                                  <Badge variant="success" appearance="soft">
+                                  <Badge variant="success" appearance="light">
                                     <BadgeDot />
                                     {t("grid.publishedBadge")}
                                   </Badge>
