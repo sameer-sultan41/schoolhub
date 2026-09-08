@@ -43,6 +43,11 @@
     "COMMENT: messages/*.json holds next-intl translation catalogues, including ur.json (Urdu). An English dictionary cannot validate them, and listing every non-English word as a project term would be meaningless.",
     "**/messages/*.json",
     ".git/**",
-    ".cspell/project-words.txt"
+    ".cspell/project-words.txt",
+    "COMMENT: Metronic's own demo-page scaffolding (fake names, third-party service names, placeholder copy) — not yet wired into anything this package exports, and not this repo's own prose. See packages/ui/tsconfig.json's exclude for the same treatment.",
+    "packages/ui/src/components/layouts/**",
+    "packages/ui/src/components/partials/**",
+    "packages/ui/src/components/image-input/**",
+    "packages/ui/src/components/keenicons/**"
   ]
 }

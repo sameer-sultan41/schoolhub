@@ -3,17 +3,55 @@
  *
  * The stylesheet is imported by the apps, not from here:
  *   @import "@schoolhub/ui/styles/theme.css";
+ *
+ * Every primitive below (alert through tooltip, plus accordion/breadcrumb/calendar/
+ * collapsible/hover-card/kbd/progress/radio-group/scroll-area/switch/toggle) is Metronic's
+ * own component, copied verbatim — no variant or structural changes, per explicit
+ * instruction. This barrel exports exactly what each file itself exports, nothing more,
+ * nothing invented. The data-grid, data-table, empty-state, stat-card, skeletons and
+ * sidebar files are schoolhub's own and unaffected by that swap.
  */
-export { Alert, AlertDescription, AlertTitle, alertVariants } from "./components/alert";
-export type { AlertProps } from "./components/alert";
+export {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "./components/accordion";
 
-export { Avatar, AvatarFallback, AvatarImage } from "./components/avatar";
+export {
+  Alert,
+  AlertContent,
+  AlertDescription,
+  AlertIcon,
+  AlertTitle,
+  AlertToolbar,
+} from "./components/alert";
 
-export { Badge, BadgeDot, badgeVariants } from "./components/badge";
-export type { BadgeProps } from "./components/badge";
+export {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  AvatarIndicator,
+  AvatarStatus,
+  avatarStatusVariants,
+} from "./components/avatar";
 
-export { Button, buttonVariants } from "./components/button";
-export type { ButtonProps } from "./components/button";
+export { Badge, BadgeButton, BadgeDot, badgeVariants } from "./components/badge";
+export type { BadgeButtonProps, BadgeDotProps, BadgeProps } from "./components/badge";
+
+export {
+  Breadcrumb,
+  BreadcrumbEllipsis,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "./components/breadcrumb";
+
+export { Button, ButtonArrow, buttonVariants } from "./components/button";
+
+export { Calendar } from "./components/calendar";
 
 export {
   Card,
@@ -21,27 +59,25 @@ export {
   CardDescription,
   CardFooter,
   CardHeader,
+  CardHeading,
+  CardTable,
   CardTitle,
+  CardToolbar,
 } from "./components/card";
-export type { CardHeaderProps, CardProps } from "./components/card";
 
 export {
   ChartContainer,
   ChartLegend,
   ChartLegendContent,
+  ChartStyle,
   ChartTooltip,
   ChartTooltipContent,
 } from "./components/chart";
-export type {
-  ChartConfig,
-  ChartContainerProps,
-  ChartLegendContentProps,
-  ChartSlot,
-  ChartTooltipContentProps,
-} from "./components/chart";
+export type { ChartConfig, ChartTooltipContentProps } from "./components/chart";
 
 export { Checkbox } from "./components/checkbox";
-export type { CheckboxProps } from "./components/checkbox";
+
+export { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./components/collapsible";
 
 export { DataTable } from "./components/data-table";
 export { DataTableColumnsMenu } from "./components/data-table-columns-menu";
@@ -93,33 +129,16 @@ export type { DataGridCardProps } from "./components/data-grid-card";
 export { pinnedSide, tanStackPinValue } from "./lib/pin-side";
 export type { PinnedSide } from "./lib/pin-side";
 
-export { Pagination } from "./components/pagination";
-export type { PaginationProps } from "./components/pagination";
-export { getPageNumbers, PAGE_WINDOW_SIZE } from "./lib/page-numbers";
-
-export { EmptyState } from "./components/empty-state";
-export type { EmptyStateProps } from "./components/empty-state";
-
-export { StatCard } from "./components/stat-card";
-export type { StatCardProps } from "./components/stat-card";
-
-export {
-  ChartSkeleton,
-  DetailSkeleton,
-  FormSkeleton,
-  GridSkeleton,
-  ScreenHeaderSkeleton,
-  TableSkeleton,
-} from "./components/skeletons";
-
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogOverlay,
+  DialogPortal,
   DialogTitle,
   DialogTrigger,
 } from "./components/dialog";
@@ -131,14 +150,19 @@ export {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./components/dropdown-menu";
+
+export { EmptyState } from "./components/empty-state";
+export type { EmptyStateProps } from "./components/empty-state";
 
 export {
   Form,
@@ -151,24 +175,47 @@ export {
   useFormField,
 } from "./components/form";
 
-export { Input } from "./components/input";
-export type { InputProps } from "./components/input";
+export { HoverCard, HoverCardContent, HoverCardTrigger } from "./components/hover-card";
+
+export {
+  Input,
+  InputAddon,
+  InputGroup,
+  InputWrapper,
+  inputAddonVariants,
+  inputVariants,
+} from "./components/input";
+
+export { Kbd, kbdVariants } from "./components/kbd";
 
 export { Label } from "./components/label";
 
-export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./components/popover";
-export type { PopoverContentProps } from "./components/popover";
+export { Pagination } from "./components/pagination";
+export type { PaginationProps } from "./components/pagination";
+export { getPageNumbers, PAGE_WINDOW_SIZE } from "./lib/page-numbers";
+
+export { Popover, PopoverContent, PopoverTrigger } from "./components/popover";
+
+export { Progress, ProgressCircle, ProgressRadial } from "./components/progress";
+
+export { RadioGroup, RadioGroupItem } from "./components/radio-group";
+
+export { ScrollArea, ScrollBar } from "./components/scroll-area";
 
 export {
   Select,
   SelectContent,
   SelectGroup,
+  SelectIndicator,
   SelectItem,
   SelectLabel,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
   SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "./components/select";
+export type { SelectTriggerProps } from "./components/select";
 
 export { Separator } from "./components/separator";
 
@@ -201,16 +248,33 @@ export {
 
 export {
   Sheet,
+  SheetBody,
   SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
   SheetHeader,
+  SheetOverlay,
+  SheetPortal,
   SheetTitle,
   SheetTrigger,
 } from "./components/sheet";
 
 export { Skeleton } from "./components/skeleton";
+
+export {
+  ChartSkeleton,
+  DetailSkeleton,
+  FormSkeleton,
+  GridSkeleton,
+  ScreenHeaderSkeleton,
+  TableSkeleton,
+} from "./components/skeletons";
+
+export { StatCard } from "./components/stat-card";
+export type { StatCardProps } from "./components/stat-card";
+
+export { Switch, SwitchIndicator, SwitchWrapper } from "./components/switch";
 
 // Toaster is NOT re-exported here — see @schoolhub/ui/toaster. sonner runs a
 // CSS-injection side effect at module-evaluation time that survives tree-shaking (confirmed
@@ -230,11 +294,10 @@ export {
 
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/tabs";
 
-export { Textarea } from "./components/textarea";
-export type { TextareaProps } from "./components/textarea";
+export { Textarea, textareaVariants } from "./components/textarea";
 
+export { Toggle, toggleVariants } from "./components/toggle";
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";
-export type { ToggleGroupItemProps, ToggleGroupProps } from "./components/toggle-group";
 
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip";
 

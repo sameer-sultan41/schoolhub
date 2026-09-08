@@ -210,7 +210,11 @@ export function Sidebar({
         <SheetContent
           data-sidebar="sidebar"
           data-mobile="true"
-          side={side}
+          // Metronic's own "left"/"right" already position at the inline-start/-end edge
+          // (`start-0`/`border-e` and `end-0`/`border-s`) with `rtl:` overrides on the
+          // slide animation, so they're already what this file calls "start"/"end" — this
+          // is a naming translation, not a direction decision.
+          side={side === "start" ? "left" : "right"}
           closeLabel={mobileCloseLabel}
           className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
           style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE } as CSSProperties}

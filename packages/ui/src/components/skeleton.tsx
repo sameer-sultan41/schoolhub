@@ -1,18 +1,14 @@
-import type { HTMLAttributes } from "react";
+import * as React from "react";
 import { cn } from "../lib/cn";
 
-/**
- * Placeholder for content still loading. `aria-hidden` because the meaningful state is
- * whatever `aria-busy`/`role="status"` the CONSUMER puts on the region this sits inside —
- * a skeleton describing itself to a screen reader (e.g. "loading, loading, loading" once
- * per tile) is noise, not information.
- */
-export function Skeleton({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      aria-hidden="true"
-      className={cn("animate-pulse rounded-[var(--sh-radius)] bg-muted", className)}
+      data-slot="skeleton"
+      className={cn("animate-pulse rounded-md bg-accent", className)}
       {...props}
     />
   );
 }
+
+export { Skeleton };
