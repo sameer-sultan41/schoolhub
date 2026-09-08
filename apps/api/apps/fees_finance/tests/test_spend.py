@@ -217,16 +217,23 @@ class ExpenseReversalTests(SpendTestCase):
             services.reverse_expense(
                 expense=expense, reason="Wrong category", actor_id=self.approver.pk
             )
-            original = LedgerEntry.objects.filter(
-                reference_type=LedgerReferenceType.EXPENSE, reference_id=expense.pk
-            ).first()
-            reversal_lines = list(
-                LedgerEntry.objects.filter(transaction_id=original.reversed_by_transaction_id)
+            original_lines = list(
+                LedgerEntry.objects.filter(
+                    reference_type=LedgerReferenceType.EXPENSE, reference_id=expense.pk
+                )
             )
+            reversal_id = original_lines[0].reversed_by_transaction_id
+            reversal_lines = list(LedgerEntry.objects.filter(transaction_id=reversal_id))
 
-        self.assertIsNotNone(original.reversed_by_transaction_id)
-        self.assertEqual(sum(line.debit for line in reversal_lines), original.credit)
-        self.assertEqual(sum(line.credit for line in reversal_lines), original.debit)
+        self.assertTrue(
+            all(line.reversed_by_transaction_id == reversal_id for line in original_lines)
+        )
+        self.assertEqual(
+            sum(line.debit for line in reversal_lines), sum(line.credit for line in original_lines)
+        )
+        self.assertEqual(
+            sum(line.credit for line in reversal_lines), sum(line.debit for line in original_lines)
+        )
 
     def test_reversing_moves_the_expense_to_reversed(self) -> None:
         expense = self._approved()
