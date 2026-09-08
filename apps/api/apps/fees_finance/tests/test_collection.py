@@ -526,13 +526,15 @@ class RefundTests(CollectionTestCase):
         `test_a_partial_refund_posts_its_own_balanced_transaction` above does
         not catch it.
         """
-        from apps.fees_finance.models import FeeInvoice
         from apps.fees_finance.tests.factories import (
             FeeInvoiceLineFactory,
             LedgerAccountFactory,
             UserFactory,
         )
 
+        # A fresh invoice, not `self.invoice` — `RefundTests.setUp` already
+        # pays 1000.00 against that one, and this scenario needs its own
+        # unpaid 3000.00 charge to refund a fresh 1000.00 from.
         with tenant_context(self.tenant.id):
             second_head = FeeHeadFactory(
                 tenant=self.tenant,
@@ -542,24 +544,40 @@ class RefundTests(CollectionTestCase):
                 tenant=self.tenant,
                 ledger_account=LedgerAccountFactory(tenant=self.tenant, code="4300"),
             )
+            invoice = FeeInvoiceFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                subtotal=Decimal("3000.00"),
+                period_label="2026-10",
+            )
             FeeInvoiceLineFactory(
                 tenant=self.tenant,
-                fee_invoice=self.invoice,
+                fee_invoice=invoice,
+                fee_head=self.head,
+                amount=Decimal("1000.00"),
+            )
+            FeeInvoiceLineFactory(
+                tenant=self.tenant,
+                fee_invoice=invoice,
                 fee_head=second_head,
                 amount=Decimal("1000.00"),
             )
             FeeInvoiceLineFactory(
                 tenant=self.tenant,
-                fee_invoice=self.invoice,
+                fee_invoice=invoice,
                 fee_head=third_head,
                 amount=Decimal("1000.00"),
             )
-            FeeInvoice.objects.filter(pk=self.invoice.pk).update(
-                subtotal=Decimal("3000.00"), balance_due=Decimal("3000.00")
+            payment = services.record_payment(
+                invoice=invoice,
+                amount=Decimal("3000.00"),
+                method=PaymentMethod.CASH,
+                reference_no=None,
+                gateway_provider=None,
+                actor_id=self.user.pk,
+                tenant_id=self.tenant.pk,
             )
-            self.invoice.refresh_from_db()
-
-        payment = self._pay(Decimal("3000.00"))
         approver = UserFactory(tenant=self.tenant)
 
         with tenant_context(self.tenant.id):
