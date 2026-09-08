@@ -199,7 +199,8 @@
   --color-sidebar-accent: var(--sh-color-chrome-accent);
   --color-sidebar-accent-foreground: var(--sh-color-chrome-foreground);
   --color-sidebar-border: var(--sh-color-chrome-border);
-  --color-sidebar-ring: var(--sh-color-chrome-primary);
+  /* Neutral, matching --sh-color-ring's own reasoning above — not chrome-primary. */
+  --color-sidebar-ring: var(--sh-color-chrome-muted);
 
   /*
    * Components across the repo currently write `rounded-[var(--sh-radius)]` as an
@@ -279,7 +280,18 @@
   --sh-color-muted: oklch(0.962 0.01 265);
   --sh-color-muted-foreground: oklch(0.52 0.03 265);
   --sh-color-border: oklch(0.905 0.014 265);
-  --sh-color-ring: var(--sh-color-primary);
+  /*
+   * A neutral mid-tone, not `var(--sh-color-primary)` — shadcn's own docs describe ring
+   * as "a functional accessibility tool... a mid-tone that ensures visible keyboard
+   * focus indicators without competing with primary branding," the same restraint
+   * Metronic's own theme applies (its ring is zinc-400, unrelated to its blue primary).
+   * Tying ring to the brand hue made every focus outline in the app full-saturation
+   * indigo — visible, but competing with primary rather than staying out of its way.
+   * `muted-foreground` already clears 4.5:1 as TEXT against every surface tone in this
+   * palette, comfortably above the 3:1 a non-text focus indicator needs, so it carries
+   * over as a ring colour with no new contrast work.
+   */
+  --sh-color-ring: var(--sh-color-muted-foreground);
 
   /*
    * Three surface planes, not one. `sunken` is for wells that sit BEHIND the page —

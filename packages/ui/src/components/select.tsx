@@ -81,7 +81,12 @@ export function SelectItem({
     <SelectPrimitive.Item
       className={cn(
         "relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none select-none",
-        "focus:bg-accent focus:text-accent-foreground",
+        // A highlighted row's own neutral surface, not `bg-accent`: that alias points at
+        // Aurora's vivid decorative cyan (a real second brand hue — see theme.css's own
+        // header), not the near-grey "highlighted row" shadcn's stock components assume
+        // when they reach for `accent`. Matches Button's ghost variant and every other
+        // hover surface in this package.
+        "focus:bg-muted",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
