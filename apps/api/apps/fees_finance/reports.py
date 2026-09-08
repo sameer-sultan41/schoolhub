@@ -42,6 +42,7 @@ from apps.fees_finance.models import (
     InvoiceStatus,
     LedgerAccountType,
     LedgerEntry,
+    LedgerReferenceType,
     Payment,
     PaymentStatus,
     Refund,
@@ -461,12 +462,19 @@ def budget_variance(
     account. A conditional `Sum` per distinct period keeps this at one query
     regardless of how many periods appear among the (capped) budget set.
 
-    **Not keyed on campus.** `ledger_entries` carries no campus column — see
-    `LedgerEntryViewSet.get_queryset`'s docstring for why — so two
-    campus-scoped budgets on the same account and period (the constraint
-    allows exactly that, differentiated by `campus_id`) still read the same,
-    tenant-wide actual. Recorded rather than silently wrong: fixing it needs a
-    campus dimension on the ledger itself, which is out of scope here.
+    **Also keyed on campus, for a campus-scoped budget — through `Expense`,
+    not a column on `ledger_entries` itself.** `ledger_entries` genuinely has
+    no campus of its own — see `LedgerEntryViewSet.get_queryset`'s docstring
+    for why a column-level fix was rejected — but every expense-origin
+    posting names the `Expense` it came from, and `Expense.campus` already
+    exists. `_campus_expense_spend` below correlates a reversal back to its
+    original posting (a reversal's own `reference_id` is that original
+    transaction's id) so a reversed expense still stops counting against a
+    campus-scoped budget, the same guarantee the tenant-wide figure has. A
+    budget against an account nothing but expenses ever post to — which is
+    every budget §5.10 describes — gets full campus separation this way with
+    no new column and no risk to the "seven mostly-null columns" argument
+    `LedgerEntry`'s own docstring makes against widening that table further.
     """
     today = as_of or timezone.localdate()
     budgets = list(
@@ -518,13 +526,26 @@ def budget_variance(
         .annotate(**period_annotations)
     }
 
+    campus_ids = {budget.campus_id for budget in budgets if budget.campus_id}
+    campus_spend = (
+        _campus_expense_spend(
+            account_ids=account_ids, campus_ids=campus_ids, periods=periods, today=today
+        )
+        if campus_ids
+        else {}
+    )
+
     rows = []
     for budget in budgets:
         account_id = budget.ledger_account_id or (
             budget.expense_category.ledger_account_id if budget.expense_category else None
         )
-        period_key = f"spent_{period_index[(budget.period_start, budget.period_end)]}"
-        actual = quantize_money(spend.get(account_id, {}).get(period_key, ZERO))
+        period = (budget.period_start, budget.period_end)
+        if budget.campus_id:
+            actual = quantize_money(campus_spend.get((account_id, period, budget.campus_id), ZERO))
+        else:
+            period_key = f"spent_{period_index[period]}"
+            actual = quantize_money(spend.get(account_id, {}).get(period_key, ZERO))
         rows.append(
             {
                 "budget_id": str(budget.pk),
@@ -542,6 +563,105 @@ def budget_variance(
             }
         )
     return rows
+
+
+def _campus_expense_spend(
+    *,
+    account_ids: set,
+    campus_ids: set,
+    periods: list[tuple[datetime.date, datetime.date]],
+    today: datetime.date,
+) -> dict[tuple, Decimal]:
+    """Actual spend, per `(account, period, campus)`, for campus-scoped budgets.
+
+    `ledger_entries` carries no campus of its own, but every expense-origin
+    posting names the `Expense` it came from (`reference_type=EXPENSE,
+    reference_id=<expense id>`), and `Expense.campus` already exists. Three
+    queries, none of them per row:
+
+    1. Every expense-origin entry on these accounts, to learn which
+       `transaction_id` belongs to which `Expense`.
+    2. Those expenses' campuses, narrowed to the campuses actually asked for.
+    3. Every entry — original *and* reversal — that names one of those
+       transactions, fetched once and bucketed here in Python.
+
+    Step 3 has to include reversals deliberately: `reverse_transaction` posts
+    a mirror transaction with its *own* new `transaction_id`, and points back
+    at the original one through `reference_id`. Filtering step 3 by
+    `reference_type=EXPENSE` alone would miss every reversal, and a reversed
+    expense would keep counting against the campus it used to belong to —
+    the exact bug the tenant-wide figure's plain `debit - credit` sum avoids
+    by not caring about `reference_type` at all. Correlating a reversal back
+    to its original's campus here gives a campus-scoped budget the same
+    "a reversed expense stops counting" guarantee.
+
+    Bounded rather than one query per row: step 3 fetches every relevant
+    entry once, and the bucketing below is a single pass over that one
+    result set — the same shape `budget_variance`'s own tenant-wide branch
+    uses, just finished in Python because the correlation a SQL `Sum` would
+    need spans two tables with no FK between them.
+    """
+    origin_rows = list(
+        LedgerEntry.objects.filter(
+            ledger_account_id__in=account_ids,
+            reference_type=LedgerReferenceType.EXPENSE,
+        ).values_list("transaction_id", "reference_id")
+    )
+    if not origin_rows:
+        return {}
+
+    expense_ids = {expense_id for _, expense_id in origin_rows if expense_id}
+    campus_by_expense = dict(
+        Expense.objects.filter(pk__in=expense_ids, campus_id__in=campus_ids).values_list(
+            "pk", "campus_id"
+        )
+    )
+    campus_by_transaction = {
+        transaction_id: campus_by_expense[expense_id]
+        for transaction_id, expense_id in origin_rows
+        if expense_id in campus_by_expense
+    }
+    if not campus_by_transaction:
+        return {}
+
+    relevant_transaction_ids = list(campus_by_transaction)
+    entries = (
+        LedgerEntry.objects.filter(
+            ledger_account_id__in=account_ids,
+            entry_date__gte=min(period_start for period_start, _ in periods),
+            entry_date__lte=min(today, max(period_end for _, period_end in periods)),
+        )
+        .filter(
+            Q(transaction_id__in=relevant_transaction_ids)
+            | Q(reference_id__in=relevant_transaction_ids)
+        )
+        .values(
+            "ledger_account_id",
+            "transaction_id",
+            "reference_id",
+            "reference_type",
+            "debit",
+            "credit",
+            "entry_date",
+        )
+    )
+
+    result: dict[tuple, Decimal] = {}
+    for entry in entries:
+        origin_transaction_id = (
+            entry["transaction_id"]
+            if entry["reference_type"] == LedgerReferenceType.EXPENSE
+            else entry["reference_id"]
+        )
+        campus_id = campus_by_transaction.get(origin_transaction_id)
+        if campus_id is None:
+            continue
+        for period_start, period_end in periods:
+            if period_start <= entry["entry_date"] <= min(today, period_end):
+                key = (entry["ledger_account_id"], (period_start, period_end), campus_id)
+                result[key] = result.get(key, ZERO) + entry["debit"] - entry["credit"]
+
+    return {key: quantize_money(value) for key, value in result.items()}
 
 
 def expense_register(
