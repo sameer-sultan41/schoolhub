@@ -47,7 +47,9 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `fees.refund.approve` | Approve/reject refund requests | `accountant`, `school_owner` |
 | `fees.discount.create` / `fees.scholarship.create` | Grant discounts/scholarships | `accountant`, `school_admin` |
 | `fees.discount.waive` / `fees.fine.waive` | Waive fines or invoice lines | `accountant`, `school_owner` |
+| `fees.fee-structure.view` † | View fee heads, structures and schedules | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner` |
 | `fees.ledger.view` | View general ledger and student ledgers | `accountant`, `school_owner` |
+| `fees.ledger.create` † | Create ledger accounts and post a manual journal entry | `accountant` |
 | `fees.expense.create` / `.update` | Record expenses | `accountant`, `finance_staff` |
 | `fees.expense.approve` | Approve submitted expenses | `accountant`, `school_owner` |
 | `fees.budget.create` / `fees.budget.approve` | Define / approve budgets | `accountant` / `school_owner` |
@@ -59,6 +61,16 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `payroll.payslip.publish` | Publish payslips to staff | `hr_staff`, `accountant` |
 
 Segregation of duties: the user who processed a payroll run or requested a refund cannot approve it (see auth-and-rbac §2.4).
+
+† Added during implementation. This table granted create/update/delete on fee
+configuration with no way to *read* it, and §5.8's automatic postings plus §8's
+accountant journal with no key for either — capabilities the doc grants in prose
+above and the table had no row for. Registered with the row added in the same
+PR, which is how `attendance.student-attendance.import` and examinations' five
+gap keys were resolved. `fees.ledger.create` is `accountant`-only and
+deliberately excludes `finance_staff`: §3 makes them a data-entry role, and a
+manual journal is the one operation that moves money between accounts with no
+invoice or payment behind it.
 
 ## 5. Main Features
 
@@ -299,3 +311,144 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 - **Gateway settlement reconciliation** granularity (per transaction vs. per settlement batch) needs client confirmation.
 - **Bank/wallet voucher file formats** are a recommendation, not client-confirmed: exact per-provider settlement-file layout (Easypaisa, JazzCash, and any partnered bank) needs confirmation with the chosen providers at Phase 4.
 - Multi-currency per tenant is out of scope (single tenant currency); flagged for future phases.
+
+## 20. Implementation status
+
+Building as four stacked PRs. This section is updated by each.
+
+**PR A — ledger and fee configuration (this PR).** The chart of accounts, the
+append-only double-entry ledger and its posting engine, fee heads, structures
+and installment schedules.
+**PR B — invoicing.** Bulk generation, discounts, scholarships, fines.
+**PR C — collection.** Payments, receipts, refunds, vouchers and the settlement
+import.
+**PR D — spend and reports.** Expenses, categories, budgets, and §13's reports
+with the export lane.
+
+### Built (PR A)
+
+| Area | State |
+| ---- | ----- |
+| Entities | 5 of §15's 22 tables — `ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules` — tenant-owned with RLS policies |
+| Ledger | Double-entry postings through one write path (`ledger.post_transaction`), balance asserted per transaction, archived accounts refused, corrections as reversals, one-query trial balance |
+| Append-only | `ledger_entries` enforced at three levels: model `save`/`delete`, queryset `update`/`delete`, and `REVOKE UPDATE, DELETE` from `schoolhub_app` — with a column-level `GRANT UPDATE (reversed_by_transaction_id)` as the single exception |
+| Fee configuration | Fee heads mapped to income accounts, structures scoped by session/class/campus with a draft→active→archived lifecycle, and installment schedules whose due rule must match their frequency |
+| Endpoints | §16's `/ledger-accounts`, `/ledger-entries` (read-only), `/fee-heads`, `/fee-structures` (+ `:activate`, `:archive`), `/fee-schedules`, plus `/ledger-entries:post-journal` |
+| Seeding | `manage.py seed_finance_accounts` — idempotent system accounts per tenant |
+
+### Decisions worth carrying forward
+
+**Invariant 4 needed a new base class, not a convention.** `ledger_entries` is
+the platform's first append-only *tenant-owned* table. `core/audit` had
+established the shape — Python guards plus `REVOKE UPDATE, DELETE`, with the
+argument in its own migration docstring — but `AuditLog` is platform-scoped,
+with a nullable tenant and no RLS policy, so a ledger could not reuse it. And
+`TenantOwnedModel` could not be used either: it inherits `deleted_at`, and
+**soft delete is an UPDATE**, which is exactly the grant append-only revokes.
+
+The resolution is `core.tenancy.models.AppendOnlyTenantModel`, a sibling of
+`TenantOwnedModel` sharing a new abstract `TenantScopedModel`. That shared base
+is what `tenant_owned_tables()` now enumerates, so an append-only table is
+caught by `tests/test_rls_coverage.py` exactly like any other — narrowing the
+predicate to the soft-deletable base would have let the money tables out of the
+isolation check. `tests/test_append_only_coverage.py` is the matching guard for
+the grants, and it also asserts the model's `MUTABLE_FIELDS` and the migration's
+`mutable_columns` name the same columns, because two declarations of one rule
+drift.
+
+**The single mutable column is a database fact, not a comment.**
+`reversed_by_transaction_id` is stamped on the original lines when a reversal
+supersedes them, and it is allowed by a PostgreSQL *column-level* `GRANT UPDATE`
+rather than by convention. An ordinary `save()` writes every column and is still
+refused; only `save(update_fields=["reversed_by_transaction_id"])` gets through.
+The alternative considered was dropping the column and deriving reversal from
+`reference_type='reversal'` + `reference_id`; that is purer but contradicts the
+entities doc's column list, and the grant states the intent more strongly than
+its absence would.
+
+**Balance is a service rule and says so.** Σ debit = Σ credit is a property of
+the *set* of lines sharing a `transaction_id`, and a CHECK cannot see a sibling
+row — the same shape examinations' grade-band contiguity rule has, resolved the
+same way. The database holds what it can (exactly one side positive, neither
+negative) and `core.money.assert_balanced` holds the rest, naming both sums when
+it refuses. A negative debit is arithmetically a credit, so allowing one would
+let a posting balance while every account balance computed from it came out
+wrong — the worst available failure, because it is silent.
+
+**One write path, asserted rather than hoped for.**
+`ledger.post_transaction` refuses to run outside the caller's transaction, the
+same way `core.tenancy.sequences.allocate_number` does and for the same class of
+reason: a confirmed payment whose posting rolled back separately is
+unreconcilable, and by then the receipt is in a parent's hand.
+
+**Both duplicate guards need `NULLS NOT DISTINCT`, and the tests are what
+found it.** `fee_structures` is unique on
+`(tenant, session, class, campus, name)` and `fee_schedules` on
+`(tenant, structure, head, frequency, term)` — and in both, a nullable column
+carries real meaning: `class_id`/`campus_id` NULL means "all campuses / all
+classes", and `term` is NULL on every non-per-term line. PostgreSQL treats
+NULLs as *distinct* in a unique index by default, so both guards were no-ops
+for exactly their most common input: two identical session-wide structures, or
+the same monthly charge priced twice into one structure and then billed twice,
+every month, to a whole class.
+
+`nulls_distinct=False` (PostgreSQL 15+, Django 5.0+) makes "no class" a value
+that collides with itself. Worth recording because the first version of this
+module shipped the constraints without it and the model docstring even
+*described* the NULL-distinctness while drawing the wrong conclusion from it —
+the constraint tests are what turned that into a failure rather than a
+production surprise.
+
+`services.activate_fee_structure` still holds the narrower rule the index
+cannot express: no two *active* structures may cover one scope. The key includes
+`name`, so two differently named structures at one scope are legitimately
+storable and only one of them may be active — otherwise invoice generation would
+have to guess which price applies.
+
+**`ledger_entries.reference_type` is NOT NULL, narrowing the entities doc.**
+Every posting has an origin: the enum carries `manual` for an accountant's
+journal with no platform record behind it and `reversal` for a correction, so
+there is no state a NULL would describe. It also keeps a `NullEnum` union — for
+a case that cannot arise — out of the generated TypeScript client, which is
+where the dead nullability first became visible.
+
+**`due_day` is capped at 28.** Day 29-31 is not a rule February can honour. The
+generator clamps to the month's last day, and the constraint keeps that clamp a
+rare path rather than the normal one.
+
+### Deliberately not built
+
+**Payroll is deferred with hr-leave.** §15's `salary_structures`,
+`salary_components`, `payroll_runs` and `payslips`, §5.12, §7.4, §13's payroll
+register and §12's two payroll notification rows are all out of scope for this
+module. `payslips.lop_days` is spec'd as coming from hr-leave's
+`leave_requests` outcomes, and hr-leave is Tier 6 and unbuilt — the five leave
+tables exist in `attendance`, so the input has a home, but staff leave policy and
+accrual do not exist yet. §19 also calls per-country statutory templates a
+recommendation with no confirmed shape. Building a tax engine against an
+unconfirmed spec is how a money module acquires rules nobody can justify later.
+
+**Payment gateways are out of scope.** §17 routes them through "the platform
+integrations layer", and there is no `core/integrations` — the same situation
+`core/ai` is in, and AGENTS.md hard rule 6's reasoning applies. `payments.method
+= online_gateway` and the `gateway_provider` / `gateway_payload` columns will
+ship with PR C precisely so a confirmation lands without a migration, and the
+webhook verifier's call site will be named there rather than half-built.
+
+**§14's four AI capabilities (AI-FEE-01 to 04) are out of scope.** `core/ai`
+does not exist. All four are advisory by §14's own framing, and invariant 5
+would require a human-approval gate in any case.
+
+**No receivable posting on invoice issue.** §5.8 lists the posting origins as
+"payments, refunds, expenses, and payroll" — invoices are not among them, so an
+issued invoice creates no ledger entry. A receivable posting is defensible
+accounting and several charts of accounts do it, but inventing one here would
+make §13's reports disagree with the spec they are written against. The
+`1100 Fees receivable` system account is seeded so the choice can be revisited
+without a migration.
+
+**§19's open recommendations are all left open**, each because it is
+unconfirmed rather than difficult: advance payments/wallet per student (default
+stays payment ≤ balance), accounting-period locking and the fiscal-year close
+procedure, gateway settlement reconciliation granularity, the per-provider
+voucher settlement-file layouts, and multi-currency per tenant.

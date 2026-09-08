@@ -76,14 +76,21 @@ class RLSCoverageTests(TestCase):
         )
 
     def test_tenant_owned_models_declare_tenant_column(self):
+        """Both concrete bases, via the one they share.
+
+        ``TenantScopedModel`` is what ``tenant_owned_tables()`` enumerates, so
+        checking the same predicate here keeps the two in step: a table that
+        appears in one list and not the other is exactly the gap that would let
+        an append-only money table ship without a policy.
+        """
         from django.apps import apps
 
-        from core.tenancy.models import TenantOwnedModel
+        from core.tenancy.models import TenantScopedModel
 
         offenders = [
             model._meta.label
             for model in apps.get_models()
-            if issubclass(model, TenantOwnedModel)
+            if issubclass(model, TenantScopedModel)
             and not any(f.name == "tenant" for f in model._meta.fields)
         ]
         self.assertEqual(offenders, [], f"Tenant-owned models without a tenant FK: {offenders}")

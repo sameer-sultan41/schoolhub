@@ -75,6 +75,7 @@ MODULE_APPS = [
     "apps.timetable",
     "apps.attendance",
     "apps.examinations",
+    "apps.fees_finance",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -249,6 +250,15 @@ SPECTACULAR_SETTINGS = {
         "QuestionTypeEnum": "apps.examinations.models.QuestionType",
         "QuestionDifficultyEnum": "apps.examinations.models.QuestionDifficulty",
         "QuestionSourceEnum": "apps.examinations.models.QuestionSource",
+        # And for fees-finance. `LedgerReferenceType` in particular has to be
+        # named: it is a polymorphic origin discriminator the TypeScript client
+        # switches on, so a hash-suffixed name would make every consumer's
+        # narrowing break on an unrelated module's diff.
+        "LedgerAccountTypeEnum": "apps.fees_finance.models.LedgerAccountType",
+        "LedgerReferenceTypeEnum": "apps.fees_finance.models.LedgerReferenceType",
+        "FeeHeadCategoryEnum": "apps.fees_finance.models.FeeHeadCategory",
+        "FeeStructureStatusEnum": "apps.fees_finance.models.FeeStructureStatus",
+        "FeeFrequencyEnum": "apps.fees_finance.models.FeeFrequency",
     },
 }
 

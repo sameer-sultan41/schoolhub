@@ -8,7 +8,12 @@ import uuid
 
 from django.db import models
 
-from core.tenancy.managers import AllTenantsManager, TenantScopedManager
+from core.tenancy.managers import (
+    AllTenantsManager,
+    AppendOnlyAllTenantsManager,
+    AppendOnlyTenantManager,
+    TenantScopedManager,
+)
 
 
 class TenantStatus(models.TextChoices):
@@ -92,24 +97,132 @@ class TenantSettings(TimestampedModel):
         return f"Settings for {self.tenant_id}"
 
 
-class TenantOwnedModel(TimestampedModel):
-    """Base class for every tenant-owned table.
+class TenantScopedModel(models.Model):
+    """The tenant dimension, without any opinion on mutability.
+
+    Carries only what makes a row belong to one school: the tenant FK. It exists
+    so a table can be tenant-scoped *and* append-only, which the two concrete
+    bases below could not both be while the tenant FK lived on only one of them.
+
+    The managers are declared on each concrete base rather than here, because
+    the two genuinely differ: ``TenantOwnedModel``'s queryset knows about soft
+    delete and offers ``alive()``, and ``AppendOnlyTenantModel``'s must not.
+
+    ``core.tenancy.rls.tenant_owned_tables()`` enumerates subclasses of *this*
+    class, so anything tenant-scoped is caught by the RLS coverage check in
+    ``tests/test_rls_coverage.py`` no matter which base it picked. Do not
+    subclass this directly — pick ``TenantOwnedModel`` or
+    ``AppendOnlyTenantModel``.
+
+    ``on_delete=CASCADE`` here deserves a note for the append-only subclasses.
+    Any code path that cascades a ``Tenant`` deletion through Django's ORM —
+    including its fast-delete collector, which can issue one raw ``DELETE``
+    per related table straight through the connection — reaches an
+    append-only table without ever instantiating a ``LedgerEntry`` object, so
+    neither ``AppendOnlyQuerySet.delete()`` nor the model's own ``delete()``
+    guard is in the path. That is not a hole in practice: the connection is
+    still ``schoolhub_app``, whose DELETE privilege on every append-only table
+    is revoked at the database (``core.tenancy.grants``), so any such delete —
+    scoped to one tenant or not — is refused rather than silently succeeding.
+    ``tests/test_ledger.py`` proves the tenant-scoped shape directly. Nothing
+    on this platform calls ``Tenant.delete()`` today in any case; retirement is
+    ``TenantStatus.DEPROVISIONED``, a status change, not a row deletion.
+    """
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="+", db_index=True)
+
+    class Meta:
+        abstract = True
+
+
+class TenantOwnedModel(TimestampedModel, TenantScopedModel):
+    """Base class for every tenant-owned table. The default choice.
 
     Subclasses automatically get:
       - a non-null tenant_id foreign key,
       - a tenant-scoped default manager (``objects``),
-      - an explicitly-named unfiltered manager (``all_tenants``) for platform code only.
+      - an explicitly-named unfiltered manager (``all_tenants``) for platform code only,
+      - the full audit column set, including ``deleted_at`` soft delete.
 
     The database RLS policy — not this manager — is the authoritative boundary.
     """
-
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="+", db_index=True)
 
     objects = TenantScopedManager()
     all_tenants = AllTenantsManager()
 
     class Meta:
         abstract = True
+
+
+class AppendOnlyTenantModel(TenantScopedModel):
+    """Base class for a tenant-owned table history is never rewritten on.
+
+    Same tenant dimension and RLS coverage as ``TenantOwnedModel``, minus every
+    column that implies mutation: no ``updated_at``, no ``updated_by``, and no
+    ``deleted_at``. That last omission is not tidiness — **soft delete is an
+    UPDATE**, and an append-only table has UPDATE revoked from the application
+    role, so the two are mutually exclusive. A row here is inserted once and
+    read forever; a mistake is corrected by appending its reversal.
+
+    Enforced at three levels, because each catches what the others miss:
+
+    1. ``save``/``delete`` here, which catch the ordinary instance path.
+    2. ``AppendOnlyQuerySet.update``/``delete``, which catch the bulk path that
+       never calls ``save`` at all.
+    3. ``core.tenancy.grants.append_only_operations`` in the table's migration,
+       which revokes UPDATE and DELETE from ``schoolhub_app`` — the only one of
+       the three a compromised or careless code path cannot talk its way past.
+       ``tests/test_append_only_coverage.py`` fails the build if a table skips it.
+
+    ``core/audit`` is the precedent and its migration carries the argument:
+    "an audit trail the application can rewrite is not evidence." The same is
+    true of a ledger, which is why ``AuditLog`` could not simply be reused —
+    it is platform-scoped, with a nullable tenant and no RLS policy, and money
+    is tenant-owned data.
+
+    Subclasses that need exactly one mutable column — a back-reference stamped
+    when a later row supersedes this one — list it in ``MUTABLE_FIELDS`` and
+    pass the matching ``mutable_columns`` to ``append_only_operations``, which
+    emits a column-level ``GRANT UPDATE (col)``. A full-row ``save()`` still
+    writes every column and is still refused by the database; only
+    ``save(update_fields=[...])`` within the allowance gets through. The two
+    declarations must agree, and ``test_append_only_coverage.py`` asserts they do.
+    """
+
+    #: Columns a subclass may update in place. Empty means strictly append-only.
+    MUTABLE_FIELDS: frozenset[str] = frozenset()
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_by = models.UUIDField(null=True, blank=True, editable=False)
+
+    objects = AppendOnlyTenantManager()
+    all_tenants = AppendOnlyAllTenantsManager()
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            # An unrestricted save() rewrites every column, which is the one
+            # operation this base exists to prevent. A narrowed save() is allowed
+            # only within MUTABLE_FIELDS, and the database grant enforces the
+            # same narrowing independently.
+            fields = set(kwargs.get("update_fields") or ())
+            if not fields or not fields <= self.MUTABLE_FIELDS:
+                raise RuntimeError(
+                    f"{type(self).__name__} rows are append-only. "
+                    f"Updatable fields: {sorted(self.MUTABLE_FIELDS) or 'none'}. "
+                    "Correct a mistake by appending a reversal "
+                    "(AGENTS.md invariant 4)."
+                )
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError(
+            f"{type(self).__name__} rows cannot be deleted. "
+            "Correct a mistake by appending a reversal (AGENTS.md invariant 4)."
+        )
 
 
 class FeatureFlag(TimestampedModel):

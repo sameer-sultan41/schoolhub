@@ -50,13 +50,18 @@ def tenant_owned_tables() -> list[str]:
     Derived from the models at call time so a new tenant-owned model cannot be
     forgotten — the CI check in tests/test_rls_coverage.py compares this against
     the policies actually present in the database.
+
+    The predicate is ``TenantScopedModel``, not ``TenantOwnedModel``, so it also
+    catches append-only tables (``AppendOnlyTenantModel``). Those carry a tenant
+    column and therefore need a policy exactly as much as any other; narrowing
+    this to the soft-deletable base would let the money tables out of the check.
     """
     from django.apps import apps
 
-    from core.tenancy.models import TenantOwnedModel
+    from core.tenancy.models import TenantScopedModel
 
     tables = []
     for model in apps.get_models():
-        if issubclass(model, TenantOwnedModel) and not model._meta.abstract:
+        if issubclass(model, TenantScopedModel) and not model._meta.abstract:
             tables.append(model._meta.db_table)
     return sorted(tables)

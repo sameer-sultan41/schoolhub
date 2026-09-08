@@ -2614,6 +2614,534 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/fee-heads:
+    get:
+      operationId: fee_heads_list
+      description: '`/fee-heads` — §5.1''s chargeable categories.'
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: is_refundable
+        schema:
+          type: boolean
+      - in: query
+        name: ledger_account_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - fee-heads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFeeHeadList'
+          description: ''
+    post:
+      operationId: fee_heads_create
+      description: '`/fee-heads` — §5.1''s chargeable categories.'
+      tags:
+      - fee-heads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeHead'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FeeHead'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FeeHead'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeHead'
+          description: ''
+  /api/v1/fee-heads/{id}:
+    get:
+      operationId: fee_heads_retrieve
+      description: '`/fee-heads` — §5.1''s chargeable categories.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee head.
+        required: true
+      tags:
+      - fee-heads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeHead'
+          description: ''
+    patch:
+      operationId: fee_heads_partial_update
+      description: '`/fee-heads` — §5.1''s chargeable categories.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee head.
+        required: true
+      tags:
+      - fee-heads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeHead'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeHead'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeHead'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeHead'
+          description: ''
+    delete:
+      operationId: fee_heads_destroy
+      description: '`/fee-heads` — §5.1''s chargeable categories.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee head.
+        required: true
+      tags:
+      - fee-heads
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/fee-schedules:
+    get:
+      operationId: fee_schedules_list
+      description: '`/fee-schedules` — §5.1''s structure lines and installment schedule.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: fee_head_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: fee_structure_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: frequency
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: term_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - fee-schedules
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFeeScheduleList'
+          description: ''
+    post:
+      operationId: fee_schedules_create
+      description: '`/fee-schedules` — §5.1''s structure lines and installment schedule.'
+      tags:
+      - fee-schedules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeSchedule'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FeeSchedule'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FeeSchedule'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSchedule'
+          description: ''
+  /api/v1/fee-schedules/{id}:
+    get:
+      operationId: fee_schedules_retrieve
+      description: '`/fee-schedules` — §5.1''s structure lines and installment schedule.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee schedule.
+        required: true
+      tags:
+      - fee-schedules
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSchedule'
+          description: ''
+    patch:
+      operationId: fee_schedules_partial_update
+      description: '`/fee-schedules` — §5.1''s structure lines and installment schedule.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee schedule.
+        required: true
+      tags:
+      - fee-schedules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeSchedule'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeSchedule'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeSchedule'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSchedule'
+          description: ''
+    delete:
+      operationId: fee_schedules_destroy
+      description: '`/fee-schedules` — §5.1''s structure lines and installment schedule.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee schedule.
+        required: true
+      tags:
+      - fee-schedules
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/fee-structures:
+    get:
+      operationId: fee_structures_list
+      description: '`/fee-structures` — §5.1''s named fee set, with its §6 lifecycle.'
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - fee-structures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFeeStructureList'
+          description: ''
+    post:
+      operationId: fee_structures_create
+      description: '`/fee-structures` — §5.1''s named fee set, with its §6 lifecycle.'
+      tags:
+      - fee-structures
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeStructure'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FeeStructure'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FeeStructure'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeStructure'
+          description: ''
+  /api/v1/fee-structures/{id}:
+    get:
+      operationId: fee_structures_retrieve
+      description: '`/fee-structures` — §5.1''s named fee set, with its §6 lifecycle.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee structure.
+        required: true
+      tags:
+      - fee-structures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeStructure'
+          description: ''
+    patch:
+      operationId: fee_structures_partial_update
+      description: '`/fee-structures` — §5.1''s named fee set, with its §6 lifecycle.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee structure.
+        required: true
+      tags:
+      - fee-structures
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeStructure'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeStructure'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFeeStructure'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeStructure'
+          description: ''
+    delete:
+      operationId: fee_structures_destroy
+      description: '`/fee-structures` — §5.1''s named fee set, with its §6 lifecycle.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee structure.
+        required: true
+      tags:
+      - fee-structures
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/fee-structures/{id}:activate:
+    post:
+      operationId: fee_structures_:activate_create
+      description: |-
+        `POST /fee-structures/{id}:activate`.
+
+        The two checks it runs — at least one schedule, no other active
+        structure at the same scope — are both about a set of rows, so neither
+        can be a constraint. See `services.activate_fee_structure`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - fee-structures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeStructure'
+          description: ''
+  /api/v1/fee-structures/{id}:archive:
+    post:
+      operationId: fee_structures_:archive_create
+      description: |-
+        `POST /fee-structures/{id}:archive`.
+
+        Invoices already priced from this structure are untouched — archiving
+        stops it being used again, it does not rewrite history.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - fee-structures
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeStructure'
+          description: ''
   /api/v1/files:
     get:
       operationId: files_list
@@ -4142,6 +4670,357 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LeaveType'
+          description: ''
+  /api/v1/ledger-accounts:
+    get:
+      operationId: ledger_accounts_list
+      description: '`/ledger-accounts` — §5.8''s per-tenant chart of accounts.'
+      parameters:
+      - in: query
+        name: account_type
+        schema:
+          type: string
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: is_system
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: parent_id
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - ledger-accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLedgerAccountList'
+          description: ''
+    post:
+      operationId: ledger_accounts_create
+      description: '`/ledger-accounts` — §5.8''s per-tenant chart of accounts.'
+      tags:
+      - ledger-accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAccount'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LedgerAccount'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LedgerAccount'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+          description: ''
+  /api/v1/ledger-accounts/{id}:
+    get:
+      operationId: ledger_accounts_retrieve
+      description: '`/ledger-accounts` — §5.8''s per-tenant chart of accounts.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this ledger account.
+        required: true
+      tags:
+      - ledger-accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+          description: ''
+    patch:
+      operationId: ledger_accounts_partial_update
+      description: '`/ledger-accounts` — §5.8''s per-tenant chart of accounts.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this ledger account.
+        required: true
+      tags:
+      - ledger-accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLedgerAccount'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLedgerAccount'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLedgerAccount'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+          description: ''
+    delete:
+      operationId: ledger_accounts_destroy
+      description: '`/ledger-accounts` — §5.8''s per-tenant chart of accounts.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this ledger account.
+        required: true
+      tags:
+      - ledger-accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/ledger-entries:
+    get:
+      operationId: ledger_entries_list
+      description: '`/ledger-entries` — the general ledger, read-only. See the module
+        docstring.'
+      parameters:
+      - in: query
+        name: account
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: is_reversed
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: reference_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: reference_type
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: transaction_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - ledger-entries
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLedgerEntryList'
+          description: ''
+  /api/v1/ledger-entries/{id}:
+    get:
+      operationId: ledger_entries_retrieve
+      description: '`/ledger-entries` — the general ledger, read-only. See the module
+        docstring.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this ledger entry.
+        required: true
+      tags:
+      - ledger-entries
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEntry'
+          description: ''
+  /api/v1/ledger-entries:post-journal:
+    post:
+      operationId: ledger_entries:post_journal_create
+      description: |-
+        `POST /ledger-entries:post-journal` — §8's hand-written journal entry.
+
+        A colon-action rather than a POST to the collection, because the unit of
+        a posting is the balanced *set* of lines. One line at a time could never
+        be validated.
+
+        `Idempotency-Key` through `replay_or_execute`, §11's contract for every
+        money mutation and the one this endpoint was missing: a journal entry
+        is a ledger posting like any other, and a retried request after a
+        timeout must not post the same correction twice onto a table that
+        cannot be corrected by anything but a second, offsetting posting.
+      parameters:
+      - in: query
+        name: account
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: is_reversed
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: reference_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: reference_type
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: transaction_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - ledger-entries:post-journal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualJournal'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ManualJournal'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ManualJournal'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLedgerEntryList'
           description: ''
   /api/v1/marks:
     get:
@@ -10816,6 +11695,186 @@ components:
         * `resigned` - resigned
         * `retired` - retired
         * `terminated` - terminated
+    FeeFrequencyEnum:
+      enum:
+      - one_time
+      - monthly
+      - per_term
+      - annual
+      type: string
+      description: |-
+        * `one_time` - One time
+        * `monthly` - Monthly
+        * `per_term` - Per term
+        * `annual` - Annual
+    FeeHead:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        code:
+          type: string
+          maxLength: 30
+        category:
+          $ref: '#/components/schemas/FeeHeadCategoryEnum'
+        ledger_account:
+          type: string
+          format: uuid
+        is_refundable:
+          type: boolean
+        is_active:
+          type: boolean
+          description: Inactive heads are excluded from new structures.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - ledger_account
+      - name
+      - updated_at
+    FeeHeadCategoryEnum:
+      enum:
+      - tuition
+      - admission
+      - transport
+      - library
+      - exam
+      - fine
+      - other
+      type: string
+      description: |-
+        * `tuition` - Tuition
+        * `admission` - Admission
+        * `transport` - Transport
+        * `library` - Library
+        * `exam` - Exam
+        * `fine` - Fine
+        * `other` - Other
+    FeeSchedule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fee_structure:
+          type: string
+          format: uuid
+        fee_head:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        frequency:
+          $ref: '#/components/schemas/FeeFrequencyEnum'
+        term:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required when frequency is per_term.
+        due_day:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          description: Day-of-month due rule for monthly schedules.
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Fixed due date for one_time and annual schedules.
+        late_fee_policy:
+          nullable: true
+          description: Grace days and fixed/percent late fee, tenant-configured. Read
+            by the overdue sweep; absent means no automatic late fee.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - fee_head
+      - fee_structure
+      - id
+      - updated_at
+    FeeStructure:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        academic_session:
+          type: string
+          format: uuid
+        school_class:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means the structure applies session-wide.
+        campus:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means all campuses.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FeeStructureStatusEnum'
+          readOnly: true
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeSchedule'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_session
+      - created_at
+      - id
+      - name
+      - schedules
+      - status
+      - updated_at
+    FeeStructureStatusEnum:
+      enum:
+      - draft
+      - active
+      - archived
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `active` - Active
+        * `archived` - Archived
     File:
       type: object
       properties:
@@ -11455,6 +12514,186 @@ components:
       - name
       - requires_attachment
       - updated_at
+    LedgerAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 20
+        name:
+          type: string
+          maxLength: 120
+        account_type:
+          $ref: '#/components/schemas/LedgerAccountTypeEnum'
+        parent:
+          type: string
+          format: uuid
+          nullable: true
+        is_system:
+          type: boolean
+          readOnly: true
+          description: Seeded at provisioning; cannot be deleted (see the delete constraint).
+        is_active:
+          type: boolean
+          description: Archived accounts reject new postings but keep their history.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account_type
+      - code
+      - created_at
+      - id
+      - is_system
+      - name
+      - updated_at
+    LedgerAccountTypeEnum:
+      enum:
+      - asset
+      - liability
+      - equity
+      - income
+      - expense
+      type: string
+      description: |-
+        * `asset` - Asset
+        * `liability` - Liability
+        * `equity` - Equity
+        * `income` - Income
+        * `expense` - Expense
+    LedgerEntry:
+      type: object
+      description: |-
+        Read-only. Postings are made by `ledger.post_transaction`, never by a POST.
+
+        There is no create path on this serializer on purpose: a client that could
+        insert a single line could insert an unbalanced posting, and the balance rule
+        is about the set. `LedgerEntryViewSet` exposes list and retrieve only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        transaction_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Groups the balanced lines of one posting. Assigned by ledger.post_transaction.
+        entry_date:
+          type: string
+          format: date
+          readOnly: true
+          description: Posting date, which is not always the creation date.
+        ledger_account:
+          type: string
+          format: uuid
+          readOnly: true
+        account_code:
+          type: string
+          readOnly: true
+        account_name:
+          type: string
+          readOnly: true
+        debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        reference_type:
+          allOf:
+          - $ref: '#/components/schemas/LedgerReferenceTypeEnum'
+          readOnly: true
+        reference_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: The origin record, per reference_type. Null for a manual journal,
+            which has no platform record behind it.
+        memo:
+          type: string
+          readOnly: true
+          nullable: true
+        reversed_by_transaction_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Set when a reversal supersedes this posting. The only mutable
+            column.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account_code
+      - account_name
+      - created_at
+      - credit
+      - debit
+      - entry_date
+      - id
+      - ledger_account
+      - memo
+      - reference_id
+      - reference_type
+      - reversed_by_transaction_id
+      - transaction_id
+    LedgerLine:
+      type: object
+      description: One line of a manual journal entry.
+      properties:
+        ledger_account:
+          type: string
+          format: uuid
+        debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        memo:
+          type: string
+          nullable: true
+          maxLength: 255
+      required:
+      - ledger_account
+    LedgerReferenceTypeEnum:
+      enum:
+      - payment
+      - refund
+      - expense
+      - payroll_run
+      - fine
+      - manual
+      - reversal
+      type: string
+      description: |-
+        * `payment` - Payment
+        * `refund` - Refund
+        * `expense` - Expense
+        * `payroll_run` - Payroll run
+        * `fine` - Fine
+        * `manual` - Manual journal
+        * `reversal` - Reversal
     Login:
       type: object
       description: |-
@@ -11479,6 +12718,25 @@ components:
       required:
       - identifier
       - password
+    ManualJournal:
+      type: object
+      description: '`POST /ledger-entries:post-journal` — §8''s hand-written journal
+        entry.'
+      properties:
+        entry_date:
+          type: string
+          format: date
+        memo:
+          type: string
+          maxLength: 255
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerLine'
+      required:
+      - entry_date
+      - lines
+      - memo
     Marks:
       type: object
       description: |-
@@ -11877,6 +13135,69 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedFeeHeadList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeHead'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedFeeScheduleList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeSchedule'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedFeeStructureList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeStructure'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedFileList:
       type: object
       properties:
@@ -12010,6 +13331,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LeaveType'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedLedgerAccountList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerAccount'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedLedgerEntryList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
         meta:
           type: object
           properties:
@@ -12942,6 +14305,124 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedFeeHead:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        code:
+          type: string
+          maxLength: 30
+        category:
+          $ref: '#/components/schemas/FeeHeadCategoryEnum'
+        ledger_account:
+          type: string
+          format: uuid
+        is_refundable:
+          type: boolean
+        is_active:
+          type: boolean
+          description: Inactive heads are excluded from new structures.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedFeeSchedule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fee_structure:
+          type: string
+          format: uuid
+        fee_head:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        frequency:
+          $ref: '#/components/schemas/FeeFrequencyEnum'
+        term:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required when frequency is per_term.
+        due_day:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          description: Day-of-month due rule for monthly schedules.
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Fixed due date for one_time and annual schedules.
+        late_fee_policy:
+          nullable: true
+          description: Grace days and fixed/percent late fee, tenant-configured. Read
+            by the overdue sweep; absent means no automatic late fee.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedFeeStructure:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        academic_session:
+          type: string
+          format: uuid
+        school_class:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means the structure applies session-wide.
+        campus:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means all campuses.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FeeStructureStatusEnum'
+          readOnly: true
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeSchedule'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedGradeBand:
       type: object
       description: |-
@@ -13139,6 +14620,40 @@ components:
           description: staff(id).
         is_active:
           type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedLedgerAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 20
+        name:
+          type: string
+          maxLength: 120
+        account_type:
+          $ref: '#/components/schemas/LedgerAccountTypeEnum'
+        parent:
+          type: string
+          format: uuid
+          nullable: true
+        is_system:
+          type: boolean
+          readOnly: true
+          description: Seeded at provisioning; cannot be deleted (see the delete constraint).
+        is_active:
+          type: boolean
+          description: Archived accounts reject new postings but keep their history.
         created_at:
           type: string
           format: date-time

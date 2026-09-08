@@ -1,6 +1,7 @@
 # Entities: Finance & Payroll
 
 > **Agent Context**
+> **Implementation note:** 5 of these 22 tables are built (`ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules`); payroll's four are deferred with hr-leave. See `../../03-modules/fees-finance.md` §20 for the register.
 > **Summary:** Column-level specs for the 22 tables owned by the fees-finance module: fee configuration, invoicing, collections (incl. bank/wallet vouchers), refunds, general ledger, expenses, budgets, and payroll. Every table is tenant-owned and implicitly carries `id UUID PK`, `tenant_id FK`, `created_at`/`updated_at`, `created_by`/`updated_by`, `deleted_at` (soft delete) — exceptions are stated per table. All monetary columns are `numeric(12,2)` in the tenant's configured currency (no per-row currency column).
 > **Co-load with:** `../../03-modules/fees-finance.md` · `people.md` (students, staff) · `academics.md` (sessions, terms, classes, campuses) · `tenancy.md` (users, files)
 
@@ -46,7 +47,7 @@ Line of a fee structure: which head is charged, how much, and when (acts as the 
 | amount | numeric(12,2) | no | — | Amount per occurrence |
 | frequency | varchar(15) | no | `'monthly'` | Enum: `one_time`, `monthly`, `per_term`, `annual` |
 | term_id | uuid | yes | null | FK → `terms.id`; required when frequency = `per_term` |
-| due_day | smallint | yes | null | Day-of-month due rule for `monthly` |
+| due_day | smallint | yes | null | Day-of-month due rule for `monthly`. Constrained to 1-28: day 29-31 is not a rule February can honour, so the generator's clamp to the month's last day stays a rare path |
 | due_date | date | yes | null | Fixed due date for `one_time`/`annual` |
 | late_fee_policy | jsonb | yes | null | Grace days, fixed/percent late fee (tenant-configured) |
 
@@ -272,6 +273,8 @@ Relationships: self-referencing hierarchy; one→many `ledger_entries`, `fee_hea
 
 Immutable double-entry journal lines; corrections by reversal entries only. Exception to implicit columns: **no `updated_at`/`updated_by`/`deleted_at`** — append-only (no update/delete grants for the application role).
 
+Implemented on `core.tenancy.models.AppendOnlyTenantModel`, a sibling of `TenantOwnedModel` that shares its tenant column and RLS policy but carries none of the mutation columns — `deleted_at` is absent because soft delete *is* an UPDATE, which is the grant this table revokes. Enforced at three levels: the model's `save`/`delete`, the queryset's `update`/`delete`, and `REVOKE UPDATE, DELETE ON ledger_entries FROM schoolhub_app` in `0002_rls_policies` (via `core.tenancy.grants.append_only_operations`). `reversed_by_transaction_id` is the one exception and is permitted by a column-level `GRANT UPDATE (reversed_by_transaction_id)`, so a full-row `save()` is still refused by PostgreSQL while a narrowed one succeeds.
+
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
 | transaction_id | uuid | no | — | Groups the balanced lines of one posting (Σ debit = Σ credit) |
@@ -279,10 +282,10 @@ Immutable double-entry journal lines; corrections by reversal entries only. Exce
 | ledger_account_id | uuid | no | — | FK → `ledger_accounts.id` |
 | debit | numeric(12,2) | no | `0` | Exactly one of debit/credit > 0 per row |
 | credit | numeric(12,2) | no | `0` | |
-| reference_type | varchar(30) | yes | null | Enum: `payment`, `refund`, `expense`, `payroll_run`, `fine`, `manual`, `reversal` |
-| reference_id | uuid | yes | null | Origin record id per reference_type |
+| reference_type | varchar(30) | **no** | — | Enum: `payment`, `refund`, `expense`, `payroll_run`, `fine`, `manual`, `reversal`. Narrowed to NOT NULL in implementation: every posting has an origin, and `manual` is the value for an accountant's journal with no platform record behind it, so there is no state a NULL would describe |
+| reference_id | uuid | yes | null | Origin record id per reference_type. Null for a `manual` journal |
 | memo | varchar(255) | yes | null | |
-| reversed_by_transaction_id | uuid | yes | null | Set when a reversal supersedes this posting |
+| reversed_by_transaction_id | uuid | yes | null | Set when a reversal supersedes this posting. The only column the application role may UPDATE, by column-level grant |
 
 Indexes: `(tenant_id, transaction_id)`; `(tenant_id, ledger_account_id, entry_date)`; `(tenant_id, reference_type, reference_id)`.
 Relationships: many→one `ledger_accounts`; polymorphic origin → `payments` / `refunds` / `expenses` / `payroll_runs` / `fines`.
