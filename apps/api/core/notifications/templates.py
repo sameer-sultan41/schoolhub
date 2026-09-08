@@ -163,17 +163,24 @@ class TemplateRegistry:
         return {code for (code, _) in self._templates}
 
 
+def used_placeholders(*texts: str) -> set[str]:
+    """Every `{{ variable }}` name referenced across the given texts.
+
+    Public because `apps.communication.services.assert_override_is_valid` needs
+    the identical extraction to check a tenant's proposed override against the
+    platform template's declared set — the same rule this module enforces at
+    registration, re-run at edit time. One regex, one place it can drift.
+    """
+    return {match.group(1) for text in texts for match in _PLACEHOLDER.finditer(text)}
+
+
 def _assert_placeholders_declared(template: NotificationTemplate) -> None:
     """Catch an undeclared placeholder at import time, not at send time.
 
     A template registered with `{{ student.name }}` but no such declared variable
     would otherwise only fail the first time a real absence alert tried to render.
     """
-    used = {
-        match.group(1)
-        for text in (template.subject or "", template.body)
-        for match in _PLACEHOLDER.finditer(text)
-    }
+    used = used_placeholders(template.subject or "", template.body)
     undeclared = used - template.variables
     if undeclared:
         raise ValueError(
