@@ -36,6 +36,7 @@ from apps.fees_finance.models import (
     Receipt,
     Refund,
     Scholarship,
+    ScholarshipStatus,
     VoucherCollectionImport,
     VoucherProvider,
 )
@@ -59,8 +60,18 @@ class LedgerAccountSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "is_system", "created_at", "updated_at"]
 
     def validate(self, attrs: dict) -> dict:
-        parent = attrs.get("parent") or getattr(self.instance, "parent", None)
-        account_type = attrs.get("account_type") or getattr(self.instance, "account_type", None)
+        # `"parent" in attrs`, not `attrs.get("parent") or ...`: the `or` form
+        # cannot tell "the client explicitly sent null to clear it" from "the
+        # client didn't mention this field at all", and silently falls back to
+        # the instance's stale value in the first case — which validates the
+        # wrong intended parent and can raise a spurious type-mismatch error
+        # against a client trying to clear it.
+        parent = attrs["parent"] if "parent" in attrs else getattr(self.instance, "parent", None)
+        account_type = (
+            attrs["account_type"]
+            if "account_type" in attrs
+            else getattr(self.instance, "account_type", None)
+        )
         if parent is not None and parent.account_type != account_type:
             raise serializers.ValidationError(
                 {
@@ -192,6 +203,18 @@ class FeeScheduleSerializer(serializers.ModelSerializer):
         structure = attrs.get("fee_structure") or getattr(self.instance, "fee_structure", None)
         if structure is not None:
             services.assert_structure_is_editable(structure=structure)
+        # And the structure being left, if `fee_structure` is changing. Without
+        # this, a PATCH moving a schedule out of an ACTIVE structure into a
+        # draft one only validated the destination — silently re-pricing the
+        # active structure invoices were already generated from, which is
+        # exactly what this check exists to prevent.
+        current_structure = getattr(self.instance, "fee_structure", None)
+        if (
+            current_structure is not None
+            and "fee_structure" in attrs
+            and attrs["fee_structure"] != current_structure
+        ):
+            services.assert_structure_is_editable(structure=current_structure)
         head = attrs.get("fee_head") or getattr(self.instance, "fee_head", None)
         if head is not None and not head.is_active:
             raise serializers.ValidationError(
@@ -424,11 +447,29 @@ class ScholarshipSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "approved_by", "created_at", "updated_at"]
 
     def validate(self, attrs: dict) -> dict:
-        return _validate_grant_value(
+        attrs = _validate_grant_value(
             attrs,
             instance=self.instance,
             type_field="coverage_type",
         )
+        # Ending or revoking an award is a decision with no colon-action of its
+        # own — §5.3's lifecycle moves through a plain PATCH — but it must not
+        # move through one with no explanation. `notes` is optional everywhere
+        # else on this serializer; it stops being optional the moment `status`
+        # is heading to a terminal state, which is the same requirement
+        # Discount.revoke and Fine.waive both enforce on their own colon-action.
+        terminal = {ScholarshipStatus.ENDED, ScholarshipStatus.REVOKED}
+        new_status = attrs.get("status")
+        if new_status in terminal and not (attrs.get("notes") or "").strip():
+            raise serializers.ValidationError(
+                {
+                    "notes": (
+                        f"Say why the award is being {new_status} — an unexplained "
+                        "termination of a grant is what an audit flags."
+                    )
+                }
+            )
+        return attrs
 
 
 class FineSerializer(serializers.ModelSerializer):

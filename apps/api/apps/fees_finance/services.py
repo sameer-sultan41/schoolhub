@@ -92,8 +92,22 @@ def ensure_system_accounts(*, tenant_id: uuid.UUID) -> dict[str, LedgerAccount]:
     to "Petty cash" keeps its name, and one that archived an account it does not
     use keeps it archived. Re-asserting our defaults over a tenant's edits would
     make this command destructive on its second run.
+
+    Reads through `all_tenants.filter(tenant_id=tenant_id)`, not the default
+    manager. `LedgerAccount.objects` is tenant-scoped by the *ambient* context
+    (`core.tenancy.context.get_current_tenant_id()`), not by this function's own
+    `tenant_id` argument — every current caller happens to bind that context
+    first, so the two agree today, but a function that takes `tenant_id`
+    explicitly should not depend on a caller having also set it as ambient
+    state. Getting it wrong here is silent and severe: if the two ever diverge,
+    `existing` reflects the *other* tenant's accounts, every code in
+    `SYSTEM_ACCOUNTS` looks already present (the codes are fixed strings like
+    "1000"), and this tenant's accounts are never created.
     """
-    existing = {account.code: account for account in LedgerAccount.objects.alive()}
+    existing = {
+        account.code: account
+        for account in LedgerAccount.all_tenants.filter(tenant_id=tenant_id).alive()
+    }
     missing = [
         LedgerAccount(
             tenant_id=tenant_id, code=code, name=name, account_type=account_type, is_system=True
@@ -131,10 +145,12 @@ def assert_fee_head_account_is_income(*, ledger_account: LedgerAccount) -> None:
 def assert_account_may_be_archived(*, account: LedgerAccount) -> None:
     """A system account stays available; anything else may be archived freely.
 
-    Archiving is the only retirement path for an account that has been posted
-    to — the entries must stay readable, so deletion is never right. `is_system`
-    accounts are the ones this module's own postings target by code, so
-    archiving one would break collection for the whole tenant.
+    Archiving keeps the row and its code exactly as they are — only
+    `is_active` moves — so a posted-to account's history stays reachable under
+    the same code. `is_system` accounts are the ones this module's own
+    postings target by code, so archiving one would break collection for the
+    whole tenant. This check is for `PATCH is_active=False` only; deleting is
+    the stricter operation and has its own check below.
     """
     if account.is_system:
         raise DomainRuleViolation(
@@ -142,6 +158,32 @@ def assert_account_may_be_archived(*, account: LedgerAccount) -> None:
                 "is_active": (
                     f"{account.code} {account.name} is a system account and stays "
                     "available. Add your own account alongside it instead."
+                )
+            }
+        )
+
+
+def assert_account_may_be_deleted(*, account: LedgerAccount) -> None:
+    """Deletion is stricter than archiving: nothing may have posted to it.
+
+    Archiving keeps the row and its code; deleting frees the code for reuse —
+    `ledger_accounts_code_unique` is conditioned on `deleted_at IS NULL`. An
+    account with live postings must never be deletable, because a new account
+    could then take its code while the old postings still exist under a
+    now-invisible row: the FK still resolves correctly by primary key, but
+    "account 4001" would silently mean two different things depending on when
+    you asked. Archiving is the only retirement path once anything has posted;
+    say so rather than letting the delete succeed and the confusion surface
+    later, in a report.
+    """
+    assert_account_may_be_archived(account=account)
+    if LedgerEntry.objects.filter(ledger_account=account).exists():
+        raise DomainRuleViolation(
+            {
+                "id": (
+                    f"{account.code} {account.name} has ledger postings and cannot "
+                    "be deleted. Archive it instead — its code stays reserved and "
+                    "its history stays under it."
                 )
             }
         )
@@ -170,9 +212,14 @@ def assert_structure_is_editable(*, structure: FeeStructure) -> None:
 def assert_session_is_writable(*, academic_session) -> None:
     """A closed session takes no new fee configuration.
 
-    Mirrors `academics` and `examinations`: the session lifecycle is
-    school_organization's, and every module that hangs records off a session
-    asks the same question rather than each deciding for itself.
+    The predicate mirrors `academics` and `examinations` — `AcademicSession.
+    is_writable` is school-organization's own, and this defers to it rather
+    than restating the status list. The function itself is not shared: the
+    error body's key and wording are fees-finance's own ("fee configuration"),
+    where examinations' equivalent speaks to exams. Genuinely unifying the two
+    into one helper is a cross-module change with no bug behind it, so it is
+    left as a parallel, independent implementation of the same underlying rule
+    rather than bundled into this PR.
     """
     if not academic_session.is_writable:
         raise DomainRuleViolation(
@@ -248,18 +295,33 @@ def archive_fee_structure(*, structure: FeeStructure, actor_id: uuid.UUID | None
 
 
 def assert_fee_head_is_unused(*, fee_head: FeeHead) -> None:
-    """A head priced into a schedule cannot be deleted, only deactivated.
+    """A head referenced anywhere cannot be deleted, only deactivated.
 
     `is_active=False` removes it from new structures while every historical
-    invoice line keeps its meaning. Deleting it would leave lines describing a
-    charge nobody can name.
+    reference keeps its meaning. Deleting it would leave those rows describing
+    a charge nobody can name — and `fee_heads_code_unique` is conditioned on
+    `deleted_at IS NULL`, so a deleted head's code is immediately reusable by a
+    new one, the same code-reuse shape flagged on `LedgerAccount`.
+
+    Three tables reference a head, and pricing it into a `FeeSchedule` is only
+    one of them. A fine-category head is never priced into a schedule at all —
+    it exists purely for `Fine.fee_head` — and `generate_invoices` also writes
+    `FeeInvoiceLine.fee_head` directly, independent of whichever schedule (if
+    any) produced the line. A check that only looked at `FeeSchedule` would let
+    a fine-only or already-invoiced head be deleted while still referenced.
     """
-    if FeeSchedule.objects.alive().filter(fee_head=fee_head).exists():
+    referenced = (
+        FeeSchedule.objects.alive().filter(fee_head=fee_head).exists()
+        or Fine.objects.alive().filter(fee_head=fee_head).exists()
+        or FeeInvoiceLine.objects.alive().filter(fee_head=fee_head).exists()
+    )
+    if referenced:
         raise DomainRuleViolation(
             {
                 "fee_head": (
-                    "This fee head is priced into a fee schedule. Deactivate it "
-                    "instead — historical invoice lines still refer to it."
+                    "This fee head is referenced by a fee schedule, a fine or an "
+                    "invoice line. Deactivate it instead — historical records still "
+                    "refer to it."
                 )
             }
         )
@@ -420,7 +482,25 @@ def generate_invoices(
     unbilled one: the accountant cannot tell which students were done without
     reading every invoice, and the duplicate guard would then make a clean
     re-run impossible to distinguish from a double-billing attempt.
+
+    **The structure is locked `FOR UPDATE` before `already` is read.** Without
+    it, two runs firing at once for the same structure and period (a retried
+    Celery delivery, or two staff members both clicking generate) both read the
+    *same* `already` set — neither sees the other's still-uncommitted inserts —
+    and both then try to create the same student's invoice. The duplicate guard
+    is exactly what refuses the second one, but as an uncaught `IntegrityError`
+    partway through this one transaction, which the "skip and finish the
+    remainder" story only holds for a *sequential* retry, not a genuinely
+    concurrent one. The lock makes the second run wait for the first to commit,
+    so it then sees the correct, up-to-date `already` set and skips cleanly —
+    the same shape `activate_fee_structure` and `record_payment` already use to
+    close this class of race.
     """
+    structure = (
+        FeeStructure.objects.select_for_update()
+        .select_related("academic_session")
+        .get(pk=structure.pk)
+    )
     assert_structure_is_billable(structure=structure)
     session = structure.academic_session
     window_start, window_end, label = resolve_period(
@@ -612,14 +692,25 @@ def revoke_discount(*, discount: Discount, reason: str, actor_id: uuid.UUID | No
     Revocation is forward-looking by design: re-pricing issued invoices would
     change what a parent was told they owe, which is a correction that belongs
     in an adjustment line rather than a silent rewrite.
+
+    **`reason` is left exactly as it was.** `discounts` has one text column,
+    unlike `fines` — which keeps `reason` (why it was raised) and
+    `waived_reason` (why it was forgiven) separate precisely so neither
+    overwrites the other. A discount's `reason` records why it was *granted*,
+    and a revocation overwriting it would destroy that record with no way to
+    recover it: an accountant reviewing a revoked discount six months later
+    would read the revocation's reason and have no way to tell what the grant
+    itself was for. The caller's stated reason for revoking still reaches the
+    audit trail — `record_audit`'s `after` payload — which is the durable,
+    queryable place a decision like this belongs, without overloading a column
+    the schema gives one meaning.
     """
     locked = Discount.objects.select_for_update().get(pk=discount.pk)
     if not reason.strip():
         raise DomainRuleViolation({"reason": "Revoking a discount requires a reason."})
     locked.status = DiscountStatus.REVOKED
-    locked.reason = reason
     locked.updated_by = actor_id
-    locked.save(update_fields=["status", "reason", "updated_by", "updated_at"])
+    locked.save(update_fields=["status", "updated_by", "updated_at"])
     return locked
 
 
@@ -729,15 +820,23 @@ def _post_payment_to_ledger(
 
     credits: list[LedgerLine] = []
     allocated = ZERO
+    # Largest share first: its remainder-absorbing portion is computed last
+    # (once `allocated` covers everything else), but the *account* it lands on
+    # is `ordered[0]`, not `ordered[-1]` — a one-cent drift lands proportionally
+    # lighter against the largest share than the smallest.
     ordered = sorted(shares.items(), key=lambda item: item[1], reverse=True)
     for index, (account_id, share) in enumerate(ordered):
-        if index == len(ordered) - 1:
-            portion = quantize_money(payment.amount - allocated)
-        else:
-            portion = quantize_money(payment.amount * share / charged)
-            allocated = quantize_money(allocated + portion)
+        if index == 0:
+            continue
+        portion = quantize_money(payment.amount * share / charged)
+        allocated = quantize_money(allocated + portion)
         if portion > ZERO:
             credits.append(LedgerLine(ledger_account_id=account_id, credit=portion))
+
+    largest_account_id, _ = ordered[0]
+    largest_portion = quantize_money(payment.amount - allocated)
+    if largest_portion > ZERO:
+        credits.append(LedgerLine(ledger_account_id=largest_account_id, credit=largest_portion))
 
     return post_transaction(
         entry_date=timezone.localdate(),
@@ -1066,20 +1165,40 @@ def _post_partial_refund(
     *, refund: Refund, original_transaction_id: uuid.UUID, actor_id: uuid.UUID | None
 ) -> uuid.UUID:
     """Mirror the original transaction's accounts, scaled to the refunded share."""
-    original_lines = list(LedgerEntry.objects.filter(transaction_id=original_transaction_id))
+    # `order_by("ledger_account_id")`: a payment posts one debit line (cash or
+    # bank) against possibly several credit lines — "payments split the income
+    # side across the heads the invoice charged" — and an unordered fetch
+    # leaves Postgres free to return them in whatever order a given scan
+    # happens to produce, `ledger_entries.pk` being a UUID gives no natural
+    # sequence to fall back on. Deterministic, so which line absorbs the
+    # rounding remainder below does not vary run to run for the same refund.
+    original_lines = list(
+        LedgerEntry.objects.filter(transaction_id=original_transaction_id).order_by(
+            "ledger_account_id"
+        )
+    )
     total_debit = quantize_money(sum((line.debit for line in original_lines), ZERO))
     share = refund.amount / total_debit if total_debit else ZERO
 
-    lines = []
-    allocated = ZERO
     scaled = [
         (line, quantize_money((line.debit or line.credit) * share)) for line in original_lines
     ]
+    # The remainder goes to the *last credit line specifically* — not "the
+    # last line in whatever order the query returned". Only a credit line's
+    # mirrored amount feeds `allocated`, the sum `assert_balanced` is about to
+    # check against `refund.amount`; anchoring the correction to "last line"
+    # rather than "last credit line" silently skips it whenever the single
+    # debit (cash/bank) line happens to sort last, and several independently
+    # rounded credit lines can then fail to sum to `refund.amount` exactly.
+    last_credit_index = max(
+        (index for index, (line, _) in enumerate(scaled) if line.credit), default=None
+    )
+
+    lines = []
+    allocated = ZERO
     for index, (line, portion) in enumerate(scaled):
-        if index == len(scaled) - 1:
-            # The last line absorbs the rounding remainder so the posting
-            # balances exactly — `assert_balanced` is about to insist.
-            portion = quantize_money(refund.amount - allocated) if line.credit else portion
+        if index == last_credit_index:
+            portion = quantize_money(refund.amount - allocated)
         if line.debit:
             lines.append(LedgerLine(ledger_account_id=line.ledger_account_id, credit=portion))
         else:
@@ -1093,6 +1212,11 @@ def _post_partial_refund(
         reference_id=refund.pk,
         actor_id=actor_id,
         memo=f"Partial refund of payment {refund.payment_id}",
+        # Same reasoning as `reverse_transaction`: this mirrors the original
+        # payment's own accounts, so an account archived after that payment
+        # posted must not strand a refund against it — a partial refund is a
+        # correction of history exactly as much as a full one is.
+        allow_archived_accounts=True,
     )
 
 
@@ -1259,34 +1383,68 @@ def apply_settlement_rows(
             )
             continue
 
-        payment = record_payment(
-            invoice=voucher.fee_invoice,
-            amount=row.amount,
-            method=PaymentMethod.BANK_TRANSFER,
-            reference_no=row.transaction_reference,
-            gateway_provider=None,
-            # No `received_by`: nobody at the school handled this money.
-            actor_id=None,
-            tenant_id=tenant_id,
-        )
-        SettlementRow.objects.create(
-            tenant_id=tenant_id,
-            voucher_import=voucher_import,
-            provider=provider,
-            consumer_number=row.consumer_number,
-            transaction_reference=row.transaction_reference,
-            amount=quantize_money(row.amount),
-            paid_on=row.paid_on,
-            payment=payment,
-            created_by=actor_id,
-            updated_by=actor_id,
-        )
-        FeeVoucher.objects.filter(pk=voucher.pk).update(
-            status=VoucherStatus.PAID,
-            payment=payment,
-            updated_by=actor_id,
-            updated_at=timezone.now(),
-        )
+        # A savepoint per row, caught here: `record_payment` can still refuse a
+        # row that matched cleanly on consumer number and amount — the invoice
+        # was canceled, or its balance moved between when the voucher was
+        # issued and when this file settles it. Letting that propagate would
+        # abort the whole import on one row, the same failure this function's
+        # own "an unmatched row does not fail the file" guarantee exists to
+        # prevent — it just arrives through `record_payment` instead of a
+        # missing voucher.
+        try:
+            with transaction.atomic():
+                # Re-fetched and locked, not the `vouchers` dict's snapshot from
+                # before the loop started: a voucher can go `void` mid-import —
+                # a family settling at the counter while this exact file is
+                # being reconciled is the ordinary case `void_voucher` exists
+                # for — and the invoice's own balance check cannot catch that,
+                # since a partly-covered invoice can still have room for a
+                # second, no-longer-legitimate settlement to fit under it.
+                locked_voucher = FeeVoucher.objects.select_for_update().get(pk=voucher.pk)
+                if locked_voucher.status != VoucherStatus.ISSUED:
+                    raise DomainRuleViolation(
+                        f"Voucher {locked_voucher.consumer_number} is "
+                        f"{locked_voucher.status}, not issued."
+                    )
+                payment = record_payment(
+                    invoice=voucher.fee_invoice,
+                    amount=row.amount,
+                    method=PaymentMethod.BANK_TRANSFER,
+                    reference_no=row.transaction_reference,
+                    gateway_provider=None,
+                    # No `received_by`: nobody at the school handled this money.
+                    actor_id=None,
+                    tenant_id=tenant_id,
+                )
+                SettlementRow.objects.create(
+                    tenant_id=tenant_id,
+                    voucher_import=voucher_import,
+                    provider=provider,
+                    consumer_number=row.consumer_number,
+                    transaction_reference=row.transaction_reference,
+                    amount=quantize_money(row.amount),
+                    paid_on=row.paid_on,
+                    payment=payment,
+                    created_by=actor_id,
+                    updated_by=actor_id,
+                )
+                FeeVoucher.objects.filter(pk=voucher.pk).update(
+                    status=VoucherStatus.PAID,
+                    payment=payment,
+                    updated_by=actor_id,
+                    updated_at=timezone.now(),
+                )
+        except DomainRuleViolation as exc:
+            exceptions.append(
+                {
+                    "row": row.row_number,
+                    "provider_reference": row.transaction_reference,
+                    "amount": str(row.amount),
+                    "reason": f"Could not post: {exc.detail}",
+                }
+            )
+            continue
+
         already.add(key)
         vouchers.pop(row.consumer_number, None)
         matched += 1

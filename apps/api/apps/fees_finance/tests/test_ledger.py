@@ -244,6 +244,38 @@ class AppendOnlyTests(LedgerTestCase):
 
         self.assertIn("permission denied", str(caught.exception).lower())
 
+    def test_a_tenant_scoped_bulk_delete_is_refused_like_the_unscoped_one(self) -> None:
+        """The shape a cascade would take, past all three the class docstring names.
+
+        Nothing on this platform actually deletes a `Tenant` row today
+        (retirement is `TenantStatus.DEPROVISIONED`, a status, not a row
+        deletion) — but *if* something ever cascaded a tenant's deletion
+        through Django's ORM, the collector would emit a `DELETE FROM
+        ledger_entries WHERE tenant_id = ...`, which is a raw statement through
+        the connection that the model's own `delete()` guard and
+        `AppendOnlyQuerySet.delete()` never see. This proves the actual
+        boundary holds even for that shape: the `schoolhub_app` connection has
+        DELETE revoked on `ledger_entries` at the database, so a tenant-scoped
+        bulk delete is refused exactly like the unscoped one above, regardless
+        of which code path constructs it.
+        """
+        self._post()
+
+        # `assertRaises` outside `atomic()`, not inside — see `_raw`'s
+        # docstring above. A permission denial poisons the transaction, and if
+        # `assertRaises` swallowed it while still inside `atomic`, the block
+        # would exit cleanly and then fail releasing its savepoint on a dead
+        # connection instead of raising the assertion the test is for.
+        with (
+            tenant_context(self.tenant.id),
+            self.assertRaises(ProgrammingError) as caught,
+            transaction.atomic(),
+            connection.cursor() as cursor,
+        ):
+            cursor.execute("DELETE FROM ledger_entries WHERE tenant_id = %s", [str(self.tenant.pk)])
+
+        self.assertIn("permission denied", str(caught.exception).lower())
+
     def test_the_one_mutable_column_may_be_updated_and_nothing_else(self) -> None:
         """The column-level GRANT UPDATE, which is what makes reversal possible
         on a table that otherwise refuses every write."""

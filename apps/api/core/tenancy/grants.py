@@ -51,6 +51,12 @@ END
 $$;
 """
 
+#: Deliberately not the exact inverse of ``_REVOKE``. The forward SQL revokes
+#: from both ``PUBLIC`` and the app role; the reverse re-grants only to the app
+#: role, because handing broad UPDATE/DELETE back to ``PUBLIC`` is never the
+#: right way to undo this migration — nothing should have been relying on
+#: PUBLIC's grant in the first place. Reversing this migration is expected to
+#: restore normal application access, not PUBLIC's.
 _RESTORE = """
 DO $$
 BEGIN
@@ -101,13 +107,37 @@ def append_only_tables() -> dict[str, frozenset[str]]:
     Derived from the models at call time, the same way
     ``core.tenancy.rls.tenant_owned_tables()`` is, so a new append-only model
     cannot be forgotten.
+
+    The allowance is resolved through ``_meta.get_field(name).column``, not
+    used as a bare field name. ``MUTABLE_FIELDS`` names a Python attribute and
+    the SQL grant names a database column, and those coincide only by luck for
+    a plain column like ``UUIDField``. A future entry that is a
+    ``ForeignKey("other_model")`` named e.g. ``superseded_by`` would resolve to
+    the column ``superseded_by_id`` — granting the field name directly would
+    emit ``GRANT UPDATE (superseded_by)`` against a column that does not exist,
+    failing the migration outright rather than silently granting the wrong
+    thing, but resolving it correctly here means it never comes up.
     """
     from django.apps import apps
+    from django.db.models import Field
 
     from core.tenancy.models import AppendOnlyTenantModel
 
-    return {
-        model._meta.db_table: frozenset(model.MUTABLE_FIELDS)
-        for model in apps.get_models()
-        if issubclass(model, AppendOnlyTenantModel) and not model._meta.abstract
-    }
+    tables: dict[str, frozenset[str]] = {}
+    for model in apps.get_models():
+        if not (issubclass(model, AppendOnlyTenantModel) and not model._meta.abstract):
+            continue
+        columns = set()
+        for name in model.MUTABLE_FIELDS:
+            field = model._meta.get_field(name)
+            # `MUTABLE_FIELDS` names an actual column, never a reverse relation
+            # — `get_field()`'s return type covers both, so this narrows it
+            # rather than assuming the case away.
+            if not isinstance(field, Field) or field.column is None:
+                raise TypeError(
+                    f"{model.__name__}.MUTABLE_FIELDS names {name!r}, which is not a "
+                    "concrete column."
+                )
+            columns.add(field.column)
+        tables[model._meta.db_table] = frozenset(columns)
+    return tables

@@ -15,6 +15,9 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
 from apps.fees_finance import services
 from apps.fees_finance.adapters import adapter_for
 from apps.fees_finance.models import (
@@ -307,6 +310,33 @@ class SettlementTests(VoucherTestCase):
         with tenant_context(self.tenant.id):
             self.assertEqual(Payment.objects.count(), 0)
 
+    def test_the_matcher_locks_the_voucher_before_posting(self) -> None:
+        """Not the `vouchers` dict's snapshot from before the loop started — a
+        voucher can go `void` mid-import, a family settling at the counter
+        while this exact file is being reconciled is the ordinary case
+        `void_voucher` exists for, and the invoice's own balance check alone
+        cannot catch that: a partly-covered invoice can still have room for a
+        second, no-longer-legitimate settlement to fit under it.
+
+        Asserted against the SQL actually issued, the same reason
+        `test_the_invoice_is_locked_while_a_payment_is_taken` does in
+        `test_collection.py`: a genuine race needs two connections, and mocking
+        the manager would only prove the mock was called.
+        """
+        voucher = self._issue()
+
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as queries:
+            self._import([(voucher.consumer_number, "TRX-1", "1000.00", "2026-09-05")])
+
+        locked_voucher_reads = [
+            query["sql"]
+            for query in queries.captured_queries
+            if "FOR UPDATE" in query["sql"] and "fee_vouchers" in query["sql"]
+        ]
+        self.assertTrue(
+            locked_voucher_reads, "apply_settlement_rows must read the voucher FOR UPDATE"
+        )
+
     def test_a_short_payment_becomes_an_exception_rather_than_posting(self) -> None:
         """A short or over payment is a decision — accept it, chase the
         difference, or re-issue — not an automatic posting."""
@@ -349,6 +379,51 @@ class SettlementTests(VoucherTestCase):
 
         self.assertEqual(result["matched"], 2)
         self.assertEqual(result["exceptions"], 1)
+
+    def test_a_matched_row_record_payment_refuses_becomes_an_exception_not_an_abort(self) -> None:
+        """A matched row can still fail past the match: `record_payment` refuses
+        a canceled invoice, which is exactly the shape here — a voucher stays
+        `issued` when its invoice is cancelled, since cancellation is only its
+        own separate concern. That must land in `exceptions`, not abort the
+        whole file — the same "one bad row doesn't fail the others" guarantee
+        `test_a_good_row_posts_even_when_another_row_fails` proves for an
+        unmatched row, extended to a matched one that fails downstream.
+        """
+        voided = self._issue()
+        with tenant_context(self.tenant.id):
+            services.cancel_invoice(
+                invoice=self.invoice, reason="Wrong term", actor_id=self.user.pk
+            )
+
+            second_invoice = FeeInvoiceFactory(
+                tenant=self.tenant,
+                student=self.students[1],
+                academic_session=self.session,
+                subtotal=Decimal("1000.00"),
+                period_label="2026-09",
+                invoice_no="INV-2",
+            )
+            FeeInvoiceLineFactory(
+                tenant=self.tenant,
+                fee_invoice=second_invoice,
+                fee_head=self.head,
+                amount=Decimal("1000.00"),
+            )
+        good = self._issue(invoice=second_invoice)
+
+        result = self._import(
+            [
+                (voided.consumer_number, "TRX-1", "1000.00", "2026-09-05"),
+                (good.consumer_number, "TRX-2", "1000.00", "2026-09-05"),
+            ]
+        )
+
+        self.assertEqual(result["matched"], 1)
+        self.assertEqual(result["exceptions"], 1)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Payment.objects.count(), 1)
+            record = VoucherCollectionImport.objects.get()
+        self.assertIn("Could not post", record.exceptions[0]["reason"])
 
     def test_the_import_records_its_outcome(self) -> None:
         voucher = self._issue()

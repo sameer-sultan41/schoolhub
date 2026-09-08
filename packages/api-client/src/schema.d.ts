@@ -2554,6 +2554,12 @@ export interface paths {
          *     A colon-action rather than a POST to the collection, because the unit of
          *     a posting is the balanced *set* of lines. One line at a time could never
          *     be validated.
+         *
+         *     `Idempotency-Key` through `replay_or_execute`, §11's contract for every
+         *     money mutation and the one this endpoint was missing: a journal entry
+         *     is a ledger posting like any other, and a retried request after a
+         *     timeout must not post the same correction twice onto a table that
+         *     cannot be corrected by anything but a second, offsetting posting.
          */
         post: operations["ledger_entries:post_journal_create"];
         delete?: never;

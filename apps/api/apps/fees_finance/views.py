@@ -38,7 +38,7 @@ import base64
 import datetime
 import uuid
 
-from django.db import transaction
+from django.db import models, transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
@@ -142,6 +142,7 @@ from core.rbac.permissions import (
     DenyRestrictedPrincipals,
     HasPermissionKey,
     is_restricted_principal,
+    scope_queryset,
 )
 
 FEATURE = "module.fees_finance"
@@ -188,7 +189,7 @@ class LedgerAccountViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         this too, but as a 409 naming a constraint. The service check names the
         account and says what to do instead.
         """
-        services.assert_account_may_be_archived(account=instance)
+        services.assert_account_may_be_deleted(account=instance)
         record_audit(self.request, "delete", instance)
         super().perform_destroy(instance)
 
@@ -214,16 +215,32 @@ class LedgerEntryViewSet(
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        """Deliberately not `super().get_queryset()`.
+        """Deliberately not `super().get_queryset()`, but still `scope_queryset`.
 
         The mixin's version ends in `.alive()`, which filters `deleted_at` — a
         column an append-only table does not have and cannot have, because soft
-        delete is an UPDATE. `select_related` is not optional either: the
-        serializer renders the account's code and name, so without it a page of
-        entries costs a query per row.
+        delete is an UPDATE. That is the only reason this cannot just call
+        `super().get_queryset()`.
+
+        Skipping `scope_queryset` entirely, rather than reproducing the mixin's
+        call to it, was the actual bug: a hand-rolled `.filter(tenant_id=...)`
+        stops at tenant scoping and never asks about record scope at all. For
+        `RecordScope.ALL` and `RecordScope.CAMPUS` that happens to look the
+        same as passing `campus_field=None` through `scope_queryset` — a ledger
+        has no campus dimension, so CAMPUS scope is already satisfied by tenant
+        scoping, per that function's own docstring. But an `own`- or
+        `assigned`-scoped grant is not the same: `scope_queryset` fails that
+        closed to `.none()` because `LedgerEntry` defines neither hook, while
+        the hand-rolled filter let it see every posting in the tenant. `fees.
+        ledger.view`'s default roles are `all`-scoped, but the whole point of
+        calling `scope_queryset` is not to depend on that staying true.
         """
         return (
-            LedgerEntry.objects.filter(tenant_id=self.request.tenant.pk)
+            scope_queryset(
+                LedgerEntry.objects.filter(tenant_id=self.request.tenant.pk),
+                self.request.user,
+                campus_field=None,
+            )
             .select_related("ledger_account")
             .order_by("-entry_date", "created_at")
         )
@@ -237,39 +254,67 @@ class LedgerEntryViewSet(
         A colon-action rather than a POST to the collection, because the unit of
         a posting is the balanced *set* of lines. One line at a time could never
         be validated.
+
+        `Idempotency-Key` through `replay_or_execute`, §11's contract for every
+        money mutation and the one this endpoint was missing: a journal entry
+        is a ledger posting like any other, and a retried request after a
+        timeout must not post the same correction twice onto a table that
+        cannot be corrected by anything but a second, offsetting posting.
         """
         serializer = ManualJournalSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         payload = serializer.validated_data
+        key = request.headers.get("Idempotency-Key")
 
-        with transaction.atomic():
-            transaction_id = services.post_manual_journal(
-                entry_date=payload["entry_date"],
-                lines=[
-                    LedgerLine(
-                        ledger_account_id=line["ledger_account"],
-                        debit=line["debit"],
-                        credit=line["credit"],
-                        memo=line.get("memo"),
-                    )
-                    for line in payload["lines"]
-                ],
-                memo=payload["memo"],
-                actor_id=request.user.pk,
-            )
-            posted = list(
-                LedgerEntry.objects.filter(transaction_id=transaction_id).select_related(
-                    "ledger_account"
+        def execute() -> Response:
+            with transaction.atomic():
+                transaction_id = services.post_manual_journal(
+                    entry_date=payload["entry_date"],
+                    lines=[
+                        LedgerLine(
+                            ledger_account_id=line["ledger_account"],
+                            debit=line["debit"],
+                            credit=line["credit"],
+                            memo=line.get("memo"),
+                        )
+                        for line in payload["lines"]
+                    ],
+                    memo=payload["memo"],
+                    actor_id=request.user.pk,
                 )
-            )
-            record_audit(
-                request, "create", posted[0], after={"transaction_id": str(transaction_id)}
+                posted = list(
+                    LedgerEntry.objects.filter(transaction_id=transaction_id).select_related(
+                        "ledger_account"
+                    )
+                )
+                # `posted[0]` is an arbitrary choice of "the" audited resource —
+                # a multi-line posting has no single natural one — so the
+                # payload carries what actually identifies the posting: the
+                # transaction id every line shares, plus how many lines and how
+                # much moved, so the audit row is self-describing regardless of
+                # which line record_audit happened to be handed.
+                record_audit(
+                    request,
+                    "create",
+                    posted[0],
+                    after={
+                        "transaction_id": str(transaction_id),
+                        "line_count": len(posted),
+                        "total_debit": str(sum((line.debit for line in posted), ZERO)),
+                    },
+                )
+
+            return ActionResponse.ok(
+                LedgerEntrySerializer(posted, many=True).data,
+                message="Journal entry posted.",
+                status=201,
             )
 
-        return ActionResponse.ok(
-            LedgerEntrySerializer(posted, many=True).data,
-            message="Journal entry posted.",
-            status=201,
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=key,
+            endpoint="ledger-entries:post-journal",
+            execute=execute,
         )
 
 
@@ -326,11 +371,17 @@ class FeeStructureViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         # `schedules` is nested on the serializer, so without this every
         # structure in a list costs a query for its lines.
+        #
+        # `Prefetch(..., queryset=FeeSchedule.objects.alive())`, not a bare
+        # `"schedules"` string: the reverse relation walks FeeSchedule's plain
+        # manager, which does not filter `deleted_at` on its own — a bare
+        # prefetch would nest a soft-deleted line back into every structure's
+        # response.
         return (
             super()
             .get_queryset()
             .select_related("academic_session", "school_class", "campus")
-            .prefetch_related("schedules")
+            .prefetch_related(models.Prefetch("schedules", queryset=FeeSchedule.objects.alive()))
         )
 
     @extend_schema(request=None, responses={200: FeeStructureSerializer})
@@ -595,7 +646,19 @@ class DiscountViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             reason=serializer.validated_data["reason"],
             actor_id=request.user.pk,
         )
-        record_audit(request, "update", revoked, after={"status": revoked.status})
+        # `revoke_discount` deliberately leaves `Discount.reason` — the record
+        # of why it was *granted* — untouched, so the caller's stated reason
+        # for revoking is carried here instead, where it is durable without
+        # overloading a column the schema gives one meaning.
+        record_audit(
+            request,
+            "update",
+            revoked,
+            after={
+                "status": revoked.status,
+                "revocation_reason": serializer.validated_data["reason"],
+            },
+        )
         return ActionResponse.ok(self.get_serializer(revoked).data, message="Discount revoked.")
 
 

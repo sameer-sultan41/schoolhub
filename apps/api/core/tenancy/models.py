@@ -121,6 +121,20 @@ class TenantScopedModel(models.Model):
     ``tests/test_rls_coverage.py`` no matter which base it picked. Do not
     subclass this directly — pick ``TenantOwnedModel`` or
     ``AppendOnlyTenantModel``.
+
+    ``on_delete=CASCADE`` here deserves a note for the append-only subclasses.
+    Any code path that cascades a ``Tenant`` deletion through Django's ORM —
+    including its fast-delete collector, which can issue one raw ``DELETE``
+    per related table straight through the connection — reaches an
+    append-only table without ever instantiating a ``LedgerEntry`` object, so
+    neither ``AppendOnlyQuerySet.delete()`` nor the model's own ``delete()``
+    guard is in the path. That is not a hole in practice: the connection is
+    still ``schoolhub_app``, whose DELETE privilege on every append-only table
+    is revoked at the database (``core.tenancy.grants``), so any such delete —
+    scoped to one tenant or not — is refused rather than silently succeeding.
+    ``tests/test_ledger.py`` proves the tenant-scoped shape directly. Nothing
+    on this platform calls ``Tenant.delete()`` today in any case; retirement is
+    ``TenantStatus.DEPROVISIONED``, a status change, not a row deletion.
     """
 
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="+", db_index=True)
