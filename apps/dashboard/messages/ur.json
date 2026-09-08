@@ -1083,7 +1083,15 @@
     "goToPage": "صفحہ {page} پر جائیں",
     "morePages": "مزید صفحات",
     "columns": "کالم",
-    "toggleColumns": "کالم دکھائیں یا چھپائیں"
+    "toggleColumns": "کالم دکھائیں یا چھپائیں",
+    "pinToStart": "شروع میں پن کریں",
+    "pinToEnd": "آخر میں پن کریں",
+    "unpinColumn": "{column} کالم اَن پن کریں",
+    "moveToStart": "شروع میں منتقل کریں",
+    "moveToEnd": "آخر میں منتقل کریں",
+    "dragToReorderColumn": "ترتیب بدلنے کے لیے کالم گھسیٹیں",
+    "dragToReorderRow": "ترتیب بدلنے کے لیے قطار گھسیٹیں",
+    "resizeColumn": "{column} کالم کا سائز تبدیل کریں"
   },
   "errors": {
     "validation_error": "براہ کرم نشان زد خانوں کو درست کریں۔",

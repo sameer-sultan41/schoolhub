@@ -126,6 +126,7 @@ Mariam
 maxmemory
 Meilisearch
 messageformat
+Metronic
 msdownload
 myschool
 nahi
@@ -161,6 +162,7 @@ PGPASSWORD
 PGPORT
 PGUSER
 pidfile
+pinnable
 PITR
 pixbuf
 plpgsql

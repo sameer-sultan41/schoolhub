@@ -5,14 +5,23 @@ import {
   Badge,
   BadgeDot,
   Button,
-  Checkbox,
-  DataTable,
-  type DataTableColumn,
+  createSelectColumn,
+  DataGridCard,
+  DataGridColumnHeader,
   EmptyState,
   Skeleton,
 } from "@schoolhub/ui";
 import { isOffsetPagination } from "@schoolhub/types";
+import type { DragEndEvent } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  type ColumnDef,
+  type ColumnPinningState,
+  getCoreRowModel,
+  type RowSelectionState,
+  useReactTable,
+} from "@tanstack/react-table";
 import { GraduationCap } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
@@ -25,7 +34,8 @@ import { PersonCell } from "@/components/person-cell";
 import { IdCardBatchAction } from "@/features/students/id-card-batch-action";
 import { STUDENTS_PAGE_SIZE } from "@/features/students/student-constants";
 import type { StudentRecord, StudentStatus } from "@/features/students/student-types";
-import { useTableParams } from "@/hooks/use-table-params";
+import { useDataGridLabels } from "@/hooks/use-data-grid-labels";
+import { useDataGridTableParams } from "@/hooks/use-data-grid-table-params";
 import { apiClient } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
 import { queryKeys } from "@/lib/query-client";
@@ -34,6 +44,18 @@ const STATUSES: StudentStatus[] = ["active", "suspended", "transferred", "withdr
 
 /** The house convention for "no value" — see AGENTS.md's cell vocabulary. */
 const EMPTY = "—";
+
+/** Column ids double as the server's `sort_by` values (see `useDataGridTableParams`'s own
+ * header comment) — so "name" is `last_name`, "campus" is `campus_name`, and so on, the
+ * same fields `DataTable`'s old `sortKey` named explicitly. */
+const COLUMN_ORDER = [
+  "select",
+  "last_name",
+  "campus_name",
+  "house_name",
+  "admission_date",
+  "status",
+];
 
 /**
  * The badge variant a student's status wears.
@@ -90,12 +112,13 @@ export function StudentsTable() {
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const router = useRouter();
+  const labels = useDataGridLabels();
 
   // Filters, sort, page size and page number all live in the URL: a filtered roster is
   // then a link a head of year can send to a form tutor, and Back and a refresh both
   // keep the reader's place — including which page they were on, which the cursor this
   // list used to page by could never put in a shareable link.
-  const table = useTableParams({
+  const table = useDataGridTableParams({
     filterKeys: ["status"],
     searchable: true,
     pageSize: STUDENTS_PAGE_SIZE,
@@ -108,7 +131,12 @@ export function StudentsTable() {
   // what lands here is the committed term.
   const status = table.filter("status");
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Column order and pinning stay local — neither is persisted anywhere in the Metronic
+  // reference this grid was adapted from either (see `useDataGridTableParams`'s own
+  // header comment for why that's a deliberate scope line, not an oversight).
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({});
+  const [columnOrder, setColumnOrder] = useState<string[]>(COLUMN_ORDER);
 
   // Carries `page` already, whenever the reader is past the first one, so the request
   // and the cache key both follow the pager without either of them restating it.
@@ -127,146 +155,127 @@ export function StudentsTable() {
   // assuming the shape.
   const pagination =
     data?.pagination && isOffsetPagination(data.pagination) ? data.pagination : undefined;
-
-  // The pager reads the URL, never the envelope. `placeholderData` keeps the previous
-  // page on screen while the next one loads, so the envelope still describes the page
-  // being replaced — a number that lagged a click by a whole request would read as a
-  // control that did not take. The range below comes from that same URL state so the two
-  // can never disagree; only `total_count` has to come from the server.
-  const pageSize = pagination?.page_size ?? table.pageSize;
   const totalCount = pagination?.total_count ?? 0;
-  // Guarded rather than a bare `(page - 1) * size + 1`, which would read "1–0 of 0" on
-  // an empty roster.
-  const firstRowOnPage = totalCount === 0 ? 0 : (table.page - 1) * pageSize + 1;
-  const lastRowOnPage = Math.min(table.page * pageSize, totalCount);
 
-  function toggleRow(id: string, checked: boolean) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
+  const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
 
-  // The header box has three states, not two. It used to have two, and an unticked box
-  // sitting above three ticked rows read as "nothing is selected" — the one state the
-  // roster is most often actually in. Radix resolves a click on an indeterminate box to
-  // `true`, so the dash still means "click to take the rest of the page".
-  const selectedOnPageCount = rows.reduce(
-    (count, row) => (selectedIds.has(row.id) ? count + 1 : count),
-    0,
-  );
-  const allOnPageSelected = rows.length > 0 && selectedOnPageCount === rows.length;
-  const someOnPageSelected = selectedOnPageCount > 0 && !allOnPageSelected;
-
-  const columns: DataTableColumn<StudentRecord>[] = [
-    {
-      id: "select",
-      // Never offered in the columns menu: a roster whose checkboxes are gone can be
-      // read and not acted on, and the menu that hid them is the only clue back.
-      alwaysVisible: true,
-      header: (
-        <Checkbox
-          label={t("idCards.selectAll")}
-          checked={someOnPageSelected ? "indeterminate" : allOnPageSelected}
-          onCheckedChange={(checked) => {
-            setSelectedIds((current) => {
-              const next = new Set(current);
-              for (const row of rows) {
-                if (checked === true) next.add(row.id);
-                else next.delete(row.id);
-              }
-              return next;
-            });
-          }}
-        />
-      ),
-      cell: (row) => (
-        <Checkbox
-          label={t("idCards.selectRow")}
-          checked={selectedIds.has(row.id)}
-          onCheckedChange={(checked) => {
-            toggleRow(row.id, checked === true);
-          }}
-        />
-      ),
+  const columns: ColumnDef<StudentRecord>[] = [
+    createSelectColumn<StudentRecord>({
+      selectAll: t("idCards.selectAll"),
+      selectRow: t("idCards.selectRow"),
       skeleton: <Skeleton className="size-4" />,
-    },
+    }),
     {
-      id: "name",
-      header: t("columns.name"),
-      // Sorts on last_name, which is what the endpoint offers — the cell shows a
-      // preferred name when there is one, so the order can look off for a student
-      // whose preferred name starts differently; sorting on the displayed string is
-      // not on offer, and a
-      // control that silently did nothing would be worse.
-      sortKey: "last_name",
+      id: "last_name",
+      header: ({ column }) => <DataGridColumnHeader column={column} title={t("columns.name")} />,
       // The admission number rides under the name now instead of holding a column of its
       // own: a reader reads the two together anyway, and folding them buys back a whole
       // column's width for the rest of the table.
-      cell: (row) => (
+      cell: ({ row }) => (
         <PersonCell
-          name={row.preferred_name || `${row.first_name} ${row.last_name}`}
-          secondary={row.admission_number}
+          name={
+            row.original.preferred_name || `${row.original.first_name} ${row.original.last_name}`
+          }
+          secondary={row.original.admission_number}
         />
       ),
-      skeleton: PERSON_SKELETON,
+      meta: { headerTitle: t("columns.name"), skeleton: PERSON_SKELETON },
     },
     {
-      id: "campus",
-      header: t("fields.campus"),
+      id: "campus_name",
+      header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.campus")} />,
       // The name comes down on the row itself — the list serializer sends `campus_name`
       // beside `campus_id` — so this costs no second request and no lookup map, which
       // is what a column of raw UUIDs was worth avoiding.
-      sortKey: "campus_name",
-      cell: (row) => row.campus_name,
-      skeleton: <Skeleton className="h-4 w-28" />,
+      cell: ({ row }) => row.original.campus_name,
+      meta: { headerTitle: t("fields.campus"), skeleton: <Skeleton className="h-4 w-28" /> },
     },
     {
-      id: "house",
-      header: t("fields.house"),
-      sortKey: "house_name",
+      id: "house_name",
+      header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.house")} />,
       // A student need not be in a house. The dash says "none", where an empty cell
       // reads as a rendering fault.
-      cell: (row) => row.house_name ?? EMPTY,
-      skeleton: <Skeleton className="h-4 w-20" />,
+      cell: ({ row }) => row.original.house_name ?? EMPTY,
+      meta: { headerTitle: t("fields.house"), skeleton: <Skeleton className="h-4 w-20" /> },
     },
     {
-      id: "admissionDate",
-      header: t("columns.admissionDate"),
-      // `identifier`, not `measure`: a date names a row rather than being a quantity
-      // compared down the column, so it takes the figures' face but stays start-aligned.
-      numeric: "identifier",
-      sortKey: "admission_date",
-      cell: (row) => formatDate(row.admission_date, locale),
-      skeleton: <Skeleton className="h-4 w-24" />,
+      id: "admission_date",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title={t("columns.admissionDate")} />
+      ),
+      cell: ({ row }) => formatDate(row.original.admission_date, locale),
+      meta: {
+        headerTitle: t("columns.admissionDate"),
+        // An identifier, not a measure — a date names a row rather than being a quantity
+        // compared down the column — but still figures, so it keeps tabular digits.
+        cellClassName: "tabular-nums",
+        skeleton: <Skeleton className="h-4 w-24" />,
+      },
     },
     {
       id: "status",
-      header: t("columns.status"),
-      sortKey: "status",
+      header: ({ column }) => <DataGridColumnHeader column={column} title={t("columns.status")} />,
       // Soft rather than solid: one saturated pill per row, down every row of the page,
       // reads as a wall of colour. The dot keeps the chip legible as a STATUS at a
       // glance now that its fill is only a tint.
-      cell: (row) => (
-        <Badge variant={getStudentStatusVariant(row.status)} appearance="soft">
+      cell: ({ row }) => (
+        <Badge variant={getStudentStatusVariant(row.original.status)} appearance="soft">
           <BadgeDot />
-          {t(`status.${row.status}`)}
+          {t(`status.${row.original.status}`)}
         </Badge>
       ),
-      skeleton: <Skeleton className="h-5 w-20 rounded-full" />,
+      meta: {
+        headerTitle: t("columns.status"),
+        skeleton: <Skeleton className="h-5 w-20 rounded-full" />,
+      },
     },
   ];
+
+  const reactTable = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+    manualSorting: true,
+    manualPagination: true,
+    manualFiltering: true,
+    pageCount: pagination?.total_pages ?? -1,
+    columnResizeMode: "onChange",
+    enableRowSelection: true,
+    state: {
+      sorting: table.sorting,
+      pagination: table.pagination,
+      columnVisibility: table.columnVisibility,
+      rowSelection,
+      columnPinning,
+      columnOrder,
+    },
+    onSortingChange: table.onSortingChange,
+    onPaginationChange: table.onPaginationChange,
+    onColumnVisibilityChange: table.onColumnVisibilityChange,
+    onRowSelectionChange: setRowSelection,
+    onColumnPinningChange: setColumnPinning,
+    onColumnOrderChange: setColumnOrder,
+  });
+
+  function handleColumnDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setColumnOrder((current) => {
+      const oldIndex = current.indexOf(active.id as string);
+      const newIndex = current.indexOf(over.id as string);
+      return arrayMove(current, oldIndex, newIndex);
+    });
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Can permission="students.id-card.generate">
           <IdCardBatchAction
-            selectedIds={[...selectedIds]}
+            selectedIds={selectedIds}
             onDone={() => {
-              setSelectedIds(new Set());
+              setRowSelection({});
             }}
           />
         </Can>
@@ -284,7 +293,12 @@ export function StudentsTable() {
         </div>
       </div>
 
-      <DataTable
+      <DataGridCard
+        table={reactTable}
+        recordCount={totalCount}
+        isLoading={isPending}
+        labels={labels}
+        caption={t("list.caption")}
         toolbar={
           <FilterBar
             search={{
@@ -310,14 +324,7 @@ export function StudentsTable() {
             onClear={table.clear}
           />
         }
-        columns={columns}
-        rows={rows}
-        getRowId={(row) => row.id}
-        caption={t("list.caption")}
-        isLoading={isPending}
-        // Wide table, scanned down one column rather than read row by row.
-        density="compact"
-        // The envelope goes into the table's own error slot rather than replacing the
+        // The envelope goes into the grid's own error slot rather than replacing the
         // whole screen: the filter row stays usable, so a failed request under a narrow
         // filter can be widened without a reload.
         error={error ? <ApiErrorAlert error={error} /> : undefined}
@@ -338,47 +345,17 @@ export function StudentsTable() {
         onRowClick={(row) => {
           router.push(`/students/${row.id}`);
         }}
-        sort={table.sort}
-        // The hidden set goes in the URL alongside the filters, so a column layout
-        // someone arranged travels with the link rather than staying on their machine.
-        columnVisibility={{
-          hidden: table.hiddenColumns,
-          onChange: table.setHiddenColumns,
-          triggerLabel: tCommon("columns"),
-          title: tCommon("toggleColumns"),
+        // Wide table, scanned down one column rather than read row by row.
+        tableLayout={{
+          dense: true,
+          columnsVisibility: true,
+          columnsResizable: true,
+          columnsPinnable: true,
+          columnsMovable: true,
+          columnsDraggable: true,
         }}
-        pagination={{
-          mode: "pages",
-          page: table.page,
-          // 0 until the first response lands, which is what leaves the pager absent
-          // under the loading skeleton rather than showing a lone disabled "1".
-          totalPages: pagination?.total_pages ?? 0,
-          onPageChange: table.setPage,
-          label: tCommon("pagination"),
-          previousLabel: tCommon("previousPage"),
-          nextLabel: tCommon("nextPage"),
-          goToPageLabel: (page) => tCommon("goToPage", { page }),
-          morePagesLabel: tCommon("morePages"),
-          pageSize: {
-            value: table.pageSize,
-            options: [25, 50, 100],
-            onChange: table.setPageSize,
-            label: tCommon("rowsPerPage"),
-          },
-          // "1–25 of 284" rather than the bare total this showed under cursor paging:
-          // with a page number on screen, where the reader is in the roll is finally a
-          // fact the summary can state.
-          // Suppressed on an empty result: the range would read "1–0 of 0" beneath an
-          // empty state that has already said there is nothing here.
-          summary:
-            pagination && pagination.total_count > 0
-              ? tCommon("pageRange", {
-                  from: firstRowOnPage,
-                  to: lastRowOnPage,
-                  count: pagination.total_count,
-                })
-              : null,
-        }}
+        onColumnDragEnd={handleColumnDragEnd}
+        pageSizes={[25, 50, 100]}
       />
     </div>
   );
