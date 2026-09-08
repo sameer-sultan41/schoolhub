@@ -11,6 +11,7 @@
    it has to exist now that it is no longer what :root happens to contain. */
 @import "@schoolhub/ui/styles/presets/ink-brass.css";
 @import "@schoolhub/ui/styles/presets/azure.css";
+@import "@schoolhub/ui/styles/presets/cobalt.css";
 @import "@schoolhub/ui/styles/presets/tangerine.css";
 @import "@schoolhub/ui/styles/presets/soft-pop.css";
 @import "@schoolhub/ui/styles/presets/brutalist.css";

@@ -118,6 +118,7 @@ libgdk
 libpango
 libpangocairo
 libpq
+linkedunion
 Mahnoor
 Mailpit
 manylinux

@@ -13,17 +13,21 @@
  * ./presets/ink-brass.css this value would have quietly started meaning "Aurora with the
  * school's branding withheld" — a menu entry that kept its label and lost its palette.
  *
- * The six named presets each have a stylesheet under ./presets/, imported by the
+ * The seven named presets each have a stylesheet under ./presets/, imported by the
  * dashboard's globals.css; four of them (tangerine, soft-pop, brutalist, neon) are
- * adapted from arhamkhnz/next-shadcn-admin-dashboard (MIT). "azure" is this repo's own —
- * a professional blue for a school that wants the platform's structure without Aurora's
- * indigo. apps/website deliberately imports none of them — it has no switcher, and every
- * page there must wear its tenant's brand.
+ * adapted from arhamkhnz/next-shadcn-admin-dashboard (MIT). "azure" and "cobalt" are
+ * this repo's own — both a professional blue for a school that wants the platform's
+ * structure without Aurora's indigo, at two different points on the same brief: azure
+ * a softer corporate blue derived from scratch, cobalt a brighter, more saturated one
+ * matched to LinkedUnion's own dashboard palette (see cobalt.css's own header for the
+ * measurement). apps/website deliberately imports none of them — it has no switcher,
+ * and every page there must wear its tenant's brand.
  */
 export const THEME_PRESETS = [
   "tenant",
   "ink-brass",
   "azure",
+  "cobalt",
   "tangerine",
   "soft-pop",
   "brutalist",
