@@ -40,8 +40,11 @@ from apps.fees_finance.services import ensure_system_accounts
 from apps.fees_finance.tests.base import FEATURE, FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
     AcademicSessionFactory,
+    BudgetFactory,
     CampusFactory,
     DiscountFactory,
+    ExpenseCategoryFactory,
+    ExpenseFactory,
     FeeHeadFactory,
     FeeInvoiceFactory,
     FeeScheduleFactory,
@@ -126,6 +129,18 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
                 tenant=self.other_tenant,
                 fee_invoice=self.other_invoice,
                 student=self.other_student,
+            )
+            other_expense_account = LedgerAccountFactory(
+                tenant=self.other_tenant, code="5900", account_type="expense"
+            )
+            self.other_category = ExpenseCategoryFactory(
+                tenant=self.other_tenant, ledger_account=other_expense_account
+            )
+            self.other_expense = ExpenseFactory(
+                tenant=self.other_tenant, expense_category=self.other_category
+            )
+            self.other_budget = BudgetFactory(
+                tenant=self.other_tenant, ledger_account=other_expense_account
             )
 
     def test_a_foreign_ledger_account_is_not_found(self) -> None:
@@ -440,3 +455,59 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
 
         self.assertEqual(result["matched"], 0)
         self.assertEqual(result["exceptions"], 1)
+
+    # ---------------------------------------------------- spend and reports
+
+    def test_a_foreign_expense_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/expenses/{self.other_expense.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_expense_category_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/expense-categories/{self.other_category.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_budget_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/budgets/{self.other_budget.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_approving_a_foreign_expense_is_not_found(self) -> None:
+        response = self.client.post(f"/api/v1/expenses/{self.other_expense.pk}:approve")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_approving_a_foreign_budget_is_not_found(self) -> None:
+        response = self.client.post(f"/api/v1/budgets/{self.other_budget.pk}:approve")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_no_report_includes_another_tenant_s_figures(self) -> None:
+        """The case that matters most in this file.
+
+        A report is read as authoritative, so a leak here is a school seeing
+        another school's books. Every kind is walked rather than a
+        representative one, because `build_report_rows` applies scope per kind
+        and one missed branch is one leaking report.
+        """
+        for kind in (
+            "collection",
+            "outstanding-aging",
+            "expense-register",
+            "grant-register",
+            "budget-variance",
+        ):
+            with self.subTest(kind=kind):
+                response = self.client.get(
+                    f"/api/v1/reports/finance-summary?kind={kind}"
+                    "&date_from=2026-01-01&date_to=2027-12-31"
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.json()["data"], [])
+
+    def test_a_foreign_student_s_ledger_is_empty_rather_than_theirs(self) -> None:
+        response = self.client.get(f"/api/v1/students/{self.other_student.pk}/ledger")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["data"], [])

@@ -212,6 +212,13 @@ SPECTACULAR_SETTINGS = {
     # promotion one has different values, which is the actual collision. Left
     # unnamed it gets a hash suffix (`DecisionBb7Enum`) that churns the generated
     # TypeScript client whenever the choices move.
+    # A nullable choice field otherwise renders as
+    # `(SomeEnum | BlankEnum | NullEnum) | null` — a union whose BlankEnum and
+    # NullEnum members duplicate the trailing `null`, which fails
+    # `@typescript-eslint/no-duplicate-type-constituents` in the *generated*
+    # client and so cannot be lint-fixed by hand. `?: X | null` already says
+    # everything a TypeScript consumer needs.
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "ENUM_NAME_OVERRIDES": {
         "PromotionDecisionEnum": "apps.academics.models.PromotionDecision",
         # A plain list of tuples, per drf-spectacular's own FAQ: the two document
@@ -273,6 +280,8 @@ SPECTACULAR_SETTINGS = {
         "VoucherProviderEnum": "apps.fees_finance.models.VoucherProvider",
         "VoucherStatusEnum": "apps.fees_finance.models.VoucherStatus",
         "SettlementImportStatusEnum": "apps.fees_finance.models.ImportStatus",
+        "ExpenseStatusEnum": "apps.fees_finance.models.ExpenseStatus",
+        "BudgetStatusEnum": "apps.fees_finance.models.BudgetStatus",
     },
 }
 
@@ -330,6 +339,7 @@ CELERY_TASK_ROUTES = {
     "apps.fees_finance.tasks.import_settlement_file_task": {"queue": "bulk"},
     "apps.fees_finance.tasks.render_receipt_task": {"queue": "bulk"},
     "apps.fees_finance.tasks.expire_fee_vouchers": {"queue": "bulk"},
+    "apps.fees_finance.tasks.export_finance_report_task": {"queue": "bulk"},
     # A receipt confirmation is the one fee message a family is actively waiting
     # for — they are standing at the counter — so it takes the transactional
     # lane for the reason attendance's absence alert does.

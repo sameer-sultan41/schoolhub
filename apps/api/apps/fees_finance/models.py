@@ -214,6 +214,21 @@ class ImportStatus(models.TextChoices):
     FAILED = "failed", "Failed"
 
 
+class ExpenseStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    SUBMITTED = "submitted", "Submitted"
+    APPROVED = "approved", "Approved"
+    PAID = "paid", "Paid"
+    REJECTED = "rejected", "Rejected"
+    REVERSED = "reversed", "Reversed"
+
+
+class BudgetStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    APPROVED = "approved", "Approved"
+    CLOSED = "closed", "Closed"
+
+
 class LedgerAccount(TenantOwnedModel):
     """One line of the tenant's chart of accounts.
 
@@ -1460,3 +1475,236 @@ class SettlementRow(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.provider} {self.transaction_reference}"
+
+
+class ExpenseCategory(TenantOwnedModel):
+    """The taxonomy an expense is filed under, mapped to its expense account.
+
+    Hierarchical like `LedgerAccount`, so a school can nest "Utilities —
+    Electricity" under "Utilities" and budget at either level. The account
+    mapping is not null for the same reason a fee head's is not: an expense with
+    nowhere to post is spend that never reaches the books, and §11's
+    budget-variance report is computed from postings rather than from expense
+    rows precisely so a reversed expense stops counting.
+    """
+
+    name = models.CharField(max_length=120)
+    code = models.CharField(max_length=30)
+    ledger_account = models.ForeignKey(
+        LedgerAccount, on_delete=models.PROTECT, related_name="expense_categories"
+    )
+    parent = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="children"
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "expense_categories"
+        ordering = ["code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "code"],
+                name="expense_categories_code_unique",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code} {self.name}"
+
+
+class Expense(TenantOwnedModel):
+    """One outgoing payment, under an approval gate.
+
+    **The approver may not be the submitter**, which §15 states outright and the
+    CHECK below carries as far as a constraint can. The service holds the rest,
+    because a constraint cannot know who is asking — the same split refunds use.
+
+    `status` is the gate: only an `approved` expense posts to the ledger, and
+    only a `paid` one has left the bank. Keeping those separate matters for the
+    income-vs-expense report, which recognises an approved cost in the period it
+    was approved rather than whenever the cheque cleared.
+
+    `vendor_name` is free text on purpose — §15 says the supplier master lives in
+    inventory-assets, which is Tier 7. A nullable FK to a table that does not
+    exist would be worse than a string a school can search.
+    """
+
+    expense_no = models.CharField(max_length=30)
+    expense_category = models.ForeignKey(
+        ExpenseCategory, on_delete=models.PROTECT, related_name="expenses"
+    )
+    campus = models.ForeignKey(
+        "school_organization.Campus",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="expenses",
+        help_text="Null means the expense is not attributable to one campus.",
+    )
+    vendor_name = models.CharField(max_length=160, null=True, blank=True)
+    description = models.TextField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Net of tax.")
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    expense_date = models.DateField()
+    payment_method = models.CharField(
+        max_length=20, choices=PaymentMethod.choices, null=True, blank=True
+    )
+    status = models.CharField(
+        max_length=15, choices=ExpenseStatus.choices, default=ExpenseStatus.DRAFT
+    )
+    approved_by = models.UUIDField(null=True, blank=True)
+    receipt_file = models.ForeignKey(
+        "files.File",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="expense_receipts",
+        db_column="receipt_file_id",
+    )
+
+    class Meta:
+        db_table = "expenses"
+        ordering = ["-expense_date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "expense_no"],
+                name="expenses_no_unique",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0) & models.Q(tax_amount__gte=0),
+                name="expenses_amounts_are_sane",
+            ),
+            # Segregation of duties, as far as a CHECK carries it. §15: "must
+            # differ from created_by".
+            models.CheckConstraint(
+                condition=(
+                    models.Q(approved_by__isnull=True)
+                    | ~models.Q(approved_by=models.F("created_by"))
+                ),
+                name="expenses_approver_is_not_the_submitter",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status__in=[ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED])
+                    | models.Q(approved_by__isnull=False)
+                ),
+                name="expenses_decision_is_attributable",
+            ),
+            # `online_gateway` is not a way a school pays a supplier, and §15
+            # excludes it by name.
+            models.CheckConstraint(
+                condition=~models.Q(payment_method=PaymentMethod.ONLINE_GATEWAY),
+                name="expenses_no_gateway_method",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "expense_category", "expense_date"]),
+            models.Index(fields=["tenant", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.expense_no} {self.amount}"
+
+    @property
+    def gross_amount(self):
+        """What actually left the school. Derived, never stored.
+
+        A stored gross could drift from `amount + tax_amount`, and the two
+        components are what a tax return needs separately.
+        """
+        return self.amount + self.tax_amount
+
+
+class Budget(TenantOwnedModel):
+    """A planned figure for one account or category over one period.
+
+    **Exactly one of `ledger_account` or `expense_category`**, which §15 states
+    and the CHECK enforces: a budget against both would be double-counted by the
+    variance report, and one against neither describes nothing.
+
+    Variance is computed from *posted ledger entries*, not from expense rows —
+    so a reversed expense stops counting against the budget automatically, which
+    is the whole reason the ledger is the source of truth rather than the
+    documents that feed it.
+    """
+
+    name = models.CharField(max_length=120)
+    ledger_account = models.ForeignKey(
+        LedgerAccount, on_delete=models.PROTECT, null=True, blank=True, related_name="budgets"
+    )
+    expense_category = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="budgets",
+    )
+    campus = models.ForeignKey(
+        "school_organization.Campus",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="budgets",
+        help_text="Null means tenant-wide.",
+    )
+    period_start = models.DateField()
+    period_end = models.DateField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(
+        max_length=15, choices=BudgetStatus.choices, default=BudgetStatus.DRAFT
+    )
+    approved_by = models.UUIDField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = "budgets"
+        ordering = ["-period_start"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(ledger_account__isnull=False, expense_category__isnull=True)
+                    | models.Q(ledger_account__isnull=True, expense_category__isnull=False)
+                ),
+                name="budgets_exactly_one_target",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="budgets_amount_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(period_end__gte=models.F("period_start")),
+                name="budgets_period_ordered",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status=BudgetStatus.DRAFT) | models.Q(approved_by__isnull=False)
+                ),
+                name="budgets_approval_is_attributable",
+            ),
+            # One budget per target, period and campus. NULLS NOT DISTINCT
+            # because a tenant-wide budget has `campus_id IS NULL` and two of
+            # those for one account is the double-count this exists to stop —
+            # the same trap PR A and PR B both hit.
+            models.UniqueConstraint(
+                fields=[
+                    "tenant",
+                    "ledger_account",
+                    "expense_category",
+                    "campus",
+                    "period_start",
+                    "period_end",
+                ],
+                name="budgets_one_per_target_and_period",
+                condition=models.Q(deleted_at__isnull=True) & ~models.Q(status=BudgetStatus.CLOSED),
+                nulls_distinct=False,
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "period_start", "period_end"]),
+            models.Index(fields=["tenant", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.amount})"

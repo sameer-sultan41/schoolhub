@@ -31,6 +31,7 @@ from core.tenancy.sequences import allocate_number
 
 DEFAULT_INVOICE_PATTERN = "INV-{year}-{seq:05d}"
 DEFAULT_RECEIPT_PATTERN = "RCP-{year}-{seq:05d}"
+DEFAULT_EXPENSE_PATTERN = "EXP-{year}-{seq:05d}"
 
 _TOKEN = re.compile(r"\{(year|seq)(?::0(\d+)d)?\}")
 _ALLOWED_TOKENS = {"year", "seq"}
@@ -110,6 +111,22 @@ def allocate_invoice_no(*, tenant_id: uuid.UUID, issue_date: datetime.date) -> s
             field="invoice_number_pattern",
         ),
         on_date=issue_date,
+    )
+
+
+def allocate_expense_no(*, tenant_id: uuid.UUID, on_date: datetime.date) -> str:
+    """Used by PR D. An expense register with holes in it is the second thing an
+    auditor asks about, after the receipt book."""
+    return _allocate(
+        tenant_id=tenant_id,
+        scope="expense_number",
+        pattern=_pattern(
+            tenant_id=tenant_id,
+            key="expense_number_pattern",
+            default=DEFAULT_EXPENSE_PATTERN,
+            field="expense_number_pattern",
+        ),
+        on_date=on_date,
     )
 
 

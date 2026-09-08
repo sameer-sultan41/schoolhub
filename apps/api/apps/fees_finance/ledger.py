@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from django.db import connection, transaction
+from django.db.models import QuerySet
 
 from apps.fees_finance.models import LedgerAccount, LedgerEntry, LedgerReferenceType
 from core.api.exceptions import DomainRuleViolation
@@ -246,7 +247,11 @@ def reverse_transaction(
 
 
 def trial_balance(
-    *, date_from: datetime.date, date_to: datetime.date, include_zero: bool = False
+    *,
+    date_from: datetime.date,
+    date_to: datetime.date,
+    include_zero: bool = False,
+    queryset: QuerySet[LedgerEntry] | None = None,
 ) -> list[dict]:
     """Per-account debit/credit totals over a period — §13's report 6.
 
@@ -254,13 +259,20 @@ def trial_balance(
     would return the same answer and time out on the school that most needs it,
     which is why `tests/test_ledger.py` asserts the query count and not just the
     figures.
+
+    `queryset` defaults to `LedgerEntry.objects` — every existing caller in
+    `tests/test_ledger.py` calls this with no user or scope in play at all, and
+    the ledger's own tests should not need one. `reports.trial_balance_extract`
+    passes its caller's already-scoped queryset through instead, which is what
+    makes this safe to expose as a §13 report and not just an internal utility.
     """
     from django.db.models import DecimalField, Sum, Value
     from django.db.models.functions import Coalesce
 
     zero = Value(ZERO, output_field=DecimalField(max_digits=12, decimal_places=2))
+    base = LedgerEntry.objects if queryset is None else queryset
     rows = (
-        LedgerEntry.objects.filter(entry_date__gte=date_from, entry_date__lte=date_to)
+        base.filter(entry_date__gte=date_from, entry_date__lte=date_to)
         .values(
             "ledger_account_id",
             "ledger_account__code",

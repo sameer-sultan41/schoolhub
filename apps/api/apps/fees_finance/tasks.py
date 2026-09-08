@@ -488,3 +488,63 @@ def notify_refund_status(*, tenant_id: str, refund_id: str) -> dict[str, int]:
             source_id=refund.pk,
         )
     return {"notified": len(recipients)}
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def export_finance_report_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§13's export lane — the same rows the synchronous endpoint returns.
+
+    The rows are recomputed here rather than carried in the job payload: a
+    payload big enough to hold a year's aging report is a payload big enough to
+    be the reason the export exists.
+
+    **The scope is recomputed too, from the requesting user.** A report is read
+    as authoritative, so an export must not widen what its requester could see
+    inline — which it would if the job re-queried the tables without the record
+    scope the endpoint applied. For money that is not a cosmetic concern: it
+    would put one family's balance in another family's spreadsheet.
+    """
+    import datetime as _datetime
+
+    from apps.fees_finance import services, uploads
+    from core.exports import tabular
+    from core.files.services import create_ready_file
+    from core.rbac.models import User
+    from core.tenancy.context import tenant_atomic
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    try:
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            payload = job.payload
+            requester = User.objects.get(pk=payload["requested_by"])
+            # No `limit`: the job is the unbounded path, which is the whole
+            # reason the endpoint hands it anything over the inline ceiling.
+            rows = services.build_report_rows(
+                kind=payload["kind"],
+                user=requester,
+                date_from=_datetime.date.fromisoformat(payload["date_from"]),
+                date_to=_datetime.date.fromisoformat(payload["date_to"]),
+                student_id=payload.get("student_id"),
+                group_by=payload.get("group_by", "day"),
+            )
+
+            fmt = payload.get("format", "csv")
+            title = payload["kind"].replace("-", " ").capitalize()
+            data, mime_type, extension = tabular.render(rows, fmt=fmt, title=title)
+            file = create_ready_file(
+                tenant_id=uuid.UUID(tenant_id),
+                purpose=uploads.REPORT_EXPORT.key,
+                original_name=f"fees-{payload['kind']}.{extension}",
+                mime_type=mime_type,
+                data=data,
+                actor_id=uuid.UUID(actor_id),
+            )
+        mark_succeeded(
+            job=job,
+            result={"result_file_id": str(file.pk), "rows": len(rows), "format": fmt},
+        )
+    except Exception as exc:  # noqa: BLE001 — see the module docstring.
+        mark_failed(job=job, error=str(exc))

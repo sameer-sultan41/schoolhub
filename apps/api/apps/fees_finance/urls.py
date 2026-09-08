@@ -13,12 +13,16 @@ from django.urls import path
 from rest_framework.routers import SimpleRouter
 
 from apps.fees_finance.views import (
+    BudgetViewSet,
     DiscountViewSet,
+    ExpenseCategoryViewSet,
+    ExpenseViewSet,
     FeeHeadViewSet,
     FeeInvoiceViewSet,
     FeeScheduleViewSet,
     FeeStructureViewSet,
     FeeVoucherViewSet,
+    FinanceReportView,
     FineViewSet,
     LedgerAccountViewSet,
     LedgerEntryViewSet,
@@ -26,6 +30,7 @@ from apps.fees_finance.views import (
     ReceiptViewSet,
     RefundViewSet,
     ScholarshipViewSet,
+    StudentLedgerView,
     VoucherCollectionImportViewSet,
 )
 
@@ -48,6 +53,9 @@ router.register(
     VoucherCollectionImportViewSet,
     basename="voucher-collection-imports",
 )
+router.register("expense-categories", ExpenseCategoryViewSet, basename="expense-categories")
+router.register("expenses", ExpenseViewSet, basename="expenses")
+router.register("budgets", BudgetViewSet, basename="budgets")
 
 urlpatterns = [
     path(
@@ -134,6 +142,50 @@ urlpatterns = [
         "vouchers/<uuid:pk>:void",
         FeeVoucherViewSet.as_view({"post": "void"}),
         name="vouchers-void",
+    ),
+    path(
+        "expenses/<uuid:pk>:submit",
+        ExpenseViewSet.as_view({"post": "submit"}),
+        name="expenses-submit",
+    ),
+    path(
+        "expenses/<uuid:pk>:approve",
+        ExpenseViewSet.as_view({"post": "approve"}),
+        name="expenses-approve",
+    ),
+    path(
+        "expenses/<uuid:pk>:reject",
+        ExpenseViewSet.as_view({"post": "reject"}),
+        name="expenses-reject",
+    ),
+    path(
+        "expenses/<uuid:pk>:mark-paid",
+        ExpenseViewSet.as_view({"post": "mark_paid"}),
+        name="expenses-mark-paid",
+    ),
+    path(
+        "expenses/<uuid:pk>:reverse",
+        ExpenseViewSet.as_view({"post": "reverse"}),
+        name="expenses-reverse",
+    ),
+    path(
+        "budgets/<uuid:pk>:approve",
+        BudgetViewSet.as_view({"post": "approve"}),
+        name="budgets-approve",
+    ),
+    # An APIView rather than a viewset action: `GET` serves inline and `POST`
+    # asks for an export, and neither is a CRUD operation on a resource.
+    path(
+        "reports/finance-summary",
+        FinanceReportView.as_view(),
+        name="reports-finance-summary",
+    ),
+    # §16 declares this path under the student rather than under /reports,
+    # because it is the one financial report a family reads.
+    path(
+        "students/<uuid:pk>/ledger",
+        StudentLedgerView.as_view(),
+        name="students-ledger",
     ),
     *router.urls,
 ]

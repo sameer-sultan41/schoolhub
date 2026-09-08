@@ -394,6 +394,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/budgets` — §5.10's planned figures, and the variance report's baseline. */
+        get: operations["budgets_list"];
+        put?: never;
+        /** @description `/budgets` — §5.10's planned figures, and the variance report's baseline. */
+        post: operations["budgets_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/budgets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/budgets` — §5.10's planned figures, and the variance report's baseline. */
+        get: operations["budgets_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description `/budgets` — §5.10's planned figures, and the variance report's baseline. */
+        patch: operations["budgets_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/budgets/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /budgets/{id}:approve`. §4 puts this with the owner alone.
+         *
+         *     Only an approved budget appears in the variance report — a draft is a
+         *     proposal, and reporting against one would show a school measuring itself
+         *     against a figure nobody signed off.
+         */
+        post: operations["budgets_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/campuses": {
         parameters: {
             query?: never;
@@ -1110,6 +1169,206 @@ export interface paths {
          *     same decision.
          */
         post: operations["exams_:send_results_back_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/expense-categories` — §5.9's spend taxonomy. */
+        get: operations["expense_categories_list"];
+        put?: never;
+        /** @description `/expense-categories` — §5.9's spend taxonomy. */
+        post: operations["expense_categories_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/expense-categories` — §5.9's spend taxonomy. */
+        get: operations["expense_categories_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `/expense-categories` — §5.9's spend taxonomy. */
+        delete: operations["expense_categories_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `/expense-categories` — §5.9's spend taxonomy. */
+        patch: operations["expense_categories_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/expenses` — §5.9's spend, under §7's approval gate.
+         *
+         *     Staff-only outright: nothing about what a school spends belongs in a
+         *     parent portal.
+         */
+        get: operations["expenses_list"];
+        put?: never;
+        /**
+         * @description `/expenses` — §5.9's spend, under §7's approval gate.
+         *
+         *     Staff-only outright: nothing about what a school spends belongs in a
+         *     parent portal.
+         */
+        post: operations["expenses_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/expenses` — §5.9's spend, under §7's approval gate.
+         *
+         *     Staff-only outright: nothing about what a school spends belongs in a
+         *     parent portal.
+         */
+        get: operations["expenses_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description `/expenses` — §5.9's spend, under §7's approval gate.
+         *
+         *     Staff-only outright: nothing about what a school spends belongs in a
+         *     parent portal.
+         */
+        patch: operations["expenses_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /expenses/{id}:approve` — and post it to the ledger.
+         *
+         *     The submitter cannot approve their own, checked in `services` for the
+         *     reason refunds' equivalent is: the rule is the module's and has to hold
+         *     through any door.
+         */
+        post: operations["expenses_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}:mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /expenses/{id}:mark-paid` — it has left the bank.
+         *
+         *     Posts nothing: approval already moved the money in the books, and
+         *     posting again would double-count it.
+         */
+        post: operations["expenses_:mark_paid_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `/expenses` — §5.9's spend, under §7's approval gate.
+         *
+         *     Staff-only outright: nothing about what a school spends belongs in a
+         *     parent portal.
+         */
+        post: operations["expenses_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}:reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /expenses/{id}:reverse` — undo an approved or paid expense.
+         *
+         *     A reversal, never an edit: the original posting stays exactly as made
+         *     and a new transaction moves the same amounts back — the ledger's
+         *     only correction path, mirroring `process_refund`'s.
+         */
+        post: operations["expenses_:reverse_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}:submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /expenses/{id}:submit` — into the approval queue. */
+        post: operations["expenses_:submit_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3075,6 +3334,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/finance-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET/POST /reports/finance-summary` — §13, `kind`-parameterised.
+         *
+         *     `GET` serves inline; `POST` asks for an export and returns 202 + job. One
+         *     view because the row set and the record scope are identical either way, and
+         *     two views would be two places for the scope to be applied differently.
+         *
+         *     **The cap is requested as `limit + 1`.** That is how the endpoint decides
+         *     "inline or job?" without building a term-scale result twice, which is the
+         *     fix attendance's review produced.
+         */
+        get: operations["reports_finance_summary_retrieve"];
+        put?: never;
+        /**
+         * @description `GET/POST /reports/finance-summary` — §13, `kind`-parameterised.
+         *
+         *     `GET` serves inline; `POST` asks for an export and returns 202 + job. One
+         *     view because the row set and the record scope are identical either way, and
+         *     two views would be two places for the scope to be applied differently.
+         *
+         *     **The cap is requested as `limit + 1`.** That is how the endpoint decides
+         *     "inline or job?" without building a term-scale result twice, which is the
+         *     fix attendance's review produced.
+         */
+        post: operations["reports_finance_summary_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/results": {
         parameters: {
             query?: never;
@@ -4358,6 +4655,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/students/{id}/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /students/{id}/ledger` — §13.3's printable statement.
+         *
+         *     Its own view rather than a `kind` on the report endpoint, because §16
+         *     declares this path and because a family reads it: this is the one report a
+         *     portal principal reaches, narrowed by record scope through the same
+         *     `build_report_rows` the staff endpoint uses.
+         */
+        get: operations["students_ledger_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/students/{id}:change-section": {
         parameters: {
             query?: never;
@@ -5268,6 +5589,41 @@ export interface components {
          * @enum {string}
          */
         BackgroundJobStatusEnum: "queued" | "running" | "succeeded" | "failed";
+        Budget: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            /** Format: uuid */
+            ledger_account?: string | null;
+            /** Format: uuid */
+            expense_category?: string | null;
+            /**
+             * Format: uuid
+             * @description Null means tenant-wide.
+             */
+            campus?: string | null;
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** Format: decimal */
+            amount: string;
+            readonly status: components["schemas"]["BudgetStatusEnum"];
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            notes?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `approved` - Approved
+         *     * `closed` - Closed
+         * @enum {string}
+         */
+        BudgetStatusEnum: "draft" | "approved" | "closed";
         /**
          * @description `POST /student-attendance:bulk-mark` — one section, one date, one period.
          *
@@ -5759,6 +6115,67 @@ export interface components {
          * @enum {string}
          */
         ExitTypeEnum: "resigned" | "retired" | "terminated";
+        Expense: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly expense_no: string;
+            /** Format: uuid */
+            expense_category: string;
+            readonly category_name: string;
+            /**
+             * Format: uuid
+             * @description Null means the expense is not attributable to one campus.
+             */
+            campus?: string | null;
+            vendor_name?: string | null;
+            description: string;
+            /**
+             * Format: decimal
+             * @description Net of tax.
+             */
+            amount: string;
+            /** Format: decimal */
+            tax_amount?: string;
+            /** Format: double */
+            readonly gross_amount: number;
+            /** Format: date */
+            expense_date: string;
+            payment_method?: components["schemas"]["PaymentMethodEnum"] | null;
+            readonly status: components["schemas"]["ExpenseStatusEnum"];
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            /** Format: uuid */
+            receipt_file?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        ExpenseCategory: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            code: string;
+            /** Format: uuid */
+            ledger_account: string;
+            /** Format: uuid */
+            parent?: string | null;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `submitted` - Submitted
+         *     * `approved` - Approved
+         *     * `paid` - Paid
+         *     * `rejected` - Rejected
+         *     * `reversed` - Reversed
+         * @enum {string}
+         */
+        ExpenseStatusEnum: "draft" | "submitted" | "approved" | "paid" | "rejected" | "reversed";
         /**
          * @description * `active` - Active
          *     * `expired` - Expired
@@ -6009,6 +6426,20 @@ export interface components {
          * @enum {string}
          */
         FileStatusEnum: "pending" | "ready" | "quarantined";
+        /** @description `GET/POST /reports/finance-summary` — §13's parameterised entry point. */
+        FinanceReportQuery: {
+            kind: string;
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            /** Format: uuid */
+            student?: string | null;
+            /** @default day */
+            group_by: components["schemas"]["GroupByEnum"];
+            /** @default csv */
+            format: components["schemas"]["FormatEnum"];
+        };
         Fine: {
             /** Format: uuid */
             readonly id: string;
@@ -6159,6 +6590,13 @@ export interface components {
          * @enum {string}
          */
         GradingScaleTypeEnum: "percentage" | "letter" | "gpa" | "hybrid";
+        /**
+         * @description * `day` - day
+         *     * `method` - method
+         *     * `cashier` - cashier
+         * @enum {string}
+         */
+        GroupByEnum: "day" | "method" | "cashier";
         Guardian: {
             /** Format: uuid */
             readonly id: string;
@@ -6588,6 +7026,16 @@ export interface components {
                 };
             };
         };
+        PaginatedBudgetList: {
+            data?: components["schemas"]["Budget"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedCampusList: {
             data?: components["schemas"]["Campus"][];
             meta?: {
@@ -6685,6 +7133,26 @@ export interface components {
         };
         PaginatedExamSubjectList: {
             data?: components["schemas"]["ExamSubject"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedExpenseCategoryList: {
+            data?: components["schemas"]["ExpenseCategory"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedExpenseList: {
+            data?: components["schemas"]["Expense"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -7158,6 +7626,34 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedBudget: {
+            /** Format: uuid */
+            readonly id?: string;
+            name?: string;
+            /** Format: uuid */
+            ledger_account?: string | null;
+            /** Format: uuid */
+            expense_category?: string | null;
+            /**
+             * Format: uuid
+             * @description Null means tenant-wide.
+             */
+            campus?: string | null;
+            /** Format: date */
+            period_start?: string;
+            /** Format: date */
+            period_end?: string;
+            /** Format: decimal */
+            amount?: string;
+            readonly status?: components["schemas"]["BudgetStatusEnum"];
+            /** Format: uuid */
+            readonly approved_by?: string | null;
+            notes?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
         PatchedCampus: {
             /** Format: uuid */
             readonly id?: string;
@@ -7390,6 +7886,57 @@ export interface components {
              * @description Set by :lock-marks; cleared by :unlock-marks.
              */
             readonly marks_locked_at?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedExpense: {
+            /** Format: uuid */
+            readonly id?: string;
+            readonly expense_no?: string;
+            /** Format: uuid */
+            expense_category?: string;
+            readonly category_name?: string;
+            /**
+             * Format: uuid
+             * @description Null means the expense is not attributable to one campus.
+             */
+            campus?: string | null;
+            vendor_name?: string | null;
+            description?: string;
+            /**
+             * Format: decimal
+             * @description Net of tax.
+             */
+            amount?: string;
+            /** Format: decimal */
+            tax_amount?: string;
+            /** Format: double */
+            readonly gross_amount?: number;
+            /** Format: date */
+            expense_date?: string;
+            payment_method?: components["schemas"]["PaymentMethodEnum"] | null;
+            readonly status?: components["schemas"]["ExpenseStatusEnum"];
+            /** Format: uuid */
+            readonly approved_by?: string | null;
+            /** Format: uuid */
+            receipt_file?: string | null;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedExpenseCategory: {
+            /** Format: uuid */
+            readonly id?: string;
+            name?: string;
+            code?: string;
+            /** Format: uuid */
+            ledger_account?: string;
+            /** Format: uuid */
+            parent?: string | null;
+            is_active?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -10065,6 +10612,136 @@ export interface operations {
             };
         };
     };
+    budgets_list: {
+        parameters: {
+            query?: {
+                campus_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                expense_category_id?: string;
+                ledger_account_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                period_end__lte?: string;
+                period_start__gte?: string;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedBudgetList"];
+                };
+            };
+        };
+    };
+    budgets_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Budget"];
+                "application/x-www-form-urlencoded": components["schemas"]["Budget"];
+                "multipart/form-data": components["schemas"]["Budget"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+        };
+    };
+    budgets_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this budget. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+        };
+    };
+    budgets_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this budget. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedBudget"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedBudget"];
+                "multipart/form-data": components["schemas"]["PatchedBudget"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+        };
+    };
+    "budgets_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+        };
+    };
     campuses_list: {
         parameters: {
             query?: {
@@ -11611,6 +12288,353 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    expense_categories_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                ledger_account_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                parent_id?: string;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedExpenseCategoryList"];
+                };
+            };
+        };
+    };
+    expense_categories_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseCategory"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExpenseCategory"];
+                "multipart/form-data": components["schemas"]["ExpenseCategory"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+        };
+    };
+    expense_categories_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this expense category. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+        };
+    };
+    expense_categories_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this expense category. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    expense_categories_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this expense category. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedExpenseCategory"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedExpenseCategory"];
+                "multipart/form-data": components["schemas"]["PatchedExpenseCategory"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategory"];
+                };
+            };
+        };
+    };
+    expenses_list: {
+        parameters: {
+            query?: {
+                awaiting_approval?: boolean;
+                campus_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                expense_category_id?: string;
+                expense_date__gte?: string;
+                expense_date__lte?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedExpenseList"];
+                };
+            };
+        };
+    };
+    expenses_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Expense"];
+                "application/x-www-form-urlencoded": components["schemas"]["Expense"];
+                "multipart/form-data": components["schemas"]["Expense"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+        };
+    };
+    expenses_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this expense. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+        };
+    };
+    expenses_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this expense. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedExpense"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedExpense"];
+                "multipart/form-data": components["schemas"]["PatchedExpense"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+        };
+    };
+    "expenses_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+        };
+    };
+    "expenses_:mark_paid_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+        };
+    };
+    "expenses_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+        };
+    };
+    "expenses_:reverse_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Waive"];
+                "application/x-www-form-urlencoded": components["schemas"]["Waive"];
+                "multipart/form-data": components["schemas"]["Waive"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+        };
+    };
+    "expenses_:submit_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
             };
         };
     };
@@ -14697,6 +15721,65 @@ export interface operations {
             };
         };
     };
+    reports_finance_summary_retrieve: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+                /**
+                 * @description * `csv` - csv
+                 *     * `xlsx` - xlsx
+                 *     * `pdf` - pdf
+                 */
+                format?: "csv" | "xlsx" | "pdf";
+                /**
+                 * @description * `day` - day
+                 *     * `method` - method
+                 *     * `cashier` - cashier
+                 */
+                group_by?: "day" | "method" | "cashier";
+                kind: string;
+                student?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reports_finance_summary_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceReportQuery"];
+                "application/x-www-form-urlencoded": components["schemas"]["FinanceReportQuery"];
+                "multipart/form-data": components["schemas"]["FinanceReportQuery"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     results_list: {
         parameters: {
             query?: {
@@ -16734,6 +17817,26 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Timeline of enrollment and transfer events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    students_ledger_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -52,6 +52,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `fees.ledger.create` † | Create ledger accounts and post a manual journal entry | `accountant` |
 | `fees.discount.view` † / `fees.fine.view` † | View discounts, scholarships and fines | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `guardian`, `student` (scoped `own`) |
 | `fees.payment.view` † | View payments, receipts and vouchers | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `principal`, `guardian`, `student` (scoped `own`) |
+| `fees.expense.view` † | View expenses, categories and budgets | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner` |
 | `fees.expense.create` / `.update` | Record expenses | `accountant`, `finance_staff` |
 | `fees.expense.approve` | Approve submitted expenses | `accountant`, `school_owner` |
 | `fees.budget.create` / `fees.budget.approve` | Define / approve budgets | `accountant` / `school_owner` |
@@ -328,14 +329,16 @@ and installment schedules.
 **PR B — invoicing.** Bulk generation as a 202 + job, gapless invoice
 numbering, the duplicate guard, discounts, scholarships, fines with their
 waiver, cancellation, and §12's three invoicing notifications.
-**PR C — collection (this PR).** Payments with their receipts and ledger
+**PR C — collection.** Payments with their receipts and ledger
 postings in one transaction, §7.3's refund workflow with segregation of duties,
 bank/wallet vouchers in both print layouts, and the settlement import with its
 match key and exceptions queue.
-**PR D — spend and reports.** Expenses, categories, budgets, and §13's reports
-with the export lane.
+**PR D — spend and reports (this PR).** Expenses under an approval gate that
+posts on approval, budgets whose variance comes from the ledger, and §13's
+reports with the 202 export lane. **The module is complete apart from payroll,
+which is deferred with hr-leave.**
 
-### Built (PRs A-C)
+### Built (PRs A-D)
 
 | Area | State |
 | ---- | ----- |
@@ -355,6 +358,11 @@ with the export lane.
 | Refunds | §7.3's request → approve/reject → process, with the requester barred from approving, the refundable *remainder* bounding the amount, and non-refundable heads refused at request time |
 | Vouchers | Issued per invoice with the balance snapshotted, voided-never-edited, auto-voided when the invoice settles elsewhere, expired nightly, and rendered in A4 and 80mm thermal from one template |
 | Settlement | `POST /voucher-collection-imports` (202 + job), one generic-CSV adapter behind a provider registry, §11's match key as a unique index, and an exceptions queue that keeps one bad row from failing a file |
+| Entities (PR D) | `expense_categories`, `expenses`, `budgets` — **18 of §15's 22 tables built**, plus `voucher_settlement_rows`; only payroll's four remain |
+| Spend | Expenses with a gapless number, `:submit` → `:approve`/`:reject` → `:mark-paid`, the submitter barred from approving, and the ledger posted **on approval** rather than on payment |
+| Budgets | Per account or category (exactly one, by CHECK), approved by the owner alone, with variance computed from posted ledger entries |
+| Reports | §13's eight kinds behind one `kind`-parameterised endpoint — collection, outstanding/aging, student ledger, grant register, income vs expense, budget variance, expense register, trial balance — serving inline under 1000 rows and 202 + job past it |
+| Permissions | **§4's table is now fully registered**, plus the six gap keys added across the four PRs |
 
 ### Decisions worth carrying forward
 
@@ -431,6 +439,34 @@ journal with no platform record behind it and `reversal` for a correction, so
 there is no state a NULL would describe. It also keeps a `NullEnum` union — for
 a case that cannot arise — out of the generated TypeScript client, which is
 where the dead nullability first became visible.
+
+**Approval posts to the ledger; payment does not.** §13's income-vs-expense
+report should describe the period a school *committed* a cost in rather than
+whenever the cheque cleared, so `:approve` is the posting moment and
+`:mark-paid` records only that the money has left the bank. Posting again there
+would double-count it.
+
+**Budget variance reads posted entries, never expense rows.** That is the whole
+reason the ledger is the source of truth: a rejected or reversed expense stops
+counting against a budget automatically, where summing the source documents
+would require every report to know each document's lifecycle.
+
+**Expense tax rides on the expense account.** §19 leaves the tenant tax regime
+unconfirmed, and inventing an input-tax liability account for a school whose
+jurisdiction may not have one is a guess an auditor would have to unpick. The
+`tax_amount` column is kept separate on the row, which is what a return needs,
+so a real regime can be added later without a migration.
+
+**A budget names exactly one target.** One against both an account and a
+category is double-counted by the variance report; one against neither
+describes nothing. Both a CHECK and a serializer error, so the person filling in
+the form is told which field.
+
+**The report endpoint requests `limit + 1`.** That is how it decides "inline or
+job?" without building a term-scale result twice — the fix attendance's review
+produced. The export task then recomputes the rows **and the record scope, from
+the requesting user**: an export must not widen what its requester could see
+inline, which for money would put one family's balance in another's spreadsheet.
 
 **`voucher_settlement_rows` is a table §15 does not list, added deliberately.**
 §11 requires that "a settlement-file row can post at most once, keyed on
@@ -544,6 +580,26 @@ without a migration.
 
 **§19's open recommendations are all left open**, each because it is
 unconfirmed rather than difficult: advance payments/wallet per student (default
-stays payment ≤ balance), accounting-period locking and the fiscal-year close
-procedure, gateway settlement reconciliation granularity, the per-provider
-voucher settlement-file layouts, and multi-currency per tenant.
+stays payment ≤ balance, and `record_payment` refuses an overpayment outright),
+accounting-period locking and the fiscal-year close procedure, gateway
+settlement reconciliation granularity, the per-provider voucher settlement-file
+layouts, and multi-currency per tenant.
+
+**No scheduled report delivery.** §13's closing line offers it; there is no
+per-tenant scheduling primitive on the platform — the static Celery beat dict
+can run a sweep but has nowhere to deliver a per-tenant subscription to — and
+`attendance`'s §13 records the same gap. It arrives with reporting-analytics.
+
+### Where payroll would go
+
+Named rather than left implicit, since it is the one substantial part of §15
+this module does not build. `salary_structures`, `salary_components`,
+`payroll_runs` and `payslips`; §5.12; §7.4's four-step run; §13's payroll
+register and statutory summary; §12's two payroll notification rows; and
+`payroll.*`'s five permission keys. The ledger side already exists —
+`LedgerReferenceType.PAYROLL_RUN` is registered and `post_transaction` takes it
+today — so payroll is additive rather than a change to anything here.
+
+`payslips.lop_days` is the dependency that decides the timing: it comes from
+hr-leave's approved-leave outcomes, and while `attendance` owns the five leave
+tables, staff leave *policy* and accrual do not exist yet.

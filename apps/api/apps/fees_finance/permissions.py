@@ -31,7 +31,8 @@ Two scope notes that are easy to get backwards:
 Keys arrive with the PR that ships an endpoint for them, so
 `tests/test_endpoint_contracts.py` never sees a registered key with nothing
 behind it. Registered so far: fee-structure and ledger (PR A); invoice, discount,
-scholarship and fine (PR B); payment, refund and their views (PR C).
+scholarship and fine (PR B); payment, refund and their views (PR C);
+expense, budget and report (PR D). **§4's table is now fully registered.**
 
 One more gap key, on the same footing as PR A's two: `fees.discount.view` and
 `fees.fine.view` are granted in prose by §3 (a guardian "views children's
@@ -84,6 +85,11 @@ WAIVERS = ("accountant", "school_owner")
 # was the requester, because the same person can hold both keys and §7.3's
 # segregation is about the *act*, not the grant.
 REFUND_APPROVERS = ("accountant", "school_owner")
+# §4 — "`fees.report.view` / `.export` … `accountant`, `school_owner`,
+# `principal`". A principal reads collection and defaulter summaries for
+# oversight (§3) without holding any write key in this module, which is why
+# reporting is its own pair rather than folded into `fees.ledger.view`.
+REPORT_VIEWERS = ("accountant", "school_owner", "principal", "school_admin")
 
 registry.register(
     "fees.fee-structure.view",
@@ -192,6 +198,49 @@ registry.register(
     REFUND_APPROVERS,
 )
 
+# --- Spend and reports (PR D) --------------------------------------------- #
+
+registry.register(
+    "fees.expense.view",
+    "View expenses, expense categories and budgets.",
+    STRUCTURE_VIEWERS,
+)
+registry.register(
+    "fees.expense.create",
+    "Record an expense and its category.",
+    FINANCE_STAFF,
+)
+registry.register(
+    "fees.expense.update",
+    "Edit a draft expense, or mark an approved one paid.",
+    FINANCE_STAFF,
+)
+registry.register(
+    "fees.expense.approve",
+    "Approve or reject a submitted expense.",
+    REFUND_APPROVERS,
+)
+registry.register(
+    "fees.budget.create",
+    "Define a budget for an account or category.",
+    ACCOUNTANTS,
+)
+registry.register(
+    "fees.budget.approve",
+    "Approve a budget.",
+    ("school_owner",),
+)
+registry.register(
+    "fees.report.view",
+    "Run the financial reports (§13).",
+    REPORT_VIEWERS,
+)
+registry.register(
+    "fees.report.export",
+    "Export a financial report as CSV, XLSX or PDF.",
+    REPORT_VIEWERS,
+)
+
 # Referenced by the module docstring's scope note; keeps ruff from flagging the
 # tuple as unused while PR B is what first needs it.
 __all__ = [
@@ -202,6 +251,7 @@ __all__ = [
     "LEDGER_VIEWERS",
     "PORTAL",
     "REFUND_APPROVERS",
+    "REPORT_VIEWERS",
     "STRUCTURE_AUTHORS",
     "STRUCTURE_VIEWERS",
     "WAIVERS",

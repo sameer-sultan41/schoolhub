@@ -35,6 +35,8 @@ and keeps the default.
 from __future__ import annotations
 
 import base64
+import datetime
+import uuid
 
 from django.db import models, transaction
 from django.http import HttpResponse
@@ -45,10 +47,14 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.fees_finance import documents, services, uploads
 from apps.fees_finance.filters import (
+    BudgetFilterSet,
     DiscountFilterSet,
+    ExpenseCategoryFilterSet,
+    ExpenseFilterSet,
     FeeHeadFilterSet,
     FeeInvoiceFilterSet,
     FeeScheduleFilterSet,
@@ -65,7 +71,10 @@ from apps.fees_finance.filters import (
 )
 from apps.fees_finance.ledger import LedgerLine
 from apps.fees_finance.models import (
+    Budget,
     Discount,
+    Expense,
+    ExpenseCategory,
     FeeHead,
     FeeInvoice,
     FeeSchedule,
@@ -84,13 +93,17 @@ from apps.fees_finance.models import (
     VoucherProvider,
 )
 from apps.fees_finance.serializers import (
+    BudgetSerializer,
     CancelInvoiceSerializer,
     DiscountSerializer,
+    ExpenseCategorySerializer,
+    ExpenseSerializer,
     FeeHeadSerializer,
     FeeInvoiceSerializer,
     FeeScheduleSerializer,
     FeeStructureSerializer,
     FeeVoucherSerializer,
+    FinanceReportQuerySerializer,
     FineSerializer,
     GenerateInvoicesSerializer,
     IssueVoucherSerializer,
@@ -109,6 +122,7 @@ from apps.fees_finance.serializers import (
     WaiveSerializer,
 )
 from apps.fees_finance.tasks import (
+    export_finance_report_task,
     generate_invoices_task,
     import_settlement_file_task,
     notify_payment_received,
@@ -1208,4 +1222,316 @@ class VoucherCollectionImportViewSet(
             key=key,
             endpoint="voucher-collection-imports:create",
             execute=execute,
+        )
+
+
+class ExpenseCategoryViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/expense-categories` — §5.9's spend taxonomy."""
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = ExpenseCategory.objects
+    serializer_class = ExpenseCategorySerializer
+    filterset_class = ExpenseCategoryFilterSet
+    search_fields = ["code", "name"]
+    ordering_fields = ["code", "name"]
+    # A category is school-wide; a campus does not have its own idea of what
+    # "utilities" means. Left at the mixin's default this would raise for every
+    # campus-scoped caller.
+    scope_campus_field = None
+    required_feature = FEATURE
+    required_permission = "fees.expense.view"
+    required_permission_map = {
+        "create": "fees.expense.create",
+        "update": "fees.expense.create",
+        "partial_update": "fees.expense.create",
+        "destroy": "fees.expense.create",
+    }
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("ledger_account")
+
+    def perform_destroy(self, instance: ExpenseCategory) -> None:
+        """Refuse to delete a category anything has been filed against.
+
+        Deleting frees `code` for reuse — `expense_categories_code_unique` is
+        conditioned on `deleted_at IS NULL` — and a soft delete is an UPDATE, so
+        the FK's `on_delete=PROTECT` never sees it. Without this check the
+        delete would succeed while every expense and budget still on the row
+        quietly loses its category from every report that filters `.alive()`.
+        """
+        services.assert_expense_category_may_be_deleted(category=instance)
+        record_audit(self.request, "delete", instance)
+        super().perform_destroy(instance)
+
+
+class ExpenseViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/expenses` — §5.9's spend, under §7's approval gate.
+
+    Staff-only outright: nothing about what a school spends belongs in a
+    parent portal.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = Expense.objects
+    serializer_class = ExpenseSerializer
+    filterset_class = ExpenseFilterSet
+    search_fields = ["expense_no", "vendor_name", "description"]
+    ordering_fields = ["expense_date", "amount", "created_at"]
+    required_feature = FEATURE
+    required_permission = "fees.expense.view"
+    required_permission_map = {
+        "create": "fees.expense.create",
+        "update": "fees.expense.update",
+        "partial_update": "fees.expense.update",
+        "submit": "fees.expense.create",
+        "approve": "fees.expense.approve",
+        "reject": "fees.expense.approve",
+        "mark_paid": "fees.expense.update",
+        "reverse": "fees.expense.approve",
+    }
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("expense_category", "campus", "receipt_file")
+
+    def perform_create(self, serializer):
+        """Allocate the expense number inside the creating transaction.
+
+        `allocate_number` asserts it is inside one, which is what makes the
+        sequence gapless: a create that fails afterwards does not burn a number.
+        """
+        with transaction.atomic():
+            instance = serializer.save(
+                tenant=self.request.tenant,
+                expense_no=services.allocate_expense_no(
+                    tenant_id=self.request.tenant.pk,
+                    on_date=serializer.validated_data["expense_date"],
+                ),
+                created_by=self.request.user.pk,
+                updated_by=self.request.user.pk,
+            )
+            record_audit(self.request, "create", instance)
+
+    @extend_schema(request=None, responses={200: ExpenseSerializer})
+    def submit(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /expenses/{id}:submit` — into the approval queue."""
+        submitted = services.submit_expense(expense=self.get_object(), actor_id=request.user.pk)
+        record_audit(request, "update", submitted, after={"status": submitted.status})
+        return ActionResponse.ok(self.get_serializer(submitted).data, message="Expense submitted.")
+
+    @extend_schema(request=None, responses={200: ExpenseSerializer})
+    def approve(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /expenses/{id}:approve` — and post it to the ledger.
+
+        The submitter cannot approve their own, checked in `services` for the
+        reason refunds' equivalent is: the rule is the module's and has to hold
+        through any door.
+        """
+        approved = services.decide_expense(
+            expense=self.get_object(), approve=True, actor_id=request.user.pk
+        )
+        record_audit(request, "approve", approved, after={"status": approved.status})
+        return ActionResponse.ok(self.get_serializer(approved).data, message="Expense approved.")
+
+    @extend_schema(request=None, responses={200: ExpenseSerializer})
+    def reject(self, request: Request, pk: str | None = None) -> Response:
+        rejected = services.decide_expense(
+            expense=self.get_object(), approve=False, actor_id=request.user.pk
+        )
+        record_audit(request, "approve", rejected, after={"status": rejected.status})
+        return ActionResponse.ok(self.get_serializer(rejected).data, message="Expense rejected.")
+
+    @extend_schema(request=None, responses={200: ExpenseSerializer})
+    def mark_paid(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /expenses/{id}:mark-paid` — it has left the bank.
+
+        Posts nothing: approval already moved the money in the books, and
+        posting again would double-count it.
+        """
+        paid = services.mark_expense_paid(expense=self.get_object(), actor_id=request.user.pk)
+        record_audit(request, "update", paid, after={"status": paid.status})
+        return ActionResponse.ok(self.get_serializer(paid).data, message="Expense marked paid.")
+
+    @extend_schema(request=WaiveSerializer, responses={200: ExpenseSerializer})
+    def reverse(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /expenses/{id}:reverse` — undo an approved or paid expense.
+
+        A reversal, never an edit: the original posting stays exactly as made
+        and a new transaction moves the same amounts back — the ledger's
+        only correction path, mirroring `process_refund`'s.
+        """
+        serializer = WaiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        reversed_expense = services.reverse_expense(
+            expense=self.get_object(),
+            reason=serializer.validated_data["reason"],
+            actor_id=request.user.pk,
+        )
+        record_audit(
+            request,
+            "update",
+            reversed_expense,
+            after={
+                "status": reversed_expense.status,
+                "reason": serializer.validated_data["reason"],
+            },
+        )
+        return ActionResponse.ok(
+            self.get_serializer(reversed_expense).data, message="Expense reversed."
+        )
+
+
+class BudgetViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
+    """`/budgets` — §5.10's planned figures, and the variance report's baseline."""
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = Budget.objects
+    serializer_class = BudgetSerializer
+    filterset_class = BudgetFilterSet
+    search_fields = ["name"]
+    ordering_fields = ["period_start", "amount"]
+    required_feature = FEATURE
+    required_permission = "fees.expense.view"
+    required_permission_map = {
+        "create": "fees.budget.create",
+        "update": "fees.budget.create",
+        "partial_update": "fees.budget.create",
+        "approve": "fees.budget.approve",
+    }
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("ledger_account", "expense_category", "campus")
+
+    @extend_schema(request=None, responses={200: BudgetSerializer})
+    def approve(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /budgets/{id}:approve`. §4 puts this with the owner alone.
+
+        Only an approved budget appears in the variance report — a draft is a
+        proposal, and reporting against one would show a school measuring itself
+        against a figure nobody signed off.
+        """
+        approved = services.approve_budget(budget=self.get_object(), actor_id=request.user.pk)
+        record_audit(request, "approve", approved, after={"status": approved.status})
+        return ActionResponse.ok(self.get_serializer(approved).data, message="Budget approved.")
+
+
+class FinanceReportView(APIView):
+    """`GET/POST /reports/finance-summary` — §13, `kind`-parameterised.
+
+    `GET` serves inline; `POST` asks for an export and returns 202 + job. One
+    view because the row set and the record scope are identical either way, and
+    two views would be two places for the scope to be applied differently.
+
+    **The cap is requested as `limit + 1`.** That is how the endpoint decides
+    "inline or job?" without building a term-scale result twice, which is the
+    fix attendance's review produced.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    required_feature = FEATURE
+    required_permission = "fees.report.view"
+    required_permission_map = {"post": "fees.report.export"}
+
+    @extend_schema(parameters=[FinanceReportQuerySerializer], responses={200: None})
+    def get(self, request: Request) -> Response:
+        serializer = FinanceReportQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        rows = services.build_report_rows(
+            kind=payload["kind"],
+            user=request.user,
+            date_from=payload["date_from"],
+            date_to=payload["date_to"],
+            student_id=payload.get("student"),
+            group_by=payload.get("group_by", "day"),
+            limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1,
+        )
+
+        if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
+            raise DomainRuleViolation(
+                "This report is too large to return inline. POST the same "
+                "parameters to receive it as an export job.",
+                meta={"row_limit": services.SYNCHRONOUS_REPORT_ROW_LIMIT},
+            )
+
+        # A bare `Response` with a pre-shaped envelope, not `ActionResponse.ok`:
+        # `EnvelopeJSONRenderer` passes a payload that already has both keys
+        # through untouched, and wrapping it again would nest `meta` inside
+        # `data`.
+        return Response(
+            {
+                "data": rows,
+                "meta": {
+                    "kind": payload["kind"],
+                    "row_count": len(rows),
+                    "date_from": payload["date_from"].isoformat(),
+                    "date_to": payload["date_to"].isoformat(),
+                },
+            }
+        )
+
+    @extend_schema(request=FinanceReportQuerySerializer, responses={202: None})
+    def post(self, request: Request) -> Response:
+        serializer = FinanceReportQuerySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        job = create_job(
+            tenant_id=request.tenant.pk,
+            job_type="fees.export-report",
+            payload={
+                "kind": payload["kind"],
+                "date_from": payload["date_from"].isoformat(),
+                "date_to": payload["date_to"].isoformat(),
+                "student_id": str(payload["student"]) if payload.get("student") else None,
+                "group_by": payload.get("group_by", "day"),
+                "format": payload.get("format", "csv"),
+                # Read back by the task to recompute the record scope, which is
+                # what stops an export widening what its requester could see.
+                "requested_by": str(request.user.pk),
+            },
+            actor_id=request.user.pk,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+        )
+        transaction.on_commit(
+            lambda: export_finance_report_task.delay(
+                tenant_id=str(request.tenant.pk),
+                job_id=str(job.pk),
+                actor_id=str(request.user.pk),
+            )
+        )
+        return ActionResponse.accepted(str(job.pk), message="Report export queued.")
+
+
+class StudentLedgerView(APIView):
+    """`GET /students/{id}/ledger` — §13.3's printable statement.
+
+    Its own view rather than a `kind` on the report endpoint, because §16
+    declares this path and because a family reads it: this is the one report a
+    portal principal reaches, narrowed by record scope through the same
+    `build_report_rows` the staff endpoint uses.
+    """
+
+    permission_classes = PORTAL_READABLE_PERMISSIONS
+    required_feature = FEATURE
+    required_permission = "fees.invoice.view"
+
+    @extend_schema(responses={200: None})
+    def get(self, request: Request, pk: str | None = None) -> Response:
+        rows = services.build_report_rows(
+            kind="student-ledger",
+            user=request.user,
+            # The whole history: a statement is not period-bounded, and a
+            # parent asking what they owe means in total.
+            date_from=datetime.date.min,
+            date_to=datetime.date.max,
+            student_id=uuid.UUID(str(pk)),
+        )
+        closing = rows[-1]["balance"] if rows else ZERO
+        return Response(
+            {"data": rows, "meta": {"row_count": len(rows), "closing_balance": str(closing)}}
         )

@@ -12,7 +12,11 @@ from __future__ import annotations
 import django_filters
 
 from apps.fees_finance.models import (
+    Budget,
     Discount,
+    Expense,
+    ExpenseCategory,
+    ExpenseStatus,
     FeeHead,
     FeeInvoice,
     FeeSchedule,
@@ -212,4 +216,49 @@ class VoucherImportFilterSet(django_filters.FilterSet):
 
     class Meta:
         model = VoucherCollectionImport
+        fields: list[str] = []
+
+
+class ExpenseCategoryFilterSet(django_filters.FilterSet):
+    parent_id = django_filters.UUIDFilter(field_name="parent_id")
+    ledger_account_id = django_filters.UUIDFilter(field_name="ledger_account_id")
+    is_active = django_filters.BooleanFilter(field_name="is_active")
+
+    class Meta:
+        model = ExpenseCategory
+        fields: list[str] = []
+
+
+class ExpenseFilterSet(django_filters.FilterSet):
+    expense_category_id = django_filters.UUIDFilter(field_name="expense_category_id")
+    campus_id = django_filters.UUIDFilter(field_name="campus_id")
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+    expense_date__gte = django_filters.DateFilter(field_name="expense_date", lookup_expr="gte")
+    expense_date__lte = django_filters.DateFilter(field_name="expense_date", lookup_expr="lte")
+    # "What is waiting on me?" is the accountant's first question of the day,
+    # and it is a status filter rather than a separate endpoint.
+    awaiting_approval = django_filters.BooleanFilter(method="filter_awaiting")
+
+    class Meta:
+        model = Expense
+        fields: list[str] = []
+
+    def filter_awaiting(self, queryset, name, value):
+        if value is None:
+            return queryset
+        if value:
+            return queryset.filter(status=ExpenseStatus.SUBMITTED)
+        return queryset.exclude(status=ExpenseStatus.SUBMITTED)
+
+
+class BudgetFilterSet(django_filters.FilterSet):
+    ledger_account_id = django_filters.UUIDFilter(field_name="ledger_account_id")
+    expense_category_id = django_filters.UUIDFilter(field_name="expense_category_id")
+    campus_id = django_filters.UUIDFilter(field_name="campus_id")
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+    period_start__gte = django_filters.DateFilter(field_name="period_start", lookup_expr="gte")
+    period_end__lte = django_filters.DateFilter(field_name="period_end", lookup_expr="lte")
+
+    class Meta:
+        model = Budget
         fields: list[str] = []
