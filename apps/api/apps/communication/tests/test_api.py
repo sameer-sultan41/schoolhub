@@ -45,7 +45,9 @@ class TemplateEndpointTests(CommunicationAPITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # DomainRuleViolation (assert_override_is_valid), not a plain
+        # serializer ValidationError — see core/api/exceptions.py.
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_creating_a_valid_override_derives_its_variables(self) -> None:
         response = self.client.post(
@@ -137,7 +139,7 @@ class PreferenceEndpointTests(CommunicationAPITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_patch_persists_and_the_next_get_reflects_it(self) -> None:
         response = self.client.patch(
@@ -207,4 +209,4 @@ class DeliverySummaryEndpointTests(CommunicationAPITestCase):
     def test_summary_rejects_an_unknown_group_by(self) -> None:
         response = self.client.get("/api/v1/delivery-logs:summary?group_by=nonsense")
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
