@@ -84,6 +84,10 @@ ALL_KEYS = (
     "fees.fine.view",
     "fees.fine.create",
     "fees.fine.waive",
+    "fees.payment.view",
+    "fees.payment.collect",
+    "fees.payment.refund",
+    "fees.refund.approve",
 )
 
 

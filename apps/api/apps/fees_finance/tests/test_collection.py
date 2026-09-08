@@ -20,7 +20,7 @@ from unittest import mock
 from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
 
-from apps.fees_finance import ledger, services
+from apps.fees_finance import services
 from apps.fees_finance.models import (
     FeeInvoice,
     InvoiceStatus,
@@ -186,8 +186,13 @@ class PaymentTests(CollectionTestCase):
         """
         with (
             tenant_context(self.tenant.id),
+            # Patched on `services`, not on `ledger`: services binds the
+            # name at import (`from ...ledger import post_transaction`), so
+            # replacing the attribute on the ledger module would leave the
+            # already-bound reference untouched and the test would pass without
+            # exercising anything.
             mock.patch.object(
-                ledger, "post_transaction", side_effect=RuntimeError("ledger is down")
+                services, "post_transaction", side_effect=RuntimeError("ledger is down")
             ),
             self.assertRaises(RuntimeError),
         ):
@@ -422,12 +427,16 @@ class RefundTests(CollectionTestCase):
         approver = UserFactory(tenant=self.tenant)
 
         with tenant_context(self.tenant.id):
-            services.decide_refund(
+            # The returned instance, not the local one: `decide_refund` locks
+            # and re-reads the row, so the object passed in stays at its old
+            # status. Asserting on the stale local is how a passing test hides
+            # a service that never wrote anything.
+            decided = services.decide_refund(
                 refund=refund, approve=False, note="Not eligible", actor_id=approver.pk
             )
             self.invoice.refresh_from_db()
 
-        self.assertEqual(refund.status, RefundStatus.REJECTED)
+        self.assertEqual(decided.status, RefundStatus.REJECTED)
         self.assertEqual(self.invoice.paid_total, Decimal("1000.00"))
 
     def test_a_rejected_refund_releases_the_remainder(self) -> None:

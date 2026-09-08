@@ -14,16 +14,25 @@ three providers so a real layout replaces one entry rather than restructuring
 anything.
 """
 
+# Imported for its side effect: `generic_csv` registers itself on import, the
+# way `permissions.py` and `features.py` populate their registries. Without
+# this line `adapter_for` raises for every provider — the registry would be
+# empty and nothing would say why, since the module exists and looks correct.
+from apps.fees_finance.adapters import generic_csv  # noqa: E402,F401  (side effect)
 from apps.fees_finance.adapters.base import (
+    ParseResult,
     SettlementAdapter,
     SettlementFileRow,
     adapter_for,
     register_adapter,
+    registered_providers,
 )
 
 __all__ = [
+    "ParseResult",
     "SettlementAdapter",
     "SettlementFileRow",
     "adapter_for",
     "register_adapter",
+    "registered_providers",
 ]
