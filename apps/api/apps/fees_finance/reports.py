@@ -29,6 +29,7 @@ from decimal import Decimal
 
 from django.db.models import Case, Count, DecimalField, F, Q, QuerySet, Sum, Value, When
 from django.db.models.functions import Coalesce, TruncDate
+from django.utils import timezone
 
 from apps.fees_finance.models import (
     Budget,
@@ -150,7 +151,7 @@ def outstanding_and_aging(
     not an outstanding balance, and including it would make every paid-up family
     appear on the defaulter list at 0.
     """
-    today = as_of or datetime.date.today()
+    today = as_of or timezone.localdate()
     unpaid = queryset.exclude(status=InvoiceStatus.CANCELED).filter(balance_due__gt=0)
 
     def bucket_sum(lower: int, upper: int | None):
@@ -390,7 +391,11 @@ def grant_and_waiver_register(
 
 
 def income_vs_expense(
-    *, date_from: datetime.date, date_to: datetime.date, limit: int | None = None
+    queryset: QuerySet[LedgerEntry],
+    *,
+    date_from: datetime.date,
+    date_to: datetime.date,
+    limit: int | None = None,
 ) -> list[dict]:
     """§13.5 — income and expense by account over a period.
 
@@ -400,7 +405,7 @@ def income_vs_expense(
     require every report to know each document's lifecycle.
     """
     rows = (
-        LedgerEntry.objects.filter(
+        queryset.filter(
             entry_date__gte=date_from,
             entry_date__lte=date_to,
             ledger_account__account_type__in=[
@@ -447,8 +452,23 @@ def budget_variance(
     what makes a reversed expense stop counting against it. Two queries: the
     budgets, then one aggregate over the entries for all of their accounts —
     never one query per budget.
+
+    **Keyed on `(account, period)`, not on the account alone.** Two budgets can
+    legitimately target the same account with different periods —
+    `budgets_one_per_target_and_period` only requires the *pair* to be unique —
+    and pooling every account's spend into one tenant-wide-date-range figure
+    would hand a Q1 budget the same "actual" as a Q2 budget on the same
+    account. A conditional `Sum` per distinct period keeps this at one query
+    regardless of how many periods appear among the (capped) budget set.
+
+    **Not keyed on campus.** `ledger_entries` carries no campus column — see
+    `LedgerEntryViewSet.get_queryset`'s docstring for why — so two
+    campus-scoped budgets on the same account and period (the constraint
+    allows exactly that, differentiated by `campus_id`) still read the same,
+    tenant-wide actual. Recorded rather than silently wrong: fixing it needs a
+    campus dimension on the ledger itself, which is out of scope here.
     """
-    today = as_of or datetime.date.today()
+    today = as_of or timezone.localdate()
     budgets = list(
         _capped(
             queryset.filter(status=BudgetStatus.APPROVED)
@@ -467,15 +487,35 @@ def budget_variance(
     }
     account_ids.discard(None)
 
+    periods = sorted({(budget.period_start, budget.period_end) for budget in budgets})
+    period_index = {period: index for index, period in enumerate(periods)}
+    period_annotations = {
+        f"spent_{index}": Coalesce(
+            Sum(
+                Case(
+                    When(
+                        entry_date__gte=period_start,
+                        entry_date__lte=min(today, period_end),
+                        then=F("debit") - F("credit"),
+                    ),
+                    default=_ZERO,
+                    output_field=_MONEY,
+                )
+            ),
+            _ZERO,
+        )
+        for index, (period_start, period_end) in enumerate(periods)
+    }
+
     spend = {
-        row["ledger_account_id"]: row["spent"]
+        row["ledger_account_id"]: row
         for row in LedgerEntry.objects.filter(
             ledger_account_id__in=account_ids,
-            entry_date__gte=min(b.period_start for b in budgets),
-            entry_date__lte=min(today, max(b.period_end for b in budgets)),
+            entry_date__gte=min(period_start for period_start, _ in periods),
+            entry_date__lte=min(today, max(period_end for _, period_end in periods)),
         )
         .values("ledger_account_id")
-        .annotate(spent=Coalesce(Sum("debit"), _ZERO) - Coalesce(Sum("credit"), _ZERO))
+        .annotate(**period_annotations)
     }
 
     rows = []
@@ -483,7 +523,8 @@ def budget_variance(
         account_id = budget.ledger_account_id or (
             budget.expense_category.ledger_account_id if budget.expense_category else None
         )
-        actual = quantize_money(spend.get(account_id, ZERO))
+        period_key = f"spent_{period_index[(budget.period_start, budget.period_end)]}"
+        actual = quantize_money(spend.get(account_id, {}).get(period_key, ZERO))
         rows.append(
             {
                 "budget_id": str(budget.pk),
@@ -539,18 +580,23 @@ def expense_register(
 
 
 def trial_balance_extract(
-    *, date_from: datetime.date, date_to: datetime.date, limit: int | None = None
+    queryset: QuerySet[LedgerEntry],
+    *,
+    date_from: datetime.date,
+    date_to: datetime.date,
+    limit: int | None = None,
 ) -> list[dict]:
     """§13.6 — delegates to `ledger.trial_balance`.
 
     A thin wrapper on purpose: the trial balance is the ledger's own view of
     itself and belongs beside the posting engine, so having two implementations
     of "what does each account total" is exactly the drift this module avoids
-    elsewhere.
+    elsewhere. The scoped `queryset` is passed straight through rather than
+    re-derived, so this report and `income_vs_expense` share one scoping story.
     """
     from apps.fees_finance.ledger import trial_balance
 
-    rows = trial_balance(date_from=date_from, date_to=date_to)
+    rows = trial_balance(queryset=queryset, date_from=date_from, date_to=date_to)
     return rows if limit is None else rows[:limit]
 
 

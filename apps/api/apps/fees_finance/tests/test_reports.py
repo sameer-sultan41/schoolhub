@@ -21,6 +21,7 @@ from apps.fees_finance.models import (
     Discount,
     FeeInvoice,
     Fine,
+    LedgerEntry,
     Payment,
     PaymentMethod,
     Refund,
@@ -365,7 +366,9 @@ class IncomeVsExpenseTests(ReportTestCase):
             rows = {
                 row["ledger_account__code"]: row
                 for row in reports.income_vs_expense(
-                    date_from=datetime.date(2026, 1, 1), date_to=datetime.date(2027, 1, 1)
+                    LedgerEntry.objects,
+                    date_from=datetime.date(2026, 1, 1),
+                    date_to=datetime.date(2027, 1, 1),
                 )
             }
 
@@ -381,7 +384,9 @@ class IncomeVsExpenseTests(ReportTestCase):
             codes = {
                 row["ledger_account__code"]
                 for row in reports.income_vs_expense(
-                    date_from=datetime.date(2026, 1, 1), date_to=datetime.date(2027, 1, 1)
+                    LedgerEntry.objects,
+                    date_from=datetime.date(2026, 1, 1),
+                    date_to=datetime.date(2027, 1, 1),
                 )
             }
 
@@ -394,8 +399,44 @@ class IncomeVsExpenseTests(ReportTestCase):
 
         with tenant_context(self.tenant.id), self.assertNumQueries(1):
             reports.income_vs_expense(
-                date_from=datetime.date(2026, 1, 1), date_to=datetime.date(2027, 1, 1)
+                LedgerEntry.objects,
+                date_from=datetime.date(2026, 1, 1),
+                date_to=datetime.date(2027, 1, 1),
             )
+
+    def test_an_own_scoped_principal_sees_nothing_not_everything(self) -> None:
+        """`income-vs-expense` and `trial-balance` still call `scope_queryset`,
+        with `campus_field=None` — `ledger_entries` has no campus dimension, but
+        that is not a reason to skip scoping altogether. `LedgerEntry` defines
+        neither `filter_owned_by_user` nor `filter_assigned_to_user`, so a role
+        granted `fees.ledger.view` at `own` scope must see nothing rather than
+        every posting in the tenant — the fail-closed behaviour is the point;
+        a tenant is free to grant this key more narrowly than the default
+        `accountant`/`school_owner` roles do.
+        """
+        from apps.fees_finance.tests.factories import grant
+
+        invoice = self._invoice(due=datetime.date(2026, 9, 10))
+        self._pay(invoice, Decimal("1000.00"))
+        reader = UserFactory(tenant=self.tenant)
+        grant(reader, "fees.ledger.view", scope="own")
+
+        with tenant_context(self.tenant.id):
+            income_rows = services.build_report_rows(
+                kind="income-vs-expense",
+                user=reader,
+                date_from=datetime.date(2026, 1, 1),
+                date_to=datetime.date(2027, 1, 1),
+            )
+            trial_rows = services.build_report_rows(
+                kind="trial-balance",
+                user=reader,
+                date_from=datetime.date(2026, 1, 1),
+                date_to=datetime.date(2027, 1, 1),
+            )
+
+        self.assertEqual(income_rows, [])
+        self.assertEqual(trial_rows, [])
 
 
 class ReportDispatchTests(ReportTestCase):

@@ -1251,6 +1251,19 @@ class ExpenseCategoryViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         return super().get_queryset().select_related("ledger_account")
 
+    def perform_destroy(self, instance: ExpenseCategory) -> None:
+        """Refuse to delete a category anything has been filed against.
+
+        Deleting frees `code` for reuse — `expense_categories_code_unique` is
+        conditioned on `deleted_at IS NULL` — and a soft delete is an UPDATE, so
+        the FK's `on_delete=PROTECT` never sees it. Without this check the
+        delete would succeed while every expense and budget still on the row
+        quietly loses its category from every report that filters `.alive()`.
+        """
+        services.assert_expense_category_may_be_deleted(category=instance)
+        record_audit(self.request, "delete", instance)
+        super().perform_destroy(instance)
+
 
 class ExpenseViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     """`/expenses` — §5.9's spend, under §7's approval gate.
@@ -1275,6 +1288,7 @@ class ExpenseViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "approve": "fees.expense.approve",
         "reject": "fees.expense.approve",
         "mark_paid": "fees.expense.update",
+        "reverse": "fees.expense.approve",
     }
     http_method_names = ["get", "post", "patch", "head", "options"]
 
@@ -1338,6 +1352,35 @@ class ExpenseViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         paid = services.mark_expense_paid(expense=self.get_object(), actor_id=request.user.pk)
         record_audit(request, "update", paid, after={"status": paid.status})
         return ActionResponse.ok(self.get_serializer(paid).data, message="Expense marked paid.")
+
+    @extend_schema(request=WaiveSerializer, responses={200: ExpenseSerializer})
+    def reverse(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /expenses/{id}:reverse` — undo an approved or paid expense.
+
+        A reversal, never an edit: the original posting stays exactly as made
+        and a new transaction moves the same amounts back — the ledger's
+        only correction path, mirroring `process_refund`'s.
+        """
+        serializer = WaiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        reversed_expense = services.reverse_expense(
+            expense=self.get_object(),
+            reason=serializer.validated_data["reason"],
+            actor_id=request.user.pk,
+        )
+        record_audit(
+            request,
+            "update",
+            reversed_expense,
+            after={
+                "status": reversed_expense.status,
+                "reason": serializer.validated_data["reason"],
+            },
+        )
+        return ActionResponse.ok(
+            self.get_serializer(reversed_expense).data, message="Expense reversed."
+        )
 
 
 class BudgetViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):

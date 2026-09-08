@@ -64,6 +64,36 @@ class ExpenseCategoryTests(SpendTestCase):
     def test_an_expense_account_is_accepted(self) -> None:
         services.assert_expense_category_account_is_expense(ledger_account=self.expense_account)
 
+    def test_a_category_with_expenses_may_not_be_deleted(self) -> None:
+        """Deleting frees `code` for reuse; an expense filed against the row
+        must not silently lose its category to a new one wearing the same
+        code."""
+        self._expense()
+
+        with (
+            tenant_context(self.tenant.id),
+            self.assertRaises(DomainRuleViolation) as caught,
+        ):
+            services.assert_expense_category_may_be_deleted(category=self.category)
+
+        self.assertIn("cannot be deleted", str(caught.exception.detail))
+
+    def test_a_category_with_a_budget_may_not_be_deleted(self) -> None:
+        with tenant_context(self.tenant.id):
+            BudgetFactory(tenant=self.tenant, expense_category=self.category)
+
+        with (
+            tenant_context(self.tenant.id),
+            self.assertRaises(DomainRuleViolation) as caught,
+        ):
+            services.assert_expense_category_may_be_deleted(category=self.category)
+
+        self.assertIn("cannot be deleted", str(caught.exception.detail))
+
+    def test_an_unused_category_may_be_deleted(self) -> None:
+        with tenant_context(self.tenant.id):
+            services.assert_expense_category_may_be_deleted(category=self.category)
+
 
 class ExpenseApprovalTests(SpendTestCase):
     def test_a_draft_expense_posts_nothing(self) -> None:
@@ -169,6 +199,97 @@ class ExpenseApprovalTests(SpendTestCase):
             credit = LedgerEntry.objects.get(reference_id=cash_expense.pk, credit__gt=0)
 
         self.assertEqual(credit.ledger_account_id, self.cash.pk)
+
+
+class ExpenseReversalTests(SpendTestCase):
+    def _approved(self, **kwargs) -> Expense:
+        expense = self._expense(**kwargs)
+        with tenant_context(self.tenant.id):
+            services.submit_expense(expense=expense, actor_id=self.user.pk)
+            return services.decide_expense(expense=expense, approve=True, actor_id=self.approver.pk)
+
+    def test_reversing_posts_the_opposite_entries(self) -> None:
+        """A reversal, never an edit: the original posting stays exactly as
+        made and a new transaction moves the same amounts back."""
+        expense = self._approved(amount=Decimal("500.00"))
+
+        with tenant_context(self.tenant.id):
+            services.reverse_expense(
+                expense=expense, reason="Wrong category", actor_id=self.approver.pk
+            )
+            original = LedgerEntry.objects.filter(
+                reference_type=LedgerReferenceType.EXPENSE, reference_id=expense.pk
+            ).first()
+            reversal_lines = list(
+                LedgerEntry.objects.filter(transaction_id=original.reversed_by_transaction_id)
+            )
+
+        self.assertIsNotNone(original.reversed_by_transaction_id)
+        self.assertEqual(sum(line.debit for line in reversal_lines), original.credit)
+        self.assertEqual(sum(line.credit for line in reversal_lines), original.debit)
+
+    def test_reversing_moves_the_expense_to_reversed(self) -> None:
+        expense = self._approved()
+
+        with tenant_context(self.tenant.id):
+            reversed_expense = services.reverse_expense(
+                expense=expense, reason="Duplicate submission", actor_id=self.approver.pk
+            )
+
+        self.assertEqual(reversed_expense.status, ExpenseStatus.REVERSED)
+
+    def test_a_paid_expense_may_also_be_reversed(self) -> None:
+        expense = self._approved()
+        with tenant_context(self.tenant.id):
+            services.mark_expense_paid(expense=expense, actor_id=self.approver.pk)
+
+            reversed_expense = services.reverse_expense(
+                expense=expense, reason="Refunded by the vendor", actor_id=self.approver.pk
+            )
+
+        self.assertEqual(reversed_expense.status, ExpenseStatus.REVERSED)
+
+    def test_a_draft_expense_cannot_be_reversed(self) -> None:
+        """Nothing has posted yet — there is nothing to reverse."""
+        expense = self._expense()
+
+        with (
+            tenant_context(self.tenant.id),
+            self.assertRaises(DomainRuleViolation) as caught,
+        ):
+            services.reverse_expense(
+                expense=expense, reason="Changed my mind", actor_id=self.user.pk
+            )
+
+        self.assertIn("can be reversed", str(caught.exception.detail))
+
+    def test_reversing_requires_a_reason(self) -> None:
+        expense = self._approved()
+
+        with (
+            tenant_context(self.tenant.id),
+            self.assertRaises(DomainRuleViolation),
+        ):
+            services.reverse_expense(expense=expense, reason="   ", actor_id=self.approver.pk)
+
+    def test_reversing_twice_finds_nothing_new_to_reverse(self) -> None:
+        """The second reversal's own status check refuses before it ever looks
+        for a posting to undo."""
+        expense = self._approved()
+        with tenant_context(self.tenant.id):
+            services.reverse_expense(
+                expense=expense, reason="First reversal", actor_id=self.approver.pk
+            )
+
+        with (
+            tenant_context(self.tenant.id),
+            self.assertRaises(DomainRuleViolation) as caught,
+        ):
+            services.reverse_expense(
+                expense=expense, reason="Second attempt", actor_id=self.approver.pk
+            )
+
+        self.assertIn("can be reversed", str(caught.exception.detail))
 
 
 class BudgetTests(SpendTestCase):

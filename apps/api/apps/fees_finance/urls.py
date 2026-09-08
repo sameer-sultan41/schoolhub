@@ -164,6 +164,11 @@ urlpatterns = [
         name="expenses-mark-paid",
     ),
     path(
+        "expenses/<uuid:pk>:reverse",
+        ExpenseViewSet.as_view({"post": "reverse"}),
+        name="expenses-reverse",
+    ),
+    path(
         "budgets/<uuid:pk>:approve",
         BudgetViewSet.as_view({"post": "approve"}),
         name="budgets-approve",

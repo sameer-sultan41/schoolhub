@@ -220,6 +220,7 @@ class ExpenseStatus(models.TextChoices):
     APPROVED = "approved", "Approved"
     PAID = "paid", "Paid"
     REJECTED = "rejected", "Rejected"
+    REVERSED = "reversed", "Reversed"
 
 
 class BudgetStatus(models.TextChoices):

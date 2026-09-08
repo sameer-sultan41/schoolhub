@@ -3396,6 +3396,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/Expense'
           description: ''
+  /api/v1/expenses/{id}:reverse:
+    post:
+      operationId: expenses_:reverse_create
+      description: |-
+        `POST /expenses/{id}:reverse` — undo an approved or paid expense.
+
+        A reversal, never an edit: the original posting stays exactly as made
+        and a new transaction moves the same amounts back — the ledger's
+        only correction path, mirroring `process_refund`'s.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Waive'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Waive'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Waive'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
   /api/v1/expenses/{id}:submit:
     post:
       operationId: expenses_:submit_create
@@ -14273,6 +14312,7 @@ components:
       - approved
       - paid
       - rejected
+      - reversed
       type: string
       description: |-
         * `draft` - Draft
@@ -14280,6 +14320,7 @@ components:
         * `approved` - Approved
         * `paid` - Paid
         * `rejected` - Rejected
+        * `reversed` - Reversed
     FeeDiscountStatusEnum:
       enum:
       - active

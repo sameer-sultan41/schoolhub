@@ -1335,6 +1335,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expenses/{id}:reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /expenses/{id}:reverse` — undo an approved or paid expense.
+         *
+         *     A reversal, never an edit: the original posting stays exactly as made
+         *     and a new transaction moves the same amounts back — the ledger's
+         *     only correction path, mirroring `process_refund`'s.
+         */
+        post: operations["expenses_:reverse_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expenses/{id}:submit": {
         parameters: {
             query?: never;
@@ -6149,9 +6172,10 @@ export interface components {
          *     * `approved` - Approved
          *     * `paid` - Paid
          *     * `rejected` - Rejected
+         *     * `reversed` - Reversed
          * @enum {string}
          */
-        ExpenseStatusEnum: "draft" | "submitted" | "approved" | "paid" | "rejected";
+        ExpenseStatusEnum: "draft" | "submitted" | "approved" | "paid" | "rejected" | "reversed";
         /**
          * @description * `active` - Active
          *     * `expired` - Expired
@@ -12555,6 +12579,33 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+        };
+    };
+    "expenses_:reverse_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Waive"];
+                "application/x-www-form-urlencoded": components["schemas"]["Waive"];
+                "multipart/form-data": components["schemas"]["Waive"];
+            };
+        };
         responses: {
             200: {
                 headers: {

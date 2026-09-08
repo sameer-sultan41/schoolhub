@@ -27,6 +27,7 @@ from apps.fees_finance.models import (
     Discount,
     DiscountStatus,
     Expense,
+    ExpenseCategory,
     ExpenseStatus,
     FeeHead,
     FeeInvoice,
@@ -1524,6 +1525,38 @@ def assert_expense_category_account_is_expense(*, ledger_account: LedgerAccount)
         )
 
 
+def assert_expense_category_may_be_deleted(*, category: ExpenseCategory) -> None:
+    """Deletion frees the code for reuse — `expense_categories_code_unique` is
+    conditioned on `deleted_at IS NULL`, same as `LedgerAccount`'s. A category
+    with expenses or budgets already filed against it must never be
+    deletable: a new category could then take its code while the old rows
+    still exist under a now-invisible row, and "Utilities" would silently
+    mean two different things depending on when you asked. `is_active=False`
+    is the retirement path once anything references it — it keeps the row and
+    its code, so the FK on every expense and budget keeps resolving to
+    something a report can still show.
+    """
+    if Expense.objects.filter(expense_category=category).exists():
+        raise DomainRuleViolation(
+            {
+                "id": (
+                    f"{category.code} {category.name} has expenses filed against it "
+                    "and cannot be deleted. Set is_active=False instead — its code "
+                    "stays reserved and its history stays under it."
+                )
+            }
+        )
+    if Budget.objects.filter(expense_category=category).exists():
+        raise DomainRuleViolation(
+            {
+                "id": (
+                    f"{category.code} {category.name} has a budget against it and "
+                    "cannot be deleted. Set is_active=False instead."
+                )
+            }
+        )
+
+
 @transaction.atomic
 def submit_expense(*, expense: Expense, actor_id: uuid.UUID) -> Expense:
     """Move a draft expense into the approval queue."""
@@ -1624,6 +1657,55 @@ def mark_expense_paid(*, expense: Expense, actor_id: uuid.UUID) -> Expense:
 
 
 @transaction.atomic
+def reverse_expense(*, expense: Expense, reason: str, actor_id: uuid.UUID) -> Expense:
+    """Undo an approved (or already-paid) expense's ledger posting.
+
+    Approval is what posts to the ledger, and until now nothing could undo
+    that: a category picked in error, an amount that was wrong, an expense
+    approved by mistake, all stood in the books forever, permanently
+    inflating that account's actual spend in every budget-variance and
+    income-vs-expense report. A reversal, mirroring `process_refund`'s own
+    reasoning — never an edit: the original posting stays exactly as made and
+    a new transaction moves the same amounts back, which is what append-only
+    means on a ledger.
+
+    `reason` is not stored on the row — `Expense` has no field for it, and
+    adding one to carry a single correction's explanation would overload a
+    column the schema does not otherwise need — so it goes into the audit
+    trail instead, the same choice `Discount.revoke` makes about its own
+    reason.
+    """
+    if not reason.strip():
+        raise DomainRuleViolation({"reason": "Reversing an expense requires a reason."})
+
+    locked = Expense.objects.select_for_update().get(pk=expense.pk)
+    if locked.status not in (ExpenseStatus.APPROVED, ExpenseStatus.PAID):
+        raise DomainRuleViolation({"status": "Only an approved or paid expense can be reversed."})
+
+    original = (
+        LedgerEntry.objects.filter(
+            reference_type=LedgerReferenceType.EXPENSE, reference_id=locked.pk
+        )
+        .values_list("transaction_id", flat=True)
+        .first()
+    )
+    if original is None:
+        raise DomainRuleViolation({"id": "This expense has no ledger posting to reverse."})
+
+    reverse_transaction(
+        transaction_id=original,
+        entry_date=timezone.localdate(),
+        actor_id=actor_id,
+        memo=f"Reversal of {locked.expense_no}: {reason}"[:255],
+    )
+
+    locked.status = ExpenseStatus.REVERSED
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "updated_by", "updated_at"])
+    return locked
+
+
+@transaction.atomic
 def approve_budget(*, budget: Budget, actor_id: uuid.UUID) -> Budget:
     """Move a budget from draft to approved. §4 puts this with the owner."""
     locked = Budget.objects.select_for_update().get(pk=budget.pk)
@@ -1671,9 +1753,15 @@ def build_report_rows(
     campus-scoped caller would get a `FieldError`, which is the bug
     `LeaveTypeViewSet` documents.
 
-    `income-vs-expense` and `trial-balance` take no scoped queryset: both read
-    `ledger_entries`, which has no campus dimension and is already gated by
-    `fees.ledger.view`'s narrow default roles (`accountant`, `school_owner`).
+    `income-vs-expense` and `trial-balance` still call `scope_queryset`, with
+    `campus_field=None` — `ledger_entries` genuinely has no campus dimension, so
+    that part of `LedgerEntryViewSet.get_queryset`'s reasoning holds here too.
+    What does not hold is skipping `scope_queryset` on the strength of
+    `fees.ledger.view`'s *default* roles being narrow: a tenant can grant that
+    key to a role scoped `own` or `assigned`, and `LedgerEntry` defines neither
+    hook, so `scope_queryset` fails that closed to `.none()` rather than
+    quietly falling through to every posting in the tenant — the same trap
+    `LedgerEntryViewSet.get_queryset` was fixed for.
     """
     from core.rbac.permissions import scope_queryset
 
@@ -1722,7 +1810,12 @@ def build_report_rows(
             limit=limit,
         )
     if kind == "income-vs-expense":
-        return reports.income_vs_expense(date_from=date_from, date_to=date_to, limit=limit)
+        return reports.income_vs_expense(
+            scope_queryset(LedgerEntry.objects, user, campus_field=None),
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+        )
     if kind == "budget-variance":
         return reports.budget_variance(
             scope_queryset(Budget.objects.alive(), user, campus_field="campus_id"),
@@ -1736,4 +1829,9 @@ def build_report_rows(
             date_to=date_to,
             limit=limit,
         )
-    return reports.trial_balance_extract(date_from=date_from, date_to=date_to, limit=limit)
+    return reports.trial_balance_extract(
+        scope_queryset(LedgerEntry.objects, user, campus_field=None),
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+    )
