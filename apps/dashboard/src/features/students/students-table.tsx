@@ -26,7 +26,7 @@ import { GraduationCap } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ApiErrorAlert } from "@/components/api-error-alert";
 import { Can } from "@/components/can";
 import { FilterBar } from "@/components/filter-bar";
@@ -159,77 +159,89 @@ export function StudentsTable() {
 
   const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
 
-  const columns: ColumnDef<StudentRecord>[] = [
-    createSelectColumn<StudentRecord>({
-      selectAll: t("idCards.selectAll"),
-      selectRow: t("idCards.selectRow"),
-      skeleton: <Skeleton className="size-4" />,
-    }),
-    {
-      id: "last_name",
-      header: ({ column }) => <DataGridColumnHeader column={column} title={t("columns.name")} />,
-      // The admission number rides under the name now instead of holding a column of its
-      // own: a reader reads the two together anyway, and folding them buys back a whole
-      // column's width for the rest of the table.
-      cell: ({ row }) => (
-        <PersonCell
-          name={
-            row.original.preferred_name || `${row.original.first_name} ${row.original.last_name}`
-          }
-          secondary={row.original.admission_number}
-        />
-      ),
-      meta: { headerTitle: t("columns.name"), skeleton: PERSON_SKELETON },
-    },
-    {
-      id: "campus_name",
-      header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.campus")} />,
-      // The name comes down on the row itself — the list serializer sends `campus_name`
-      // beside `campus_id` — so this costs no second request and no lookup map, which
-      // is what a column of raw UUIDs was worth avoiding.
-      cell: ({ row }) => row.original.campus_name,
-      meta: { headerTitle: t("fields.campus"), skeleton: <Skeleton className="h-4 w-28" /> },
-    },
-    {
-      id: "house_name",
-      header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.house")} />,
-      // A student need not be in a house. The dash says "none", where an empty cell
-      // reads as a rendering fault.
-      cell: ({ row }) => row.original.house_name ?? EMPTY,
-      meta: { headerTitle: t("fields.house"), skeleton: <Skeleton className="h-4 w-20" /> },
-    },
-    {
-      id: "admission_date",
-      header: ({ column }) => (
-        <DataGridColumnHeader column={column} title={t("columns.admissionDate")} />
-      ),
-      cell: ({ row }) => formatDate(row.original.admission_date, locale),
-      meta: {
-        headerTitle: t("columns.admissionDate"),
-        // An identifier, not a measure — a date names a row rather than being a quantity
-        // compared down the column — but still figures, so it keeps tabular digits.
-        cellClassName: "tabular-nums",
-        skeleton: <Skeleton className="h-4 w-24" />,
+  // Memoized, not rebuilt on every render: `flexRender` calls each column's `cell`/
+  // `header` AS the React component it renders, so a fresh function identity here is a
+  // fresh component TYPE on every render — React remounts the whole cell subtree
+  // (including the checkbox) instead of re-rendering it, which loses the DOM node a test
+  // (or a real click handler holding a ref) is still holding on to. Every future
+  // DataGrid migration needs the same `useMemo`, not just this one.
+  const columns: ColumnDef<StudentRecord>[] = useMemo(
+    () => [
+      createSelectColumn<StudentRecord>({
+        selectAll: t("idCards.selectAll"),
+        selectRow: t("idCards.selectRow"),
+        skeleton: <Skeleton className="size-4" />,
+      }),
+      {
+        id: "last_name",
+        header: ({ column }) => <DataGridColumnHeader column={column} title={t("columns.name")} />,
+        // The admission number rides under the name now instead of holding a column of its
+        // own: a reader reads the two together anyway, and folding them buys back a whole
+        // column's width for the rest of the table.
+        cell: ({ row }) => (
+          <PersonCell
+            name={
+              row.original.preferred_name || `${row.original.first_name} ${row.original.last_name}`
+            }
+            secondary={row.original.admission_number}
+          />
+        ),
+        meta: { headerTitle: t("columns.name"), skeleton: PERSON_SKELETON },
       },
-    },
-    {
-      id: "status",
-      header: ({ column }) => <DataGridColumnHeader column={column} title={t("columns.status")} />,
-      // Soft rather than solid: one saturated pill per row, down every row of the page,
-      // reads as a wall of colour. The dot keeps the chip legible as a STATUS at a
-      // glance now that its fill is only a tint.
-      cell: ({ row }) => (
-        <Badge variant={getStudentStatusVariant(row.original.status)} appearance="soft">
-          <BadgeDot />
-          {t(`status.${row.original.status}`)}
-        </Badge>
-      ),
-      meta: {
-        headerTitle: t("columns.status"),
-        skeleton: <Skeleton className="h-5 w-20 rounded-full" />,
+      {
+        id: "campus_name",
+        header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.campus")} />,
+        // The name comes down on the row itself — the list serializer sends `campus_name`
+        // beside `campus_id` — so this costs no second request and no lookup map, which
+        // is what a column of raw UUIDs was worth avoiding.
+        cell: ({ row }) => row.original.campus_name,
+        meta: { headerTitle: t("fields.campus"), skeleton: <Skeleton className="h-4 w-28" /> },
       },
-    },
-  ];
+      {
+        id: "house_name",
+        header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.house")} />,
+        // A student need not be in a house. The dash says "none", where an empty cell
+        // reads as a rendering fault.
+        cell: ({ row }) => row.original.house_name ?? EMPTY,
+        meta: { headerTitle: t("fields.house"), skeleton: <Skeleton className="h-4 w-20" /> },
+      },
+      {
+        id: "admission_date",
+        header: ({ column }) => (
+          <DataGridColumnHeader column={column} title={t("columns.admissionDate")} />
+        ),
+        cell: ({ row }) => formatDate(row.original.admission_date, locale),
+        meta: {
+          headerTitle: t("columns.admissionDate"),
+          // An identifier, not a measure — a date names a row rather than being a quantity
+          // compared down the column — but still figures, so it keeps tabular digits.
+          cellClassName: "tabular-nums",
+          skeleton: <Skeleton className="h-4 w-24" />,
+        },
+      },
+      {
+        id: "status",
+        header: ({ column }) => (
+          <DataGridColumnHeader column={column} title={t("columns.status")} />
+        ),
+        // Soft rather than solid: one saturated pill per row, down every row of the page,
+        // reads as a wall of colour. The dot keeps the chip legible as a STATUS at a
+        // glance now that its fill is only a tint.
+        cell: ({ row }) => (
+          <Badge variant={getStudentStatusVariant(row.original.status)} appearance="soft">
+            <BadgeDot />
+            {t(`status.${row.original.status}`)}
+          </Badge>
+        ),
+        meta: {
+          headerTitle: t("columns.status"),
+          skeleton: <Skeleton className="h-5 w-20 rounded-full" />,
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `t` is next-intl's translator, not memoized by that library itself; re-deriving columns on every message-catalog/locale change (not on every render) is the actual intent here.
+    [locale],
+  );
 
   const reactTable = useReactTable({
     data: rows,

@@ -56,10 +56,11 @@ const PINNED_BODY_CELL =
   "data-pinned:border-border data-pinned:bg-surface/95 data-pinned:backdrop-blur-xs data-[pinned=start][data-last-col=start]:border-e! data-[pinned=end][data-last-col=end]:border-s!";
 
 function DataGridTableBase({ children }: { children: ReactNode }) {
-  const { tableLayout, caption } = useDataGrid();
+  const { tableLayout, caption, isLoading } = useDataGrid();
   return (
     <table
       data-slot="data-grid-table"
+      aria-busy={isLoading || undefined}
       className={cn(
         "w-full border-separate border-spacing-0 text-start align-middle text-sm text-foreground",
         tableLayout.columnsResizable ? "table-fixed" : "table-auto",
