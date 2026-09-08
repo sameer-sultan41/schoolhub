@@ -80,7 +80,9 @@ class NotificationTemplateOverrideViewSet(TenantScopedViewSetMixin, viewsets.Mod
             body=instance.body,
             variables=frozenset(instance.variables),
         )
-        sample_context = {variable: f"[{variable}]" for variable in instance.variables}
+        sample_context: dict[str, object] = {
+            variable: f"[{variable}]" for variable in instance.variables
+        }
         subject, body = template.render(sample_context)
         return Response(
             NotificationTemplatePreviewSerializer({"subject": subject or None, "body": body}).data

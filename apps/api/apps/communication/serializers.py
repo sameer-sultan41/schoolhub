@@ -43,10 +43,13 @@ class NotificationTemplateOverrideSerializer(serializers.ModelSerializer):
                         {locked_field: "Cannot be changed after creation."}
                     )
 
-        code = attrs.get("code", getattr(self.instance, "code", None))
-        channel = attrs.get("channel", getattr(self.instance, "channel", None))
+        # code/channel/body are required model fields — always a str by the
+        # time either a create (attrs has them) or an update (self.instance
+        # does) reaches here. The str() calls are for mypy, not runtime.
+        code = str(attrs.get("code", getattr(self.instance, "code", "")))
+        channel = str(attrs.get("channel", getattr(self.instance, "channel", "")))
         subject = attrs.get("subject", getattr(self.instance, "subject", None))
-        body = attrs.get("body", getattr(self.instance, "body", None))
+        body = str(attrs.get("body", getattr(self.instance, "body", "")))
         assert_override_is_valid(code=code, channel=channel, subject=subject, body=body)
 
         # `variables` is never author-editable (read-only above); it is derived
