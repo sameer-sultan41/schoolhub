@@ -13,15 +13,17 @@
  * ./presets/ink-brass.css this value would have quietly started meaning "Aurora with the
  * school's branding withheld" — a menu entry that kept its label and lost its palette.
  *
- * The five named presets each have a stylesheet under ./presets/, imported by the
+ * The six named presets each have a stylesheet under ./presets/, imported by the
  * dashboard's globals.css; four of them (tangerine, soft-pop, brutalist, neon) are
- * adapted from arhamkhnz/next-shadcn-admin-dashboard (MIT). apps/website deliberately
- * imports none of them — it has no switcher, and every page there must wear its tenant's
- * brand.
+ * adapted from arhamkhnz/next-shadcn-admin-dashboard (MIT). "azure" is this repo's own —
+ * a professional blue for a school that wants the platform's structure without Aurora's
+ * indigo. apps/website deliberately imports none of them — it has no switcher, and every
+ * page there must wear its tenant's brand.
  */
 export const THEME_PRESETS = [
   "tenant",
   "ink-brass",
+  "azure",
   "tangerine",
   "soft-pop",
   "brutalist",

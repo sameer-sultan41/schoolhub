@@ -1,0 +1,170 @@
+/*
+ * Azure — a professional blue, for a school that wants the platform's own structure
+ * (surface planes, chrome, elevation) but a blue identity instead of Aurora's indigo.
+ *
+ * Primary sits at oklch(0.50 0.159 255) — hue 255 is chosen to read as unambiguously
+ * BLUE rather than the indigo/violet Aurora's 274 leans toward, and the lightness/chroma
+ * pair was chosen the same way Aurora's was: scanned across hue and lightness for the
+ * most saturated in-gamut sRGB value that still clears AA (>=4.5:1) as text on the canvas
+ * AND as a white-on-it fill. #0B61BB is the result — close to the lightness/chroma
+ * territory of well-known "professional blue" brand marks, arrived at by measurement
+ * rather than by matching one.
+ *
+ * Accent is a separate hue (204, azure-cyan) rather than a second step of the same blue —
+ * two colours at one hue read as one colour at two brightnesses, which is what a viewer
+ * actually needs distinguished at a glance (this is the same reasoning Aurora's own primary/
+ * accent split documents).
+ *
+ * Only `--sh-*` is written here. Never a `--color-*` name: those are aliases declared in
+ * theme.css's `@theme inline` block, and pointing one somewhere else would create the
+ * second source of truth that file exists to prevent.
+ *
+ * Deliberately NOT overridden, so they stay identical to the platform default:
+ *   - success / warning / danger / info. A status colour is not a matter of taste.
+ *   - --sh-color-ring, which is `var(--sh-color-primary)` and so already follows.
+ *   - the elevation scale (still primary-tinted, but via the SAME literal theme.css
+ *     already uses — elevation is depth, not branding, same reasoning as tenant branding
+ *     never touching it), the platform tier, and the type stack.
+ *   - chart-2 through chart-6, which are Aurora's own CVD-validated ramp. Only chart-1
+ *     moves, to track this preset's own primary — exactly the restraint Aurora's own
+ *     header documents for the same reason: a fresh all-blue ramp was tried, and a
+ *     six-slot ramp needs hue SEPARATION to stay tellable apart under simulated colour
+ *     blindness, which "blue shades" cannot supply on its own. Re-measured here with the
+ *     new slot 1: light 17.0 ΔE normal / 9.0 ΔE colour-blind adjacent, dark 16.2 / 10.2 —
+ *     both above the 15/8 floors, matching Aurora's own numbers because slots 2-6 are
+ *     unchanged.
+ *
+ * Specificity, low to high:
+ *   1. :root — theme.css, the Aurora default
+ *   2. :root[data-theme-preset="azure"] — this file
+ *   3. the inline style on the TenantTheme wrapper — tenant branding, applied only
+ *      under the "tenant" preset (tenant-theme.tsx)
+ *
+ * Measured contrast, light: foreground/background 17.34:1, primary-foreground/primary
+ * 6.08:1, primary as text on background 5.83:1, secondary-foreground/secondary 7.82:1,
+ * accent-foreground/accent 8.22:1, muted-foreground/background 6.25:1. Dark: foreground/
+ * background 17.15:1, primary-foreground/primary 6.74:1, secondary-foreground/secondary
+ * 9.23:1, accent-foreground/accent 8.87:1, muted-foreground/background 7.47:1. Every value
+ * below is confirmed in-gamut sRGB (not just a valid OKLCH triple — OKLCH can express
+ * colours no display can show, and several of the high-chroma blue candidates this file's
+ * header describes clipped before landing on these).
+ */
+
+:root[data-theme-preset="azure"] {
+  --sh-color-background: oklch(0.985 0.005 255);
+  --sh-color-foreground: oklch(0.2 0.035 255);
+  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface-foreground: oklch(0.2 0.035 255);
+  --sh-color-surface-raised: oklch(1 0 0);
+  --sh-color-surface-sunken: oklch(0.965 0.009 255);
+
+  --sh-color-muted: oklch(0.953 0.011 255);
+  --sh-color-muted-foreground: oklch(0.48 0.028 255);
+  --sh-color-border: oklch(0.885 0.016 255);
+
+  --sh-color-primary: oklch(0.5 0.159 255);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  --sh-color-secondary: oklch(0.94 0.028 255);
+  --sh-color-secondary-foreground: oklch(0.4 0.128 255);
+  --sh-color-accent: oklch(0.74 0.121 204);
+  --sh-color-accent-foreground: oklch(0.2 0.035 255);
+
+  /*
+   * The frame follows this preset's own surface rather than theme.css's recessed chrome
+   * — Azure's own surface/muted/border already give the rail the "one step below the
+   * page" relationship the platform default achieves with dedicated tokens, so deriving
+   * from them keeps the two in step automatically. Declared in the light block only:
+   * custom-property indirection resolves at computed-value time, so when the dark arms
+   * below restate `--sh-color-surface`, chrome follows on its own.
+   */
+  --sh-color-chrome: var(--sh-color-surface);
+  --sh-color-chrome-foreground: var(--sh-color-surface-foreground);
+  --sh-color-chrome-muted: var(--sh-color-muted-foreground);
+  --sh-color-chrome-accent: var(--sh-color-muted);
+  --sh-color-chrome-border: var(--sh-color-border);
+  --sh-color-chrome-primary: var(--sh-color-primary);
+
+  --sh-color-chart-1: oklch(0.5 0.159 255);
+
+  /*
+   * The hero gradient sweeps primary (255°) toward a deeper azure-cyan (210°) rather than
+   * following Aurora's own indigo->teal stops — both ends are pinned dark regardless of
+   * scheme, same reasoning as theme.css's own `--sh-gradient-spotlight` comment: the band
+   * is a fixed dark surface in both schemes, so white text needs its contrast measured
+   * once, not per-mode. White text clears 6.08:1 at the near stop and 8.96:1 at the far
+   * one.
+   */
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    var(--sh-color-primary) 0%,
+    oklch(0.4 0.067 210) 100%
+  );
+}
+
+/*
+ * Declared twice with identical values, matching theme.css: the media arm covers a viewer
+ * who has not chosen (`:not(.light)` lets an explicit light choice win), the class arm
+ * covers the dashboard's toggle. A divergence here is invisible until someone toggles.
+ */
+/* dark-mode token block */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset="azure"]:not(.light) {
+    --sh-color-background: oklch(0.155 0.028 255);
+    --sh-color-foreground: oklch(0.955 0.011 255);
+    --sh-color-surface: oklch(0.225 0.034 255);
+    --sh-color-surface-foreground: oklch(0.955 0.011 255);
+    --sh-color-surface-raised: oklch(0.265 0.038 255);
+    --sh-color-surface-sunken: oklch(0.19 0.031 255);
+
+    --sh-color-muted: oklch(0.255 0.035 255);
+    --sh-color-muted-foreground: oklch(0.705 0.028 255);
+    --sh-color-border: oklch(0.32 0.04 255);
+
+    /* Same problem `--sh-color-primary` solves for Aurora's own dark arm: the light-mode
+       blue computes to under 3:1 against a dark ground, so a lighter step restores the
+       boundary, paired with a dark near-page-background foreground for text on a solid
+       primary surface. */
+    --sh-color-primary: oklch(0.68 0.165 255);
+    --sh-color-primary-foreground: oklch(0.155 0.028 255);
+    --sh-color-secondary: oklch(0.3 0.065 255);
+    --sh-color-secondary-foreground: oklch(0.87 0.05 255);
+    --sh-color-accent: oklch(0.74 0.121 204);
+    --sh-color-accent-foreground: oklch(0.155 0.028 255);
+
+    --sh-color-chart-1: oklch(0.68 0.165 255);
+
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.42 0.135 255) 0%,
+      oklch(0.4 0.066 204) 100%
+    );
+  }
+}
+
+:root[data-theme-preset="azure"].dark {
+  --sh-color-background: oklch(0.155 0.028 255);
+  --sh-color-foreground: oklch(0.955 0.011 255);
+  --sh-color-surface: oklch(0.225 0.034 255);
+  --sh-color-surface-foreground: oklch(0.955 0.011 255);
+  --sh-color-surface-raised: oklch(0.265 0.038 255);
+  --sh-color-surface-sunken: oklch(0.19 0.031 255);
+
+  --sh-color-muted: oklch(0.255 0.035 255);
+  --sh-color-muted-foreground: oklch(0.705 0.028 255);
+  --sh-color-border: oklch(0.32 0.04 255);
+
+  --sh-color-primary: oklch(0.68 0.165 255);
+  --sh-color-primary-foreground: oklch(0.155 0.028 255);
+  --sh-color-secondary: oklch(0.3 0.065 255);
+  --sh-color-secondary-foreground: oklch(0.87 0.05 255);
+  --sh-color-accent: oklch(0.74 0.121 204);
+  --sh-color-accent-foreground: oklch(0.155 0.028 255);
+
+  --sh-color-chart-1: oklch(0.68 0.165 255);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.42 0.135 255) 0%,
+    oklch(0.4 0.066 204) 100%
+  );
+}
