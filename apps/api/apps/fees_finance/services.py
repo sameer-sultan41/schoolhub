@@ -1729,6 +1729,37 @@ def allocate_expense_no(*, tenant_id: uuid.UUID, on_date: datetime.date) -> str:
     return numbering.allocate_expense_no(tenant_id=tenant_id, on_date=on_date)
 
 
+def _ledger_report_queryset(*, user) -> models.QuerySet[LedgerEntry]:
+    """`LedgerEntry.objects`, scoped for `income-vs-expense` and `trial-balance`.
+
+    `scope_queryset(..., campus_field=None)` correctly fails `own`/`assigned`
+    scope closed to `.none()` — `LedgerEntry` defines neither hook — but for
+    `campus` scope, `campus_field=None` means something different: it is
+    `scope_queryset`'s signal that *the table itself is campus-agnostic*
+    (classes, subjects — one definition every campus shares), so a
+    campus-scoped caller passes through unfiltered. That is the wrong call
+    here. `ledger_entries` has no campus column not because income and
+    expense are campus-agnostic — they plainly are not — but because nothing
+    records which campus a posting belongs to. Passing a campus-scoped
+    caller through on that technicality would show them the whole tenant's
+    P&L, which is the exact leak a real per-campus P&L report exists to
+    avoid. Refused the same way `own`/`assigned` already is: no correct
+    narrowing exists, so the caller sees nothing rather than everything.
+
+    A caller holding `RecordScope.ALL` on some other grant still passes —
+    `scope_queryset` itself resolves scope the same way, aggregated across
+    every role the user holds, and this only narrows the one case it
+    otherwise gets backwards.
+    """
+    from core.rbac.models import RecordScope
+    from core.rbac.permissions import scope_queryset, user_scopes
+
+    scopes = user_scopes(user)
+    if RecordScope.CAMPUS in scopes and RecordScope.ALL not in scopes:
+        return LedgerEntry.objects.none()
+    return scope_queryset(LedgerEntry.objects, user, campus_field=None)
+
+
 def build_report_rows(
     *,
     kind: str,
@@ -1753,15 +1784,11 @@ def build_report_rows(
     campus-scoped caller would get a `FieldError`, which is the bug
     `LeaveTypeViewSet` documents.
 
-    `income-vs-expense` and `trial-balance` still call `scope_queryset`, with
-    `campus_field=None` — `ledger_entries` genuinely has no campus dimension, so
-    that part of `LedgerEntryViewSet.get_queryset`'s reasoning holds here too.
-    What does not hold is skipping `scope_queryset` on the strength of
-    `fees.ledger.view`'s *default* roles being narrow: a tenant can grant that
-    key to a role scoped `own` or `assigned`, and `LedgerEntry` defines neither
-    hook, so `scope_queryset` fails that closed to `.none()` rather than
-    quietly falling through to every posting in the tenant — the same trap
-    `LedgerEntryViewSet.get_queryset` was fixed for.
+    `income-vs-expense` and `trial-balance` go through `_ledger_report_queryset`
+    below rather than a bare `scope_queryset` call — see its docstring for why
+    `campus_field=None` is right for `own`/`assigned` scope here and wrong for
+    `campus` scope, which is the opposite of every other table in this
+    function.
     """
     from core.rbac.permissions import scope_queryset
 
@@ -1811,7 +1838,7 @@ def build_report_rows(
         )
     if kind == "income-vs-expense":
         return reports.income_vs_expense(
-            scope_queryset(LedgerEntry.objects, user, campus_field=None),
+            _ledger_report_queryset(user=user),
             date_from=date_from,
             date_to=date_to,
             limit=limit,
@@ -1830,7 +1857,7 @@ def build_report_rows(
             limit=limit,
         )
     return reports.trial_balance_extract(
-        scope_queryset(LedgerEntry.objects, user, campus_field=None),
+        _ledger_report_queryset(user=user),
         date_from=date_from,
         date_to=date_to,
         limit=limit,

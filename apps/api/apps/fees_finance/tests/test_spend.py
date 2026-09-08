@@ -388,6 +388,104 @@ class BudgetTests(SpendTestCase):
 
         self.assertEqual(rows[0]["actual"], Decimal("10000.00"))
 
+    def test_two_budgets_on_one_account_in_different_periods_keep_their_own_actual(self) -> None:
+        """The bug a fix keyed `budget_variance` on `(account, period)` to
+        close: two budgets can legitimately share an account with different
+        periods — the unique constraint only requires the *pair* to be
+        unique — and pooling every account's spend into one date range would
+        hand a first-half budget the same actual as a second-half one on the
+        same account.
+        """
+        first_half = self._expense(
+            amount=Decimal("10000.00"), expense_date=datetime.date(2026, 6, 1)
+        )
+        second_half = self._expense(
+            amount=Decimal("15000.00"), expense_date=datetime.date(2026, 11, 1)
+        )
+
+        with tenant_context(self.tenant.id):
+            services.submit_expense(expense=first_half, actor_id=self.user.pk)
+            services.decide_expense(expense=first_half, approve=True, actor_id=self.approver.pk)
+            services.submit_expense(expense=second_half, actor_id=self.user.pk)
+            services.decide_expense(expense=second_half, approve=True, actor_id=self.approver.pk)
+
+            first_budget = BudgetFactory(
+                tenant=self.tenant,
+                ledger_account=self.expense_account,
+                amount=Decimal("50000.00"),
+                period_start=datetime.date(2026, 4, 1),
+                period_end=datetime.date(2026, 9, 30),
+            )
+            second_budget = BudgetFactory(
+                tenant=self.tenant,
+                ledger_account=self.expense_account,
+                amount=Decimal("50000.00"),
+                period_start=datetime.date(2026, 10, 1),
+                period_end=datetime.date(2027, 3, 31),
+            )
+            services.approve_budget(budget=first_budget, actor_id=self.approver.pk)
+            services.approve_budget(budget=second_budget, actor_id=self.approver.pk)
+
+            from apps.fees_finance.models import Budget
+
+            rows = {
+                row["budget_id"]: row
+                for row in reports.budget_variance(
+                    Budget.objects.alive(), as_of=datetime.date(2027, 3, 31)
+                )
+            }
+
+        self.assertEqual(rows[str(first_budget.pk)]["actual"], Decimal("10000.00"))
+        self.assertEqual(rows[str(second_budget.pk)]["actual"], Decimal("15000.00"))
+
+    def test_two_campus_budgets_on_one_account_and_period_still_pool_their_actual(self) -> None:
+        """The still-open half of the same bug, recorded rather than silently
+        wrong — see `budget_variance`'s own docstring. `ledger_entries`
+        carries no campus column, so two campus-scoped budgets on the same
+        account and period (the unique constraint allows exactly that,
+        differentiated by `campus_id`) cannot be told apart by actual spend:
+        both read the tenant-wide total for the account. This test exists so
+        a future fix for it is a deliberate change to this assertion, not an
+        unnoticed regression either way.
+        """
+        from apps.fees_finance.tests.factories import CampusFactory
+
+        expense = self._expense(amount=Decimal("10000.00"), expense_date=datetime.date(2026, 6, 1))
+
+        with tenant_context(self.tenant.id):
+            services.submit_expense(expense=expense, actor_id=self.user.pk)
+            services.decide_expense(expense=expense, approve=True, actor_id=self.approver.pk)
+
+            other_campus = CampusFactory(tenant=self.tenant)
+            main_budget = BudgetFactory(
+                tenant=self.tenant,
+                ledger_account=self.expense_account,
+                campus=self.campus,
+                amount=Decimal("50000.00"),
+            )
+            other_budget = BudgetFactory(
+                tenant=self.tenant,
+                ledger_account=self.expense_account,
+                campus=other_campus,
+                amount=Decimal("50000.00"),
+            )
+            services.approve_budget(budget=main_budget, actor_id=self.approver.pk)
+            services.approve_budget(budget=other_budget, actor_id=self.approver.pk)
+
+            from apps.fees_finance.models import Budget
+
+            rows = {
+                row["budget_id"]: row
+                for row in reports.budget_variance(
+                    Budget.objects.alive(), as_of=datetime.date(2027, 3, 31)
+                )
+            }
+
+        # The expense belongs to neither campus in particular, but both
+        # budgets show it — the pooling the docstring names.
+        self.assertEqual(rows[str(main_budget.pk)]["actual"], Decimal("10000.00"))
+        self.assertEqual(rows[str(other_budget.pk)]["actual"], Decimal("10000.00"))
+
     def test_two_budgets_for_one_target_and_period_collide(self) -> None:
         """NULLS NOT DISTINCT: a tenant-wide budget has `campus_id IS NULL`, and
         two of those for one account is the double-count this exists to stop."""

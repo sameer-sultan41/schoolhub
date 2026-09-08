@@ -438,6 +438,42 @@ class IncomeVsExpenseTests(ReportTestCase):
         self.assertEqual(income_rows, [])
         self.assertEqual(trial_rows, [])
 
+    def test_a_campus_scoped_principal_sees_nothing_not_the_whole_tenant(self) -> None:
+        """`campus_field=None` is `scope_queryset`'s signal that a table is
+        campus-*agnostic* — one definition every campus shares, like a class
+        or a subject — and a campus-scoped caller passes through unfiltered.
+        `ledger_entries` has no campus column for a different reason: nothing
+        records which campus a posting belongs to, not because income and
+        expense are the same across campuses. Passing a campus-scoped
+        `school_admin` through on that technicality would hand them the whole
+        tenant's P&L — the original leak this report exists to avoid, not
+        merely a narrower version of the own-scope one above.
+        """
+        from apps.fees_finance.tests.factories import grant
+        from core.rbac.models import RecordScope
+
+        invoice = self._invoice(due=datetime.date(2026, 9, 10))
+        self._pay(invoice, Decimal("1000.00"))
+        reader = UserFactory(tenant=self.tenant)
+        grant(reader, "fees.ledger.view", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+
+        with tenant_context(self.tenant.id):
+            income_rows = services.build_report_rows(
+                kind="income-vs-expense",
+                user=reader,
+                date_from=datetime.date(2026, 1, 1),
+                date_to=datetime.date(2027, 1, 1),
+            )
+            trial_rows = services.build_report_rows(
+                kind="trial-balance",
+                user=reader,
+                date_from=datetime.date(2026, 1, 1),
+                date_to=datetime.date(2027, 1, 1),
+            )
+
+        self.assertEqual(income_rows, [])
+        self.assertEqual(trial_rows, [])
+
 
 class ReportDispatchTests(ReportTestCase):
     def test_every_declared_kind_is_answerable(self) -> None:
