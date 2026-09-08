@@ -11,6 +11,8 @@ from django.core import mail
 from django.test import TestCase
 
 from apps.school_organization.tests.factories import TenantFactory, UserFactory
+from core.notifications import services as notify_services
+from core.notifications import templates as templates_module
 from core.notifications.catalog import MANDATORY_CHANNEL, TriggerCatalog
 from core.notifications.catalog import registry as catalog
 from core.notifications.models import (
@@ -21,7 +23,7 @@ from core.notifications.models import (
     NotificationChannel,
 )
 from core.notifications.services import Recipient, UnknownTrigger, mask_address, notify
-from core.notifications.templates import TemplateError
+from core.notifications.templates import NotificationTemplate, TemplateError
 from core.notifications.templates import registry as template_registry
 from core.tenancy.context import tenant_context
 
@@ -70,6 +72,11 @@ class NotifyTestCase(TestCase):
         super().setUp()
         self._saved_catalog = catalog._triggers.copy()  # noqa: SLF001 — module registry
         self._saved_templates = template_registry._templates.copy()  # noqa: SLF001
+        # Both resolver hooks default to None (no communication app registered in
+        # this suite) — saved/restored here too so a test that registers one
+        # cannot leak it into an unrelated test run in the same process.
+        self._saved_override_resolver = templates_module._override_resolver  # noqa: SLF001
+        self._saved_preference_resolver = notify_services._preference_resolver  # noqa: SLF001
         _register_test_trigger(channels=self.channels)
 
         self.tenant = TenantFactory()
@@ -78,6 +85,8 @@ class NotifyTestCase(TestCase):
     def tearDown(self) -> None:
         catalog._triggers = self._saved_catalog  # noqa: SLF001 — restoring a module registry
         template_registry._templates = self._saved_templates  # noqa: SLF001
+        templates_module.set_override_resolver(self._saved_override_resolver)
+        notify_services.set_preference_resolver(self._saved_preference_resolver)
         super().tearDown()
 
     def run_notify(self, *, deliver: bool = False, **kwargs):
@@ -240,6 +249,185 @@ class UnavailableChannelTests(NotifyTestCase):
 
         self.assertEqual(sms_row.status, DeliveryStatus.SKIPPED)
         self.assertIn("no adapter", (sms_row.error_message or "").lower())
+
+
+class PerChannelRenderingTests(NotifyTestCase):
+    """Task A1: a channel's own template, not the in-app one reused verbatim."""
+
+    channels = {NotificationChannel.IN_APP, NotificationChannel.EMAIL}
+
+    def setUp(self) -> None:
+        super().setUp()
+        # _register_test_trigger's EMAIL template is byte-identical to the
+        # in-app one, which would not catch this task's regression. Re-register
+        # EMAIL with deliberately different wording.
+        template_registry._templates.pop((CODE, NotificationChannel.EMAIL), None)  # noqa: SLF001
+        template_registry.register(
+            CODE,
+            channel=NotificationChannel.EMAIL,
+            subject="Email subject for {{ name }}",
+            body="Email body for {{ name }}, distinct from the in-app copy.",
+            variables=VARIABLES,
+        )
+
+    def test_notify_renders_a_distinct_body_per_channel_when_templates_differ(self) -> None:
+        created = self.run_notify()
+
+        with tenant_context(self.tenant.id):
+            notification = Notification.objects.get(pk=created[0].pk)
+            email_row = DeliveryLog.objects.get(
+                notification=notification, channel=NotificationChannel.EMAIL
+            )
+
+        self.assertEqual(notification.title, "Hi Ayesha")
+        self.assertEqual(email_row.subject, "Email subject for Ayesha")
+        self.assertEqual(email_row.body, "Email body for Ayesha, distinct from the in-app copy.")
+        self.assertNotEqual(email_row.body, notification.body)
+
+    def test_in_app_delivery_row_leaves_subject_and_body_null(self) -> None:
+        created = self.run_notify()
+
+        with tenant_context(self.tenant.id):
+            in_app_row = DeliveryLog.objects.get(
+                notification=created[0], channel=NotificationChannel.IN_APP
+            )
+
+        self.assertIsNone(in_app_row.subject)
+        self.assertIsNone(in_app_row.body)
+
+
+class OverrideResolverTests(NotifyTestCase):
+    channels = {NotificationChannel.IN_APP}
+
+    def test_resolve_falls_back_to_the_platform_default_with_no_resolver_registered(self) -> None:
+        template = templates_module.resolve(
+            CODE, NotificationChannel.IN_APP, tenant_id=self.tenant.pk
+        )
+
+        self.assertIsNotNone(template)
+        self.assertEqual(template.body, "Body for {{ name }}")
+
+    def test_resolve_prefers_the_registered_resolvers_result_when_it_returns_one(self) -> None:
+        override = NotificationTemplate(
+            code=CODE,
+            channel=NotificationChannel.IN_APP,
+            subject="Overridden subject",
+            body="Overridden body for {{ name }}",
+            variables=VARIABLES,
+        )
+        templates_module.set_override_resolver(lambda code, channel, locale, tenant_id: override)
+
+        template = templates_module.resolve(
+            CODE, NotificationChannel.IN_APP, tenant_id=self.tenant.pk
+        )
+
+        self.assertIs(template, override)
+
+    def test_resolve_falls_back_to_platform_default_when_the_resolver_returns_none(self) -> None:
+        templates_module.set_override_resolver(lambda code, channel, locale, tenant_id: None)
+
+        template = templates_module.resolve(
+            CODE, NotificationChannel.IN_APP, tenant_id=self.tenant.pk
+        )
+
+        self.assertEqual(template.body, "Body for {{ name }}")
+
+    def test_notify_renders_with_the_tenants_override_when_one_is_registered(self) -> None:
+        override = NotificationTemplate(
+            code=CODE,
+            channel=NotificationChannel.IN_APP,
+            subject="Overridden {{ name }}",
+            body="Overridden body",
+            variables=VARIABLES,
+        )
+        templates_module.set_override_resolver(lambda code, channel, locale, tenant_id: override)
+
+        created = self.run_notify()
+
+        with tenant_context(self.tenant.id):
+            notification = Notification.objects.get(pk=created[0].pk)
+
+        self.assertEqual(notification.title, "Overridden Ayesha")
+        self.assertEqual(notification.body, "Overridden body")
+
+
+class PreferenceResolverTests(NotifyTestCase):
+    channels = {NotificationChannel.IN_APP, NotificationChannel.EMAIL}
+
+    def test_in_app_rendering_is_unaffected_by_a_registered_preference_resolver(self) -> None:
+        notify_services.set_preference_resolver(lambda user_id, category, channel, tenant_id: False)
+
+        created = self.run_notify()
+
+        with tenant_context(self.tenant.id):
+            in_app_row = DeliveryLog.objects.get(
+                notification=created[0], channel=NotificationChannel.IN_APP
+            )
+
+        self.assertEqual(in_app_row.status, DeliveryStatus.QUEUED)
+
+    def test_a_preference_resolver_returning_false_skips_that_channel_with_a_named_reason(
+        self,
+    ) -> None:
+        notify_services.set_preference_resolver(
+            lambda user_id, category, channel, tenant_id: channel != NotificationChannel.EMAIL
+        )
+
+        created = self.run_notify()
+
+        with tenant_context(self.tenant.id):
+            email_row = DeliveryLog.objects.get(
+                notification=created[0], channel=NotificationChannel.EMAIL
+            )
+
+        self.assertEqual(email_row.status, DeliveryStatus.SKIPPED)
+        self.assertEqual(email_row.error_message, "Disabled by user preference.")
+
+    def test_an_emergency_category_notification_ignores_the_preference_resolver_entirely(
+        self,
+    ) -> None:
+        emergency_event = "test.emergency-event"
+        catalog.register(
+            emergency_event,
+            template_code=CODE,
+            category=NotificationCategory.EMERGENCY,
+            channels=self.channels,
+            variables=VARIABLES,
+        )
+        called = []
+
+        def resolver(user_id, category, channel, tenant_id):
+            called.append(channel)
+            return False
+
+        notify_services.set_preference_resolver(resolver)
+
+        with self.captureOnCommitCallbacks(execute=False), tenant_context(self.tenant.id):
+            created = notify(
+                emergency_event,
+                tenant_id=self.tenant.pk,
+                recipients=[Recipient(user_id=self.user.pk)],
+                context={"name": "Ayesha"},
+            )
+
+        with tenant_context(self.tenant.id):
+            email_row = DeliveryLog.objects.get(
+                notification=created[0], channel=NotificationChannel.EMAIL
+            )
+
+        self.assertEqual(email_row.status, DeliveryStatus.QUEUED)
+        self.assertNotIn(NotificationChannel.EMAIL, called)
+
+    def test_with_no_resolver_registered_every_channel_is_enabled(self) -> None:
+        # The default state on `main` today, and every existing caller's contract.
+        created = self.run_notify()
+
+        with tenant_context(self.tenant.id):
+            email_row = DeliveryLog.objects.get(
+                notification=created[0], channel=NotificationChannel.EMAIL
+            )
+
+        self.assertEqual(email_row.status, DeliveryStatus.QUEUED)
 
 
 class MaskAddressTests(TestCase):

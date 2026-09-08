@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from django.test import SimpleTestCase
 
+from core.notifications import templates as templates_module
 from core.notifications.models import NotificationChannel
 from core.notifications.templates import (
+    NotificationTemplate,
     TemplateError,
     TemplateRegistry,
     registry,
+    resolve,
 )
 
 
@@ -173,3 +178,63 @@ class ShippedTemplateTests(SimpleTestCase):
         template = registry.get("staff.invited", NotificationChannel.IN_APP)
 
         self.assertIsNotNone(template)
+
+
+class ResolveTests(SimpleTestCase):
+    """`resolve()` — the tenant-aware lookup `notify()` calls instead of `registry.get()`.
+
+    Exercises the real module-level `registry`, since `resolve()` has no way to
+    take one as a parameter — so every test here registers into it and restores
+    it afterward, the same discipline test_notify.py's NotifyTestCase uses.
+    """
+
+    CODE = "demo.resolve-target"
+    TENANT_ID = uuid4()
+
+    def setUp(self) -> None:
+        super().setUp()
+        self._saved_templates = registry._templates.copy()  # noqa: SLF001
+        self._saved_resolver = templates_module._override_resolver  # noqa: SLF001
+        registry.register(
+            self.CODE,
+            channel=NotificationChannel.IN_APP,
+            subject="Platform subject",
+            body="Platform body",
+            variables=set(),
+        )
+
+    def tearDown(self) -> None:
+        registry._templates = self._saved_templates  # noqa: SLF001
+        templates_module.set_override_resolver(self._saved_resolver)
+        super().tearDown()
+
+    def test_resolve_falls_back_to_the_platform_default_with_no_resolver_registered(self) -> None:
+        template = resolve(self.CODE, NotificationChannel.IN_APP, tenant_id=self.TENANT_ID)
+
+        self.assertEqual(template.body, "Platform body")
+
+    def test_resolve_prefers_the_registered_resolvers_result_when_it_returns_one(self) -> None:
+        override = NotificationTemplate(
+            code=self.CODE,
+            channel=NotificationChannel.IN_APP,
+            subject="Tenant subject",
+            body="Tenant body",
+            variables=frozenset(),
+        )
+        templates_module.set_override_resolver(lambda code, channel, locale, tenant_id: override)
+
+        template = resolve(self.CODE, NotificationChannel.IN_APP, tenant_id=self.TENANT_ID)
+
+        self.assertIs(template, override)
+
+    def test_resolve_falls_back_to_platform_default_when_the_resolver_returns_none(self) -> None:
+        templates_module.set_override_resolver(lambda code, channel, locale, tenant_id: None)
+
+        template = resolve(self.CODE, NotificationChannel.IN_APP, tenant_id=self.TENANT_ID)
+
+        self.assertEqual(template.body, "Platform body")
+
+    def test_resolve_of_an_unregistered_code_returns_none_regardless_of_resolver(self) -> None:
+        template = resolve("no.such.code", NotificationChannel.IN_APP, tenant_id=self.TENANT_ID)
+
+        self.assertIsNone(template)

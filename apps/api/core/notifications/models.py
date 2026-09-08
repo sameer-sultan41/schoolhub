@@ -142,6 +142,20 @@ class DeliveryLog(TenantOwnedModel):
         help_text="Template used at render time — a soft reference by code, so it "
         "survives the template being edited or removed.",
     )
+    subject = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text="This channel's own rendering — NULL for in_app, which has no "
+        "separate send and reuses Notification.title instead. See "
+        "services.notify's per-channel rendering.",
+    )
+    body = models.TextField(
+        null=True,
+        blank=True,
+        help_text="This channel's own rendering — NULL for in_app, which reuses "
+        "Notification.body instead.",
+    )
     provider = models.CharField(
         max_length=50, null=True, blank=True, help_text="Adapter name, e.g. 'console', 'ses'."
     )

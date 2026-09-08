@@ -28,11 +28,23 @@ Two rules from §2 that this module enforces rather than documents:
    tenant-editable input in Tier 4, and handing untrusted input to a full
    template engine is how server-side template injection happens. A literal
    `{{ name }}` substitution over a declared variable set cannot execute anything.
+
+**Tenant overrides (Tier 4).** `resolve()` is the entry point everything but this
+module's own registration code should call — `registry.get()` alone only ever
+sees the platform default. `set_override_resolver()` is how `apps.communication`
+plugs its `notification_templates` table in at `AppConfig.ready()`, without this
+module importing a Tier-4 app: the resolver is a plain callable, registered the
+same way `core.rbac.permissions` never imports a specific module's permission
+keys. No resolver registered (every state before communication's app-ready runs,
+including every test that does not explicitly register one) means `resolve()`
+behaves exactly like `registry.get()` always has.
 """
 
 from __future__ import annotations
 
 import re
+import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from core.notifications.models import NotificationChannel
@@ -171,6 +183,38 @@ def _assert_placeholders_declared(template: NotificationTemplate) -> None:
 
 
 registry = TemplateRegistry()
+
+_OverrideResolver = Callable[[str, str, str, uuid.UUID], NotificationTemplate | None]
+_override_resolver: _OverrideResolver | None = None
+
+
+def set_override_resolver(fn: _OverrideResolver | None) -> None:
+    """Register (or clear, with `None`) the tenant-override lookup.
+
+    Called once from `apps.communication.apps.CommunicationConfig.ready()`. `fn`
+    takes `(code, channel, locale, tenant_id)` and returns a `NotificationTemplate`
+    or `None` — `None` means "no active override for this tenant", which is the
+    common case and falls through to the platform default, not an error.
+    """
+    global _override_resolver
+    _override_resolver = fn
+
+
+def resolve(
+    code: str, channel: str, *, tenant_id: uuid.UUID, locale: str = "en"
+) -> NotificationTemplate | None:
+    """The tenant-aware lookup: an active override if one exists, else the platform default.
+
+    `locale` defaults to `"en"` and nothing in this plan's scope passes another
+    value yet — `User` has no locale field today, so every render is English
+    until a later PR adds one. The parameter exists now so that PR does not have
+    to touch this signature.
+    """
+    if _override_resolver is not None:
+        override = _override_resolver(code, channel, locale, tenant_id)
+        if override is not None:
+            return override
+    return registry.get(code, channel)
 
 
 def load_module_notifications() -> None:
