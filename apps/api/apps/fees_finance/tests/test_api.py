@@ -26,12 +26,16 @@ from apps.fees_finance.tests.base import FEATURE, FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
     ClassFactory,
     FeeHeadFactory,
+    FeeInvoiceFactory,
+    FeeInvoiceLineFactory,
     FeeScheduleFactory,
     FeeStructureFactory,
+    FineFactory,
     LedgerAccountFactory,
     UserFactory,
     authenticate,
     disable_feature,
+    fine_head,
     grant,
     posting,
 )
@@ -323,6 +327,39 @@ class FeeHeadEndpointTests(FeesFinanceAPITestCase):
         response = self.client.delete(f"/api/v1/fee-heads/{head.pk}")
 
         self.assertEqual(response.status_code, 204)
+
+    def test_a_head_referenced_only_by_a_fine_cannot_be_deleted(self) -> None:
+        """A fine-category head is never priced into a schedule at all — it
+        exists purely for `Fine.fee_head` — so the schedule check alone would
+        let a fine-only head be deleted while a fine still names it."""
+        with tenant_context(self.tenant.id):
+            head = fine_head(self.tenant, self.fee_income)
+            FineFactory(tenant=self.tenant, student=self.student, fee_head=head)
+
+        response = self.client.delete(f"/api/v1/fee-heads/{head.pk}")
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_a_head_referenced_only_by_an_invoice_line_cannot_be_deleted(self) -> None:
+        """`generate_invoices` writes `FeeInvoiceLine.fee_head` directly,
+        independent of whichever schedule (if any) produced the line — so an
+        already-invoiced head must refuse deletion even with no live schedule
+        of its own."""
+        with tenant_context(self.tenant.id):
+            head = FeeHeadFactory(tenant=self.tenant, ledger_account=self.fee_income)
+            invoice = FeeInvoiceFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                subtotal=Decimal("500.00"),
+            )
+            FeeInvoiceLineFactory(
+                tenant=self.tenant, fee_invoice=invoice, fee_head=head, amount=Decimal("500.00")
+            )
+
+        response = self.client.delete(f"/api/v1/fee-heads/{head.pk}")
+
+        self.assertEqual(response.status_code, 422)
 
     def test_the_category_filter_narrows_the_list(self) -> None:
         with tenant_context(self.tenant.id):
