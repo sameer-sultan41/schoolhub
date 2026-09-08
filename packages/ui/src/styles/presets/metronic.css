@@ -1,0 +1,165 @@
+/*
+ * Metronic — the template's own default palette (config.reui.css), unadapted, for a
+ * school that wants exactly what Metronic ships out of the box rather than one of this
+ * repo's own designed palettes.
+ *
+ * Source values are copied verbatim from `../metronic/config.reui.css` (Metronic's own
+ * `:root`/`.dark` blocks — Tailwind's `zinc`/`blue`/`red` scale, referenced there via
+ * `var(--color-zinc-*)` etc.). Converted here to the literal OKLCH triples those
+ * variables resolve to (Tailwind v4's own `theme.css`), since this package's convention
+ * is measured OKLCH literals per preset, never a second `var()` indirection.
+ *
+ * Unlike every other preset, `background` and `surface` (Metronic's `card`) are the SAME
+ * value in both light and dark — Metronic's own file makes no distinction between them
+ * (nor does it distinguish a "raised" popover surface: `popover` matches `card` too).
+ * This is not an oversight here: Metronic's cards read as flat, separated from the page
+ * by a hairline `border` and a barely-there `shadow-xs` rather than by a colour step, and
+ * reproducing that faithfully means NOT inventing the tinted-page/white-card split this
+ * repo's other presets use. `surface-sunken` has no Metronic equivalent at all (the
+ * template never needs a "recessed" plane); `muted` is the closest thing it actually
+ * has, so that is what fills the slot.
+ *
+ * Only `--sh-*` is written here. Never a `--color-*` name: those are aliases declared in
+ * theme.css's `@theme inline` block, and pointing one somewhere else would create the
+ * second source of truth that file exists to prevent.
+ *
+ * Deliberately NOT overridden, so they stay identical to the platform default:
+ *   - success / warning / danger / info. A status colour is not a matter of taste, and
+ *     Metronic's own template does not ship a fixed opinion on all four either.
+ *   - --sh-color-ring. Metronic's own file sets `--ring: zinc-400` — already a neutral
+ *     mid-tone, not primary-tinted — which is exactly what this platform's own
+ *     `--sh-color-ring: var(--sh-color-muted-foreground)` already gives every preset, so
+ *     there is nothing to override here to match Metronic's actual intent.
+ *   - the elevation scale, the platform tier, the type stack, and chart slots 2-6 (Aurora's
+ *     own CVD-validated ramp — see theme.css's own header for why only slot 1 ever moves).
+ *
+ * `--sh-gradient-spotlight` has no Metronic source at all — the template ships no hero
+ * band. Synthesized here from the same blue family (hue ~260-263, matching both light
+ * and dark primary), at a lightness chosen for the gradient itself rather than borrowed
+ * from `--sh-color-primary`: primary's own 0.623 lightness only clears 3.68:1 for white
+ * text (documented below, not silently dropped), which is fine for a button label sized
+ * and weighted for UI contrast but not for a hero band's larger passage of text, so the
+ * two gradient stops are measured on their own (8.76:1 / 12.45:1 azure-a — see the given
+ * OKLCH triples).
+ *
+ * Specificity, low to high:
+ *   1. :root — theme.css, the Aurora default
+ *   2. :root[data-theme-preset="metronic"] — this file
+ *   3. the inline style on the TenantTheme wrapper — tenant branding, applied only
+ *      under the "tenant" preset (tenant-theme.tsx)
+ *
+ * Measured contrast (light, from Metronic's own literal values — not this repo's own
+ * AA floor, since these are reproduced as shipped): foreground on background 19.90:1;
+ * secondary/accent-foreground on secondary/accent 16.12:1; muted-foreground on
+ * background 4.83:1 (passes AA), on muted itself 4.40:1 (marginally under AA for normal
+ * text — Metronic's own shipped value, not adjusted here); destructive-foreground on
+ * destructive 4.83:1. **primary-foreground on primary is 3.68:1** — under the 4.5:1 AA
+ * text floor, though it clears the 3:1 UI-component floor (WCAG 1.4.11) that a button
+ * fill is actually held to. This is Metronic's own real, currently-shipped pairing, kept
+ * as-is rather than re-picked, since the point of this preset is to BE the template's
+ * default, not a corrected version of it.
+ *
+ * Measured contrast (dark): foreground on background 19.06:1; primary-foreground on
+ * primary 5.17:1 (passes — the dark arm's own blue-600 is darker than light's blue-500,
+ * an unusual choice but Metronic's own); secondary/accent-foreground on secondary/accent
+ * 14.27:1 / 16.97:1; muted-foreground on background 4.12:1 and on muted 3.67:1 (both
+ * under AA, again Metronic's own shipped values).
+ */
+
+:root[data-theme-preset="metronic"] {
+  --sh-radius: 0.5rem;
+
+  --sh-color-background: oklch(1 0 0);
+  --sh-color-foreground: oklch(0.141 0.005 285.823);
+  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface-foreground: oklch(0.141 0.005 285.823);
+  --sh-color-surface-raised: oklch(1 0 0);
+  --sh-color-surface-sunken: oklch(0.967 0.001 286.375);
+
+  --sh-color-muted: oklch(0.967 0.001 286.375);
+  --sh-color-muted-foreground: oklch(0.552 0.016 285.938);
+  --sh-color-border: oklch(0.94 0.004 286.32);
+
+  --sh-color-primary: oklch(0.623 0.214 259.815);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  --sh-color-secondary: oklch(0.967 0.001 286.375);
+  --sh-color-secondary-foreground: oklch(0.21 0.006 285.885);
+  --sh-color-accent: oklch(0.967 0.001 286.375);
+  --sh-color-accent-foreground: oklch(0.21 0.006 285.885);
+
+  /* The chrome tier (sidebar/header) is NOT declared here — it derives from this
+     preset's own surface/muted/border/primary tokens via shared-chrome.css, imported
+     once for every named preset instead of copy-pasted into each one. */
+
+  --sh-color-chart-1: oklch(0.623 0.214 259.815);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.4 0.19 262.881) 0%,
+    oklch(0.3 0.15 255) 100%
+  );
+}
+
+/*
+ * Declared twice with identical values, matching theme.css: the media arm covers a viewer
+ * who has not chosen (`:not(.light)` lets an explicit light choice win), the class arm
+ * covers the dashboard's toggle. A divergence here is invisible until someone toggles.
+ */
+/* dark-mode token block */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme-preset="metronic"]:not(.light) {
+    --sh-color-background: oklch(0.141 0.005 285.823);
+    --sh-color-foreground: oklch(0.985 0 0);
+    --sh-color-surface: oklch(0.141 0.005 285.823);
+    --sh-color-surface-foreground: oklch(0.985 0 0);
+    --sh-color-surface-raised: oklch(0.141 0.005 285.823);
+    --sh-color-surface-sunken: oklch(0.21 0.006 285.885);
+
+    --sh-color-muted: oklch(0.21 0.006 285.885);
+    --sh-color-muted-foreground: oklch(0.552 0.016 285.938);
+    --sh-color-border: oklch(0.274 0.006 286.033);
+
+    --sh-color-primary: oklch(0.546 0.245 262.881);
+    --sh-color-primary-foreground: oklch(1 0 0);
+    --sh-color-secondary: oklch(0.274 0.006 286.033);
+    --sh-color-secondary-foreground: oklch(0.985 0 0);
+    --sh-color-accent: oklch(0.21 0.006 285.885);
+    --sh-color-accent-foreground: oklch(0.985 0 0);
+
+    --sh-color-chart-1: oklch(0.546 0.245 262.881);
+
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.4 0.19 262.881) 0%,
+      oklch(0.3 0.15 255) 100%
+    );
+  }
+}
+
+:root[data-theme-preset="metronic"].dark {
+  --sh-color-background: oklch(0.141 0.005 285.823);
+  --sh-color-foreground: oklch(0.985 0 0);
+  --sh-color-surface: oklch(0.141 0.005 285.823);
+  --sh-color-surface-foreground: oklch(0.985 0 0);
+  --sh-color-surface-raised: oklch(0.141 0.005 285.823);
+  --sh-color-surface-sunken: oklch(0.21 0.006 285.885);
+
+  --sh-color-muted: oklch(0.21 0.006 285.885);
+  --sh-color-muted-foreground: oklch(0.552 0.016 285.938);
+  --sh-color-border: oklch(0.274 0.006 286.033);
+
+  --sh-color-primary: oklch(0.546 0.245 262.881);
+  --sh-color-primary-foreground: oklch(1 0 0);
+  --sh-color-secondary: oklch(0.274 0.006 286.033);
+  --sh-color-secondary-foreground: oklch(0.985 0 0);
+  --sh-color-accent: oklch(0.21 0.006 285.885);
+  --sh-color-accent-foreground: oklch(0.985 0 0);
+
+  --sh-color-chart-1: oklch(0.546 0.245 262.881);
+
+  --sh-gradient-spotlight: linear-gradient(
+    135deg,
+    oklch(0.4 0.19 262.881) 0%,
+    oklch(0.3 0.15 255) 100%
+  );
+}
