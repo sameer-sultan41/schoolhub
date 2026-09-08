@@ -8,6 +8,7 @@
  */
 
 import { Columns3 } from "lucide-react";
+import type { Table } from "@tanstack/react-table";
 import { useDataGrid } from "./data-grid";
 import { Button } from "./button";
 import {
@@ -18,6 +19,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
+
+/** Whether this grid has anything for the columns menu to show — `DataGridColumnVisibility`
+ * itself renders `null` when it doesn't, but a CALLER deciding whether to render the
+ * toolbar row AROUND it (`DataGridCard`) needs to know that ahead of the JSX existing,
+ * not after: a JSX element is truthy regardless of what its component renders. One
+ * predicate, used by both, so the two can never disagree. */
+export function hasHideableColumns<TData>(table: Table<TData>): boolean {
+  return table.getAllColumns().some((column) => column.getCanHide());
+}
 
 export function DataGridColumnVisibility() {
   const { table, labels } = useDataGrid();

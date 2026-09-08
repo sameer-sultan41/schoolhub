@@ -69,20 +69,9 @@
   --sh-color-accent: oklch(0.74 0.121 204);
   --sh-color-accent-foreground: oklch(0.2 0.035 255);
 
-  /*
-   * The frame follows this preset's own surface rather than theme.css's recessed chrome
-   * — Azure's own surface/muted/border already give the rail the "one step below the
-   * page" relationship the platform default achieves with dedicated tokens, so deriving
-   * from them keeps the two in step automatically. Declared in the light block only:
-   * custom-property indirection resolves at computed-value time, so when the dark arms
-   * below restate `--sh-color-surface`, chrome follows on its own.
-   */
-  --sh-color-chrome: var(--sh-color-surface);
-  --sh-color-chrome-foreground: var(--sh-color-surface-foreground);
-  --sh-color-chrome-muted: var(--sh-color-muted-foreground);
-  --sh-color-chrome-accent: var(--sh-color-muted);
-  --sh-color-chrome-border: var(--sh-color-border);
-  --sh-color-chrome-primary: var(--sh-color-primary);
+  /* The chrome tier (sidebar/header) is NOT declared here — it derives from this
+     preset's own surface/muted/border/primary tokens via shared-chrome.css, imported
+     once for every named preset instead of copy-pasted into each one. */
 
   --sh-color-chart-1: oklch(0.5 0.159 255);
 

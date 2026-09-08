@@ -415,6 +415,7 @@ export function createSelectColumn<TData>(labels: {
       headerClassName: "w-10",
       cellClassName: "w-10",
       skeleton: labels.skeleton,
+      draggable: false,
     },
   };
 }

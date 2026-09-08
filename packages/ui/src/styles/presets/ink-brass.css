@@ -58,22 +58,9 @@
   --sh-color-accent: oklch(0.762 0.155 74);
   --sh-color-accent-foreground: oklch(0.314 0.058 267);
 
-  /*
-   * Ink & Brass had no chrome tier — its sidebar was a `surface` panel like any card,
-   * and the header was the page background. Restoring that under a base file whose
-   * chrome is ink means saying so explicitly, which is what these six do: the frame
-   * follows this preset's own surface/muted/border rather than theme.css's ink.
-   *
-   * Declared once, in the light block only, and deliberately so — custom-property
-   * indirection resolves at computed-value time, so when the dark arms below restate
-   * `--sh-color-surface`, chrome follows without a second copy to keep in sync.
-   */
-  --sh-color-chrome: var(--sh-color-surface);
-  --sh-color-chrome-foreground: var(--sh-color-surface-foreground);
-  --sh-color-chrome-muted: var(--sh-color-muted-foreground);
-  --sh-color-chrome-accent: var(--sh-color-muted);
-  --sh-color-chrome-border: var(--sh-color-border);
-  --sh-color-chrome-primary: var(--sh-color-primary);
+  /* The chrome tier (sidebar/header) is NOT declared here — it derives from this
+     preset's own surface/muted/border/primary tokens via shared-chrome.css, imported
+     once for every named preset instead of copy-pasted into each one. */
 
   --sh-color-chart-1: oklch(0.514 0.204 281.7);
   --sh-color-chart-2: oklch(0.635 0.129 74.4);

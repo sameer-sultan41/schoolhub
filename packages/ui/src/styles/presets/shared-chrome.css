@@ -1,0 +1,37 @@
+/*
+ * Every named preset except Aurora (theme.css's own bespoke, deliberately RECESSED
+ * chrome tier — see that file's header) wants the sidebar/header frame to simply follow
+ * its own surface/muted/border/primary tokens, so the rail reads as "one step below the
+ * page" automatically whenever those tokens change, without each preset having to
+ * restate the mapping. That six-line block used to be copy-pasted into all seven named
+ * preset files, byte-for-byte identical in every one — a change to the mapping (or a
+ * typo in one copy) could silently drift between them with nothing to catch it, since
+ * theme.test.ts only reads theme.css, not these preset files. One rule, addressed at
+ * all seven `[data-theme-preset]` selectors at once, makes that drift structurally
+ * impossible instead of merely unlikely.
+ *
+ * Declared BEFORE the individual preset files (see globals.css's own import order) so a
+ * future preset wanting Aurora's kind of bespoke chrome — not this derived kind — can
+ * still win by simply declaring its own `--sh-color-chrome-*` tokens in its own file:
+ * same-selector CSS resolves same-specificity ties by source order, and a later file
+ * beats this shared one.
+ *
+ * Only listing an ID here is what opts a preset INTO this shared mapping — presets.ts's
+ * own THEME_PRESETS array is the source of truth for which preset ids exist; this list
+ * mirrors it, minus "tenant" (no stylesheet at all) and "ink-brass" is included because,
+ * unlike Aurora, it has no bespoke chrome of its own to protect.
+ */
+:root[data-theme-preset="ink-brass"],
+:root[data-theme-preset="azure"],
+:root[data-theme-preset="cobalt"],
+:root[data-theme-preset="tangerine"],
+:root[data-theme-preset="soft-pop"],
+:root[data-theme-preset="brutalist"],
+:root[data-theme-preset="neon"] {
+  --sh-color-chrome: var(--sh-color-surface);
+  --sh-color-chrome-foreground: var(--sh-color-surface-foreground);
+  --sh-color-chrome-muted: var(--sh-color-muted-foreground);
+  --sh-color-chrome-accent: var(--sh-color-muted);
+  --sh-color-chrome-border: var(--sh-color-border);
+  --sh-color-chrome-primary: var(--sh-color-primary);
+}

@@ -15,7 +15,7 @@
 import type { ReactNode } from "react";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { DataGrid, type DataGridProps } from "./data-grid";
-import { DataGridColumnVisibility } from "./data-grid-column-visibility";
+import { DataGridColumnVisibility, hasHideableColumns } from "./data-grid-column-visibility";
 import { DataGridTableDnd } from "./data-grid-dnd";
 import { DataGridPagination } from "./data-grid-pagination";
 import { DataGridTable } from "./data-grid-table";
@@ -44,17 +44,16 @@ export function DataGridCard<TData extends object>({
   className,
   ...gridProps
 }: DataGridCardProps<TData>) {
-  const columnsMenu = gridProps.tableLayout?.columnsVisibility ? (
-    <DataGridColumnVisibility />
-  ) : null;
-  const hasToolbar = Boolean(toolbar) || columnsMenu !== null;
+  const showColumnsMenu =
+    Boolean(gridProps.tableLayout?.columnsVisibility) && hasHideableColumns(gridProps.table);
+  const hasToolbar = Boolean(toolbar) || showColumnsMenu;
 
   return (
     <DataGrid {...gridProps} className={className}>
       {hasToolbar ? (
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0 flex-1">{toolbar}</div>
-          {columnsMenu}
+          {showColumnsMenu && <DataGridColumnVisibility />}
         </div>
       ) : null}
 

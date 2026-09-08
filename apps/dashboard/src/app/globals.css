@@ -8,7 +8,11 @@
 /* Colour presets. Imported after theme.css so their [data-theme-preset] rules win over
    its :root defaults; a viewer picks one in the header's preferences popover.
    ink-brass pins the platform's previous palette — see that file's own header for why
-   it has to exist now that it is no longer what :root happens to contain. */
+   it has to exist now that it is no longer what :root happens to contain.
+   shared-chrome.css comes first so a preset wanting its OWN bespoke chrome (the way
+   Aurora's :root does) can still win — same-selector CSS resolves ties by source
+   order, so a later file beats this shared one. */
+@import "@schoolhub/ui/styles/presets/shared-chrome.css";
 @import "@schoolhub/ui/styles/presets/ink-brass.css";
 @import "@schoolhub/ui/styles/presets/azure.css";
 @import "@schoolhub/ui/styles/presets/cobalt.css";

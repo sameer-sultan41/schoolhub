@@ -48,6 +48,32 @@ export interface DataGridColumnHeaderProps<TData extends object> {
   className?: string;
 }
 
+/** Where a moved column belongs for "start"/"end" — the edge of the UNPINNED region,
+ * not the absolute array edge. This menu item is disabled for a pinned column (see its
+ * `disabled={... || side !== false}` below), so the column being placed is always
+ * unpinned; "start" means right after the last pinned-start column and "end" means
+ * right before the first pinned-end one. A left-pinned column has to stay in DOM order
+ * before every unpinned column, and a right-pinned one after, or the sticky offset math
+ * (computed from the pinning order, not `columnOrder` — see `column.getStart('left')`
+ * in `getPinningStyles`) stops matching where the column actually renders, and cells
+ * overlap on scroll.
+ *
+ * `columnIds` is the order WITHOUT the moved column already removed from it, so the
+ * returned index is where to `splice` it back in directly. */
+function unpinnedRegionEdge(
+  columnIds: readonly string[],
+  pinnedStart: ReadonlySet<string>,
+  pinnedEnd: ReadonlySet<string>,
+  direction: "start" | "end",
+): number {
+  if (direction === "start") {
+    const index = columnIds.findIndex((id) => !pinnedStart.has(id));
+    return index === -1 ? columnIds.length : index;
+  }
+  const index = columnIds.findIndex((id) => pinnedEnd.has(id));
+  return index === -1 ? columnIds.length : index;
+}
+
 /** `Column` carries no reference back to its `Table` — both take the table explicitly
  * rather than reading it off the column, unlike `column.pin()`/`column.toggleSorting()`,
  * which the column's own feature mixins do provide. */
@@ -56,15 +82,14 @@ function moveColumn<TData>(
   columnId: string,
   direction: "start" | "end",
 ): void {
-  const order = [...table.getState().columnOrder];
-  const index = order.indexOf(columnId);
-  const target = direction === "start" ? index - 1 : index + 1;
-  if (target < 0 || target >= order.length) return;
+  const { columnOrder, columnPinning } = table.getState();
+  const pinnedStart = new Set(columnPinning.left);
+  const pinnedEnd = new Set(columnPinning.right);
+  const withoutMoved = columnOrder.filter((id) => id !== columnId);
+  const target = unpinnedRegionEdge(withoutMoved, pinnedStart, pinnedEnd, direction);
 
-  const next = [...order];
-  const [moved] = next.splice(index, 1);
-  if (moved === undefined) return;
-  next.splice(target, 0, moved);
+  const next = [...withoutMoved];
+  next.splice(target, 0, columnId);
   table.setColumnOrder(next);
 }
 
@@ -73,9 +98,19 @@ function canMove<TData>(
   columnId: string,
   direction: "start" | "end",
 ): boolean {
-  const order = table.getState().columnOrder;
-  const index = order.indexOf(columnId);
-  return direction === "start" ? index > 0 : index < order.length - 1;
+  const { columnOrder, columnPinning } = table.getState();
+  const currentIndex = columnOrder.indexOf(columnId);
+  if (currentIndex === -1) return false;
+
+  const pinnedStart = new Set(columnPinning.left);
+  const pinnedEnd = new Set(columnPinning.right);
+  const withoutMoved = columnOrder.filter((id) => id !== columnId);
+  const target = unpinnedRegionEdge(withoutMoved, pinnedStart, pinnedEnd, direction);
+  // Removing `columnId` only shifts indices AFTER its own position, and `target` is
+  // computed on that post-removal array — so `target === currentIndex` means putting
+  // it back exactly where it already sits (nothing to do), and anywhere else means the
+  // edge of the unpinned region is actually somewhere new.
+  return target !== currentIndex;
 }
 
 export function DataGridColumnHeader<TData extends object>({

@@ -57,6 +57,19 @@ const COLUMN_ORDER = [
   "status",
 ];
 
+/** The DataTable-era column ids, mapped to what they became when this table adopted
+ * TanStack Table and its ids started doubling as sort_by values. A `?hidden=` link
+ * bookmarked before that migration still names the OLD ids — without translating them
+ * on the way in, they match no real column and the reader's hidden columns come back
+ * silently. Sort was unaffected: the old DataTable's `sortKey` for each of these was
+ * ALREADY the new id, so only column-visibility persistence needs this. */
+const LEGACY_COLUMN_IDS: Record<string, string> = {
+  name: "last_name",
+  campus: "campus_name",
+  house: "house_name",
+  admissionDate: "admission_date",
+};
+
 /**
  * The badge variant a student's status wears.
  *
@@ -159,6 +172,20 @@ export function StudentsTable() {
 
   const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
 
+  // Translates any legacy ids a bookmarked pre-migration link still carries — see
+  // LEGACY_COLUMN_IDS's own comment. `table.columnVisibility` only ever lists HIDDEN
+  // columns (an id absent from it defaults to visible), so remapping keys is enough.
+  const columnVisibility = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(table.columnVisibility).map(([id, visible]) => [
+          LEGACY_COLUMN_IDS[id] ?? id,
+          visible,
+        ]),
+      ),
+    [table.columnVisibility],
+  );
+
   // Memoized, not rebuilt on every render: `flexRender` calls each column's `cell`/
   // `header` AS the React component it renders, so a fresh function identity here is a
   // fresh component TYPE on every render — React remounts the whole cell subtree
@@ -214,8 +241,10 @@ export function StudentsTable() {
         meta: {
           headerTitle: t("columns.admissionDate"),
           // An identifier, not a measure — a date names a row rather than being a quantity
-          // compared down the column — but still figures, so it keeps tabular digits.
-          cellClassName: "tabular-nums",
+          // compared down the column — but still figures, so it keeps the numeric face and
+          // tabular digits every figure in this app wears (DESIGN.md), matching the
+          // admission number right above it in the name column.
+          cellClassName: "font-numeric tabular-nums",
           skeleton: <Skeleton className="h-4 w-24" />,
         },
       },
@@ -257,7 +286,7 @@ export function StudentsTable() {
     state: {
       sorting: table.sorting,
       pagination: table.pagination,
-      columnVisibility: table.columnVisibility,
+      columnVisibility,
       rowSelection,
       columnPinning,
       columnOrder,

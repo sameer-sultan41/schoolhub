@@ -52,8 +52,16 @@ function DataGridDndHeaderCell<TData extends object>({
 }) {
   const { tableLayout, labels } = useDataGrid<TData>();
   const { column } = header;
+  // Structural columns (`createSelectColumn`'s checkbox) opt out via `meta.draggable:
+  // false` — TanStack has no built-in per-column "can reorder" flag the way it does for
+  // sorting/pinning/resizing, since dragging is this package's own feature on top.
+  // `disabled` on `useSortable` itself, not just hiding the grip below: that's what
+  // actually stops dnd-kit from treating the column as a drag source at all, by pointer
+  // OR keyboard, rather than merely removing its handle's visible affordance.
+  const draggable = column.columnDef.meta?.draggable !== false;
   const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
     id: column.id,
+    disabled: !draggable,
   });
 
   return (
@@ -65,20 +73,27 @@ function DataGridDndHeaderCell<TData extends object>({
         transform: CSS.Translate.toString(transform),
         transition,
         whiteSpace: "nowrap",
-        zIndex: isDragging ? 2 : undefined,
+        // Omitted rather than `zIndex: undefined` while not dragging: `style={{
+        // ...getPinningStyles(column), ...dndStyle }}` in data-grid-table.tsx spreads
+        // this object LAST, and a key present with value `undefined` still overwrites
+        // the pinning style's own `zIndex: 1` — a pinned column would lose its stacking
+        // order the instant this file is in the render path at all, dragging or not.
+        ...(isDragging ? { zIndex: 2 } : null),
       }}
     >
       <div className="flex items-center justify-start gap-0.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="-ms-2 size-6"
-          {...attributes}
-          {...listeners}
-          aria-label={labels.dragToReorderColumn}
-        >
-          <GripVertical aria-hidden="true" className="size-3.5 opacity-50" />
-        </Button>
+        {draggable && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-ms-2 size-6"
+            {...attributes}
+            {...listeners}
+            aria-label={labels.dragToReorderColumn}
+          >
+            <GripVertical aria-hidden="true" className="size-3.5 opacity-50" />
+          </Button>
+        )}
         {header.isPlaceholder
           ? null
           : flexRender(header.column.columnDef.header, header.getContext())}
@@ -91,7 +106,11 @@ function DataGridDndHeaderCell<TData extends object>({
 }
 
 function DataGridDndBodyCell<TData>({ cell }: { cell: Cell<TData, unknown> }) {
-  const { isDragging, setNodeRef, transform, transition } = useSortable({ id: cell.column.id });
+  // Matches the header cell's own `disabled` — see DataGridDndHeaderCell's comment.
+  const { isDragging, setNodeRef, transform, transition } = useSortable({
+    id: cell.column.id,
+    disabled: cell.column.columnDef.meta?.draggable === false,
+  });
 
   return (
     <DataGridTableBodyRowCell
@@ -101,7 +120,9 @@ function DataGridDndBodyCell<TData>({ cell }: { cell: Cell<TData, unknown> }) {
         opacity: isDragging ? 0.8 : 1,
         transform: CSS.Translate.toString(transform),
         transition,
-        zIndex: isDragging ? 2 : undefined,
+        // See DataGridDndHeaderCell's own comment: omitted, not `undefined`, so a
+        // pinned column's zIndex: 1 survives being spread over while not dragging.
+        ...(isDragging ? { zIndex: 2 } : null),
       }}
     >
       {flexRender(cell.column.columnDef.cell, cell.getContext())}

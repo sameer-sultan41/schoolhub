@@ -43,7 +43,7 @@
  *    would need a label for — is dropped rather than carried over unused.
  */
 
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import type { RowData, Table } from "@tanstack/react-table";
 import { cn } from "../lib/cn";
 
@@ -57,6 +57,13 @@ declare module "@tanstack/react-table" {
     headerTitle?: string;
     headerClassName?: string;
     cellClassName?: string;
+    /** Whether a drag handle appears for this column under `DataGridTableDnd`. Defaults
+     * to `true` — TanStack Table has no built-in per-column "can reorder" flag the way
+     * it does for sorting/pinning/resizing (column drag-to-reorder is this package's own
+     * feature, layered on with `@dnd-kit`), so this is the equivalent for it. Set to
+     * `false` for a structural column — `createSelectColumn`'s own selection checkbox
+     * does, since it belongs in a fixed leading position, not wherever a drag left it. */
+    draggable?: boolean;
     /** What this column shows in a loading row. Defaults to nothing (an empty cell) —
      * worth setting wherever the real cell is not one line of text, exactly as
      * `DataTableColumn.skeleton` already documents. */
@@ -202,19 +209,47 @@ export function DataGrid<TData extends object>({
     ...props.tableLayout,
   };
 
+  // Matches useSidebar's own SidebarContextValue memoization — every `DataGridTable*`/
+  // `DataGridColumnHeader`/`DataGridPagination` piece reads this context, so an
+  // unmemoized value here re-renders all of them on every keystroke in an unrelated
+  // filter, not just when something the grid actually owns changed.
+  const contextValue = useMemo(
+    () => ({
+      table,
+      recordCount: props.recordCount,
+      isLoading: props.isLoading ?? false,
+      onRowClick: props.onRowClick,
+      emptyState: props.emptyState,
+      tableLayout,
+      labels: props.labels,
+      caption: props.caption,
+    }),
+    // `tableLayout` itself is a fresh object every render by construction (spread from
+    // DEFAULT_TABLE_LAYOUT above), so it is deliberately compared by its own fields
+    // below rather than listed by reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      table,
+      props.recordCount,
+      props.isLoading,
+      props.onRowClick,
+      props.emptyState,
+      props.labels,
+      props.caption,
+      tableLayout.dense,
+      tableLayout.cellBorder,
+      tableLayout.stripped,
+      tableLayout.columnsVisibility,
+      tableLayout.columnsResizable,
+      tableLayout.columnsPinnable,
+      tableLayout.columnsMovable,
+      tableLayout.columnsDraggable,
+      tableLayout.rowsDraggable,
+    ],
+  );
+
   return (
-    <DataGridContext.Provider
-      value={{
-        table,
-        recordCount: props.recordCount,
-        isLoading: props.isLoading ?? false,
-        onRowClick: props.onRowClick,
-        emptyState: props.emptyState,
-        tableLayout,
-        labels: props.labels,
-        caption: props.caption,
-      }}
-    >
+    <DataGridContext.Provider value={contextValue}>
       {/* One card holds the table and its footer, matching `DataTable`'s own frame — a
           grid is a single object on the page, not a table floating above a separate
           pagination bar. */}
