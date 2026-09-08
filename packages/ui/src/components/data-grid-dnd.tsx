@@ -86,7 +86,9 @@ function DataGridDndHeaderCell<TData extends object>({
           <Button
             variant="ghost"
             size="icon"
-            className="-ms-2 size-6"
+            // ring-offset-0: see DataGridColumnHeader's own sortToggle comment — this
+            // button lives in the same clipped header row.
+            className="-ms-2 size-6 focus-visible:ring-offset-0"
             {...attributes}
             {...listeners}
             aria-label={labels.dragToReorderColumn}

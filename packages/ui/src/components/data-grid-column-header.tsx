@@ -138,7 +138,17 @@ export function DataGridColumnHeader<TData extends object>({
     <Button
       variant="ghost"
       size="sm"
-      className={cn("-ms-2 h-7 gap-1 px-2 font-normal text-foreground", className)}
+      // ring-offset-0, not Button's own default ring-offset-2: this button sits inside
+      // DataGrid's `overflow-hidden` card (needed to clip the table to the card's own
+      // rounded corners), a few px below the card's top edge — offset pushes the focus
+      // ring's outer edge out far enough to get clipped by that same overflow-hidden,
+      // reading as a ring with its top and bottom sliced flat. DataTable's own inline
+      // sort button (data-table.tsx) already omits ring-offset for the same reason;
+      // this matches that precedent rather than the shared Button default.
+      className={cn(
+        "-ms-2 h-7 gap-1 px-2 font-normal text-foreground focus-visible:ring-offset-0",
+        className,
+      )}
       disabled={isLoading || recordCount === 0}
       onClick={() => {
         const sorted = column.getIsSorted();
@@ -293,7 +303,9 @@ export function DataGridColumnHeader<TData extends object>({
         <Button
           variant="ghost"
           size="icon"
-          className="-me-1 size-7"
+          // ring-offset-0: see sortToggle's own comment above — this button lives in the
+          // same clipped header row.
+          className="-me-1 size-7 focus-visible:ring-offset-0"
           onClick={() => {
             column.pin(false);
           }}
