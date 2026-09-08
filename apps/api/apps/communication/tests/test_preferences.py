@@ -45,9 +45,10 @@ class IsChannelEnabledTests(TestCase):
         super().tearDown()
 
     def test_is_channel_enabled_defaults_to_true_with_no_preference_row(self) -> None:
-        enabled = is_channel_enabled(
-            self.user_id, NotificationCategory.FEES, NotificationChannel.SMS, self.tenant.pk
-        )
+        with tenant_context(self.tenant.id):
+            enabled = is_channel_enabled(
+                self.user_id, NotificationCategory.FEES, NotificationChannel.SMS, self.tenant.pk
+            )
 
         self.assertTrue(enabled)
 
@@ -61,9 +62,9 @@ class IsChannelEnabledTests(TestCase):
                 is_enabled=False,
             )
 
-        enabled = is_channel_enabled(
-            self.user_id, NotificationCategory.FEES, NotificationChannel.SMS, self.tenant.pk
-        )
+            enabled = is_channel_enabled(
+                self.user_id, NotificationCategory.FEES, NotificationChannel.SMS, self.tenant.pk
+            )
 
         self.assertFalse(enabled)
 
@@ -80,20 +81,25 @@ class IsChannelEnabledTests(TestCase):
                     is_enabled=True,
                 )
 
-        with self.assertNumQueries(1):
-            for channel in NotificationChannel.values:
-                is_channel_enabled(self.user_id, NotificationCategory.FEES, channel, self.tenant.pk)
+            with self.assertNumQueries(1):
+                for channel in NotificationChannel.values:
+                    is_channel_enabled(
+                        self.user_id, NotificationCategory.FEES, channel, self.tenant.pk
+                    )
 
     def test_a_second_call_after_a_preference_change_sees_the_new_value(self) -> None:
         """Proves the signal-driven cache eviction, not just is_channel_enabled's shape."""
-        # Warm the cache at the default (no row yet).
-        self.assertTrue(
-            is_channel_enabled(
-                self.user_id, NotificationCategory.FEES, NotificationChannel.EMAIL, self.tenant.pk
-            )
-        )
-
         with tenant_context(self.tenant.id):
+            # Warm the cache at the default (no row yet).
+            self.assertTrue(
+                is_channel_enabled(
+                    self.user_id,
+                    NotificationCategory.FEES,
+                    NotificationChannel.EMAIL,
+                    self.tenant.pk,
+                )
+            )
+
             NotificationPreferenceFactory(
                 tenant=self.tenant,
                 user_id=self.user_id,
@@ -102,11 +108,14 @@ class IsChannelEnabledTests(TestCase):
                 is_enabled=False,
             )
 
-        self.assertFalse(
-            is_channel_enabled(
-                self.user_id, NotificationCategory.FEES, NotificationChannel.EMAIL, self.tenant.pk
+            self.assertFalse(
+                is_channel_enabled(
+                    self.user_id,
+                    NotificationCategory.FEES,
+                    NotificationChannel.EMAIL,
+                    self.tenant.pk,
+                )
             )
-        )
 
 
 class PreferenceModelTests(TestCase):

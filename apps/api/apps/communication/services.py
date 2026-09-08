@@ -74,21 +74,19 @@ def is_channel_enabled(
 
 
 def _preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[tuple[str, str], bool]:
-    """Bound to `tenant_id` explicitly — see `resolve_tenant_template`'s docstring
-    for why a registered resolver cannot trust ambient tenant context."""
+    """Trusts ambient tenant context — see `templates_service.resolve_tenant_template`'s
+    docstring for why this resolver does not rebind it."""
     from apps.communication.models import NotificationPreference
-    from core.tenancy.context import tenant_context
 
     cache_key = f"notif-pref:{tenant_id}:{user_id}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    with tenant_context(tenant_id):
-        rows = NotificationPreference.objects.filter(
-            tenant_id=tenant_id, user_id=user_id
-        ).values_list("event_category", "channel", "is_enabled")
-        matrix = {(category, channel): is_enabled for category, channel, is_enabled in rows}
+    rows = NotificationPreference.objects.filter(tenant_id=tenant_id, user_id=user_id).values_list(
+        "event_category", "channel", "is_enabled"
+    )
+    matrix = {(category, channel): is_enabled for category, channel, is_enabled in rows}
     cache.set(cache_key, matrix, _PREFERENCE_CACHE_TTL)
     return matrix
 

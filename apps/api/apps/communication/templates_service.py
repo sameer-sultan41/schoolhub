@@ -25,24 +25,25 @@ def resolve_tenant_template(
     dataclass shape, built fresh here rather than imported as a model instance,
     since `render()` only needs the four fields, not an ORM row.
 
-    Binds `tenant_id` explicitly rather than trusting ambient context: `notify()`
-    always runs inside the caller's already-tenant-bound transaction in
-    production, but this resolver is a registered callback with no control over
-    who calls it or when, and `TenantScopedManager` fails closed (`.none()`) on
-    an unbound read rather than raising — silently finding nothing is exactly
-    the wrong failure mode for "does this tenant have an override".
+    Trusts ambient tenant context rather than rebinding it, matching this
+    module's own `services.resolve_addresses`: `notify()` always runs inside
+    the caller's already-tenant-bound transaction in production (every request
+    and task binds tenant before touching data), and rebinding to the same
+    tenant here would cost a redundant `SET LOCAL` on every fan-out — see
+    `services._preference_matrix`'s query-count test for what that costs in
+    practice. A caller that invokes this resolver with no tenant bound gets an
+    empty result from `TenantScopedManager`, the same fail-closed behaviour
+    every other tenant-scoped read on the platform has.
     """
     from apps.communication.models import NotificationTemplateOverride
-    from core.tenancy.context import tenant_context
 
-    with tenant_context(tenant_id):
-        row = (
-            NotificationTemplateOverride.objects.filter(
-                tenant_id=tenant_id, code=code, channel=channel, locale=locale, is_active=True
-            )
-            .only("code", "channel", "subject", "body", "variables")
-            .first()
+    row = (
+        NotificationTemplateOverride.objects.filter(
+            tenant_id=tenant_id, code=code, channel=channel, locale=locale, is_active=True
         )
+        .only("code", "channel", "subject", "body", "variables")
+        .first()
+    )
     if row is None:
         return None
     return NotificationTemplate(

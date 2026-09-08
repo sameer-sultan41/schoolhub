@@ -186,6 +186,13 @@ class ResolveTests(SimpleTestCase):
     Exercises the real module-level `registry`, since `resolve()` has no way to
     take one as a parameter — so every test here registers into it and restores
     it afterward, the same discipline test_notify.py's NotifyTestCase uses.
+
+    `setUp` forces the resolver to `None`, not just saves whatever is ambient:
+    once `apps.communication` is installed, its `AppConfig.ready()` registers a
+    real, DB-backed resolver for the whole process, and a `SimpleTestCase` (no
+    database) would crash calling it. `None` here is a deliberate test double for
+    "no override resolver", proving `resolve()`'s own fallback logic in
+    isolation — not a claim about what is registered on `main`.
     """
 
     CODE = "demo.resolve-target"
@@ -195,6 +202,7 @@ class ResolveTests(SimpleTestCase):
         super().setUp()
         self._saved_templates = registry._templates.copy()  # noqa: SLF001
         self._saved_resolver = templates_module._override_resolver  # noqa: SLF001
+        templates_module.set_override_resolver(None)
         registry.register(
             self.CODE,
             channel=NotificationChannel.IN_APP,
