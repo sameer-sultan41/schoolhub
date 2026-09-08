@@ -70,13 +70,14 @@ def assert_accounts_are_postable(
     payroll posting into a hundred round trips, and it is the reason this returns
     the map rather than a boolean.
 
-    `allow_archived` exists for exactly one caller: `reverse_transaction`. A
-    reversal is a correction of history that already happened, not a new
-    posting, so it must not be blocked by an account being archived *after*
-    the original posting — a school archiving "Transport — 2025 fleet" at year
-    end must not permanently strand a refund against a payment that posted
-    there. Ordinary postings still refuse an archived account; only a reversal
-    of an account's own prior activity is exempt.
+    `allow_archived` exists for correcting history that already happened, not
+    for a new posting — `reverse_transaction` and a partial refund's own
+    mirrored posting are the two callers. Neither must be blocked by an
+    account being archived *after* the original posting: a school archiving
+    "Transport — 2025 fleet" at year end must not permanently strand a refund,
+    full or partial, against a payment that posted there. Ordinary postings
+    still refuse an archived account; only a correction of an account's own
+    prior activity is exempt.
     """
     wanted = set(account_ids)
     accounts = {
@@ -121,9 +122,10 @@ def post_transaction(
     `core.tenancy.sequences.allocate_number`, which refuses for the same class
     of reason.
 
-    `allow_archived_accounts` exists only for `reverse_transaction` to pass
-    through — see `assert_accounts_are_postable`'s docstring. Every ordinary
-    caller leaves it at the default.
+    `allow_archived_accounts` exists for `reverse_transaction` and a partial
+    refund's own mirrored posting to pass through — see
+    `assert_accounts_are_postable`'s docstring. Every ordinary caller leaves it
+    at the default.
     """
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError(

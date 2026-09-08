@@ -177,6 +177,65 @@ class PaymentTests(CollectionTestCase):
         self.assertEqual(credits[self.fee_income.pk], Decimal("1000.00"))
         self.assertEqual(credits[transport_account.pk], Decimal("1000.00"))
 
+    def test_the_rounding_remainder_lands_on_the_largest_share_not_the_smallest(self) -> None:
+        """A one-cent drift lands proportionally lighter against the largest
+        share than the smallest — the docstring's stated intent. A part
+        payment of 1000.00 split 2000/500/500 gives the two smaller shares
+        `quantize_money(1000 * 500/3000)` = `166.67` each (rounded up from
+        `166.666...`), which between them consume 0.02 more than their exact
+        proportional share — the largest share absorbs that back as its
+        remainder, landing on `666.66` rather than its own naively-rounded
+        `666.67`.
+        """
+        with tenant_context(self.tenant.id):
+            from apps.fees_finance.tests.factories import (
+                FeeInvoiceLineFactory,
+                LedgerAccountFactory,
+            )
+
+            transport_account = LedgerAccountFactory(tenant=self.tenant, code="4200")
+            transport_head = FeeHeadFactory(tenant=self.tenant, ledger_account=transport_account)
+            library_account = LedgerAccountFactory(tenant=self.tenant, code="4300")
+            library_head = FeeHeadFactory(tenant=self.tenant, ledger_account=library_account)
+            FeeInvoiceLineFactory(
+                tenant=self.tenant,
+                fee_invoice=self.invoice,
+                fee_head=transport_head,
+                amount=Decimal("500.00"),
+            )
+            FeeInvoiceLineFactory(
+                tenant=self.tenant,
+                fee_invoice=self.invoice,
+                fee_head=library_head,
+                amount=Decimal("500.00"),
+            )
+            # The default head from setUp carries the invoice's original
+            # 1000.00 line; raised to 2000.00 so it is the largest of the
+            # three shares.
+            FeeInvoiceLineFactory(
+                tenant=self.tenant,
+                fee_invoice=self.invoice,
+                fee_head=self.head,
+                amount=Decimal("1000.00"),
+            )
+            FeeInvoice.objects.filter(pk=self.invoice.pk).update(
+                subtotal=Decimal("3000.00"), balance_due=Decimal("3000.00")
+            )
+            self.invoice.refresh_from_db()
+
+        payment = self._pay(Decimal("1000.00"))
+
+        with tenant_context(self.tenant.id):
+            credits = {
+                entry.ledger_account_id: entry.credit
+                for entry in LedgerEntry.objects.filter(reference_id=payment.pk, credit__gt=0)
+            }
+
+        self.assertEqual(credits[transport_account.pk], Decimal("166.67"))
+        self.assertEqual(credits[library_account.pk], Decimal("166.67"))
+        self.assertEqual(credits[self.fee_income.pk], Decimal("666.66"))
+        self.assertEqual(sum(credits.values()), Decimal("1000.00"))
+
     def test_the_posting_and_the_payment_commit_together(self) -> None:
         """The guarantee the whole transaction exists for.
 
@@ -419,6 +478,114 @@ class RefundTests(CollectionTestCase):
         self.assertEqual(sum(line.credit for line in lines), Decimal("250.00"))
         self.assertEqual(self.invoice.paid_total, Decimal("750.00"))
         self.assertEqual(self.invoice.status, InvoiceStatus.PARTIALLY_PAID)
+
+    def test_a_partial_refund_is_not_blocked_by_an_account_archived_since_payment(self) -> None:
+        """The same exemption `reverse_transaction` gets, extended to a partial.
+
+        A partial refund mirrors the original payment's own accounts — cash and
+        fee income here — so if either was archived in the meantime, this is
+        exactly the "refund against a payment that posted there" case
+        `assert_accounts_are_postable`'s docstring names. A full refund of the
+        same payment would already succeed; a partial one must not be the odd
+        one out.
+        """
+        from apps.fees_finance.models import LedgerAccount
+        from apps.fees_finance.tests.factories import UserFactory
+
+        refund = self._request(Decimal("250.00"))
+        approver = UserFactory(tenant=self.tenant)
+
+        with tenant_context(self.tenant.id):
+            LedgerAccount.objects.filter(pk=self.cash.pk).update(is_active=False)
+
+            services.decide_refund(refund=refund, approve=True, note=None, actor_id=approver.pk)
+            services.process_refund(
+                refund=refund,
+                method=PaymentMethod.CASH,
+                reference_no=None,
+                actor_id=approver.pk,
+            )
+
+            lines = list(
+                LedgerEntry.objects.filter(
+                    reference_type=LedgerReferenceType.REFUND, reference_id=refund.pk
+                )
+            )
+
+        self.assertEqual(sum(line.debit for line in lines), Decimal("250.00"))
+        self.assertEqual(sum(line.credit for line in lines), Decimal("250.00"))
+
+    def test_a_partial_refund_across_several_credit_lines_still_balances(self) -> None:
+        """Three credit lines splitting the income side, and a refund amount
+        that does not divide evenly among them: `1000 * (1000/3000)` rounds to
+        `333.33` a head, and three heads sum to `999.99` — a cent short of the
+        `1000.00` being refunded. The remainder has to land on a credit line
+        specifically, or the posting fails `assert_balanced` whenever the
+        single cash line happens to be the one an unordered fetch returns
+        last — undetectable from a single ledger account, which is why
+        `test_a_partial_refund_posts_its_own_balanced_transaction` above does
+        not catch it.
+        """
+        from apps.fees_finance.models import FeeInvoice
+        from apps.fees_finance.tests.factories import (
+            FeeInvoiceLineFactory,
+            LedgerAccountFactory,
+            UserFactory,
+        )
+
+        with tenant_context(self.tenant.id):
+            second_head = FeeHeadFactory(
+                tenant=self.tenant,
+                ledger_account=LedgerAccountFactory(tenant=self.tenant, code="4200"),
+            )
+            third_head = FeeHeadFactory(
+                tenant=self.tenant,
+                ledger_account=LedgerAccountFactory(tenant=self.tenant, code="4300"),
+            )
+            FeeInvoiceLineFactory(
+                tenant=self.tenant,
+                fee_invoice=self.invoice,
+                fee_head=second_head,
+                amount=Decimal("1000.00"),
+            )
+            FeeInvoiceLineFactory(
+                tenant=self.tenant,
+                fee_invoice=self.invoice,
+                fee_head=third_head,
+                amount=Decimal("1000.00"),
+            )
+            FeeInvoice.objects.filter(pk=self.invoice.pk).update(
+                subtotal=Decimal("3000.00"), balance_due=Decimal("3000.00")
+            )
+            self.invoice.refresh_from_db()
+
+        payment = self._pay(Decimal("3000.00"))
+        approver = UserFactory(tenant=self.tenant)
+
+        with tenant_context(self.tenant.id):
+            refund = services.request_refund(
+                payment=payment,
+                amount=Decimal("1000.00"),
+                reason="Overcharged one head",
+                actor_id=self.user.pk,
+                tenant_id=self.tenant.pk,
+            )
+            services.decide_refund(refund=refund, approve=True, note=None, actor_id=approver.pk)
+            services.process_refund(
+                refund=refund,
+                method=PaymentMethod.CASH,
+                reference_no=None,
+                actor_id=approver.pk,
+            )
+
+            lines = list(
+                LedgerEntry.objects.filter(
+                    reference_type=LedgerReferenceType.REFUND, reference_id=refund.pk
+                )
+            )
+
+        self.assertEqual(sum(line.debit for line in lines), Decimal("1000.00"))
+        self.assertEqual(sum(line.credit for line in lines), Decimal("1000.00"))
 
     def test_a_rejected_refund_moves_no_money(self) -> None:
         from apps.fees_finance.tests.factories import UserFactory

@@ -816,15 +816,23 @@ def _post_payment_to_ledger(
 
     credits: list[LedgerLine] = []
     allocated = ZERO
+    # Largest share first: its remainder-absorbing portion is computed last
+    # (once `allocated` covers everything else), but the *account* it lands on
+    # is `ordered[0]`, not `ordered[-1]` — a one-cent drift lands proportionally
+    # lighter against the largest share than the smallest.
     ordered = sorted(shares.items(), key=lambda item: item[1], reverse=True)
     for index, (account_id, share) in enumerate(ordered):
-        if index == len(ordered) - 1:
-            portion = quantize_money(payment.amount - allocated)
-        else:
-            portion = quantize_money(payment.amount * share / charged)
-            allocated = quantize_money(allocated + portion)
+        if index == 0:
+            continue
+        portion = quantize_money(payment.amount * share / charged)
+        allocated = quantize_money(allocated + portion)
         if portion > ZERO:
             credits.append(LedgerLine(ledger_account_id=account_id, credit=portion))
+
+    largest_account_id, _ = ordered[0]
+    largest_portion = quantize_money(payment.amount - allocated)
+    if largest_portion > ZERO:
+        credits.append(LedgerLine(ledger_account_id=largest_account_id, credit=largest_portion))
 
     return post_transaction(
         entry_date=timezone.localdate(),
@@ -1153,20 +1161,40 @@ def _post_partial_refund(
     *, refund: Refund, original_transaction_id: uuid.UUID, actor_id: uuid.UUID | None
 ) -> uuid.UUID:
     """Mirror the original transaction's accounts, scaled to the refunded share."""
-    original_lines = list(LedgerEntry.objects.filter(transaction_id=original_transaction_id))
+    # `order_by("ledger_account_id")`: a payment posts one debit line (cash or
+    # bank) against possibly several credit lines — "payments split the income
+    # side across the heads the invoice charged" — and an unordered fetch
+    # leaves Postgres free to return them in whatever order a given scan
+    # happens to produce, `ledger_entries.pk` being a UUID gives no natural
+    # sequence to fall back on. Deterministic, so which line absorbs the
+    # rounding remainder below does not vary run to run for the same refund.
+    original_lines = list(
+        LedgerEntry.objects.filter(transaction_id=original_transaction_id).order_by(
+            "ledger_account_id"
+        )
+    )
     total_debit = quantize_money(sum((line.debit for line in original_lines), ZERO))
     share = refund.amount / total_debit if total_debit else ZERO
 
-    lines = []
-    allocated = ZERO
     scaled = [
         (line, quantize_money((line.debit or line.credit) * share)) for line in original_lines
     ]
+    # The remainder goes to the *last credit line specifically* — not "the
+    # last line in whatever order the query returned". Only a credit line's
+    # mirrored amount feeds `allocated`, the sum `assert_balanced` is about to
+    # check against `refund.amount`; anchoring the correction to "last line"
+    # rather than "last credit line" silently skips it whenever the single
+    # debit (cash/bank) line happens to sort last, and several independently
+    # rounded credit lines can then fail to sum to `refund.amount` exactly.
+    last_credit_index = max(
+        (index for index, (line, _) in enumerate(scaled) if line.credit), default=None
+    )
+
+    lines = []
+    allocated = ZERO
     for index, (line, portion) in enumerate(scaled):
-        if index == len(scaled) - 1:
-            # The last line absorbs the rounding remainder so the posting
-            # balances exactly — `assert_balanced` is about to insist.
-            portion = quantize_money(refund.amount - allocated) if line.credit else portion
+        if index == last_credit_index:
+            portion = quantize_money(refund.amount - allocated)
         if line.debit:
             lines.append(LedgerLine(ledger_account_id=line.ledger_account_id, credit=portion))
         else:
@@ -1180,6 +1208,11 @@ def _post_partial_refund(
         reference_id=refund.pk,
         actor_id=actor_id,
         memo=f"Partial refund of payment {refund.payment_id}",
+        # Same reasoning as `reverse_transaction`: this mirrors the original
+        # payment's own accounts, so an account archived after that payment
+        # posted must not strand a refund against it — a partial refund is a
+        # correction of history exactly as much as a full one is.
+        allow_archived_accounts=True,
     )
 
 
@@ -1346,34 +1379,68 @@ def apply_settlement_rows(
             )
             continue
 
-        payment = record_payment(
-            invoice=voucher.fee_invoice,
-            amount=row.amount,
-            method=PaymentMethod.BANK_TRANSFER,
-            reference_no=row.transaction_reference,
-            gateway_provider=None,
-            # No `received_by`: nobody at the school handled this money.
-            actor_id=None,
-            tenant_id=tenant_id,
-        )
-        SettlementRow.objects.create(
-            tenant_id=tenant_id,
-            voucher_import=voucher_import,
-            provider=provider,
-            consumer_number=row.consumer_number,
-            transaction_reference=row.transaction_reference,
-            amount=quantize_money(row.amount),
-            paid_on=row.paid_on,
-            payment=payment,
-            created_by=actor_id,
-            updated_by=actor_id,
-        )
-        FeeVoucher.objects.filter(pk=voucher.pk).update(
-            status=VoucherStatus.PAID,
-            payment=payment,
-            updated_by=actor_id,
-            updated_at=timezone.now(),
-        )
+        # A savepoint per row, caught here: `record_payment` can still refuse a
+        # row that matched cleanly on consumer number and amount — the invoice
+        # was canceled, or its balance moved between when the voucher was
+        # issued and when this file settles it. Letting that propagate would
+        # abort the whole import on one row, the same failure this function's
+        # own "an unmatched row does not fail the file" guarantee exists to
+        # prevent — it just arrives through `record_payment` instead of a
+        # missing voucher.
+        try:
+            with transaction.atomic():
+                # Re-fetched and locked, not the `vouchers` dict's snapshot from
+                # before the loop started: a voucher can go `void` mid-import —
+                # a family settling at the counter while this exact file is
+                # being reconciled is the ordinary case `void_voucher` exists
+                # for — and the invoice's own balance check cannot catch that,
+                # since a partly-covered invoice can still have room for a
+                # second, no-longer-legitimate settlement to fit under it.
+                locked_voucher = FeeVoucher.objects.select_for_update().get(pk=voucher.pk)
+                if locked_voucher.status != VoucherStatus.ISSUED:
+                    raise DomainRuleViolation(
+                        f"Voucher {locked_voucher.consumer_number} is "
+                        f"{locked_voucher.status}, not issued."
+                    )
+                payment = record_payment(
+                    invoice=voucher.fee_invoice,
+                    amount=row.amount,
+                    method=PaymentMethod.BANK_TRANSFER,
+                    reference_no=row.transaction_reference,
+                    gateway_provider=None,
+                    # No `received_by`: nobody at the school handled this money.
+                    actor_id=None,
+                    tenant_id=tenant_id,
+                )
+                SettlementRow.objects.create(
+                    tenant_id=tenant_id,
+                    voucher_import=voucher_import,
+                    provider=provider,
+                    consumer_number=row.consumer_number,
+                    transaction_reference=row.transaction_reference,
+                    amount=quantize_money(row.amount),
+                    paid_on=row.paid_on,
+                    payment=payment,
+                    created_by=actor_id,
+                    updated_by=actor_id,
+                )
+                FeeVoucher.objects.filter(pk=voucher.pk).update(
+                    status=VoucherStatus.PAID,
+                    payment=payment,
+                    updated_by=actor_id,
+                    updated_at=timezone.now(),
+                )
+        except DomainRuleViolation as exc:
+            exceptions.append(
+                {
+                    "row": row.row_number,
+                    "provider_reference": row.transaction_reference,
+                    "amount": str(row.amount),
+                    "reason": f"Could not post: {exc.detail}",
+                }
+            )
+            continue
+
         already.add(key)
         vouchers.pop(row.consumer_number, None)
         matched += 1
