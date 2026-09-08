@@ -17,11 +17,16 @@ from apps.fees_finance.models import (
     FeeInvoice,
     FeeSchedule,
     FeeStructure,
+    FeeVoucher,
     Fine,
     InvoiceStatus,
     LedgerAccount,
     LedgerEntry,
+    Payment,
+    Receipt,
+    Refund,
     Scholarship,
+    VoucherCollectionImport,
 )
 
 
@@ -148,4 +153,63 @@ class FineFilterSet(django_filters.FilterSet):
 
     class Meta:
         model = Fine
+        fields: list[str] = []
+
+
+class PaymentFilterSet(django_filters.FilterSet):
+    invoice = django_filters.UUIDFilter(field_name="fee_invoice_id")
+    student = django_filters.UUIDFilter(field_name="student_id")
+    method = django_filters.CharFilter(field_name="method", lookup_expr="exact")
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+    # §13's collection report buckets by day and by cashier, so both are filters
+    # rather than something a client derives from a full page of payments.
+    paid_at__gte = django_filters.DateTimeFilter(field_name="paid_at", lookup_expr="gte")
+    paid_at__lte = django_filters.DateTimeFilter(field_name="paid_at", lookup_expr="lte")
+    received_by = django_filters.UUIDFilter(field_name="received_by")
+
+    class Meta:
+        model = Payment
+        fields: list[str] = []
+
+
+class ReceiptFilterSet(django_filters.FilterSet):
+    payment = django_filters.UUIDFilter(field_name="payment_id")
+    receipt_no = django_filters.CharFilter(field_name="receipt_no", lookup_expr="exact")
+    issued_at__gte = django_filters.DateTimeFilter(field_name="issued_at", lookup_expr="gte")
+    issued_at__lte = django_filters.DateTimeFilter(field_name="issued_at", lookup_expr="lte")
+
+    class Meta:
+        model = Receipt
+        fields: list[str] = []
+
+
+class RefundFilterSet(django_filters.FilterSet):
+    payment = django_filters.UUIDFilter(field_name="payment_id")
+    student = django_filters.UUIDFilter(field_name="student_id")
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+
+    class Meta:
+        model = Refund
+        fields: list[str] = []
+
+
+class FeeVoucherFilterSet(django_filters.FilterSet):
+    invoice = django_filters.UUIDFilter(field_name="fee_invoice_id")
+    student = django_filters.UUIDFilter(field_name="student_id")
+    provider = django_filters.CharFilter(field_name="provider", lookup_expr="exact")
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+    consumer_number = django_filters.CharFilter(field_name="consumer_number", lookup_expr="exact")
+    due_date__lte = django_filters.DateFilter(field_name="due_date", lookup_expr="lte")
+
+    class Meta:
+        model = FeeVoucher
+        fields: list[str] = []
+
+
+class VoucherImportFilterSet(django_filters.FilterSet):
+    provider = django_filters.CharFilter(field_name="provider", lookup_expr="exact")
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+
+    class Meta:
+        model = VoucherCollectionImport
         fields: list[str] = []

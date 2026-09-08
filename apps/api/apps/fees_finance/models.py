@@ -166,6 +166,54 @@ class FineStatus(models.TextChoices):
     WAIVED = "waived", "Waived"
 
 
+class PaymentMethod(models.TextChoices):
+    CASH = "cash", "Cash"
+    CHEQUE = "cheque", "Cheque"
+    BANK_TRANSFER = "bank_transfer", "Bank transfer"
+    CARD = "card", "Card"
+    ONLINE_GATEWAY = "online_gateway", "Online gateway"
+
+
+class PaymentStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    CONFIRMED = "confirmed", "Confirmed"
+    FAILED = "failed", "Failed"
+    REVERSED = "reversed", "Reversed"
+
+
+class RefundStatus(models.TextChoices):
+    REQUESTED = "requested", "Requested"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+    PROCESSED = "processed", "Processed"
+
+
+class VoucherProvider(models.TextChoices):
+    """§15 calls this tenant-configurable, and these are the three named.
+
+    Kept as an enum rather than a free string because the *adapter* registry is
+    keyed on it (`adapters/`), so a value with no adapter behind it is a voucher
+    nothing can ever reconcile.
+    """
+
+    BANK_BRANCH = "bank_branch", "Bank branch"
+    EASYPAISA = "easypaisa", "Easypaisa"
+    JAZZCASH = "jazzcash", "JazzCash"
+
+
+class VoucherStatus(models.TextChoices):
+    ISSUED = "issued", "Issued"
+    PAID = "paid", "Paid"
+    VOID = "void", "Void"
+    EXPIRED = "expired", "Expired"
+
+
+class ImportStatus(models.TextChoices):
+    PROCESSING = "processing", "Processing"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
+
+
 class LedgerAccount(TenantOwnedModel):
     """One line of the tenant's chart of accounts.
 
@@ -994,3 +1042,421 @@ class FeeInvoiceLine(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.description} {self.amount}"
+
+
+class Payment(TenantOwnedModel):
+    """Money received against one invoice.
+
+    One invoice per payment, by §15's own note — a family settling two invoices
+    at one counter visit makes two payments. That keeps `amount` unambiguously
+    comparable to one invoice's balance, which is the rule §11 states and the
+    thing a receipt has to be able to say.
+
+    **`status` is a lifecycle, and only `confirmed` moves an invoice.** A cash
+    payment is confirmed as it is taken; a gateway payment sits `pending` until
+    its webhook arrives. Nothing about a pending row touches `paid_total`,
+    because a balance that moved on an unconfirmed payment is a receipt the
+    school cannot honour.
+
+    `idempotency_key` is a *column*, not only a header. `replay_or_execute`
+    documents itself as not concurrency-safe — it checks then stores — so the
+    partial unique index here is what actually stops two simultaneous submits
+    from both taking the money. The two layers cover different failures.
+    """
+
+    fee_invoice = models.ForeignKey(FeeInvoice, on_delete=models.PROTECT, related_name="payments")
+    student = models.ForeignKey(
+        "student_management.Student",
+        on_delete=models.PROTECT,
+        related_name="fee_payments",
+        help_text="Denormalized from the invoice so the student ledger is one query.",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    method = models.CharField(max_length=20, choices=PaymentMethod.choices)
+    reference_no = models.CharField(max_length=80, null=True, blank=True)
+    gateway_provider = models.CharField(max_length=40, null=True, blank=True)
+    gateway_payload = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Sanitized confirmation snapshot. Never holds card data or credentials.",
+    )
+    status = models.CharField(
+        max_length=15, choices=PaymentStatus.choices, default=PaymentStatus.PENDING
+    )
+    paid_at = models.DateTimeField(null=True, blank=True)
+    received_by = models.UUIDField(
+        null=True, blank=True, help_text="Null for a gateway or voucher self-service payment."
+    )
+    idempotency_key = models.CharField(max_length=80, null=True, blank=True)
+
+    class Meta:
+        db_table = "payments"
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="payments_amount_positive",
+            ),
+            # A confirmed payment has a time. Without it the collection report
+            # cannot bucket by day and the student ledger cannot order itself.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status=PaymentStatus.CONFIRMED) | models.Q(paid_at__isnull=False)
+                ),
+                name="payments_confirmed_has_a_time",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(method=PaymentMethod.ONLINE_GATEWAY)
+                    | models.Q(gateway_provider__isnull=False)
+                ),
+                name="payments_gateway_names_its_provider",
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "idempotency_key"],
+                name="payments_idempotency_key_unique",
+                condition=models.Q(deleted_at__isnull=True, idempotency_key__isnull=False),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "fee_invoice"]),
+            models.Index(fields=["tenant", "student", "paid_at"]),
+            models.Index(fields=["tenant", "status", "method"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.amount} {self.method} for {self.fee_invoice_id}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — see `FeeInvoice.filter_owned_by_user`."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+
+class Receipt(TenantOwnedModel):
+    """The numbered acknowledgement of one confirmed payment.
+
+    1:1 with a payment and created in the same transaction, because a payment a
+    parent has no receipt for is a payment they cannot prove they made. The
+    number is gapless through `core.tenancy.sequences` for the same reason
+    invoice numbers are: a receipt book with holes in it is what an auditor asks
+    about first.
+
+    `amount` is a snapshot rather than a join to the payment. A receipt is a
+    document handed over at a moment in time; if the payment were ever adjusted,
+    the piece of paper in the parent's hand would still say what it said.
+    """
+
+    payment = models.OneToOneField(Payment, on_delete=models.PROTECT, related_name="receipt")
+    receipt_no = models.CharField(max_length=30)
+    issued_at = models.DateTimeField(auto_now_add=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    pdf_file = models.ForeignKey(
+        "files.File",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fee_receipts",
+        db_column="pdf_file_id",
+    )
+
+    class Meta:
+        db_table = "receipts"
+        ordering = ["-issued_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "receipt_no"],
+                name="receipts_no_unique",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="receipts_amount_positive",
+            ),
+        ]
+        indexes = [models.Index(fields=["tenant", "issued_at"])]
+
+    def __str__(self) -> str:
+        return self.receipt_no
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own`, resolved through the payment's student."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(payment__student__in=visible)
+
+
+class Refund(TenantOwnedModel):
+    """A request to return money, under §7.3's approval workflow.
+
+    **The approver may not be the requester**, and that is a service check
+    rather than only a constraint, because the rule is the module's: it has to
+    hold when a later caller approves through some other door. The constraint
+    below is the half a CHECK can hold — both columns are on the row.
+
+    `amount` is bounded by the *refundable remainder* of the payment, not by the
+    payment itself: two partial refunds against one payment must not together
+    exceed it. That is a set-level rule and lives in `services`.
+    """
+
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="fee_refunds"
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=15, choices=RefundStatus.choices, default=RefundStatus.REQUESTED
+    )
+    requested_by = models.UUIDField()
+    approved_by = models.UUIDField(null=True, blank=True)
+    decision_note = models.TextField(null=True, blank=True)
+    method = models.CharField(max_length=20, choices=PaymentMethod.choices, null=True, blank=True)
+    reference_no = models.CharField(max_length=80, null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    idempotency_key = models.CharField(max_length=80, null=True, blank=True)
+
+    class Meta:
+        db_table = "refunds"
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="refunds_amount_positive",
+            ),
+            # Segregation of duties, as far as a CHECK can carry it. The service
+            # holds the rest — a constraint cannot know who is asking.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(approved_by__isnull=True)
+                    | ~models.Q(approved_by=models.F("requested_by"))
+                ),
+                name="refunds_approver_is_not_the_requester",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status=RefundStatus.REQUESTED) | models.Q(approved_by__isnull=False)
+                ),
+                name="refunds_decision_is_attributable",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status=RefundStatus.PROCESSED)
+                    | (models.Q(processed_at__isnull=False) & models.Q(method__isnull=False))
+                ),
+                name="refunds_processed_records_how_and_when",
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "idempotency_key"],
+                name="refunds_idempotency_key_unique",
+                condition=models.Q(deleted_at__isnull=True, idempotency_key__isnull=False),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "status"]),
+            models.Index(fields=["tenant", "payment"]),
+            models.Index(fields=["tenant", "student"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Refund {self.amount} ({self.status})"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — see `FeeInvoice.filter_owned_by_user`."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+
+class FeeVoucher(TenantOwnedModel):
+    """A printable slip payable off-platform at a bank counter or wallet agent.
+
+    §7.2's flow, and the reason it exists: most of the families this platform
+    serves pay at a bank branch, not with a card. The voucher carries a consumer
+    number the provider's own systems key on, and a daily settlement file
+    matches paid vouchers back to invoices.
+
+    **A voucher is never edited once issued** — a correction voids it and issues
+    a new one, mirroring the append-only money rule §7.2 states outright. It is
+    also voided automatically once the invoice settles by any other channel, so
+    a parent who paid at the counter cannot also pay the voucher at a bank.
+
+    `amount` is a snapshot of the balance at issuance. If the balance later
+    changes, the printed slip still says what the bank will collect — which is
+    exactly why the settlement matcher compares against the *voucher*, not
+    against the live invoice.
+    """
+
+    fee_invoice = models.ForeignKey(FeeInvoice, on_delete=models.PROTECT, related_name="vouchers")
+    student = models.ForeignKey(
+        "student_management.Student", on_delete=models.PROTECT, related_name="fee_vouchers"
+    )
+    provider = models.CharField(max_length=40, choices=VoucherProvider.choices)
+    consumer_number = models.CharField(max_length=60)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    due_date = models.DateField()
+    status = models.CharField(
+        max_length=15, choices=VoucherStatus.choices, default=VoucherStatus.ISSUED
+    )
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vouchers",
+        help_text="Set when a settlement row matches.",
+    )
+    voided_reason = models.TextField(null=True, blank=True)
+    issued_by = models.UUIDField()
+
+    class Meta:
+        db_table = "fee_vouchers"
+        ordering = ["-created_at"]
+        constraints = [
+            # The provider's own key. Two live vouchers sharing one consumer
+            # number would make a settlement row ambiguous about which invoice
+            # it paid — the one thing the matcher cannot recover from.
+            models.UniqueConstraint(
+                fields=["tenant", "provider", "consumer_number"],
+                name="fee_vouchers_consumer_number_unique",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="fee_vouchers_amount_positive",
+            ),
+            models.CheckConstraint(
+                condition=(~models.Q(status=VoucherStatus.PAID) | models.Q(payment__isnull=False)),
+                name="fee_vouchers_paid_names_its_payment",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status=VoucherStatus.VOID)
+                    | (models.Q(voided_reason__isnull=False) & ~models.Q(voided_reason=""))
+                ),
+                name="fee_vouchers_void_is_attributable",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "fee_invoice"]),
+            models.Index(fields=["tenant", "status", "due_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.provider} {self.consumer_number}"
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — a family downloads their own voucher to pay it."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        from apps.student_management.models import Student
+
+        visible = Student.filter_owned_by_user(Student.objects.alive(), user)
+        return queryset.filter(student__in=visible)
+
+
+class VoucherCollectionImport(TenantOwnedModel):
+    """One settlement file and what came of it.
+
+    `exceptions` is a JSONB list rather than a table on purpose: an unmatched row
+    is a work item an accountant resolves the same day, not a record with a
+    lifecycle. §7.2 asks that a row that cannot be matched land in a queue for
+    manual review rather than failing the file — one bank's typo must not stop
+    the other four hundred rows posting.
+    """
+
+    provider = models.CharField(max_length=40, choices=VoucherProvider.choices)
+    file = models.ForeignKey(
+        "files.File",
+        on_delete=models.PROTECT,
+        related_name="voucher_imports",
+        db_column="file_id",
+    )
+    imported_by = models.UUIDField()
+    status = models.CharField(
+        max_length=15, choices=ImportStatus.choices, default=ImportStatus.PROCESSING
+    )
+    row_count = models.PositiveIntegerField(default=0)
+    matched_count = models.PositiveIntegerField(default=0)
+    exceptions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Unmatched rows: {row, provider_reference, amount, reason}.",
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "voucher_collection_imports"
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(matched_count__lte=models.F("row_count")),
+                name="voucher_imports_matched_within_rows",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "provider", "created_at"]),
+            models.Index(fields=["tenant", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.provider} import ({self.matched_count}/{self.row_count})"
+
+
+class SettlementRow(TenantOwnedModel):
+    """One line of a settlement file, kept so a re-import cannot post twice.
+
+    **Not in §15's table list, and added deliberately.** §11 requires that "a
+    settlement-file row can post at most once, keyed on
+    `(provider, consumer_number, transaction_reference)`" — and a rule about
+    what may happen *at most once* needs somewhere to record that it happened.
+    Without this table the guarantee would rest on the voucher's status alone,
+    which cannot distinguish "already posted by this exact row" from "paid by
+    some other channel", and re-importing yesterday's file is a normal
+    operational event rather than an error.
+
+    Recorded in §20 as a schema addition, with this reasoning.
+    """
+
+    voucher_import = models.ForeignKey(
+        VoucherCollectionImport, on_delete=models.CASCADE, related_name="rows"
+    )
+    provider = models.CharField(max_length=40, choices=VoucherProvider.choices)
+    consumer_number = models.CharField(max_length=60)
+    transaction_reference = models.CharField(max_length=80)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    paid_on = models.DateField()
+    payment = models.ForeignKey(
+        Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name="settlement_rows"
+    )
+
+    class Meta:
+        db_table = "voucher_settlement_rows"
+        ordering = ["-paid_on"]
+        constraints = [
+            # §11's match key, as an index. This is what makes a re-import a
+            # no-op rather than a double posting.
+            models.UniqueConstraint(
+                fields=["tenant", "provider", "consumer_number", "transaction_reference"],
+                name="settlement_rows_match_key_unique",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [models.Index(fields=["tenant", "voucher_import"])]
+
+    def __str__(self) -> str:
+        return f"{self.provider} {self.transaction_reference}"

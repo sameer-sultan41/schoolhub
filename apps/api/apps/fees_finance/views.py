@@ -34,25 +34,34 @@ and keeps the default.
 
 from __future__ import annotations
 
+import base64
+
 from django.db import models, transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.fees_finance import services
+from apps.fees_finance import documents, services, uploads
 from apps.fees_finance.filters import (
     DiscountFilterSet,
     FeeHeadFilterSet,
     FeeInvoiceFilterSet,
     FeeScheduleFilterSet,
     FeeStructureFilterSet,
+    FeeVoucherFilterSet,
     FineFilterSet,
     LedgerAccountFilterSet,
     LedgerEntryFilterSet,
+    PaymentFilterSet,
+    ReceiptFilterSet,
+    RefundFilterSet,
     ScholarshipFilterSet,
+    VoucherImportFilterSet,
 )
 from apps.fees_finance.ledger import LedgerLine
 from apps.fees_finance.models import (
@@ -61,12 +70,18 @@ from apps.fees_finance.models import (
     FeeInvoice,
     FeeSchedule,
     FeeStructure,
+    FeeVoucher,
     Fine,
     InvoiceStatus,
     LedgerAccount,
     LedgerEntry,
+    Payment,
+    Receipt,
+    Refund,
     Scholarship,
     ScholarshipStatus,
+    VoucherCollectionImport,
+    VoucherProvider,
 )
 from apps.fees_finance.serializers import (
     CancelInvoiceSerializer,
@@ -75,19 +90,37 @@ from apps.fees_finance.serializers import (
     FeeInvoiceSerializer,
     FeeScheduleSerializer,
     FeeStructureSerializer,
+    FeeVoucherSerializer,
     FineSerializer,
     GenerateInvoicesSerializer,
+    IssueVoucherSerializer,
     LedgerAccountSerializer,
     LedgerEntrySerializer,
     ManualJournalSerializer,
+    PaymentSerializer,
+    ProcessRefundSerializer,
+    ReceiptSerializer,
+    RecordPaymentSerializer,
+    RefundDecisionSerializer,
+    RefundSerializer,
+    RequestRefundSerializer,
     ScholarshipSerializer,
+    VoucherCollectionImportSerializer,
     WaiveSerializer,
 )
-from apps.fees_finance.tasks import generate_invoices_task
+from apps.fees_finance.tasks import (
+    generate_invoices_task,
+    import_settlement_file_task,
+    notify_payment_received,
+    notify_refund_status,
+    render_receipt_task,
+)
 from apps.school_organization.models import Term
+from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.files.services import create_ready_file
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job
 from core.money import ZERO
@@ -714,3 +747,465 @@ class FineViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         )
         record_audit(request, "update", waived, after={"status": waived.status})
         return ActionResponse.ok(self.get_serializer(waived).data, message="Fine waived.")
+
+
+class PaymentViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/payments` — money in. Read-only as a collection; `:record` takes it.
+
+    No `create` route, deliberately. A payment is never just a row: it carries a
+    balance check, a gapless receipt number, a ledger posting and a
+    recomputation of the invoice's five money columns, all in one transaction.
+    A plain `POST /payments` that wrote the row and left a signal to do the rest
+    is precisely how a confirmed payment ends up with no ledger entry.
+
+    Portal-readable, so a family can see what they have paid.
+    """
+
+    queryset = Payment.objects
+    serializer_class = PaymentSerializer
+    filterset_class = PaymentFilterSet
+    search_fields = ["reference_no", "student__first_name", "student__last_name"]
+    ordering_fields = ["paid_at", "amount", "created_at"]
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "fees.payment.view"
+    required_permission_map = {"record": "fees.payment.collect"}
+    http_method_names = ["get", "post", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("student", "fee_invoice", "receipt")
+
+    @extend_schema(request=RecordPaymentSerializer, responses={201: PaymentSerializer})
+    def record(self, request: Request) -> Response:
+        """⚿ `POST /payments:record` — take money against an invoice.
+
+        `Idempotency-Key` through `replay_or_execute`, which is the platform's
+        contract for a money mutation (§11's closing line). The header stops a
+        double *submit*; `payments_idempotency_key_unique` stops a concurrent
+        one, because `replay_or_execute` documents itself as check-then-store
+        and therefore not concurrency-safe. Two layers, two different failures.
+        """
+        serializer = RecordPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        invoice: FeeInvoice = get_object_or_404(FeeInvoice.objects, pk=payload["fee_invoice"])
+        key = request.headers.get("Idempotency-Key")
+
+        def execute() -> Response:
+            with transaction.atomic():
+                payment = services.record_payment(
+                    invoice=invoice,
+                    amount=payload["amount"],
+                    method=payload["method"],
+                    reference_no=payload.get("reference_no"),
+                    gateway_provider=None,
+                    actor_id=request.user.pk,
+                    tenant_id=request.tenant.pk,
+                    idempotency_key=key,
+                )
+                record_audit(request, "create", payment, after={"amount": str(payment.amount)})
+                receipt_id = str(payment.receipt.pk)
+                transaction.on_commit(
+                    lambda: render_receipt_task.delay(
+                        tenant_id=str(request.tenant.pk),
+                        receipt_id=receipt_id,
+                        actor_id=str(request.user.pk),
+                    )
+                )
+                transaction.on_commit(
+                    lambda: notify_payment_received.delay(
+                        tenant_id=str(request.tenant.pk), payment_id=str(payment.pk)
+                    )
+                )
+            payment.refresh_from_db()
+            return ActionResponse.ok(
+                PaymentSerializer(payment).data, message="Payment recorded.", status=201
+            )
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=key,
+            endpoint="payments:record",
+            execute=execute,
+        )
+
+
+class ReceiptViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/receipts` — read-only. Receipts are issued by `payments:record`.
+
+    §16 gives this a `?format=pdf|thermal` download. Both layouts come from the
+    same template data (§10's requirement) so a printed receipt and a thermal
+    one cannot disagree about what was paid.
+    """
+
+    queryset = Receipt.objects
+    serializer_class = ReceiptSerializer
+    filterset_class = ReceiptFilterSet
+    search_fields = ["receipt_no"]
+    ordering_fields = ["issued_at", "amount"]
+    scope_campus_field = "payment__student__campus_id"
+    required_feature = FEATURE
+    required_permission = "fees.payment.view"
+    http_method_names = ["get", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve", "download"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related("payment__student", "payment__fee_invoice", "pdf_file")
+        )
+
+    @extend_schema(responses={200: None})
+    def download(self, request: Request, pk: str | None = None) -> Response:
+        """`GET /receipts/{id}/download?format=pdf|thermal`.
+
+        Rendered on demand rather than served from the stored PDF, because the
+        thermal layout is a different document and pre-rendering both for every
+        receipt would double the storage for a format most are never printed in.
+        The A4 one is still stored — that is what `render_receipt_task` does —
+        so an audit has a fixed artefact.
+        """
+        receipt = self.get_object()
+        layout = (
+            documents.THERMAL if request.query_params.get("format") == "thermal" else documents.A4
+        )
+        data = documents.render_receipt(
+            receipt=receipt,
+            payment=receipt.payment,
+            invoice=receipt.payment.fee_invoice,
+            student=receipt.payment.student,
+            school_name=request.tenant.name,
+            page_size=layout,
+        )
+        response = HttpResponse(data, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="receipt-{receipt.receipt_no}.pdf"'
+        return response
+
+
+class RefundViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/refunds` — §7.3's request → decide → process workflow.
+
+    Every transition is a colon-action and none is a PATCH, because each carries
+    a rule a serializer cannot express: the remainder still refundable, the
+    segregation of duties, and the ledger reversal.
+    """
+
+    queryset = Refund.objects
+    serializer_class = RefundSerializer
+    filterset_class = RefundFilterSet
+    ordering_fields = ["created_at", "amount"]
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "fees.payment.view"
+    required_permission_map = {
+        "request_refund": "fees.payment.refund",
+        "approve": "fees.refund.approve",
+        "reject": "fees.refund.approve",
+        "process": "fees.refund.approve",
+    }
+    http_method_names = ["get", "post", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("student", "payment")
+
+    @extend_schema(request=RequestRefundSerializer, responses={201: RefundSerializer})
+    def request_refund(self, request: Request) -> Response:
+        """⚿ `POST /refunds` — §7.3 step one."""
+        serializer = RequestRefundSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        payment: Payment = get_object_or_404(Payment.objects, pk=payload["payment"])
+        key = request.headers.get("Idempotency-Key")
+
+        def execute() -> Response:
+            refund = services.request_refund(
+                payment=payment,
+                amount=payload["amount"],
+                reason=payload["reason"],
+                actor_id=request.user.pk,
+                tenant_id=request.tenant.pk,
+                idempotency_key=key,
+            )
+            record_audit(request, "create", refund, after={"amount": str(refund.amount)})
+            return ActionResponse.ok(
+                RefundSerializer(refund).data, message="Refund requested.", status=201
+            )
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk, key=key, endpoint="refunds:create", execute=execute
+        )
+
+    @extend_schema(request=RefundDecisionSerializer, responses={200: RefundSerializer})
+    def approve(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /refunds/{id}:approve`. The requester cannot be the approver."""
+        return self._decide(request, approve=True, message="Refund approved.")
+
+    @extend_schema(request=RefundDecisionSerializer, responses={200: RefundSerializer})
+    def reject(self, request: Request, pk: str | None = None) -> Response:
+        return self._decide(request, approve=False, message="Refund rejected.")
+
+    def _decide(self, request: Request, *, approve: bool, message: str) -> Response:
+        serializer = RefundDecisionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refund = self.get_object()
+
+        decided = services.decide_refund(
+            refund=refund,
+            approve=approve,
+            note=serializer.validated_data.get("note") or None,
+            actor_id=request.user.pk,
+        )
+        record_audit(request, "approve", decided, after={"status": decided.status})
+        transaction.on_commit(
+            lambda: notify_refund_status.delay(
+                tenant_id=str(request.tenant.pk), refund_id=str(decided.pk)
+            )
+        )
+        return ActionResponse.ok(self.get_serializer(decided).data, message=message)
+
+    @extend_schema(request=ProcessRefundSerializer, responses={200: RefundSerializer})
+    def process(self, request: Request, pk: str | None = None) -> Response:
+        """⚿ `POST /refunds/{id}:process` — pay it out and reverse the ledger."""
+        serializer = ProcessRefundSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refund = self.get_object()
+        key = request.headers.get("Idempotency-Key")
+
+        def execute() -> Response:
+            processed = services.process_refund(
+                refund=refund,
+                method=serializer.validated_data["method"],
+                reference_no=serializer.validated_data.get("reference_no"),
+                actor_id=request.user.pk,
+            )
+            record_audit(request, "update", processed, after={"status": processed.status})
+            transaction.on_commit(
+                lambda: notify_refund_status.delay(
+                    tenant_id=str(request.tenant.pk), refund_id=str(processed.pk)
+                )
+            )
+            return ActionResponse.ok(RefundSerializer(processed).data, message="Refund processed.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk, key=key, endpoint="refunds:process", execute=execute
+        )
+
+
+class FeeVoucherViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/vouchers` — §7.2's printable bank/wallet slips.
+
+    Issued from the invoice (`/fee-invoices/{id}/vouchers`), never posted here:
+    every field but the provider is derived at issuance, and a client that could
+    set the amount could print a voucher for a figure the invoice does not owe.
+    """
+
+    queryset = FeeVoucher.objects
+    serializer_class = FeeVoucherSerializer
+    filterset_class = FeeVoucherFilterSet
+    search_fields = ["consumer_number"]
+    ordering_fields = ["due_date", "created_at"]
+    scope_campus_field = "student__campus_id"
+    required_feature = FEATURE
+    required_permission = "fees.payment.view"
+    required_permission_map = {
+        "issue": "fees.payment.collect",
+        "void": "fees.payment.collect",
+    }
+    http_method_names = ["get", "post", "head", "options"]
+
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve", "download"})
+
+    def get_permissions(self):
+        if self.action in self.PORTAL_READABLE_ACTIONS:
+            return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("student", "fee_invoice")
+
+    @extend_schema(request=IssueVoucherSerializer, responses={201: FeeVoucherSerializer})
+    def issue(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /fee-invoices/{id}/vouchers` — print a slip for this invoice."""
+        serializer = IssueVoucherSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        invoice: FeeInvoice = get_object_or_404(FeeInvoice.objects, pk=pk)
+
+        voucher = services.issue_voucher(
+            invoice=invoice,
+            provider=serializer.validated_data["provider"],
+            actor_id=request.user.pk,
+            tenant_id=request.tenant.pk,
+            validity_days=serializer.validated_data.get("validity_days"),
+        )
+        record_audit(request, "issue", voucher, after={"amount": str(voucher.amount)})
+        return ActionResponse.ok(
+            FeeVoucherSerializer(voucher).data, message="Voucher issued.", status=201
+        )
+
+    @extend_schema(request=WaiveSerializer, responses={200: FeeVoucherSerializer})
+    def void(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /vouchers/{id}:void` — §7.2's correction, which is never an edit."""
+        serializer = WaiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        voucher = self.get_object()
+
+        voided = services.void_voucher(
+            voucher=voucher,
+            reason=serializer.validated_data["reason"],
+            actor_id=request.user.pk,
+        )
+        record_audit(request, "update", voided, after={"status": voided.status})
+        return ActionResponse.ok(self.get_serializer(voided).data, message="Voucher voided.")
+
+    @extend_schema(responses={200: None})
+    def download(self, request: Request, pk: str | None = None) -> Response:
+        """`GET /vouchers/{id}/download?format=pdf|thermal`."""
+        voucher = self.get_object()
+        layout = (
+            documents.THERMAL if request.query_params.get("format") == "thermal" else documents.A4
+        )
+        data = documents.render_voucher(
+            voucher=voucher,
+            invoice=voucher.fee_invoice,
+            student=voucher.student,
+            school_name=request.tenant.name,
+            page_size=layout,
+        )
+        response = HttpResponse(data, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'inline; filename="voucher-{voucher.consumer_number}.pdf"'
+        )
+        return response
+
+
+class VoucherCollectionImportViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/voucher-collection-imports` — §7.2's daily settlement reconciliation.
+
+    Staff-only outright: a settlement file is a bank's record of what it
+    collected, and nothing about it belongs in a portal.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = VoucherCollectionImport.objects
+    serializer_class = VoucherCollectionImportSerializer
+    filterset_class = VoucherImportFilterSet
+    ordering_fields = ["created_at"]
+    scope_campus_field = None
+    required_feature = FEATURE
+    required_permission = "fees.payment.view"
+    required_permission_map = {"create": "fees.payment.collect"}
+    parser_classes = [MultiPartParser]
+    http_method_names = ["get", "post", "head", "options"]
+
+    @extend_schema(request=None, responses={202: None})
+    def create(self, request: Request, *args, **kwargs) -> Response:
+        """⚿ `POST /voucher-collection-imports` — 202 + job.
+
+        The file is stored *and* its bytes go into the job payload. Storing it
+        is not redundant: a settlement file is a financial record a school has
+        to retain, and `file_id` is where an auditor goes for the original. The
+        payload is how the worker reads it, matching the platform's established
+        import shape.
+        """
+        upload = request.FILES.get("file")
+        provider = request.data.get("provider")
+        if upload is None:
+            raise DomainRuleViolation({"file": "A settlement file is required."})
+        if provider not in VoucherProvider.values:
+            known = ", ".join(VoucherProvider.values)
+            raise DomainRuleViolation({"provider": f"Unknown provider. Expected one of: {known}."})
+
+        data = upload.read()
+        key = request.headers.get("Idempotency-Key")
+
+        def execute() -> Response:
+            with transaction.atomic():
+                stored = create_ready_file(
+                    tenant_id=request.tenant.pk,
+                    purpose=uploads.SETTLEMENT_FILE.key,
+                    original_name=upload.name,
+                    mime_type=upload.content_type or "text/csv",
+                    data=data,
+                    actor_id=request.user.pk,
+                )
+                voucher_import = VoucherCollectionImport.objects.create(
+                    tenant_id=request.tenant.pk,
+                    provider=provider,
+                    file=stored,
+                    imported_by=request.user.pk,
+                    created_by=request.user.pk,
+                    updated_by=request.user.pk,
+                )
+                job = create_job(
+                    tenant_id=request.tenant.pk,
+                    job_type="fees.import-settlement-file",
+                    payload={
+                        "voucher_import_id": str(voucher_import.pk),
+                        "content_base64": base64.b64encode(data).decode(),
+                    },
+                    actor_id=request.user.pk,
+                    idempotency_key=key,
+                )
+                record_audit(request, "import", voucher_import, after={"provider": provider})
+                transaction.on_commit(
+                    lambda: import_settlement_file_task.delay(
+                        tenant_id=str(request.tenant.pk),
+                        job_id=str(job.pk),
+                        actor_id=str(request.user.pk),
+                    )
+                )
+            return ActionResponse.accepted(str(job.pk), message="Settlement import queued.")
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=key,
+            endpoint="voucher-collection-imports:create",
+            execute=execute,
+        )

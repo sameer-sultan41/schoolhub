@@ -1253,6 +1253,23 @@ export interface paths {
         patch: operations["fee_invoices_partial_update"];
         trace?: never;
     };
+    "/api/v1/fee-invoices/{id}/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /fee-invoices/{id}/vouchers` — print a slip for this invoice. */
+        post: operations["fee_invoices_vouchers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/fee-invoices/{id}:cancel": {
         parameters: {
             query?: never;
@@ -2425,6 +2442,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/payments` — money in. Read-only as a collection; `:record` takes it.
+         *
+         *     No `create` route, deliberately. A payment is never just a row: it carries a
+         *     balance check, a gapless receipt number, a ledger posting and a
+         *     recomputation of the invoice's five money columns, all in one transaction.
+         *     A plain `POST /payments` that wrote the row and left a signal to do the rest
+         *     is precisely how a confirmed payment ends up with no ledger entry.
+         *
+         *     Portal-readable, so a family can see what they have paid.
+         */
+        get: operations["payments_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/payments` — money in. Read-only as a collection; `:record` takes it.
+         *
+         *     No `create` route, deliberately. A payment is never just a row: it carries a
+         *     balance check, a gapless receipt number, a ledger posting and a
+         *     recomputation of the invoice's five money columns, all in one transaction.
+         *     A plain `POST /payments` that wrote the row and left a signal to do the rest
+         *     is precisely how a confirmed payment ends up with no ledger entry.
+         *
+         *     Portal-readable, so a family can see what they have paid.
+         */
+        get: operations["payments_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments:record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ⚿ `POST /payments:record` — take money against an invoice.
+         *
+         *     `Idempotency-Key` through `replay_or_execute`, which is the platform's
+         *     contract for a money mutation (§11's closing line). The header stops a
+         *     double *submit*; `payments_idempotency_key_unique` stops a concurrent
+         *     one, because `replay_or_execute` documents itself as check-then-store
+         *     and therefore not concurrency-safe. Two layers, two different failures.
+         */
+        post: operations["payments:record_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/periods": {
         parameters: {
             query?: never;
@@ -2647,6 +2743,197 @@ export interface paths {
          *     about each section of the paper, not to fix one and resubmit.
          */
         post: operations["question_banks_:assemble_paper_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/receipts` — read-only. Receipts are issued by `payments:record`.
+         *
+         *     §16 gives this a `?format=pdf|thermal` download. Both layouts come from the
+         *     same template data (§10's requirement) so a printed receipt and a thermal
+         *     one cannot disagree about what was paid.
+         */
+        get: operations["receipts_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receipts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/receipts` — read-only. Receipts are issued by `payments:record`.
+         *
+         *     §16 gives this a `?format=pdf|thermal` download. Both layouts come from the
+         *     same template data (§10's requirement) so a printed receipt and a thermal
+         *     one cannot disagree about what was paid.
+         */
+        get: operations["receipts_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receipts/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /receipts/{id}/download?format=pdf|thermal`.
+         *
+         *     Rendered on demand rather than served from the stored PDF, because the
+         *     thermal layout is a different document and pre-rendering both for every
+         *     receipt would double the storage for a format most are never printed in.
+         *     The A4 one is still stored — that is what `render_receipt_task` does —
+         *     so an audit has a fixed artefact.
+         */
+        get: operations["receipts_download_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/refunds` — §7.3's request → decide → process workflow.
+         *
+         *     Every transition is a colon-action and none is a PATCH, because each carries
+         *     a rule a serializer cannot express: the remainder still refundable, the
+         *     segregation of duties, and the ledger reversal.
+         */
+        get: operations["refunds_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/refunds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/refunds` — §7.3's request → decide → process workflow.
+         *
+         *     Every transition is a colon-action and none is a PATCH, because each carries
+         *     a rule a serializer cannot express: the remainder still refundable, the
+         *     segregation of duties, and the ledger reversal.
+         */
+        get: operations["refunds_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/refunds/{id}:approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /refunds/{id}:approve`. The requester cannot be the approver. */
+        post: operations["refunds_:approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/refunds/{id}:process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ⚿ `POST /refunds/{id}:process` — pay it out and reverse the ledger. */
+        post: operations["refunds_:process_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/refunds/{id}:reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `/refunds` — §7.3's request → decide → process workflow.
+         *
+         *     Every transition is a colon-action and none is a PATCH, because each carries
+         *     a rule a serializer cannot express: the remainder still refundable, the
+         *     segregation of duties, and the ledger reversal.
+         */
+        post: operations["refunds_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/refunds:create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ⚿ `POST /refunds` — §7.3 step one. */
+        post: operations["refunds:create_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4624,6 +4911,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/voucher-collection-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/voucher-collection-imports` — §7.2's daily settlement reconciliation.
+         *
+         *     Staff-only outright: a settlement file is a bank's record of what it
+         *     collected, and nothing about it belongs in a portal.
+         */
+        get: operations["voucher_collection_imports_list"];
+        put?: never;
+        /**
+         * @description ⚿ `POST /voucher-collection-imports` — 202 + job.
+         *
+         *     The file is stored *and* its bytes go into the job payload. Storing it
+         *     is not redundant: a settlement file is a financial record a school has
+         *     to retain, and `file_id` is where an auditor goes for the original. The
+         *     payload is how the worker reads it, matching the platform's established
+         *     import shape.
+         */
+        post: operations["voucher_collection_imports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/voucher-collection-imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/voucher-collection-imports` — §7.2's daily settlement reconciliation.
+         *
+         *     Staff-only outright: a settlement file is a bank's record of what it
+         *     collected, and nothing about it belongs in a portal.
+         */
+        get: operations["voucher_collection_imports_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/vouchers` — §7.2's printable bank/wallet slips.
+         *
+         *     Issued from the invoice (`/fee-invoices/{id}/vouchers`), never posted here:
+         *     every field but the provider is derived at issuance, and a client that could
+         *     set the amount could print a voucher for a figure the invoice does not owe.
+         */
+        get: operations["vouchers_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/vouchers` — §7.2's printable bank/wallet slips.
+         *
+         *     Issued from the invoice (`/fee-invoices/{id}/vouchers`), never posted here:
+         *     every field but the provider is derived at issuance, and a client that could
+         *     set the amount could print a voucher for a figure the invoice does not owe.
+         */
+        get: operations["vouchers_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /vouchers/{id}/download?format=pdf|thermal`. */
+        get: operations["vouchers_download_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vouchers/{id}:void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /vouchers/{id}:void` — §7.2's correction, which is never an edit. */
+        post: operations["vouchers_:void_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5533,6 +5953,33 @@ export interface components {
          * @enum {string}
          */
         FeeStructureStatusEnum: "draft" | "active" | "archived";
+        FeeVoucher: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly fee_invoice: string;
+            readonly invoice_no: string;
+            /** Format: uuid */
+            readonly student: string;
+            readonly student_name: string;
+            readonly provider: components["schemas"]["VoucherProviderEnum"];
+            readonly consumer_number: string;
+            /** Format: decimal */
+            readonly amount: string;
+            /** Format: date */
+            readonly due_date: string;
+            readonly status: components["schemas"]["VoucherStatusEnum"];
+            /**
+             * Format: uuid
+             * @description Set when a settlement row matches.
+             */
+            readonly payment: string | null;
+            readonly voided_reason: string | null;
+            /** Format: uuid */
+            readonly issued_by: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         File: {
             /** Format: uuid */
             readonly id: string;
@@ -5804,6 +6251,10 @@ export interface components {
          */
         InviteRequest: {
             role_ids?: string[];
+        };
+        IssueVoucher: {
+            provider: components["schemas"]["VoucherProviderEnum"];
+            validity_days?: number;
         };
         /** @description One step of §7.2's chain, nested on the request it belongs to. */
         LeaveApproval: {
@@ -6282,6 +6733,16 @@ export interface components {
                 };
             };
         };
+        PaginatedFeeVoucherList: {
+            data?: components["schemas"]["FeeVoucher"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedFileList: {
             data?: components["schemas"]["File"][];
             meta?: {
@@ -6393,6 +6854,16 @@ export interface components {
                 };
             };
         };
+        PaginatedPaymentList: {
+            data?: components["schemas"]["Payment"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedPeriodList: {
             data?: components["schemas"]["Period"][];
             meta?: {
@@ -6427,6 +6898,26 @@ export interface components {
         };
         PaginatedQuestionList: {
             data?: components["schemas"]["Question"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedReceiptList: {
+            data?: components["schemas"]["Receipt"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedRefundList: {
+            data?: components["schemas"]["Refund"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -6624,6 +7115,16 @@ export interface components {
         };
         PaginatedTimetableSlotList: {
             data?: components["schemas"]["TimetableSlot"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedVoucherCollectionImportList: {
+            data?: components["schemas"]["VoucherCollectionImport"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -7655,6 +8156,50 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        Payment: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            fee_invoice: string;
+            /**
+             * Format: uuid
+             * @description Denormalized from the invoice so the student ledger is one query.
+             */
+            readonly student: string;
+            /** Format: decimal */
+            amount: string;
+            method: components["schemas"]["PaymentMethodEnum"];
+            reference_no?: string | null;
+            gateway_provider?: string | null;
+            readonly status: components["schemas"]["PaymentStatusEnum"];
+            /** Format: date-time */
+            readonly paid_at: string | null;
+            /**
+             * Format: uuid
+             * @description Null for a gateway or voucher self-service payment.
+             */
+            readonly received_by: string | null;
+            readonly receipt_no: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `cash` - Cash
+         *     * `cheque` - Cheque
+         *     * `bank_transfer` - Bank transfer
+         *     * `card` - Card
+         *     * `online_gateway` - Online gateway
+         * @enum {string}
+         */
+        PaymentMethodEnum: "cash" | "cheque" | "bank_transfer" | "card" | "online_gateway";
+        /**
+         * @description * `pending` - Pending
+         *     * `confirmed` - Confirmed
+         *     * `failed` - Failed
+         *     * `reversed` - Reversed
+         * @enum {string}
+         */
+        PaymentStatusEnum: "pending" | "confirmed" | "failed" | "reversed";
         /**
          * @description `periods` — one slot of the bell schedule (§5.1).
          *
@@ -7686,6 +8231,11 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /** @description ⚿ `:process` — how the money actually went back. */
+        ProcessRefund: {
+            method: components["schemas"]["PaymentMethodEnum"];
+            reference_no?: string | null;
         };
         /**
          * @description A batch, synthesised by aggregating its decision rows.
@@ -7877,6 +8427,30 @@ export interface components {
          * @enum {string}
          */
         QuestionTypeEnum: "mcq" | "true_false" | "short_answer" | "long_answer" | "fill_blank" | "numerical";
+        Receipt: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly receipt_no: string;
+            /** Format: uuid */
+            readonly payment: string;
+            readonly invoice_no: string;
+            readonly student_name: string;
+            /** Format: decimal */
+            readonly amount: string;
+            /** Format: date-time */
+            readonly issued_at: string;
+            /** Format: uuid */
+            readonly pdf_file: string | null;
+        };
+        /** @description ⚿ `POST /payments` — money in, at a counter or by bank transfer. */
+        RecordPayment: {
+            /** Format: uuid */
+            fee_invoice: string;
+            /** Format: decimal */
+            amount: string;
+            method: components["schemas"]["PaymentMethodEnum"];
+            reference_no?: string | null;
+        };
         /**
          * @description Documents ``RefreshView``'s actual response body for the OpenAPI schema.
          *
@@ -7888,6 +8462,41 @@ export interface components {
             access_token: string;
             expires_in: number;
         };
+        Refund: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            payment: string;
+            /** Format: uuid */
+            readonly student: string;
+            /** Format: decimal */
+            amount: string;
+            reason: string;
+            readonly status: components["schemas"]["RefundStatusEnum"];
+            /** Format: uuid */
+            readonly requested_by: string;
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            readonly decision_note: string | null;
+            readonly method: string | null;
+            readonly reference_no: string | null;
+            /** Format: date-time */
+            readonly processed_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /** @description `:approve` / `:reject` — the note is optional on approval, not on refusal. */
+        RefundDecision: {
+            note?: string;
+        };
+        /**
+         * @description * `requested` - Requested
+         *     * `approved` - Approved
+         *     * `rejected` - Rejected
+         *     * `processed` - Processed
+         * @enum {string}
+         */
+        RefundStatusEnum: "requested" | "approved" | "rejected" | "processed";
         /**
          * @description * `father` - Father
          *     * `mother` - Mother
@@ -7939,6 +8548,14 @@ export interface components {
          * @enum {string}
          */
         ReportCardStatusEnum: "draft" | "generated" | "published";
+        /** @description ⚿ `POST /refunds` — §7.3 step one. */
+        RequestRefund: {
+            /** Format: uuid */
+            payment: string;
+            /** Format: decimal */
+            amount: string;
+            reason: string;
+        };
         /**
          * @description `results` — read-only on the wire (§16 declares a `GET` and no writes).
          *
@@ -8143,6 +8760,13 @@ export interface components {
             /** Format: date */
             end_date: string;
         };
+        /**
+         * @description * `processing` - Processing
+         *     * `completed` - Completed
+         *     * `failed` - Failed
+         * @enum {string}
+         */
+        SettlementImportStatusEnum: "processing" | "completed" | "failed";
         /** @description The substitution overlay on one cell of `GET /timetables/my`. */
         SlotSubstitution: {
             /** Format: uuid */
@@ -8828,6 +9452,39 @@ export interface components {
          * @enum {string}
          */
         VisibilityEnum: "private" | "public";
+        VoucherCollectionImport: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly provider: components["schemas"]["VoucherProviderEnum"];
+            /** Format: uuid */
+            readonly file: string;
+            /** Format: uuid */
+            readonly imported_by: string;
+            readonly status: components["schemas"]["SettlementImportStatusEnum"];
+            readonly row_count: number;
+            readonly matched_count: number;
+            /** @description Unmatched rows: {row, provider_reference, amount, reason}. */
+            readonly exceptions: unknown;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `bank_branch` - Bank branch
+         *     * `easypaisa` - Easypaisa
+         *     * `jazzcash` - JazzCash
+         * @enum {string}
+         */
+        VoucherProviderEnum: "bank_branch" | "easypaisa" | "jazzcash";
+        /**
+         * @description * `issued` - Issued
+         *     * `paid` - Paid
+         *     * `void` - Void
+         *     * `expired` - Expired
+         * @enum {string}
+         */
+        VoucherStatusEnum: "issued" | "paid" | "void" | "expired";
         /**
          * @description Shared by `:waive` and `:revoke`. A reason is not optional.
          *
@@ -11196,6 +11853,33 @@ export interface operations {
             };
         };
     };
+    fee_invoices_vouchers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueVoucher"];
+                "application/x-www-form-urlencoded": components["schemas"]["IssueVoucher"];
+                "multipart/form-data": components["schemas"]["IssueVoucher"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeVoucher"];
+                };
+            };
+        };
+    };
     "fee_invoices_:cancel_create": {
         parameters: {
             query?: never;
@@ -13027,6 +13711,88 @@ export interface operations {
             };
         };
     };
+    payments_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                invoice?: string;
+                method?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                paid_at__gte?: string;
+                paid_at__lte?: string;
+                received_by?: string;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+                student?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPaymentList"];
+                };
+            };
+        };
+    };
+    payments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this payment. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Payment"];
+                };
+            };
+        };
+    };
+    "payments:record_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPayment"];
+                "application/x-www-form-urlencoded": components["schemas"]["RecordPayment"];
+                "multipart/form-data": components["schemas"]["RecordPayment"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Payment"];
+                };
+            };
+        };
+    };
     periods_list: {
         parameters: {
             query?: {
@@ -13480,6 +14246,239 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    receipts_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                issued_at__gte?: string;
+                issued_at__lte?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                payment?: string;
+                receipt_no?: string;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedReceiptList"];
+                };
+            };
+        };
+    };
+    receipts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this receipt. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Receipt"];
+                };
+            };
+        };
+    };
+    receipts_download_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refunds_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                payment?: string;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+                student?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRefundList"];
+                };
+            };
+        };
+    };
+    refunds_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this refund. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+        };
+    };
+    "refunds_:approve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefundDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["RefundDecision"];
+                "multipart/form-data": components["schemas"]["RefundDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+        };
+    };
+    "refunds_:process_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessRefund"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProcessRefund"];
+                "multipart/form-data": components["schemas"]["ProcessRefund"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+        };
+    };
+    "refunds_:reject_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefundDecision"];
+                "application/x-www-form-urlencoded": components["schemas"]["RefundDecision"];
+                "multipart/form-data": components["schemas"]["RefundDecision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
+            };
+        };
+    };
+    "refunds:create_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestRefund"];
+                "application/x-www-form-urlencoded": components["schemas"]["RequestRefund"];
+                "multipart/form-data": components["schemas"]["RequestRefund"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Refund"];
+                };
             };
         };
     };
@@ -16786,6 +17785,179 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EffectiveSlot"][];
+                };
+            };
+        };
+    };
+    voucher_collection_imports_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                provider?: string;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedVoucherCollectionImportList"];
+                };
+            };
+        };
+    };
+    voucher_collection_imports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    voucher_collection_imports_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this voucher collection import. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherCollectionImport"];
+                };
+            };
+        };
+    };
+    vouchers_list: {
+        parameters: {
+            query?: {
+                consumer_number?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                due_date__lte?: string;
+                invoice?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                provider?: string;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+                student?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFeeVoucherList"];
+                };
+            };
+        };
+    };
+    vouchers_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this fee voucher. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeVoucher"];
+                };
+            };
+        };
+    };
+    vouchers_download_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "vouchers_:void_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Waive"];
+                "application/x-www-form-urlencoded": components["schemas"]["Waive"];
+                "multipart/form-data": components["schemas"]["Waive"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeVoucher"];
                 };
             };
         };

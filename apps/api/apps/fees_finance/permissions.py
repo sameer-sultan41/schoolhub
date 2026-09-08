@@ -31,7 +31,7 @@ Two scope notes that are easy to get backwards:
 Keys arrive with the PR that ships an endpoint for them, so
 `tests/test_endpoint_contracts.py` never sees a registered key with nothing
 behind it. Registered so far: fee-structure and ledger (PR A); invoice, discount,
-scholarship and fine (PR B).
+scholarship and fine (PR B); payment, refund and their views (PR C).
 
 One more gap key, on the same footing as PR A's two: `fees.discount.view` and
 `fees.fine.view` are granted in prose by §3 (a guardian "views children's
@@ -78,6 +78,12 @@ GRANT_VIEWERS = ("accountant", "finance_staff", "school_admin", "school_owner", 
 # `school_owner`". Forgiving money owed is the owner's call or the accountant's;
 # §3 is explicit that `finance_staff` "cannot approve refunds or waivers".
 WAIVERS = ("accountant", "school_owner")
+# §4 — "`fees.refund.approve` … `accountant`, `school_owner`", and §3 is
+# explicit that `finance_staff` "cannot approve refunds or waivers". Holding the
+# key is not enough on its own: `services.decide_refund` refuses an approver who
+# was the requester, because the same person can hold both keys and §7.3's
+# segregation is about the *act*, not the grant.
+REFUND_APPROVERS = ("accountant", "school_owner")
 
 registry.register(
     "fees.fee-structure.view",
@@ -163,6 +169,29 @@ registry.register(
     WAIVERS,
 )
 
+# --- Collection (PR C) ---------------------------------------------------- #
+
+registry.register(
+    "fees.payment.collect",
+    "Record a payment and issue its receipt.",
+    FINANCE_STAFF,
+)
+registry.register(
+    "fees.payment.view",
+    "View payments, receipts and vouchers.",
+    INVOICE_VIEWERS,
+)
+registry.register(
+    "fees.payment.refund",
+    "Request a refund against a payment.",
+    FINANCE_STAFF,
+)
+registry.register(
+    "fees.refund.approve",
+    "Approve, reject or process a refund request.",
+    REFUND_APPROVERS,
+)
+
 # Referenced by the module docstring's scope note; keeps ruff from flagging the
 # tuple as unused while PR B is what first needs it.
 __all__ = [
@@ -172,6 +201,7 @@ __all__ = [
     "INVOICE_VIEWERS",
     "LEDGER_VIEWERS",
     "PORTAL",
+    "REFUND_APPROVERS",
     "STRUCTURE_AUTHORS",
     "STRUCTURE_VIEWERS",
     "WAIVERS",

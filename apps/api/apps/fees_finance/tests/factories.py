@@ -35,6 +35,7 @@ from apps.fees_finance.models import (
     FeeSchedule,
     FeeStructure,
     FeeStructureStatus,
+    FeeVoucher,
     Fine,
     FineStatus,
     GrantValueType,
@@ -42,8 +43,13 @@ from apps.fees_finance.models import (
     LedgerAccount,
     LedgerAccountType,
     LedgerReferenceType,
+    Payment,
+    PaymentMethod,
+    PaymentStatus,
     Scholarship,
     ScholarshipStatus,
+    VoucherProvider,
+    VoucherStatus,
 )
 from apps.school_organization.tests.factories import (
     AcademicSessionFactory,
@@ -76,9 +82,11 @@ __all__ = [
     "FeeInvoiceLineFactory",
     "FeeScheduleFactory",
     "FeeStructureFactory",
+    "FeeVoucherFactory",
     "FineFactory",
     "GuardianFactory",
     "LedgerAccountFactory",
+    "PaymentFactory",
     "ScholarshipFactory",
     "SectionFactory",
     "StudentEnrollmentFactory",
@@ -95,6 +103,7 @@ __all__ = [
     "grant",
     "income_account",
     "posting",
+    "settlement_csv",
 ]
 
 
@@ -290,3 +299,36 @@ def fine_head(tenant, account: LedgerAccount) -> FeeHead:
             category=FeeHeadCategory.FINE,
             code=f"FINE{uuid.uuid4().hex[:6].upper()}",
         )
+
+
+class PaymentFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Payment
+
+    amount = Decimal("500.00")
+    method = PaymentMethod.CASH
+    status = PaymentStatus.PENDING
+
+
+class FeeVoucherFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = FeeVoucher
+
+    provider = VoucherProvider.BANK_BRANCH
+    consumer_number = factory.Sequence(lambda n: f"BAN{n:08d}")
+    amount = Decimal("1000.00")
+    due_date = datetime.date(2026, 10, 1)
+    status = VoucherStatus.ISSUED
+    issued_by = factory.LazyFunction(uuid.uuid4)
+
+
+def settlement_csv(rows: list[tuple[str, str, str, str]]) -> bytes:
+    """A generic-CSV settlement file, in the adapter's documented column set.
+
+    Built here rather than in each test so the header lives in one place — the
+    adapter's contract is a header, and a test that hand-wrote it would keep
+    passing after the contract changed.
+    """
+    lines = ["consumer_number,transaction_reference,amount,paid_on"]
+    lines += [",".join(row) for row in rows]
+    return ("\n".join(lines) + "\n").encode()

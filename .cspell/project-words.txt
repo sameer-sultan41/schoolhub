@@ -290,3 +290,5 @@ quantizing
 grantee
 grantees
 unbilled
+Segoe
+unpayable

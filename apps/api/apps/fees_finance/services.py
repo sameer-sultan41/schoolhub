@@ -16,11 +16,11 @@ import datetime
 import uuid
 from collections.abc import Sequence
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.fees_finance import invoicing, numbering
-from apps.fees_finance.ledger import LedgerLine, post_transaction
+from apps.fees_finance.ledger import LedgerLine, post_transaction, reverse_transaction
 from apps.fees_finance.models import (
     Discount,
     DiscountStatus,
@@ -30,18 +30,29 @@ from apps.fees_finance.models import (
     FeeSchedule,
     FeeStructure,
     FeeStructureStatus,
+    FeeVoucher,
     Fine,
     FineStatus,
+    ImportStatus,
     InvoiceLineSource,
     InvoiceStatus,
     LedgerAccount,
     LedgerAccountType,
     LedgerEntry,
     LedgerReferenceType,
+    Payment,
+    PaymentMethod,
+    PaymentStatus,
+    Receipt,
+    Refund,
+    RefundStatus,
     Scholarship,
+    SettlementRow,
+    VoucherCollectionImport,
+    VoucherStatus,
 )
 from core.api.exceptions import DomainRuleViolation
-from core.money import ZERO
+from core.money import ZERO, quantize_money
 
 #: The chart of accounts a tenant cannot operate without — §6's "system accounts
 #: seeded at provisioning". Deliberately minimal: these are the accounts this
@@ -697,3 +708,782 @@ def revoke_discount(*, discount: Discount, reason: str, actor_id: uuid.UUID | No
     locked.updated_by = actor_id
     locked.save(update_fields=["status", "updated_by", "updated_at"])
     return locked
+
+
+# --------------------------------------------------------------------------- #
+# Collection (PR C)
+# --------------------------------------------------------------------------- #
+
+
+def _recompute_invoice_totals(invoice: FeeInvoice) -> FeeInvoice:
+    """Refresh `paid_total`, `balance_due` and `status` from confirmed payments.
+
+    All five money columns move together, because `fee_invoices_balance_is_derived`
+    is a CHECK: writing `paid_total` without `balance_due` is a state the
+    database refuses outright, which is the point of having the constraint.
+
+    Only **confirmed** payments count, and refunds are netted off. A pending
+    gateway payment that moved a balance would be a receipt the school cannot
+    honour if the webhook never arrives.
+    """
+    paid = (
+        Payment.objects.alive()
+        .filter(fee_invoice=invoice, status=PaymentStatus.CONFIRMED)
+        .aggregate(total=models.Sum("amount"))["total"]
+        or ZERO
+    )
+    refunded = (
+        Refund.objects.alive()
+        .filter(payment__fee_invoice=invoice, status=RefundStatus.PROCESSED)
+        .aggregate(total=models.Sum("amount"))["total"]
+        or ZERO
+    )
+
+    net_paid = quantize_money(paid - refunded)
+    charged = quantize_money(invoice.subtotal - invoice.discount_total + invoice.fine_total)
+    invoice.paid_total = net_paid
+    invoice.balance_due = quantize_money(charged - net_paid)
+
+    if invoice.status != InvoiceStatus.CANCELED:
+        if invoice.balance_due <= ZERO:
+            invoice.status = InvoiceStatus.PAID
+        elif net_paid > ZERO:
+            invoice.status = InvoiceStatus.PARTIALLY_PAID
+        elif invoice.due_date < timezone.localdate():
+            invoice.status = InvoiceStatus.OVERDUE
+        else:
+            invoice.status = InvoiceStatus.ISSUED
+
+    invoice.save(update_fields=["paid_total", "balance_due", "status", "updated_at"])
+    return invoice
+
+
+def _fee_income_accounts(*, invoice: FeeInvoice) -> dict:
+    """The income account each of this invoice's lines posts to.
+
+    One query for the invoice's heads. A payment posts debit-cash /
+    credit-income, and the income side is split across whichever heads the
+    invoice charged — a school that maps transport to its own account expects
+    the transport share to land there rather than in general fee income.
+    """
+    lines = FeeInvoiceLine.objects.alive().filter(fee_invoice=invoice).select_related("fee_head")
+    shares: dict = {}
+    for line in lines:
+        net = quantize_money(line.amount - line.discount_amount)
+        if net <= ZERO:
+            continue
+        account_id = line.fee_head.ledger_account_id
+        shares[account_id] = quantize_money(shares.get(account_id, ZERO) + net)
+    return shares
+
+
+def _cash_account_for(method: str) -> str:
+    """Which asset account money of this kind lands in.
+
+    Cash at a counter is `1000`; everything else clears through the bank. A
+    school reconciling a bank statement needs the two separated, and this is the
+    one place that mapping is made.
+    """
+    return "1000" if method == PaymentMethod.CASH else "1010"
+
+
+def _post_payment_to_ledger(
+    *, payment: Payment, invoice: FeeInvoice, actor_id: uuid.UUID | None
+) -> uuid.UUID:
+    """Debit the asset account, credit the income accounts the invoice charged.
+
+    Split across heads in proportion to what each head was actually billed, so a
+    part payment credits each income account its share rather than dumping the
+    lot in whichever head sorted first. The remainder from rounding goes to the
+    largest share, which keeps Σ credit exactly equal to the debit — the thing
+    `assert_balanced` is about to check.
+    """
+    accounts = {
+        account.code: account
+        for account in LedgerAccount.objects.alive().filter(
+            code__in=[_cash_account_for(payment.method), "4000"]
+        )
+    }
+    asset = accounts[_cash_account_for(payment.method)]
+
+    shares = _fee_income_accounts(invoice=invoice)
+    charged = quantize_money(sum(shares.values(), ZERO))
+    if charged <= ZERO:
+        # An invoice whose lines were entirely discounted still takes money if
+        # a school insists; credit general fee income rather than refusing.
+        shares = {accounts["4000"].pk: payment.amount}
+        charged = payment.amount
+
+    credits: list[LedgerLine] = []
+    allocated = ZERO
+    # Largest share first: its remainder-absorbing portion is computed last
+    # (once `allocated` covers everything else), but the *account* it lands on
+    # is `ordered[0]`, not `ordered[-1]` — a one-cent drift lands proportionally
+    # lighter against the largest share than the smallest.
+    ordered = sorted(shares.items(), key=lambda item: item[1], reverse=True)
+    for index, (account_id, share) in enumerate(ordered):
+        if index == 0:
+            continue
+        portion = quantize_money(payment.amount * share / charged)
+        allocated = quantize_money(allocated + portion)
+        if portion > ZERO:
+            credits.append(LedgerLine(ledger_account_id=account_id, credit=portion))
+
+    largest_account_id, _ = ordered[0]
+    largest_portion = quantize_money(payment.amount - allocated)
+    if largest_portion > ZERO:
+        credits.append(LedgerLine(ledger_account_id=largest_account_id, credit=largest_portion))
+
+    return post_transaction(
+        entry_date=timezone.localdate(),
+        lines=[LedgerLine(ledger_account_id=asset.pk, debit=payment.amount), *credits],
+        reference_type=LedgerReferenceType.PAYMENT,
+        reference_id=payment.pk,
+        actor_id=actor_id,
+        memo=f"Payment against {invoice.invoice_no}",
+    )
+
+
+@transaction.atomic
+def record_payment(
+    *,
+    invoice: FeeInvoice,
+    amount,
+    method: str,
+    reference_no: str | None,
+    gateway_provider: str | None,
+    actor_id: uuid.UUID | None,
+    tenant_id: uuid.UUID,
+    idempotency_key: str | None = None,
+    confirm: bool = True,
+) -> Payment:
+    """Take money against an invoice, in one transaction with everything it implies.
+
+    Locks the invoice, checks the balance, writes the payment, allocates a
+    gapless receipt number, writes the receipt, recomputes the five money columns
+    and posts to the ledger. **All of it commits together or none of it does** —
+    a confirmed payment with no ledger entry is a reconciliation failure nobody
+    discovers until year end, and by then the receipt is in a parent's hand.
+
+    The invoice lock is what makes two cashiers taking the same last instalment
+    safe. Without it both read the same balance, both pass the check, and the
+    invoice ends up overpaid — the missing-`select_for_update` finding PR #53's
+    review produced, applied before the fact.
+    """
+    locked = FeeInvoice.objects.select_for_update().get(pk=invoice.pk)
+    amount = quantize_money(amount)
+
+    if locked.status == InvoiceStatus.CANCELED:
+        raise DomainRuleViolation(
+            {"fee_invoice": f"{locked.invoice_no} is canceled and takes no payment."}
+        )
+    if amount <= ZERO:
+        raise DomainRuleViolation({"amount": "A payment must be for a positive amount."})
+    if amount > locked.balance_due:
+        # §11's default. Advance payment is a §19 recommendation and is not
+        # built — see §20.
+        raise DomainRuleViolation(
+            {
+                "amount": (
+                    f"{amount} exceeds the {locked.balance_due} outstanding on {locked.invoice_no}."
+                )
+            },
+            meta={"balance_due": str(locked.balance_due)},
+        )
+
+    payment = Payment.objects.create(
+        tenant_id=tenant_id,
+        fee_invoice=locked,
+        student_id=locked.student_id,
+        amount=amount,
+        method=method,
+        reference_no=reference_no,
+        gateway_provider=gateway_provider,
+        status=PaymentStatus.CONFIRMED if confirm else PaymentStatus.PENDING,
+        paid_at=timezone.now() if confirm else None,
+        received_by=actor_id,
+        idempotency_key=idempotency_key,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+    if confirm:
+        confirm_payment(payment=payment, actor_id=actor_id, tenant_id=tenant_id)
+    return payment
+
+
+@transaction.atomic
+def confirm_payment(
+    *, payment: Payment, actor_id: uuid.UUID | None, tenant_id: uuid.UUID
+) -> Payment:
+    """Move a payment to confirmed, issuing its receipt and posting the ledger.
+
+    Split from `record_payment` because a gateway payment is created `pending`
+    and confirmed later by a webhook — the same work, arriving through a
+    different door, which is exactly the case AGENTS.md's "rules live in
+    services" exists for.
+
+    Idempotent on the payment's status: confirming an already-confirmed payment
+    returns it untouched rather than issuing a second receipt. A retried webhook
+    is a normal event, not an error.
+    """
+    locked = Payment.objects.select_for_update().select_related("fee_invoice").get(pk=payment.pk)
+    if locked.status == PaymentStatus.CONFIRMED and hasattr(locked, "receipt"):
+        return locked
+    if locked.status == PaymentStatus.REVERSED:
+        raise DomainRuleViolation({"status": "A reversed payment cannot be confirmed."})
+
+    invoice = FeeInvoice.objects.select_for_update().get(pk=locked.fee_invoice_id)
+
+    locked.status = PaymentStatus.CONFIRMED
+    locked.paid_at = locked.paid_at or timezone.now()
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "paid_at", "updated_by", "updated_at"])
+
+    Receipt.objects.create(
+        tenant_id=tenant_id,
+        payment=locked,
+        receipt_no=numbering.allocate_receipt_no(
+            tenant_id=tenant_id, issued_on=timezone.localdate()
+        ),
+        amount=locked.amount,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+    _post_payment_to_ledger(payment=locked, invoice=invoice, actor_id=actor_id)
+    _recompute_invoice_totals(invoice)
+    _void_vouchers_for(invoice=invoice, actor_id=actor_id, except_payment_id=locked.pk)
+    return locked
+
+
+def _void_vouchers_for(
+    *, invoice: FeeInvoice, actor_id: uuid.UUID | None, except_payment_id=None
+) -> int:
+    """§6 — a voucher is void once its invoice settles by any other channel.
+
+    Without this a parent who paid at the counter could also pay the voucher at
+    a bank, and the school would be holding money it has to refund. Only fully
+    settled invoices void their vouchers: a part payment leaves the voucher
+    standing, because the balance it names is still owed.
+    """
+    invoice.refresh_from_db(fields=["balance_due"])
+    if invoice.balance_due > ZERO:
+        return 0
+    return (
+        FeeVoucher.objects.alive()
+        .filter(fee_invoice=invoice, status=VoucherStatus.ISSUED)
+        .exclude(payment_id=except_payment_id)
+        .update(
+            status=VoucherStatus.VOID,
+            voided_reason="The invoice was settled through another channel.",
+            updated_by=actor_id,
+            updated_at=timezone.now(),
+        )
+    )
+
+
+def refundable_remainder(*, payment: Payment) -> object:
+    """What is left of a payment after refunds already approved or processed.
+
+    A set-level rule: two partial refunds against one payment must not together
+    exceed it, and no CHECK can see sibling rows. `requested` counts too —
+    otherwise two requests could each pass the check and only collide at
+    processing, after an approver has agreed to both.
+    """
+    committed = (
+        Refund.objects.alive()
+        .filter(
+            payment=payment,
+            status__in=(RefundStatus.REQUESTED, RefundStatus.APPROVED, RefundStatus.PROCESSED),
+        )
+        .aggregate(total=models.Sum("amount"))["total"]
+        or ZERO
+    )
+    return quantize_money(payment.amount - committed)
+
+
+@transaction.atomic
+def request_refund(
+    *,
+    payment: Payment,
+    amount,
+    reason: str,
+    actor_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    idempotency_key: str | None = None,
+) -> Refund:
+    """§7.3 step one. Bounded by the refundable remainder, not the payment."""
+    locked = Payment.objects.select_for_update().select_related("fee_invoice").get(pk=payment.pk)
+    amount = quantize_money(amount)
+
+    if not reason.strip():
+        raise DomainRuleViolation({"reason": "A refund request must say why."})
+    if locked.status != PaymentStatus.CONFIRMED:
+        raise DomainRuleViolation({"payment": "Only a confirmed payment can be refunded."})
+    remaining = refundable_remainder(payment=locked)
+    if amount > remaining:
+        raise DomainRuleViolation(
+            {"amount": (f"{amount} exceeds the {remaining} still refundable on this payment.")},
+            meta={"refundable_remainder": str(remaining)},
+        )
+    _assert_heads_are_refundable(invoice=locked.fee_invoice)
+
+    return Refund.objects.create(
+        tenant_id=tenant_id,
+        payment=locked,
+        student_id=locked.student_id,
+        amount=amount,
+        reason=reason,
+        status=RefundStatus.REQUESTED,
+        requested_by=actor_id,
+        idempotency_key=idempotency_key,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+
+def _assert_heads_are_refundable(*, invoice: FeeInvoice) -> None:
+    """`fee_heads.is_refundable` exists precisely for this.
+
+    An admission fee is typically non-refundable, and refusing at request time
+    is far better than after an approver has already agreed to it.
+    """
+    blocked = list(
+        FeeInvoiceLine.objects.alive()
+        .filter(fee_invoice=invoice, fee_head__is_refundable=False)
+        .values_list("fee_head__code", "fee_head__name")
+    )
+    if blocked:
+        names = ", ".join(f"{code} {name}" for code, name in blocked)
+        raise DomainRuleViolation(
+            {"payment": f"This invoice charges non-refundable fee head(s): {names}."}
+        )
+
+
+@transaction.atomic
+def decide_refund(
+    *, refund: Refund, approve: bool, note: str | None, actor_id: uuid.UUID
+) -> Refund:
+    """§7.3 step two — approve or reject.
+
+    **The requester may not approve their own refund.** Checked here rather than
+    in the viewset, because the rule is the module's: it has to hold when a later
+    caller approves through some other door. auth-and-rbac §2.4, and the same
+    shape examinations' result approval uses.
+    """
+    locked = Refund.objects.select_for_update().get(pk=refund.pk)
+    if locked.status != RefundStatus.REQUESTED:
+        raise DomainRuleViolation(
+            {"status": f"This refund is already {locked.get_status_display().lower()}."}
+        )
+    if locked.requested_by == actor_id:
+        raise DomainRuleViolation(
+            {
+                "approved_by": (
+                    "The person who requested a refund cannot approve it (auth-and-rbac §2.4)."
+                )
+            }
+        )
+
+    locked.status = RefundStatus.APPROVED if approve else RefundStatus.REJECTED
+    locked.approved_by = actor_id
+    locked.decision_note = note
+    locked.updated_by = actor_id
+    locked.save(
+        update_fields=["status", "approved_by", "decision_note", "updated_by", "updated_at"]
+    )
+    return locked
+
+
+@transaction.atomic
+def process_refund(
+    *, refund: Refund, method: str, reference_no: str | None, actor_id: uuid.UUID
+) -> Refund:
+    """§7.3 step three — pay it out and reverse the ledger.
+
+    A **reversal**, never an edit: the original posting stays exactly as made and
+    a new transaction moves the same amounts back. That is what append-only means
+    on a ledger, and `ledger.reverse_transaction` is where it happens.
+    """
+    locked = (
+        Refund.objects.select_for_update().select_related("payment__fee_invoice").get(pk=refund.pk)
+    )
+    if locked.status != RefundStatus.APPROVED:
+        raise DomainRuleViolation({"status": "Only an approved refund can be processed."})
+
+    original = (
+        LedgerEntry.objects.filter(
+            reference_type=LedgerReferenceType.PAYMENT, reference_id=locked.payment_id
+        )
+        .values_list("transaction_id", flat=True)
+        .first()
+    )
+    if original is None:
+        raise DomainRuleViolation({"payment": "This payment has no ledger posting to reverse."})
+
+    if locked.amount == locked.payment.amount:
+        # A full refund reverses the original posting exactly, which keeps the
+        # two transactions visibly paired in the ledger.
+        reverse_transaction(
+            transaction_id=original,
+            entry_date=timezone.localdate(),
+            actor_id=actor_id,
+            memo=f"Refund of payment {locked.payment_id}",
+        )
+    else:
+        # A partial refund cannot mirror the original — it moves a different
+        # amount — so it is posted as its own balanced transaction against the
+        # same accounts, tagged `refund` rather than `reversal`.
+        _post_partial_refund(refund=locked, original_transaction_id=original, actor_id=actor_id)
+
+    locked.status = RefundStatus.PROCESSED
+    locked.method = method
+    locked.reference_no = reference_no
+    locked.processed_at = timezone.now()
+    locked.updated_by = actor_id
+    locked.save(
+        update_fields=[
+            "status",
+            "method",
+            "reference_no",
+            "processed_at",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+    _recompute_invoice_totals(
+        FeeInvoice.objects.select_for_update().get(pk=locked.payment.fee_invoice_id)
+    )
+    return locked
+
+
+def _post_partial_refund(
+    *, refund: Refund, original_transaction_id: uuid.UUID, actor_id: uuid.UUID | None
+) -> uuid.UUID:
+    """Mirror the original transaction's accounts, scaled to the refunded share."""
+    # `order_by("ledger_account_id")`: a payment posts one debit line (cash or
+    # bank) against possibly several credit lines — "payments split the income
+    # side across the heads the invoice charged" — and an unordered fetch
+    # leaves Postgres free to return them in whatever order a given scan
+    # happens to produce, `ledger_entries.pk` being a UUID gives no natural
+    # sequence to fall back on. Deterministic, so which line absorbs the
+    # rounding remainder below does not vary run to run for the same refund.
+    original_lines = list(
+        LedgerEntry.objects.filter(transaction_id=original_transaction_id).order_by(
+            "ledger_account_id"
+        )
+    )
+    total_debit = quantize_money(sum((line.debit for line in original_lines), ZERO))
+    share = refund.amount / total_debit if total_debit else ZERO
+
+    scaled = [
+        (line, quantize_money((line.debit or line.credit) * share)) for line in original_lines
+    ]
+    # The remainder goes to the *last credit line specifically* — not "the
+    # last line in whatever order the query returned". Only a credit line's
+    # mirrored amount feeds `allocated`, the sum `assert_balanced` is about to
+    # check against `refund.amount`; anchoring the correction to "last line"
+    # rather than "last credit line" silently skips it whenever the single
+    # debit (cash/bank) line happens to sort last, and several independently
+    # rounded credit lines can then fail to sum to `refund.amount` exactly.
+    last_credit_index = max(
+        (index for index, (line, _) in enumerate(scaled) if line.credit), default=None
+    )
+
+    lines = []
+    allocated = ZERO
+    for index, (line, portion) in enumerate(scaled):
+        if index == last_credit_index:
+            portion = quantize_money(refund.amount - allocated)
+        if line.debit:
+            lines.append(LedgerLine(ledger_account_id=line.ledger_account_id, credit=portion))
+        else:
+            lines.append(LedgerLine(ledger_account_id=line.ledger_account_id, debit=portion))
+            allocated = quantize_money(allocated + portion)
+
+    return post_transaction(
+        entry_date=timezone.localdate(),
+        lines=lines,
+        reference_type=LedgerReferenceType.REFUND,
+        reference_id=refund.pk,
+        actor_id=actor_id,
+        memo=f"Partial refund of payment {refund.payment_id}",
+        # Same reasoning as `reverse_transaction`: this mirrors the original
+        # payment's own accounts, so an account archived after that payment
+        # posted must not strand a refund against it — a partial refund is a
+        # correction of history exactly as much as a full one is.
+        allow_archived_accounts=True,
+    )
+
+
+DEFAULT_VOUCHER_VALIDITY_DAYS = 30
+
+
+def _consumer_number(*, invoice: FeeInvoice, provider: str) -> str:
+    """The reference a bank or wallet keys on.
+
+    Derived from the invoice number and the provider rather than allocated from
+    a counter, because it must be reproducible: a re-issued voucher for the same
+    invoice at the same provider has to be distinguishable from the voided one,
+    while a settlement file that arrives late still identifies its invoice. The
+    sequence suffix comes from how many vouchers this invoice already has.
+    """
+    issued = FeeVoucher.objects.alive().filter(fee_invoice=invoice, provider=provider).count()
+    digits = "".join(ch for ch in invoice.invoice_no if ch.isdigit()) or "0"
+    return f"{provider[:3].upper()}{digits}{issued + 1:02d}"
+
+
+@transaction.atomic
+def issue_voucher(
+    *,
+    invoice: FeeInvoice,
+    provider: str,
+    actor_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    validity_days: int | None = None,
+) -> FeeVoucher:
+    """Print a slip a family can pay at a bank counter or wallet agent.
+
+    `amount` is a **snapshot** of the balance at issuance, and the settlement
+    matcher compares against the voucher rather than the live invoice. That is
+    deliberate: the piece of paper says what the bank will collect, and a
+    balance that moves afterwards must not make an already-printed voucher
+    unpayable.
+    """
+    locked = FeeInvoice.objects.select_for_update().get(pk=invoice.pk)
+    if locked.status == InvoiceStatus.CANCELED:
+        raise DomainRuleViolation(
+            {"fee_invoice": f"{locked.invoice_no} is canceled and takes no voucher."}
+        )
+    if locked.balance_due <= ZERO:
+        raise DomainRuleViolation(
+            {"fee_invoice": f"{locked.invoice_no} is settled; there is nothing to collect."}
+        )
+
+    days = validity_days or _voucher_validity_days(tenant_id=tenant_id)
+    return FeeVoucher.objects.create(
+        tenant_id=tenant_id,
+        fee_invoice=locked,
+        student_id=locked.student_id,
+        provider=provider,
+        consumer_number=_consumer_number(invoice=locked, provider=provider),
+        amount=locked.balance_due,
+        due_date=timezone.localdate() + datetime.timedelta(days=days),
+        status=VoucherStatus.ISSUED,
+        issued_by=actor_id,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+
+def _voucher_validity_days(*, tenant_id: uuid.UUID) -> int:
+    from core.tenancy.models import TenantSettings
+
+    settings = TenantSettings.objects.filter(tenant_id=tenant_id).first()
+    finance = (settings.finance if settings else None) or {}
+    days = finance.get("voucher_validity_days")
+    return days if isinstance(days, int) and days > 0 else DEFAULT_VOUCHER_VALIDITY_DAYS
+
+
+@transaction.atomic
+def void_voucher(*, voucher: FeeVoucher, reason: str, actor_id: uuid.UUID) -> FeeVoucher:
+    """§7.2 — a voucher is never edited, only voided and re-issued."""
+    locked = FeeVoucher.objects.select_for_update().get(pk=voucher.pk)
+    if not reason.strip():
+        raise DomainRuleViolation({"reason": "Voiding a voucher requires a reason."})
+    if locked.status == VoucherStatus.PAID:
+        raise DomainRuleViolation(
+            {"status": "A paid voucher cannot be voided. Refund the payment instead."}
+        )
+
+    locked.status = VoucherStatus.VOID
+    locked.voided_reason = reason
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "voided_reason", "updated_by", "updated_at"])
+    return locked
+
+
+@transaction.atomic
+def apply_settlement_rows(
+    *,
+    voucher_import: VoucherCollectionImport,
+    rows: list,
+    actor_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+) -> dict:
+    """Match a file's rows to vouchers and post what matches. §7.2's reconciliation.
+
+    Three properties this has to have, and each is a separate mechanism:
+
+    * **A row posts at most once.** §11's match key
+      `(provider, consumer_number, transaction_reference)` is a unique index on
+      `voucher_settlement_rows`, so re-importing yesterday's file is a no-op
+      rather than a double payment. Checked by reading the existing keys once
+      rather than catching IntegrityError per row.
+    * **An unmatched row does not fail the file.** It lands in `exceptions` for
+      an accountant, because one bank's typo must not stop four hundred other
+      rows posting.
+    * **A matched row goes through `record_payment`.** No shortcut: the
+      settlement path gets the same balance check, receipt, ledger posting and
+      total recomputation as a payment taken at a counter, or the two would
+      drift.
+    """
+    provider = voucher_import.provider
+    already = set(
+        SettlementRow.objects.alive()
+        .filter(provider=provider)
+        .values_list("consumer_number", "transaction_reference")
+    )
+    vouchers = {
+        voucher.consumer_number: voucher
+        for voucher in FeeVoucher.objects.alive()
+        .filter(provider=provider, status=VoucherStatus.ISSUED)
+        .select_related("fee_invoice")
+    }
+
+    exceptions: list[dict] = list(voucher_import.exceptions or [])
+    matched = 0
+
+    for row in rows:
+        key = (row.consumer_number, row.transaction_reference)
+        if key in already:
+            # Already posted by an earlier import. Not an exception — a re-import
+            # is a normal operational event and reporting it as a problem would
+            # train accountants to ignore the queue.
+            continue
+
+        voucher = vouchers.get(row.consumer_number)
+        if voucher is None:
+            exceptions.append(
+                {
+                    "row": row.row_number,
+                    "provider_reference": row.transaction_reference,
+                    "amount": str(row.amount),
+                    "reason": (
+                        f"No open voucher with consumer number "
+                        f"'{row.consumer_number}' for {provider}."
+                    ),
+                }
+            )
+            continue
+        if quantize_money(row.amount) != voucher.amount:
+            # A short or over payment is a decision, not an automatic posting:
+            # the school may accept it, chase the difference, or re-issue.
+            exceptions.append(
+                {
+                    "row": row.row_number,
+                    "provider_reference": row.transaction_reference,
+                    "amount": str(row.amount),
+                    "reason": (f"Settled {row.amount} against a voucher for {voucher.amount}."),
+                }
+            )
+            continue
+
+        # A savepoint per row, caught here: `record_payment` can still refuse a
+        # row that matched cleanly on consumer number and amount — the invoice
+        # was canceled, or its balance moved between when the voucher was
+        # issued and when this file settles it. Letting that propagate would
+        # abort the whole import on one row, the same failure this function's
+        # own "an unmatched row does not fail the file" guarantee exists to
+        # prevent — it just arrives through `record_payment` instead of a
+        # missing voucher.
+        try:
+            with transaction.atomic():
+                # Re-fetched and locked, not the `vouchers` dict's snapshot from
+                # before the loop started: a voucher can go `void` mid-import —
+                # a family settling at the counter while this exact file is
+                # being reconciled is the ordinary case `void_voucher` exists
+                # for — and the invoice's own balance check cannot catch that,
+                # since a partly-covered invoice can still have room for a
+                # second, no-longer-legitimate settlement to fit under it.
+                locked_voucher = FeeVoucher.objects.select_for_update().get(pk=voucher.pk)
+                if locked_voucher.status != VoucherStatus.ISSUED:
+                    raise DomainRuleViolation(
+                        f"Voucher {locked_voucher.consumer_number} is "
+                        f"{locked_voucher.status}, not issued."
+                    )
+                payment = record_payment(
+                    invoice=voucher.fee_invoice,
+                    amount=row.amount,
+                    method=PaymentMethod.BANK_TRANSFER,
+                    reference_no=row.transaction_reference,
+                    gateway_provider=None,
+                    # No `received_by`: nobody at the school handled this money.
+                    actor_id=None,
+                    tenant_id=tenant_id,
+                )
+                SettlementRow.objects.create(
+                    tenant_id=tenant_id,
+                    voucher_import=voucher_import,
+                    provider=provider,
+                    consumer_number=row.consumer_number,
+                    transaction_reference=row.transaction_reference,
+                    amount=quantize_money(row.amount),
+                    paid_on=row.paid_on,
+                    payment=payment,
+                    created_by=actor_id,
+                    updated_by=actor_id,
+                )
+                FeeVoucher.objects.filter(pk=voucher.pk).update(
+                    status=VoucherStatus.PAID,
+                    payment=payment,
+                    updated_by=actor_id,
+                    updated_at=timezone.now(),
+                )
+        except DomainRuleViolation as exc:
+            exceptions.append(
+                {
+                    "row": row.row_number,
+                    "provider_reference": row.transaction_reference,
+                    "amount": str(row.amount),
+                    "reason": f"Could not post: {exc.detail}",
+                }
+            )
+            continue
+
+        already.add(key)
+        vouchers.pop(row.consumer_number, None)
+        matched += 1
+
+    voucher_import.row_count = len(rows) + len(
+        [e for e in (voucher_import.exceptions or []) if e.get("row") == 0]
+    )
+    voucher_import.matched_count = matched
+    voucher_import.exceptions = exceptions
+    voucher_import.status = ImportStatus.COMPLETED
+    voucher_import.completed_at = timezone.now()
+    voucher_import.updated_by = actor_id
+    voucher_import.save(
+        update_fields=[
+            "row_count",
+            "matched_count",
+            "exceptions",
+            "status",
+            "completed_at",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+    return {
+        "row_count": voucher_import.row_count,
+        "matched": matched,
+        "exceptions": len(exceptions),
+    }
+
+
+def expire_tenant_vouchers(tenant_id: uuid.UUID) -> int:
+    """§7.2 — an unpaid voucher past its due date is void and must be re-issued.
+
+    A sweep step in `for_each_tenant`'s shape. It matters that this runs: an
+    expired voucher still sitting `issued` would be matched by a late settlement
+    file and post a payment for an amount the invoice may no longer owe.
+    """
+    return (
+        FeeVoucher.objects.alive()
+        .filter(status=VoucherStatus.ISSUED, due_date__lt=timezone.localdate())
+        .update(
+            status=VoucherStatus.EXPIRED,
+            voided_reason="The voucher passed its due date unpaid.",
+            updated_at=timezone.now(),
+        )
+    )

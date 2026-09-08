@@ -306,3 +306,185 @@ def _send_batch(*, tenant, invoices: list[FeeInvoice], event: str, notify) -> in
         )
         notified += len(recipients)
     return notified
+
+
+@shared_task(base=TenantAwareTask, bind=True)
+def import_settlement_file_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
+    """§7.2's reconciliation, off the request path.
+
+    A settlement file is hundreds of rows and each match is a full payment —
+    balance check, receipt, ledger posting — so this is bulk work by any
+    measure. It never re-raises: the job row is the only place a caller polling
+    `GET /jobs/{id}` learns it failed.
+    """
+    import base64
+
+    from apps.fees_finance import services
+    from apps.fees_finance.adapters import adapter_for
+    from apps.fees_finance.models import ImportStatus, VoucherCollectionImport
+    from core.tenancy.context import tenant_atomic
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        job = BackgroundJob.objects.get(pk=job_id)
+    mark_running(job=job)
+
+    try:
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            voucher_import = VoucherCollectionImport.objects.select_related("file").get(
+                pk=job.payload["voucher_import_id"]
+            )
+            # The bytes travel in the job payload, base64-encoded, which is the
+            # platform's established import shape (`core.jobs`' own prune sweep
+            # notes these rows carry base64 payloads and are the heavier
+            # retention sweep). The `File` row still exists and is still linked:
+            # a settlement file is a financial record a school has to retain,
+            # and `file_id` is where an auditor goes to find the original.
+            parsed = adapter_for(voucher_import.provider).parse(
+                base64.b64decode(job.payload["content_base64"])
+            )
+            # Whole-file problems (unreadable, missing columns) are recorded
+            # before matching, so an accountant sees why nothing posted rather
+            # than an empty result.
+            voucher_import.exceptions = parsed.problems
+            result = services.apply_settlement_rows(
+                voucher_import=voucher_import,
+                rows=parsed.rows,
+                actor_id=uuid.UUID(actor_id),
+                tenant_id=uuid.UUID(tenant_id),
+            )
+        mark_succeeded(job=job, result=result)
+    except Exception as exc:  # noqa: BLE001 — see the module docstring.
+        with tenant_atomic(uuid.UUID(tenant_id)):
+            VoucherCollectionImport.objects.filter(pk=job.payload["voucher_import_id"]).update(
+                status=ImportStatus.FAILED
+            )
+        mark_failed(job=job, error=str(exc))
+
+
+@shared_task(base=TenantAwareTask)
+def render_receipt_task(*, tenant_id: str, receipt_id: str, actor_id: str) -> dict[str, str]:
+    """Render one receipt to PDF and attach it.
+
+    Asynchronous because WeasyPrint is the slowest thing this platform does and
+    a cashier should not wait on it — the receipt row and its number already
+    exist, so the parent has proof of payment whether or not the PDF is ready.
+    """
+    from apps.fees_finance import documents, uploads
+    from apps.fees_finance.models import Receipt
+    from core.files.services import create_ready_file
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        receipt = Receipt.objects.select_related("payment__fee_invoice", "payment__student").get(
+            pk=receipt_id
+        )
+        school = Tenant.objects.get(pk=tenant_id)
+        data = documents.render_receipt(
+            receipt=receipt,
+            payment=receipt.payment,
+            invoice=receipt.payment.fee_invoice,
+            student=receipt.payment.student,
+            school_name=school.name,
+        )
+        stored = create_ready_file(
+            tenant_id=uuid.UUID(tenant_id),
+            purpose=uploads.RECEIPT.key,
+            original_name=f"receipt-{receipt.receipt_no}.pdf",
+            mime_type="application/pdf",
+            data=data,
+            # `actor_id` is required by create_ready_file and the task always
+            # receives one: a receipt is rendered on behalf of whoever took the
+            # payment, and a settlement match passes the importing accountant.
+            actor_id=uuid.UUID(actor_id),
+        )
+        Receipt.objects.filter(pk=receipt.pk).update(pdf_file=stored)
+
+    return {"receipt_id": str(receipt_id), "file_id": str(stored.pk)}
+
+
+@shared_task
+def expire_fee_vouchers() -> dict[str, int]:
+    """Nightly. §7.2 — an unpaid voucher past its due date is void.
+
+    It matters that this runs: an expired voucher still sitting `issued` would
+    be matched by a late settlement file and post a payment for an amount the
+    invoice may no longer owe.
+    """
+    from apps.fees_finance.services import expire_tenant_vouchers
+
+    return for_each_tenant(expire_tenant_vouchers, job="fees-voucher-expiry")
+
+
+@shared_task(base=TenantAwareTask)
+def notify_payment_received(*, tenant_id: str, payment_id: str) -> dict[str, int]:
+    """§12's `fees.payment-receipt`, to the family that paid.
+
+    Queued on `transaction.on_commit` by the recording endpoint, so a
+    notification is never sent for a payment that rolled back — the guarantee
+    the whole `record_payment` transaction exists to provide.
+    """
+    from apps.fees_finance.models import Payment
+    from core.notifications.services import notify
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        payment = Payment.objects.select_related("student", "fee_invoice", "receipt").get(
+            pk=payment_id
+        )
+        recipients, _ = _recipients_for([payment.fee_invoice])
+        if not recipients:
+            return {"notified": 0}
+        school = Tenant.objects.get(pk=tenant_id)
+        notify(
+            notifications.PAYMENT_RECEIPT,
+            tenant_id=uuid.UUID(tenant_id),
+            recipients=recipients,
+            context={
+                "school.name": school.name,
+                "student.first_name": payment.student.first_name,
+                "receipt_no": payment.receipt.receipt_no,
+                "amount": str(payment.amount),
+                "invoice_no": payment.fee_invoice.invoice_no,
+            },
+            source_type="payment",
+            source_id=payment.pk,
+        )
+    return {"notified": len(recipients)}
+
+
+@shared_task(base=TenantAwareTask)
+def notify_refund_status(*, tenant_id: str, refund_id: str) -> dict[str, int]:
+    """§12's `fees.refund-status`, on each decision and on processing.
+
+    Fired from the transition rather than from a status sweep, so a family hears
+    once per actual decision — the distinction attendance's review turned into a
+    rule after a sweep re-sent the same message on every run.
+    """
+    from apps.fees_finance.models import Refund
+    from core.notifications.services import notify
+    from core.tenancy.context import tenant_atomic
+    from core.tenancy.models import Tenant
+
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        refund = Refund.objects.select_related("student", "payment__fee_invoice").get(pk=refund_id)
+        recipients, _ = _recipients_for([refund.payment.fee_invoice])
+        if not recipients:
+            return {"notified": 0}
+        school = Tenant.objects.get(pk=tenant_id)
+        notify(
+            notifications.REFUND_STATUS,
+            tenant_id=uuid.UUID(tenant_id),
+            recipients=recipients,
+            context={
+                "school.name": school.name,
+                "student.first_name": refund.student.first_name,
+                "amount": str(refund.amount),
+                "status": refund.get_status_display().lower(),
+                "reason": refund.decision_note or refund.reason,
+            },
+            source_type="refund",
+            source_id=refund.pk,
+        )
+    return {"notified": len(recipients)}

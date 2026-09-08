@@ -18,10 +18,15 @@ from apps.fees_finance.views import (
     FeeInvoiceViewSet,
     FeeScheduleViewSet,
     FeeStructureViewSet,
+    FeeVoucherViewSet,
     FineViewSet,
     LedgerAccountViewSet,
     LedgerEntryViewSet,
+    PaymentViewSet,
+    ReceiptViewSet,
+    RefundViewSet,
     ScholarshipViewSet,
+    VoucherCollectionImportViewSet,
 )
 
 router = SimpleRouter(trailing_slash=False)
@@ -34,6 +39,15 @@ router.register("fee-invoices", FeeInvoiceViewSet, basename="fee-invoices")
 router.register("discounts", DiscountViewSet, basename="discounts")
 router.register("scholarships", ScholarshipViewSet, basename="scholarships")
 router.register("fines", FineViewSet, basename="fines")
+router.register("payments", PaymentViewSet, basename="payments")
+router.register("receipts", ReceiptViewSet, basename="receipts")
+router.register("refunds", RefundViewSet, basename="refunds")
+router.register("vouchers", FeeVoucherViewSet, basename="vouchers")
+router.register(
+    "voucher-collection-imports",
+    VoucherCollectionImportViewSet,
+    basename="voucher-collection-imports",
+)
 
 urlpatterns = [
     path(
@@ -70,6 +84,56 @@ urlpatterns = [
         "fines/<uuid:pk>:waive",
         FineViewSet.as_view({"post": "waive"}),
         name="fines-waive",
+    ),
+    path(
+        "payments:record",
+        PaymentViewSet.as_view({"post": "record"}),
+        name="payments-record",
+    ),
+    path(
+        "receipts/<uuid:pk>/download",
+        ReceiptViewSet.as_view({"get": "download"}),
+        name="receipts-download",
+    ),
+    # `/refunds` as a collection colon-action rather than a plain POST: the
+    # request carries a rule about the *payment* (its refundable remainder),
+    # which is not a field on the refund being created.
+    path(
+        "refunds:create",
+        RefundViewSet.as_view({"post": "request_refund"}),
+        name="refunds-create",
+    ),
+    path(
+        "refunds/<uuid:pk>:approve",
+        RefundViewSet.as_view({"post": "approve"}),
+        name="refunds-approve",
+    ),
+    path(
+        "refunds/<uuid:pk>:reject",
+        RefundViewSet.as_view({"post": "reject"}),
+        name="refunds-reject",
+    ),
+    path(
+        "refunds/<uuid:pk>:process",
+        RefundViewSet.as_view({"post": "process"}),
+        name="refunds-process",
+    ),
+    # Nested under the invoice, as §16 declares: a voucher is meaningless apart
+    # from the invoice it collects, and its amount is that invoice's balance.
+    path(
+        "fee-invoices/<uuid:pk>/vouchers",
+        FeeVoucherViewSet.as_view({"post": "issue"}),
+        name="fee-invoices-vouchers",
+    ),
+    path(
+        "vouchers/<uuid:pk>/download",
+        FeeVoucherViewSet.as_view({"get": "download"}),
+        name="vouchers-download",
+    ),
+    path(
+        "vouchers/<uuid:pk>:void",
+        FeeVoucherViewSet.as_view({"post": "void"}),
+        name="vouchers-void",
     ),
     *router.urls,
 ]

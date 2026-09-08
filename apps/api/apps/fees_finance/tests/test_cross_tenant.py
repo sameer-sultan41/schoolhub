@@ -31,9 +31,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.utils import timezone
 from rest_framework import status
 
-from apps.fees_finance.models import LedgerEntry
+from apps.fees_finance import services
+from apps.fees_finance.models import LedgerEntry, PaymentStatus, Receipt
 from apps.fees_finance.services import ensure_system_accounts
 from apps.fees_finance.tests.base import FEATURE, FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
@@ -44,8 +46,10 @@ from apps.fees_finance.tests.factories import (
     FeeInvoiceFactory,
     FeeScheduleFactory,
     FeeStructureFactory,
+    FeeVoucherFactory,
     FineFactory,
     LedgerAccountFactory,
+    PaymentFactory,
     ScholarshipFactory,
     StudentFactory,
     TenantFactory,
@@ -104,6 +108,24 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
                 tenant=self.other_tenant,
                 student=self.other_student,
                 fee_head=fine_head(self.other_tenant, self.other_income),
+            )
+            self.other_payment = PaymentFactory(
+                tenant=self.other_tenant,
+                fee_invoice=self.other_invoice,
+                student=self.other_student,
+                status=PaymentStatus.CONFIRMED,
+                paid_at=timezone.now(),
+            )
+            self.other_receipt = Receipt.objects.create(
+                tenant=self.other_tenant,
+                payment=self.other_payment,
+                receipt_no="RCP-OTHER-1",
+                amount=self.other_payment.amount,
+            )
+            self.other_voucher = FeeVoucherFactory(
+                tenant=self.other_tenant,
+                fee_invoice=self.other_invoice,
+                student=self.other_student,
             )
 
     def test_a_foreign_ledger_account_is_not_found(self) -> None:
@@ -313,3 +335,108 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["data"], [])
+
+    # ------------------------------------------------------------- collection
+
+    def test_a_foreign_payment_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/payments/{self.other_payment.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_receipt_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/receipts/{self.other_receipt.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_voucher_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/vouchers/{self.other_voucher.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_downloading_a_foreign_receipt_is_not_found(self) -> None:
+        """The PDF route matters more than the JSON one: it renders a document
+        carrying a family's name and what they paid."""
+        response = self.client.get(f"/api/v1/receipts/{self.other_receipt.pk}/download")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_downloading_a_foreign_voucher_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/vouchers/{self.other_voucher.pk}/download")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_paying_a_foreign_invoice_is_not_found(self) -> None:
+        response = self.client.post(
+            "/api/v1/payments:record",
+            {
+                "fee_invoice": str(self.other_invoice.pk),
+                "amount": "100.00",
+                "method": "cash",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_issuing_a_voucher_on_a_foreign_invoice_is_not_found(self) -> None:
+        response = self.client.post(
+            f"/api/v1/fee-invoices/{self.other_invoice.pk}/vouchers",
+            {"provider": "bank_branch"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_voiding_a_foreign_voucher_is_not_found(self) -> None:
+        response = self.client.post(
+            f"/api/v1/vouchers/{self.other_voucher.pk}:void",
+            {"reason": "Not mine to void"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_settlement_file_never_matches_another_tenant_s_voucher(self) -> None:
+        """The matcher reads vouchers through the tenant-scoped manager, so a
+        consumer number belonging to another school simply does not exist —
+        which is the correct answer and lands the row in exceptions.
+        """
+        from apps.fees_finance.adapters import adapter_for
+        from apps.fees_finance.models import Payment, VoucherCollectionImport
+        from apps.fees_finance.tests.factories import settlement_csv
+        from core.files.services import create_ready_file
+
+        with tenant_context(self.tenant.id):
+            stored = create_ready_file(
+                tenant_id=self.tenant.pk,
+                purpose="fees.settlement-file",
+                original_name="settlement.csv",
+                mime_type="text/csv",
+                data=b"x",
+                actor_id=self.user.pk,
+            )
+            record = VoucherCollectionImport.objects.create(
+                tenant=self.tenant,
+                provider="bank_branch",
+                file=stored,
+                imported_by=self.user.pk,
+            )
+            rows = (
+                adapter_for("bank_branch")
+                .parse(
+                    settlement_csv(
+                        [(self.other_voucher.consumer_number, "TRX-X", "1000.00", "2026-09-05")]
+                    )
+                )
+                .rows
+            )
+            result = services.apply_settlement_rows(
+                voucher_import=record,
+                rows=rows,
+                actor_id=self.user.pk,
+                tenant_id=self.tenant.pk,
+            )
+            self.assertEqual(Payment.objects.count(), 0)
+
+        self.assertEqual(result["matched"], 0)
+        self.assertEqual(result["exceptions"], 1)
