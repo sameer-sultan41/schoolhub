@@ -62,13 +62,21 @@ def _quantized(line: LedgerLine) -> LedgerLine:
 
 
 def assert_accounts_are_postable(
-    account_ids: Sequence[uuid.UUID],
+    account_ids: Sequence[uuid.UUID], *, allow_archived: bool = False
 ) -> dict[uuid.UUID, LedgerAccount]:
-    """Return the accounts by id, refusing anything missing or archived.
+    """Return the accounts by id, refusing anything missing — and, usually, archived.
 
     One query for the whole set. Fetching per line is the N+1 that turns a
     payroll posting into a hundred round trips, and it is the reason this returns
     the map rather than a boolean.
+
+    `allow_archived` exists for exactly one caller: `reverse_transaction`. A
+    reversal is a correction of history that already happened, not a new
+    posting, so it must not be blocked by an account being archived *after*
+    the original posting — a school archiving "Transport — 2025 fleet" at year
+    end must not permanently strand a refund against a payment that posted
+    there. Ordinary postings still refuse an archived account; only a reversal
+    of an account's own prior activity is exempt.
     """
     wanted = set(account_ids)
     accounts = {
@@ -82,13 +90,14 @@ def assert_accounts_are_postable(
             meta={"unknown_account_ids": sorted(str(pk) for pk in missing)},
         )
 
-    archived = sorted(str(pk) for pk, account in accounts.items() if not account.is_active)
-    if archived:
-        raise DomainRuleViolation(
-            "This posting references an archived ledger account. Archived accounts "
-            "keep their history but accept no new postings.",
-            meta={"archived_account_ids": archived},
-        )
+    if not allow_archived:
+        archived = sorted(str(pk) for pk, account in accounts.items() if not account.is_active)
+        if archived:
+            raise DomainRuleViolation(
+                "This posting references an archived ledger account. Archived accounts "
+                "keep their history but accept no new postings.",
+                meta={"archived_account_ids": archived},
+            )
     return accounts
 
 
@@ -100,6 +109,7 @@ def post_transaction(
     reference_id: uuid.UUID | None = None,
     actor_id: uuid.UUID | None = None,
     memo: str | None = None,
+    allow_archived_accounts: bool = False,
 ) -> uuid.UUID:
     """Post one balanced transaction and return its `transaction_id`.
 
@@ -110,6 +120,10 @@ def post_transaction(
     thing that caused it commit together or neither does. This mirrors
     `core.tenancy.sequences.allocate_number`, which refuses for the same class
     of reason.
+
+    `allow_archived_accounts` exists only for `reverse_transaction` to pass
+    through — see `assert_accounts_are_postable`'s docstring. Every ordinary
+    caller leaves it at the default.
     """
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError(
@@ -120,7 +134,9 @@ def post_transaction(
 
     quantized = [_quantized(line) for line in lines]
     assert_balanced(quantized)
-    assert_accounts_are_postable([line.ledger_account_id for line in quantized])
+    assert_accounts_are_postable(
+        [line.ledger_account_id for line in quantized], allow_archived=allow_archived_accounts
+    )
 
     transaction_id = uuid.uuid4()
     LedgerEntry.objects.bulk_create(
@@ -202,6 +218,11 @@ def reverse_transaction(
         reference_id=transaction_id,
         actor_id=actor_id,
         memo=memo,
+        # A reversal corrects history that already happened; it must not be
+        # blocked by an account having been archived since the original
+        # posting, or an archived account permanently strands every refund
+        # against a payment that posted there.
+        allow_archived_accounts=True,
     )
 
     for entry in originals:

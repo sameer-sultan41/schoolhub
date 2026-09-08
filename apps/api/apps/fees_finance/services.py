@@ -25,6 +25,7 @@ from apps.fees_finance.models import (
     FeeStructureStatus,
     LedgerAccount,
     LedgerAccountType,
+    LedgerEntry,
     LedgerReferenceType,
 )
 from core.api.exceptions import DomainRuleViolation
@@ -63,8 +64,22 @@ def ensure_system_accounts(*, tenant_id: uuid.UUID) -> dict[str, LedgerAccount]:
     to "Petty cash" keeps its name, and one that archived an account it does not
     use keeps it archived. Re-asserting our defaults over a tenant's edits would
     make this command destructive on its second run.
+
+    Reads through `all_tenants.filter(tenant_id=tenant_id)`, not the default
+    manager. `LedgerAccount.objects` is tenant-scoped by the *ambient* context
+    (`core.tenancy.context.get_current_tenant_id()`), not by this function's own
+    `tenant_id` argument — every current caller happens to bind that context
+    first, so the two agree today, but a function that takes `tenant_id`
+    explicitly should not depend on a caller having also set it as ambient
+    state. Getting it wrong here is silent and severe: if the two ever diverge,
+    `existing` reflects the *other* tenant's accounts, every code in
+    `SYSTEM_ACCOUNTS` looks already present (the codes are fixed strings like
+    "1000"), and this tenant's accounts are never created.
     """
-    existing = {account.code: account for account in LedgerAccount.objects.alive()}
+    existing = {
+        account.code: account
+        for account in LedgerAccount.all_tenants.filter(tenant_id=tenant_id).alive()
+    }
     missing = [
         LedgerAccount(
             tenant_id=tenant_id, code=code, name=name, account_type=account_type, is_system=True
@@ -102,10 +117,12 @@ def assert_fee_head_account_is_income(*, ledger_account: LedgerAccount) -> None:
 def assert_account_may_be_archived(*, account: LedgerAccount) -> None:
     """A system account stays available; anything else may be archived freely.
 
-    Archiving is the only retirement path for an account that has been posted
-    to — the entries must stay readable, so deletion is never right. `is_system`
-    accounts are the ones this module's own postings target by code, so
-    archiving one would break collection for the whole tenant.
+    Archiving keeps the row and its code exactly as they are — only
+    `is_active` moves — so a posted-to account's history stays reachable under
+    the same code. `is_system` accounts are the ones this module's own
+    postings target by code, so archiving one would break collection for the
+    whole tenant. This check is for `PATCH is_active=False` only; deleting is
+    the stricter operation and has its own check below.
     """
     if account.is_system:
         raise DomainRuleViolation(
@@ -113,6 +130,32 @@ def assert_account_may_be_archived(*, account: LedgerAccount) -> None:
                 "is_active": (
                     f"{account.code} {account.name} is a system account and stays "
                     "available. Add your own account alongside it instead."
+                )
+            }
+        )
+
+
+def assert_account_may_be_deleted(*, account: LedgerAccount) -> None:
+    """Deletion is stricter than archiving: nothing may have posted to it.
+
+    Archiving keeps the row and its code; deleting frees the code for reuse —
+    `ledger_accounts_code_unique` is conditioned on `deleted_at IS NULL`. An
+    account with live postings must never be deletable, because a new account
+    could then take its code while the old postings still exist under a
+    now-invisible row: the FK still resolves correctly by primary key, but
+    "account 4001" would silently mean two different things depending on when
+    you asked. Archiving is the only retirement path once anything has posted;
+    say so rather than letting the delete succeed and the confusion surface
+    later, in a report.
+    """
+    assert_account_may_be_archived(account=account)
+    if LedgerEntry.objects.filter(ledger_account=account).exists():
+        raise DomainRuleViolation(
+            {
+                "id": (
+                    f"{account.code} {account.name} has ledger postings and cannot "
+                    "be deleted. Archive it instead — its code stays reserved and "
+                    "its history stays under it."
                 )
             }
         )
@@ -141,9 +184,14 @@ def assert_structure_is_editable(*, structure: FeeStructure) -> None:
 def assert_session_is_writable(*, academic_session) -> None:
     """A closed session takes no new fee configuration.
 
-    Mirrors `academics` and `examinations`: the session lifecycle is
-    school_organization's, and every module that hangs records off a session
-    asks the same question rather than each deciding for itself.
+    The predicate mirrors `academics` and `examinations` — `AcademicSession.
+    is_writable` is school-organization's own, and this defers to it rather
+    than restating the status list. The function itself is not shared: the
+    error body's key and wording are fees-finance's own ("fee configuration"),
+    where examinations' equivalent speaks to exams. Genuinely unifying the two
+    into one helper is a cross-module change with no bug behind it, so it is
+    left as a parallel, independent implementation of the same underlying rule
+    rather than bundled into this PR.
     """
     if not academic_session.is_writable:
         raise DomainRuleViolation(
