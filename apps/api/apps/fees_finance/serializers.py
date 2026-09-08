@@ -22,11 +22,18 @@ from apps.fees_finance.models import (
     FeeInvoiceLine,
     FeeSchedule,
     FeeStructure,
+    FeeVoucher,
     Fine,
     GrantValueType,
     LedgerAccount,
     LedgerEntry,
+    Payment,
+    PaymentMethod,
+    Receipt,
+    Refund,
     Scholarship,
+    VoucherCollectionImport,
+    VoucherProvider,
 )
 from core.money import MONEY_MAX, quantize_money
 
@@ -509,3 +516,237 @@ def _validate_grant_value(attrs: dict, *, instance, type_field: str) -> dict:
     if valid_from and valid_to and valid_to < valid_from:
         raise serializers.ValidationError({"valid_to": "A grant cannot end before it starts."})
     return attrs
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    receipt_no = serializers.CharField(source="receipt.receipt_no", read_only=True)
+
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "fee_invoice",
+            "student",
+            "amount",
+            "method",
+            "reference_no",
+            "gateway_provider",
+            "status",
+            "paid_at",
+            "received_by",
+            "receipt_no",
+            "created_at",
+        ]
+        # `gateway_payload` is deliberately absent from the field list: it holds
+        # a provider's confirmation snapshot, and echoing it back to a client is
+        # how a sanitized blob stops being sanitized.
+        read_only_fields = [
+            "id",
+            "student",
+            "status",
+            "paid_at",
+            "received_by",
+            "receipt_no",
+            "created_at",
+        ]
+
+
+class RecordPaymentSerializer(serializers.Serializer):
+    """⚿ `POST /payments` — money in, at a counter or by bank transfer."""
+
+    fee_invoice = serializers.UUIDField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    method = serializers.ChoiceField(choices=PaymentMethod.choices)
+    reference_no = serializers.CharField(max_length=80, required=False, allow_null=True)
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise serializers.ValidationError("A payment must be for a positive amount.")
+        if value > MONEY_MAX:
+            raise serializers.ValidationError(
+                f"An amount above {MONEY_MAX} does not fit a money column."
+            )
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        """A cheque or transfer without a reference cannot be reconciled.
+
+        Cash needs none — the receipt is the reference — but a bank line with no
+        reference is a line an accountant cannot match to a statement, which is
+        the whole job the collection report exists to make possible.
+        """
+        needs_reference = {PaymentMethod.CHEQUE, PaymentMethod.BANK_TRANSFER}
+        if attrs["method"] in needs_reference and not attrs.get("reference_no"):
+            raise serializers.ValidationError(
+                {
+                    "reference_no": (
+                        f"A {attrs['method'].replace('_', ' ')} payment needs its "
+                        "reference number to be reconcilable against a statement."
+                    )
+                }
+            )
+        if attrs["method"] == PaymentMethod.ONLINE_GATEWAY:
+            raise serializers.ValidationError(
+                {
+                    "method": (
+                        "Gateway payments are not accepted through this endpoint. "
+                        "The integrations layer they need does not exist yet — see "
+                        "§20."
+                    )
+                }
+            )
+        return attrs
+
+
+class ReceiptSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    invoice_no = serializers.CharField(source="payment.fee_invoice.invoice_no", read_only=True)
+
+    class Meta:
+        model = Receipt
+        fields = [
+            "id",
+            "receipt_no",
+            "payment",
+            "invoice_no",
+            "student_name",
+            "amount",
+            "issued_at",
+            "pdf_file",
+        ]
+        read_only_fields = fields
+
+    def get_student_name(self, obj: Receipt) -> str:
+        student = obj.payment.student
+        return f"{student.first_name} {student.last_name}".strip()
+
+
+class RefundSerializer(serializers.ModelSerializer):
+    # Declared explicitly rather than inferred. `Refund.method` is a genuinely
+    # nullable choice field — it is set at processing, so a requested refund has
+    # none — and drf-spectacular renders a nullable enum as
+    # `(MethodEnum | NullEnum) | null`, a union whose `NullEnum` member
+    # duplicates the trailing `null`. The generated TypeScript client then fails
+    # `@typescript-eslint/no-duplicate-type-constituents`, and the file is
+    # generated so it cannot be lint-fixed by hand.
+    #
+    # PR A hit the same thing on `ledger_entries.reference_type` and resolved it
+    # by making the column NOT NULL, because every posting genuinely has an
+    # origin. Here the nullability is real, so the fix belongs on the read side:
+    # the field is read-only anyway, and a plain string is what a client does
+    # with it.
+    method = serializers.CharField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = Refund
+        fields = [
+            "id",
+            "payment",
+            "student",
+            "amount",
+            "reason",
+            "status",
+            "requested_by",
+            "approved_by",
+            "decision_note",
+            "method",
+            "reference_no",
+            "processed_at",
+            "created_at",
+        ]
+        # Every state transition goes through a colon-action, so none of the
+        # lifecycle columns is writable here: a PATCH that could set `status` to
+        # `processed` would pay out money with no approval behind it.
+        read_only_fields = [
+            "id",
+            "student",
+            "status",
+            "requested_by",
+            "approved_by",
+            "decision_note",
+            "method",
+            "reference_no",
+            "processed_at",
+            "created_at",
+        ]
+
+
+class RequestRefundSerializer(serializers.Serializer):
+    """⚿ `POST /refunds` — §7.3 step one."""
+
+    payment = serializers.UUIDField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    reason = serializers.CharField(max_length=2000)
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise serializers.ValidationError("A refund must be for a positive amount.")
+        return value
+
+
+class RefundDecisionSerializer(serializers.Serializer):
+    """`:approve` / `:reject` — the note is optional on approval, not on refusal."""
+
+    note = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+
+
+class ProcessRefundSerializer(serializers.Serializer):
+    """⚿ `:process` — how the money actually went back."""
+
+    method = serializers.ChoiceField(choices=PaymentMethod.choices)
+    reference_no = serializers.CharField(max_length=80, required=False, allow_null=True)
+
+
+class FeeVoucherSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    invoice_no = serializers.CharField(source="fee_invoice.invoice_no", read_only=True)
+
+    class Meta:
+        model = FeeVoucher
+        fields = [
+            "id",
+            "fee_invoice",
+            "invoice_no",
+            "student",
+            "student_name",
+            "provider",
+            "consumer_number",
+            "amount",
+            "due_date",
+            "status",
+            "payment",
+            "voided_reason",
+            "issued_by",
+            "created_at",
+        ]
+        # Everything but the provider is derived at issuance: the consumer
+        # number is generated, the amount is a snapshot of the balance, and the
+        # due date comes from tenant settings. A client that could set the
+        # amount could print a voucher for a figure the invoice does not owe.
+        read_only_fields = fields
+
+    def get_student_name(self, obj: FeeVoucher) -> str:
+        return f"{obj.student.first_name} {obj.student.last_name}".strip()
+
+
+class IssueVoucherSerializer(serializers.Serializer):
+    provider = serializers.ChoiceField(choices=VoucherProvider.choices)
+    validity_days = serializers.IntegerField(required=False, min_value=1, max_value=365)
+
+
+class VoucherCollectionImportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VoucherCollectionImport
+        fields = [
+            "id",
+            "provider",
+            "file",
+            "imported_by",
+            "status",
+            "row_count",
+            "matched_count",
+            "exceptions",
+            "completed_at",
+            "created_at",
+        ]
+        read_only_fields = fields

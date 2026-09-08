@@ -118,3 +118,59 @@ for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
         ),
         variables=_OVERDUE_VARS,
     )
+
+
+PAYMENT_RECEIPT = "fees.payment-receipt"
+REFUND_STATUS = "fees.refund-status"
+
+_RECEIPT_VARS = {"school.name", "student.first_name", "receipt_no", "amount", "invoice_no"}
+_REFUND_VARS = {"school.name", "student.first_name", "amount", "status", "reason"}
+
+catalog.register(
+    PAYMENT_RECEIPT,
+    template_code=PAYMENT_RECEIPT,
+    category=NotificationCategory.FEES,
+    # Normal: money arriving safely is reassuring rather than urgent, and a
+    # school that marks every fee message high trains guardians to ignore the
+    # flag by the time something actually is.
+    priority=NotificationPriority.NORMAL,
+    channels={NotificationChannel.EMAIL},
+    variables=_RECEIPT_VARS,
+    description="A payment has been received and its receipt is available.",
+)
+
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
+    templates.register(
+        PAYMENT_RECEIPT,
+        channel=_channel,
+        subject="Receipt {{ receipt_no }} for {{ amount }}",
+        body=(
+            "We have received {{ amount }} towards {{ student.first_name }}'s "
+            "invoice {{ invoice_no }}. Receipt {{ receipt_no }} is available in "
+            "the parent portal.\n\n"
+            "{{ school.name }}"
+        ),
+        variables=_RECEIPT_VARS,
+    )
+
+catalog.register(
+    REFUND_STATUS,
+    template_code=REFUND_STATUS,
+    category=NotificationCategory.FEES,
+    priority=NotificationPriority.NORMAL,
+    channels={NotificationChannel.EMAIL},
+    variables=_REFUND_VARS,
+    description="A refund request has been decided or processed (§7.3).",
+)
+
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
+    templates.register(
+        REFUND_STATUS,
+        channel=_channel,
+        subject="Refund update for {{ student.first_name }}",
+        body=(
+            "The refund of {{ amount }} for {{ student.first_name }} is now "
+            "{{ status }}.\n\n{{ reason }}\n\n{{ school.name }}"
+        ),
+        variables=_REFUND_VARS,
+    )

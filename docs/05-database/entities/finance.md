@@ -1,7 +1,7 @@
 # Entities: Finance & Payroll
 
 > **Agent Context**
-> **Implementation note:** 10 of these 22 tables are built — `ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules` (PR A) and `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines` (PR B). Payroll's four are deferred with hr-leave. See `../../03-modules/fees-finance.md` §20 for the register.
+> **Implementation note:** 16 of these 22 tables are built — `ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules` (PR A) and `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines` (PR B). PR C adds `payments`, `receipts`, `refunds`, `fee_vouchers` and `voucher_collection_imports`, plus **`voucher_settlement_rows`, which is not in this document's table list** — §11's "a settlement row posts at most once" needs somewhere to record that it did, and the match key is a unique index there. Payroll's four are deferred with hr-leave. See `../../03-modules/fees-finance.md` §20 for the register.
 > **Summary:** Column-level specs for the 22 tables owned by the fees-finance module: fee configuration, invoicing, collections (incl. bank/wallet vouchers), refunds, general ledger, expenses, budgets, and payroll. Every table is tenant-owned and implicitly carries `id UUID PK`, `tenant_id FK`, `created_at`/`updated_at`, `created_by`/`updated_by`, `deleted_at` (soft delete) — exceptions are stated per table. All monetary columns are `numeric(12,2)` in the tenant's configured currency (no per-row currency column).
 > **Co-load with:** `../../03-modules/fees-finance.md` · `people.md` (students, staff) · `academics.md` (sessions, terms, classes, campuses) · `tenancy.md` (users, files)
 

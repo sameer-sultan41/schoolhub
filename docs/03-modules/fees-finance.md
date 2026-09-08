@@ -51,6 +51,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `fees.ledger.view` | View general ledger and student ledgers | `accountant`, `school_owner` |
 | `fees.ledger.create` † | Create ledger accounts and post a manual journal entry | `accountant` |
 | `fees.discount.view` † / `fees.fine.view` † | View discounts, scholarships and fines | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `guardian`, `student` (scoped `own`) |
+| `fees.payment.view` † | View payments, receipts and vouchers | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `principal`, `guardian`, `student` (scoped `own`) |
 | `fees.expense.create` / `.update` | Record expenses | `accountant`, `finance_staff` |
 | `fees.expense.approve` | Approve submitted expenses | `accountant`, `school_owner` |
 | `fees.budget.create` / `fees.budget.approve` | Define / approve budgets | `accountant` / `school_owner` |
@@ -324,15 +325,17 @@ Building as four stacked PRs. This section is updated by each.
 **PR A — ledger and fee configuration.** The chart of accounts, the
 append-only double-entry ledger and its posting engine, fee heads, structures
 and installment schedules.
-**PR B — invoicing (this PR).** Bulk generation as a 202 + job, gapless invoice
+**PR B — invoicing.** Bulk generation as a 202 + job, gapless invoice
 numbering, the duplicate guard, discounts, scholarships, fines with their
 waiver, cancellation, and §12's three invoicing notifications.
-**PR C — collection.** Payments, receipts, refunds, vouchers and the settlement
-import.
+**PR C — collection (this PR).** Payments with their receipts and ledger
+postings in one transaction, §7.3's refund workflow with segregation of duties,
+bank/wallet vouchers in both print layouts, and the settlement import with its
+match key and exceptions queue.
 **PR D — spend and reports.** Expenses, categories, budgets, and §13's reports
 with the export lane.
 
-### Built (PRs A-B)
+### Built (PRs A-C)
 
 | Area | State |
 | ---- | ----- |
@@ -347,6 +350,11 @@ with the export lane.
 | Grants | Discounts scoped to a session and optionally one head, scholarships with their five-state lifecycle, both attributable to a granter by CHECK; `:revoke` is forward-looking |
 | Fines | Raised by hand or by a source module (idempotent on `(source_module, source_reference)`), folded onto the next invoice, `:waive` behind `fees.fine.waive` with actor and reason by CHECK |
 | Notifications | §12's `fees.invoice-issued`, `fees.due-reminder` and `fees.overdue`, one `notify()` per trigger with the whole recipient list, plus the nightly `send-fee-reminders` sweep |
+| Entities (PR C) | `payments`, `receipts`, `refunds`, `fee_vouchers`, `voucher_collection_imports` and `voucher_settlement_rows` — 16 of §15's 22 tables now built, plus one addition explained below |
+| Collection | ⚿ `POST /payments:record` — the invoice locked `FOR UPDATE`, balance checked, gapless receipt allocated, ledger posted and the five money columns recomputed, all in one transaction |
+| Refunds | §7.3's request → approve/reject → process, with the requester barred from approving, the refundable *remainder* bounding the amount, and non-refundable heads refused at request time |
+| Vouchers | Issued per invoice with the balance snapshotted, voided-never-edited, auto-voided when the invoice settles elsewhere, expired nightly, and rendered in A4 and 80mm thermal from one template |
+| Settlement | `POST /voucher-collection-imports` (202 + job), one generic-CSV adapter behind a provider registry, §11's match key as a unique index, and an exceptions queue that keeps one bad row from failing a file |
 
 ### Decisions worth carrying forward
 
@@ -424,6 +432,38 @@ there is no state a NULL would describe. It also keeps a `NullEnum` union — fo
 a case that cannot arise — out of the generated TypeScript client, which is
 where the dead nullability first became visible.
 
+**`voucher_settlement_rows` is a table §15 does not list, added deliberately.**
+§11 requires that "a settlement-file row can post at most once, keyed on
+`(provider, consumer_number, transaction_reference)`" — and a rule about what
+may happen *at most once* needs somewhere to record that it happened. Resting
+the guarantee on the voucher's status instead cannot distinguish "already
+posted by this exact row" from "paid by some other channel", and re-importing
+yesterday's file is a normal operational event rather than an error. The match
+key is a unique index on that table, so a re-import is a no-op.
+
+**A settlement match goes through `record_payment`, not a shortcut.** It gets
+the same balance check, receipt, ledger posting and total recomputation as a
+payment taken at a counter. Two paths to the same outcome drift; one path with
+two callers does not.
+
+**A short or over payment is an exception, not a posting.** Whether to accept
+it, chase the difference or re-issue is a decision a person makes, and posting
+it automatically would make that decision silently.
+
+**Payments split the income side across the heads the invoice charged.** A
+school that maps transport to its own account expects the transport share to
+land there rather than in general fee income; the rounding remainder goes to the
+largest share so Σ credit equals the debit exactly.
+
+**Cash debits `1000`, everything else `1010`.** A school reconciling a bank
+statement needs the two separated, and that mapping is made in exactly one
+place.
+
+**A full refund reverses; a partial refund posts its own transaction.** A
+partial cannot mirror the original because it moves a different amount, so it is
+a balanced posting of its own tagged `refund` — which also keeps a full refund
+and its original visibly paired in the ledger.
+
 **Scholarships apply before discounts, and the order is fixed in code.** A 50%
 scholarship and a fixed 600 discount on a 1000 line: scholarship first takes
 500, then the discount is clamped to the remaining 500, so the line is fully
@@ -480,10 +520,15 @@ unconfirmed spec is how a money module acquires rules nobody can justify later.
 
 **Payment gateways are out of scope.** §17 routes them through "the platform
 integrations layer", and there is no `core/integrations` — the same situation
-`core/ai` is in, and AGENTS.md hard rule 6's reasoning applies. `payments.method
-= online_gateway` and the `gateway_provider` / `gateway_payload` columns will
-ship with PR C precisely so a confirmation lands without a migration, and the
-webhook verifier's call site will be named there rather than half-built.
+`core/ai` is in, and AGENTS.md hard rule 6's reasoning applies. The schema is
+ready for one: `payments.method = online_gateway`, `gateway_provider` and
+`gateway_payload` all ship, and `services.confirm_payment` is deliberately split
+from `record_payment` precisely so a webhook has something to call — a gateway
+payment is created `pending` and confirmed later, which is the same work
+arriving through a different door. `RecordPaymentSerializer` refuses
+`online_gateway` outright rather than accepting a payment nothing can confirm.
+What is missing is only the HMAC verifier and the provider adapter, and both
+belong in `core/integrations` when it exists.
 
 **§14's four AI capabilities (AI-FEE-01 to 04) are out of scope.** `core/ai`
 does not exist. All four are advisory by §14's own framing, and invariant 5

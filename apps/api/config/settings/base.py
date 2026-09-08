@@ -267,6 +267,12 @@ SPECTACULAR_SETTINGS = {
         "ScholarshipStatusEnum": "apps.fees_finance.models.ScholarshipStatus",
         "FineTypeEnum": "apps.fees_finance.models.FineType",
         "FineStatusEnum": "apps.fees_finance.models.FineStatus",
+        "PaymentMethodEnum": "apps.fees_finance.models.PaymentMethod",
+        "PaymentStatusEnum": "apps.fees_finance.models.PaymentStatus",
+        "RefundStatusEnum": "apps.fees_finance.models.RefundStatus",
+        "VoucherProviderEnum": "apps.fees_finance.models.VoucherProvider",
+        "VoucherStatusEnum": "apps.fees_finance.models.VoucherStatus",
+        "SettlementImportStatusEnum": "apps.fees_finance.models.ImportStatus",
     },
 }
 
@@ -321,6 +327,14 @@ CELERY_TASK_ROUTES = {
     # generation a background job precisely so nobody watches it.
     "apps.fees_finance.tasks.generate_invoices_task": {"queue": "bulk"},
     "apps.fees_finance.tasks.send_fee_reminders": {"queue": "bulk"},
+    "apps.fees_finance.tasks.import_settlement_file_task": {"queue": "bulk"},
+    "apps.fees_finance.tasks.render_receipt_task": {"queue": "bulk"},
+    "apps.fees_finance.tasks.expire_fee_vouchers": {"queue": "bulk"},
+    # A receipt confirmation is the one fee message a family is actively waiting
+    # for — they are standing at the counter — so it takes the transactional
+    # lane for the reason attendance's absence alert does.
+    "apps.fees_finance.tasks.notify_payment_received": {"queue": "transactional"},
+    "apps.fees_finance.tasks.notify_refund_status": {"queue": "transactional"},
     # The three result announcements are the opposite: a student waiting on a
     # result, and an approver blocking every downstream step.
     "apps.examinations.tasks.notify_results_pending_approval": {"queue": "transactional"},
@@ -397,6 +411,13 @@ CELERY_BEAT_SCHEDULE = {
     "send-fee-reminders": {
         "task": "apps.fees_finance.tasks.send_fee_reminders",
         "schedule": crontab(hour="7", minute="0"),
+    },
+    # Before the reminder sweep, deliberately: an expired voucher still sitting
+    # `issued` would be matched by a late settlement file and post a payment for
+    # an amount the invoice may no longer owe, so expiry runs first.
+    "expire-fee-vouchers": {
+        "task": "apps.fees_finance.tasks.expire_fee_vouchers",
+        "schedule": crontab(hour="5", minute="20"),
     },
 }
 

@@ -3191,6 +3191,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/FeeInvoice'
           description: ''
+  /api/v1/fee-invoices/{id}/vouchers:
+    post:
+      operationId: fee_invoices_vouchers_create
+      description: '`POST /fee-invoices/{id}/vouchers` — print a slip for this invoice.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - fee-invoices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueVoucher'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IssueVoucher'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IssueVoucher'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeVoucher'
+          description: ''
   /api/v1/fee-invoices/{id}:cancel:
     post:
       operationId: fee_invoices_:cancel_create
@@ -5855,6 +5889,154 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/payments:
+    get:
+      operationId: payments_list
+      description: |-
+        `/payments` — money in. Read-only as a collection; `:record` takes it.
+
+        No `create` route, deliberately. A payment is never just a row: it carries a
+        balance check, a gapless receipt number, a ledger posting and a
+        recomputation of the invoice's five money columns, all in one transaction.
+        A plain `POST /payments` that wrote the row and left a signal to do the rest
+        is precisely how a confirmed payment ends up with no ledger entry.
+
+        Portal-readable, so a family can see what they have paid.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: invoice
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: method
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: paid_at__gte
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: paid_at__lte
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: received_by
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaymentList'
+          description: ''
+  /api/v1/payments/{id}:
+    get:
+      operationId: payments_retrieve
+      description: |-
+        `/payments` — money in. Read-only as a collection; `:record` takes it.
+
+        No `create` route, deliberately. A payment is never just a row: it carries a
+        balance check, a gapless receipt number, a ledger posting and a
+        recomputation of the invoice's five money columns, all in one transaction.
+        A plain `POST /payments` that wrote the row and left a signal to do the rest
+        is precisely how a confirmed payment ends up with no ledger entry.
+
+        Portal-readable, so a family can see what they have paid.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this payment.
+        required: true
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+  /api/v1/payments:record:
+    post:
+      operationId: payments:record_create
+      description: |-
+        ⚿ `POST /payments:record` — take money against an invoice.
+
+        `Idempotency-Key` through `replay_or_execute`, which is the platform's
+        contract for a money mutation (§11's closing line). The header stops a
+        double *submit*; `payments_idempotency_key_unique` stops a concurrent
+        one, because `replay_or_execute` documents itself as check-then-store
+        and therefore not concurrency-safe. Two layers, two different failures.
+      tags:
+      - payments:record
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordPayment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecordPayment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecordPayment'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
   /api/v1/periods:
     get:
       operationId: periods_list
@@ -6511,6 +6693,342 @@ paths:
       responses:
         '202':
           description: No response body
+  /api/v1/receipts:
+    get:
+      operationId: receipts_list
+      description: |-
+        `/receipts` — read-only. Receipts are issued by `payments:record`.
+
+        §16 gives this a `?format=pdf|thermal` download. Both layouts come from the
+        same template data (§10's requirement) so a printed receipt and a thermal
+        one cannot disagree about what was paid.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: issued_at__gte
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: issued_at__lte
+        schema:
+          type: string
+          format: date-time
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: payment
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: receipt_no
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - receipts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReceiptList'
+          description: ''
+  /api/v1/receipts/{id}:
+    get:
+      operationId: receipts_retrieve
+      description: |-
+        `/receipts` — read-only. Receipts are issued by `payments:record`.
+
+        §16 gives this a `?format=pdf|thermal` download. Both layouts come from the
+        same template data (§10's requirement) so a printed receipt and a thermal
+        one cannot disagree about what was paid.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this receipt.
+        required: true
+      tags:
+      - receipts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+          description: ''
+  /api/v1/receipts/{id}/download:
+    get:
+      operationId: receipts_download_retrieve
+      description: |-
+        `GET /receipts/{id}/download?format=pdf|thermal`.
+
+        Rendered on demand rather than served from the stored PDF, because the
+        thermal layout is a different document and pre-rendering both for every
+        receipt would double the storage for a format most are never printed in.
+        The A4 one is still stored — that is what `render_receipt_task` does —
+        so an audit has a fixed artefact.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - receipts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/refunds:
+    get:
+      operationId: refunds_list
+      description: |-
+        `/refunds` — §7.3's request → decide → process workflow.
+
+        Every transition is a colon-action and none is a PATCH, because each carries
+        a rule a serializer cannot express: the remainder still refundable, the
+        segregation of duties, and the ledger reversal.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: payment
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - refunds
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRefundList'
+          description: ''
+  /api/v1/refunds/{id}:
+    get:
+      operationId: refunds_retrieve
+      description: |-
+        `/refunds` — §7.3's request → decide → process workflow.
+
+        Every transition is a colon-action and none is a PATCH, because each carries
+        a rule a serializer cannot express: the remainder still refundable, the
+        segregation of duties, and the ledger reversal.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this refund.
+        required: true
+      tags:
+      - refunds
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+          description: ''
+  /api/v1/refunds/{id}:approve:
+    post:
+      operationId: refunds_:approve_create
+      description: '`POST /refunds/{id}:approve`. The requester cannot be the approver.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - refunds
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundDecision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefundDecision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefundDecision'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+          description: ''
+  /api/v1/refunds/{id}:process:
+    post:
+      operationId: refunds_:process_create
+      description: ⚿ `POST /refunds/{id}:process` — pay it out and reverse the ledger.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - refunds
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessRefund'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProcessRefund'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProcessRefund'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+          description: ''
+  /api/v1/refunds/{id}:reject:
+    post:
+      operationId: refunds_:reject_create
+      description: |-
+        `/refunds` — §7.3's request → decide → process workflow.
+
+        Every transition is a colon-action and none is a PATCH, because each carries
+        a rule a serializer cannot express: the remainder still refundable, the
+        segregation of duties, and the ledger reversal.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - refunds
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundDecision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefundDecision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefundDecision'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+          description: ''
+  /api/v1/refunds:create:
+    post:
+      operationId: refunds:create_create
+      description: ⚿ `POST /refunds` — §7.3 step one.
+      tags:
+      - refunds:create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestRefund'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RequestRefund'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RequestRefund'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+          description: ''
   /api/v1/report-cards:
     get:
       operationId: report_cards_list
@@ -11150,6 +11668,255 @@ paths:
                   $ref: '#/components/schemas/EffectiveSlot'
           description: Published cells with confirmed substitutions applied for `?date=`.
             `meta.audience` says which principal was resolved.
+  /api/v1/voucher-collection-imports:
+    get:
+      operationId: voucher_collection_imports_list
+      description: |-
+        `/voucher-collection-imports` — §7.2's daily settlement reconciliation.
+
+        Staff-only outright: a settlement file is a bank's record of what it
+        collected, and nothing about it belongs in a portal.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: provider
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - voucher-collection-imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVoucherCollectionImportList'
+          description: ''
+    post:
+      operationId: voucher_collection_imports_create
+      description: |-
+        ⚿ `POST /voucher-collection-imports` — 202 + job.
+
+        The file is stored *and* its bytes go into the job payload. Storing it
+        is not redundant: a settlement file is a financial record a school has
+        to retain, and `file_id` is where an auditor goes for the original. The
+        payload is how the worker reads it, matching the platform's established
+        import shape.
+      tags:
+      - voucher-collection-imports
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
+  /api/v1/voucher-collection-imports/{id}:
+    get:
+      operationId: voucher_collection_imports_retrieve
+      description: |-
+        `/voucher-collection-imports` — §7.2's daily settlement reconciliation.
+
+        Staff-only outright: a settlement file is a bank's record of what it
+        collected, and nothing about it belongs in a portal.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this voucher collection import.
+        required: true
+      tags:
+      - voucher-collection-imports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoucherCollectionImport'
+          description: ''
+  /api/v1/vouchers:
+    get:
+      operationId: vouchers_list
+      description: |-
+        `/vouchers` — §7.2's printable bank/wallet slips.
+
+        Issued from the invoice (`/fee-invoices/{id}/vouchers`), never posted here:
+        every field but the provider is derived at issuance, and a client that could
+        set the amount could print a voucher for a figure the invoice does not owe.
+      parameters:
+      - in: query
+        name: consumer_number
+        schema:
+          type: string
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: due_date__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: invoice
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: provider
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - vouchers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFeeVoucherList'
+          description: ''
+  /api/v1/vouchers/{id}:
+    get:
+      operationId: vouchers_retrieve
+      description: |-
+        `/vouchers` — §7.2's printable bank/wallet slips.
+
+        Issued from the invoice (`/fee-invoices/{id}/vouchers`), never posted here:
+        every field but the provider is derived at issuance, and a client that could
+        set the amount could print a voucher for a figure the invoice does not owe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this fee voucher.
+        required: true
+      tags:
+      - vouchers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeVoucher'
+          description: ''
+  /api/v1/vouchers/{id}/download:
+    get:
+      operationId: vouchers_download_retrieve
+      description: '`GET /vouchers/{id}/download?format=pdf|thermal`.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - vouchers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/vouchers/{id}:void:
+    post:
+      operationId: vouchers_:void_create
+      description: '`POST /vouchers/{id}:void` — §7.2''s correction, which is never
+        an edit.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - vouchers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Waive'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Waive'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Waive'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeVoucher'
+          description: ''
 components:
   schemas:
     AcademicSession:
@@ -12957,6 +13724,80 @@ components:
         * `draft` - Draft
         * `active` - Active
         * `archived` - Archived
+    FeeVoucher:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fee_invoice:
+          type: string
+          format: uuid
+          readOnly: true
+        invoice_no:
+          type: string
+          readOnly: true
+        student:
+          type: string
+          format: uuid
+          readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        provider:
+          allOf:
+          - $ref: '#/components/schemas/VoucherProviderEnum'
+          readOnly: true
+        consumer_number:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/VoucherStatusEnum'
+          readOnly: true
+        payment:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Set when a settlement row matches.
+        voided_reason:
+          type: string
+          readOnly: true
+          nullable: true
+        issued_by:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - consumer_number
+      - created_at
+      - due_date
+      - fee_invoice
+      - id
+      - invoice_no
+      - issued_by
+      - payment
+      - provider
+      - status
+      - student
+      - student_name
+      - voided_reason
     File:
       type: object
       properties:
@@ -13491,6 +14332,17 @@ components:
           items:
             type: string
             format: uuid
+    IssueVoucher:
+      type: object
+      properties:
+        provider:
+          $ref: '#/components/schemas/VoucherProviderEnum'
+        validity_days:
+          type: integer
+          maximum: 365
+          minimum: 1
+      required:
+      - provider
     LeaveApproval:
       type: object
       description: One step of §7.2's chain, nested on the request it belongs to.
@@ -14436,6 +15288,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedFeeVoucherList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeVoucher'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedFileList:
       type: object
       properties:
@@ -14667,6 +15540,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedPaymentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedPeriodList:
       type: object
       properties:
@@ -14737,6 +15631,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Question'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedReceiptList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Receipt'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedRefundList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Refund'
         meta:
           type: object
           properties:
@@ -15136,6 +16072,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TimetableSlot'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedVoucherCollectionImportList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VoucherCollectionImport'
         meta:
           type: object
           properties:
@@ -17075,6 +18032,95 @@ components:
           type: string
           format: date-time
           readOnly: true
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fee_invoice:
+          type: string
+          format: uuid
+        student:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Denormalized from the invoice so the student ledger is one
+            query.
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        reference_no:
+          type: string
+          nullable: true
+          maxLength: 80
+        gateway_provider:
+          type: string
+          nullable: true
+          maxLength: 40
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        received_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Null for a gateway or voucher self-service payment.
+        receipt_no:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - fee_invoice
+      - id
+      - method
+      - paid_at
+      - receipt_no
+      - received_by
+      - status
+      - student
+    PaymentMethodEnum:
+      enum:
+      - cash
+      - cheque
+      - bank_transfer
+      - card
+      - online_gateway
+      type: string
+      description: |-
+        * `cash` - Cash
+        * `cheque` - Cheque
+        * `bank_transfer` - Bank transfer
+        * `card` - Card
+        * `online_gateway` - Online gateway
+    PaymentStatusEnum:
+      enum:
+      - pending
+      - confirmed
+      - failed
+      - reversed
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `confirmed` - Confirmed
+        * `failed` - Failed
+        * `reversed` - Reversed
     Period:
       type: object
       description: |-
@@ -17130,6 +18176,18 @@ components:
       - sequence
       - start_time
       - updated_at
+    ProcessRefund:
+      type: object
+      description: ⚿ `:process` — how the money actually went back.
+      properties:
+        method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        reference_no:
+          type: string
+          nullable: true
+          maxLength: 80
+      required:
+      - method
     PromotionBatch:
       type: object
       description: |-
@@ -17483,6 +18541,70 @@ components:
         * `long_answer` - Long answer
         * `fill_blank` - Fill in the blank
         * `numerical` - Numerical
+    Receipt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        receipt_no:
+          type: string
+          readOnly: true
+        payment:
+          type: string
+          format: uuid
+          readOnly: true
+        invoice_no:
+          type: string
+          readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+        pdf_file:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+      required:
+      - amount
+      - id
+      - invoice_no
+      - issued_at
+      - payment
+      - pdf_file
+      - receipt_no
+      - student_name
+    RecordPayment:
+      type: object
+      description: ⚿ `POST /payments` — money in, at a counter or by bank transfer.
+      properties:
+        fee_invoice:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        reference_no:
+          type: string
+          nullable: true
+          maxLength: 80
+      required:
+      - amount
+      - fee_invoice
+      - method
     RefreshResponse:
       type: object
       description: |-
@@ -17499,6 +18621,94 @@ components:
       required:
       - access_token
       - expires_in
+    Refund:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        payment:
+          type: string
+          format: uuid
+        student:
+          type: string
+          format: uuid
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        reason:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RefundStatusEnum'
+          readOnly: true
+        requested_by:
+          type: string
+          format: uuid
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        decision_note:
+          type: string
+          readOnly: true
+          nullable: true
+        method:
+          type: string
+          readOnly: true
+          nullable: true
+        reference_no:
+          type: string
+          readOnly: true
+          nullable: true
+        processed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - approved_by
+      - created_at
+      - decision_note
+      - id
+      - method
+      - payment
+      - processed_at
+      - reason
+      - reference_no
+      - requested_by
+      - status
+      - student
+    RefundDecision:
+      type: object
+      description: '`:approve` / `:reject` — the note is optional on approval, not
+        on refusal.'
+      properties:
+        note:
+          type: string
+          maxLength: 2000
+    RefundStatusEnum:
+      enum:
+      - requested
+      - approved
+      - rejected
+      - processed
+      type: string
+      description: |-
+        * `requested` - Requested
+        * `approved` - Approved
+        * `rejected` - Rejected
+        * `processed` - Processed
     RelationshipEnum:
       enum:
       - father
@@ -17605,6 +18815,24 @@ components:
         * `draft` - Draft
         * `generated` - Generated
         * `published` - Published
+    RequestRefund:
+      type: object
+      description: ⚿ `POST /refunds` — §7.3 step one.
+      properties:
+        payment:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        reason:
+          type: string
+          maxLength: 2000
+      required:
+      - amount
+      - payment
+      - reason
     Result:
       type: object
       description: |-
@@ -18010,6 +19238,16 @@ components:
       - end_date
       - name
       - start_date
+    SettlementImportStatusEnum:
+      enum:
+      - processing
+      - completed
+      - failed
+      type: string
+      description: |-
+        * `processing` - Processing
+        * `completed` - Completed
+        * `failed` - Failed
     SlotSubstitution:
       type: object
       description: The substitution overlay on one cell of `GET /timetables/my`.
@@ -19401,6 +20639,80 @@ components:
       description: |-
         * `private` - Private
         * `public` - Public
+    VoucherCollectionImport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        provider:
+          allOf:
+          - $ref: '#/components/schemas/VoucherProviderEnum'
+          readOnly: true
+        file:
+          type: string
+          format: uuid
+          readOnly: true
+        imported_by:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SettlementImportStatusEnum'
+          readOnly: true
+        row_count:
+          type: integer
+          readOnly: true
+        matched_count:
+          type: integer
+          readOnly: true
+        exceptions:
+          readOnly: true
+          description: 'Unmatched rows: {row, provider_reference, amount, reason}.'
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - completed_at
+      - created_at
+      - exceptions
+      - file
+      - id
+      - imported_by
+      - matched_count
+      - provider
+      - row_count
+      - status
+    VoucherProviderEnum:
+      enum:
+      - bank_branch
+      - easypaisa
+      - jazzcash
+      type: string
+      description: |-
+        * `bank_branch` - Bank branch
+        * `easypaisa` - Easypaisa
+        * `jazzcash` - JazzCash
+    VoucherStatusEnum:
+      enum:
+      - issued
+      - paid
+      - void
+      - expired
+      type: string
+      description: |-
+        * `issued` - Issued
+        * `paid` - Paid
+        * `void` - Void
+        * `expired` - Expired
     Waive:
       type: object
       description: |-
