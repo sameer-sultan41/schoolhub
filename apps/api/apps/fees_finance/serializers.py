@@ -27,6 +27,7 @@ from apps.fees_finance.models import (
     LedgerAccount,
     LedgerEntry,
     Scholarship,
+    ScholarshipStatus,
 )
 from core.money import MONEY_MAX, quantize_money
 
@@ -435,11 +436,29 @@ class ScholarshipSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "approved_by", "created_at", "updated_at"]
 
     def validate(self, attrs: dict) -> dict:
-        return _validate_grant_value(
+        attrs = _validate_grant_value(
             attrs,
             instance=self.instance,
             type_field="coverage_type",
         )
+        # Ending or revoking an award is a decision with no colon-action of its
+        # own — §5.3's lifecycle moves through a plain PATCH — but it must not
+        # move through one with no explanation. `notes` is optional everywhere
+        # else on this serializer; it stops being optional the moment `status`
+        # is heading to a terminal state, which is the same requirement
+        # Discount.revoke and Fine.waive both enforce on their own colon-action.
+        terminal = {ScholarshipStatus.ENDED, ScholarshipStatus.REVOKED}
+        new_status = attrs.get("status")
+        if new_status in terminal and not (attrs.get("notes") or "").strip():
+            raise serializers.ValidationError(
+                {
+                    "notes": (
+                        f"Say why the award is being {new_status} — an unexplained "
+                        "termination of a grant is what an audit flags."
+                    )
+                }
+            )
+        return attrs
 
 
 class FineSerializer(serializers.ModelSerializer):

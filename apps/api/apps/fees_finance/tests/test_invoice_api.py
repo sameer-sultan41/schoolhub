@@ -377,10 +377,21 @@ class GrantEndpointTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_revoking_records_the_reason_and_the_status(self) -> None:
+    def test_revoking_moves_the_status_but_not_the_original_reason(self) -> None:
+        """`discounts` has one `reason` column, used at grant time.
+
+        Overwriting it with the revocation's reason would destroy the record
+        of why the discount was granted in the first place — the same mistake
+        `fines` avoids by keeping `reason` and `waived_reason` separate. The
+        revocation's own reason still has to go *somewhere* durable; that is
+        the audit trail, not this field.
+        """
         with tenant_context(self.tenant.id):
             discount = DiscountFactory(
-                tenant=self.tenant, student=self.student, academic_session=self.session
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                reason="Sibling discount — second child enrolled",
             )
 
         response = self.client.post(
@@ -391,6 +402,9 @@ class GrantEndpointTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["status"], DiscountStatus.REVOKED)
+        self.assertEqual(
+            response.json()["data"]["reason"], "Sibling discount — second child enrolled"
+        )
 
     def test_an_applied_scholarship_carries_no_approver(self) -> None:
         """`applied` is the one status with no approver, because that is what
@@ -429,6 +443,40 @@ class GrantEndpointTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["approved_by"], str(self.user.pk))
+
+    def test_ending_a_scholarship_with_no_notes_is_refused(self) -> None:
+        """§5.3's lifecycle moves through a plain PATCH, unlike `Discount`'s
+        colon-actioned `:revoke` — but terminating an award still needs the
+        same thing a revocation does: a stated reason. An unexplained
+        termination of a grant is exactly what an audit flags."""
+        with tenant_context(self.tenant.id):
+            scholarship = ScholarshipFactory(
+                tenant=self.tenant, student=self.student, academic_session=self.session
+            )
+
+        response = self.client.patch(
+            f"/api/v1/scholarships/{scholarship.pk}",
+            {"status": ScholarshipStatus.ENDED},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("notes", response.json()["error"]["details"][0]["field"])
+
+    def test_ending_a_scholarship_with_notes_is_accepted(self) -> None:
+        with tenant_context(self.tenant.id):
+            scholarship = ScholarshipFactory(
+                tenant=self.tenant, student=self.student, academic_session=self.session
+            )
+
+        response = self.client.patch(
+            f"/api/v1/scholarships/{scholarship.pk}",
+            {"status": ScholarshipStatus.ENDED, "notes": "Family withdrew mid-year"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["status"], ScholarshipStatus.ENDED)
 
 
 class FineEndpointTests(FeesFinanceAPITestCase):

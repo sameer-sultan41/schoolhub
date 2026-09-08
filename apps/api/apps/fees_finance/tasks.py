@@ -12,10 +12,15 @@ Two shapes, both established by `attendance` and `examinations`:
   unbound read does not raise, it silently matches zero rows, so the sweep shape
   is what makes it do anything at all.
 
-Notifications go out in **one `notify()` call per trigger with the whole
-recipient list**, never one per student. `notify` persists the fan-out in two
-bulk writes; a reminder to four hundred guardians was eight hundred round trips
-before it did.
+Notifications go out **one `notify()` call per invoice, grouped by student** —
+not one call for a whole run's recipient list. `notify()` renders its template
+body once from the single context it is given and persists that identical body
+to every recipient in the call, so a batch that shared one call across many
+families would render one family's child and invoice number into every other
+family's notice. Per-invoice is still bulk relative to guardians: `notify()`'s
+own two bulk writes cover every guardian linked to that one student in a single
+pair of round trips, so the cost scales with invoices billed, not with total
+guardians reached.
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ from apps.fees_finance import notifications
 from apps.fees_finance.models import FeeInvoice, InvoiceStatus
 from core.jobs.models import BackgroundJob
 from core.jobs.services import mark_failed, mark_running, mark_succeeded
-from core.money import ZERO, quantize_money
+from core.money import ZERO
 from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.tasks import TenantAwareTask
 
@@ -125,42 +130,63 @@ def _recipients_for(invoices: list[FeeInvoice]) -> tuple[list, dict]:
 
 
 def _notify_issued(*, tenant_id: uuid.UUID, invoice_ids: list[str]) -> int:
-    """§12's `fees.invoice-issued`, one call for the whole run."""
-    from core.notifications.services import notify
+    """§12's `fees.invoice-issued` — one `notify()` call per invoice.
+
+    **Not one call for the whole run.** `notify()` renders its template body
+    exactly once from the single `context` it is given, then persists that
+    identical body to every recipient in the call — it has no notion of
+    per-recipient variables. A batch of thirty invoices sharing one call and
+    one context (built from the first invoice) meant twenty-nine of thirty
+    families received a notice naming a different family's child, invoice
+    number and amount: the fan-out this file's own module docstring warns
+    against, reintroduced at the wrong granularity. An invoice-issued notice is
+    inherently per-family content, unlike a genuinely shared announcement (a
+    published timetable), so it cannot share a rendering the way that can.
+
+    Grouped by student, not by recipient: a family with two guardians linked to
+    one child still gets one `notify()` call covering both, which is what keeps
+    the write cost proportional to invoices billed rather than to guardians
+    reached.
+    """
+    from core.notifications.services import Recipient, notify
     from core.tenancy.context import tenant_atomic
     from core.tenancy.models import Tenant
 
     if not invoice_ids:
         return 0
 
+    notified = 0
     with tenant_atomic(tenant_id):
         invoices = list(FeeInvoice.objects.filter(pk__in=invoice_ids).select_related("student"))
-        recipients, _ = _recipients_for(invoices)
-        if not recipients:
+        if not invoices:
             return 0
+        _, users_by_student = _recipients_for(invoices)
         school = Tenant.objects.get(pk=tenant_id)
-        first = invoices[0]
-        notify(
-            notifications.INVOICE_ISSUED,
-            tenant_id=tenant_id,
-            recipients=recipients,
-            # The batch shares one context: every invoice in a run is for the
-            # same period and the same structure, and a per-invoice context
-            # would mean a notify() call per student — the fan-out this shape
-            # exists to avoid. The amount and number a family needs are on the
-            # invoice itself in the portal.
-            context={
-                "school": {"name": school.name},
-                "student": {"first_name": first.student.first_name},
-                "invoice_no": first.invoice_no,
-                "amount": str(first.balance_due),
-                "due_date": first.due_date.isoformat(),
-                "period": first.period_label or first.issue_date.strftime("%Y-%m"),
-            },
-            source_type="fee_invoice",
-            source_id=first.pk,
-        )
-    return len(recipients)
+
+        for invoice in invoices:
+            recipients = [
+                Recipient(user_id=user_id)
+                for user_id in users_by_student.get(invoice.student_id, [])
+            ]
+            if not recipients:
+                continue
+            notify(
+                notifications.INVOICE_ISSUED,
+                tenant_id=tenant_id,
+                recipients=recipients,
+                context={
+                    "school": {"name": school.name},
+                    "student": {"first_name": invoice.student.first_name},
+                    "invoice_no": invoice.invoice_no,
+                    "amount": str(invoice.balance_due),
+                    "due_date": invoice.due_date.isoformat(),
+                    "period": invoice.period_label or invoice.issue_date.strftime("%Y-%m"),
+                },
+                source_type="fee_invoice",
+                source_id=invoice.pk,
+            )
+            notified += len(recipients)
+    return notified
 
 
 @shared_task
@@ -242,25 +268,41 @@ def _reminder_days(tenant) -> tuple[int, ...]:
 
 
 def _send_batch(*, tenant, invoices: list[FeeInvoice], event: str, notify) -> int:
+    """One `notify()` call per invoice, for the reason `_notify_issued` gives.
+
+    The previous shape called `notify()` once for the *whole* sweep with a
+    context built from `invoices[0]` and, when more than one invoice was in
+    play, an `outstanding` total summed across every family in the batch —
+    every other family then saw a reminder naming a different child, a
+    different invoice number, and a total that was not even their own balance.
+    Reminders and overdue notices are exactly as per-family as an
+    invoice-issued notice, so they need the same fix.
+    """
+    from core.notifications.services import Recipient
+
     if not invoices:
         return 0
-    recipients, _ = _recipients_for(invoices)
-    if not recipients:
-        return 0
-    first = invoices[0]
-    outstanding = quantize_money(sum((i.balance_due for i in invoices), ZERO))
-    notify(
-        event,
-        tenant_id=tenant.pk,
-        recipients=recipients,
-        context={
-            "school": {"name": tenant.name},
-            "student": {"first_name": first.student.first_name},
-            "invoice_no": first.invoice_no,
-            "amount": str(outstanding if len(invoices) > 1 else first.balance_due),
-            "due_date": first.due_date.isoformat(),
-        },
-        source_type="fee_invoice",
-        source_id=first.pk,
-    )
-    return len(recipients)
+    notified = 0
+    _, users_by_student = _recipients_for(invoices)
+    for invoice in invoices:
+        recipients = [
+            Recipient(user_id=user_id) for user_id in users_by_student.get(invoice.student_id, [])
+        ]
+        if not recipients:
+            continue
+        notify(
+            event,
+            tenant_id=tenant.pk,
+            recipients=recipients,
+            context={
+                "school": {"name": tenant.name},
+                "student": {"first_name": invoice.student.first_name},
+                "invoice_no": invoice.invoice_no,
+                "amount": str(invoice.balance_due),
+                "due_date": invoice.due_date.isoformat(),
+            },
+            source_type="fee_invoice",
+            source_id=invoice.pk,
+        )
+        notified += len(recipients)
+    return notified

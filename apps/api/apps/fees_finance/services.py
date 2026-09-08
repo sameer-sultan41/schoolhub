@@ -280,18 +280,33 @@ def archive_fee_structure(*, structure: FeeStructure, actor_id: uuid.UUID | None
 
 
 def assert_fee_head_is_unused(*, fee_head: FeeHead) -> None:
-    """A head priced into a schedule cannot be deleted, only deactivated.
+    """A head referenced anywhere cannot be deleted, only deactivated.
 
     `is_active=False` removes it from new structures while every historical
-    invoice line keeps its meaning. Deleting it would leave lines describing a
-    charge nobody can name.
+    reference keeps its meaning. Deleting it would leave those rows describing
+    a charge nobody can name — and `fee_heads_code_unique` is conditioned on
+    `deleted_at IS NULL`, so a deleted head's code is immediately reusable by a
+    new one, the same code-reuse shape flagged on `LedgerAccount`.
+
+    Three tables reference a head, and pricing it into a `FeeSchedule` is only
+    one of them. A fine-category head is never priced into a schedule at all —
+    it exists purely for `Fine.fee_head` — and `generate_invoices` also writes
+    `FeeInvoiceLine.fee_head` directly, independent of whichever schedule (if
+    any) produced the line. A check that only looked at `FeeSchedule` would let
+    a fine-only or already-invoiced head be deleted while still referenced.
     """
-    if FeeSchedule.objects.alive().filter(fee_head=fee_head).exists():
+    referenced = (
+        FeeSchedule.objects.alive().filter(fee_head=fee_head).exists()
+        or Fine.objects.alive().filter(fee_head=fee_head).exists()
+        or FeeInvoiceLine.objects.alive().filter(fee_head=fee_head).exists()
+    )
+    if referenced:
         raise DomainRuleViolation(
             {
                 "fee_head": (
-                    "This fee head is priced into a fee schedule. Deactivate it "
-                    "instead — historical invoice lines still refer to it."
+                    "This fee head is referenced by a fee schedule, a fine or an "
+                    "invoice line. Deactivate it instead — historical records still "
+                    "refer to it."
                 )
             }
         )
@@ -452,7 +467,25 @@ def generate_invoices(
     unbilled one: the accountant cannot tell which students were done without
     reading every invoice, and the duplicate guard would then make a clean
     re-run impossible to distinguish from a double-billing attempt.
+
+    **The structure is locked `FOR UPDATE` before `already` is read.** Without
+    it, two runs firing at once for the same structure and period (a retried
+    Celery delivery, or two staff members both clicking generate) both read the
+    *same* `already` set — neither sees the other's still-uncommitted inserts —
+    and both then try to create the same student's invoice. The duplicate guard
+    is exactly what refuses the second one, but as an uncaught `IntegrityError`
+    partway through this one transaction, which the "skip and finish the
+    remainder" story only holds for a *sequential* retry, not a genuinely
+    concurrent one. The lock makes the second run wait for the first to commit,
+    so it then sees the correct, up-to-date `already` set and skips cleanly —
+    the same shape `activate_fee_structure` and `record_payment` already use to
+    close this class of race.
     """
+    structure = (
+        FeeStructure.objects.select_for_update()
+        .select_related("academic_session")
+        .get(pk=structure.pk)
+    )
     assert_structure_is_billable(structure=structure)
     session = structure.academic_session
     window_start, window_end, label = resolve_period(
@@ -644,12 +677,23 @@ def revoke_discount(*, discount: Discount, reason: str, actor_id: uuid.UUID | No
     Revocation is forward-looking by design: re-pricing issued invoices would
     change what a parent was told they owe, which is a correction that belongs
     in an adjustment line rather than a silent rewrite.
+
+    **`reason` is left exactly as it was.** `discounts` has one text column,
+    unlike `fines` — which keeps `reason` (why it was raised) and
+    `waived_reason` (why it was forgiven) separate precisely so neither
+    overwrites the other. A discount's `reason` records why it was *granted*,
+    and a revocation overwriting it would destroy that record with no way to
+    recover it: an accountant reviewing a revoked discount six months later
+    would read the revocation's reason and have no way to tell what the grant
+    itself was for. The caller's stated reason for revoking still reaches the
+    audit trail — `record_audit`'s `after` payload — which is the durable,
+    queryable place a decision like this belongs, without overloading a column
+    the schema gives one meaning.
     """
     locked = Discount.objects.select_for_update().get(pk=discount.pk)
     if not reason.strip():
         raise DomainRuleViolation({"reason": "Revoking a discount requires a reason."})
     locked.status = DiscountStatus.REVOKED
-    locked.reason = reason
     locked.updated_by = actor_id
-    locked.save(update_fields=["status", "reason", "updated_by", "updated_at"])
+    locked.save(update_fields=["status", "updated_by", "updated_at"])
     return locked

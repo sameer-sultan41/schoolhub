@@ -277,6 +277,62 @@ class GrantApplicationTests(SimpleTestCase):
         self.assertEqual(total, Decimal("500.00"))
         self.assertEqual(lines[0].discount_amount, Decimal("500.00"))
 
+    def test_a_fixed_grant_is_spent_once_across_every_line_it_touches(self) -> None:
+        """A FIXED grant has one face value, not one *per line*.
+
+        A 1000 fixed sibling discount with no head scope against a
+        3000/1500/500 invoice must total 1000 off the invoice — not
+        `min(1000, 3000) + min(1000, 1500) + min(1000, 500)` = 2500, which is
+        what applying the grant's full face value independently to every line
+        produces. It should exhaust itself on the largest line and leave the
+        smaller two untouched, since lines are consumed in the order given.
+        """
+        lines = self._lines("3000.00", "1500.00", "500.00")
+
+        total = invoicing.apply_grants(
+            lines=lines,
+            discounts=[StubGrant(Decimal("1000.00"), discount_type=GrantValueType.FIXED)],
+            scholarships=[],
+            on_date=SEP,
+        )
+
+        self.assertEqual(total, Decimal("1000.00"))
+        self.assertEqual(lines[0].discount_amount, Decimal("1000.00"))
+        self.assertEqual(lines[1].discount_amount, Decimal("0.00"))
+        self.assertEqual(lines[2].discount_amount, Decimal("0.00"))
+
+    def test_a_fixed_grant_spans_lines_when_the_first_cannot_absorb_it_all(self) -> None:
+        """The remaining budget carries forward to the next line rather than
+        being discarded once a line cannot take the whole thing."""
+        lines = self._lines("400.00", "1000.00")
+
+        total = invoicing.apply_grants(
+            lines=lines,
+            discounts=[StubGrant(Decimal("1000.00"), discount_type=GrantValueType.FIXED)],
+            scholarships=[],
+            on_date=SEP,
+        )
+
+        self.assertEqual(total, Decimal("1000.00"))
+        self.assertEqual(lines[0].discount_amount, Decimal("400.00"))
+        self.assertEqual(lines[1].discount_amount, Decimal("600.00"))
+
+    def test_a_fixed_scholarship_is_also_spent_once_across_lines(self) -> None:
+        """The same bug, and the same fix, on the scholarship side of
+        `apply_grants` — it is a separate loop with its own budget."""
+        lines = self._lines("2000.00", "2000.00")
+
+        total = invoicing.apply_grants(
+            lines=lines,
+            discounts=[],
+            scholarships=[StubGrant(Decimal("3000.00"), coverage_type=GrantValueType.FIXED)],
+            on_date=SEP,
+        )
+
+        self.assertEqual(total, Decimal("3000.00"))
+        self.assertEqual(lines[0].discount_amount, Decimal("2000.00"))
+        self.assertEqual(lines[1].discount_amount, Decimal("1000.00"))
+
     def test_scholarships_apply_before_discounts(self) -> None:
         """The order is fixed in `apply_grants` and this is what pins it.
 

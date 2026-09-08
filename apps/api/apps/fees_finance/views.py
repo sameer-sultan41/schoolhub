@@ -599,7 +599,19 @@ class DiscountViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             reason=serializer.validated_data["reason"],
             actor_id=request.user.pk,
         )
-        record_audit(request, "update", revoked, after={"status": revoked.status})
+        # `revoke_discount` deliberately leaves `Discount.reason` — the record
+        # of why it was *granted* — untouched, so the caller's stated reason
+        # for revoking is carried here instead, where it is durable without
+        # overloading a column the schema gives one meaning.
+        record_audit(
+            request,
+            "update",
+            revoked,
+            after={
+                "status": revoked.status,
+                "revocation_reason": serializer.validated_data["reason"],
+            },
+        )
         return ActionResponse.ok(self.get_serializer(revoked).data, message="Discount revoked.")
 
 

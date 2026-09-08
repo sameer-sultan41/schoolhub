@@ -137,6 +137,29 @@ class GenerationTests(FeesFinanceAPITestCase):
 
         self.assertIn("outside", str(caught.exception.detail))
 
+    def test_the_structure_is_locked_before_the_duplicate_guard_is_read(self) -> None:
+        """Two runs firing at once for the same structure and period — a
+        retried Celery delivery, or two staff both clicking generate — must
+        not both read the same `already` set and both try to create the same
+        student's invoice, aborting the whole transaction on an uncaught
+        IntegrityError. The lock is what serializes them, so asserted directly
+        against the SQL rather than by attempting to reproduce the race, which
+        needs two real connections a single-threaded test cannot open.
+        """
+        structure, _, _ = self.active_structure()
+
+        with CaptureQueriesContext(connection) as queries:
+            self._generate(structure)
+
+        locked_structure_reads = [
+            query["sql"]
+            for query in queries.captured_queries
+            if "FOR UPDATE" in query["sql"] and "fee_structures" in query["sql"]
+        ]
+        self.assertTrue(
+            locked_structure_reads, "generate_invoices must read the structure FOR UPDATE"
+        )
+
     def test_a_structure_scoped_to_another_class_bills_nobody(self) -> None:
         with tenant_context(self.tenant.id):
             from apps.fees_finance.tests.factories import ClassFactory
