@@ -14,7 +14,11 @@ from rest_framework import serializers
 
 from apps.fees_finance import services
 from apps.fees_finance.models import (
+    Budget,
     Discount,
+    Expense,
+    ExpenseCategory,
+    ExpenseStatus,
     FeeFrequency,
     FeeHead,
     FeeHeadCategory,
@@ -622,19 +626,11 @@ class ReceiptSerializer(serializers.ModelSerializer):
 
 
 class RefundSerializer(serializers.ModelSerializer):
-    # Declared explicitly rather than inferred. `Refund.method` is a genuinely
-    # nullable choice field — it is set at processing, so a requested refund has
-    # none — and drf-spectacular renders a nullable enum as
-    # `(MethodEnum | NullEnum) | null`, a union whose `NullEnum` member
-    # duplicates the trailing `null`. The generated TypeScript client then fails
-    # `@typescript-eslint/no-duplicate-type-constituents`, and the file is
-    # generated so it cannot be lint-fixed by hand.
-    #
-    # PR A hit the same thing on `ledger_entries.reference_type` and resolved it
-    # by making the column NOT NULL, because every posting genuinely has an
-    # origin. Here the nullability is real, so the fix belongs on the read side:
-    # the field is read-only anyway, and a plain string is what a client does
-    # with it.
+    # Read-only and declared explicitly: `method` is set by `:process`, so a
+    # requested refund has none and a client never supplies one. (The schema
+    # shape of nullable enums is handled globally by
+    # `ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE` in settings — see the comment
+    # there — so this declaration is about the write contract, not the schema.)
     method = serializers.CharField(read_only=True, allow_null=True)
 
     class Meta:
@@ -750,3 +746,180 @@ class VoucherCollectionImportSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class ExpenseCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExpenseCategory
+        fields = [
+            "id",
+            "name",
+            "code",
+            "ledger_account",
+            "parent",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_ledger_account(self, value: LedgerAccount) -> LedgerAccount:
+        services.assert_expense_category_account_is_expense(ledger_account=value)
+        return value
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    gross_amount = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source="expense_category.name", read_only=True)
+
+    class Meta:
+        model = Expense
+        fields = [
+            "id",
+            "expense_no",
+            "expense_category",
+            "category_name",
+            "campus",
+            "vendor_name",
+            "description",
+            "amount",
+            "tax_amount",
+            "gross_amount",
+            "expense_date",
+            "payment_method",
+            "status",
+            "approved_by",
+            "receipt_file",
+            "created_at",
+            "updated_at",
+        ]
+        # `status` and `approved_by` move through the colon-actions, which run
+        # the segregation-of-duties check and the ledger posting a PATCH would
+        # bypass. `expense_no` is allocated at creation.
+        read_only_fields = [
+            "id",
+            "expense_no",
+            "status",
+            "approved_by",
+            "gross_amount",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_gross_amount(self, obj: Expense) -> Decimal:
+        return obj.gross_amount
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise serializers.ValidationError("An expense must be for a positive amount.")
+        if value > MONEY_MAX:
+            raise serializers.ValidationError(
+                f"An amount above {MONEY_MAX} does not fit a money column."
+            )
+        return value
+
+    def validate_payment_method(self, value: str | None) -> str | None:
+        """§15 excludes `online_gateway` by name — a school does not pay a
+        supplier through its own fee gateway. The CHECK holds it too; this is
+        what gives the person filling in the form the field."""
+        if value == PaymentMethod.ONLINE_GATEWAY:
+            raise serializers.ValidationError("An expense is not paid through the fee gateway.")
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        category = attrs.get("expense_category") or getattr(self.instance, "expense_category", None)
+        if category is not None and not category.is_active:
+            raise serializers.ValidationError(
+                {"expense_category": f"{category.code} {category.name} is inactive."}
+            )
+        if self.instance is not None and self.instance.status != ExpenseStatus.DRAFT:
+            raise serializers.ValidationError(
+                {
+                    "status": (
+                        f"This expense is {self.instance.get_status_display().lower()} "
+                        "and its figures are fixed. Reject it and record a new one."
+                    )
+                }
+            )
+        return attrs
+
+
+class BudgetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Budget
+        fields = [
+            "id",
+            "name",
+            "ledger_account",
+            "expense_category",
+            "campus",
+            "period_start",
+            "period_end",
+            "amount",
+            "status",
+            "approved_by",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "status", "approved_by", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict) -> dict:
+        """Exactly one target, and a period that runs forwards.
+
+        Both are CHECKs as well. A budget against both an account and a
+        category would be double-counted by the variance report, and one
+        against neither describes nothing — so the field error names which.
+        """
+        account = attrs.get("ledger_account", getattr(self.instance, "ledger_account", None))
+        category = attrs.get("expense_category", getattr(self.instance, "expense_category", None))
+        if bool(account) == bool(category):
+            raise serializers.ValidationError(
+                "Name exactly one of `ledger_account` or `expense_category` — a budget "
+                "against both is counted twice by the variance report."
+            )
+
+        start = attrs.get("period_start", getattr(self.instance, "period_start", None))
+        end = attrs.get("period_end", getattr(self.instance, "period_end", None))
+        if start and end and end < start:
+            raise serializers.ValidationError(
+                {"period_end": "A budget period cannot end before it starts."}
+            )
+
+        amount = attrs.get("amount", getattr(self.instance, "amount", None))
+        if amount is not None and amount <= 0:
+            raise serializers.ValidationError({"amount": "A budget must be for a positive amount."})
+        return attrs
+
+
+class FinanceReportQuerySerializer(serializers.Serializer):
+    """`GET/POST /reports/finance-summary` — §13's parameterised entry point."""
+
+    kind = serializers.CharField()
+    date_from = serializers.DateField()
+    date_to = serializers.DateField()
+    student = serializers.UUIDField(required=False, allow_null=True)
+    group_by = serializers.ChoiceField(
+        choices=["day", "method", "cashier"], required=False, default="day"
+    )
+    format = serializers.ChoiceField(choices=["csv", "xlsx", "pdf"], required=False, default="csv")
+
+    def validate_kind(self, value: str) -> str:
+        from apps.fees_finance import reports
+
+        if value not in reports.REPORT_KINDS:
+            raise serializers.ValidationError(
+                f"Unknown report. Expected one of: {', '.join(reports.REPORT_KINDS)}."
+            )
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs["date_to"] < attrs["date_from"]:
+            raise serializers.ValidationError(
+                {"date_to": "The end of the period cannot precede its start."}
+            )
+        if attrs["kind"] == "student-ledger" and not attrs.get("student"):
+            raise serializers.ValidationError(
+                {"student": "A student ledger needs the student it is for."}
+            )
+        return attrs

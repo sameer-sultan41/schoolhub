@@ -19,11 +19,15 @@ from collections.abc import Sequence
 from django.db import models, transaction
 from django.utils import timezone
 
-from apps.fees_finance import invoicing, numbering
+from apps.fees_finance import invoicing, numbering, reports
 from apps.fees_finance.ledger import LedgerLine, post_transaction, reverse_transaction
 from apps.fees_finance.models import (
+    Budget,
+    BudgetStatus,
     Discount,
     DiscountStatus,
+    Expense,
+    ExpenseStatus,
     FeeHead,
     FeeInvoice,
     FeeInvoiceLine,
@@ -1329,3 +1333,249 @@ def expire_tenant_vouchers(tenant_id: uuid.UUID) -> int:
             updated_at=timezone.now(),
         )
     )
+
+
+# --------------------------------------------------------------------------- #
+# Spend and reports (PR D)
+# --------------------------------------------------------------------------- #
+
+#: §16's inline ceiling. Past this a report endpoint hands back a job instead —
+#: the row cap is requested as `limit + 1` so the endpoint decides which
+#: without building a term-scale result twice, which is the fix attendance's
+#: review produced.
+SYNCHRONOUS_REPORT_ROW_LIMIT = 1000
+
+
+def assert_expense_category_account_is_expense(*, ledger_account: LedgerAccount) -> None:
+    """A category maps to an *expense* account.
+
+    Not a CHECK: `account_type` is on `ledger_accounts` and a constraint on
+    `expense_categories` cannot read it. The mirror of the fee-head rule, and
+    for the same reason — spend filed against an income account makes the
+    income statement wrong in a way that still balances.
+    """
+    if ledger_account.account_type != LedgerAccountType.EXPENSE:
+        raise DomainRuleViolation(
+            {
+                "ledger_account": (
+                    f"An expense category must map to an expense account. "
+                    f"{ledger_account.code} {ledger_account.name} is "
+                    f"{ledger_account.get_account_type_display().lower()}."
+                )
+            }
+        )
+
+
+@transaction.atomic
+def submit_expense(*, expense: Expense, actor_id: uuid.UUID) -> Expense:
+    """Move a draft expense into the approval queue."""
+    locked = Expense.objects.select_for_update().get(pk=expense.pk)
+    if locked.status != ExpenseStatus.DRAFT:
+        raise DomainRuleViolation(
+            {"status": f"This expense is already {locked.get_status_display().lower()}."}
+        )
+    locked.status = ExpenseStatus.SUBMITTED
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "updated_by", "updated_at"])
+    return locked
+
+
+@transaction.atomic
+def decide_expense(*, expense: Expense, approve: bool, actor_id: uuid.UUID) -> Expense:
+    """Approve or reject a submitted expense, posting the ledger on approval.
+
+    **The submitter may not approve their own expense.** §15 says so, and the
+    check is here rather than in the viewset for the reason refunds' is: the
+    rule is the module's and has to hold through any door. The CHECK constraint
+    carries the half a constraint can.
+
+    Approval is what posts to the ledger — debit the category's expense account,
+    credit cash or bank. Recognising the cost at approval rather than at payment
+    is what makes §13's income-vs-expense report describe the period a school
+    committed the money in.
+    """
+    locked = (
+        Expense.objects.select_for_update()
+        .select_related("expense_category__ledger_account")
+        .get(pk=expense.pk)
+    )
+    if locked.status != ExpenseStatus.SUBMITTED:
+        raise DomainRuleViolation(
+            {"status": "Only a submitted expense can be approved or rejected."}
+        )
+    if locked.created_by == actor_id:
+        raise DomainRuleViolation(
+            {
+                "approved_by": (
+                    "The person who submitted an expense cannot approve it "
+                    "(§15, and auth-and-rbac §2.4)."
+                )
+            }
+        )
+
+    locked.status = ExpenseStatus.APPROVED if approve else ExpenseStatus.REJECTED
+    locked.approved_by = actor_id
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "approved_by", "updated_by", "updated_at"])
+
+    if approve:
+        _post_expense_to_ledger(expense=locked, actor_id=actor_id)
+    return locked
+
+
+def _post_expense_to_ledger(*, expense: Expense, actor_id: uuid.UUID) -> uuid.UUID:
+    """Debit the category's expense account, credit the asset it was paid from.
+
+    Tax is posted on the same expense account rather than a separate liability:
+    §19 leaves the tenant tax regime unconfirmed, and inventing an input-tax
+    account for a school whose jurisdiction may not have one would be a
+    guess an auditor has to unpick. Recorded in §20.
+    """
+    asset_code = _cash_account_for(expense.payment_method or PaymentMethod.BANK_TRANSFER)
+    asset = LedgerAccount.objects.alive().get(code=asset_code)
+    gross = quantize_money(expense.amount + expense.tax_amount)
+
+    return post_transaction(
+        entry_date=expense.expense_date,
+        lines=[
+            LedgerLine(ledger_account_id=expense.expense_category.ledger_account_id, debit=gross),
+            LedgerLine(ledger_account_id=asset.pk, credit=gross),
+        ],
+        reference_type=LedgerReferenceType.EXPENSE,
+        reference_id=expense.pk,
+        actor_id=actor_id,
+        memo=f"{expense.expense_no}: {expense.description}"[:255],
+    )
+
+
+@transaction.atomic
+def mark_expense_paid(*, expense: Expense, actor_id: uuid.UUID) -> Expense:
+    """Record that an approved expense has actually left the bank.
+
+    Posts nothing: approval already moved the money in the books, and posting
+    again would double-count it. This column exists so a school can tell what
+    is committed from what has cleared.
+    """
+    locked = Expense.objects.select_for_update().get(pk=expense.pk)
+    if locked.status != ExpenseStatus.APPROVED:
+        raise DomainRuleViolation({"status": "Only an approved expense can be paid."})
+    locked.status = ExpenseStatus.PAID
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "updated_by", "updated_at"])
+    return locked
+
+
+@transaction.atomic
+def approve_budget(*, budget: Budget, actor_id: uuid.UUID) -> Budget:
+    """Move a budget from draft to approved. §4 puts this with the owner."""
+    locked = Budget.objects.select_for_update().get(pk=budget.pk)
+    if locked.status != BudgetStatus.DRAFT:
+        raise DomainRuleViolation(
+            {"status": f"This budget is already {locked.get_status_display().lower()}."}
+        )
+    locked.status = BudgetStatus.APPROVED
+    locked.approved_by = actor_id
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "approved_by", "updated_by", "updated_at"])
+    return locked
+
+
+def allocate_expense_no(*, tenant_id: uuid.UUID, on_date: datetime.date) -> str:
+    """A gapless expense number, through the same primitive as invoices.
+
+    Gapless because an expense register with holes in it is the second thing an
+    auditor asks about, after the receipt book.
+    """
+    return numbering.allocate_expense_no(tenant_id=tenant_id, on_date=on_date)
+
+
+def build_report_rows(
+    *,
+    kind: str,
+    user,
+    date_from: datetime.date,
+    date_to: datetime.date,
+    student_id: uuid.UUID | None = None,
+    group_by: str = "day",
+    limit: int | None = None,
+) -> list[dict]:
+    """Run one §13 report with the caller's record scope applied.
+
+    **The scope is resolved here, from the user**, and the same function serves
+    the inline endpoint and the export job. That is deliberate: an export must
+    not widen what its requester could see inline, which it would if the job
+    re-queried the tables without the scope the endpoint applied. Attendance's
+    export task documents the same reasoning.
+
+    Each model's `campus_field` is spelled out because none of these tables
+    carries a `campus_id` of its own — an invoice's campus is its student's, an
+    expense's is on the row. Left at `scope_queryset`'s default, every
+    campus-scoped caller would get a `FieldError`, which is the bug
+    `LeaveTypeViewSet` documents.
+
+    `income-vs-expense` and `trial-balance` take no scoped queryset: both read
+    `ledger_entries`, which has no campus dimension and is already gated by
+    `fees.ledger.view`'s narrow default roles (`accountant`, `school_owner`).
+    """
+    from core.rbac.permissions import scope_queryset
+
+    if kind not in reports.REPORT_KINDS:
+        raise DomainRuleViolation(
+            {"kind": f"Unknown report. Expected one of: {', '.join(reports.REPORT_KINDS)}."}
+        )
+
+    if kind == "collection":
+        return reports.collection_report(
+            scope_queryset(Payment.objects.alive(), user, campus_field="student__campus_id"),
+            date_from=date_from,
+            date_to=date_to,
+            group_by=group_by,
+            limit=limit,
+        )
+    if kind == "outstanding-aging":
+        return reports.outstanding_and_aging(
+            scope_queryset(FeeInvoice.objects.alive(), user, campus_field="student__campus_id"),
+            as_of=date_to,
+            limit=limit,
+        )
+    if kind == "student-ledger":
+        if student_id is None:
+            raise DomainRuleViolation({"student": "A student ledger needs the student it is for."})
+        return reports.student_ledger(
+            student_id=student_id,
+            invoices=scope_queryset(
+                FeeInvoice.objects.alive(), user, campus_field="student__campus_id"
+            ),
+            payments=scope_queryset(
+                Payment.objects.alive(), user, campus_field="student__campus_id"
+            ),
+            refunds=scope_queryset(Refund.objects.alive(), user, campus_field="student__campus_id"),
+            limit=limit,
+        )
+    if kind == "grant-register":
+        return reports.grant_and_waiver_register(
+            discounts=scope_queryset(
+                Discount.objects.alive(), user, campus_field="student__campus_id"
+            ),
+            scholarships=scope_queryset(
+                Scholarship.objects.alive(), user, campus_field="student__campus_id"
+            ),
+            fines=scope_queryset(Fine.objects.alive(), user, campus_field="student__campus_id"),
+            limit=limit,
+        )
+    if kind == "income-vs-expense":
+        return reports.income_vs_expense(date_from=date_from, date_to=date_to, limit=limit)
+    if kind == "budget-variance":
+        return reports.budget_variance(
+            scope_queryset(Budget.objects.alive(), user, campus_field="campus_id"),
+            as_of=date_to,
+            limit=limit,
+        )
+    if kind == "expense-register":
+        return reports.expense_register(
+            scope_queryset(Expense.objects.alive(), user, campus_field="campus_id"),
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+        )
+    return reports.trial_balance_extract(date_from=date_from, date_to=date_to, limit=limit)

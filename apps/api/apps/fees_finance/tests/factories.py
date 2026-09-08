@@ -25,8 +25,13 @@ from decimal import Decimal
 import factory
 
 from apps.fees_finance.models import (
+    Budget,
+    BudgetStatus,
     Discount,
     DiscountStatus,
+    Expense,
+    ExpenseCategory,
+    ExpenseStatus,
     FeeFrequency,
     FeeHead,
     FeeHeadCategory,
@@ -76,7 +81,10 @@ __all__ = [
     "AcademicSessionFactory",
     "CampusFactory",
     "ClassFactory",
+    "BudgetFactory",
     "DiscountFactory",
+    "ExpenseCategoryFactory",
+    "ExpenseFactory",
     "FeeHeadFactory",
     "FeeInvoiceFactory",
     "FeeInvoiceLineFactory",
@@ -103,6 +111,7 @@ __all__ = [
     "grant",
     "income_account",
     "posting",
+    "expense_account",
     "settlement_csv",
 ]
 
@@ -332,3 +341,43 @@ def settlement_csv(rows: list[tuple[str, str, str, str]]) -> bytes:
     lines = ["consumer_number,transaction_reference,amount,paid_on"]
     lines += [",".join(row) for row in rows]
     return ("\n".join(lines) + "\n").encode()
+
+
+class ExpenseCategoryFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ExpenseCategory
+
+    name = factory.Sequence(lambda n: f"Category {n}")
+    code = factory.Sequence(lambda n: f"CAT{n}")
+    is_active = True
+
+
+class ExpenseFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Expense
+
+    expense_no = factory.Sequence(lambda n: f"EXP-TEST-{n:05d}")
+    description = "Electricity bill"
+    amount = Decimal("5000.00")
+    tax_amount = Decimal("0.00")
+    expense_date = datetime.date(2026, 9, 15)
+    status = ExpenseStatus.DRAFT
+
+
+class BudgetFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Budget
+
+    name = factory.Sequence(lambda n: f"Budget {n}")
+    period_start = datetime.date(2026, 4, 1)
+    period_end = datetime.date(2027, 3, 31)
+    amount = Decimal("100000.00")
+    status = BudgetStatus.DRAFT
+
+
+def expense_account(tenant, *, code: str = "5000", name: str = "General expenses"):
+    """An expense account, which is the only kind a category may map to."""
+    with tenant_context(tenant.id):
+        return LedgerAccountFactory(
+            tenant=tenant, code=code, name=name, account_type=LedgerAccountType.EXPENSE
+        )

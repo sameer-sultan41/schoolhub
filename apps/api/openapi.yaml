@@ -739,6 +739,188 @@ paths:
               schema:
                 $ref: '#/components/schemas/RefreshResponse'
           description: ''
+  /api/v1/budgets:
+    get:
+      operationId: budgets_list
+      description: '`/budgets` — §5.10''s planned figures, and the variance report''s
+        baseline.'
+      parameters:
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: expense_category_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: ledger_account_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: period_end__lte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: period_start__gte
+        schema:
+          type: string
+          format: date
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - budgets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBudgetList'
+          description: ''
+    post:
+      operationId: budgets_create
+      description: '`/budgets` — §5.10''s planned figures, and the variance report''s
+        baseline.'
+      tags:
+      - budgets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Budget'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Budget'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Budget'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
+  /api/v1/budgets/{id}:
+    get:
+      operationId: budgets_retrieve
+      description: '`/budgets` — §5.10''s planned figures, and the variance report''s
+        baseline.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this budget.
+        required: true
+      tags:
+      - budgets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
+    patch:
+      operationId: budgets_partial_update
+      description: '`/budgets` — §5.10''s planned figures, and the variance report''s
+        baseline.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this budget.
+        required: true
+      tags:
+      - budgets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBudget'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBudget'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBudget'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
+  /api/v1/budgets/{id}:approve:
+    post:
+      operationId: budgets_:approve_create
+      description: |-
+        `POST /budgets/{id}:approve`. §4 puts this with the owner alone.
+
+        Only an approved budget appears in the variance report — a draft is a
+        proposal, and reporting against one would show a school measuring itself
+        against a figure nobody signed off.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - budgets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+          description: ''
   /api/v1/campuses:
     get:
       operationId: campuses_list
@@ -2815,6 +2997,427 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/expense-categories:
+    get:
+      operationId: expense_categories_list
+      description: '`/expense-categories` — §5.9''s spend taxonomy.'
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: ledger_account_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: parent_id
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - expense-categories
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExpenseCategoryList'
+          description: ''
+    post:
+      operationId: expense_categories_create
+      description: '`/expense-categories` — §5.9''s spend taxonomy.'
+      tags:
+      - expense-categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategory'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategory'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategory'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+  /api/v1/expense-categories/{id}:
+    get:
+      operationId: expense_categories_retrieve
+      description: '`/expense-categories` — §5.9''s spend taxonomy.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this expense category.
+        required: true
+      tags:
+      - expense-categories
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    patch:
+      operationId: expense_categories_partial_update
+      description: '`/expense-categories` — §5.9''s spend taxonomy.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this expense category.
+        required: true
+      tags:
+      - expense-categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategory'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategory'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseCategory'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    delete:
+      operationId: expense_categories_destroy
+      description: '`/expense-categories` — §5.9''s spend taxonomy.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this expense category.
+        required: true
+      tags:
+      - expense-categories
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/expenses:
+    get:
+      operationId: expenses_list
+      description: |-
+        `/expenses` — §5.9's spend, under §7's approval gate.
+
+        Staff-only outright: nothing about what a school spends belongs in a
+        parent portal.
+      parameters:
+      - in: query
+        name: awaiting_approval
+        schema:
+          type: boolean
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: expense_category_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: expense_date__gte
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: expense_date__lte
+        schema:
+          type: string
+          format: date
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExpenseList'
+          description: ''
+    post:
+      operationId: expenses_create
+      description: |-
+        `/expenses` — §5.9's spend, under §7's approval gate.
+
+        Staff-only outright: nothing about what a school spends belongs in a
+        parent portal.
+      tags:
+      - expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Expense'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Expense'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Expense'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
+  /api/v1/expenses/{id}:
+    get:
+      operationId: expenses_retrieve
+      description: |-
+        `/expenses` — §5.9's spend, under §7's approval gate.
+
+        Staff-only outright: nothing about what a school spends belongs in a
+        parent portal.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this expense.
+        required: true
+      tags:
+      - expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
+    patch:
+      operationId: expenses_partial_update
+      description: |-
+        `/expenses` — §5.9's spend, under §7's approval gate.
+
+        Staff-only outright: nothing about what a school spends belongs in a
+        parent portal.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this expense.
+        required: true
+      tags:
+      - expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExpense'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExpense'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExpense'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
+  /api/v1/expenses/{id}:approve:
+    post:
+      operationId: expenses_:approve_create
+      description: |-
+        `POST /expenses/{id}:approve` — and post it to the ledger.
+
+        The submitter cannot approve their own, checked in `services` for the
+        reason refunds' equivalent is: the rule is the module's and has to hold
+        through any door.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
+  /api/v1/expenses/{id}:mark-paid:
+    post:
+      operationId: expenses_:mark_paid_create
+      description: |-
+        `POST /expenses/{id}:mark-paid` — it has left the bank.
+
+        Posts nothing: approval already moved the money in the books, and
+        posting again would double-count it.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
+  /api/v1/expenses/{id}:reject:
+    post:
+      operationId: expenses_:reject_create
+      description: |-
+        `/expenses` — §5.9's spend, under §7's approval gate.
+
+        Staff-only outright: nothing about what a school spends belongs in a
+        parent portal.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
+  /api/v1/expenses/{id}:submit:
+    post:
+      operationId: expenses_:submit_create
+      description: '`POST /expenses/{id}:submit` — into the approval queue.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - expenses
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+          description: ''
   /api/v1/fee-heads:
     get:
       operationId: fee_heads_list
@@ -7377,6 +7980,110 @@ paths:
       responses:
         '202':
           description: No response body
+  /api/v1/reports/finance-summary:
+    get:
+      operationId: reports_finance_summary_retrieve
+      description: |-
+        `GET/POST /reports/finance-summary` — §13, `kind`-parameterised.
+
+        `GET` serves inline; `POST` asks for an export and returns 202 + job. One
+        view because the row set and the record scope are identical either way, and
+        two views would be two places for the scope to be applied differently.
+
+        **The cap is requested as `limit + 1`.** That is how the endpoint decides
+        "inline or job?" without building a term-scale result twice, which is the
+        fix attendance's review produced.
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: format
+        schema:
+          enum:
+          - csv
+          - xlsx
+          - pdf
+          type: string
+          default: csv
+          minLength: 1
+        description: |-
+          * `csv` - csv
+          * `xlsx` - xlsx
+          * `pdf` - pdf
+      - in: query
+        name: group_by
+        schema:
+          enum:
+          - day
+          - method
+          - cashier
+          type: string
+          default: day
+          minLength: 1
+        description: |-
+          * `day` - day
+          * `method` - method
+          * `cashier` - cashier
+      - in: query
+        name: kind
+        schema:
+          type: string
+          minLength: 1
+        required: true
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: reports_finance_summary_create
+      description: |-
+        `GET/POST /reports/finance-summary` — §13, `kind`-parameterised.
+
+        `GET` serves inline; `POST` asks for an export and returns 202 + job. One
+        view because the row set and the record scope are identical either way, and
+        two views would be two places for the scope to be applied differently.
+
+        **The cap is requested as `limit + 1`.** That is how the endpoint decides
+        "inline or job?" without building a term-scale result twice, which is the
+        fix attendance's review produced.
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinanceReportQuery'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FinanceReportQuery'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FinanceReportQuery'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: No response body
   /api/v1/results:
     get:
       operationId: results_list
@@ -10210,6 +10917,30 @@ paths:
       responses:
         '200':
           description: Timeline of enrollment and transfer events
+  /api/v1/students/{id}/ledger:
+    get:
+      operationId: students_ledger_retrieve
+      description: |-
+        `GET /students/{id}/ledger` — §13.3's printable statement.
+
+        Its own view rather than a `kind` on the report endpoint, because §16
+        declares this path and because a family reads it: this is the one report a
+        portal principal reaches, narrowed by record scope through the same
+        `build_report_rows` the staff endpoint uses.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/students/{id}:change-section:
     post:
       operationId: students_:change_section_create
@@ -12339,6 +13070,79 @@ components:
         * `running` - Running
         * `succeeded` - Succeeded
         * `failed` - Failed
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        ledger_account:
+          type: string
+          format: uuid
+          nullable: true
+        expense_category:
+          type: string
+          format: uuid
+          nullable: true
+        campus:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means tenant-wide.
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BudgetStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - approved_by
+      - created_at
+      - id
+      - name
+      - period_end
+      - period_start
+      - status
+      - updated_at
+    BudgetStatusEnum:
+      enum:
+      - draft
+      - approved
+      - closed
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `approved` - Approved
+        * `closed` - Closed
     BulkMark:
       type: object
       description: |-
@@ -13338,6 +14142,138 @@ components:
         * `resigned` - resigned
         * `retired` - retired
         * `terminated` - terminated
+    Expense:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        expense_no:
+          type: string
+          readOnly: true
+        expense_category:
+          type: string
+          format: uuid
+        category_name:
+          type: string
+          readOnly: true
+        campus:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means the expense is not attributable to one campus.
+        vendor_name:
+          type: string
+          nullable: true
+          maxLength: 160
+        description:
+          type: string
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          description: Net of tax.
+        tax_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        gross_amount:
+          type: number
+          format: double
+          readOnly: true
+        expense_date:
+          type: string
+          format: date
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        receipt_file:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - approved_by
+      - category_name
+      - created_at
+      - description
+      - expense_category
+      - expense_date
+      - expense_no
+      - gross_amount
+      - id
+      - status
+      - updated_at
+    ExpenseCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        code:
+          type: string
+          maxLength: 30
+        ledger_account:
+          type: string
+          format: uuid
+        parent:
+          type: string
+          format: uuid
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - ledger_account
+      - name
+      - updated_at
+    ExpenseStatusEnum:
+      enum:
+      - draft
+      - submitted
+      - approved
+      - paid
+      - rejected
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `submitted` - Submitted
+        * `approved` - Approved
+        * `paid` - Paid
+        * `rejected` - Rejected
     FeeDiscountStatusEnum:
       enum:
       - active
@@ -13875,6 +14811,35 @@ components:
         * `pending` - Pending
         * `ready` - Ready
         * `quarantined` - Quarantined
+    FinanceReportQuery:
+      type: object
+      description: '`GET/POST /reports/finance-summary` — §13''s parameterised entry
+        point.'
+      properties:
+        kind:
+          type: string
+        date_from:
+          type: string
+          format: date
+        date_to:
+          type: string
+          format: date
+        student:
+          type: string
+          format: uuid
+          nullable: true
+        group_by:
+          allOf:
+          - $ref: '#/components/schemas/GroupByEnum'
+          default: day
+        format:
+          allOf:
+          - $ref: '#/components/schemas/FormatEnum'
+          default: csv
+      required:
+      - date_from
+      - date_to
+      - kind
     Fine:
       type: object
       properties:
@@ -14144,6 +15109,16 @@ components:
         * `letter` - Letter grades
         * `gpa` - GPA
         * `hybrid` - Hybrid (letter and GPA)
+    GroupByEnum:
+      enum:
+      - day
+      - method
+      - cashier
+      type: string
+      description: |-
+        * `day` - day
+        * `method` - method
+        * `cashier` - cashier
     Guardian:
       type: object
       properties:
@@ -14994,6 +15969,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedBudgetList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Budget'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedCampusList:
       type: object
       properties:
@@ -15190,6 +16186,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ExamSubject'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedExpenseCategoryList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseCategory'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedExpenseList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Expense'
         meta:
           type: object
           properties:
@@ -16164,6 +17202,59 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedBudget:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        ledger_account:
+          type: string
+          format: uuid
+          nullable: true
+        expense_category:
+          type: string
+          format: uuid
+          nullable: true
+        campus:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means tenant-wide.
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BudgetStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedCampus:
       type: object
       properties:
@@ -16590,6 +17681,104 @@ components:
           readOnly: true
           nullable: true
           description: Set by :lock-marks; cleared by :unlock-marks.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedExpense:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        expense_no:
+          type: string
+          readOnly: true
+        expense_category:
+          type: string
+          format: uuid
+        category_name:
+          type: string
+          readOnly: true
+        campus:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means the expense is not attributable to one campus.
+        vendor_name:
+          type: string
+          nullable: true
+          maxLength: 160
+        description:
+          type: string
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          description: Net of tax.
+        tax_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        gross_amount:
+          type: number
+          format: double
+          readOnly: true
+        expense_date:
+          type: string
+          format: date
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        receipt_file:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedExpenseCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        code:
+          type: string
+          maxLength: 30
+        ledger_account:
+          type: string
+          format: uuid
+        parent:
+          type: string
+          format: uuid
+          nullable: true
+        is_active:
+          type: boolean
         created_at:
           type: string
           format: date-time

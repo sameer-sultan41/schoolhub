@@ -29,6 +29,17 @@ VOUCHER = registry.register(
     max_size_bytes=5 * MEGABYTE,
 )
 
+REPORT_EXPORT = registry.register(
+    "fees.report-export",
+    "A generated financial report export (§13).",
+    mime_types={
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/pdf",
+    },
+    max_size_bytes=25 * MEGABYTE,
+)
+
 SETTLEMENT_FILE = registry.register(
     "fees.settlement-file",
     "A provider settlement file being imported for reconciliation (§7.2).",
