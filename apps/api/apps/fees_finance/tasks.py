@@ -175,8 +175,8 @@ def _notify_issued(*, tenant_id: uuid.UUID, invoice_ids: list[str]) -> int:
                 tenant_id=tenant_id,
                 recipients=recipients,
                 context={
-                    "school": {"name": school.name},
-                    "student": {"first_name": invoice.student.first_name},
+                    "school.name": school.name,
+                    "student.first_name": invoice.student.first_name,
                     "invoice_no": invoice.invoice_no,
                     "amount": str(invoice.balance_due),
                     "due_date": invoice.due_date.isoformat(),
@@ -295,8 +295,8 @@ def _send_batch(*, tenant, invoices: list[FeeInvoice], event: str, notify) -> in
             tenant_id=tenant.pk,
             recipients=recipients,
             context={
-                "school": {"name": tenant.name},
-                "student": {"first_name": invoice.student.first_name},
+                "school.name": tenant.name,
+                "student.first_name": invoice.student.first_name,
                 "invoice_no": invoice.invoice_no,
                 "amount": str(invoice.balance_due),
                 "due_date": invoice.due_date.isoformat(),
