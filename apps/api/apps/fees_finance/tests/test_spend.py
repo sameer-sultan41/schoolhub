@@ -13,6 +13,9 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
 from apps.fees_finance import reports, services
 from apps.fees_finance.models import (
     Expense,
@@ -438,25 +441,30 @@ class BudgetTests(SpendTestCase):
         self.assertEqual(rows[str(first_budget.pk)]["actual"], Decimal("10000.00"))
         self.assertEqual(rows[str(second_budget.pk)]["actual"], Decimal("15000.00"))
 
-    def test_two_campus_budgets_on_one_account_and_period_still_pool_their_actual(self) -> None:
-        """The still-open half of the same bug, recorded rather than silently
-        wrong — see `budget_variance`'s own docstring. `ledger_entries`
-        carries no campus column, so two campus-scoped budgets on the same
-        account and period (the unique constraint allows exactly that,
-        differentiated by `campus_id`) cannot be told apart by actual spend:
-        both read the tenant-wide total for the account. This test exists so
-        a future fix for it is a deliberate change to this assertion, not an
-        unnoticed regression either way.
+    def test_two_campus_budgets_on_one_account_and_period_keep_their_own_actual(self) -> None:
+        """`ledger_entries` carries no campus column, but every expense-origin
+        posting names the `Expense` it came from, and `Expense.campus`
+        already does. Two campus-scoped budgets on the same account and
+        period (the unique constraint allows exactly that, differentiated by
+        `campus_id`) each see only the spend from expenses filed against
+        their own campus, not the account's tenant-wide total.
         """
         from apps.fees_finance.tests.factories import CampusFactory
 
-        expense = self._expense(amount=Decimal("10000.00"), expense_date=datetime.date(2026, 6, 1))
+        main_expense = self._expense(
+            amount=Decimal("10000.00"), expense_date=datetime.date(2026, 6, 1), campus=self.campus
+        )
+        other_campus = CampusFactory(tenant=self.tenant)
+        other_expense = self._expense(
+            amount=Decimal("4000.00"), expense_date=datetime.date(2026, 7, 1), campus=other_campus
+        )
 
         with tenant_context(self.tenant.id):
-            services.submit_expense(expense=expense, actor_id=self.user.pk)
-            services.decide_expense(expense=expense, approve=True, actor_id=self.approver.pk)
+            services.submit_expense(expense=main_expense, actor_id=self.user.pk)
+            services.decide_expense(expense=main_expense, approve=True, actor_id=self.approver.pk)
+            services.submit_expense(expense=other_expense, actor_id=self.user.pk)
+            services.decide_expense(expense=other_expense, approve=True, actor_id=self.approver.pk)
 
-            other_campus = CampusFactory(tenant=self.tenant)
             main_budget = BudgetFactory(
                 tenant=self.tenant,
                 ledger_account=self.expense_account,
@@ -481,10 +489,40 @@ class BudgetTests(SpendTestCase):
                 )
             }
 
-        # The expense belongs to neither campus in particular, but both
-        # budgets show it — the pooling the docstring names.
         self.assertEqual(rows[str(main_budget.pk)]["actual"], Decimal("10000.00"))
-        self.assertEqual(rows[str(other_budget.pk)]["actual"], Decimal("10000.00"))
+        self.assertEqual(rows[str(other_budget.pk)]["actual"], Decimal("4000.00"))
+
+    def test_a_reversed_campus_expense_stops_counting_against_its_campus_budget(self) -> None:
+        """The same guarantee the tenant-wide figure has — a reversed expense
+        stops counting — must hold per campus too. A reversal posts under its
+        own new `transaction_id` and only points back at the original through
+        `reference_id`, so this is the case that would silently break if that
+        correlation were missed.
+        """
+        expense = self._expense(
+            amount=Decimal("10000.00"), expense_date=datetime.date(2026, 6, 1), campus=self.campus
+        )
+
+        with tenant_context(self.tenant.id):
+            services.submit_expense(expense=expense, actor_id=self.user.pk)
+            services.decide_expense(expense=expense, approve=True, actor_id=self.approver.pk)
+            services.reverse_expense(
+                expense=expense, reason="Wrong category", actor_id=self.approver.pk
+            )
+
+            budget = BudgetFactory(
+                tenant=self.tenant,
+                ledger_account=self.expense_account,
+                campus=self.campus,
+                amount=Decimal("50000.00"),
+            )
+            services.approve_budget(budget=budget, actor_id=self.approver.pk)
+
+            from apps.fees_finance.models import Budget
+
+            rows = reports.budget_variance(Budget.objects.alive(), as_of=datetime.date(2027, 3, 31))
+
+        self.assertEqual(rows[0]["actual"], Decimal("0.00"))
 
     def test_two_budgets_for_one_target_and_period_collide(self) -> None:
         """NULLS NOT DISTINCT: a tenant-wide budget has `campus_id IS NULL`, and
@@ -515,3 +553,39 @@ class BudgetTests(SpendTestCase):
 
         with tenant_context(self.tenant.id), self.assertNumQueries(2):
             reports.budget_variance(Budget.objects.alive(), as_of=datetime.date(2027, 3, 31))
+
+    def test_campus_attribution_is_also_a_bounded_number_of_queries(self) -> None:
+        """`_campus_expense_spend` fetches every relevant entry once and does
+        the campus correlation in Python — asserted here the same way the
+        tenant-wide path is above: the query count must not grow with the
+        number of expenses, or a school with a year of campus-scoped spend
+        turns a budget review into a timeout the same way one query per
+        budget would.
+        """
+        from apps.fees_finance.models import Budget
+
+        with tenant_context(self.tenant.id):
+            budget = BudgetFactory(
+                tenant=self.tenant,
+                ledger_account=self.expense_account,
+                campus=self.campus,
+                name="Campus budget",
+            )
+            services.approve_budget(budget=budget, actor_id=self.approver.pk)
+            expense = self._expense(amount=Decimal("100.00"), campus=self.campus)
+            services.submit_expense(expense=expense, actor_id=self.user.pk)
+            services.decide_expense(expense=expense, approve=True, actor_id=self.approver.pk)
+
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as few:
+            reports.budget_variance(Budget.objects.alive(), as_of=datetime.date(2027, 3, 31))
+
+        with tenant_context(self.tenant.id):
+            for _ in range(5):
+                expense = self._expense(amount=Decimal("100.00"), campus=self.campus)
+                services.submit_expense(expense=expense, actor_id=self.user.pk)
+                services.decide_expense(expense=expense, approve=True, actor_id=self.approver.pk)
+
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as many:
+            reports.budget_variance(Budget.objects.alive(), as_of=datetime.date(2027, 3, 31))
+
+        self.assertEqual(len(many.captured_queries), len(few.captured_queries))
