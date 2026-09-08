@@ -283,6 +283,14 @@ SPECTACULAR_SETTINGS = {
         "SettlementImportStatusEnum": "apps.fees_finance.models.ImportStatus",
         "ExpenseStatusEnum": "apps.fees_finance.models.ExpenseStatus",
         "BudgetStatusEnum": "apps.fees_finance.models.BudgetStatus",
+        # core.notifications' enums are first exposed through the API here —
+        # communication's PR A ships the first endpoints (notification-templates,
+        # delivery-logs) that serialize them. Named for the same reason as every
+        # entry above: `channel`, `status` and `event_category` are all reused
+        # field names on the platform.
+        "NotificationChannelEnum": "core.notifications.models.NotificationChannel",
+        "NotificationCategoryEnum": "core.notifications.models.NotificationCategory",
+        "DeliveryStatusEnum": "core.notifications.models.DeliveryStatus",
     },
 }
 

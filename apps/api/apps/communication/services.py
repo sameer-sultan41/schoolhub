@@ -7,7 +7,7 @@ import uuid
 from django.core.cache import cache
 
 from core.api.exceptions import DomainRuleViolation
-from core.notifications.models import NotificationCategory
+from core.notifications.models import NotificationCategory, NotificationChannel
 from core.notifications.templates import registry as platform_templates
 from core.notifications.templates import used_placeholders
 
@@ -93,3 +93,43 @@ def _preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[tupl
 
 def evict_preference_cache(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
     cache.delete(f"notif-pref:{tenant_id}:{user_id}")
+
+
+def materialize_preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> list[dict]:
+    """Every (category, channel) pair, stored rows overlaid on the `True` default.
+
+    `GET /notification-preferences` returns this rather than the bare stored
+    rows, so a client never has to know "no row" means enabled — the same
+    completeness `is_channel_enabled`'s own docstring argues for, now for the
+    read side instead of the delivery-gating side.
+    """
+    matrix = _preference_matrix(user_id=user_id, tenant_id=tenant_id)
+    return [
+        {
+            "event_category": category,
+            "channel": channel,
+            "is_enabled": matrix.get((category, channel), True),
+        }
+        for category in NotificationCategory.values
+        for channel in NotificationChannel.values
+    ]
+
+
+def save_preferences(*, user_id: uuid.UUID, tenant_id: uuid.UUID, rows: list[dict]) -> None:
+    """Upsert each `{event_category, channel, is_enabled}` row for this user.
+
+    Each row was already validated by `NotificationPreferenceUpdateSerializer`
+    (which calls `assert_preference_may_be_saved`), so this is pure persistence —
+    the `post_save` signal (`signals.py`) evicts the cache, which is why no
+    eviction call appears here.
+    """
+    from apps.communication.models import NotificationPreference
+
+    for row in rows:
+        NotificationPreference.objects.update_or_create(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            event_category=row["event_category"],
+            channel=row["channel"],
+            defaults={"is_enabled": row["is_enabled"]},
+        )

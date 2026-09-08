@@ -201,3 +201,26 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md);
 - WhatsApp Business API as a first-class channel: **recommendation — phase 2**, gated per tenant (cost + template pre-approval overhead).
 - Thread participants stored as JSONB on `message_threads` initially; promote to a `message_participants` join table if group messaging grows (flagged for the database consistency pass).
 - Notice approval chain fixed at one step (principal) initially; configurable multi-step chains follow the workflow engine (scope §22). Read receipts on staff↔guardian threads: on by default, tenant-disableable (recommendation).
+
+## 20. Implementation status
+
+Building as three stacked PRs. This section is updated by each.
+
+**PR A — templates and preferences (this PR).** Tenant-editable per-channel
+notification templates, per-user channel preferences, and the delivery
+dashboard — built on top of `core/notifications`, which already owns
+`notifications`/`delivery_logs`/`notify()`/the platform-default template
+registry (§15's note on that split still holds; see `entities/communication.md`).
+**PR B — announcements and notices.** Not yet started.
+**PR C — threads and emergency broadcast.** Not yet started.
+
+### Built (PR A)
+
+| Area | State |
+| ---- | ----- |
+| `core/notifications` extension | `notify()` renders each channel's own template (previously every channel reused the single in-app-rendered string) and gates delivery through a registered preference resolver; both hooks self-register from this module's `AppConfig.ready()` so `core/` never imports a Tier-4 app. With neither hook registered, behaviour is unchanged from before this PR — regression-tested against attendance/fees_finance/examinations' existing `notify()` call sites |
+| Entities | 2 of §15's 8 tables — `notification_templates` (as `NotificationTemplateOverride`), `notification_preferences` — tenant-owned with RLS policies. The other 6 are either already built (`notifications`, `delivery_logs`, owned by `core/notifications`) or arrive in PR B/C |
+| Templates | Tenant overrides validated against the platform template's declared variable set at save time; `code`/`channel` locked after creation; inactive rows fall back to the platform default, never to nothing |
+| Preferences | A per-user category × channel matrix with "no row = enabled" as the default, cached per user and evicted on write; the `emergency` category is refused closed at the service layer, on top of `core/notifications`' own hard-coded bypass |
+| Endpoints | §16's `/notification-templates` (+ `:preview`), `/notification-preferences`, `/delivery-logs` (read-only, + `:summary` for §13's delivery report) |
+| Deferred | Locale variants beyond `en` (no `User.locale` field yet); SMS/push/WhatsApp providers (no `core/integrations`, same reasoning as fees-finance's payment gateway); quiet hours, suppression lists, SMS credit quotas (notifications.md §4/§6/§7's own words: communication-module scope, and there is no SMS provider yet to meter); a guardian/student-facing `GET /announcements`/`GET /notices` browse endpoint (guardians consume via the existing `GET /notifications` inbox; a browse endpoint is recorded as parent-portal's task) |

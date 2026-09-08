@@ -586,6 +586,69 @@ export interface paths {
         patch: operations["classes_partial_update"];
         trace?: never;
     };
+    "/api/v1/delivery-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/delivery-logs` — the delivery dashboard, read-only.
+         *
+         *     List/retrieve only: nothing here should let a caller edit delivery
+         *     history, and every write to this table already happens inside
+         *     `core.notifications` (`notify()`, `deliver_notifications`).
+         */
+        get: operations["delivery_logs_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/delivery-logs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/delivery-logs` — the delivery dashboard, read-only.
+         *
+         *     List/retrieve only: nothing here should let a caller edit delivery
+         *     history, and every write to this table already happens inside
+         *     `core.notifications` (`notify()`, `deliver_notifications`).
+         */
+        get: operations["delivery_logs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/delivery-logs:summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /delivery-logs:summary?group_by=channel|status|provider` — §13's delivery report. */
+        get: operations["delivery_logs:summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/departments": {
         parameters: {
             query?: never;
@@ -2695,6 +2758,97 @@ export interface paths {
          *     UI shows.
          */
         post: operations["marks:bulk_entry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notification-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET/PATCH /notification-preferences` — the caller's own channel matrix.
+         *
+         *     No `pk` in the path: this always resolves to `request.user`. §4 grants the
+         *     key to every tenant role at `own` scope, and "own" here means "the caller,
+         *     always" — there is no other user's matrix this endpoint could address.
+         */
+        get: operations["notification_preferences_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description `GET/PATCH /notification-preferences` — the caller's own channel matrix.
+         *
+         *     No `pk` in the path: this always resolves to `request.user`. §4 grants the
+         *     key to every tenant role at `own` scope, and "own" here means "the caller,
+         *     always" — there is no other user's matrix this endpoint could address.
+         */
+        patch: operations["notification_preferences_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/notification-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/notification-templates` — tenant overrides of the platform defaults. */
+        get: operations["notification_templates_list"];
+        put?: never;
+        /** @description `/notification-templates` — tenant overrides of the platform defaults. */
+        post: operations["notification_templates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notification-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/notification-templates` — tenant overrides of the platform defaults. */
+        get: operations["notification_templates_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `/notification-templates` — tenant overrides of the platform defaults. */
+        delete: operations["notification_templates_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `/notification-templates` — tenant overrides of the platform defaults. */
+        patch: operations["notification_templates_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/notification-templates/{id}:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /notification-templates/{id}:preview` — renders with sample data.
+         *
+         *     Never persists. Sample values are `[variable]`, one per declared
+         *     placeholder, so a missing-variable render error (the real renderer's
+         *     loudest failure mode) can never happen here — every declared variable
+         *     always has a value, which is the point of a preview.
+         */
+        post: operations["notification_templates_:preview_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5780,6 +5934,44 @@ export interface components {
          * @enum {string}
          */
         DayPartEnum: "full" | "first_half" | "second_half";
+        /** @description Read-only. `DeliveryLog` rows are written only by `core.notifications`. */
+        DeliveryLog: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly notification: string;
+            readonly channel: components["schemas"]["NotificationChannelEnum"];
+            /** @description Template used at render time — a soft reference by code, so it survives the template being edited or removed. */
+            readonly template_code: string | null;
+            /** @description This channel's own rendering — NULL for in_app, which has no separate send and reuses Notification.title instead. See services.notify's per-channel rendering. */
+            readonly subject: string | null;
+            /** @description This channel's own rendering — NULL for in_app, which reuses Notification.body instead. */
+            readonly body: string | null;
+            /** @description Adapter name, e.g. 'console', 'ses'. */
+            readonly provider: string | null;
+            readonly provider_message_id: string | null;
+            /** @description Email/phone/device token, stored masked — see services.mask_address. */
+            readonly recipient_address: string;
+            readonly status: components["schemas"]["DeliveryStatusEnum"];
+            readonly attempts: number;
+            readonly error_message: string | null;
+            /** Format: date-time */
+            readonly last_attempt_at: string | null;
+            /** Format: date-time */
+            readonly delivered_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `queued` - Queued
+         *     * `sent` - Sent
+         *     * `delivered` - Delivered
+         *     * `failed` - Failed
+         *     * `bounced` - Bounced
+         *     * `skipped` - Skipped
+         * @enum {string}
+         */
+        DeliveryStatusEnum: "queued" | "sent" | "delivered" | "failed" | "bounced" | "skipped";
         Department: {
             /** Format: uuid */
             readonly id: string;
@@ -6996,6 +7188,65 @@ export interface components {
          * @enum {string}
          */
         MarksStatusEnum: "draft" | "submitted" | "locked";
+        /**
+         * @description * `attendance` - Attendance
+         *     * `fees` - Fees
+         *     * `exams` - Exams
+         *     * `library` - Library
+         *     * `transport` - Transport
+         *     * `academic` - Academic
+         *     * `general` - General
+         *     * `emergency` - Emergency
+         * @enum {string}
+         */
+        NotificationCategoryEnum: "attendance" | "fees" | "exams" | "library" | "transport" | "academic" | "general" | "emergency";
+        /**
+         * @description * `email` - Email
+         *     * `sms` - SMS
+         *     * `push` - Push
+         *     * `in_app` - In-app
+         *     * `whatsapp` - WhatsApp
+         * @enum {string}
+         */
+        NotificationChannelEnum: "email" | "sms" | "push" | "in_app" | "whatsapp";
+        /** @description One cell of the materialized category x channel matrix. */
+        NotificationPreferenceRow: {
+            event_category: string;
+            channel: string;
+            is_enabled: boolean;
+        };
+        NotificationPreferenceUpdate: {
+            event_category: components["schemas"]["NotificationCategoryEnum"];
+            channel: components["schemas"]["NotificationChannelEnum"];
+            is_enabled?: boolean;
+        };
+        NotificationTemplateOverride: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description Matches a core.notifications trigger's template_code. */
+            code: string;
+            name: string;
+            channel: components["schemas"]["NotificationChannelEnum"];
+            /** @description BCP-47 tag. Only 'en' is ever created in this plan — see the module's §20 register for the deferred locale-variant work. */
+            locale?: string;
+            /** @description NULL for a subjectless channel (SMS). */
+            subject?: string | null;
+            body: string;
+            /** @description Copied from the platform template at creation. */
+            readonly variables: unknown;
+            readonly is_system: boolean;
+            /** @description Inactive falls back to the platform default, not to nothing. */
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description Response shape for `:preview` — rendered with sample data, never persisted. */
+        NotificationTemplatePreview: {
+            subject: string | null;
+            body: string;
+        };
         PaginatedAcademicSessionList: {
             data?: components["schemas"]["AcademicSession"][];
             meta?: {
@@ -7066,6 +7317,16 @@ export interface components {
                     page_size?: number;
                     total_count?: number;
                     total_pages?: number;
+                };
+            };
+        };
+        PaginatedDeliveryLogList: {
+            data?: components["schemas"]["DeliveryLog"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
                 };
             };
         };
@@ -7314,6 +7575,16 @@ export interface components {
         };
         PaginatedMarksList: {
             data?: components["schemas"]["Marks"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedNotificationTemplateOverrideList: {
+            data?: components["schemas"]["NotificationTemplateOverride"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -8202,6 +8473,28 @@ export interface components {
             /** @description Seeded at provisioning; cannot be deleted (see the delete constraint). */
             readonly is_system?: boolean;
             /** @description Archived accounts reject new postings but keep their history. */
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedNotificationTemplateOverride: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** @description Matches a core.notifications trigger's template_code. */
+            code?: string;
+            name?: string;
+            channel?: components["schemas"]["NotificationChannelEnum"];
+            /** @description BCP-47 tag. Only 'en' is ever created in this plan — see the module's §20 register for the deferred locale-variant work. */
+            locale?: string;
+            /** @description NULL for a subjectless channel (SMS). */
+            subject?: string | null;
+            body?: string;
+            /** @description Copied from the platform template at creation. */
+            readonly variables?: unknown;
+            readonly is_system?: boolean;
+            /** @description Inactive falls back to the platform default, not to nothing. */
             is_active?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
@@ -11201,6 +11494,80 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Class"];
                 };
+            };
+        };
+    };
+    delivery_logs_list: {
+        parameters: {
+            query?: {
+                channel?: string;
+                created_at__gte?: string;
+                created_at__lte?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                notification_id?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                provider?: string;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedDeliveryLogList"];
+                };
+            };
+        };
+    };
+    delivery_logs_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this delivery log. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryLog"];
+                };
+            };
+        };
+    };
+    "delivery_logs:summary_retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -14732,6 +15099,205 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    notification_preferences_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferenceRow"][];
+                };
+            };
+        };
+    };
+    notification_preferences_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferenceUpdate"][];
+                "application/x-www-form-urlencoded": components["schemas"]["NotificationPreferenceUpdate"][];
+                "multipart/form-data": components["schemas"]["NotificationPreferenceUpdate"][];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferenceRow"][];
+                };
+            };
+        };
+    };
+    notification_templates_list: {
+        parameters: {
+            query?: {
+                channel?: string;
+                code?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_active?: boolean;
+                is_system?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedNotificationTemplateOverrideList"];
+                };
+            };
+        };
+    };
+    notification_templates_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationTemplateOverride"];
+                "application/x-www-form-urlencoded": components["schemas"]["NotificationTemplateOverride"];
+                "multipart/form-data": components["schemas"]["NotificationTemplateOverride"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTemplateOverride"];
+                };
+            };
+        };
+    };
+    notification_templates_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this notification template override. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTemplateOverride"];
+                };
+            };
+        };
+    };
+    notification_templates_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this notification template override. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    notification_templates_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this notification template override. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedNotificationTemplateOverride"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedNotificationTemplateOverride"];
+                "multipart/form-data": components["schemas"]["PatchedNotificationTemplateOverride"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTemplateOverride"];
+                };
+            };
+        };
+    };
+    "notification_templates_:preview_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationTemplateOverride"];
+                "application/x-www-form-urlencoded": components["schemas"]["NotificationTemplateOverride"];
+                "multipart/form-data": components["schemas"]["NotificationTemplateOverride"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTemplatePreview"];
+                };
             };
         };
     };
