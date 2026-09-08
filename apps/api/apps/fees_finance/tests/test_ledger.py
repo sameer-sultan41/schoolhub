@@ -261,10 +261,15 @@ class AppendOnlyTests(LedgerTestCase):
         """
         self._post()
 
+        # `assertRaises` outside `atomic()`, not inside — see `_raw`'s
+        # docstring above. A permission denial poisons the transaction, and if
+        # `assertRaises` swallowed it while still inside `atomic`, the block
+        # would exit cleanly and then fail releasing its savepoint on a dead
+        # connection instead of raising the assertion the test is for.
         with (
             tenant_context(self.tenant.id),
-            transaction.atomic(),
             self.assertRaises(ProgrammingError) as caught,
+            transaction.atomic(),
             connection.cursor() as cursor,
         ):
             cursor.execute("DELETE FROM ledger_entries WHERE tenant_id = %s", [str(self.tenant.pk)])
