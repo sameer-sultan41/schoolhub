@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from apps.fees_finance import tasks
+from apps.fees_finance import services, tasks
 from apps.fees_finance.tests.base import FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
     FeeHeadFactory,
@@ -24,6 +24,7 @@ from apps.fees_finance.tests.factories import (
     StudentGuardianFactory,
     UserFactory,
 )
+from apps.fees_finance.tests.test_collection import CollectionTestCase
 from core.notifications.models import Notification
 from core.tenancy.context import tenant_context
 
@@ -198,3 +199,58 @@ class ReminderBatchNotificationTests(FeesFinanceAPITestCase):
         self.assertNotIn("1000.00", first_notice.body)
         self.assertIn("700.00", second_notice.body)
         self.assertNotIn("1000.00", second_notice.body)
+
+
+class PaymentReceiptNotificationTests(CollectionTestCase):
+    """`notify_payment_received` against the real `notify()`, not a mock.
+
+    `notify()` and the template renderer both resolve a placeholder by
+    looking the literal dotted string (`"student.first_name"`) up as a
+    top-level context key — see `attendance/tasks.py`'s own `notify()` call
+    for the established shape. A context built as nested dicts
+    (`{"student": {"first_name": ...}}`) raises `TemplateError` before
+    anything is persisted, which no test caught because every existing
+    caller of a `notify()`-wrapping task mocked `notify()` out.
+    """
+
+    def test_the_receipt_notice_renders_and_persists(self) -> None:
+        payment = self._pay(Decimal("400.00"))
+
+        tasks.notify_payment_received(tenant_id=str(self.tenant.pk), payment_id=str(payment.pk))
+
+        with tenant_context(self.tenant.id):
+            notice = Notification.objects.get(user_id=self.guardian_user.pk, source_id=payment.pk)
+
+        self.assertIn(self.student.first_name, notice.body)
+        self.assertIn("400.00", notice.body)
+        with tenant_context(self.tenant.id):
+            self.assertIn(payment.receipt.receipt_no, notice.title)
+
+
+class RefundStatusNotificationTests(CollectionTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.payment = self._pay(Decimal("1000.00"))
+
+    def test_the_refund_status_notice_renders_and_persists(self) -> None:
+        with tenant_context(self.tenant.id):
+            refund = services.request_refund(
+                payment=self.payment,
+                amount=Decimal("250.00"),
+                reason="Overpaid the transport fee",
+                actor_id=self.user.pk,
+                tenant_id=self.tenant.pk,
+            )
+            approver = UserFactory(tenant=self.tenant)
+            refund = services.decide_refund(
+                refund=refund, approve=True, note="Verified", actor_id=approver.pk
+            )
+
+        tasks.notify_refund_status(tenant_id=str(self.tenant.pk), refund_id=str(refund.pk))
+
+        with tenant_context(self.tenant.id):
+            notice = Notification.objects.get(user_id=self.guardian_user.pk, source_id=refund.pk)
+
+        self.assertIn(self.student.first_name, notice.body)
+        self.assertIn("250.00", notice.body)
+        self.assertIn("approved", notice.body)
