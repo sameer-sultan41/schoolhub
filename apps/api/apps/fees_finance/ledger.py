@@ -28,7 +28,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from apps.fees_finance.models import LedgerAccount, LedgerEntry, LedgerReferenceType
 from core.api.exceptions import DomainRuleViolation
@@ -225,12 +225,20 @@ def reverse_transaction(
         allow_archived_accounts=True,
     )
 
-    for entry in originals:
-        entry.reversed_by_transaction_id = reversal_id
-        # The narrowed save() the column-level UPDATE grant permits. A bare
-        # save() here would rewrite every column and PostgreSQL would refuse it,
-        # which is the design working rather than a limitation to route around.
-        entry.save(update_fields=["reversed_by_transaction_id"])
+    # One statement for every original line, not one `save()` each — a
+    # multi-line posting (payments split across several income heads) would
+    # otherwise cost a round trip per line just to stamp the same reversal id.
+    # `AppendOnlyQuerySet.update()` refuses on principle, and rightly so: it
+    # would let a caller silently rewrite every column, not just this one. A
+    # raw statement naming only `reversed_by_transaction_id` is the same
+    # column-level grant `save(update_fields=[...])` uses, exercised once for
+    # the whole set instead of once per row; RLS still scopes it, since
+    # `originals` was already read through the tenant-scoped manager.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE ledger_entries SET reversed_by_transaction_id = %s WHERE id = ANY(%s::uuid[])",
+            [str(reversal_id), [str(entry.pk) for entry in originals]],
+        )
 
     return reversal_id
 

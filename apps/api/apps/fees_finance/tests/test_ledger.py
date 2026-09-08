@@ -223,6 +223,20 @@ class AppendOnlyTests(LedgerTestCase):
         with tenant_context(self.tenant.id), self.assertRaises(RuntimeError):
             LedgerEntry.objects.delete()
 
+    def test_a_queryset_bulk_update_is_refused(self) -> None:
+        """`bulk_update()` builds its own UPDATE independently of `update()` —
+        a separate code path in the ORM, and so a separate hole unless it gets
+        its own override."""
+        self._post()
+        with tenant_context(self.tenant.id):
+            entry = LedgerEntry.objects.first()
+            entry.memo = "tampered"
+
+            with self.assertRaises(RuntimeError) as caught:
+                LedgerEntry.objects.bulk_update([entry], ["memo"])
+
+        self.assertIn("append-only", str(caught.exception))
+
     def test_raw_sql_update_is_refused_by_the_database_itself(self) -> None:
         """Layer 3: the only one that matters.
 
@@ -298,6 +312,43 @@ class AppendOnlyTests(LedgerTestCase):
 
 
 class ReversalTests(LedgerTestCase):
+    def test_stamping_the_originals_is_one_statement_regardless_of_line_count(self) -> None:
+        """A multi-line posting — a payment split across several income heads —
+        must not cost a round trip per line just to stamp the same reversal id
+        on each. Asserted against the SQL actually issued: a query count that
+        does not grow with the number of lines is what proves it, not the
+        figures alone.
+        """
+        from django.test.utils import CaptureQueriesContext
+
+        second_income = LedgerAccountFactory(
+            tenant=self.tenant, code="4100", account_type=LedgerAccountType.INCOME
+        )
+        with tenant_context(self.tenant.id), transaction.atomic():
+            transaction_id = post_transaction(
+                entry_date=datetime.date(2026, 9, 1),
+                lines=[
+                    LedgerLine(ledger_account_id=self.cash.pk, debit=Decimal("300.00")),
+                    LedgerLine(ledger_account_id=self.fee_income.pk, credit=Decimal("100.00")),
+                    LedgerLine(ledger_account_id=second_income.pk, credit=Decimal("200.00")),
+                ],
+                reference_type=LedgerReferenceType.MANUAL,
+            )
+
+        with (
+            tenant_context(self.tenant.id),
+            transaction.atomic(),
+            CaptureQueriesContext(connection) as queries,
+        ):
+            reverse_transaction(transaction_id=transaction_id, entry_date=datetime.date(2026, 9, 5))
+
+        updates = [
+            q["sql"]
+            for q in queries.captured_queries
+            if q["sql"].strip().upper().startswith("UPDATE") and "ledger_entries" in q["sql"]
+        ]
+        self.assertEqual(len(updates), 1, updates)
+
     def test_a_reversal_mirrors_the_original_and_stamps_it(self) -> None:
         original = self._post(amount=Decimal("400.00"))
 
