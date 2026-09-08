@@ -55,6 +55,44 @@ export type {
   DataTableSort,
 } from "./components/data-table";
 
+export { DataGrid, useDataGrid } from "./components/data-grid";
+export type {
+  DataGridContextValue,
+  DataGridLabels,
+  DataGridProps,
+  DataGridTableLayout,
+} from "./components/data-grid";
+export {
+  createSelectColumn,
+  DataGridTable,
+  DataGridTableBase,
+  DataGridTableBody,
+  DataGridTableBodyRow,
+  DataGridTableBodyRowCell,
+  DataGridTableBodyRowExpanded,
+  DataGridTableBodyRowSkeleton,
+  DataGridTableBodyRowSkeletonCell,
+  DataGridTableEmpty,
+  DataGridTableHead,
+  DataGridTableHeadRow,
+  DataGridTableHeadRowCell,
+  DataGridTableHeadRowCellResize,
+  DataGridTableRowSelect,
+  DataGridTableRowSelectAll,
+  DataGridTableRowSpacer,
+} from "./components/data-grid-table";
+export { DataGridColumnHeader } from "./components/data-grid-column-header";
+export type { DataGridColumnHeaderProps } from "./components/data-grid-column-header";
+export { DataGridColumnVisibility } from "./components/data-grid-column-visibility";
+export { DataGridPagination } from "./components/data-grid-pagination";
+export type { DataGridPaginationProps } from "./components/data-grid-pagination";
+export { DataGridTableDnd } from "./components/data-grid-dnd";
+export { DataGridRowDragHandle, DataGridTableDndRows } from "./components/data-grid-dnd-rows";
+export { DataGridCard } from "./components/data-grid-card";
+export type { DataGridCardProps } from "./components/data-grid-card";
+export { pinnedSide, tanStackPinValue } from "./lib/pin-side";
+export type { PinnedSide } from "./lib/pin-side";
+
 export { Pagination } from "./components/pagination";
 export type { PaginationProps } from "./components/pagination";
 export { getPageNumbers, PAGE_WINDOW_SIZE } from "./lib/page-numbers";

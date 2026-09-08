@@ -13,63 +13,78 @@
  * from the tenant's branding settings and the whole subtree re-themes.
  *
  * The tenant-overridable defaults below carry SchoolHub's own platform brand — now
- * "Ink & Brass" (previously "Navy & Gold", and "Marigold & Indigo" before that). An
- * unbranded tenant should look like SchoolHub, not like nothing. `branding.ts`'s
+ * "Aurora" (previously "Ink & Brass", "Navy & Gold", and "Marigold & Indigo" before
+ * that). An unbranded tenant should look like SchoolHub, not like nothing. `branding.ts`'s
  * TOKEN_MAP still wins the instant a tenant sets their own value; no component may
  * hardcode a brand colour outside this file. A second, NEVER-overridable
  * `--sh-platform-*` tier below skins surfaces that stay SchoolHub's regardless of tenant
  * — /login chrome, the platform-landing page, the unknown-host page — because those are
  * shown before any tenant is known, or to nobody's tenant at all.
  *
+ * The palette this replaced is not gone: `presets/ink-brass.css` pins it, so the
+ * "Ink & Brass" entry in the dashboard's Colours menu still means what it says. That
+ * file exists precisely because `ink-brass` used to have no stylesheet — it WAS this
+ * :root — so changing these defaults would otherwise have silently redefined it.
+ *
  * ── Why the palette moved ─────────────────────────────────────────────────────────
  *
- * The previous palette's hues were sound; its STRUCTURE was not. It had exactly three
- * surface values (background, surface, muted) and one accent, so a card on a panel on a
- * page all sat the same distance from the reader — every screen read as one flat plane
- * regardless of hierarchy. This revision keeps the reasoning that worked (deliberate hue
- * spacing, saturation carrying urgency, cool-tinted neutrals) and adds what was missing:
- * three surface planes, three elevation steps, an informational hue, one gradient, and a
- * validated categorical chart ramp.
+ * Ink & Brass got the structure right — three surface planes, three elevation steps, an
+ * informational hue, one gradient, a CVD-validated chart ramp — and all of that is kept
+ * here unchanged. What it got wrong was VOLTAGE, and the measurements say so plainly:
  *
- * Primary moved from navy 263.4° to ink-violet 278°, and from chroma .104 to .148 — a
- * deeper, more chromatic colour that reads as ink on a register rather than as generic
- * corporate blue, and that sits further from every status hue. Accent moved from soft
- * gold 79.8° to brass 74° with more chroma: the same school-crest metal association
- * (achievement, not urgency), stated with more conviction.
+ *   - primary #383693 measured 9.92:1 on white. That is not a brand colour, it is
+ *     nearly black. At L .395 the hue barely registers, so every filled button read as
+ *     dark navy and no screen had colour in it.
+ *   - accent brass #EBA01D measured 2.19:1, so this file's own rule was "never as text,
+ *     only as a fill" — which left half the brand unusable and therefore invisible in
+ *     the product. It survived as a squiggle rule and one chart series.
+ *   - background was pure white and surface .979, a 2% separation. A card could not read
+ *     as a card, so every card leaned on a 1px hairline instead.
  *
- * Status hues did NOT move. danger 27.2° / warning 55.6° / success 160.3° are product
- * semantics with their own worked-out contrast pairs in both schemes; relocating them
- * would cost a full re-audit and buy nothing. The hue placement around the wheel is
- * therefore now:
- *   danger 27° — warning 56° — accent 74° — success 160° — info 218° — primary 278°
- * danger/warning/accent still sit ~18–27° apart, close enough to read as one escalating
- * "alert temperature" family; success, info and primary sit 44–86° further round, since
- * they need to read as calm rather than urgent. Saturation carries the same hierarchy:
- * danger (C.162) > accent (C.155) > primary (C.148) > warning (C.143) > info (C.118) >
- * success (C.114).
+ * So: primary to L .550 C .210 at 274° (5.19:1 — the band where a colour works as text
+ * AND as a white-on-it fill), accent from brass 74° to cyan 200° at L .800 (ink on it
+ * 9.27:1, so it can finally be a chip, a rule, a highlight), and the canvas/card
+ * relationship inverted — the page takes the faint tint, cards go pure white.
  *
- * `info` is new. Neutral informational state — a draft timetable, an unpublished plan —
- * previously borrowed `secondary`, which is a pale brand tint and therefore says "brand",
- * not "information". Cyan 218° is clear of primary and of every status hue.
+ * Status hues did NOT move. danger 27.2° / warning 55.6° / success 160.3° / info 218°
+ * are product semantics with their own worked-out contrast pairs in both schemes;
+ * relocating them would cost a full re-audit and buy nothing. The hue placement around
+ * the wheel is therefore now:
+ *   danger 27° — warning 56° — success 160° — accent 200° — info 218° — primary 274°
+ * The vacated brass slot at 74° is what cyan replaces. Accent and info now sit 18°
+ * apart — the same gap Ink & Brass already shipped between warning (56°) and accent
+ * (74°), so this is a precedent, not a new compromise. They are separated by lightness
+ * and by role rather than by hue: accent is a light decorative fill (L .800), info is a
+ * mid-tone state colour (L .510), and info is never used as a large fill.
+ *
+ * `info` remains the neutral informational state — a draft timetable, an unpublished
+ * plan — which previously borrowed `secondary`, a pale brand tint that therefore said
+ * "brand", not "information".
  *
  * Every background/surface/border/muted token stays cool (blue-tinted) rather than
  * neutral-grey or warm-ivory, so light and dark both stay in the same colour family
  * instead of the accent carrying the whole brand.
  *
+ * A fourth tier, `--sh-color-chrome-*`, skins the app frame (sidebar + header). It is
+ * ink in both schemes and is NOT tenant-overridable — see its own comment in :root.
+ *
  * ── Contrast, measured ────────────────────────────────────────────────────────────
  *
  * WCAG 2.x relative-luminance ratios, not OKLCH lightness deltas. Light mode:
- *   Ink violet  #383693 -> oklch(0.395 0.148 278)  (primary — 9.92:1 on white, AAA)
- *   Brass       #EBA01D -> oklch(0.762 0.155 74)   (accent  —  2.19:1 on white: NEVER
- *                                                    used as text on a light surface,
- *                                                    only as a fill with ink text on it
- *                                                    at 7.22:1)
- *   Cyan        #007593 -> oklch(0.510 0.118 218)  (info — 5.30:1 on background,
- *                                                    4.98:1 on surface, 4.60:1 on
+ *   Indigo      #515CE9 -> oklch(0.550 0.210 274)  (primary — 5.19:1 on white, AA both
+ *                                                    as text and as a white-on-it fill)
+ *   Cyan        #28D6DF -> oklch(0.800 0.130 200)  (accent — 9.27:1 with ink on it;
+ *                                                    2.06:1 on white, so still never a
+ *                                                    text colour on a light surface)
+ *   Teal        #007593 -> oklch(0.510 0.118 218)  (info — 5.30:1 on background,
+ *                                                    5.30:1 on surface, 5.03:1 on
  *                                                    surface-sunken: AA on all three)
  *   Green       #178257 -> oklch(0.538 0.114 160.3) (success — 4.8:1 on white, unchanged)
  *   Brick red   #C1443C -> oklch(0.560 0.162  27.2) (danger  — 5.1:1 on white, unchanged)
- *   Cool white  #F6F8FC -> oklch(0.979 0.006 264.5) (surface, unchanged)
+ *   Ink frame   #171F36 -> oklch(0.245 0.045 268)  (chrome — its foreground 13.25:1,
+ *                                                    chrome-muted 5.65:1,
+ *                                                    chrome-primary 5.90:1)
+ *   Canvas      #FCFDFF -> oklch(0.993 0.003 265)  (background — ink on it 16.25:1)
  */
 
 @theme inline {
@@ -154,17 +169,38 @@
   --color-destructive-foreground: var(--sh-color-danger-foreground);
   --color-input: var(--sh-color-border);
 
-  /* Sidebar reuses the existing surface/primary tokens rather than introducing a new
-     --sh-color-sidebar-* tier — it's a --sh-color-surface panel, same as any other card,
-     so it already gets tenant branding (primary) and dark mode (surface) for free. */
-  --color-sidebar: var(--sh-color-surface);
-  --color-sidebar-foreground: var(--sh-color-surface-foreground);
-  --color-sidebar-primary: var(--sh-color-primary);
-  --color-sidebar-primary-foreground: var(--sh-color-primary-foreground);
-  --color-sidebar-accent: var(--sh-color-muted);
-  --color-sidebar-accent-foreground: var(--sh-color-foreground);
-  --color-sidebar-border: var(--sh-color-border);
-  --color-sidebar-ring: var(--sh-color-ring);
+  /*
+   * The chrome tier — the app frame (sidebar rail + header), as opposed to the page
+   * inside it. It gets its own tier rather than reusing `surface` because it is the one
+   * region that stays dark in BOTH schemes: an ink frame around light content is what
+   * separates the two at a glance, and the previous arrangement (sidebar = surface)
+   * left the rail and the page the same near-white, so a 1px hairline was the only
+   * thing dividing them.
+   *
+   * It is deliberately NOT tenant-overridable. A frame is structure, not brand — and a
+   * tenant who picks a pale brand colour would otherwise get an unreadable rail. The
+   * brand still reaches the frame through `chrome-primary`, the active-nav colour.
+   */
+  --color-chrome: var(--sh-color-chrome);
+  --color-chrome-foreground: var(--sh-color-chrome-foreground);
+  --color-chrome-muted: var(--sh-color-chrome-muted);
+  --color-chrome-accent: var(--sh-color-chrome-accent);
+  --color-chrome-border: var(--sh-color-chrome-border);
+  --color-chrome-primary: var(--sh-color-chrome-primary);
+
+  /* shadcn's own sidebar names, pointed at the chrome tier so ported source keeps
+     working. `sidebar-primary-foreground` is chrome's own background, not the page's:
+     chrome-primary is a LIGHT ink-violet chosen to sit on a dark rail, so text on it
+     has to be dark. */
+  --color-sidebar: var(--sh-color-chrome);
+  --color-sidebar-foreground: var(--sh-color-chrome-foreground);
+  --color-sidebar-primary: var(--sh-color-chrome-primary);
+  --color-sidebar-primary-foreground: var(--sh-color-chrome);
+  --color-sidebar-accent: var(--sh-color-chrome-accent);
+  --color-sidebar-accent-foreground: var(--sh-color-chrome-foreground);
+  --color-sidebar-border: var(--sh-color-chrome-border);
+  /* Neutral, matching --sh-color-ring's own reasoning above — not chrome-primary. */
+  --color-sidebar-ring: var(--sh-color-chrome-muted);
 
   /*
    * Components across the repo currently write `rounded-[var(--sh-radius)]` as an
@@ -227,41 +263,102 @@
 
 :root {
   /*
-   * SchoolHub platform brand — "Ink & Brass". These are the DEFAULT values for every
+   * SchoolHub platform brand — "Aurora". These are the DEFAULT values for every
    * tenant-overridable token; a tenant's own branding.ts TOKEN_MAP entry still wins the
    * moment it is set (see branding.ts's own header comment). An unbranded tenant
    * therefore looks like SchoolHub, not grey.
+   *
+   * The canvas/card relationship is INVERTED from the old palette: the page is a faint
+   * cool tint and cards are pure white, rather than a white page carrying near-white
+   * cards. Same two values, opposite assignment — and it is what lets a card read as a
+   * card without leaning on its border.
    */
-  --sh-color-background: oklch(1 0 0);
-  --sh-color-foreground: oklch(0.264 0.056 269.3);
-  --sh-color-surface: oklch(0.979 0.006 264.5);
-  --sh-color-surface-foreground: oklch(0.264 0.056 269.3);
-  --sh-color-muted: oklch(0.958 0.01 267.4);
-  --sh-color-muted-foreground: oklch(0.503 0.034 266.1);
-  --sh-color-border: oklch(0.912 0.018 264.5);
-  --sh-color-ring: var(--sh-color-primary);
+  --sh-color-background: oklch(0.993 0.003 265);
+  --sh-color-foreground: oklch(0.24 0.035 268);
+  --sh-color-surface: oklch(1 0 0);
+  --sh-color-surface-foreground: oklch(0.24 0.035 268);
+  --sh-color-muted: oklch(0.962 0.01 265);
+  --sh-color-muted-foreground: oklch(0.52 0.03 265);
+  --sh-color-border: oklch(0.905 0.014 265);
+  /*
+   * A neutral mid-tone, not `var(--sh-color-primary)` — shadcn's own docs describe ring
+   * as "a functional accessibility tool... a mid-tone that ensures visible keyboard
+   * focus indicators without competing with primary branding," the same restraint
+   * Metronic's own theme applies (its ring is zinc-400, unrelated to its blue primary).
+   * Tying ring to the brand hue made every focus outline in the app full-saturation
+   * indigo — visible, but competing with primary rather than staying out of its way.
+   * `muted-foreground` already clears 4.5:1 as TEXT against every surface tone in this
+   * palette, comfortably above the 3:1 a non-text focus indicator needs, so it carries
+   * over as a ring colour with no new contrast work.
+   */
+  --sh-color-ring: var(--sh-color-muted-foreground);
 
   /*
    * Three surface planes, not one. `sunken` is for wells that sit BEHIND the page —
    * an empty-state's icon recess, a table's zebra band, a disabled control. `raised`
    * is for anything floating ABOVE it — a popover, a card that carries its own
-   * elevation. Plain `surface` is unchanged, so every existing component keeps the
-   * exact appearance it has today until it opts in.
+   * elevation.
    *
-   * muted-foreground stays legible on both: 5.16:1 on sunken, 4.72:1 on raised.
+   * muted-foreground stays legible on both: 5.03:1 on sunken, 5.53:1 on raised.
    */
-  --sh-color-surface-sunken: oklch(0.952 0.011 267);
+  --sh-color-surface-sunken: oklch(0.968 0.008 265);
   --sh-color-surface-raised: oklch(1 0 0);
 
-  --sh-color-primary: oklch(0.395 0.148 278);
+  /*
+   * Primary moved from oklch(0.395 0.148 278) to L .550 C .210 — the single biggest
+   * change in this palette, and the one that fixes "the UI looks flat".
+   *
+   * The old ink violet measured 9.90:1 on white. That is not a brand colour, that is
+   * nearly black: at that lightness the hue barely registers, so every filled button
+   * read as dark navy and the page had no colour in it at all. L .550 lands at 5.19:1 —
+   * still comfortably AA as text on white AND as a white-on-it fill, because ~5:1 is
+   * the band where a colour works in both directions at once. Chroma went .148 -> .210
+   * for the same reason: the old value was desaturated enough to read grey-blue.
+   */
+  --sh-color-primary: oklch(0.55 0.21 274);
   --sh-color-primary-foreground: oklch(1 0 0);
-  /* A pale ink tint, not a second saturated hue — accent already carries brass, and
+  /* A pale ink tint, not a second saturated hue — accent already carries the cyan, and
      stacking two loud colours into "primary" and "secondary" both would leave nothing
      quiet to set the signature element against. */
-  --sh-color-secondary: oklch(0.934 0.022 280);
-  --sh-color-secondary-foreground: oklch(0.395 0.148 278);
-  --sh-color-accent: oklch(0.762 0.155 74);
-  --sh-color-accent-foreground: oklch(0.314 0.058 267);
+  --sh-color-secondary: oklch(0.94 0.025 275);
+  --sh-color-secondary-foreground: oklch(0.42 0.16 274);
+  /*
+   * Accent moved from brass 74° to cyan 200°, and this is a correction, not a
+   * repaint. Brass measured 2.18:1 on white, so this file's own rule was "never as
+   * text, only as a fill with ink on it" — which left half the brand unusable and
+   * therefore nearly invisible in the product. Cyan at L .800 carries ink at 9.27:1,
+   * so the accent can finally be a chip, a rule, a highlight, a focus ring.
+   */
+  --sh-color-accent: oklch(0.8 0.13 200);
+  --sh-color-accent-foreground: oklch(0.24 0.035 268);
+
+  /*
+   * The chrome tier — the sidebar rail and the header.
+   *
+   * The frame is RECESSED, not inverted: one step below the page in light mode and one
+   * step below it in dark, so it reads as the surface the content sits on top of. It is
+   * a separate tier from `surface` only because that relationship has to hold in both
+   * schemes, and `surface` flips.
+   *
+   * An ink frame was tried here and pulled: a dark navy slab behind a light page is a
+   * strong look, but it is the look of a template rather than of this product, and it
+   * spends the page's entire colour budget on furniture. The frame's job is to sit
+   * still and let the content carry the colour.
+   *
+   * `chrome-primary` is a separate token rather than `var(--sh-color-primary)` so the
+   * frame can pick its own step per scheme: the two agree in light mode today, but a
+   * dark rail needs a lighter primary than the page does, and the presets that keep a
+   * light rail need to follow their own.
+   *
+   * Measured on --sh-color-chrome: foreground 15.21:1, muted 5.09:1, the active-item
+   * accent bar 4.78:1 (UI floor is 3:1), and the active label on its own tint 13.41:1.
+   */
+  --sh-color-chrome: oklch(0.972 0.006 265);
+  --sh-color-chrome-foreground: oklch(0.24 0.035 268);
+  --sh-color-chrome-muted: oklch(0.52 0.03 265);
+  --sh-color-chrome-accent: oklch(0.94 0.012 265);
+  --sh-color-chrome-border: oklch(0.9 0.014 265);
+  --sh-color-chrome-primary: oklch(0.55 0.21 274);
 
   /*
    * Status colours are product semantics, not branding — tenants do not override these
@@ -281,7 +378,7 @@
   --sh-color-success: oklch(0.538 0.114 160.3);
   --sh-color-success-foreground: oklch(1 0 0);
   --sh-color-warning: oklch(0.745 0.143 55.6);
-  --sh-color-warning-foreground: oklch(0.264 0.056 269.3);
+  --sh-color-warning-foreground: oklch(0.24 0.035 268);
   --sh-color-danger: oklch(0.56 0.162 27.2);
   --sh-color-danger-foreground: oklch(1 0 0);
   --sh-color-info: oklch(0.51 0.118 218);
@@ -295,7 +392,7 @@
    * --sh-color-foreground itself for this (Dialog/Sheet's overlay previously did) inverts
    * to near-WHITE in dark mode, washing the page instead of dimming it.
    */
-  --sh-color-overlay: oklch(0.264 0.056 269.3);
+  --sh-color-overlay: oklch(0.24 0.035 268);
 
   /*
    * Elevation tinted with the primary hue rather than neutral black. Two layers each —
@@ -306,21 +403,27 @@
    * brand is a pale yellow would otherwise get shadows the page cannot show. Elevation is
    * depth, not branding.
    */
-  --sh-elevation-1:
-    0 1px 2px -1px oklch(0.395 0.148 278 / 0.08), 0 1px 3px oklch(0.395 0.148 278 / 0.06);
+  --sh-elevation-1: 0 1px 2px -1px oklch(0.4 0.13 274 / 0.1), 0 1px 3px oklch(0.4 0.13 274 / 0.07);
   --sh-elevation-2:
-    0 2px 4px -2px oklch(0.395 0.148 278 / 0.1), 0 6px 12px -4px oklch(0.395 0.148 278 / 0.08);
+    0 2px 4px -2px oklch(0.4 0.13 274 / 0.12), 0 8px 16px -4px oklch(0.4 0.13 274 / 0.1);
   --sh-elevation-3:
-    0 8px 16px -6px oklch(0.395 0.148 278 / 0.14), 0 20px 32px -12px oklch(0.395 0.148 278 / 0.1);
+    0 8px 16px -6px oklch(0.4 0.13 274 / 0.16), 0 24px 40px -12px oklch(0.4 0.13 274 / 0.13);
 
   /*
    * The one gradient in the system, and the reason it is a token rather than a utility:
    * it is used EXACTLY ONCE PER SCREEN, on the hero band, never as decoration. Naming it
    * once here is what makes a second use visible in review.
    *
-   * Ink violet 278° -> 302°, a 24° sweep rather than a hue jump, so it reads as one
-   * colour deepening rather than two colours meeting. White text clears 9.16:1 at the
-   * far end and 9.92:1 at the near end, so the band is legible across its whole width.
+   * Indigo 274° -> teal 220°, and this is where the palette gets its name: a 54° sweep
+   * across the blue-green arc, the one place the two brand hues meet in a single
+   * surface. Wider than the old 24° violet->magenta deepening, because with the accent
+   * now living at 200° the band is what ties primary and accent together.
+   *
+   * White text clears 5.19:1 at the near end (it follows `primary`, which is
+   * deliberately lighter than the old ink violet — see above) and 6.07:1 at the far
+   * end, so the band stays AA across its whole width. The far stop is pinned rather
+   * than derived: it must stay DARK regardless of what a tenant does to `primary`,
+   * since the band's text is white in both schemes.
    *
    * Follows the tenant's own primary in LIGHT mode; the dark blocks pin the start stop
    * back to this file's light-mode value. See the dark block for why.
@@ -328,7 +431,7 @@
   --sh-gradient-spotlight: linear-gradient(
     135deg,
     var(--sh-color-primary) 0%,
-    oklch(0.42 0.155 302) 100%
+    oklch(0.49 0.09 220) 100%
   );
 
   /*
@@ -351,11 +454,19 @@
    * was kept. Do not reorder, do not substitute an eyeballed hue, and do not cycle for a
    * seventh series.
    *
-   * Validated against surface #F6F8FC (ΔE is Euclidean OKLab x100, protanopia and
-   * deuteranopia simulated at severity 1.0):
+   * Slot 1 tracks `primary`, so Aurora re-hued it 281.7° -> 274° (chroma .204 -> .210)
+   * and left slots 2-6 exactly as they were. That restraint is deliberate and was
+   * measured, not assumed: a fresh Aurora-flavoured ramp (indigo/cyan/amber/green/
+   * rose/violet) collapses to 4.1 ΔE because amber sits next to green under
+   * deuteranopia, and a brute-force search for maximum ΔE returns ramps that pass the
+   * gate while being three blues and two browns. The shipped ordering already clears
+   * every floor and is legible as a set of names; moving one slot's hue keeps both.
+   *
+   * Validated against surface #FFFFFF (ΔE is Euclidean OKLab x100, protanopia and
+   * deuteranopia simulated at severity 1.0, Machado matrices):
    *   - adjacent pairs (bars, lines, stacked segments — only neighbours touch):
-   *     all six slots pass. Worst colour-blind pair 8.9 (target >= 8); worst
-   *     normal-vision pair 17.0 (floor >= 15); every slot >= 3:1 on surface.
+   *     all six slots pass. Worst colour-blind pair 9.0 (target >= 8); worst
+   *     normal-vision pair 17.0 (floor >= 15); every slot >= 3:1 on surface (min 3.51).
    *   - all pairs (scatter, bubble, small-multiples — any two marks can touch):
    *     capped at the FIRST THREE slots. Slot 4 collapses against slot 2 under
    *     protanopia at 0.2 ΔE. Past three series in those forms, fold the rest into
@@ -367,7 +478,7 @@
    * carried by a chart colour — it takes success/warning/danger with an icon and a
    * label, because colour alone is not an encoding.
    */
-  --sh-color-chart-1: oklch(0.514 0.204 281.7);
+  --sh-color-chart-1: oklch(0.55 0.21 274);
   --sh-color-chart-2: oklch(0.635 0.129 74.4);
   --sh-color-chart-3: oklch(0.606 0.106 213.2);
   --sh-color-chart-4: oklch(0.576 0.153 135);
@@ -423,78 +534,85 @@
 /* dark-mode token block */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --sh-color-background: oklch(0.194 0.034 267.6);
-    --sh-color-foreground: oklch(0.973 0.007 268.5);
+    --sh-color-background: oklch(0.19 0.03 268);
+    --sh-color-foreground: oklch(0.955 0.008 265);
     /* Ink-tinted rather than hue-neutral dark grey, so cards read as part of the same
        brand family at night. */
-    --sh-color-surface: oklch(0.248 0.044 268);
-    --sh-color-surface-foreground: oklch(0.973 0.007 268.5);
+    --sh-color-surface: oklch(0.245 0.038 268);
+    --sh-color-surface-foreground: oklch(0.955 0.008 265);
     /* The planes invert their relationship: sunken goes DARKER than the page and raised
        goes lighter, because on a dark ground depth reads as absence of light. */
-    --sh-color-surface-sunken: oklch(0.216 0.038 267.8);
-    --sh-color-surface-raised: oklch(0.288 0.048 268.2);
-    --sh-color-muted: oklch(0.277 0.046 267.7);
-    --sh-color-muted-foreground: oklch(0.706 0.037 267.5);
-    --sh-color-border: oklch(0.31 0.049 268.9);
-    --sh-color-secondary: oklch(0.326 0.068 279);
-    --sh-color-secondary-foreground: oklch(0.864 0.041 279);
-    /* accent (brass) genuinely doesn't need a dark-mode override — it stays 8.37:1
-       against this background in both schemes, and its foreground text is dark in both
-       schemes too. primary does: the light-mode ink violet computes to 2.0:1 against this
-       dark background — fails WCAG 1.4.11's 3:1 for a UI component boundary, text-primary
-       fails 1.4.3 outright, and --sh-color-ring inherits the same failure since it's
-       `var(--sh-color-primary)`. A lighter ink restores the boundary (5.86:1) with a
-       dark, near-page-background foreground for text on a solid primary surface. */
-    --sh-color-primary: oklch(0.665 0.135 278);
-    --sh-color-primary-foreground: oklch(0.194 0.034 267.6);
-    --sh-color-accent: oklch(0.762 0.155 74);
-    --sh-color-accent-foreground: oklch(0.194 0.034 267.6);
+    --sh-color-surface-sunken: oklch(0.215 0.032 268);
+    --sh-color-surface-raised: oklch(0.285 0.042 268);
+    --sh-color-muted: oklch(0.275 0.04 268);
+    --sh-color-muted-foreground: oklch(0.72 0.03 265);
+    --sh-color-border: oklch(0.32 0.042 268);
+    --sh-color-secondary: oklch(0.32 0.06 275);
+    --sh-color-secondary-foreground: oklch(0.87 0.04 275);
+    /* accent (cyan) needs no dark-mode override — at L .800 it already sits 10.40:1
+       above this background and its text is dark in both schemes. primary does: the
+       light-mode indigo computes to 2.6:1 here — fails WCAG 1.4.11's 3:1 for a UI
+       component boundary, text-primary fails 1.4.3 outright, and --sh-color-ring
+       inherits the failure since it is `var(--sh-color-primary)`. The lighter step
+       restores it at 6.75:1, with a dark near-page-background foreground for text on a
+       solid primary surface. */
+    --sh-color-primary: oklch(0.7 0.14 274);
+    --sh-color-primary-foreground: oklch(0.19 0.03 268);
+    --sh-color-accent: oklch(0.8 0.13 200);
+    --sh-color-accent-foreground: oklch(0.19 0.03 268);
+    /* Same relationship as light: the frame sits one step BELOW the page, so content
+       reads as being on top of it. That is why chrome goes darker than `background`
+       here rather than lighter — recession is the constant, not the direction of the
+       lightness step. */
+    --sh-color-chrome: oklch(0.165 0.028 268);
+    --sh-color-chrome-foreground: oklch(0.955 0.008 265);
+    --sh-color-chrome-muted: oklch(0.72 0.03 265);
+    --sh-color-chrome-accent: oklch(0.235 0.036 268);
+    --sh-color-chrome-border: oklch(0.28 0.038 268);
+    --sh-color-chrome-primary: oklch(0.7 0.14 274);
     /* success/warning share the same problem as primary above where their light-mode
        foreground would fail against a fill that's staying the same lightness (warning) or
        getting brighter (success) — both now pair with the same dark, near-page-background
        foreground primary uses, rather than a token that flips independently. success
        itself is also brightened for the dark background (7.9:1, was 4.1:1 unchanged). */
     --sh-color-success: oklch(0.724 0.125 161.7);
-    --sh-color-success-foreground: oklch(0.194 0.034 267.6);
+    --sh-color-success-foreground: oklch(0.19 0.03 268);
     /* warning itself doesn't need a dark-mode override either — same reasoning as accent
        above, it stays 7.8:1 against this background in both schemes — only its foreground
        does, for the same reason success/danger's foreground does. */
-    --sh-color-warning-foreground: oklch(0.194 0.034 267.6);
+    --sh-color-warning-foreground: oklch(0.19 0.03 268);
     /* Same problem as primary above, same fix: the light-mode brick red (#c1443c) computes
        to 3.4:1 against this dark background — fails WCAG AA's 4.5:1 for text (Alert's
        danger variant renders --sh-color-danger as text-danger). A lighter, gentler danger
        restores it (6.3:1), paired with the same dark near-page-background foreground
        primary uses, for text on a solid danger surface (6.3:1 against this danger). */
     --sh-color-danger: oklch(0.706 0.113 28.3);
-    --sh-color-danger-foreground: oklch(0.194 0.034 267.6);
+    --sh-color-danger-foreground: oklch(0.19 0.03 268);
     /* info brightens for the dark ground: 7.18:1 on background, 6.32:1 on surface,
        5.56:1 on surface-raised. */
     --sh-color-info: oklch(0.702 0.106 218);
-    --sh-color-info-foreground: oklch(0.194 0.034 267.6);
-    /* The gradient's start stop follows --sh-color-primary, which LIGHTENS in dark mode —
-     so left unpinned the hero band inverted from a dark surface with light text into a
-     LIGHT surface with light text. The band is a fixed dark surface by design, in both
-     schemes, so its start stop is pinned to this file's light-mode primary here. Same
-     reasoning as --sh-color-overlay, which is declared once and never redefined. */
-    --sh-gradient-spotlight: linear-gradient(
-      135deg,
-      oklch(0.395 0.148 278) 0%,
-      oklch(0.42 0.155 302) 100%
-    );
+    --sh-color-info-foreground: oklch(0.19 0.03 268);
     /* The gradient's start stop follows --sh-color-primary, which LIGHTENS in dark mode —
        so left unpinned the hero band inverted from a dark surface with light text into a
        LIGHT surface with light text. The band is a fixed dark surface by design, in both
-       schemes, so its start stop is pinned to this file's light-mode primary here. Same
-    /* Depth of black, not brand tint — a violet-tinted shadow over a violet-tinted dark
+       schemes, so its start stop is pinned to a dark step of the light-mode indigo here.
+       Same reasoning as --sh-color-overlay, which is declared once and never redefined.
+       White text measures 6.97:1 on the near stop and 6.07:1 on the far one. */
+    --sh-gradient-spotlight: linear-gradient(
+      135deg,
+      oklch(0.48 0.19 274) 0%,
+      oklch(0.49 0.09 220) 100%
+    );
+    /* Depth of black, not brand tint — an indigo-tinted shadow over an indigo-tinted dark
        surface is invisible, so the light-mode elevation values would render as nothing. */
     --sh-elevation-1: 0 1px 2px -1px oklch(0 0 0 / 0.4), 0 1px 3px oklch(0 0 0 / 0.3);
-    --sh-elevation-2: 0 2px 4px -2px oklch(0 0 0 / 0.45), 0 6px 12px -4px oklch(0 0 0 / 0.35);
-    --sh-elevation-3: 0 8px 16px -6px oklch(0 0 0 / 0.5), 0 20px 32px -12px oklch(0 0 0 / 0.4);
+    --sh-elevation-2: 0 2px 4px -2px oklch(0 0 0 / 0.45), 0 8px 16px -4px oklch(0 0 0 / 0.35);
+    --sh-elevation-3: 0 8px 16px -6px oklch(0 0 0 / 0.5), 0 24px 40px -12px oklch(0 0 0 / 0.4);
     /* Re-stepped for the dark band (OKLCH L 0.48–0.67), not flipped — the same six hues,
-       chosen as a set against surface #182036 and validated there: worst adjacent pair
-       10.2 ΔE under deuteranopia, 22.9 ΔE normal vision, every slot >= 3:1. The
-       all-pairs cap of three applies in this scheme too. */
-    --sh-color-chart-1: oklch(0.62 0.16 278.2);
+       chosen as a set against surface #192033 and validated there: worst adjacent pair
+       10.2 ΔE under deuteranopia, 16.2 ΔE normal vision, every slot >= 3:1 (min 4.10).
+       The all-pairs cap of three applies in this scheme too. Slot 1 tracks primary. */
+    --sh-color-chart-1: oklch(0.66 0.17 274);
     --sh-color-chart-2: oklch(0.66 0.14 74.2);
     --sh-color-chart-3: oklch(0.65 0.11 209.8);
     --sh-color-chart-4: oklch(0.629 0.139 130.1);
@@ -504,42 +622,49 @@
 }
 
 :root.dark {
-  --sh-color-background: oklch(0.194 0.034 267.6);
-  --sh-color-foreground: oklch(0.973 0.007 268.5);
-  --sh-color-surface: oklch(0.248 0.044 268);
-  --sh-color-surface-foreground: oklch(0.973 0.007 268.5);
-  --sh-color-surface-sunken: oklch(0.216 0.038 267.8);
-  --sh-color-surface-raised: oklch(0.288 0.048 268.2);
-  --sh-color-muted: oklch(0.277 0.046 267.7);
-  --sh-color-muted-foreground: oklch(0.706 0.037 267.5);
-  --sh-color-border: oklch(0.31 0.049 268.9);
-  --sh-color-secondary: oklch(0.326 0.068 279);
-  --sh-color-secondary-foreground: oklch(0.864 0.041 279);
-  --sh-color-primary: oklch(0.665 0.135 278);
-  --sh-color-primary-foreground: oklch(0.194 0.034 267.6);
-  --sh-color-accent: oklch(0.762 0.155 74);
-  --sh-color-accent-foreground: oklch(0.194 0.034 267.6);
+  --sh-color-background: oklch(0.19 0.03 268);
+  --sh-color-foreground: oklch(0.955 0.008 265);
+  --sh-color-surface: oklch(0.245 0.038 268);
+  --sh-color-surface-foreground: oklch(0.955 0.008 265);
+  --sh-color-surface-sunken: oklch(0.215 0.032 268);
+  --sh-color-surface-raised: oklch(0.285 0.042 268);
+  --sh-color-muted: oklch(0.275 0.04 268);
+  --sh-color-muted-foreground: oklch(0.72 0.03 265);
+  --sh-color-border: oklch(0.32 0.042 268);
+  --sh-color-secondary: oklch(0.32 0.06 275);
+  --sh-color-secondary-foreground: oklch(0.87 0.04 275);
+  --sh-color-primary: oklch(0.7 0.14 274);
+  --sh-color-primary-foreground: oklch(0.19 0.03 268);
+  --sh-color-accent: oklch(0.8 0.13 200);
+  --sh-color-accent-foreground: oklch(0.19 0.03 268);
+  --sh-color-chrome: oklch(0.165 0.028 268);
+  --sh-color-chrome-foreground: oklch(0.955 0.008 265);
+  --sh-color-chrome-muted: oklch(0.72 0.03 265);
+  --sh-color-chrome-accent: oklch(0.235 0.036 268);
+  --sh-color-chrome-border: oklch(0.28 0.038 268);
+  --sh-color-chrome-primary: oklch(0.7 0.14 274);
   --sh-color-success: oklch(0.724 0.125 161.7);
-  --sh-color-success-foreground: oklch(0.194 0.034 267.6);
-  --sh-color-warning-foreground: oklch(0.194 0.034 267.6);
+  --sh-color-success-foreground: oklch(0.19 0.03 268);
+  --sh-color-warning-foreground: oklch(0.19 0.03 268);
   --sh-color-danger: oklch(0.706 0.113 28.3);
-  --sh-color-danger-foreground: oklch(0.194 0.034 267.6);
+  --sh-color-danger-foreground: oklch(0.19 0.03 268);
   --sh-color-info: oklch(0.702 0.106 218);
-  --sh-color-info-foreground: oklch(0.194 0.034 267.6);
+  --sh-color-info-foreground: oklch(0.19 0.03 268);
   /* The gradient's start stop follows --sh-color-primary, which LIGHTENS in dark mode —
      so left unpinned the hero band inverted from a dark surface with light text into a
      LIGHT surface with light text. The band is a fixed dark surface by design, in both
-     schemes, so its start stop is pinned to this file's light-mode primary here. Same
-     reasoning as --sh-color-overlay, which is declared once and never redefined. */
+     schemes, so its start stop is pinned to a dark step of the light-mode indigo here.
+     Same reasoning as --sh-color-overlay, which is declared once and never redefined.
+     White text measures 6.97:1 on the near stop and 6.07:1 on the far one. */
   --sh-gradient-spotlight: linear-gradient(
     135deg,
-    oklch(0.395 0.148 278) 0%,
-    oklch(0.42 0.155 302) 100%
+    oklch(0.48 0.19 274) 0%,
+    oklch(0.49 0.09 220) 100%
   );
   --sh-elevation-1: 0 1px 2px -1px oklch(0 0 0 / 0.4), 0 1px 3px oklch(0 0 0 / 0.3);
-  --sh-elevation-2: 0 2px 4px -2px oklch(0 0 0 / 0.45), 0 6px 12px -4px oklch(0 0 0 / 0.35);
-  --sh-elevation-3: 0 8px 16px -6px oklch(0 0 0 / 0.5), 0 20px 32px -12px oklch(0 0 0 / 0.4);
-  --sh-color-chart-1: oklch(0.62 0.16 278.2);
+  --sh-elevation-2: 0 2px 4px -2px oklch(0 0 0 / 0.45), 0 8px 16px -4px oklch(0 0 0 / 0.35);
+  --sh-elevation-3: 0 8px 16px -6px oklch(0 0 0 / 0.5), 0 24px 40px -12px oklch(0 0 0 / 0.4);
+  --sh-color-chart-1: oklch(0.66 0.17 274);
   --sh-color-chart-2: oklch(0.66 0.14 74.2);
   --sh-color-chart-3: oklch(0.65 0.11 209.8);
   --sh-color-chart-4: oklch(0.629 0.139 130.1);
@@ -558,11 +683,11 @@
  * accidentally move the other.
  */
 :root {
-  --sh-platform-color-primary: oklch(0.395 0.148 278);
+  --sh-platform-color-primary: oklch(0.55 0.21 274);
   --sh-platform-color-primary-foreground: oklch(1 0 0);
-  --sh-platform-color-accent: oklch(0.762 0.155 74);
-  --sh-platform-color-accent-foreground: oklch(0.314 0.058 267);
-  --sh-platform-color-surface: oklch(0.979 0.006 264.5);
+  --sh-platform-color-accent: oklch(0.8 0.13 200);
+  --sh-platform-color-accent-foreground: oklch(0.24 0.035 268);
+  --sh-platform-color-surface: oklch(1 0 0);
 }
 
 /* RTL (Urdu) support relies on logical properties; never use left/right offsets in components. */

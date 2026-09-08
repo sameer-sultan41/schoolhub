@@ -43,7 +43,10 @@ export function DropdownMenuItem({
     <DropdownMenuPrimitive.Item
       className={cn(
         "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none",
-        "focus:bg-accent focus:text-accent-foreground",
+        // See select.tsx's own SelectItem comment: `bg-accent` is Aurora's vivid
+        // decorative cyan, not the neutral highlighted-row surface shadcn's stock
+        // components assume — `bg-muted` is what every other hover surface here uses.
+        "focus:bg-muted",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         variant === "danger" && "text-danger focus:bg-danger/10 focus:text-danger",
         "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -65,7 +68,8 @@ export function DropdownMenuCheckboxItem({
       checked={checked}
       className={cn(
         "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none select-none",
-        "focus:bg-accent focus:text-accent-foreground",
+        // See DropdownMenuItem's own comment on why this isn't `bg-accent`.
+        "focus:bg-muted",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
@@ -90,7 +94,8 @@ export function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       className={cn(
         "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none select-none",
-        "focus:bg-accent focus:text-accent-foreground",
+        // See DropdownMenuItem's own comment on why this isn't `bg-accent`.
+        "focus:bg-muted",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
@@ -139,7 +144,8 @@ export function DropdownMenuSubTrigger({
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
         "flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none",
-        "focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground",
+        // See DropdownMenuItem's own comment on why this isn't `bg-accent`.
+        "focus:bg-muted data-[state=open]:bg-muted",
         className,
       )}
       {...props}

@@ -16,6 +16,19 @@ const branding = readFileSync(join(__dirname, "..", "lib", "branding.ts"), "utf8
 
 const CHART_SLOTS = [1, 2, 3, 4, 5, 6] as const;
 
+/**
+ * The app frame — sidebar rail and header. Its own tier because it has to stay one step
+ * BELOW the page in both schemes, and `surface` cannot express that: it flips.
+ */
+const CHROME_TOKENS = [
+  "--sh-color-chrome",
+  "--sh-color-chrome-foreground",
+  "--sh-color-chrome-muted",
+  "--sh-color-chrome-accent",
+  "--sh-color-chrome-border",
+  "--sh-color-chrome-primary",
+];
+
 /** Every token a component may reference. Adding one here before declaring it fails. */
 const REQUIRED_TOKENS = [
   "--sh-color-surface-raised",
@@ -27,6 +40,7 @@ const REQUIRED_TOKENS = [
   "--sh-elevation-3",
   "--sh-gradient-spotlight",
   "--sh-color-spotlight-foreground",
+  ...CHROME_TOKENS,
   ...CHART_SLOTS.map((slot) => `--sh-color-chart-${slot}`),
 ];
 
@@ -143,5 +157,20 @@ describe("theme.css", () => {
 
   it("never adds the platform tier to the branding contract", () => {
     expect(branding).not.toContain("--sh-platform-");
+  });
+
+  it("keeps the chrome tier out of the tenant-overridable branding contract", () => {
+    // The frame is structure, not brand. A tenant who set a pale colour here would get
+    // an unreadable sidebar — the brand reaches the frame through chrome-primary, whose
+    // value this file picks for contrast against chrome rather than for brand fidelity.
+    expect(branding).not.toContain("--sh-color-chrome");
+  });
+
+  it("re-declares the chrome tier for the dark ground", () => {
+    // The frame steps away from the page in BOTH schemes; the values differ per scheme,
+    // so leaving it out of the dark arm would merge the rail into the content.
+    for (const token of CHROME_TOKENS) {
+      expect(darkBlock).toContain(`${token}:`);
+    }
   });
 });

@@ -373,7 +373,7 @@ function DeleteMappingDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="danger" size="sm">
+        <Button variant="outline-danger" size="sm">
           {t("curriculum.actions.delete")}
         </Button>
       </DialogTrigger>

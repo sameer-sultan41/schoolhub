@@ -16,7 +16,7 @@
  *   - the elevation scale, the platform tier, and the type stack.
  *
  * Specificity, low to high:
- *   1. :root — theme.css, the Ink & Brass default
+ *   1. :root — theme.css, the Aurora default
  *   2. :root[data-theme-preset="soft-pop"] — this file
  *   3. the inline style on the TenantTheme wrapper — tenant branding, applied only
  *      under the "tenant" preset (tenant-theme.tsx)
@@ -56,6 +56,10 @@
   --sh-color-secondary-foreground: oklch(0 0 0);
   --sh-color-accent: oklch(0.7686 0.1647 70.0804);
   --sh-color-accent-foreground: oklch(0 0 0);
+
+  /* The chrome tier (sidebar/header) is NOT declared here — it derives from this
+     preset's own surface/muted/border/primary tokens via shared-chrome.css, imported
+     once for every named preset instead of copy-pasted into each one. */
 
   --sh-color-chart-1: oklch(0.5106 0.2301 276.9656);
   --sh-color-chart-2: oklch(0.7038 0.123 182.5025);

@@ -2,6 +2,7 @@
 
 import {
   Badge,
+  BadgeDot,
   Button,
   Card,
   CardContent,
@@ -145,7 +146,8 @@ export function PromotionBatchReview({ batchId }: PromotionBatchReviewProps) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground tabular-nums">{batchId}</span>
           {status ? (
-            <Badge variant={PROMOTION_STATUS_BADGE[status]}>
+            <Badge variant={PROMOTION_STATUS_BADGE[status]} appearance="soft">
+              <BadgeDot />
               {t(`promotions.status.${status}`)}
             </Badge>
           ) : null}

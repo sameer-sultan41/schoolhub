@@ -87,7 +87,16 @@ function DashboardNav({ groups, pathname }: { groups: NavGroup[]; pathname: stri
                         <Icon aria-hidden="true" />
                         <span>{label}</span>
                       </SidebarMenuButton>
-                      <SidebarMenuBadge id={badgeId}>{t("planned")}</SidebarMenuBadge>
+                      {/* A pill, not the bare numeral-style badge SidebarMenuBadge ships
+                          with by default: "Soon" is a word, not a count, and floating
+                          unstyled text beside a disabled item read as leftover/unstyled UI
+                          rather than an intentional label. */}
+                      <SidebarMenuBadge
+                        id={badgeId}
+                        className="rounded-full bg-sidebar-foreground/10 px-1.5 text-[0.625rem] font-semibold tracking-wide text-sidebar-foreground/70 uppercase"
+                      >
+                        {t("planned")}
+                      </SidebarMenuBadge>
                     </SidebarMenuItem>
                   );
                 }
@@ -240,12 +249,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                   identifiable — a school with two campuses open in two tabs still needs to
                   tell them apart — and is aria-hidden because the name is already the
                   accessible name of the drawer and of the nav landmark beneath it. */}
-              <span className="px-2 py-2 font-heading text-base font-semibold text-foreground group-data-[collapsible=icon]:hidden">
+              {/* chrome-, not page-, foregrounds throughout the rail: the frame is ink in
+                  both schemes, so `text-foreground` here would paint the school's name in
+                  the page's ink and lose it against the rail. */}
+              <span className="px-2 py-2 font-heading text-base font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
                 {tenantLabel}
               </span>
               <span
                 aria-hidden="true"
-                className="hidden size-8 shrink-0 items-center justify-center rounded-[var(--sh-radius)] bg-primary font-heading text-sm font-semibold text-primary-foreground group-data-[collapsible=icon]:flex"
+                className="hidden size-8 shrink-0 items-center justify-center rounded-[var(--sh-radius)] bg-sidebar-primary font-heading text-sm font-semibold text-sidebar-primary-foreground group-data-[collapsible=icon]:flex"
               >
                 {tenantLabel.slice(0, 1)}
               </span>
@@ -273,15 +285,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <header
               className={cn(
-                // bg-background is not decoration: a sticky header with a transparent
-                // background shows the page scrolling through it.
-                "flex items-center gap-2 border-b border-border bg-background px-6 py-3",
+                // The header belongs to the frame, not the page: same chrome surface as
+                // the rail, so the two read as one continuous edge around the content
+                // instead of as two separate strips. A background here is not decoration
+                // either — a sticky header with a transparent one shows the page
+                // scrolling through it.
+                "flex items-center gap-2 border-b border-chrome-border bg-chrome px-6 py-3 text-chrome-foreground",
                 "[html[data-navbar-style=sticky]_&]:sticky",
                 "[html[data-navbar-style=sticky]_&]:top-0",
                 // z-40, not 50: the mobile sidebar renders as a Sheet whose overlay sits
                 // at z-50, and a header above that would float over the open drawer.
                 "[html[data-navbar-style=sticky]_&]:z-40",
-                "[html[data-navbar-style=sticky]_&]:bg-background/80",
+                "[html[data-navbar-style=sticky]_&]:bg-chrome/80",
                 "[html[data-navbar-style=sticky]_&]:backdrop-blur-md",
                 // Inherit the panel's own top corners so the floating and inset variants
                 // do not show a square header inside a rounded panel.

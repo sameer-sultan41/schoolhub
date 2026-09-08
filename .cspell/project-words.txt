@@ -24,6 +24,7 @@ Areeba
 arhamkhnz
 ASVS
 authid
+avialdo
 AWSCURRENT
 AWSPENDING
 AWSPREVIOUS
@@ -118,6 +119,7 @@ libgdk
 libpango
 libpangocairo
 libpq
+linkedunion
 Mahnoor
 Mailpit
 manylinux
@@ -125,6 +127,7 @@ Mariam
 maxmemory
 Meilisearch
 messageformat
+Metronic
 msdownload
 myschool
 nahi
@@ -161,6 +164,7 @@ PGPASSWORD
 PGPORT
 PGUSER
 pidfile
+pinnable
 PITR
 pixbuf
 plpgsql
@@ -252,6 +256,7 @@ ungated
 unindexed
 unioned
 unmarkable
+unmemoized
 unmetered
 unmoderated
 unparseable

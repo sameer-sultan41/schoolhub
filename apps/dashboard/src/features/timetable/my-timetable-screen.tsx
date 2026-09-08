@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, EmptyState, Input, Label } from "@schoolhub/ui";
+import { Badge, BadgeDot, EmptyState, Input, Label } from "@schoolhub/ui";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { CalendarDays } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -167,7 +167,12 @@ export function MyTimetableScreen() {
                         <span className="block text-xs text-muted-foreground">
                           {slot.section_name}
                         </span>
-                        {cover ? <Badge variant="warning">{t("my.substituted")}</Badge> : null}
+                        {cover ? (
+                          <Badge variant="warning" appearance="soft">
+                            <BadgeDot />
+                            {t("my.substituted")}
+                          </Badge>
+                        ) : null}
                       </td>
                     );
                   })}
