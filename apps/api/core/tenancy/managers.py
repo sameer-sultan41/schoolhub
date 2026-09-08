@@ -67,6 +67,15 @@ class AppendOnlyQuerySet(models.QuerySet):
             "Correct a mistake by appending a reversal (AGENTS.md invariant 4)."
         )
 
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise RuntimeError(
+            f"{self.model.__name__} is append-only: rows are never updated, in bulk or "
+            "otherwise. bulk_update() builds its own UPDATE independently of update() and "
+            "would walk straight past that guard if this override did not exist. Correct "
+            "a mistake by appending a reversal, not by rewriting history "
+            "(AGENTS.md invariant 4)."
+        )
+
 
 class TenantScopedManager(
     _TenantFilteredManagerMixin, models.Manager.from_queryset(TenantScopedQuerySet)

@@ -175,8 +175,8 @@ def _notify_issued(*, tenant_id: uuid.UUID, invoice_ids: list[str]) -> int:
                 tenant_id=tenant_id,
                 recipients=recipients,
                 context={
-                    "school": {"name": school.name},
-                    "student": {"first_name": invoice.student.first_name},
+                    "school.name": school.name,
+                    "student.first_name": invoice.student.first_name,
                     "invoice_no": invoice.invoice_no,
                     "amount": str(invoice.balance_due),
                     "due_date": invoice.due_date.isoformat(),
@@ -295,8 +295,8 @@ def _send_batch(*, tenant, invoices: list[FeeInvoice], event: str, notify) -> in
             tenant_id=tenant.pk,
             recipients=recipients,
             context={
-                "school": {"name": tenant.name},
-                "student": {"first_name": invoice.student.first_name},
+                "school.name": tenant.name,
+                "student.first_name": invoice.student.first_name,
                 "invoice_no": invoice.invoice_no,
                 "amount": str(invoice.balance_due),
                 "due_date": invoice.due_date.isoformat(),
@@ -442,8 +442,8 @@ def notify_payment_received(*, tenant_id: str, payment_id: str) -> dict[str, int
             tenant_id=uuid.UUID(tenant_id),
             recipients=recipients,
             context={
-                "school": {"name": school.name},
-                "student": {"first_name": payment.student.first_name},
+                "school.name": school.name,
+                "student.first_name": payment.student.first_name,
                 "receipt_no": payment.receipt.receipt_no,
                 "amount": str(payment.amount),
                 "invoice_no": payment.fee_invoice.invoice_no,
@@ -478,8 +478,8 @@ def notify_refund_status(*, tenant_id: str, refund_id: str) -> dict[str, int]:
             tenant_id=uuid.UUID(tenant_id),
             recipients=recipients,
             context={
-                "school": {"name": school.name},
-                "student": {"first_name": refund.student.first_name},
+                "school.name": school.name,
+                "student.first_name": refund.student.first_name,
                 "amount": str(refund.amount),
                 "status": refund.get_status_display().lower(),
                 "reason": refund.decision_note or refund.reason,
