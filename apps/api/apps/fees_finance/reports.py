@@ -154,10 +154,27 @@ def outstanding_and_aging(
     unpaid = queryset.exclude(status=InvoiceStatus.CANCELED).filter(balance_due__gt=0)
 
     def bucket_sum(lower: int, upper: int | None):
+        """One bucket, as a conditional `SUM` over the whole set.
+
+        `default=_ZERO` and `output_field` on the `Case` are both load-bearing:
+        without a default every non-matching row contributes NULL, and without
+        an explicit output field PostgreSQL cannot infer the type of a `CASE`
+        whose branches are all NULL — which is a database error rather than a
+        wrong number, but only for the school whose data happens to trigger it.
+        """
         overdue_days = Q(due_date__lte=today - datetime.timedelta(days=lower))
         if upper is not None:
             overdue_days &= Q(due_date__gt=today - datetime.timedelta(days=upper))
-        return Coalesce(Sum(Case(When(overdue_days, then=F("balance_due"))), _ZERO), _ZERO)
+        return Coalesce(
+            Sum(
+                Case(
+                    When(overdue_days, then=F("balance_due")),
+                    default=_ZERO,
+                    output_field=_MONEY,
+                )
+            ),
+            _ZERO,
+        )
 
     rows = (
         unpaid.values(
@@ -168,7 +185,14 @@ def outstanding_and_aging(
             invoice_count=Count("id"),
             # Not yet due: everything with a due date still ahead.
             not_yet_due=Coalesce(
-                Sum(Case(When(due_date__gt=today, then=F("balance_due"))), _ZERO), _ZERO
+                Sum(
+                    Case(
+                        When(due_date__gt=today, then=F("balance_due")),
+                        default=_ZERO,
+                        output_field=_MONEY,
+                    )
+                ),
+                _ZERO,
             ),
             bucket_0_30=bucket_sum(0, 30),
             bucket_31_60=bucket_sum(30, 60),

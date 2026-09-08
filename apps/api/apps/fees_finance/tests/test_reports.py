@@ -52,12 +52,19 @@ class ReportTestCase(FeesFinanceAPITestCase):
             self.head = FeeHeadFactory(tenant=self.tenant, ledger_account=self.fee_income)
 
     def _invoice(self, *, student=None, due, balance=Decimal("1000.00"), label="2026-09"):
+        """An invoice issued a month before it fell due.
+
+        `issue_date` is derived from `due` rather than pinned: an aging test
+        needs due dates months in the past, and `fee_invoices_due_after_issue`
+        refuses an invoice due before it was issued — correctly, so the fixture
+        is what has to move.
+        """
         with tenant_context(self.tenant.id):
             invoice = FeeInvoiceFactory(
                 tenant=self.tenant,
                 student=student or self.student,
                 academic_session=self.session,
-                issue_date=datetime.date(2026, 9, 1),
+                issue_date=due - datetime.timedelta(days=30),
                 due_date=due,
                 subtotal=balance,
                 period_label=label,
