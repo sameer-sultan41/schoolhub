@@ -40,8 +40,6 @@ lists only the `create` and `waive` halves. A parent who can see a bill but not
 the discount that explains it is being shown a number they cannot check.
 """
 
-from core.rbac.registry import registry
-
 # §3's finance roles. `accountant` owns the full cycle; `finance_staff` is
 # deliberately narrower — data entry, no approvals.
 ACCOUNTANTS = ("accountant",)
@@ -84,114 +82,6 @@ WAIVERS = ("accountant", "school_owner")
 # was the requester, because the same person can hold both keys and §7.3's
 # segregation is about the *act*, not the grant.
 REFUND_APPROVERS = ("accountant", "school_owner")
-
-registry.register(
-    "fees.fee-structure.view",
-    "View fee heads, fee structures and their installment schedules.",
-    STRUCTURE_VIEWERS,
-)
-registry.register(
-    "fees.fee-structure.create",
-    "Create fee heads, fee structures and schedules.",
-    STRUCTURE_AUTHORS,
-)
-registry.register(
-    "fees.fee-structure.update",
-    "Edit a fee head, structure or schedule, and activate or archive a structure.",
-    STRUCTURE_AUTHORS,
-)
-registry.register(
-    "fees.fee-structure.delete",
-    "Delete a fee head, structure or schedule nothing has been invoiced against.",
-    STRUCTURE_AUTHORS,
-)
-registry.register(
-    "fees.ledger.view",
-    "View the chart of accounts and the general ledger.",
-    LEDGER_VIEWERS,
-)
-registry.register(
-    "fees.ledger.create",
-    "Create ledger accounts and post a manual journal entry.",
-    ACCOUNTANTS,
-)
-
-# --- Invoicing (PR B) ----------------------------------------------------- #
-
-registry.register(
-    "fees.invoice.view",
-    "View fee invoices and their lines.",
-    INVOICE_VIEWERS,
-)
-registry.register(
-    "fees.invoice.create",
-    "Generate invoices in bulk, or raise one ad hoc.",
-    FINANCE_STAFF,
-)
-registry.register(
-    "fees.invoice.update",
-    "Cancel or adjust an invoice.",
-    ACCOUNTANTS,
-)
-registry.register(
-    "fees.discount.create",
-    "Grant a student-level discount.",
-    STRUCTURE_AUTHORS,
-)
-registry.register(
-    "fees.discount.view",
-    "View discounts and scholarships.",
-    GRANT_VIEWERS,
-)
-registry.register(
-    "fees.discount.waive",
-    "Revoke a discount or waive an invoice line.",
-    WAIVERS,
-)
-registry.register(
-    "fees.scholarship.create",
-    "Award or decide a scholarship.",
-    STRUCTURE_AUTHORS,
-)
-registry.register(
-    "fees.fine.view",
-    "View fines raised against students.",
-    GRANT_VIEWERS,
-)
-registry.register(
-    "fees.fine.create",
-    "Raise a fine against a student.",
-    FINANCE_STAFF,
-)
-registry.register(
-    "fees.fine.waive",
-    "Waive a pending fine.",
-    WAIVERS,
-)
-
-# --- Collection (PR C) ---------------------------------------------------- #
-
-registry.register(
-    "fees.payment.collect",
-    "Record a payment and issue its receipt.",
-    FINANCE_STAFF,
-)
-registry.register(
-    "fees.payment.view",
-    "View payments, receipts and vouchers.",
-    INVOICE_VIEWERS,
-)
-registry.register(
-    "fees.payment.refund",
-    "Request a refund against a payment.",
-    FINANCE_STAFF,
-)
-registry.register(
-    "fees.refund.approve",
-    "Approve, reject or process a refund request.",
-    REFUND_APPROVERS,
-)
-
 # Referenced by the module docstring's scope note; keeps ruff from flagging the
 # tuple as unused while PR B is what first needs it.
 __all__ = [

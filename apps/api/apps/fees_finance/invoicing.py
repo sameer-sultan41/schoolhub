@@ -196,29 +196,54 @@ def apply_grants(
     Every reduction is clamped to what remains on the line, so no line can go
     below zero — §11's rule, and the CHECK on `fee_invoice_lines` refuses the
     state outright in case this is ever wrong.
+
+    **A FIXED grant has one budget shared across every line it touches; a
+    PERCENT grant does not need one.** `_grant_amount` for PERCENT computes a
+    fresh, correct amount *per line* (10% of this line's own amount), so
+    applying it independently line by line is exactly right. For FIXED,
+    `_grant_amount` returns the grant's whole face value regardless of which
+    line asked — a 1000 fixed sibling discount with no head scope, applied
+    line by line to a 3000/1500/500 invoice, would grant `min(1000, 3000) +
+    min(1000, 1500) + min(1000, 500)` = 2500 off a 1000 discount. `budget`
+    tracks what is left of a FIXED grant's face value as lines consume it, and
+    the loop stops early once it is exhausted.
     """
     total = ZERO
 
     for scholarship in scholarships:
         if scholarship.status not in BILLABLE_SCHOLARSHIP_STATUSES:
             continue
+        budget = (
+            quantize_money(scholarship.value)
+            if scholarship.coverage_type == GrantValueType.FIXED
+            else None
+        )
         for line in lines:
+            if budget is not None and budget <= ZERO:
+                break
             remaining = line.amount - line.discount_amount
             if remaining <= ZERO:
                 continue
-            granted = min(
-                _grant_amount(
-                    value_type=scholarship.coverage_type,
-                    value=scholarship.value,
-                    base=line.amount,
-                ),
-                remaining,
+            granted = _grant_amount(
+                value_type=scholarship.coverage_type,
+                value=scholarship.value,
+                base=line.amount,
             )
+            granted = min(granted, remaining) if budget is None else min(granted, remaining, budget)
             line.discount_amount = quantize_money(line.discount_amount + granted)
             total += granted
+            if budget is not None:
+                budget = quantize_money(budget - granted)
 
     for discount in discounts:
+        budget = (
+            quantize_money(discount.value)
+            if discount.discount_type == GrantValueType.FIXED
+            else None
+        )
         for line in lines:
+            if budget is not None and budget <= ZERO:
+                break
             if not discount_applies(
                 discount=discount, on_date=on_date, fee_head_id=line.fee_head_id
             ):
@@ -226,14 +251,14 @@ def apply_grants(
             remaining = line.amount - line.discount_amount
             if remaining <= ZERO:
                 continue
-            granted = min(
-                _grant_amount(
-                    value_type=discount.discount_type, value=discount.value, base=line.amount
-                ),
-                remaining,
+            granted = _grant_amount(
+                value_type=discount.discount_type, value=discount.value, base=line.amount
             )
+            granted = min(granted, remaining) if budget is None else min(granted, remaining, budget)
             line.discount_amount = quantize_money(line.discount_amount + granted)
             total += granted
+            if budget is not None:
+                budget = quantize_money(budget - granted)
 
     return quantize_money(total)
 

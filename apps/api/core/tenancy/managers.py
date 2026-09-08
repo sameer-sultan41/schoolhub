@@ -45,10 +45,13 @@ class AppendOnlyQuerySet(models.QuerySet):
     """Queryset for append-only tables.
 
     No ``alive()``/``dead()`` on purpose — see the module docstring. It also
-    refuses the two bulk mutations that walk straight past the model's own
-    ``save``/``delete`` guards. The database grant is the real boundary, but a
-    ``RuntimeError`` naming the reversal route is a far better developer
-    experience than a bare ``permission denied for table`` from PostgreSQL.
+    refuses the three bulk mutations that walk straight past the model's own
+    ``save``/``delete`` guards — ``update()``, ``delete()`` and
+    ``bulk_update()``, the last of which builds its own UPDATE independently of
+    ``update()`` and so needs its own override. The database grant is the real
+    boundary, but a ``RuntimeError`` naming the reversal route is a far better
+    developer experience than a bare ``permission denied for table`` from
+    PostgreSQL.
     """
 
     def update(self, **kwargs):

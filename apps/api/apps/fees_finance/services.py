@@ -88,8 +88,22 @@ def ensure_system_accounts(*, tenant_id: uuid.UUID) -> dict[str, LedgerAccount]:
     to "Petty cash" keeps its name, and one that archived an account it does not
     use keeps it archived. Re-asserting our defaults over a tenant's edits would
     make this command destructive on its second run.
+
+    Reads through `all_tenants.filter(tenant_id=tenant_id)`, not the default
+    manager. `LedgerAccount.objects` is tenant-scoped by the *ambient* context
+    (`core.tenancy.context.get_current_tenant_id()`), not by this function's own
+    `tenant_id` argument — every current caller happens to bind that context
+    first, so the two agree today, but a function that takes `tenant_id`
+    explicitly should not depend on a caller having also set it as ambient
+    state. Getting it wrong here is silent and severe: if the two ever diverge,
+    `existing` reflects the *other* tenant's accounts, every code in
+    `SYSTEM_ACCOUNTS` looks already present (the codes are fixed strings like
+    "1000"), and this tenant's accounts are never created.
     """
-    existing = {account.code: account for account in LedgerAccount.objects.alive()}
+    existing = {
+        account.code: account
+        for account in LedgerAccount.all_tenants.filter(tenant_id=tenant_id).alive()
+    }
     missing = [
         LedgerAccount(
             tenant_id=tenant_id, code=code, name=name, account_type=account_type, is_system=True
@@ -127,10 +141,12 @@ def assert_fee_head_account_is_income(*, ledger_account: LedgerAccount) -> None:
 def assert_account_may_be_archived(*, account: LedgerAccount) -> None:
     """A system account stays available; anything else may be archived freely.
 
-    Archiving is the only retirement path for an account that has been posted
-    to — the entries must stay readable, so deletion is never right. `is_system`
-    accounts are the ones this module's own postings target by code, so
-    archiving one would break collection for the whole tenant.
+    Archiving keeps the row and its code exactly as they are — only
+    `is_active` moves — so a posted-to account's history stays reachable under
+    the same code. `is_system` accounts are the ones this module's own
+    postings target by code, so archiving one would break collection for the
+    whole tenant. This check is for `PATCH is_active=False` only; deleting is
+    the stricter operation and has its own check below.
     """
     if account.is_system:
         raise DomainRuleViolation(
@@ -138,6 +154,32 @@ def assert_account_may_be_archived(*, account: LedgerAccount) -> None:
                 "is_active": (
                     f"{account.code} {account.name} is a system account and stays "
                     "available. Add your own account alongside it instead."
+                )
+            }
+        )
+
+
+def assert_account_may_be_deleted(*, account: LedgerAccount) -> None:
+    """Deletion is stricter than archiving: nothing may have posted to it.
+
+    Archiving keeps the row and its code; deleting frees the code for reuse —
+    `ledger_accounts_code_unique` is conditioned on `deleted_at IS NULL`. An
+    account with live postings must never be deletable, because a new account
+    could then take its code while the old postings still exist under a
+    now-invisible row: the FK still resolves correctly by primary key, but
+    "account 4001" would silently mean two different things depending on when
+    you asked. Archiving is the only retirement path once anything has posted;
+    say so rather than letting the delete succeed and the confusion surface
+    later, in a report.
+    """
+    assert_account_may_be_archived(account=account)
+    if LedgerEntry.objects.filter(ledger_account=account).exists():
+        raise DomainRuleViolation(
+            {
+                "id": (
+                    f"{account.code} {account.name} has ledger postings and cannot "
+                    "be deleted. Archive it instead — its code stays reserved and "
+                    "its history stays under it."
                 )
             }
         )
@@ -166,9 +208,14 @@ def assert_structure_is_editable(*, structure: FeeStructure) -> None:
 def assert_session_is_writable(*, academic_session) -> None:
     """A closed session takes no new fee configuration.
 
-    Mirrors `academics` and `examinations`: the session lifecycle is
-    school_organization's, and every module that hangs records off a session
-    asks the same question rather than each deciding for itself.
+    The predicate mirrors `academics` and `examinations` — `AcademicSession.
+    is_writable` is school-organization's own, and this defers to it rather
+    than restating the status list. The function itself is not shared: the
+    error body's key and wording are fees-finance's own ("fee configuration"),
+    where examinations' equivalent speaks to exams. Genuinely unifying the two
+    into one helper is a cross-module change with no bug behind it, so it is
+    left as a parallel, independent implementation of the same underlying rule
+    rather than bundled into this PR.
     """
     if not academic_session.is_writable:
         raise DomainRuleViolation(
@@ -244,18 +291,33 @@ def archive_fee_structure(*, structure: FeeStructure, actor_id: uuid.UUID | None
 
 
 def assert_fee_head_is_unused(*, fee_head: FeeHead) -> None:
-    """A head priced into a schedule cannot be deleted, only deactivated.
+    """A head referenced anywhere cannot be deleted, only deactivated.
 
     `is_active=False` removes it from new structures while every historical
-    invoice line keeps its meaning. Deleting it would leave lines describing a
-    charge nobody can name.
+    reference keeps its meaning. Deleting it would leave those rows describing
+    a charge nobody can name — and `fee_heads_code_unique` is conditioned on
+    `deleted_at IS NULL`, so a deleted head's code is immediately reusable by a
+    new one, the same code-reuse shape flagged on `LedgerAccount`.
+
+    Three tables reference a head, and pricing it into a `FeeSchedule` is only
+    one of them. A fine-category head is never priced into a schedule at all —
+    it exists purely for `Fine.fee_head` — and `generate_invoices` also writes
+    `FeeInvoiceLine.fee_head` directly, independent of whichever schedule (if
+    any) produced the line. A check that only looked at `FeeSchedule` would let
+    a fine-only or already-invoiced head be deleted while still referenced.
     """
-    if FeeSchedule.objects.alive().filter(fee_head=fee_head).exists():
+    referenced = (
+        FeeSchedule.objects.alive().filter(fee_head=fee_head).exists()
+        or Fine.objects.alive().filter(fee_head=fee_head).exists()
+        or FeeInvoiceLine.objects.alive().filter(fee_head=fee_head).exists()
+    )
+    if referenced:
         raise DomainRuleViolation(
             {
                 "fee_head": (
-                    "This fee head is priced into a fee schedule. Deactivate it "
-                    "instead — historical invoice lines still refer to it."
+                    "This fee head is referenced by a fee schedule, a fine or an "
+                    "invoice line. Deactivate it instead — historical records still "
+                    "refer to it."
                 )
             }
         )
@@ -416,7 +478,25 @@ def generate_invoices(
     unbilled one: the accountant cannot tell which students were done without
     reading every invoice, and the duplicate guard would then make a clean
     re-run impossible to distinguish from a double-billing attempt.
+
+    **The structure is locked `FOR UPDATE` before `already` is read.** Without
+    it, two runs firing at once for the same structure and period (a retried
+    Celery delivery, or two staff members both clicking generate) both read the
+    *same* `already` set — neither sees the other's still-uncommitted inserts —
+    and both then try to create the same student's invoice. The duplicate guard
+    is exactly what refuses the second one, but as an uncaught `IntegrityError`
+    partway through this one transaction, which the "skip and finish the
+    remainder" story only holds for a *sequential* retry, not a genuinely
+    concurrent one. The lock makes the second run wait for the first to commit,
+    so it then sees the correct, up-to-date `already` set and skips cleanly —
+    the same shape `activate_fee_structure` and `record_payment` already use to
+    close this class of race.
     """
+    structure = (
+        FeeStructure.objects.select_for_update()
+        .select_related("academic_session")
+        .get(pk=structure.pk)
+    )
     assert_structure_is_billable(structure=structure)
     session = structure.academic_session
     window_start, window_end, label = resolve_period(
@@ -608,14 +688,25 @@ def revoke_discount(*, discount: Discount, reason: str, actor_id: uuid.UUID | No
     Revocation is forward-looking by design: re-pricing issued invoices would
     change what a parent was told they owe, which is a correction that belongs
     in an adjustment line rather than a silent rewrite.
+
+    **`reason` is left exactly as it was.** `discounts` has one text column,
+    unlike `fines` — which keeps `reason` (why it was raised) and
+    `waived_reason` (why it was forgiven) separate precisely so neither
+    overwrites the other. A discount's `reason` records why it was *granted*,
+    and a revocation overwriting it would destroy that record with no way to
+    recover it: an accountant reviewing a revoked discount six months later
+    would read the revocation's reason and have no way to tell what the grant
+    itself was for. The caller's stated reason for revoking still reaches the
+    audit trail — `record_audit`'s `after` payload — which is the durable,
+    queryable place a decision like this belongs, without overloading a column
+    the schema gives one meaning.
     """
     locked = Discount.objects.select_for_update().get(pk=discount.pk)
     if not reason.strip():
         raise DomainRuleViolation({"reason": "Revoking a discount requires a reason."})
     locked.status = DiscountStatus.REVOKED
-    locked.reason = reason
     locked.updated_by = actor_id
-    locked.save(update_fields=["status", "reason", "updated_by", "updated_at"])
+    locked.save(update_fields=["status", "updated_by", "updated_at"])
     return locked
 
 
