@@ -322,7 +322,7 @@ class ReversalTests(LedgerTestCase):
         from django.test.utils import CaptureQueriesContext
 
         second_income = LedgerAccountFactory(
-            tenant=self.tenant, code="4100", account_type=LedgerAccountType.INCOME
+            tenant=self.tenant, code="4900", account_type=LedgerAccountType.INCOME
         )
         with tenant_context(self.tenant.id), transaction.atomic():
             transaction_id = post_transaction(
