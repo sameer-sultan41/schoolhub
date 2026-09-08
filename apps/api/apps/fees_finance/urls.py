@@ -13,11 +13,15 @@ from django.urls import path
 from rest_framework.routers import SimpleRouter
 
 from apps.fees_finance.views import (
+    DiscountViewSet,
     FeeHeadViewSet,
+    FeeInvoiceViewSet,
     FeeScheduleViewSet,
     FeeStructureViewSet,
+    FineViewSet,
     LedgerAccountViewSet,
     LedgerEntryViewSet,
+    ScholarshipViewSet,
 )
 
 router = SimpleRouter(trailing_slash=False)
@@ -26,6 +30,10 @@ router.register("ledger-entries", LedgerEntryViewSet, basename="ledger-entries")
 router.register("fee-heads", FeeHeadViewSet, basename="fee-heads")
 router.register("fee-structures", FeeStructureViewSet, basename="fee-structures")
 router.register("fee-schedules", FeeScheduleViewSet, basename="fee-schedules")
+router.register("fee-invoices", FeeInvoiceViewSet, basename="fee-invoices")
+router.register("discounts", DiscountViewSet, basename="discounts")
+router.register("scholarships", ScholarshipViewSet, basename="scholarships")
+router.register("fines", FineViewSet, basename="fines")
 
 urlpatterns = [
     path(
@@ -42,6 +50,26 @@ urlpatterns = [
         "fee-structures/<uuid:pk>:archive",
         FeeStructureViewSet.as_view({"post": "archive"}),
         name="fee-structures-archive",
+    ),
+    path(
+        "fee-invoices:generate",
+        FeeInvoiceViewSet.as_view({"post": "generate"}),
+        name="fee-invoices-generate",
+    ),
+    path(
+        "fee-invoices/<uuid:pk>:cancel",
+        FeeInvoiceViewSet.as_view({"post": "cancel"}),
+        name="fee-invoices-cancel",
+    ),
+    path(
+        "discounts/<uuid:pk>:revoke",
+        DiscountViewSet.as_view({"post": "revoke"}),
+        name="discounts-revoke",
+    ),
+    path(
+        "fines/<uuid:pk>:waive",
+        FineViewSet.as_view({"post": "waive"}),
+        name="fines-waive",
     ),
     *router.urls,
 ]

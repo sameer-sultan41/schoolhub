@@ -38,12 +38,19 @@ from apps.fees_finance.services import ensure_system_accounts
 from apps.fees_finance.tests.base import FEATURE, FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
     AcademicSessionFactory,
+    CampusFactory,
+    DiscountFactory,
     FeeHeadFactory,
+    FeeInvoiceFactory,
     FeeScheduleFactory,
     FeeStructureFactory,
+    FineFactory,
     LedgerAccountFactory,
+    ScholarshipFactory,
+    StudentFactory,
     TenantFactory,
     enable_feature,
+    fine_head,
     posting,
 )
 from core.tenancy.context import tenant_context
@@ -75,6 +82,29 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
                 fee_head=self.other_head,
             )
             self.other_extra_account = LedgerAccountFactory(tenant=self.other_tenant, code="4321")
+            other_campus = CampusFactory(tenant=self.other_tenant)
+            self.other_student = StudentFactory(tenant=self.other_tenant, campus=other_campus)
+            self.other_invoice = FeeInvoiceFactory(
+                tenant=self.other_tenant,
+                student=self.other_student,
+                academic_session=self.other_session,
+                invoice_no="INV-OTHER-1",
+            )
+            self.other_discount = DiscountFactory(
+                tenant=self.other_tenant,
+                student=self.other_student,
+                academic_session=self.other_session,
+            )
+            self.other_scholarship = ScholarshipFactory(
+                tenant=self.other_tenant,
+                student=self.other_student,
+                academic_session=self.other_session,
+            )
+            self.other_fine = FineFactory(
+                tenant=self.other_tenant,
+                student=self.other_student,
+                fee_head=fine_head(self.other_tenant, self.other_income),
+            )
 
     def test_a_foreign_ledger_account_is_not_found(self) -> None:
         response = self.client.get(f"/api/v1/ledger-accounts/{self.other_extra_account.pk}")
@@ -195,3 +225,91 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
 
         with tenant_context(self.tenant.id):
             self.assertEqual(LedgerEntry.all_tenants.count(), 0)
+
+    # ------------------------------------------------------------- invoicing
+
+    def test_a_foreign_invoice_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/fee-invoices/{self.other_invoice.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_discount_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/discounts/{self.other_discount.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_scholarship_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/scholarships/{self.other_scholarship.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_fine_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/fines/{self.other_fine.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cancelling_a_foreign_invoice_is_not_found(self) -> None:
+        response = self.client.post(
+            f"/api/v1/fee-invoices/{self.other_invoice.pk}:cancel",
+            {"reason": "Not mine to cancel"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_revoking_a_foreign_discount_is_not_found(self) -> None:
+        response = self.client.post(
+            f"/api/v1/discounts/{self.other_discount.pk}:revoke",
+            {"reason": "Not mine to revoke"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_waiving_a_foreign_fine_is_not_found(self) -> None:
+        response = self.client.post(
+            f"/api/v1/fines/{self.other_fine.pk}:waive",
+            {"reason": "Not mine to waive"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_billing_a_foreign_structure_is_not_found(self) -> None:
+        """The structure is named in the *body*, and `:generate` resolves it
+        through the tenant-scoped manager — so this is a 404 from the lookup
+        rather than a 400 from a field, and it leaks nothing either way."""
+        response = self.client.post(
+            "/api/v1/fee-invoices:generate",
+            {"fee_structure": str(self.other_structure.pk), "period_start": "2026-09-01"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_student_cannot_be_fined(self) -> None:
+        """A student named in a body fails to resolve through the serializer's
+        tenant-scoped PrimaryKeyRelatedField, which is a 400: the field
+        genuinely does not validate, and the message says the id is invalid
+        rather than that it belongs to someone else."""
+        head = fine_head(self.tenant, self.fee_income)
+
+        response = self.client.post(
+            "/api/v1/fines",
+            {
+                "student": str(self.other_student.pk),
+                "fee_head": str(head.pk),
+                "fine_type": "library",
+                "amount": "100.00",
+                "reason": "Cross-tenant attempt",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_foreign_tenant_s_invoices_are_never_listed(self) -> None:
+        response = self.client.get("/api/v1/fee-invoices")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["data"], [])

@@ -50,6 +50,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `fees.fee-structure.view` † | View fee heads, structures and schedules | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner` |
 | `fees.ledger.view` | View general ledger and student ledgers | `accountant`, `school_owner` |
 | `fees.ledger.create` † | Create ledger accounts and post a manual journal entry | `accountant` |
+| `fees.discount.view` † / `fees.fine.view` † | View discounts, scholarships and fines | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `guardian`, `student` (scoped `own`) |
 | `fees.expense.create` / `.update` | Record expenses | `accountant`, `finance_staff` |
 | `fees.expense.approve` | Approve submitted expenses | `accountant`, `school_owner` |
 | `fees.budget.create` / `fees.budget.approve` | Define / approve budgets | `accountant` / `school_owner` |
@@ -63,9 +64,13 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 Segregation of duties: the user who processed a payroll run or requested a refund cannot approve it (see auth-and-rbac §2.4).
 
 † Added during implementation. This table granted create/update/delete on fee
-configuration with no way to *read* it, and §5.8's automatic postings plus §8's
-accountant journal with no key for either — capabilities the doc grants in prose
-above and the table had no row for. Registered with the row added in the same
+configuration with no way to *read* it; §5.8's automatic postings plus §8's
+accountant journal with no key for either; and the `create`/`waive` halves of
+discounts and fines with no `view` — while §3 gives a guardian a view of
+"children's invoices, outstanding balance" and §13 specifies discount and fine
+registers. All capabilities the doc grants in prose above and the table had no
+row for. A parent who can see a bill but not the discount that explains it is
+being shown a number they cannot check. Registered with the row added in the same
 PR, which is how `attendance.student-attendance.import` and examinations' five
 gap keys were resolved. `fees.ledger.create` is `accountant`-only and
 deliberately excludes `finance_staff`: §3 makes them a data-entry role, and a
@@ -316,16 +321,18 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 
 Building as four stacked PRs. This section is updated by each.
 
-**PR A — ledger and fee configuration (this PR).** The chart of accounts, the
+**PR A — ledger and fee configuration.** The chart of accounts, the
 append-only double-entry ledger and its posting engine, fee heads, structures
 and installment schedules.
-**PR B — invoicing.** Bulk generation, discounts, scholarships, fines.
+**PR B — invoicing (this PR).** Bulk generation as a 202 + job, gapless invoice
+numbering, the duplicate guard, discounts, scholarships, fines with their
+waiver, cancellation, and §12's three invoicing notifications.
 **PR C — collection.** Payments, receipts, refunds, vouchers and the settlement
 import.
 **PR D — spend and reports.** Expenses, categories, budgets, and §13's reports
 with the export lane.
 
-### Built (PR A)
+### Built (PRs A-B)
 
 | Area | State |
 | ---- | ----- |
@@ -335,6 +342,11 @@ with the export lane.
 | Fee configuration | Fee heads mapped to income accounts, structures scoped by session/class/campus with a draft→active→archived lifecycle, and installment schedules whose due rule must match their frequency |
 | Endpoints | §16's `/ledger-accounts`, `/ledger-entries` (read-only), `/fee-heads`, `/fee-structures` (+ `:activate`, `:archive`), `/fee-schedules`, plus `/ledger-entries:post-journal` |
 | Seeding | `manage.py seed_finance_accounts` — idempotent system accounts per tenant |
+| Entities (PR B) | `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines` — 10 of §15's 22 tables now built |
+| Invoicing | `POST /fee-invoices:generate` (202 + job, `Idempotency-Key`), ad-hoc invoices, `:cancel` with a required reason, gapless numbering via `core.tenancy.sequences`, proration on mid-term enrollment, and a duplicate guard that makes a re-run skip rather than double-bill |
+| Grants | Discounts scoped to a session and optionally one head, scholarships with their five-state lifecycle, both attributable to a granter by CHECK; `:revoke` is forward-looking |
+| Fines | Raised by hand or by a source module (idempotent on `(source_module, source_reference)`), folded onto the next invoice, `:waive` behind `fees.fine.waive` with actor and reason by CHECK |
+| Notifications | §12's `fees.invoice-issued`, `fees.due-reminder` and `fees.overdue`, one `notify()` per trigger with the whole recipient list, plus the nightly `send-fee-reminders` sweep |
 
 ### Decisions worth carrying forward
 
@@ -411,6 +423,44 @@ journal with no platform record behind it and `reversal` for a correction, so
 there is no state a NULL would describe. It also keeps a `NullEnum` union — for
 a case that cannot arise — out of the generated TypeScript client, which is
 where the dead nullability first became visible.
+
+**Scholarships apply before discounts, and the order is fixed in code.** A 50%
+scholarship and a fixed 600 discount on a 1000 line: scholarship first takes
+500, then the discount is clamped to the remaining 500, so the line is fully
+covered. Applying the discount first would take 600 and leave only 400 for the
+scholarship to cover — **the sponsor pays less and the school absorbs more.**
+Nothing in §5 states an order, so `invoicing.apply_grants` states one and its
+docstring says why, rather than leaving it to whichever list happened to be
+iterated first.
+
+**Fines are never prorated and never discounted.** A late-payment or library
+charge is a fixed penalty, and reducing it with a sibling discount would be a
+policy nobody wrote down. Likewise a one-time admission fee is not half-owed by
+a student who joined mid-month — proration applies only to recurring charges,
+because prorating a one-off is a discount nobody granted.
+
+**An invoice's due date is the earliest across its lines.** A single invoice
+whose charges fall due on different days is due on the first of them; anything
+later would let part of it go quietly overdue outside the aging report.
+
+**The period label is derived, never typed.** It is half the duplicate guard, so
+a hand-entered "Sept 2026" beside a generated "2026-09" would let the same month
+be billed twice.
+
+**A run that owes nothing raises nothing.** A per-term-only structure billed in
+a month with no term produces no lines, and that is neither an error nor a skip:
+raising a zero invoice would put an empty statement in front of a parent.
+
+**The overdue sweep notifies on the transition, not on current status.** The
+`UPDATE` to `overdue` and the notification are in one transaction and only
+invoices that actually moved are notified — a sweep alerting on current status
+re-sent every guardian the same message on each run, which is the bug
+attendance's review found.
+
+**Cancelling returns billed fines to the queue.** A cancelled invoice must not
+quietly forgive a library charge. And a part-paid invoice cannot be cancelled at
+all: money already received cannot be un-received, so §7.3's refund workflow is
+the route, and cancelling would leave the payment pointing at a void charge.
 
 **`due_day` is capped at 28.** Day 29-31 is not a rule February can honour. The
 generator clamps to the month's last day, and the constraint keeps that clamp a

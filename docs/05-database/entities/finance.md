@@ -1,7 +1,7 @@
 # Entities: Finance & Payroll
 
 > **Agent Context**
-> **Implementation note:** 5 of these 22 tables are built (`ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules`); payroll's four are deferred with hr-leave. See `../../03-modules/fees-finance.md` §20 for the register.
+> **Implementation note:** 10 of these 22 tables are built — `ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules` (PR A) and `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines` (PR B). Payroll's four are deferred with hr-leave. See `../../03-modules/fees-finance.md` §20 for the register.
 > **Summary:** Column-level specs for the 22 tables owned by the fees-finance module: fee configuration, invoicing, collections (incl. bank/wallet vouchers), refunds, general ledger, expenses, budgets, and payroll. Every table is tenant-owned and implicitly carries `id UUID PK`, `tenant_id FK`, `created_at`/`updated_at`, `created_by`/`updated_by`, `deleted_at` (soft delete) — exceptions are stated per table. All monetary columns are `numeric(12,2)` in the tenant's configured currency (no per-row currency column).
 > **Co-load with:** `../../03-modules/fees-finance.md` · `people.md` (students, staff) · `academics.md` (sessions, terms, classes, campuses) · `tenancy.md` (users, files)
 
@@ -76,7 +76,9 @@ Student invoice header with lifecycle status and denormalized totals.
 | balance_due | numeric(12,2) | no | `0` | `subtotal − discount_total + fine_total − paid_total` |
 | canceled_reason | text | yes | null | Required when status = `canceled` |
 
-Indexes: unique `(tenant_id, invoice_no)`; unique partial `(tenant_id, student_id, fee_structure_id, period_label)` where status ≠ `canceled` (duplicate guard); `(tenant_id, student_id, status)`; `(tenant_id, due_date)` for aging.
+Indexes: unique `(tenant_id, invoice_no)`; unique partial `(tenant_id, student_id, fee_structure_id, period_label)` where status ≠ `canceled` (duplicate guard), **NULLS NOT DISTINCT** — `fee_structure_id` is null on an ad-hoc invoice and `period_label` on a one-time charge, and under PostgreSQL's default those nulls would make every such invoice unique from every other, defeating the guard; `(tenant_id, student_id, status)`; `(tenant_id, due_date)` for aging.
+
+`balance_due` is enforced by a CHECK (`subtotal − discount_total + fine_total − paid_total`) rather than left to the application, because a parent reads the balance and an accountant reads the components — a denormalized total that can drift is an invoice the two of them read differently.
 Relationships: many→one `students`, `student_enrollments`, `academic_sessions`, `fee_structures`; one→many `fee_invoice_lines`, `payments`.
 
 ### fee_invoice_lines
