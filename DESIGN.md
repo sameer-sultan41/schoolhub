@@ -1,7 +1,7 @@
 ---
 version: 1
 name: SchoolHub Aurora
-description: The design system for SchoolHub, a multi-tenant school-management SaaS. Aurora pairs a vivid indigo primary with a cyan accent and frames the app in an ink chrome that stays dark in both colour schemes, so light content always sits inside a dark surround. Every colour is expressed in OKLCH and measured against WCAG 2.1 rather than eyeballed; the chart ramp is additionally validated under simulated protanopia and deuteranopia. Type pairs a humanist sans (Inter) for body with a serif display face (Fraunces) for headings and a true tabular monospace (JetBrains Mono) for every figure, with Noto Nastaliq Urdu in the same stacks so Urdu renders without a separate rule.
+description: The design system for SchoolHub, a multi-tenant school-management SaaS. Aurora pairs a vivid indigo primary with a cyan accent on a faintly tinted canvas whose cards are pure white, and frames the app in a quiet recessed chrome that lets the content carry the colour. Every colour is expressed in OKLCH and measured against WCAG 2.1 rather than eyeballed; the chart ramp is additionally validated under simulated protanopia and deuteranopia. Type pairs a humanist sans (Inter) for body with a serif display face (Fraunces) for headings and a true tabular monospace (JetBrains Mono) for every figure, with Noto Nastaliq Urdu in the same stacks so Urdu renders without a separate rule.
 
 colors:
   # Brand
@@ -21,13 +21,13 @@ colors:
   # Text (light)
   foreground: "#181F30"
   muted-foreground: "#60697B"
-  # Chrome — the app frame, ink in BOTH schemes
-  chrome: "#171F36"
-  chrome-foreground: "#E4E8F0"
-  chrome-muted: "#9198A8"
-  chrome-accent: "#232D47"
-  chrome-border: "#2B354D"
-  chrome-primary: "#8496F5"
+  # Chrome — the app frame; one step BELOW the page in both schemes
+  chrome: "#F4F6FA"
+  chrome-foreground: "#181F30"
+  chrome-muted: "#60697B"
+  chrome-accent: "#E7EBF4"
+  chrome-border: "#D9DEE8"
+  chrome-primary: "#515CE9"
   # Status — semantics, never branding
   success: "#178257"
   warning: "#F0924A"
@@ -42,7 +42,7 @@ colors:
   dark-muted-foreground: "#9BA5B8"
   dark-border: "#2A3249"
   dark-primary: "#8496F5"
-  dark-chrome: "#141B2D"
+  dark-chrome: "#090E1A"
   # Categorical chart ramp — FIXED ORDER, see Charts
   chart-1: "#515CE9"
   chart-2: "#B87D14"
@@ -136,7 +136,7 @@ components:
   sidebar:
     width: 256px
     width-collapsed: 48px
-    surface: chrome
+    surface: "chrome — one step below the page"
     active: "2px chrome-primary leading bar + chrome-primary at 15% fill + frame-ink label + hued icon"
     hover: "chrome-accent fill, no colour"
 ---
@@ -187,14 +187,17 @@ disabled controls. `surface-raised` is for anything floating above it.
 
 ### Chrome
 
-The app frame — sidebar rail and header — is its own tier and is **ink in both schemes**.
-It does not flip with the page, so the app keeps one shape in light and dark, and content
-always sits inside a surround rather than bleeding into it.
+The app frame — sidebar rail and header — is its own tier, sitting **one step below the
+page in both schemes** so content reads as being on top of it. Recession is the constant;
+the direction of the lightness step is not, which is why it cannot simply be `surface`.
+
+An inverted ink frame was tried and pulled. A dark navy slab behind a light page is a
+strong look, but it is a *template's* look, and it spends the page's entire colour budget
+on furniture. The frame's job is to sit still and let the content carry the colour.
 
 Chrome is **not tenant-overridable**. A frame is structure, not brand, and a school that
-picked a pale brand colour would otherwise get an unreadable sidebar. The brand still
-reaches the frame through `chrome-primary` (`#8496F5`, 5.90:1 on the rail), which paints
-the active nav item and the focus ring.
+picked a pale brand colour would otherwise get an unreadable sidebar. The brand reaches
+the frame through `chrome-primary`, which paints the active nav item and the focus ring.
 
 ### Semantic
 
@@ -298,7 +301,7 @@ exists. Never a bare line of grey text.
 - Reference tokens (`bg-primary`, `text-muted-foreground`), never literals.
 - State a measured contrast ratio when introducing or moving a colour.
 - Let the accent bar, the icon and the weight carry meaning alongside hue.
-- Keep the frame dark in both schemes.
+- Keep the frame recessed from the page in both schemes.
 - Use the numeric face for every figure.
 
 **Don't**

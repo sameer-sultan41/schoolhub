@@ -287,9 +287,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               className={cn(
                 // The header belongs to the frame, not the page: same chrome surface as
                 // the rail, so the two read as one continuous edge around the content
-                // rather than as a light strip sitting on top of a dark one. A background
-                // here is not decoration either — a sticky header with a transparent one
-                // shows the page scrolling through it.
+                // instead of as two separate strips. A background here is not decoration
+                // either — a sticky header with a transparent one shows the page
+                // scrolling through it.
                 "flex items-center gap-2 border-b border-chrome-border bg-chrome px-6 py-3 text-chrome-foreground",
                 "[html[data-navbar-style=sticky]_&]:sticky",
                 "[html[data-navbar-style=sticky]_&]:top-0",

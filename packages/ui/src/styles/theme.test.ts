@@ -17,8 +17,8 @@ const branding = readFileSync(join(__dirname, "..", "lib", "branding.ts"), "utf8
 const CHART_SLOTS = [1, 2, 3, 4, 5, 6] as const;
 
 /**
- * The app frame — sidebar rail and header. Its own tier because it is the one region
- * that stays ink in BOTH schemes, so it cannot be derived from `surface`, which flips.
+ * The app frame — sidebar rail and header. Its own tier because it has to stay one step
+ * BELOW the page in both schemes, and `surface` cannot express that: it flips.
  */
 const CHROME_TOKENS = [
   "--sh-color-chrome",
@@ -167,8 +167,8 @@ describe("theme.css", () => {
   });
 
   it("re-declares the chrome tier for the dark ground", () => {
-    // Chrome is ink in both schemes, but not the SAME ink: in dark mode it has to step
-    // away from the page background or the rail and the content merge into one field.
+    // The frame steps away from the page in BOTH schemes; the values differ per scheme,
+    // so leaving it out of the dark arm would merge the rail into the content.
     for (const token of CHROME_TOKENS) {
       expect(darkBlock).toContain(`${token}:`);
     }

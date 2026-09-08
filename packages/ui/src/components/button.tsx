@@ -23,9 +23,10 @@ const buttonVariants = cva(
         /*
          * The two frame variants — for controls that sit in the header or the sidebar
          * rail rather than on the page. They exist because `ghost` and `outline` hardcode
-         * the PAGE's tokens (`text-foreground`, `hover:bg-muted`), and the chrome tier is
-         * ink in both schemes: on the header those resolve to near-black text on a dark
-         * surface, and a hover that flashes a near-white pill. Same shapes, frame tokens.
+         * the PAGE's tokens (`text-foreground`, `hover:bg-muted`), which is wrong on a
+         * surface that steps independently of the page: the hover fill in particular is
+         * the page's `muted`, so it can land at almost no contrast against the rail, or
+         * invert entirely if the frame is ever re-themed. Same shapes, frame tokens.
          */
         "chrome-ghost": "bg-transparent text-chrome-foreground hover:bg-chrome-accent",
         "chrome-outline":

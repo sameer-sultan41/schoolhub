@@ -483,20 +483,18 @@ const sidebarMenuButtonVariants = cva(
   // hover/press so the active tab keeps its own treatment even while the pointer is
   // sitting on it, rather than the two states fighting for the same element.
   //
-  // The "primary" here is `sidebar-primary`, NOT the page's `primary`. Those are two
-  // different colours by design: theme.css's chrome tier is ink in both schemes, and the
-  // page's own primary measures 1.66:1 against it — an active tab painted in it would be
-  // invisible. `sidebar-primary` is the lightened step chosen for exactly this surface
-  // (5.90:1). Presets that keep a light rail alias the two back together, so this is
-  // correct under those too.
+  // The "primary" here is `sidebar-primary`, NOT the page's `primary`. They agree under
+  // the default palette, and deliberately do not have to: the frame picks its own step
+  // per scheme, so a dark rail can take a lighter primary than the page without every
+  // call site learning about it.
   //
   // The active LABEL takes frame ink, not the hue, and that split is measured rather than
-  // stylistic. Painting the label in `sidebar-primary` on its own 15% tint lands at
-  // 3.41:1 — under AA — because tinting moves the background toward the text, the same
+  // stylistic. Painting the label in `sidebar-primary` on its own 15% tint drops as low
+  // as 3.41:1 — under AA — because tinting moves the background toward the text, the same
   // trap badge.tsx documents at length for soft badges. Frame ink on that tint measures
-  // 7.61:1. So the hue stays where the hue is legal: the accent bar (5.95:1 against the
-  // rail, clearing 1.4.11's 3:1 for a UI boundary) and the icon (3.41:1, which clears the
-  // same graphical floor — an icon is not text).
+  // 13.41:1. So the hue stays where the hue is legal: the accent bar (4.78:1 against the
+  // rail, clearing 1.4.11's 3:1 for a UI boundary) and the icon, which clears the same
+  // graphical floor — an icon is not text.
   "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-lg border-s-2 border-transparent p-2 text-start text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding,box-shadow,color,background-color,border-color] group-has-data-[sidebar=menu-action]/menu-item:pe-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=false]:hover:bg-sidebar-accent data-[active=false]:hover:text-sidebar-accent-foreground data-[active=false]:active:bg-sidebar-accent data-[active=false]:active:text-sidebar-accent-foreground data-[active=true]:border-sidebar-primary data-[active=true]:bg-sidebar-primary/15 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[active=true]:shadow-sm data-[active=true]:[&>svg]:text-sidebar-primary data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-200 data-[active=false]:hover:[&>svg]:scale-110 data-[active=false]:hover:[&>svg]:text-sidebar-primary",
   {
     variants: {

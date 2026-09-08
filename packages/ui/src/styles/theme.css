@@ -321,25 +321,32 @@
   --sh-color-accent-foreground: oklch(0.24 0.035 268);
 
   /*
-   * The chrome tier — the sidebar rail and the header. Ink in BOTH schemes, which is
-   * the point: the frame does not flip with the page, so the app keeps the same shape
-   * whether the viewer is in light or dark mode, and light content always sits inside
-   * a dark surround rather than bleeding into it.
+   * The chrome tier — the sidebar rail and the header.
    *
-   * `chrome-primary` exists because `primary` cannot be used here. The light-mode
-   * primary (#515CE9) measures 1.66:1 against this rail — invisible. This is a
-   * lightened step of the same hue, at 5.90:1 on chrome, and it is what paints the
-   * active nav item and the focus ring inside the frame.
+   * The frame is RECESSED, not inverted: one step below the page in light mode and one
+   * step below it in dark, so it reads as the surface the content sits on top of. It is
+   * a separate tier from `surface` only because that relationship has to hold in both
+   * schemes, and `surface` flips.
    *
-   * Measured on --sh-color-chrome: foreground 13.25:1, muted 5.65:1, primary 5.90:1;
-   * foreground on the hover fill (`chrome-accent`) 11.15:1.
+   * An ink frame was tried here and pulled: a dark navy slab behind a light page is a
+   * strong look, but it is the look of a template rather than of this product, and it
+   * spends the page's entire colour budget on furniture. The frame's job is to sit
+   * still and let the content carry the colour.
+   *
+   * `chrome-primary` is a separate token rather than `var(--sh-color-primary)` so the
+   * frame can pick its own step per scheme: the two agree in light mode today, but a
+   * dark rail needs a lighter primary than the page does, and the presets that keep a
+   * light rail need to follow their own.
+   *
+   * Measured on --sh-color-chrome: foreground 15.21:1, muted 5.09:1, the active-item
+   * accent bar 4.78:1 (UI floor is 3:1), and the active label on its own tint 13.41:1.
    */
-  --sh-color-chrome: oklch(0.245 0.045 268);
-  --sh-color-chrome-foreground: oklch(0.93 0.012 265);
-  --sh-color-chrome-muted: oklch(0.68 0.025 265);
-  --sh-color-chrome-accent: oklch(0.3 0.05 268);
-  --sh-color-chrome-border: oklch(0.33 0.045 268);
-  --sh-color-chrome-primary: oklch(0.7 0.14 274);
+  --sh-color-chrome: oklch(0.972 0.006 265);
+  --sh-color-chrome-foreground: oklch(0.24 0.035 268);
+  --sh-color-chrome-muted: oklch(0.52 0.03 265);
+  --sh-color-chrome-accent: oklch(0.94 0.012 265);
+  --sh-color-chrome-border: oklch(0.9 0.014 265);
+  --sh-color-chrome-primary: oklch(0.55 0.21 274);
 
   /*
    * Status colours are product semantics, not branding — tenants do not override these
@@ -541,16 +548,15 @@
     --sh-color-primary-foreground: oklch(0.19 0.03 268);
     --sh-color-accent: oklch(0.8 0.13 200);
     --sh-color-accent-foreground: oklch(0.19 0.03 268);
-    /* The frame stays ink in both schemes — that is the whole point of the tier — but it
-       cannot be the SAME ink as the page here, or the rail and the content merge. In
-       light mode chrome is far darker than the page; in dark mode it is slightly darker
-       instead, so the relationship (frame recedes, content sits forward) survives the
-       flip even though the contrast direction cannot. */
-    --sh-color-chrome: oklch(0.225 0.036 268);
-    --sh-color-chrome-foreground: oklch(0.93 0.012 265);
-    --sh-color-chrome-muted: oklch(0.7 0.028 265);
-    --sh-color-chrome-accent: oklch(0.29 0.044 268);
-    --sh-color-chrome-border: oklch(0.32 0.042 268);
+    /* Same relationship as light: the frame sits one step BELOW the page, so content
+       reads as being on top of it. That is why chrome goes darker than `background`
+       here rather than lighter — recession is the constant, not the direction of the
+       lightness step. */
+    --sh-color-chrome: oklch(0.165 0.028 268);
+    --sh-color-chrome-foreground: oklch(0.955 0.008 265);
+    --sh-color-chrome-muted: oklch(0.72 0.03 265);
+    --sh-color-chrome-accent: oklch(0.235 0.036 268);
+    --sh-color-chrome-border: oklch(0.28 0.038 268);
     --sh-color-chrome-primary: oklch(0.7 0.14 274);
     /* success/warning share the same problem as primary above where their light-mode
        foreground would fail against a fill that's staying the same lightness (warning) or
@@ -619,11 +625,11 @@
   --sh-color-primary-foreground: oklch(0.19 0.03 268);
   --sh-color-accent: oklch(0.8 0.13 200);
   --sh-color-accent-foreground: oklch(0.19 0.03 268);
-  --sh-color-chrome: oklch(0.225 0.036 268);
-  --sh-color-chrome-foreground: oklch(0.93 0.012 265);
-  --sh-color-chrome-muted: oklch(0.7 0.028 265);
-  --sh-color-chrome-accent: oklch(0.29 0.044 268);
-  --sh-color-chrome-border: oklch(0.32 0.042 268);
+  --sh-color-chrome: oklch(0.165 0.028 268);
+  --sh-color-chrome-foreground: oklch(0.955 0.008 265);
+  --sh-color-chrome-muted: oklch(0.72 0.03 265);
+  --sh-color-chrome-accent: oklch(0.235 0.036 268);
+  --sh-color-chrome-border: oklch(0.28 0.038 268);
   --sh-color-chrome-primary: oklch(0.7 0.14 274);
   --sh-color-success: oklch(0.724 0.125 161.7);
   --sh-color-success-foreground: oklch(0.19 0.03 268);
