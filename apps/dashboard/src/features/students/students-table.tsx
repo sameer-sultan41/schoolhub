@@ -201,6 +201,12 @@ export function StudentsTable() {
       }),
       {
         id: "last_name",
+        // TanStack gates `column.getCanSort()` on `!!column.accessorFn` regardless of
+        // `enableSorting` — a column with only `id`/`cell`/`header` (this table's own
+        // shape, since every cell reads `row.original` directly rather than
+        // `getValue()`) never reports sortable at all. `accessorKey` alone supplies
+        // that function; nothing here reads the value it derives.
+        accessorKey: "last_name",
         header: ({ column }) => <DataGridColumnHeader column={column} title={t("columns.name")} />,
         // The admission number rides under the name now instead of holding a column of its
         // own: a reader reads the two together anyway, and folding them buys back a whole
@@ -217,6 +223,8 @@ export function StudentsTable() {
       },
       {
         id: "campus_name",
+        // See the name column's own comment on why this is here despite the custom `cell`.
+        accessorKey: "campus_name",
         header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.campus")} />,
         // The name comes down on the row itself — the list serializer sends `campus_name`
         // beside `campus_id` — so this costs no second request and no lookup map, which
@@ -226,6 +234,8 @@ export function StudentsTable() {
       },
       {
         id: "house_name",
+        // See the name column's own comment on why this is here despite the custom `cell`.
+        accessorKey: "house_name",
         header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.house")} />,
         // A student need not be in a house. The dash says "none", where an empty cell
         // reads as a rendering fault.
@@ -234,6 +244,8 @@ export function StudentsTable() {
       },
       {
         id: "admission_date",
+        // See the name column's own comment on why this is here despite the custom `cell`.
+        accessorKey: "admission_date",
         header: ({ column }) => (
           <DataGridColumnHeader column={column} title={t("columns.admissionDate")} />
         ),
@@ -250,6 +262,8 @@ export function StudentsTable() {
       },
       {
         id: "status",
+        // See the name column's own comment on why this is here despite the custom `cell`.
+        accessorKey: "status",
         header: ({ column }) => (
           <DataGridColumnHeader column={column} title={t("columns.status")} />
         ),
