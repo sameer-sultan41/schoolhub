@@ -303,14 +303,17 @@ export function SidebarTrigger({
  * Demo1-style floating collapse/expand control, glued to the sidebar header's trailing
  * edge — positioned like Metronic's own `sidebar-header.tsx` (`absolute start-full
  * top-2/4 -translate-x-2/4 -translate-y-2/4`, a chevron that flips by collapsed state and
- * mirrors for RTL), but with an OPAQUE `bg-sidebar` fill rather than `chrome-outline`'s own
- * transparent one: this button straddles the rail's own edge, half over the rail and half
- * over the main content, so a transparent fill reads as barely-there against whichever
- * surface is showing through. `shadow-sm` lifts it off that border the same way a floating
- * action button would. Distinct from SidebarTrigger (the always-present, keyboard/mobile-
- * safe control in the header): this one is desktop-only decoration, hidden on mobile via
- * the same `md:` breakpoint `Sidebar` itself uses for its own desktop/mobile split — not a
- * duplicate `isMobile` check.
+ * mirrors for RTL). Deliberately NOT `chrome-outline`: this button straddles the rail's
+ * own trailing edge — half over the rail, half over the main content — and both of those
+ * surfaces are near-white in this platform's default light theme, so `chrome-outline`'s
+ * own subtle `border-chrome-border`/`text-chrome-muted` (correct for a control that sits
+ * ENTIRELY on one surface) rendered as a barely-visible sliver here, confirmed against a
+ * real screenshot. A visibly dark border plus a real shadow, independent of how light or
+ * dark either surrounding surface happens to be, is what actually keeps a boundary-
+ * straddling floating control legible. Distinct from SidebarTrigger (the always-present,
+ * keyboard/mobile-safe control in the header): this one is desktop-only decoration, hidden
+ * on mobile via the same `md:` breakpoint `Sidebar` itself uses for its own desktop/mobile
+ * split — not a duplicate `isMobile` check.
  */
 export function SidebarCollapseToggle({
   toggleLabel,
@@ -323,11 +326,11 @@ export function SidebarCollapseToggle({
   return (
     <Button
       data-sidebar="collapse-toggle"
-      variant="chrome-outline"
+      variant="outline"
       size="sm"
       mode="icon"
       className={cn(
-        "absolute start-full top-2/4 z-20 hidden size-7 -translate-x-2/4 -translate-y-2/4 bg-sidebar shadow-sm md:flex rtl:translate-x-2/4",
+        "absolute start-full top-2/4 z-20 hidden size-7 -translate-x-2/4 -translate-y-2/4 border-sidebar-foreground/25 bg-sidebar text-sidebar-foreground shadow-md hover:border-sidebar-primary hover:text-sidebar-primary md:flex rtl:translate-x-2/4",
         className,
       )}
       onClick={(event) => {
