@@ -32,6 +32,12 @@ export interface NavItem {
    */
   status: "ready" | "planned";
   permission?: PermissionKey;
+  /**
+   * Optional nested sub-items, rendered as a collapsible group under this entry via
+   * AccordionMenu. No current module doc calls for nesting — this exists so the renderer
+   * (dashboard-nav.tsx) is capable of it the moment one does, without another type change.
+   */
+  children?: NavItem[];
 }
 
 export interface NavGroup {
