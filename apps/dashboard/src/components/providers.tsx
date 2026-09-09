@@ -1,0 +1,32 @@
+"use client";
+
+import { QueryClientProvider } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { type ReactNode, useEffect, useState } from "react";
+import { setUnauthorizedHandler } from "@/lib/auth";
+import { LOGIN_PATH } from "@/lib/constants";
+import { getQueryClient } from "@/lib/query-client";
+
+/**
+ * Client-side providers for the whole app.
+ *
+ * `useState` (not a module constant) keeps one QueryClient per browser session while still
+ * surviving Fast Refresh; the server gets a fresh client per request from `getQueryClient`.
+ *
+ * Trimmed relative to the pre-deletion version: no motion/tooltip/toaster wiring yet
+ * (nothing under `(auth)` needs them) — restore that alongside whichever page first does.
+ */
+export function AppProviders({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(getQueryClient);
+  const router = useRouter();
+
+  useEffect(() => {
+    // Fired when a refresh attempt could not rescue a 401 — the session is genuinely over.
+    setUnauthorizedHandler(() => {
+      queryClient.clear();
+      router.replace(LOGIN_PATH);
+    });
+  }, [queryClient, router]);
+
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}

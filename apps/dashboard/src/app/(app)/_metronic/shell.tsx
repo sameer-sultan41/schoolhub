@@ -9,18 +9,12 @@ import { useSettings } from "@/app/(app)/_metronic/settings-provider";
 import { Sidebar } from "@/app/(app)/_metronic/sidebar";
 
 // Ported from packages/ui's vendored layouts/demo1/layout.tsx (Metronic's own Demo1
-// shell), plus one addition: toggling `data-theme-preset="metronic"` on <html> so
-// packages/ui's existing metronic.css preset actually applies to this route.
+// shell). `data-theme-preset="metronic"` is set on <html> by the root layout now, not
+// here — it needs to apply app-wide (auth pages included), not just while this Shell is
+// mounted.
 export function Shell({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const { settings, setOption } = useSettings();
-
-  useEffect(() => {
-    document.documentElement.dataset.themePreset = "metronic";
-    return () => {
-      delete document.documentElement.dataset.themePreset;
-    };
-  }, []);
 
   useEffect(() => {
     const bodyClass = document.body.classList;

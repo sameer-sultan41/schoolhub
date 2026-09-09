@@ -15,7 +15,9 @@ import {
   UserCircle,
   Users,
 } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
+import { useRouter } from "next/navigation";
 
 import {
   Badge,
@@ -33,22 +35,37 @@ import {
   Switch,
 } from "@schoolhub/ui";
 
-import { I18N_LANGUAGES, useLanguage, type Language } from "@/app/(app)/_metronic/i18n-config";
+import { logout } from "@/lib/auth";
+import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
+import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
 
 // Ported from packages/ui's partials/topbar/user-dropdown-menu.tsx. The vendor
-// version reads a real next-auth session; this preview has no auth system, so
-// the user identity is Metronic's own sample profile instead (its usual demo
-// name/email), and "Logout" is a no-op — same substitution technique used
-// elsewhere in this preview for pieces that need a real backend.
+// version reads a real next-auth session; this preview has no user-fetching wired up
+// yet, so the identity shown is still Metronic's own sample profile (its usual demo
+// name/email) — but "Logout" and the Language switcher now call the real API/locale
+// mechanism, same as every other real piece of this app.
 const SAMPLE_USER = { name: "Jenny Klabber", email: "jenny@keenthemes.com" };
 
-export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
-  const { language, setLanguage } = useLanguage();
-  const { theme, setTheme } = useTheme();
+/** Metronic's own demo covered 5 unrelated languages with flags; this app ships 2. */
+const LOCALE_FLAGS: Record<SupportedLocale, string> = {
+  en: "/media/flags/united-states.svg",
+  ur: "/media/flags/pakistan.svg",
+};
 
-  const handleLanguage = (lang: Language) => {
-    setLanguage(lang);
-  };
+export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
+  const t = useTranslations("nav");
+  const locale = useLocale();
+  const { theme, setTheme } = useTheme();
+  const router = useRouter();
+
+  // Mirrors the pre-deletion user-menu.tsx's selectLocale: the locale is resolved
+  // server-side from this same cookie (src/i18n/request.ts), including <html
+  // lang>/<dir>, so nothing changes until the server re-renders — hence router.refresh().
+  function selectLocale(next: string) {
+    if (next === locale) return;
+    document.cookie = `${LOCALE_COOKIE_NAME}=${next}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+    router.refresh();
+  }
   const handleThemeToggle = (checked: boolean) => {
     setTheme(checked ? "dark" : "light");
   };
@@ -155,29 +172,27 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
           <DropdownMenuSubTrigger className="flex items-center gap-2 hover:[&_[data-slot=badge]]:border-input data-[state=open]:[&_[data-slot=badge]]:border-input [&_[data-slot=dropdown-menu-sub-trigger-indicator]]:hidden">
             <Globe />
             <span className="relative flex grow items-center justify-between gap-2">
-              Language
+              {t("locale.label")}
               <Badge variant="outline" className="absolute end-0 top-1/2 -translate-y-1/2">
-                {language.name}
-                <img src={language.flag} className="h-3.5 w-3.5 rounded-full" alt={language.name} />
+                {t(`locale.${locale}`)}
+                <img
+                  src={LOCALE_FLAGS[locale as SupportedLocale]}
+                  className="h-3.5 w-3.5 rounded-full"
+                  alt={t(`locale.${locale}`)}
+                />
               </Badge>
             </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-48">
-            <DropdownMenuRadioGroup
-              value={language.code}
-              onValueChange={(value) => {
-                const selectedLang = I18N_LANGUAGES.find((lang) => lang.code === value);
-                if (selectedLang) handleLanguage(selectedLang);
-              }}
-            >
-              {I18N_LANGUAGES.map((item) => (
-                <DropdownMenuRadioItem
-                  key={item.code}
-                  value={item.code}
-                  className="flex items-center gap-2"
-                >
-                  <img src={item.flag} className="h-4 w-4 rounded-full" alt={item.name} />
-                  <span>{item.name}</span>
+            <DropdownMenuRadioGroup value={locale} onValueChange={selectLocale}>
+              {SUPPORTED_LOCALES.map((code) => (
+                <DropdownMenuRadioItem key={code} value={code} className="flex items-center gap-2">
+                  <img
+                    src={LOCALE_FLAGS[code]}
+                    className="h-4 w-4 rounded-full"
+                    alt={t(`locale.${code}`)}
+                  />
+                  <span>{t(`locale.${code}`)}</span>
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
@@ -199,7 +214,25 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
           </div>
         </DropdownMenuItem>
         <div className="mt-1 p-2">
-          <Button variant="outline" size="sm" className="w-full">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => {
+              // logout() intentionally rethrows anything that isn't the expected
+              // ApiError (see its own comment in lib/auth.ts), so that rejection must
+              // be handled here rather than left as an unhandled promise rejection.
+              // The user still always reaches /login: the unexpected case is logged,
+              // not swallowed or re-thrown.
+              void logout()
+                .catch((error: unknown) => {
+                  console.error("Sign-out request failed unexpectedly:", error);
+                })
+                .finally(() => {
+                  router.replace(LOGIN_PATH);
+                });
+            }}
+          >
             Logout
           </Button>
         </div>

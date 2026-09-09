@@ -106,7 +106,9 @@
       "submit": "Sign in",
       "submitting": "Signing in",
       "forgotPassword": "Forgot your password?",
-      "genericError": "We could not sign you in. Check your details and try again."
+      "genericError": "We could not sign you in. Check your details and try again.",
+      "brandTitle": "Secure Dashboard Access",
+      "brandDescription": "A robust authentication gateway ensuring secure, efficient access to the SchoolHub dashboard."
     },
     "session": {
       "expiredTitle": "Your session expired",
