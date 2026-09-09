@@ -6,11 +6,13 @@ AGENTS.md invariant 2: a tenant-A caller reaching for a tenant-B resource gets
 
 from __future__ import annotations
 
+import uuid
+
 from rest_framework import status
 
 from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import NotificationTemplateOverrideFactory, TenantFactory
-from core.notifications.models import NotificationChannel
+from core.notifications.models import DeliveryLog, Notification, NotificationChannel
 from core.notifications.templates import registry as platform_templates
 from core.tenancy.context import tenant_context
 
@@ -28,6 +30,19 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         with tenant_context(self.other_tenant.id):
             self.other_override = NotificationTemplateOverrideFactory(
                 tenant=self.other_tenant, code=CODE, channel=NotificationChannel.IN_APP
+            )
+            other_notification = Notification.objects.create(
+                tenant_id=self.other_tenant.pk,
+                user_id=uuid.uuid4(),
+                event_key=CODE,
+                title="Hi",
+                body="Body",
+            )
+            self.other_delivery_log = DeliveryLog.objects.create(
+                tenant_id=self.other_tenant.pk,
+                notification=other_notification,
+                channel=NotificationChannel.IN_APP,
+                recipient_address="x",
             )
 
     def tearDown(self) -> None:
@@ -52,5 +67,10 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
             {"body": "Hijacked"},
             format="json",
         )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_reading_another_tenants_delivery_log_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/delivery-logs/{self.other_delivery_log.pk}")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
