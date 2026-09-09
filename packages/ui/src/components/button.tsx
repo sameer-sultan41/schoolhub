@@ -420,34 +420,48 @@ function Button({
     /** Stretches the button to fill its container. Not part of Metronic's own Button. */
     block?: boolean;
   }) {
-  const Comp = asChild ? SlotPrimitive.Slot : "button";
+  const buttonClassName = cn(
+    buttonVariants({
+      variant,
+      size,
+      shape,
+      appearance,
+      mode,
+      autoHeight,
+      placeholder,
+      underlined,
+      underline,
+      className,
+    }),
+    block && "w-full",
+    asChild && props.disabled && "pointer-events-none opacity-50",
+  );
+
+  if (asChild) {
+    // Slot requires exactly one child — no sibling spinner/loading markup can be added
+    // here, which is also why `isLoading` is a documented no-op when `asChild` is set.
+    return (
+      <SlotPrimitive.Slot
+        data-slot="button"
+        className={buttonClassName}
+        {...(selected && { "data-state": "open" })}
+        {...props}
+      >
+        {children}
+      </SlotPrimitive.Slot>
+    );
+  }
+
   return (
-    <Comp
+    <button
       data-slot="button"
-      className={cn(
-        buttonVariants({
-          variant,
-          size,
-          shape,
-          appearance,
-          mode,
-          autoHeight,
-          placeholder,
-          underlined,
-          underline,
-          className,
-        }),
-        block && "w-full",
-        asChild && props.disabled && "pointer-events-none opacity-50",
-      )}
+      className={buttonClassName}
       {...(selected && { "data-state": "open" })}
       {...props}
-      {...(!asChild && {
-        disabled: props.disabled === true || isLoading,
-        "aria-busy": isLoading || undefined,
-      })}
+      disabled={props.disabled === true || isLoading}
+      aria-busy={isLoading || undefined}
     >
-      {!asChild && isLoading ? (
+      {isLoading ? (
         <>
           <span
             aria-hidden="true"
@@ -457,7 +471,7 @@ function Button({
         </>
       ) : null}
       {children}
-    </Comp>
+    </button>
   );
 }
 

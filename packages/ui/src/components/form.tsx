@@ -155,6 +155,12 @@ function FormMessage({
     <div
       data-slot="form-message"
       id={formMessageId}
+      // Not part of Metronic's own FormMessage — kept as a default rather than an
+      // opt-in prop: a field-level error is exactly the kind of state assistive tech
+      // needs announced without the reader having to go looking for it, and e2e's
+      // login.page.ts (and this package's own component tests) locate errors by this
+      // role to disambiguate a field-level error from the card-level API error.
+      role="alert"
       className={cn("-mt-0.5 text-xs font-normal text-destructive", className)}
       {...props}
     >
