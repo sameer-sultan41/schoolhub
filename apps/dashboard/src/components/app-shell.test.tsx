@@ -4,6 +4,9 @@ import { AppShell } from "./app-shell";
 
 jest.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
+  // UserMenu (rendered inside AppShell's header) calls useRouter() for its locale
+  // switch/sign-out redirects.
+  useRouter: () => ({ replace: jest.fn(), refresh: jest.fn() }),
 }));
 
 // UserMenu imports @/lib/auth for its sign-out action, and that module calls
