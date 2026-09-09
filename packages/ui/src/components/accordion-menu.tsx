@@ -101,9 +101,15 @@ function AccordionMenu({
       if (props.type === "multiple") {
         mapping.root = trimmedChain;
       } else {
-        mapping.root = trimmedChain[0];
-        for (let i = 0; i < trimmedChain.length - 1; i++) {
-          mapping[trimmedChain[i]] = trimmedChain[i + 1];
+        // Every (key, value) pair below is in range under the trimmedChain.length > 0
+        // guard above — the explicit undefined checks satisfy noUncheckedIndexedAccess
+        // without a non-null assertion, which this repo's lint config forbids.
+        for (let i = 0; i < trimmedChain.length; i++) {
+          const key = i === 0 ? "root" : trimmedChain[i - 1];
+          const value = trimmedChain[i];
+          if (key !== undefined && value !== undefined) {
+            mapping[key] = value;
+          }
         }
       }
     }
