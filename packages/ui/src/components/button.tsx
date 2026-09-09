@@ -434,6 +434,13 @@ function Button({
   isLoading = false,
   loadingLabel,
   block = false,
+  // Metronic's own Button spreads `type` straight from props with no default — a
+  // native <button> with no `type` attribute defaults to "submit", so any button inside
+  // a <form> with no explicit type submits it on click instead of doing nothing. Every
+  // other button primitive in this repo (and the one this replaced) defaults to
+  // "button" for exactly this reason; only a caller that explicitly passes
+  // `type="submit"` gets submit behaviour.
+  type = "button",
   children,
   ...props
 }: React.ComponentProps<"button"> &
@@ -476,6 +483,7 @@ function Button({
 
   return (
     <button
+      type={type}
       data-slot="button"
       className={buttonClassName}
       {...(selected && { "data-state": "open" })}

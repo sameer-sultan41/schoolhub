@@ -51,13 +51,20 @@ function TooltipContent({
   variant,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> & VariantProps<typeof tooltipVariants>) {
+  // Metronic's own file renders Content with no Portal at all, so it mounts inline at
+  // the trigger's position in the DOM — any overflow-hidden/overflow-auto ancestor then
+  // clips it (a real hit: promotion-batches-screen.tsx). Every other overlay primitive
+  // here (Dialog, Sheet, Select, Popover, DropdownMenu) already portals its content;
+  // Tooltip is the one Metronic left out.
   return (
-    <TooltipPrimitive.Content
-      data-slot="tooltip-content"
-      sideOffset={sideOffset}
-      className={cn(tooltipVariants({ variant }), className)}
-      {...props}
-    />
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        data-slot="tooltip-content"
+        sideOffset={sideOffset}
+        className={cn(tooltipVariants({ variant }), className)}
+        {...props}
+      />
+    </TooltipPrimitive.Portal>
   );
 }
 

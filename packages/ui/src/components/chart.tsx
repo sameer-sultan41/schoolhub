@@ -4,17 +4,26 @@ import * as React from "react";
 import { cn } from "../lib/cn";
 import * as RechartsPrimitive from "recharts";
 
-// Format: { THEME_NAME: CSS_SELECTOR }
-const THEMES = { light: "", dark: ".dark" } as const;
-
+/**
+ * `ChartConfig.color` is a single string, not Metronic's own `color | theme` union.
+ * Metronic's `theme` variant (`{ light: string; dark: string }`) exists to let a chart
+ * pick a different literal colour per scheme without a token — its `ChartStyle`
+ * companion applies it by interpolating those caller-supplied strings into a
+ * `dangerouslySetInnerHTML` `<style>` block, one rule per scheme, scoped by a generated
+ * `data-chart` id. Dropped entirely, not ported: this repo's own convention is that a
+ * chart colour is always a `var(--sh-color-chart-N)` token, which already flips between
+ * schemes via theme.css's own `.dark`/`prefers-color-scheme` rules — nothing here needs
+ * a second, string-interpolated stylesheet to do the same job, and no current caller
+ * uses the `theme` variant. `--color-${key}` is set directly as an inline style
+ * property on the chart's own container instead (below), which is CSS custom-property
+ * assignment through the DOM API, not string-built CSS.
+ */
 export type ChartConfig = {
   [k in string]: {
     label?: React.ReactNode;
     icon?: React.ComponentType;
-  } & (
-    | { color?: string; theme?: never }
-    | { color?: never; theme: Record<keyof typeof THEMES, string> }
-  );
+    color?: string;
+  };
 };
 
 type ChartContextProps = {
@@ -39,6 +48,7 @@ function ChartContainer({
   children,
   config,
   label,
+  style,
   ...props
 }: React.ComponentProps<"div"> & {
   config: ChartConfig;
@@ -54,6 +64,20 @@ function ChartContainer({
   const uniqueId = React.useId();
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
 
+  // One custom property per series, inherited by every mark below. A `<Bar
+  // fill="var(--color-load)" />` then resolves through this to the theme token — see
+  // the `ChartConfig` doc comment above for why this is plain inline style, not an
+  // injected `<style>` tag.
+  const colorVariables = React.useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(config)
+          .filter(([, item]) => item.color)
+          .map(([key, item]) => [`--color-${key}`, item.color]),
+      ) as React.CSSProperties,
+    [config],
+  );
+
   return (
     <ChartContext.Provider value={{ config }}>
       <div
@@ -65,43 +89,14 @@ function ChartContainer({
           "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
           className,
         )}
+        style={{ ...colorVariables, ...style }}
         {...props}
       >
-        <ChartStyle id={chartId} config={config} />
         <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
       </div>
     </ChartContext.Provider>
   );
 }
-
-const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
-  const colorConfig = Object.entries(config).filter(([, config]) => config.theme || config.color);
-
-  if (!colorConfig.length) {
-    return null;
-  }
-
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
-${colorConfig
-  .map(([key, itemConfig]) => {
-    const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
-  })
-  .join("\n")}
-}
-`,
-          )
-          .join("\n"),
-      }}
-    />
-  );
-};
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
@@ -362,12 +357,5 @@ function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key:
   return configLabelKey in config ? config[configLabelKey] : config[key];
 }
 
-export {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-  ChartStyle,
-};
+export { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent };
 export type { ChartTooltipContentProps };

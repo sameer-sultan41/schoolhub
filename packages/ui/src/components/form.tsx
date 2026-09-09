@@ -45,7 +45,7 @@ const useFormField = () => {
 
   const fieldState = getFieldState(fieldContext.name, formState);
 
-  const { id } = itemContext;
+  const { id, hasDescription, hasMessage } = itemContext;
 
   return {
     id,
@@ -53,28 +53,52 @@ const useFormField = () => {
     formItemId: `${id}-form-item`,
     formDescriptionId: `${id}-form-item-description`,
     formMessageId: `${id}-form-item-message`,
+    hasDescription,
+    hasMessage,
     ...fieldState,
   };
 };
 
 type FormItemContextValue = {
   id: string;
+  /**
+   * Whether a `<FormDescription>`/`<FormMessage>` is actually present among this
+   * FormItem's children — computed once, synchronously, from `children` itself (no ref
+   * registration or second render pass needed, since a parent always has its children
+   * element tree available before its own first render). Metronic's own FormControl
+   * points `aria-describedby` at both ids unconditionally, regardless of whether either
+   * element is actually rendered in that FormItem — a dangling id reference is invalid
+   * ARIA, and most fields here have no `<FormDescription>` at all.
+   */
+  hasDescription: boolean;
+  hasMessage: boolean;
 };
 
 const FormItemContext = React.createContext<FormItemContextValue>({} as FormItemContextValue);
 
-function FormItem({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function FormItem({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const id = React.useId();
   const { error } = useFormField();
+  // Function declarations (FormDescription/FormMessage, below) are hoisted, so referring
+  // to them here — inside a callback that only runs at render time, well after module
+  // evaluation — is safe despite their definitions appearing later in this file.
+  const hasDescription = React.Children.toArray(children).some(
+    (child) => React.isValidElement(child) && child.type === FormDescription,
+  );
+  const hasMessage = React.Children.toArray(children).some(
+    (child) => React.isValidElement(child) && child.type === FormMessage,
+  );
 
   return (
-    <FormItemContext.Provider value={{ id }}>
+    <FormItemContext.Provider value={{ id, hasDescription, hasMessage }}>
       <div
         data-slot="form-item"
         className={cn("flex flex-col gap-2.5", className)}
         data-invalid={!!error}
         {...props}
-      />
+      >
+        {children}
+      </div>
     </FormItemContext.Provider>
   );
 }
@@ -108,13 +132,24 @@ function FormControl({
   required,
   ...props
 }: React.ComponentProps<typeof Slot> & { required?: boolean }) {
-  const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
+  const { error, formItemId, formDescriptionId, formMessageId, hasDescription, hasMessage } =
+    useFormField();
+  // Only reference an id when its element both exists in this FormItem's JSX and has
+  // something to say — FormDescription always renders once present; FormMessage renders
+  // exactly when there's an error (its own "return null" condition is `!body`, and body
+  // is `error.message` in that branch), so checking `hasMessage && error?.message` rather
+  // than just `hasMessage` mirrors that precisely: this must not reference an id no
+  // element in the DOM actually has.
+  const describedBy =
+    [hasDescription ? formDescriptionId : null, hasMessage && error?.message ? formMessageId : null]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
   return (
     <Slot
       data-slot="form-control"
       id={formItemId}
-      aria-describedby={!error ? formDescriptionId : `${formDescriptionId} ${formMessageId}`}
+      aria-describedby={describedBy}
       aria-invalid={!!error}
       aria-required={required || undefined}
       {...props}

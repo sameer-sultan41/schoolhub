@@ -7,21 +7,25 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Select as SelectPrimitive } from "radix-ui";
 
-// Create a Context for `indicatorPosition` and `indicator` control
+// Create a Context for `indicatorPosition` and `indicator` control.
+// Logical (`start`/`end`), never physical (`left`/`right`) — Metronic's own file used
+// "left"/"right" here even though the actual CSS is already logical (`ps-`/`pe-`,
+// `start-2`/`end-2`); renamed to match what the values actually mean, per AGENTS.md
+// §0c's rule that any side/direction prop must be logical.
 const SelectContext = React.createContext<{
-  indicatorPosition: "left" | "right";
+  indicatorPosition: "start" | "end";
   indicatorVisibility: boolean;
   indicator: ReactNode;
-}>({ indicatorPosition: "left", indicator: null, indicatorVisibility: true });
+}>({ indicatorPosition: "start", indicator: null, indicatorVisibility: true });
 
 // Root Component
 const Select = ({
-  indicatorPosition = "left",
+  indicatorPosition = "start",
   indicatorVisibility = true,
   indicator,
   ...props
 }: {
-  indicatorPosition?: "left" | "right";
+  indicatorPosition?: "start" | "end";
   indicatorVisibility?: boolean;
   indicator?: ReactNode;
 } & React.ComponentProps<typeof SelectPrimitive.Root>) => {
@@ -170,7 +174,7 @@ function SelectItem({
       data-slot="select-item"
       className={cn(
         "relative flex w-full cursor-default items-center rounded-sm py-1.5 text-sm text-foreground outline-hidden select-none hover:bg-accent focus:bg-accent data-disabled:pointer-events-none data-disabled:opacity-50",
-        indicatorPosition === "left" ? "ps-8 pe-2" : "ps-2 pe-8",
+        indicatorPosition === "start" ? "ps-8 pe-2" : "ps-2 pe-8",
         className,
       )}
       {...props}
@@ -182,7 +186,7 @@ function SelectItem({
           <span
             className={cn(
               "absolute flex h-3.5 w-3.5 items-center justify-center",
-              indicatorPosition === "left" ? "start-2" : "end-2",
+              indicatorPosition === "start" ? "start-2" : "end-2",
             )}
           >
             <SelectPrimitive.ItemIndicator>
@@ -207,7 +211,7 @@ function SelectIndicator({
       data-slot="select-indicator"
       className={cn(
         "absolute top-1/2 flex -translate-y-1/2 items-center justify-center",
-        indicatorPosition === "left" ? "start-2" : "end-2",
+        indicatorPosition === "start" ? "start-2" : "end-2",
         className,
       )}
       {...props}

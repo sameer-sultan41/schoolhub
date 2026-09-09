@@ -18,7 +18,7 @@ function PopoverContent({
   sideOffset = 4,
   label,
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content> & {
+}: Omit<React.ComponentProps<typeof PopoverPrimitive.Content>, "side"> & {
   /**
    * Accessible name for the surface. Not part of Metronic's own Popover — kept as an
    * additive convenience: a popover is a dialog-adjacent surface, and a screen reader
@@ -27,6 +27,10 @@ function PopoverContent({
    */
   label?: string;
 }) {
+  // `side` is deliberately not surfaced: it stays Radix's own default ("bottom"),
+  // which is direction-neutral. `align` (start/center/end) is already logical and
+  // mirrors under `dir="rtl"` on its own; a physical "left"/"right" `side` would be
+  // the one direction prop on this component that does not.
   return (
     <PopoverPrimitive.Content
       data-slot="popover-content"

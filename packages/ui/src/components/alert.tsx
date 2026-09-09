@@ -198,6 +198,13 @@ interface AlertProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof alertVariants> {
   close?: boolean;
   onClose?: () => void;
+  /**
+   * Accessible name for the dismiss button (its only content is an icon). Not part of
+   * Metronic's own Alert, which hardcodes "Dismiss" — this package has no i18n of its
+   * own, so a hardcoded English fallback would always ship untranslated. Required
+   * whenever `close` is true.
+   */
+  closeLabel?: string;
 }
 
 interface AlertIconProps
@@ -211,6 +218,7 @@ function Alert({
   appearance,
   close = false,
   onClose,
+  closeLabel,
   children,
   ...props
 }: AlertProps) {
@@ -228,7 +236,7 @@ function Alert({
           variant="inverse"
           mode="icon"
           onClick={onClose}
-          aria-label="Dismiss"
+          aria-label={closeLabel}
           data-slot="alert-close"
           className={cn("group size-4 shrink-0")}
         >
