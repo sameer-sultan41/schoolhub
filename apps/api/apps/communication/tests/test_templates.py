@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from apps.communication.services import assert_override_is_valid
 from apps.communication.templates_service import resolve_tenant_template
-from apps.communication.tests.factories import NotificationTemplateOverrideFactory, TenantFactory
+from apps.communication.tests.factories import (
+    NotificationTemplateOverrideFactory,
+    TenantFactory,
+    enable_feature,
+)
 from core.api.exceptions import DomainRuleViolation
 from core.notifications.models import NotificationChannel
 from core.notifications.templates import registry as platform_templates
@@ -37,6 +42,7 @@ class TemplateOverrideTestCase(TestCase):
             variables={"name"},
         )
         self.tenant = TenantFactory()
+        enable_feature(self.tenant)
 
     def tearDown(self) -> None:
         platform_templates._templates = self._saved_templates  # noqa: SLF001
@@ -151,6 +157,40 @@ class ResolveTenantTemplateTests(TemplateOverrideTestCase):
             )
 
         self.assertIsNone(result)
+
+
+class FeatureGateTests(TemplateOverrideTestCase):
+    """`resolve_tenant_template` must not query for a tenant that hasn't enabled
+    `module.communication` — it is registered process-wide, but the flag ships
+    `default_enabled=False`, and every notify() call platform-wide reaches this
+    resolver regardless of which module fired the trigger."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # The base class enables the feature for every other test in this file;
+        # this class is specifically about what happens when it is off, so a
+        # fresh tenant that was never granted it is used instead of self.tenant.
+        self.disabled_tenant = TenantFactory()
+
+    def test_returns_none_without_querying_the_override_table_when_the_module_is_disabled(
+        self,
+    ) -> None:
+        with tenant_context(self.disabled_tenant.id):
+            NotificationTemplateOverrideFactory(
+                tenant=self.disabled_tenant, code=CODE, channel=NotificationChannel.IN_APP
+            )
+
+            with CaptureQueriesContext(connection) as captured:
+                result = resolve_tenant_template(
+                    CODE, NotificationChannel.IN_APP, "en", self.disabled_tenant.pk
+                )
+
+        self.assertIsNone(result)
+        # The feature-flag check itself queries FeatureFlag/TenantFeatureOverride;
+        # what matters is that it short-circuits before ever reaching this table —
+        # an override exists above (created deliberately, to prove it is ignored).
+        queries = [q["sql"] for q in captured.captured_queries]
+        self.assertFalse(any("notification_templates" in sql for sql in queries), queries)
 
 
 class SystemSeededTemplateTests(TemplateOverrideTestCase):

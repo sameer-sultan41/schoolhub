@@ -59,7 +59,21 @@ def resolve_tenant_template(
     the caller's job — and a soft delete (the viewset's default `destroy()`)
     leaves `is_active` untouched, so without `.alive()` a deleted override would
     still be found and rendered.
+
+    Gated on the `module.communication` feature flag first: this resolver is
+    registered process-wide the moment `apps.communication` is an installed
+    Django app, but the flag ships `default_enabled=False` — until a given
+    tenant opts in, every `notify()` call for it (from attendance, fees_finance,
+    examinations, ...) would otherwise pay this table query for no benefit.
+    `is_feature_enabled` is cache-backed, so this trades an uncached query for
+    a cached flag check on every call from a tenant that has not enabled the
+    module.
     """
+    from core.tenancy.features import is_feature_enabled
+
+    if not is_feature_enabled("module.communication", tenant_id=tenant_id):
+        return None
+
     from apps.communication.models import NotificationTemplateOverride
 
     row = (
