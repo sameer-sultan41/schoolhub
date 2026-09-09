@@ -6,6 +6,13 @@ jest.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
 }));
 
+// UserMenu imports @/lib/auth for its sign-out action, and that module calls
+// createApiClient() at import time — real construction touches globalThis.fetch, which
+// jsdom's test environment doesn't provide, crashing the whole suite before any test runs.
+jest.mock("@/lib/auth", () => ({
+  logout: jest.fn(),
+}));
+
 describe("AppShell", () => {
   it("renders its children inside the shell", () => {
     renderWithProviders(<AppShell>page content</AppShell>);
