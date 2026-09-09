@@ -431,6 +431,219 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdmitCard'
           description: ''
+  /api/v1/announcements:
+    get:
+      operationId: announcements_list
+      description: |-
+        `/announcements` — feed-style posts with audience targeting.
+
+        §3 does not list guardians/students among announcement authors, approvers
+        or browsers of drafts — drafting, publishing and this endpoint's own reads
+        are staff-only; `communication.announcement.view`'s default roles (§4)
+        already narrow who actually holds the key.
+      parameters:
+      - in: query
+        name: audience_type
+        schema:
+          type: string
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_emergency
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: show_on_website
+        schema:
+          type: boolean
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - announcements
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAnnouncementList'
+          description: ''
+    post:
+      operationId: announcements_create
+      description: |-
+        `/announcements` — feed-style posts with audience targeting.
+
+        §3 does not list guardians/students among announcement authors, approvers
+        or browsers of drafts — drafting, publishing and this endpoint's own reads
+        are staff-only; `communication.announcement.view`'s default roles (§4)
+        already narrow who actually holds the key.
+      tags:
+      - announcements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Announcement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Announcement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Announcement'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+          description: ''
+  /api/v1/announcements/{id}:
+    get:
+      operationId: announcements_retrieve
+      description: |-
+        `/announcements` — feed-style posts with audience targeting.
+
+        §3 does not list guardians/students among announcement authors, approvers
+        or browsers of drafts — drafting, publishing and this endpoint's own reads
+        are staff-only; `communication.announcement.view`'s default roles (§4)
+        already narrow who actually holds the key.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this announcement.
+        required: true
+      tags:
+      - announcements
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+          description: ''
+    patch:
+      operationId: announcements_partial_update
+      description: |-
+        `/announcements` — feed-style posts with audience targeting.
+
+        §3 does not list guardians/students among announcement authors, approvers
+        or browsers of drafts — drafting, publishing and this endpoint's own reads
+        are staff-only; `communication.announcement.view`'s default roles (§4)
+        already narrow who actually holds the key.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this announcement.
+        required: true
+      tags:
+      - announcements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAnnouncement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAnnouncement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAnnouncement'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+          description: ''
+    delete:
+      operationId: announcements_destroy
+      description: |-
+        `/announcements` — feed-style posts with audience targeting.
+
+        §3 does not list guardians/students among announcement authors, approvers
+        or browsers of drafts — drafting, publishing and this endpoint's own reads
+        are staff-only; `communication.announcement.view`'s default roles (§4)
+        already narrow who actually holds the key.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this announcement.
+        required: true
+      tags:
+      - announcements
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/announcements/{id}:publish:
+    post:
+      operationId: announcements_:publish_create
+      description: '`POST /announcements/{id}:publish`.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - announcements
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+          description: ''
   /api/v1/attendance-corrections:
     get:
       operationId: attendance_corrections_list
@@ -6653,6 +6866,222 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/notices:
+    get:
+      operationId: notices_list
+      description: |-
+        `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+
+        No `campus_id` column on this table (entities/communication.md) —
+        `scope_campus_field = None`, stated explicitly rather than left at the
+        mixin's default `campus_id`, which does not exist here.
+      parameters:
+      - in: query
+        name: audience_type
+        schema:
+          type: string
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: notice_type
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: requires_acknowledgment
+        schema:
+          type: boolean
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - notices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNoticeList'
+          description: ''
+    post:
+      operationId: notices_create
+      description: |-
+        `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+
+        No `campus_id` column on this table (entities/communication.md) —
+        `scope_campus_field = None`, stated explicitly rather than left at the
+        mixin's default `campus_id`, which does not exist here.
+      tags:
+      - notices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Notice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Notice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Notice'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notice'
+          description: ''
+  /api/v1/notices/{id}:
+    get:
+      operationId: notices_retrieve
+      description: '`GET /notices/{id}` — `?format=pdf` returns the rendered document
+        instead.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this notice.
+        required: true
+      tags:
+      - notices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notice'
+          description: ''
+    patch:
+      operationId: notices_partial_update
+      description: |-
+        `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+
+        No `campus_id` column on this table (entities/communication.md) —
+        `scope_campus_field = None`, stated explicitly rather than left at the
+        mixin's default `campus_id`, which does not exist here.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this notice.
+        required: true
+      tags:
+      - notices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNotice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNotice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNotice'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notice'
+          description: ''
+  /api/v1/notices/{id}:acknowledge:
+    post:
+      operationId: notices_:acknowledge_create
+      description: '`POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge_notice`.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notices/{id}:publish:
+    post:
+      operationId: notices_:publish_create
+      description: '`POST /notices/{id}:publish` — pending_approval -> published.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notice'
+          description: ''
+  /api/v1/notices/{id}:submit:
+    post:
+      operationId: notices_:submit_create
+      description: '`POST /notices/{id}:submit` — draft -> pending_approval.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notice'
+          description: ''
   /api/v1/notification-preferences:
     get:
       operationId: notification_preferences_list
@@ -13213,6 +13642,91 @@ components:
         * `generated` - Generated
         * `issued` - Issued
         * `revoked` - Revoked
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+          description: Rich text (sanitized HTML/Markdown).
+        audience_type:
+          $ref: '#/components/schemas/CommunicationAudienceTypeEnum'
+        audience_filter:
+          nullable: true
+          description: Role slugs / class, section, house, campus ids / user ids for
+            'custom'.
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: campuses(id); NULL means all campuses.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AnnouncementStatusEnum'
+          readOnly: true
+        is_emergency:
+          type: boolean
+          description: Emergency posts bypass preferences on fan-out.
+        publish_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Hidden from feeds after expiry.
+        show_on_website:
+          type: boolean
+        attachments:
+          nullable: true
+          description: Array of files.id.
+        published_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id).
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - body
+      - created_at
+      - id
+      - published_at
+      - published_by
+      - status
+      - title
+      - updated_at
+    AnnouncementStatusEnum:
+      enum:
+      - draft
+      - scheduled
+      - published
+      - archived
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `scheduled` - Scheduled
+        * `published` - Published
+        * `archived` - Archived
     AppliesToEnum:
       enum:
       - staff
@@ -13780,6 +14294,24 @@ components:
       required:
       - source_academic_session_id
       - target_academic_session_id
+    CommunicationAudienceTypeEnum:
+      enum:
+      - all
+      - staff
+      - students
+      - guardians
+      - class
+      - section
+      - custom
+      type: string
+      description: |-
+        * `all` - All
+        * `staff` - Staff
+        * `students` - Students
+        * `guardians` - Guardians
+        * `class` - Class
+        * `section` - Section
+        * `custom` - Custom
     CorrectionDecision:
       type: object
       description: |-
@@ -16459,6 +16991,100 @@ components:
         * `draft` - Draft
         * `submitted` - Submitted
         * `locked` - Locked
+    Notice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        notice_no:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Assigned at publish from the tenant sequence.
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+        notice_type:
+          $ref: '#/components/schemas/NoticeTypeEnum'
+        audience_type:
+          $ref: '#/components/schemas/CommunicationAudienceTypeEnum'
+        audience_filter:
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/NoticeStatusEnum'
+          readOnly: true
+        requires_acknowledgment:
+          type: boolean
+        publish_at:
+          type: string
+          format: date-time
+          nullable: true
+        valid_until:
+          type: string
+          format: date
+          nullable: true
+        show_on_website:
+          type: boolean
+        attachments:
+          nullable: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id); must differ from created_by.
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approved_by
+      - body
+      - created_at
+      - id
+      - notice_no
+      - published_at
+      - status
+      - title
+      - updated_at
+    NoticeStatusEnum:
+      enum:
+      - draft
+      - pending_approval
+      - published
+      - archived
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `pending_approval` - Pending approval
+        * `published` - Published
+        * `archived` - Archived
+    NoticeTypeEnum:
+      enum:
+      - general
+      - circular
+      - event
+      - urgent
+      type: string
+      description: |-
+        * `general` - General
+        * `circular` - Circular
+        * `event` - Event
+        * `urgent` - Urgent
     NotificationCategoryEnum:
       enum:
       - attendance
@@ -16615,6 +17241,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AdmitCard'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedAnnouncementList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Announcement'
         meta:
           type: object
           properties:
@@ -17280,6 +17927,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedNoticeList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notice'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedNotificationTemplateOverrideList:
       type: object
       properties:
@@ -17917,6 +18585,70 @@ components:
         is_current:
           type: boolean
           readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedAnnouncement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+          description: Rich text (sanitized HTML/Markdown).
+        audience_type:
+          $ref: '#/components/schemas/CommunicationAudienceTypeEnum'
+        audience_filter:
+          nullable: true
+          description: Role slugs / class, section, house, campus ids / user ids for
+            'custom'.
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: campuses(id); NULL means all campuses.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AnnouncementStatusEnum'
+          readOnly: true
+        is_emergency:
+          type: boolean
+          description: Emergency posts bypass preferences on fan-out.
+        publish_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Hidden from feeds after expiry.
+        show_on_website:
+          type: boolean
+        attachments:
+          nullable: true
+          description: Array of files.id.
+        published_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id).
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -18997,6 +19729,66 @@ components:
         is_active:
           type: boolean
           description: Archived accounts reject new postings but keep their history.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedNotice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        notice_no:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Assigned at publish from the tenant sequence.
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+        notice_type:
+          $ref: '#/components/schemas/NoticeTypeEnum'
+        audience_type:
+          $ref: '#/components/schemas/CommunicationAudienceTypeEnum'
+        audience_filter:
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/NoticeStatusEnum'
+          readOnly: true
+        requires_acknowledgment:
+          type: boolean
+        publish_at:
+          type: string
+          format: date-time
+          nullable: true
+        valid_until:
+          type: string
+          format: date
+          nullable: true
+        show_on_website:
+          type: boolean
+        attachments:
+          nullable: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id); must differ from created_by.
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
