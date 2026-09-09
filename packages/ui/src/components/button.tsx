@@ -385,6 +385,39 @@ const buttonVariants = cva(
   },
 );
 
+type ButtonOwnProps =
+  | {
+      /**
+       * Render the styling onto a single child element (typically next/link's `<Link>`)
+       * instead of a `<button>`. `isLoading`/`loadingLabel` don't apply here: a
+       * Slot-wrapped child owns its own content, so there is no single place a spinner
+       * could be injected — this branch is a compile-time error precisely so that isn't
+       * a silent no-op.
+       */
+      asChild: true;
+      isLoading?: never;
+      loadingLabel?: never;
+    }
+  | {
+      asChild?: false;
+      isLoading?: undefined;
+      loadingLabel?: never;
+    }
+  | {
+      asChild?: false;
+      /** Shows a spinner and disables the button. Not part of Metronic's own Button;
+       * kept as an additive convenience so existing schoolhub call sites (in-flight
+       * mutations) don't need their own ad hoc spinner wiring. */
+      isLoading: boolean;
+      /**
+       * Announced by screen readers while `isLoading`. Required whenever `isLoading` is
+       * passed at all, not defaulted to an English string — this package has no i18n of
+       * its own, the same reason `Dialog.closeLabel`/`Sheet.closeLabel` are required
+       * rather than silently falling back to untranslated text.
+       */
+      loadingLabel: string;
+    };
+
 function Button({
   className,
   selected,
@@ -406,20 +439,9 @@ function Button({
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     selected?: boolean;
-    asChild?: boolean;
-    /**
-     * Shows a spinner and disables the button. Not part of Metronic's own Button; kept
-     * as an additive convenience so existing schoolhub call sites (in-flight mutations)
-     * don't need their own ad hoc spinner wiring. Ignored when `asChild` is set — a
-     * Slot-wrapped child owns its own content, so there's no single place to inject one.
-     */
-    isLoading?: boolean;
-    /** Announced by screen readers while `isLoading`. This package has no i18n of its
-     * own, so pass `t("common.loading")` or equivalent rather than relying on a default. */
-    loadingLabel?: string;
     /** Stretches the button to fill its container. Not part of Metronic's own Button. */
     block?: boolean;
-  }) {
+  } & ButtonOwnProps) {
   const buttonClassName = cn(
     buttonVariants({
       variant,

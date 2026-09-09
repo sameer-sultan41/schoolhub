@@ -67,11 +67,13 @@ function DialogContent({
     overlay?: boolean;
     /**
      * Accessible name for the built-in close button (its only content is an icon).
-     * Required whenever `showCloseButton` is left at its `true` default — this package
-     * has no i18n of its own, so a hardcoded "Close" fallback would always ship
-     * untranslated. Pass `t("common.close")` or equivalent from the caller's own messages.
+     * Required, not defaulted to "Close" — this package has no i18n of its own, so a
+     * silent default here would always ship untranslated. Pass `t("common.close")` or
+     * equivalent from the caller's own messages. Still required even when
+     * `showCloseButton` is false: a prop only needed for half the call sites would let
+     * a later flip of that flag silently ship without a label.
      */
-    closeLabel?: string;
+    closeLabel: string;
   }) {
   return (
     <DialogPortal>

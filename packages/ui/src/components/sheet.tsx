@@ -42,17 +42,24 @@ const sheetVariants = cva(
   "flex flex-col items-stretch fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-400",
   {
     variants: {
+      // Logical (`start`/`end`), never physical (`left`/`right`) — AGENTS.md §0c names
+      // this file specifically: "this repo's own Sheet already made this call, and Urdu
+      // RTL depends on every component agreeing with it." Metronic's own file used
+      // `left`/`right` as the variant KEY names even though the class values underneath
+      // were already logical (`start-0`/`border-e`, `end-0`/`border-s`, with `rtl:`
+      // overrides only on the slide-animation direction) — renamed here to match what
+      // they actually do, not what Metronic happened to call them.
       side: {
         top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
           "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-        left: "inset-y-0 start-0 h-full w-3/4 border-e data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm rtl:data-[state=closed]:slide-out-to-right rtl:data-[state=open]:slide-in-from-right",
-        right:
-          "inset-y-0 end-0 h-full w-3/4  border-s data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm rtl:data-[state=closed]:slide-out-to-left rtl:data-[state=open]:slide-in-from-left",
+        start:
+          "inset-y-0 start-0 h-full w-3/4 border-e data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm rtl:data-[state=closed]:slide-out-to-right rtl:data-[state=open]:slide-in-from-right",
+        end: "inset-y-0 end-0 h-full w-3/4  border-s data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm rtl:data-[state=closed]:slide-out-to-left rtl:data-[state=open]:slide-in-from-left",
       },
     },
     defaultVariants: {
-      side: "right",
+      side: "end",
     },
   },
 );
@@ -65,13 +72,14 @@ interface SheetContentProps
    * Accessible name for the built-in close button (its only content is an icon). Not
    * part of Metronic's own Sheet — kept as an additive convenience: this package has no
    * i18n of its own, so a hardcoded "Close" fallback would always ship untranslated.
-   * Required whenever `close` is left at its `true` default.
+   * Required even when `close` is false: a prop only needed for some call sites would
+   * let a later flip of that flag silently ship without a label.
    */
-  closeLabel?: string;
+  closeLabel: string;
 }
 
 function SheetContent({
-  side = "right",
+  side = "end",
   overlay = true,
   close = true,
   className,
