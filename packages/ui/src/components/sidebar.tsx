@@ -301,12 +301,16 @@ export function SidebarTrigger({
 
 /**
  * Demo1-style floating collapse/expand control, glued to the sidebar header's trailing
- * edge — ported from Metronic's own `sidebar-header.tsx` (`absolute start-full top-2/4
- * -translate-x-2/4 -translate-y-2/4`, a `chrome-outline` icon button, a chevron that
- * flips by collapsed state and mirrors for RTL). Distinct from SidebarTrigger (the
- * always-present, keyboard/mobile-safe control in the header): this one is desktop-only
- * decoration, hidden on mobile via the same `md:` breakpoint `Sidebar` itself uses for its
- * own desktop/mobile split — not a duplicate `isMobile` check.
+ * edge — positioned like Metronic's own `sidebar-header.tsx` (`absolute start-full
+ * top-2/4 -translate-x-2/4 -translate-y-2/4`, a chevron that flips by collapsed state and
+ * mirrors for RTL), but with an OPAQUE `bg-sidebar` fill rather than `chrome-outline`'s own
+ * transparent one: this button straddles the rail's own edge, half over the rail and half
+ * over the main content, so a transparent fill reads as barely-there against whichever
+ * surface is showing through. `shadow-sm` lifts it off that border the same way a floating
+ * action button would. Distinct from SidebarTrigger (the always-present, keyboard/mobile-
+ * safe control in the header): this one is desktop-only decoration, hidden on mobile via
+ * the same `md:` breakpoint `Sidebar` itself uses for its own desktop/mobile split — not a
+ * duplicate `isMobile` check.
  */
 export function SidebarCollapseToggle({
   toggleLabel,
@@ -323,7 +327,7 @@ export function SidebarCollapseToggle({
       size="sm"
       mode="icon"
       className={cn(
-        "absolute start-full top-2/4 z-20 hidden size-7 -translate-x-2/4 -translate-y-2/4 md:flex rtl:translate-x-2/4",
+        "absolute start-full top-2/4 z-20 hidden size-7 -translate-x-2/4 -translate-y-2/4 bg-sidebar shadow-sm md:flex rtl:translate-x-2/4",
         className,
       )}
       onClick={(event) => {
