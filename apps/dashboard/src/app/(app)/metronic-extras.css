@@ -1,4 +1,4 @@
-@reference "../../globals.css";
+@reference "../globals.css";
 /* The header/sidebar fixed-offset mechanism (--header-height, --sidebar-width,
    .header-fixed/.sidebar-fixed padding, sidebar-collapse hover-to-expand) —
    without this, the `demo1`/`header-fixed`/`sidebar-fixed` body classes Shell
