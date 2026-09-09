@@ -27,6 +27,15 @@ verbatim, unrelated to the shell/nav visual work) and rebuilt the shell itself f
 Not rebuilt in this chunk (see Backlog): session/tenant resolution, permission-filtered nav,
 impersonation banner, sign-out, `AppBreadcrumb`, `CommandPalette`, every business route.
 
+**Chunk 2 (done): header controls.** `command.tsx` and `app-breadcrumb.tsx` restored
+verbatim (no session dependency). `command-palette.tsx` restored with its `useSession`/
+`canAccessModule`/`hasPermission` filtering dropped — `canAccessModule(null, …)` always
+returns `false`, so filtering against a nonexistent session would show nothing; it now
+shows every `status: "ready"` nav item and every quick action unconditionally, matching
+`dashboard-nav.tsx`'s own temporary stance. Both wired into `app-shell.tsx`'s header in the
+pre-reset order (`SidebarTrigger` → `AppBreadcrumb` → spacer → `CommandPalette` →
+`LayoutControls` → `ThemeToggle` → `UserMenu`).
+
 ## Decisions
 
 - **Port, don't vendor.** Root `AGENTS.md` §0d. Metronic's actual Demo1 source lives at
@@ -49,10 +58,9 @@ impersonation banner, sign-out, `AppBreadcrumb`, `CommandPalette`, every busines
 
 ## Backlog (explicitly deferred, not lost)
 
-- `AppBreadcrumb`, `CommandPalette` — restorable from `git show HEAD:apps/dashboard/src/components/<file>.tsx` for reference; need re-wiring into `app-shell.tsx`'s header once restored.
 - `TenantTheme` / tenant branding CSS variables.
 - Session/tenant resolution in `AppShell` (`useSession`, tenant `useQuery`, `tenantLabel` from real tenant name instead of `PLATFORM_NAME`), impersonation banner, sign-out (`UserMenu` currently renders with `user={null}`).
-- `canAccessModule` permission filtering of `NAV_GROUPS` (currently unfiltered — every nav item renders regardless of the viewer's permissions).
+- `canAccessModule`/`hasPermission` filtering, restored **together** in `dashboard-nav.tsx` (sidebar), `command-palette.tsx` (palette nav search + actions), and `app-shell.tsx` (`NAV_GROUPS` filtering) — all three currently show everything unconditionally and must regain filtering at the same time the session/tenant chunk above lands, so the sidebar and the palette never disagree about what a viewer can see.
 - Nested/multi-level nav groups (`NavItem.children` exists on the type; nothing uses it yet).
 - Every business route: students, staff, academics, timetable, admissions, attendance, fees, communication, website — plus the shared `ScreenHeader`/`ApiErrorAlert`/`FilterBar`/`PersonCell` components and the `useTableParams`-driven list-screen convention they supported.
 - A dedicated RTL + dark-mode visual verification pass on the rebuilt shell specifically (the underlying primitives are already covered by existing tests/e2e; the new `app-shell.tsx`/`dashboard-nav.tsx` composition itself has only been unit-tested so far).
