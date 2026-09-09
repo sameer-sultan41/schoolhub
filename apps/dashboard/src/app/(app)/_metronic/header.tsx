@@ -23,6 +23,8 @@ import {
 } from "@schoolhub/ui";
 import { useIsMobile } from "@/app/(app)/_metronic/use-mobile";
 
+import { LayoutControls } from "@/components/layout-controls";
+
 import { toAbsoluteUrl } from "@/app/(app)/_metronic/helpers";
 import { MegaMenu } from "@/app/(app)/_metronic/mega-menu";
 import { MegaMenuMobile } from "@/app/(app)/_metronic/mega-menu-mobile";
@@ -169,6 +171,7 @@ export function Header() {
               </Button>
             }
           />
+          <LayoutControls />
           <UserDropdownMenu
             trigger={
               <img

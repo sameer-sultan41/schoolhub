@@ -2,7 +2,6 @@
 // (Settings shape + APP_SETTINGS default), trimmed to the demo1 slice this
 // preview actually reads.
 export interface Settings {
-  container: "fixed" | "fluid";
   layout: string;
   layouts: {
     demo1: {
@@ -14,7 +13,6 @@ export interface Settings {
 
 export const APP_SETTINGS: Settings = {
   layout: "",
-  container: "fixed",
   layouts: {
     demo1: {
       sidebarCollapse: false,
