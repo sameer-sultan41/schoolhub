@@ -80,6 +80,18 @@ class OverrideValidationTests(TemplateOverrideTestCase):
                 code="no.such.trigger", channel=NotificationChannel.IN_APP, subject="Hi", body="x"
             )
 
+    def test_an_sms_override_may_not_declare_a_subject(self) -> None:
+        with self.assertRaises(DomainRuleViolation):
+            assert_override_is_valid(
+                code=CODE, channel=NotificationChannel.SMS, subject="Nope", body="Body"
+            )
+
+    def test_a_subject_bearing_channels_override_must_have_one(self) -> None:
+        with self.assertRaises(DomainRuleViolation):
+            assert_override_is_valid(
+                code=CODE, channel=NotificationChannel.IN_APP, subject=None, body="Body"
+            )
+
     def test_two_overrides_cannot_share_a_tenant_code_channel_locale(self) -> None:
         with tenant_context(self.tenant.id):
             NotificationTemplateOverrideFactory(

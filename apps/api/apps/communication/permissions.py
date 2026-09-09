@@ -24,7 +24,6 @@ delegation `fees_finance`'s invoice ownership and `StudentAttendance` use.
 from core.rbac.registry import registry
 
 # §3's staff roles who publish/manage communication.
-COMMS_ADMINS = ("school_admin", "principal")
 COMMS_STAFF = ("school_admin", "principal", "teacher", "reception")
 
 # §4 — "communication.announcement.create/update/delete … school_admin, teacher
@@ -32,13 +31,13 @@ COMMS_STAFF = ("school_admin", "principal", "teacher", "reception")
 # key, narrows which announcements a teacher may touch.
 ANNOUNCEMENT_AUTHORS = ("school_admin", "teacher")
 # The view gap this module fills — see the module docstring.
-ANNOUNCEMENT_VIEWERS = ("school_admin", "principal", "teacher", "reception")
+ANNOUNCEMENT_VIEWERS = COMMS_STAFF
 # §4 — "communication.announcement.publish … school_admin, principal".
 ANNOUNCEMENT_PUBLISHERS = ("school_admin", "principal")
 
 # §4 — "communication.notice.create/update … school_admin".
 NOTICE_AUTHORS = ("school_admin",)
-NOTICE_VIEWERS = ("school_admin", "principal", "teacher", "reception")
+NOTICE_VIEWERS = COMMS_STAFF
 # §4 — "communication.notice.publish … principal, school_owner". The approval
 # gate: §7's workflow requires the approver differ from the drafter, enforced
 # in services, not by this key alone (holding the key is necessary, not
