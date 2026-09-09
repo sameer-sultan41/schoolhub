@@ -5,7 +5,9 @@ from __future__ import annotations
 import uuid
 
 from django.core.cache import cache
+from django.utils import timezone
 
+from apps.communication.models import AudienceType
 from core.api.exceptions import DomainRuleViolation
 from core.notifications.models import NotificationCategory, NotificationChannel
 from core.notifications.templates import SUBJECTLESS_CHANNELS, used_placeholders
@@ -191,3 +193,336 @@ def save_preferences(*, user_id: uuid.UUID, tenant_id: uuid.UUID, rows: list[dic
             channel=row["channel"],
             defaults={"is_enabled": row["is_enabled"]},
         )
+
+
+# ---------------------------------------------------------------------------
+# Audience resolution — shared by announcements and notices.
+# ---------------------------------------------------------------------------
+
+
+def resolve_audience(
+    *, audience_type: str, audience_filter: dict | None, tenant_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """`(audience_type, audience_filter) -> [user_id, ...]`, one query per branch.
+
+    `class`/`section` resolve to the **guardians** of enrolled students, not the
+    students themselves — matching the module doc's own worked example ("targets
+    classes 6-10 guardians") and the real use case: a circular goes to parents.
+    `students`/`guardians` resolve their whole tenant-wide population, narrowed
+    by the same `audience_filter` keys (`class_ids`, `section_ids`, `house_ids`,
+    `campus_ids`) when present — `class`/`section` are exactly `guardians` with
+    one of those keys forced. `staff` resolves every non-restricted-principal
+    role holder, optionally narrowed by `audience_filter.role_slugs`. `custom`
+    reads `audience_filter.user_ids` directly, `all` is every active user.
+    """
+    audience_filter = audience_filter or {}
+
+    if audience_type == AudienceType.ALL:
+        return _resolve_all(tenant_id=tenant_id)
+    if audience_type == AudienceType.STAFF:
+        return _resolve_staff(tenant_id=tenant_id, audience_filter=audience_filter)
+    if audience_type == AudienceType.STUDENTS:
+        return _resolve_students(tenant_id=tenant_id, audience_filter=audience_filter)
+    # CLASS/SECTION carry the same audience_filter shape as GUARDIANS (the
+    # caller sets class_ids/section_ids either way) — they exist as their own
+    # audience_type values only so a client can express "everyone in this
+    # class" without also having to say "and I mean their guardians".
+    if audience_type in (AudienceType.GUARDIANS, AudienceType.CLASS, AudienceType.SECTION):
+        return _resolve_guardians(tenant_id=tenant_id, audience_filter=audience_filter)
+    if audience_type == AudienceType.CUSTOM:
+        return _resolve_custom(tenant_id=tenant_id, audience_filter=audience_filter)
+
+    raise DomainRuleViolation(f"Unknown audience_type {audience_type!r}.")
+
+
+def assert_audience_is_nonempty(recipients: list[uuid.UUID]) -> None:
+    """§11: audience resolution must yield >= 1 recipient — a published
+    announcement/notice with zero reach is refused, not silently sent to no one."""
+    if not recipients:
+        raise DomainRuleViolation(
+            "This audience resolves to zero recipients. Broaden the targeting before publishing."
+        )
+
+
+def _resolve_all(*, tenant_id: uuid.UUID) -> list[uuid.UUID]:
+    from core.rbac.models import User
+
+    return list(
+        User.objects.filter(
+            tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+        ).values_list("id", flat=True)
+    )
+
+
+def _resolve_staff(*, tenant_id: uuid.UUID, audience_filter: dict) -> list[uuid.UUID]:
+    from core.rbac.models import User
+
+    qs = User.objects.filter(
+        tenant_id=tenant_id,
+        is_active=True,
+        deleted_at__isnull=True,
+        user_roles__deleted_at__isnull=True,
+        user_roles__role__is_restricted_principal=False,
+        user_roles__role__deleted_at__isnull=True,
+    )
+    role_slugs = audience_filter.get("role_slugs")
+    if role_slugs:
+        qs = qs.filter(user_roles__role__slug__in=role_slugs)
+    return list(qs.distinct().values_list("id", flat=True))
+
+
+def _resolve_students(*, tenant_id: uuid.UUID, audience_filter: dict) -> list[uuid.UUID]:
+    from apps.student_management.models import Student
+
+    qs = Student.objects.alive().filter(tenant_id=tenant_id, user_id__isnull=False)
+    qs = _narrow_students(qs, audience_filter)
+    return list(qs.values_list("user_id", flat=True).distinct())
+
+
+def _resolve_guardians(*, tenant_id: uuid.UUID, audience_filter: dict) -> list[uuid.UUID]:
+    from apps.student_management.models import Student, StudentGuardian
+
+    students = _narrow_students(
+        Student.objects.alive().filter(tenant_id=tenant_id), audience_filter
+    )
+    links = StudentGuardian.objects.alive().filter(
+        student__in=students,
+        has_portal_access=True,
+        guardian__deleted_at__isnull=True,
+        guardian__user_id__isnull=False,
+    )
+    return list(links.values_list("guardian__user_id", flat=True).distinct())
+
+
+def _narrow_students(queryset, audience_filter: dict):
+    """Applies class/section/house/campus narrowing to a `Student` queryset —
+    shared by `_resolve_students` and `_resolve_guardians`, since `class`/
+    `section` audience types are just guardians of a narrowed student set."""
+    class_ids = audience_filter.get("class_ids")
+    section_ids = audience_filter.get("section_ids")
+    if class_ids or section_ids:
+        from django.db.models import Q
+
+        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+        # OR, not AND: a student in either named class or named section counts,
+        # matching "class 6 OR class 7" targeting rather than requiring both
+        # narrowings to hold on the same enrollment row.
+        condition = Q()
+        if class_ids:
+            condition |= Q(school_class_id__in=class_ids)
+        if section_ids:
+            condition |= Q(section_id__in=section_ids)
+        enrolled_student_ids = (
+            StudentEnrollment.objects.alive()
+            .filter(condition, status=EnrollmentStatus.ACTIVE)
+            .values_list("student_id", flat=True)
+        )
+        queryset = queryset.filter(pk__in=enrolled_student_ids)
+
+    house_ids = audience_filter.get("house_ids")
+    if house_ids:
+        queryset = queryset.filter(house_id__in=house_ids)
+
+    campus_ids = audience_filter.get("campus_ids")
+    if campus_ids:
+        queryset = queryset.filter(campus_id__in=campus_ids)
+
+    return queryset
+
+
+def _resolve_custom(*, tenant_id: uuid.UUID, audience_filter: dict) -> list[uuid.UUID]:
+    from core.rbac.models import User
+
+    requested = [uuid.UUID(str(uid)) for uid in audience_filter.get("user_ids") or []]
+    if not requested:
+        return []
+
+    found = set(
+        User.objects.filter(
+            tenant_id=tenant_id, pk__in=requested, deleted_at__isnull=True
+        ).values_list("id", flat=True)
+    )
+    missing = set(requested) - found
+    if missing:
+        raise DomainRuleViolation(
+            f"user_ids {sorted(str(uid) for uid in missing)} do not belong to this tenant.",
+            meta={"missing_user_ids": sorted(str(uid) for uid in missing)},
+        )
+    return list(found)
+
+
+# ---------------------------------------------------------------------------
+# Announcements.
+# ---------------------------------------------------------------------------
+
+
+def publish_announcement(announcement, *, actor_id: uuid.UUID):
+    """Draft/scheduled -> published: resolves the audience, fans out once.
+
+    §12 fires on the transition, not on current status, so a retry after a
+    partial failure never re-notifies an already-published announcement — the
+    `status` check below is what makes this safe to call twice.
+    """
+    from apps.communication.models import Announcement, AnnouncementStatus
+    from core.notifications.services import Recipient, notify
+
+    locked = Announcement.objects.select_for_update().get(pk=announcement.pk)
+    if locked.status == AnnouncementStatus.PUBLISHED:
+        raise DomainRuleViolation({"status": "This announcement is already published."})
+
+    recipients = resolve_audience(
+        audience_type=locked.audience_type,
+        audience_filter=locked.audience_filter,
+        tenant_id=locked.tenant_id,
+    )
+    assert_audience_is_nonempty(recipients)
+
+    now = timezone.now()
+    locked.status = AnnouncementStatus.PUBLISHED
+    locked.published_by = actor_id
+    locked.published_at = now
+    locked.updated_by = actor_id
+    locked.save(
+        update_fields=["status", "published_by", "published_at", "updated_by", "updated_at"]
+    )
+
+    # One notify() call for the whole resolved audience — never per-recipient.
+    # The fees-finance review caught exactly this anti-pattern once already
+    # this session; §5 explicitly expects one announcement to reach thousands.
+    notify(
+        "communication.announcement-published",
+        tenant_id=locked.tenant_id,
+        recipients=[Recipient(user_id=uid) for uid in recipients],
+        context={"announcement.title": locked.title, "announcement.body": locked.body},
+        source_type="announcement",
+        source_id=locked.pk,
+    )
+    return locked
+
+
+# ---------------------------------------------------------------------------
+# Notices.
+# ---------------------------------------------------------------------------
+
+
+def submit_notice(notice, *, actor_id: uuid.UUID):
+    """draft -> pending_approval."""
+    from apps.communication.models import Notice, NoticeStatus
+
+    locked = Notice.objects.select_for_update().get(pk=notice.pk)
+    if locked.status != NoticeStatus.DRAFT:
+        raise DomainRuleViolation(
+            {"status": f"Only a draft notice can be submitted (this one is {locked.status})."}
+        )
+    locked.status = NoticeStatus.PENDING_APPROVAL
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "updated_by", "updated_at"])
+    return locked
+
+
+def return_notice_to_draft(notice, *, actor_id: uuid.UUID):
+    """pending_approval -> draft, with comments. §7's workflow diagram: a
+    returned notice goes back to draft, not to a third "rejected" state — the
+    drafter edits and resubmits through the same `:submit` step."""
+    from apps.communication.models import Notice, NoticeStatus
+
+    locked = Notice.objects.select_for_update().get(pk=notice.pk)
+    if locked.status != NoticeStatus.PENDING_APPROVAL:
+        raise DomainRuleViolation(
+            {"status": "Only a notice pending approval can be returned to draft."}
+        )
+    locked.status = NoticeStatus.DRAFT
+    locked.updated_by = actor_id
+    locked.save(update_fields=["status", "updated_by", "updated_at"])
+    return locked
+
+
+def publish_notice(notice, *, actor_id: uuid.UUID):
+    """pending_approval -> published: allocates notice_no, resolves the
+    audience, fans out once.
+
+    The approver must differ from the drafter — auth-and-rbac.md §2.4,
+    checked here so the rule holds regardless of which door a caller
+    approves through, the same shape `fees_finance.decide_refund` uses.
+    """
+    from apps.communication import numbering
+    from apps.communication.models import Notice, NoticeStatus
+    from core.notifications.services import Recipient, notify
+
+    locked = Notice.objects.select_for_update().get(pk=notice.pk)
+    if locked.status != NoticeStatus.PENDING_APPROVAL:
+        raise DomainRuleViolation(
+            {"status": "A notice must be pending approval before it can be published."}
+        )
+    if locked.created_by == actor_id:
+        raise DomainRuleViolation(
+            {
+                "approved_by": (
+                    "The person who drafted a notice cannot approve it (auth-and-rbac §2.4)."
+                )
+            }
+        )
+
+    recipients = resolve_audience(
+        audience_type=locked.audience_type,
+        audience_filter=locked.audience_filter,
+        tenant_id=locked.tenant_id,
+    )
+    assert_audience_is_nonempty(recipients)
+
+    now = timezone.now()
+    locked.notice_no = numbering.allocate_notice_no(tenant_id=locked.tenant_id, on_date=now.date())
+    locked.status = NoticeStatus.PUBLISHED
+    locked.approved_by = actor_id
+    locked.published_at = now
+    locked.updated_by = actor_id
+    locked.save(
+        update_fields=[
+            "notice_no",
+            "status",
+            "approved_by",
+            "published_at",
+            "updated_by",
+            "updated_at",
+        ]
+    )
+
+    notify(
+        "communication.notice-published",
+        tenant_id=locked.tenant_id,
+        recipients=[Recipient(user_id=uid) for uid in recipients],
+        context={
+            "notice.notice_no": locked.notice_no,
+            "notice.title": locked.title,
+            "notice.body": locked.body,
+        },
+        source_type="notice",
+        source_id=locked.pk,
+    )
+    return locked
+
+
+def acknowledge_notice(notice, *, actor_id: uuid.UUID) -> None:
+    """Idempotent: a second acknowledgment from the same user is a no-op, not
+    an error — a guardian double-tapping "acknowledge" must not 500.
+
+    Tracked on the recipient's own `Notification.acknowledged_at` row (PR A's
+    `core.notifications.Notification` already carries this column) rather than
+    a new table — one row per (notice, recipient) already exists there from
+    the publish fan-out.
+    """
+    if not notice.requires_acknowledgment:
+        raise DomainRuleViolation(
+            {"requires_acknowledgment": "This notice does not require acknowledgment."}
+        )
+
+    from core.notifications.models import Notification
+
+    Notification.objects.filter(
+        tenant_id=notice.tenant_id,
+        user_id=actor_id,
+        source_type="notice",
+        source_id=notice.pk,
+        acknowledged_at__isnull=True,
+    ).update(acknowledged_at=timezone.now())
