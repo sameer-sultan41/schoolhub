@@ -14,6 +14,7 @@ from apps.communication.filters import DeliveryLogFilterSet, NotificationTemplat
 from apps.communication.models import NotificationTemplateOverride
 from apps.communication.serializers import (
     DeliveryLogSerializer,
+    DeliveryReportResponseSerializer,
     NotificationPreferenceRowSerializer,
     NotificationPreferenceUpdateSerializer,
     NotificationTemplateOverrideSerializer,
@@ -63,7 +64,7 @@ class NotificationTemplateOverrideViewSet(TenantScopedViewSetMixin, viewsets.Mod
     }
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
-    @extend_schema(responses={200: NotificationTemplatePreviewSerializer})
+    @extend_schema(request=None, responses={200: NotificationTemplatePreviewSerializer})
     def preview(self, request: Request, pk: str | None = None) -> Response:
         """`POST /notification-templates/{id}:preview` — renders with sample data.
 
@@ -159,7 +160,7 @@ class DeliveryLogViewSet(
     required_permission_map = {"summary": "communication.delivery-log.view"}
     http_method_names = ["get", "head", "options"]
 
-    @extend_schema(responses={200: None})
+    @extend_schema(responses={200: DeliveryReportResponseSerializer})
     def summary(self, request: Request) -> Response:
         """`GET /delivery-logs:summary?group_by=channel|status|provider` — §13's delivery report."""
         group_by = request.query_params.get("group_by", "channel")

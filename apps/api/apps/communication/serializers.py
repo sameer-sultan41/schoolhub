@@ -110,3 +110,16 @@ class DeliveryLogSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class DeliveryReportRowSerializer(serializers.Serializer):
+    """One grouped count from `reports.delivery_report`."""
+
+    group = serializers.CharField()
+    count = serializers.IntegerField()
+
+
+class DeliveryReportResponseSerializer(serializers.Serializer):
+    """`GET /delivery-logs:summary`'s real response shape — see views.py's `summary`."""
+
+    data = DeliveryReportRowSerializer(many=True)

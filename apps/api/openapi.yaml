@@ -1588,7 +1588,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryReportResponse'
+          description: ''
   /api/v1/departments:
     get:
       operationId: departments_list
@@ -6658,6 +6662,15 @@ paths:
         No `pk` in the path: this always resolves to `request.user`. §4 grants the
         key to every tenant role at `own` scope, and "own" here means "the caller,
         always" — there is no other user's matrix this endpoint could address.
+
+        `TenantScopedViewSetMixin` is mixed in for its `initial()`/`finalize_response()`
+        tenant binding alone — a plain `APIView` never gets `request.tenant` under real
+        JWT auth (only `TenantMiddleware`, session-only, and this mixin's `initial()`
+        ever set it; see the mixin's own docstring). Without it every real request 403s:
+        `RequiresModuleFeature` fails closed on `request.tenant is None`. The mixin's
+        other methods (`get_queryset`, `perform_create`) are `GenericAPIView`-only and
+        are never called here, so nothing else about mixing it into a bare `APIView`
+        matters.
       tags:
       - notification-preferences
       security:
@@ -6679,6 +6692,15 @@ paths:
         No `pk` in the path: this always resolves to `request.user`. §4 grants the
         key to every tenant role at `own` scope, and "own" here means "the caller,
         always" — there is no other user's matrix this endpoint could address.
+
+        `TenantScopedViewSetMixin` is mixed in for its `initial()`/`finalize_response()`
+        tenant binding alone — a plain `APIView` never gets `request.tenant` under real
+        JWT auth (only `TenantMiddleware`, session-only, and this mixin's `initial()`
+        ever set it; see the mixin's own docstring). Without it every real request 403s:
+        `RequiresModuleFeature` fails closed on `request.tenant is None`. The mixin's
+        other methods (`get_queryset`, `perform_create`) are `GenericAPIView`-only and
+        are never called here, so nothing else about mixing it into a bare `APIView`
+        matters.
       tags:
       - notification-preferences
       requestBody:
@@ -6885,18 +6907,6 @@ paths:
         required: true
       tags:
       - notification-templates
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NotificationTemplateOverride'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/NotificationTemplateOverride'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/NotificationTemplateOverride'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -13963,6 +13973,28 @@ components:
       - status
       - subject
       - template_code
+    DeliveryReportResponse:
+      type: object
+      description: '`GET /delivery-logs:summary`''s real response shape — see views.py''s
+        `summary`.'
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryReportRow'
+      required:
+      - data
+    DeliveryReportRow:
+      type: object
+      description: One grouped count from `reports.delivery_report`.
+      properties:
+        group:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - group
     DeliveryStatusEnum:
       enum:
       - queued
