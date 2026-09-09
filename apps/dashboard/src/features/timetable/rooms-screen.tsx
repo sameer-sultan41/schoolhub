@@ -117,7 +117,7 @@ export function RoomsScreen() {
       // A category, not a status: the neutral chip, so it reads as a label rather than
       // as a state the reader is meant to act on.
       cell: (row) => (
-        <Badge variant="outline" appearance="soft">
+        <Badge variant="outline" appearance="light">
           {t(`rooms.types.${row.room_type}`)}
         </Badge>
       ),
@@ -157,12 +157,12 @@ export function RoomsScreen() {
       // colour, and the dot keeps the state legible without relying on the fill.
       cell: (row) =>
         row.is_active ? (
-          <Badge variant="success" appearance="soft">
+          <Badge variant="success" appearance="light">
             <BadgeDot />
             {t("rooms.active")}
           </Badge>
         ) : (
-          <Badge variant="secondary" appearance="soft">
+          <Badge variant="secondary" appearance="light">
             <BadgeDot />
             {t("rooms.inactive")}
           </Badge>
@@ -340,7 +340,7 @@ function DeleteRoomDialog({ room }: { room: RoomRecord }) {
 
         <DialogFooter>
           <Button
-            variant="danger"
+            variant="destructive"
             isLoading={mutation.isPending}
             loadingLabel={tCommon("loading")}
             onClick={() => {

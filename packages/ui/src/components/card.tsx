@@ -1,29 +1,39 @@
-import { type VariantProps, cva } from "class-variance-authority";
-import type { HTMLAttributes, ReactNode } from "react";
-import { cn } from "../lib/cn";
+"use client";
 
-/**
- * Colours and depth come from theme tokens only. Tailwind's own `shadow-sm`/`shadow-md`
- * are deliberately unused: that scale is neutral black at a fixed opacity, and a grey
- * shadow under a blue-tinted surface reads as two materials rather than one — the
- * commonest tell of an unmodified component kit. `--sh-elevation-*` carries the brand hue
- * in light mode and falls back to depth-of-black in dark, where a tinted shadow is
- * invisible anyway.
- */
-const cardVariants = cva("rounded-[var(--sh-radius)] border text-surface-foreground", {
+import * as React from "react";
+import { cn } from "../lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
+
+// Define CardContext
+type CardContextType = {
+  variant: "default" | "accent";
+};
+
+const CardContext = React.createContext<CardContextType>({
+  variant: "default", // Default value
+});
+
+// Hook to use CardContext
+const useCardContext = () => {
+  return React.useContext(CardContext);
+};
+
+// Variants
+const cardVariants = cva("flex flex-col items-stretch text-card-foreground rounded-xl", {
   variants: {
+    variant: {
+      default: "bg-card border border-border shadow-xs black/5",
+      accent: "bg-muted shadow-xs p-1",
+    },
+    // `elevation` and `tone` are not part of Metronic's own Card — kept as additive axes
+    // (default to a no-op, so every existing `variant`-only call site is unaffected) for
+    // the one real depth/brand-gradient need this app has: the dashboard's hero band.
     elevation: {
-      /**
-       * Sits ON the page — the default, and what every existing card gets. Visually
-       * the same weight as the `shadow-sm` this replaces, so nothing already built
-       * changes; the difference is that the shadow now carries the brand hue instead
-       * of neutral black.
-       */
-      flat: "border-border bg-surface shadow-elevation-1",
+      flat: "",
       /** Sits ABOVE the page — a stat tile, a panel that should read as its own object. */
-      raised: "border-border bg-surface-raised shadow-elevation-2",
+      raised: "shadow-elevation-2",
       /** Floats — a popover, a dragged item, a card that has been picked up. */
-      floating: "border-transparent bg-surface-raised shadow-elevation-3",
+      floating: "shadow-elevation-3",
     },
     tone: {
       surface: "",
@@ -31,62 +41,180 @@ const cardVariants = cva("rounded-[var(--sh-radius)] border text-surface-foregro
        * The one gradient in the system. Allowed ONCE PER SCREEN, on that screen's hero
        * element, and never as decoration — see theme.css's `--sh-gradient-spotlight`.
        */
-      /*
-       * `text-spotlight-foreground`, NOT `text-primary-foreground`: that one flips to
-       * near-black in dark mode, because dark-mode `primary` is a light violet. The
-       * band is a fixed dark surface in both schemes, so its text is fixed light in
-       * both. Found by looking at the running app in dark mode, not by a test.
-       */
       spotlight: "border-transparent bg-spotlight text-spotlight-foreground",
     },
   },
-  defaultVariants: { elevation: "flat", tone: "surface" },
+  defaultVariants: {
+    variant: "default",
+    elevation: "flat",
+    tone: "surface",
+  },
 });
 
-export type CardProps = HTMLAttributes<HTMLDivElement> & VariantProps<typeof cardVariants>;
+const cardHeaderVariants = cva(
+  "flex items-center justify-between flex-wrap px-5 min-h-14 gap-2.5",
+  {
+    variants: {
+      variant: {
+        default: "border-b border-border",
+        accent: "",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
 
-export function Card({ className, elevation, tone, ...props }: CardProps) {
-  return <div className={cn(cardVariants({ elevation, tone }), className)} {...props} />;
-}
+const cardContentVariants = cva("grow p-5", {
+  variants: {
+    variant: {
+      default: "",
+      accent: "bg-card rounded-t-xl [&:last-child]:rounded-b-xl",
+    },
+  },
+  defaultVariants: {
+    variant: "default",
+  },
+});
 
-export interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {
-  /** Rendered on the trailing side of the header — actions, badges, menus. */
-  actions?: ReactNode;
-}
+const cardTableVariants = cva("grid grow", {
+  variants: {
+    variant: {
+      default: "",
+      accent: "bg-card rounded-xl",
+    },
+  },
+  defaultVariants: {
+    variant: "default",
+  },
+});
 
-export function CardHeader({ className, children, actions, ...props }: CardHeaderProps) {
+const cardFooterVariants = cva("flex items-center px-5 min-h-14", {
+  variants: {
+    variant: {
+      default: "border-t border-border",
+      accent: "bg-card rounded-b-xl mt-[2px]",
+    },
+  },
+  defaultVariants: {
+    variant: "default",
+  },
+});
+
+// Card Component
+function Card({
+  className,
+  variant = "default",
+  elevation,
+  tone,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof cardVariants>) {
   return (
-    <div
-      className={cn("flex items-start justify-between gap-4 px-6 pt-6 pb-4", className)}
-      {...props}
-    >
-      <div className="space-y-1">{children}</div>
-      {actions ? <div className="shrink-0">{actions}</div> : null}
-    </div>
+    <CardContext.Provider value={{ variant: variant || "default" }}>
+      <div
+        data-slot="card"
+        className={cn(cardVariants({ variant, elevation, tone }), className)}
+        {...props}
+      />
+    </CardContext.Provider>
   );
 }
 
-export function CardTitle({ className, children, ...props }: HTMLAttributes<HTMLHeadingElement>) {
+// CardHeader Component
+function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  const { variant } = useCardContext();
   return (
-    <h3 className={cn("font-heading text-base leading-none font-semibold", className)} {...props}>
+    <div
+      data-slot="card-header"
+      className={cn(cardHeaderVariants({ variant }), className)}
+      {...props}
+    />
+  );
+}
+
+// CardContent Component
+function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  const { variant } = useCardContext();
+  return (
+    <div
+      data-slot="card-content"
+      className={cn(cardContentVariants({ variant }), className)}
+      {...props}
+    />
+  );
+}
+
+// CardTable Component
+function CardTable({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  const { variant } = useCardContext();
+  return (
+    <div
+      data-slot="card-table"
+      className={cn(cardTableVariants({ variant }), className)}
+      {...props}
+    />
+  );
+}
+
+// CardFooter Component
+function CardFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  const { variant } = useCardContext();
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn(cardFooterVariants({ variant }), className)}
+      {...props}
+    />
+  );
+}
+
+// Other Components
+function CardHeading({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div data-slot="card-heading" className={cn("space-y-1", className)} {...props} />;
+}
+
+function CardToolbar({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      data-slot="card-toolbar"
+      className={cn("flex items-center gap-2.5", className)}
+      {...props}
+    />
+  );
+}
+
+function CardTitle({ className, children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
+  return (
+    <h3
+      data-slot="card-title"
+      className={cn("text-base leading-none font-semibold tracking-tight", className)}
+      {...props}
+    >
       {children}
     </h3>
   );
 }
 
-export function CardDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
-}
-
-export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-6 pb-6", className)} {...props} />;
-}
-
-export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex items-center gap-2 border-t border-border px-6 py-4", className)}
+      data-slot="card-description"
+      className={cn("text-sm text-muted-foreground", className)}
       {...props}
     />
   );
 }
+
+// Exports
+export {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardHeading,
+  CardTable,
+  CardTitle,
+  CardToolbar,
+};

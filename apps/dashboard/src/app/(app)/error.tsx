@@ -24,7 +24,7 @@ export default function Error({
 
   return (
     <div className="flex flex-1 items-center justify-center py-12">
-      <Alert variant="danger" className="max-w-md">
+      <Alert variant="destructive" className="max-w-md">
         <AlertTitle>{t("pageErrorTitle")}</AlertTitle>
         <AlertDescription className="space-y-4">
           <p>{t("pageErrorBody")}</p>

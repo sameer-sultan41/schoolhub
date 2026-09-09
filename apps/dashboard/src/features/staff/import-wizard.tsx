@@ -96,7 +96,7 @@ export function ImportWizard() {
         <Card>
           <CardContent className="space-y-4 pt-6">
             {mutationError ? (
-              <Alert variant="danger">
+              <Alert variant="destructive">
                 <AlertDescription>{mutationError}</AlertDescription>
               </Alert>
             ) : null}
@@ -134,7 +134,7 @@ export function ImportWizard() {
       ) : null}
 
       {job?.status === "failed" ? (
-        <Alert variant="danger">
+        <Alert variant="destructive">
           <AlertDescription>{job.error ?? t("import.failed")}</AlertDescription>
         </Alert>
       ) : null}
@@ -147,7 +147,7 @@ export function ImportWizard() {
                 {t("import.summarySucceeded", { count: result.succeeded })}
               </Badge>
               {result.failed > 0 ? (
-                <Badge variant="danger">
+                <Badge variant="destructive">
                   {t("import.summaryFailed", { count: result.failed })}
                 </Badge>
               ) : null}

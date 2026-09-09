@@ -85,7 +85,7 @@ export function HistoryPanel({ studentId }: HistoryPanelProps) {
 
   if (historyQuery.error instanceof ApiError) {
     return (
-      <Alert variant="danger">
+      <Alert variant="destructive">
         <AlertDescription>
           {tErrors.has(historyQuery.error.code)
             ? tErrors(historyQuery.error.code)
@@ -161,7 +161,7 @@ export function HistoryPanel({ studentId }: HistoryPanelProps) {
                         transfer.status === "completed"
                           ? "success"
                           : transfer.status === "rejected"
-                            ? "danger"
+                            ? "destructive"
                             : "warning"
                       }
                     >
@@ -282,7 +282,7 @@ function RequestTransferDialog({
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}
@@ -444,7 +444,7 @@ function CompleteTransferDialog({
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}

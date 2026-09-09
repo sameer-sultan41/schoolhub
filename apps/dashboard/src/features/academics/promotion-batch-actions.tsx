@@ -151,7 +151,7 @@ export function PromotionBatchActions({ batchId, status }: PromotionBatchActions
           <Can permission="academics.promotion.update">
             <Button
               size="sm"
-              variant="danger"
+              variant="destructive"
               disabled={isBusy}
               onClick={() => {
                 transition.mutate("revert");
@@ -173,7 +173,7 @@ export function PromotionBatchActions({ batchId, status }: PromotionBatchActions
       ) : null}
 
       {jobStatus === "failed" ? (
-        <Alert variant="danger">
+        <Alert variant="destructive">
           <AlertDescription>{job?.error ?? t("promotions.report.jobFailed")}</AlertDescription>
         </Alert>
       ) : null}
@@ -196,7 +196,7 @@ function ExecutionReport({ report }: { report: PromotionExecutionReport }) {
     { key: "enrolled" as const, rows: report.enrolled, variant: "success" as const },
     { key: "graduated" as const, rows: report.graduated, variant: "success" as const },
     { key: "skipped" as const, rows: report.skipped, variant: "warning" as const },
-    { key: "failed" as const, rows: report.failed, variant: "danger" as const },
+    { key: "failed" as const, rows: report.failed, variant: "destructive" as const },
   ];
 
   return (

@@ -33,3 +33,8 @@ infra/
 # Docs: hand-tuned tables and mermaid diagrams that Prettier's markdown formatter
 # would reflow. Deliberately out of scope for this pass — see AGENTS.md.
 **/*.md
+
+# Metronic's own CSS, vendored verbatim as a reference source for the metronic colour
+# preset (packages/ui/src/styles/presets/metronic.css derives its values from it) — not
+# this repo's own source, and explicitly not to be reformatted to match its style.
+packages/ui/src/styles/metronic/

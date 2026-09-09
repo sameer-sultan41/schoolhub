@@ -38,7 +38,8 @@ export function DataTableColumnsMenu<TRow>({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" leadingIcon={<Columns3 aria-hidden="true" />}>
+        <Button variant="outline" size="sm">
+          <Columns3 aria-hidden="true" />
           {visibility.triggerLabel}
         </Button>
       </DropdownMenuTrigger>

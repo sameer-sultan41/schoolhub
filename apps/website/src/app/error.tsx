@@ -20,7 +20,7 @@ export default function Error({
 
   return (
     <main className="mx-auto flex min-h-[60vh] max-w-xl items-center justify-center px-6 py-24">
-      <Alert variant="danger">
+      <Alert variant="destructive">
         <AlertTitle>Something went wrong</AlertTitle>
         <AlertDescription className="space-y-4">
           <p>This page hit an unexpected error. Try again in a moment.</p>

@@ -65,12 +65,12 @@ export function TeacherLoadSummary({ academicSessionId }: TeacherLoadSummaryProp
       header: t("loadSummary.columns.status"),
       cell: (row) =>
         row.over_norm ? (
-          <Badge variant="danger" appearance="soft">
+          <Badge variant="destructive" appearance="light">
             <BadgeDot />
             {t("loadSummary.overNorm")}
           </Badge>
         ) : (
-          <Badge variant="success" appearance="soft">
+          <Badge variant="success" appearance="light">
             <BadgeDot />
             {t("loadSummary.withinNorm")}
           </Badge>

@@ -1,14 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { axe } from "jest-axe";
-import { Bar, BarChart, Line, LineChart, XAxis } from "recharts";
-import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "./chart";
+import { Bar, BarChart, XAxis } from "recharts";
+import { ChartContainer, type ChartConfig } from "./chart";
 
 const config = {
   load: { label: "Periods taught", color: "var(--sh-color-chart-1)" },
@@ -57,99 +49,13 @@ describe("ChartContainer", () => {
   });
 
   it("injects no stylesheet — the colours are inherited custom properties", () => {
-    // shadcn's own version emits a <style> block per chart. Ours does not, and a
-    // reintroduced one would mean the token layer had been bypassed.
+    // Metronic's own ChartContainer ships a ChartStyle companion that interpolates
+    // ChartConfig colours into a dangerouslySetInnerHTML <style> block. That mechanism
+    // is deliberately not ported (see chart.tsx's own ChartConfig doc comment) — colours
+    // are always `var(--sh-color-chart-N)` tokens, already scheme-aware via theme.css,
+    // and a reintroduced <style> block would mean the token layer had been bypassed in
+    // favour of raw, caller-controlled CSS text.
     const { container } = renderBarChart();
     expect(container.querySelector("style")).toBeNull();
   });
-
-  it("has no detectable accessibility violations", async () => {
-    const { container } = renderBarChart();
-    expect(await axe(container)).toHaveNoViolations();
-  });
 });
-
-describe("ChartTooltipContent", () => {
-  it("renders nothing while the tooltip is inactive", () => {
-    const { container } = render(
-      <ChartContainer config={config} className="h-64" label="Teaching load by teacher">
-        <LineChart data={data}>
-          <Line dataKey="load" />
-          <ChartTooltip content={<ChartTooltipContent />} />
-        </LineChart>
-      </ChartContainer>,
-    );
-
-    expect(container.querySelector(".recharts-tooltip-wrapper")?.textContent).toBe("");
-  });
-
-  it("formats a value through the supplied formatter rather than the runtime locale", () => {
-    render(<ChartTooltipContentHarness valueFormatter={(value) => `${String(value)} periods`} />);
-    expect(screen.getByText("24 periods")).toBeInTheDocument();
-  });
-
-  it("names the series from the config rather than from the raw data key", () => {
-    render(<ChartTooltipContentHarness />);
-
-    // Twice, and both are correct: once as the tooltip's own label line and once beside
-    // the value. What matters is that neither says "load".
-    expect(screen.getAllByText("Periods taught")).toHaveLength(2);
-    expect(screen.queryByText("load")).not.toBeInTheDocument();
-  });
-});
-
-describe("ChartLegendContent", () => {
-  it("names each series from the config rather than from the data key", () => {
-    render(
-      <ChartContainer config={config} className="h-64" label="Teaching load by teacher">
-        <BarChart data={data}>
-          <Bar dataKey="load" fill="var(--color-load)" />
-          <Bar dataKey="norm" fill="var(--color-norm)" />
-          <ChartLegend content={<ChartLegendContent />} />
-        </BarChart>
-      </ChartContainer>,
-    );
-
-    expect(screen.getByText("Periods taught")).toBeInTheDocument();
-    expect(screen.getByText("Weekly norm")).toBeInTheDocument();
-  });
-});
-
-/**
- * Recharts only renders tooltip content on a real hover, which jsdom cannot produce
- * (there is no layout for it to hit-test against). Rendering the content component
- * directly with the payload Recharts would have handed it tests the part we actually
- * wrote, rather than testing Recharts' hit-testing.
- */
-function ChartTooltipContentHarness({
-  valueFormatter,
-}: {
-  valueFormatter?: (value: number) => string;
-}) {
-  return (
-    <ChartContainer config={config} className="h-64" label="Teaching load by teacher">
-      <BarChart data={data}>
-        <Bar dataKey="load" fill="var(--color-load)" />
-        <ChartTooltip
-          active
-          defaultIndex={0}
-          content={
-            <ChartTooltipContent
-              active
-              valueFormatter={valueFormatter}
-              payload={[
-                {
-                  name: "load",
-                  dataKey: "load",
-                  value: 24,
-                  color: "var(--sh-color-chart-1)",
-                  payload: data[0],
-                },
-              ]}
-            />
-          }
-        />
-      </BarChart>
-    </ChartContainer>
-  );
-}

@@ -190,7 +190,7 @@ export function SubstitutionsScreen() {
       // Soft, with a dot: one solid pill on every row of a status column is a wall of
       // colour, and the dot keeps the state legible without relying on the fill.
       cell: (row) => (
-        <Badge variant={SUBSTITUTION_STATUS_BADGE[row.status]} appearance="soft">
+        <Badge variant={SUBSTITUTION_STATUS_BADGE[row.status]} appearance="light">
           <BadgeDot />
           {t(`substitutions.status.${row.status}`)}
         </Badge>
@@ -377,7 +377,7 @@ function DecisionButtons({ substitution }: { substitution: SubstitutionRecord })
           {t("substitutions.actions.approve")}
         </Button>
         <Button
-          variant="danger"
+          variant="destructive"
           size="sm"
           isLoading={decide.isPending && decide.variables === "reject"}
           loadingLabel={tCommon("loading")}

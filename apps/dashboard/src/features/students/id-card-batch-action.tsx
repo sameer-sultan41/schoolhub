@@ -80,7 +80,7 @@ export function IdCardBatchAction({ selectedIds, onDone }: IdCardBatchActionProp
   if (job?.status === "failed") {
     return (
       <div className="flex items-center gap-2">
-        <Alert variant="danger" className="py-2">
+        <Alert variant="destructive" className="py-2">
           <AlertDescription>{job.error ?? t("idCards.failed")}</AlertDescription>
         </Alert>
         <Button
@@ -107,7 +107,7 @@ export function IdCardBatchAction({ selectedIds, onDone }: IdCardBatchActionProp
   return (
     <div className="flex items-center gap-2">
       {mutationError ? (
-        <Alert variant="danger" className="py-2">
+        <Alert variant="destructive" className="py-2">
           <AlertDescription>{mutationError}</AlertDescription>
         </Alert>
       ) : null}

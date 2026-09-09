@@ -45,7 +45,7 @@ export function EmergencyContactsPanel({ studentId }: EmergencyContactsPanelProp
 
   if (contactsQuery.error instanceof ApiError) {
     return (
-      <Alert variant="danger">
+      <Alert variant="destructive">
         <AlertDescription>
           {tErrors.has(contactsQuery.error.code)
             ? tErrors(contactsQuery.error.code)
@@ -170,7 +170,7 @@ function AddEmergencyContactDialog({
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}

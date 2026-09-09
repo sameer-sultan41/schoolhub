@@ -14,5 +14,18 @@
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "coverage", ".turbo"]
+  // layouts/ and partials/ are Metronic's own demo-page scaffolding, copied in alongside
+  // the primitive library but not yet wired into anything this package exports — they
+  // use Metronic's own Next.js app's path alias (`@/components/ui/...`) and import
+  // straight from `next/link`, neither of which resolves in this package's own
+  // tsconfig. Excluded until (if) they're actually adopted, not deleted, per the plan.
+  "exclude": [
+    "node_modules",
+    "coverage",
+    ".turbo",
+    "src/components/layouts",
+    "src/components/partials",
+    "src/components/image-input",
+    "src/components/keenicons"
+  ]
 }

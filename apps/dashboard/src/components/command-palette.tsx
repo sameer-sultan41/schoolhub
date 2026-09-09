@@ -82,8 +82,8 @@ export function CommandPalette() {
           setOpen(true);
         }}
         className="hidden gap-2 sm:inline-flex"
-        leadingIcon={<Search aria-hidden="true" className="size-4" />}
       >
+        <Search aria-hidden="true" className="size-4" />
         {t("trigger")}
         <CommandShortcut>{t("shortcut")}</CommandShortcut>
       </Button>

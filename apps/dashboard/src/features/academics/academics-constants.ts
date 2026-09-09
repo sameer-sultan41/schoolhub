@@ -39,11 +39,11 @@ export const PROMOTION_STATUSES: PromotionStatusValue[] = [
  * to `--sh-*` custom properties, never to a literal colour. */
 export const PROMOTION_STATUS_BADGE: Record<
   PromotionStatusValue,
-  "secondary" | "success" | "warning" | "danger"
+  "secondary" | "success" | "warning" | "destructive"
 > = {
   draft: "secondary",
   pending_approval: "warning",
   approved: "success",
   executed: "success",
-  reverted: "danger",
+  reverted: "destructive",
 };

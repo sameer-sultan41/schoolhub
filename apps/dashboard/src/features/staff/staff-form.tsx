@@ -136,7 +136,7 @@ export function StaffForm({ mode, staff }: StaffFormProps) {
     <Card>
       <CardContent className="space-y-5 pt-6">
         {formError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>
               {formError}
               {mutation.error instanceof ApiError && mutation.error.requestId

@@ -79,7 +79,7 @@ export function EnrollmentPanel({ studentId }: EnrollmentPanelProps) {
 
   if (enrollmentQuery.error instanceof ApiError) {
     return (
-      <Alert variant="danger">
+      <Alert variant="destructive">
         <AlertDescription>
           {tErrors.has(enrollmentQuery.error.code)
             ? tErrors(enrollmentQuery.error.code)
@@ -209,7 +209,7 @@ function EnrollDialog({ studentId, onEnrolled }: { studentId: string; onEnrolled
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}
@@ -380,7 +380,7 @@ function ChangeSectionDialog({
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}
@@ -469,7 +469,7 @@ function WithdrawDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="danger" size="sm">
+        <Button variant="destructive" size="sm">
           {t("enrollment.withdraw")}
         </Button>
       </DialogTrigger>
@@ -480,7 +480,7 @@ function WithdrawDialog({
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}
@@ -511,7 +511,7 @@ function WithdrawDialog({
 
         <DialogFooter>
           <Button
-            variant="danger"
+            variant="destructive"
             disabled={!reason || !effectiveDate || isPending}
             onClick={() => {
               onWithdraw({ reason, effective_date: effectiveDate });

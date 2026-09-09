@@ -57,7 +57,7 @@ interface ConflictListProps {
  * re-sort — the server's order is the contract ("a client showing the top few
  * must not lead with a warning while a blocking clash sits below the fold").
  *
- * Deliberately not one `<Alert variant="danger">` per finding: that component
+ * Deliberately not one `<Alert variant="destructive">` per finding: that component
  * carries `role="alert"`, and a validation run that turns up nine clashes would
  * then fire nine assertive announcements over each other. The list is announced
  * once, by its own `role="status"` container in the caller.

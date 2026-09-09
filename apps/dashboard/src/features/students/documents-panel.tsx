@@ -83,7 +83,7 @@ export function DocumentsPanel({ studentId }: DocumentsPanelProps) {
 
   if (documentsQuery.error instanceof ApiError) {
     return (
-      <Alert variant="danger">
+      <Alert variant="destructive">
         <AlertDescription>
           {tErrors.has(documentsQuery.error.code)
             ? tErrors(documentsQuery.error.code)
@@ -130,7 +130,7 @@ export function DocumentsPanel({ studentId }: DocumentsPanelProps) {
                       document.verification_status === "verified"
                         ? "success"
                         : document.verification_status === "rejected"
-                          ? "danger"
+                          ? "destructive"
                           : "warning"
                     }
                   >
@@ -174,7 +174,7 @@ export function DocumentsPanel({ studentId }: DocumentsPanelProps) {
                   ) : null}
                   <Can permission="students.document.delete">
                     <Button
-                      variant="danger"
+                      variant="destructive"
                       size="sm"
                       disabled={deleteMutation.isPending}
                       onClick={() => {
@@ -269,7 +269,7 @@ function UploadDocumentDialog({
         </DialogHeader>
 
         {mutationError ? (
-          <Alert variant="danger">
+          <Alert variant="destructive">
             <AlertDescription>{mutationError}</AlertDescription>
           </Alert>
         ) : null}

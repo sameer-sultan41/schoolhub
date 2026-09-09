@@ -1,41 +1,32 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { Toaster as SonnerToaster, type ToasterProps } from "sonner";
-import { cn } from "../lib/cn";
+import * as React from "react";
+import { useTheme } from "next-themes";
+import { Toaster as Sonner } from "sonner";
 
-export interface SchoolHubToasterProps extends Omit<ToasterProps, "theme"> {
-  /**
-   * Required, and deliberately not defaulted to sonner's own `"system"`.
-   *
-   * That default was correct while the OS preference was the only mechanism in the repo.
-   * apps/dashboard now ships a toggle, and a toaster still listening to the OS would put
-   * one dark panel over a light app for anyone who chose light on a dark-mode machine.
-   * packages/ui has no theme context of its own — it cannot depend on next-themes,
-   * because apps/website mounts no provider — so the host app has to say. Same reasoning
-   * as `Dialog.closeLabel` and `Button.loadingLabel`: a silent default in this package is
-   * always a default that ignores the app.
-   *
-   * Pass `"system"` explicitly where that genuinely is the answer.
-   */
-  theme: "light" | "dark" | "system";
-}
+type ToasterProps = React.ComponentProps<typeof Sonner>;
 
-export function Toaster({ theme, className, style, ...props }: SchoolHubToasterProps) {
+const Toaster = ({ ...props }: ToasterProps) => {
+  const { theme = "system" } = useTheme();
+
   return (
-    <SonnerToaster
-      theme={theme}
-      className={cn("toaster group", className)}
-      style={
-        {
-          "--normal-bg": "var(--color-popover)",
-          "--normal-text": "var(--color-popover-foreground)",
-          "--normal-border": "var(--color-border)",
-          "--border-radius": "var(--radius)",
-          ...style,
-        } as CSSProperties
-      }
+    <Sonner
+      theme={theme as ToasterProps["theme"]}
+      className="group toaster [&_[data-type=error]_[data-title]]:text-destructive [&_[data-type=error]>[data-icon]]:text-destructive [&_[data-type=info]_[data-title]]:text-info [&_[data-type=success]_[data-title]]:text-success [&_[data-type=success]>[data-icon]]:text-success"
+      toastOptions={{
+        classNames: {
+          toast:
+            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground! group-[.toaster]:border-border group-[.toaster]:shadow-lg has-[[role=alert]]:border-0! has-[[role=alert]]:shadow-none! has-[[role=alert]]:bg-transparent!",
+          description: "group-[.toast]:text-muted-foreground",
+          actionButton:
+            "group-[.toast]:rounded-md! group-[.toast]:bg-primary group-[.toast]:text-primary-foreground!",
+          cancelButton:
+            "group-[.toast]:rounded-md! group-[.toast]:bg-secondary group-[.toast]:text-secondary-foreground!",
+        },
+      }}
       {...props}
     />
   );
-}
+};
+
+export { Toaster };

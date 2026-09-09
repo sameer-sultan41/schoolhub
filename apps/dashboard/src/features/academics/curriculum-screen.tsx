@@ -156,14 +156,14 @@ export function CurriculumScreen() {
       // colour, and the dot keeps the two kinds separable without leaning on hue alone.
       cell: (row) =>
         row.is_elective ? (
-          <Badge variant="warning" appearance="soft">
+          <Badge variant="warning" appearance="light">
             <BadgeDot />
             {row.elective_group
               ? t("curriculum.electiveWithGroup", { group: row.elective_group })
               : t("curriculum.elective")}
           </Badge>
         ) : (
-          <Badge variant="secondary" appearance="soft">
+          <Badge variant="secondary" appearance="light">
             <BadgeDot />
             {t("curriculum.core")}
           </Badge>
@@ -389,7 +389,7 @@ function DeleteMappingDialog({
 
         <DialogFooter>
           <Button
-            variant="danger"
+            variant="destructive"
             isLoading={mutation.isPending}
             loadingLabel={tCommon("loading")}
             onClick={() => {
