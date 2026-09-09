@@ -101,3 +101,18 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         response = self.client.post(f"/api/v1/notices/{self.other_notice.pk}:submit")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_publishing_another_tenants_notice_is_404(self) -> None:
+        response = self.client.post(f"/api/v1/notices/{self.other_notice.pk}:publish")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_acknowledging_another_tenants_notice_is_404(self) -> None:
+        response = self.client.post(f"/api/v1/notices/{self.other_notice.pk}:acknowledge")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_downloading_another_tenants_notice_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/notices/{self.other_notice.pk}/download")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

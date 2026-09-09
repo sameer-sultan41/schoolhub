@@ -25,6 +25,7 @@ from apps.communication.tests.factories import (
     grant,
 )
 from core.api.exceptions import DomainRuleViolation
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 
@@ -180,6 +181,42 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
 
         self.assertEqual(recipients, [])
 
+    def test_class_audience_type_without_class_ids_is_refused(self) -> None:
+        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation):
+            services.resolve_audience(
+                audience_type=AudienceType.CLASS, audience_filter=None, tenant_id=self.tenant.pk
+            )
+
+    def test_section_audience_type_without_section_ids_is_refused(self) -> None:
+        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation):
+            services.resolve_audience(
+                audience_type=AudienceType.SECTION,
+                audience_filter={"class_ids": [str(self.school_class.pk)]},
+                tenant_id=self.tenant.pk,
+            )
+
+    def test_a_students_deactivated_portal_account_is_excluded(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.student_user.is_active = False
+            self.student_user.save(update_fields=["is_active"])
+
+            recipients = services.resolve_audience(
+                audience_type=AudienceType.STUDENTS, audience_filter=None, tenant_id=self.tenant.pk
+            )
+
+        self.assertNotIn(self.student_user.pk, recipients)
+
+    def test_a_guardians_deactivated_portal_account_is_excluded(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.guardian_user.is_active = False
+            self.guardian_user.save(update_fields=["is_active"])
+
+            recipients = services.resolve_audience(
+                audience_type=AudienceType.GUARDIANS, audience_filter=None, tenant_id=self.tenant.pk
+            )
+
+        self.assertNotIn(self.guardian_user.pk, recipients)
+
     def test_house_narrows_guardians(self) -> None:
         with tenant_context(self.tenant.id):
             other_house = HouseFactory(tenant=self.tenant)
@@ -245,6 +282,114 @@ class CustomAudienceTests(AudienceResolutionTestCase):
             )
 
         self.assertEqual(recipients, [])
+
+
+class CampusScopedAudienceTests(AudienceResolutionTestCase):
+    """`campus_id` — an announcement's own campus scope — narrows every branch
+    except `custom`. `self.student`/`self.guardian` are at `self.campus`;
+    these tests add a counterpart at `self.other_campus`."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            self.other_campus_student_user = UserFactory(tenant=self.tenant)
+            self.other_campus_student = StudentFactory(
+                tenant=self.tenant,
+                campus=self.other_campus,
+                user_id=self.other_campus_student_user.pk,
+            )
+            self.other_campus_guardian_user = UserFactory(tenant=self.tenant)
+            other_campus_guardian = GuardianFactory(
+                tenant=self.tenant, user_id=self.other_campus_guardian_user.pk
+            )
+            StudentGuardianFactory(
+                tenant=self.tenant,
+                student=self.other_campus_student,
+                guardian=other_campus_guardian,
+                has_portal_access=True,
+            )
+
+            self.all_scope_staff = UserFactory(tenant=self.tenant)
+            grant(self.all_scope_staff, "communication.announcement.view", scope=RecordScope.ALL)
+            self.campus_staff = UserFactory(tenant=self.tenant)
+            grant(
+                self.campus_staff,
+                "communication.announcement.view",
+                scope=RecordScope.CAMPUS,
+                scope_ref=self.campus.pk,
+            )
+            self.other_campus_staff = UserFactory(tenant=self.tenant)
+            grant(
+                self.other_campus_staff,
+                "communication.announcement.view",
+                scope=RecordScope.CAMPUS,
+                scope_ref=self.other_campus.pk,
+            )
+
+    def test_campus_scoped_staff_excludes_a_different_campus(self) -> None:
+        with tenant_context(self.tenant.id):
+            recipients = services.resolve_audience(
+                audience_type=AudienceType.STAFF,
+                audience_filter=None,
+                tenant_id=self.tenant.pk,
+                campus_id=self.campus.pk,
+            )
+
+        self.assertIn(self.campus_staff.pk, recipients)
+        self.assertIn(self.all_scope_staff.pk, recipients)
+        self.assertNotIn(self.other_campus_staff.pk, recipients)
+
+    def test_campus_scoped_guardians_excludes_a_different_campus(self) -> None:
+        with tenant_context(self.tenant.id):
+            recipients = services.resolve_audience(
+                audience_type=AudienceType.GUARDIANS,
+                audience_filter=None,
+                tenant_id=self.tenant.pk,
+                campus_id=self.campus.pk,
+            )
+
+        self.assertIn(self.guardian_user.pk, recipients)
+        self.assertNotIn(self.other_campus_guardian_user.pk, recipients)
+
+    def test_campus_scoped_students_excludes_a_different_campus(self) -> None:
+        with tenant_context(self.tenant.id):
+            recipients = services.resolve_audience(
+                audience_type=AudienceType.STUDENTS,
+                audience_filter=None,
+                tenant_id=self.tenant.pk,
+                campus_id=self.campus.pk,
+            )
+
+        self.assertIn(self.student_user.pk, recipients)
+        self.assertNotIn(self.other_campus_student_user.pk, recipients)
+
+    def test_campus_scoped_all_excludes_a_different_campus(self) -> None:
+        with tenant_context(self.tenant.id):
+            recipients = services.resolve_audience(
+                audience_type=AudienceType.ALL,
+                audience_filter=None,
+                tenant_id=self.tenant.pk,
+                campus_id=self.campus.pk,
+            )
+
+        self.assertIn(self.student_user.pk, recipients)
+        self.assertIn(self.guardian_user.pk, recipients)
+        self.assertIn(self.campus_staff.pk, recipients)
+        self.assertIn(self.all_scope_staff.pk, recipients)
+        self.assertNotIn(self.other_campus_student_user.pk, recipients)
+        self.assertNotIn(self.other_campus_guardian_user.pk, recipients)
+        self.assertNotIn(self.other_campus_staff.pk, recipients)
+
+    def test_custom_audience_is_not_narrowed_by_campus(self) -> None:
+        with tenant_context(self.tenant.id):
+            recipients = services.resolve_audience(
+                audience_type=AudienceType.CUSTOM,
+                audience_filter={"user_ids": [str(self.other_campus_guardian_user.pk)]},
+                tenant_id=self.tenant.pk,
+                campus_id=self.campus.pk,
+            )
+
+        self.assertEqual(recipients, [self.other_campus_guardian_user.pk])
 
 
 class AssertAudienceNonEmptyTests(TestCase):

@@ -247,6 +247,18 @@ class Notice(TenantOwnedModel):
                 condition=models.Q(deleted_at__isnull=True, notice_no__isnull=False),
                 name="notices_unique_notice_no_live",
             ),
+            # Segregation of duties, as far as a CHECK carries it — mirrors
+            # `fees_finance.Expense`'s identical `..._approver_is_not_the_submitter`
+            # constraint. `services.publish_notice` already enforces this; this is
+            # defense in depth against a direct write or a future code path that
+            # forgets the check.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(approved_by__isnull=True)
+                    | ~models.Q(approved_by=models.F("created_by"))
+                ),
+                name="notices_approver_not_drafter",
+            ),
         ]
         indexes = [
             models.Index(fields=["tenant", "status", "publish_at"], name="notices_status_idx"),
@@ -254,3 +266,20 @@ class Notice(TenantOwnedModel):
 
     def __str__(self) -> str:
         return self.notice_no or self.title
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` for a notice means "I am a recipient" — a
+        `guardian`/`student` holding `communication.notice.acknowledge` has no
+        other relationship to a `Notice` row to filter on. Without this hook,
+        `scope_queryset`'s `RecordScope.OWN` branch falls through to its
+        `own_field` fallback (`NoticeViewSet` sets none) straight to
+        `queryset.none()` — the same query `acknowledge_notice` itself runs to
+        find the recipient's own delivery row.
+        """
+        from core.notifications.models import Notification
+
+        notice_ids = Notification.objects.filter(
+            tenant_id=user.tenant_id, user_id=user.pk, source_type="notice"
+        ).values_list("source_id", flat=True)
+        return queryset.filter(pk__in=notice_ids)

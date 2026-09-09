@@ -238,9 +238,28 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "partial_update": "communication.notice.update",
         "submit": "communication.notice.update",
         "publish": "communication.notice.publish",
+        "return_to_draft": "communication.notice.publish",
         "acknowledge": "communication.notice.acknowledge",
     }
     http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_permissions(self):
+        # `communication.notice.acknowledge` is held by guardians/students
+        # (§4) — `STAFF_PERMISSIONS`' `DenyRestrictedPrincipals` would block
+        # every one of them before `HasPermissionKey` is even consulted.
+        if self.action == "acknowledge":
+            return [permission() for permission in OWN_PREFERENCE_PERMISSIONS]
+        return [permission() for permission in STAFF_PERMISSIONS]
+
+    @extend_schema(request=None, responses={200: NoticeSerializer})
+    def return_to_draft(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /notices/{id}:return-to-draft` — pending_approval -> draft, with comments."""
+        instance = self.get_object()
+        before = self.get_serializer(instance).data
+        returned = services.return_notice_to_draft(instance, actor_id=request.user.pk)
+        after = self.get_serializer(returned).data
+        record_audit(request, "return_to_draft", returned, before=before, after=after)
+        return ActionResponse.ok(after, message="Notice returned to draft.")
 
     @extend_schema(responses={200: None})
     def download(self, request: Request, pk: str | None = None) -> Response:

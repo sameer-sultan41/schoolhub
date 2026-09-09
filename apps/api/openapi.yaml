@@ -7082,6 +7082,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/Notice'
           description: ''
+  /api/v1/notices/{id}:return-to-draft:
+    post:
+      operationId: notices_:return_to_draft_create
+      description: '`POST /notices/{id}:return-to-draft` — pending_approval -> draft,
+        with comments.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notice'
+          description: ''
   /api/v1/notices/{id}:submit:
     post:
       operationId: notices_:submit_create

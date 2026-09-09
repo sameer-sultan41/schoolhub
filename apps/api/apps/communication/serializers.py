@@ -7,6 +7,7 @@ from rest_framework import serializers
 from apps.communication.models import (
     Announcement,
     Notice,
+    NoticeStatus,
     NotificationPreference,
     NotificationTemplateOverride,
 )
@@ -192,3 +193,11 @@ class NoticeSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate(self, attrs: dict) -> dict:
+        # Once submitted, a notice's content is what the approver is reviewing
+        # (or has already published) — editing it out from under them defeats
+        # the segregation-of-duties intent of the approval gate.
+        if self.instance is not None and self.instance.status != NoticeStatus.DRAFT:
+            raise serializers.ValidationError({"status": "Only a draft notice can be edited."})
+        return attrs

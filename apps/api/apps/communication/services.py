@@ -201,34 +201,61 @@ def save_preferences(*, user_id: uuid.UUID, tenant_id: uuid.UUID, rows: list[dic
 
 
 def resolve_audience(
-    *, audience_type: str, audience_filter: dict | None, tenant_id: uuid.UUID
+    *,
+    audience_type: str,
+    audience_filter: dict | None,
+    tenant_id: uuid.UUID,
+    campus_id: uuid.UUID | None = None,
 ) -> list[uuid.UUID]:
-    """`(audience_type, audience_filter) -> [user_id, ...]`, one query per branch.
+    """`(audience_type, audience_filter) -> [user_id, ...]`, one query per branch
+    (`all`/`staff`/`students`/`guardians` — `all` becomes three bounded queries,
+    not a per-recipient one, when `campus_id` narrows it; see `_resolve_all`).
 
     `class`/`section` resolve to the **guardians** of enrolled students, not the
     students themselves — matching the module doc's own worked example ("targets
     classes 6-10 guardians") and the real use case: a circular goes to parents.
+    Both require a non-empty `class_ids`/`section_ids` respectively — omitting
+    it is refused, not treated as "every guardian in the tenant".
     `students`/`guardians` resolve their whole tenant-wide population, narrowed
     by the same `audience_filter` keys (`class_ids`, `section_ids`, `house_ids`,
-    `campus_ids`) when present — `class`/`section` are exactly `guardians` with
-    one of those keys forced. `staff` resolves every non-restricted-principal
+    `campus_ids`) when present. `staff` resolves every non-restricted-principal
     role holder, optionally narrowed by `audience_filter.role_slugs`. `custom`
     reads `audience_filter.user_ids` directly, `all` is every active user.
+
+    `campus_id` — an announcement's own campus scope (`Announcement.campus_id`;
+    `Notice` has none) — narrows every branch except `custom`: a caller's
+    explicit, named recipient list is never silently narrowed by campus. It
+    ANDs with, never overrides, whatever `audience_filter.campus_ids` already
+    says.
     """
     audience_filter = audience_filter or {}
 
     if audience_type == AudienceType.ALL:
-        return _resolve_all(tenant_id=tenant_id)
+        return _resolve_all(tenant_id=tenant_id, campus_id=campus_id)
     if audience_type == AudienceType.STAFF:
-        return _resolve_staff(tenant_id=tenant_id, audience_filter=audience_filter)
+        return _resolve_staff(
+            tenant_id=tenant_id, audience_filter=audience_filter, campus_id=campus_id
+        )
     if audience_type == AudienceType.STUDENTS:
-        return _resolve_students(tenant_id=tenant_id, audience_filter=audience_filter)
+        return _resolve_students(
+            tenant_id=tenant_id, audience_filter=audience_filter, campus_id=campus_id
+        )
+    if audience_type == AudienceType.CLASS and not audience_filter.get("class_ids"):
+        raise DomainRuleViolation(
+            {"audience_filter": "audience_type 'class' requires a non-empty class_ids."}
+        )
+    if audience_type == AudienceType.SECTION and not audience_filter.get("section_ids"):
+        raise DomainRuleViolation(
+            {"audience_filter": "audience_type 'section' requires a non-empty section_ids."}
+        )
     # CLASS/SECTION carry the same audience_filter shape as GUARDIANS (the
     # caller sets class_ids/section_ids either way) — they exist as their own
     # audience_type values only so a client can express "everyone in this
     # class" without also having to say "and I mean their guardians".
     if audience_type in (AudienceType.GUARDIANS, AudienceType.CLASS, AudienceType.SECTION):
-        return _resolve_guardians(tenant_id=tenant_id, audience_filter=audience_filter)
+        return _resolve_guardians(
+            tenant_id=tenant_id, audience_filter=audience_filter, campus_id=campus_id
+        )
     if audience_type == AudienceType.CUSTOM:
         return _resolve_custom(tenant_id=tenant_id, audience_filter=audience_filter)
 
@@ -244,20 +271,51 @@ def assert_audience_is_nonempty(recipients: list[uuid.UUID]) -> None:
         )
 
 
-def _resolve_all(*, tenant_id: uuid.UUID) -> list[uuid.UUID]:
+def _resolve_all(*, tenant_id: uuid.UUID, campus_id: uuid.UUID | None = None) -> list[uuid.UUID]:
     from core.rbac.models import User
 
-    return list(
-        User.objects.filter(
-            tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
-        ).values_list("id", flat=True)
+    if campus_id is None:
+        return list(
+            User.objects.filter(
+                tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+            ).values_list("id", flat=True)
+        )
+
+    # No single table expresses "every user associated with campus X" — staff
+    # via `UserRole` scope, students/guardians via `Student.campus_id`. Union
+    # the three bounded per-branch queries rather than inventing a fourth,
+    # still no per-recipient query.
+    campus_scoped: set[uuid.UUID] = set()
+    campus_scoped.update(
+        _resolve_staff(tenant_id=tenant_id, audience_filter={}, campus_id=campus_id)
     )
+    campus_scoped.update(
+        _resolve_students(tenant_id=tenant_id, audience_filter={}, campus_id=campus_id)
+    )
+    campus_scoped.update(
+        _resolve_guardians(tenant_id=tenant_id, audience_filter={}, campus_id=campus_id)
+    )
+    return list(campus_scoped)
 
 
-def _resolve_staff(*, tenant_id: uuid.UUID, audience_filter: dict) -> list[uuid.UUID]:
-    from core.rbac.models import User
+def _resolve_staff(
+    *, tenant_id: uuid.UUID, audience_filter: dict, campus_id: uuid.UUID | None = None
+) -> list[uuid.UUID]:
+    from django.db.models import Q
+
+    from core.rbac.models import RecordScope, User
+
+    # A staff member holding an ALL-scope role is tenant-wide by definition and
+    # stays included regardless of the announcement's campus — only a
+    # CAMPUS-scoped role assignment can exclude them.
+    campus_condition = Q()
+    if campus_id is not None:
+        campus_condition = Q(user_roles__scope=RecordScope.ALL) | Q(
+            user_roles__scope=RecordScope.CAMPUS, user_roles__scope_ref=campus_id
+        )
 
     qs = User.objects.filter(
+        campus_condition,
         tenant_id=tenant_id,
         is_active=True,
         deleted_at__isnull=True,
@@ -271,33 +329,55 @@ def _resolve_staff(*, tenant_id: uuid.UUID, audience_filter: dict) -> list[uuid.
     return list(qs.distinct().values_list("id", flat=True))
 
 
-def _resolve_students(*, tenant_id: uuid.UUID, audience_filter: dict) -> list[uuid.UUID]:
+def _resolve_students(
+    *, tenant_id: uuid.UUID, audience_filter: dict, campus_id: uuid.UUID | None = None
+) -> list[uuid.UUID]:
     from apps.student_management.models import Student
+    from core.rbac.models import User
 
-    qs = Student.objects.alive().filter(tenant_id=tenant_id, user_id__isnull=False)
-    qs = _narrow_students(qs, audience_filter)
+    # `Student.user_id` is a plain UUID column, not a FK to `User` — a deleted
+    # or deactivated portal account leaves the student record untouched, so
+    # this must be checked explicitly rather than falling out of a join.
+    active_user_ids = User.objects.filter(
+        tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+    ).values_list("id", flat=True)
+    qs = Student.objects.alive().filter(
+        tenant_id=tenant_id, user_id__isnull=False, user_id__in=active_user_ids
+    )
+    qs = _narrow_students(qs, audience_filter, campus_id=campus_id)
     return list(qs.values_list("user_id", flat=True).distinct())
 
 
-def _resolve_guardians(*, tenant_id: uuid.UUID, audience_filter: dict) -> list[uuid.UUID]:
+def _resolve_guardians(
+    *, tenant_id: uuid.UUID, audience_filter: dict, campus_id: uuid.UUID | None = None
+) -> list[uuid.UUID]:
     from apps.student_management.models import Student, StudentGuardian
+    from core.rbac.models import User
 
+    active_user_ids = User.objects.filter(
+        tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+    ).values_list("id", flat=True)
     students = _narrow_students(
-        Student.objects.alive().filter(tenant_id=tenant_id), audience_filter
+        Student.objects.alive().filter(tenant_id=tenant_id), audience_filter, campus_id=campus_id
     )
     links = StudentGuardian.objects.alive().filter(
         student__in=students,
         has_portal_access=True,
         guardian__deleted_at__isnull=True,
         guardian__user_id__isnull=False,
+        guardian__user_id__in=active_user_ids,
     )
     return list(links.values_list("guardian__user_id", flat=True).distinct())
 
 
-def _narrow_students(queryset, audience_filter: dict):
+def _narrow_students(queryset, audience_filter: dict, *, campus_id: uuid.UUID | None = None):
     """Applies class/section/house/campus narrowing to a `Student` queryset —
     shared by `_resolve_students` and `_resolve_guardians`, since `class`/
-    `section` audience types are just guardians of a narrowed student set."""
+    `section` audience types are just guardians of a narrowed student set.
+
+    `campus_id` (an announcement's own campus scope) ANDs with the caller's
+    own `audience_filter.campus_ids`, never overrides it.
+    """
     class_ids = audience_filter.get("class_ids")
     section_ids = audience_filter.get("section_ids")
     if class_ids or section_ids:
@@ -327,6 +407,9 @@ def _narrow_students(queryset, audience_filter: dict):
     campus_ids = audience_filter.get("campus_ids")
     if campus_ids:
         queryset = queryset.filter(campus_id__in=campus_ids)
+
+    if campus_id is not None:
+        queryset = queryset.filter(campus_id=campus_id)
 
     return queryset
 
@@ -375,6 +458,7 @@ def publish_announcement(announcement, *, actor_id: uuid.UUID):
         audience_type=locked.audience_type,
         audience_filter=locked.audience_filter,
         tenant_id=locked.tenant_id,
+        campus_id=locked.campus_id,
     )
     assert_audience_is_nonempty(recipients)
 
@@ -512,6 +596,10 @@ def acknowledge_notice(notice, *, actor_id: uuid.UUID) -> None:
     a new table — one row per (notice, recipient) already exists there from
     the publish fan-out.
     """
+    from apps.communication.models import NoticeStatus
+
+    if notice.status != NoticeStatus.PUBLISHED:
+        raise DomainRuleViolation({"status": "Only a published notice can be acknowledged."})
     if not notice.requires_acknowledgment:
         raise DomainRuleViolation(
             {"requires_acknowledgment": "This notice does not require acknowledgment."}

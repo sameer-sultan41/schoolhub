@@ -61,6 +61,11 @@ urlpatterns = [
         name="notices-publish",
     ),
     path(
+        "notices/<uuid:pk>:return-to-draft",
+        NoticeViewSet.as_view({"post": "return_to_draft"}),
+        name="notices-return-to-draft",
+    ),
+    path(
         "notices/<uuid:pk>:acknowledge",
         NoticeViewSet.as_view({"post": "acknowledge"}),
         name="notices-acknowledge",
