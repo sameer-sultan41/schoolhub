@@ -111,6 +111,25 @@ class DeliveryLogEndpointTests(CommunicationAPITestCase):
 
 
 class PreferenceEndpointTests(CommunicationAPITestCase):
+    def test_get_works_with_jwt_only_no_session(self) -> None:
+        """The specific gap `force_login` hides — see views.py's mixin note.
+
+        `authenticate()` (used by every other test here) calls both
+        `force_login` and sets a bearer token; session auth alone binds
+        `request.tenant` via `TenantMiddleware`, which would mask a view that
+        forgot `TenantScopedViewSetMixin`. This client carries the bearer
+        token only, matching what a real client sends.
+        """
+        from rest_framework.test import APIClient
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+
+        response = client.get("/api/v1/notification-preferences")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def test_get_returns_the_full_materialized_matrix(self) -> None:
         response = self.client.get("/api/v1/notification-preferences")
 
