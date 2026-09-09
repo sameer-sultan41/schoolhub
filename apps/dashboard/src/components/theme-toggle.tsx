@@ -55,6 +55,7 @@ export function ThemeToggle() {
         <Button
           variant="chrome-ghost"
           size="icon"
+          shape="circle"
           aria-label={t("label")}
           className="[&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110"
         >

@@ -140,6 +140,7 @@ export function LayoutControls() {
         <Button
           variant="chrome-ghost"
           size="icon"
+          shape="circle"
           aria-label={t("trigger")}
           className="[&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110"
         >

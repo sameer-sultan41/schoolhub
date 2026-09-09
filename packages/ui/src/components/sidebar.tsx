@@ -2,7 +2,7 @@
 
 import { Slot } from "@radix-ui/react-slot";
 import { type VariantProps, cva } from "class-variance-authority";
-import { ChevronLeft, PanelLeftIcon } from "lucide-react";
+import { ChevronFirst, PanelLeftIcon } from "lucide-react";
 import {
   type ComponentProps,
   type CSSProperties,
@@ -300,12 +300,13 @@ export function SidebarTrigger({
 }
 
 /**
- * Demo1-style floating collapse/expand control, glued to the sidebar's trailing edge.
- * Distinct from SidebarTrigger (which lives in the header and is the always-present,
- * keyboard/mobile-safe control): this one is desktop-only decoration for the icon-collapse
- * affordance, hidden entirely on mobile and shown only once a `collapsible="icon"` sidebar
- * is actually collapsed. Chevron direction is derived from `state`, then mirrored for RTL
- * exactly like SidebarTrigger's own icon.
+ * Demo1-style floating collapse/expand control, glued to the sidebar header's trailing
+ * edge — ported from Metronic's own `sidebar-header.tsx` (`absolute start-full top-2/4
+ * -translate-x-2/4 -translate-y-2/4`, a `chrome-outline` icon button, a chevron that
+ * flips by collapsed state and mirrors for RTL). Distinct from SidebarTrigger (the
+ * always-present, keyboard/mobile-safe control in the header): this one is desktop-only
+ * decoration, hidden on mobile via the same `md:` breakpoint `Sidebar` itself uses for its
+ * own desktop/mobile split — not a duplicate `isMobile` check.
  */
 export function SidebarCollapseToggle({
   toggleLabel,
@@ -313,16 +314,16 @@ export function SidebarCollapseToggle({
   onClick,
   ...props
 }: ComponentProps<typeof Button> & { toggleLabel: string }) {
-  const { state, toggleSidebar, isMobile } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
 
   return (
     <Button
       data-sidebar="collapse-toggle"
-      variant="outline"
-      size="icon"
+      variant="chrome-outline"
+      size="sm"
+      mode="icon"
       className={cn(
-        "absolute start-full top-1/2 z-20 hidden size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-sidebar-border bg-sidebar shadow-sm group-data-[collapsible=icon]:flex md:flex",
-        isMobile && "hidden!",
+        "absolute start-full top-2/4 z-20 hidden size-7 -translate-x-2/4 -translate-y-2/4 md:flex rtl:translate-x-2/4",
         className,
       )}
       onClick={(event) => {
@@ -331,10 +332,10 @@ export function SidebarCollapseToggle({
       }}
       {...props}
     >
-      <ChevronLeft
+      <ChevronFirst
         className={cn(
-          "size-3.5 transition-transform duration-200",
-          state === "collapsed" ? "rtl:rotate-180" : "rotate-180 rtl:rotate-0",
+          "size-4! transition-transform duration-200",
+          state === "collapsed" ? "ltr:rotate-180" : "rtl:rotate-180",
         )}
       />
       <span className="sr-only">{toggleLabel}</span>

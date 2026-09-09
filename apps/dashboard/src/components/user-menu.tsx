@@ -60,7 +60,8 @@ export function UserMenu({ user }: { user: AuthenticatedUser | null }) {
         <Button
           variant="chrome-ghost"
           size="icon"
-          className="group rounded-full"
+          shape="circle"
+          className="group"
           aria-label={t("account")}
         >
           <Avatar className="size-8 ring-2 ring-transparent transition-[box-shadow] duration-200 group-hover:ring-chrome-primary/40">

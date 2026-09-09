@@ -2,6 +2,7 @@
 
 import {
   AccordionMenu,
+  type AccordionMenuClassNames,
   AccordionMenuGroup,
   AccordionMenuItem,
   AccordionMenuLabel,
@@ -10,6 +11,24 @@ import {
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import type { NavGroup, NavItem } from "@/lib/nav-items";
+
+/**
+ * AccordionMenu's own default item styling (accordion-menu.tsx's `itemVariants`) hardcodes
+ * PAGE tokens (`hover:bg-accent`, `text-accent-foreground`) — the same class of bug this
+ * repo's Button already documents for `ghost`/`outline` on a frame surface (see
+ * `chrome-ghost`/`chrome-outline` in button.tsx): a hover fill built for the page can land
+ * at low contrast, or invert entirely, against the sidebar rail. This override, matching
+ * Metronic's own `sidebar-menu.tsx` classNames (text-colour-only hover, a muted fill only
+ * once selected) but pointed at this repo's `sidebar-*` tokens instead of Metronic's plain
+ * `muted`/`primary`, is what actually makes this render as the sidebar frame rather than
+ * page content that happens to sit inside it.
+ */
+const navClassNames: AccordionMenuClassNames = {
+  root: "space-y-3",
+  label:
+    "px-2 pt-2.5 pb-1 text-[0.6875rem] font-semibold tracking-wider text-sidebar-foreground/70 uppercase",
+  item: "h-8 rounded-md px-2 text-sidebar-foreground hover:bg-transparent hover:text-sidebar-primary data-[selected=true]:bg-sidebar-accent data-[selected=true]:text-sidebar-accent-foreground data-[selected=true]:font-medium",
+};
 
 /**
  * Rendered inside SidebarProvider so it can reach useSidebar() — needed for exactly one
@@ -97,6 +116,7 @@ export function DashboardNav({ groups, pathname }: { groups: NavGroup[]; pathnam
       <AccordionMenu
         type="single"
         collapsible
+        classNames={navClassNames}
         matchPath={(href) => pathname === href || pathname.startsWith(`${href}/`)}
       >
         {groups.map((group) => (
