@@ -1477,6 +1477,122 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/delivery-logs:
+    get:
+      operationId: delivery_logs_list
+      description: |-
+        `/delivery-logs` — the delivery dashboard, read-only.
+
+        List/retrieve only: nothing here should let a caller edit delivery
+        history, and every write to this table already happens inside
+        `core.notifications` (`notify()`, `deliver_notifications`).
+      parameters:
+      - in: query
+        name: channel
+        schema:
+          type: string
+      - in: query
+        name: created_at__gte
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: created_at__lte
+        schema:
+          type: string
+          format: date-time
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: notification_id
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: provider
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - delivery-logs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDeliveryLogList'
+          description: ''
+  /api/v1/delivery-logs/{id}:
+    get:
+      operationId: delivery_logs_retrieve
+      description: |-
+        `/delivery-logs` — the delivery dashboard, read-only.
+
+        List/retrieve only: nothing here should let a caller edit delivery
+        history, and every write to this table already happens inside
+        `core.notifications` (`notify()`, `deliver_notifications`).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this delivery log.
+        required: true
+      tags:
+      - delivery-logs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryLog'
+          description: ''
+  /api/v1/delivery-logs:summary:
+    get:
+      operationId: delivery_logs:summary_retrieve
+      description: '`GET /delivery-logs:summary?group_by=channel|status|provider`
+        — §13''s delivery report.'
+      tags:
+      - delivery-logs:summary
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryReportResponse'
+          description: ''
   /api/v1/departments:
     get:
       operationId: departments_list
@@ -6537,6 +6653,269 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/notification-preferences:
+    get:
+      operationId: notification_preferences_list
+      description: |-
+        `GET/PATCH /notification-preferences` — the caller's own channel matrix.
+
+        No `pk` in the path: this always resolves to `request.user`. §4 grants the
+        key to every tenant role at `own` scope, and "own" here means "the caller,
+        always" — there is no other user's matrix this endpoint could address.
+
+        `TenantScopedViewSetMixin` is mixed in for its `initial()`/`finalize_response()`
+        tenant binding alone — a plain `APIView` never gets `request.tenant` under real
+        JWT auth (only `TenantMiddleware`, session-only, and this mixin's `initial()`
+        ever set it; see the mixin's own docstring). Without it every real request 403s:
+        `RequiresModuleFeature` fails closed on `request.tenant is None`. The mixin's
+        other methods (`get_queryset`, `perform_create`) are `GenericAPIView`-only and
+        are never called here, so nothing else about mixing it into a bare `APIView`
+        matters.
+      tags:
+      - notification-preferences
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationPreferenceRow'
+          description: ''
+    patch:
+      operationId: notification_preferences_partial_update
+      description: |-
+        `GET/PATCH /notification-preferences` — the caller's own channel matrix.
+
+        No `pk` in the path: this always resolves to `request.user`. §4 grants the
+        key to every tenant role at `own` scope, and "own" here means "the caller,
+        always" — there is no other user's matrix this endpoint could address.
+
+        `TenantScopedViewSetMixin` is mixed in for its `initial()`/`finalize_response()`
+        tenant binding alone — a plain `APIView` never gets `request.tenant` under real
+        JWT auth (only `TenantMiddleware`, session-only, and this mixin's `initial()`
+        ever set it; see the mixin's own docstring). Without it every real request 403s:
+        `RequiresModuleFeature` fails closed on `request.tenant is None`. The mixin's
+        other methods (`get_queryset`, `perform_create`) are `GenericAPIView`-only and
+        are never called here, so nothing else about mixing it into a bare `APIView`
+        matters.
+      tags:
+      - notification-preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationPreferenceUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationPreferenceUpdate'
+          multipart/form-data:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationPreferenceUpdate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationPreferenceRow'
+          description: ''
+  /api/v1/notification-templates:
+    get:
+      operationId: notification_templates_list
+      description: '`/notification-templates` — tenant overrides of the platform defaults.'
+      parameters:
+      - in: query
+        name: channel
+        schema:
+          type: string
+      - in: query
+        name: code
+        schema:
+          type: string
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: is_system
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - notification-templates
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNotificationTemplateOverrideList'
+          description: ''
+    post:
+      operationId: notification_templates_create
+      description: '`/notification-templates` — tenant overrides of the platform defaults.'
+      tags:
+      - notification-templates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplateOverride'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplateOverride'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplateOverride'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTemplateOverride'
+          description: ''
+  /api/v1/notification-templates/{id}:
+    get:
+      operationId: notification_templates_retrieve
+      description: '`/notification-templates` — tenant overrides of the platform defaults.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this notification template override.
+        required: true
+      tags:
+      - notification-templates
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTemplateOverride'
+          description: ''
+    patch:
+      operationId: notification_templates_partial_update
+      description: '`/notification-templates` — tenant overrides of the platform defaults.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this notification template override.
+        required: true
+      tags:
+      - notification-templates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationTemplateOverride'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationTemplateOverride'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNotificationTemplateOverride'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTemplateOverride'
+          description: ''
+    delete:
+      operationId: notification_templates_destroy
+      description: '`/notification-templates` — tenant overrides of the platform defaults.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this notification template override.
+        required: true
+      tags:
+      - notification-templates
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/notification-templates/{id}:preview:
+    post:
+      operationId: notification_templates_:preview_create
+      description: |-
+        `POST /notification-templates/{id}:preview` — renders with sample data.
+
+        Never persists. Sample values are `[variable]`, one per declared
+        placeholder, so a missing-variable render error (the real renderer's
+        loudest failure mode) can never happen here — every declared variable
+        always has a value, which is the point of a preview.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notification-templates
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTemplatePreview'
+          description: ''
   /api/v1/payments:
     get:
       operationId: payments_list
@@ -13505,6 +13884,133 @@ components:
         * `full` - Full day
         * `first_half` - First half
         * `second_half` - Second half
+    DeliveryLog:
+      type: object
+      description: Read-only. `DeliveryLog` rows are written only by `core.notifications`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        notification:
+          type: string
+          format: uuid
+          readOnly: true
+        channel:
+          allOf:
+          - $ref: '#/components/schemas/NotificationChannelEnum'
+          readOnly: true
+        template_code:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Template used at render time — a soft reference by code, so
+            it survives the template being edited or removed.
+        subject:
+          type: string
+          readOnly: true
+          nullable: true
+          description: This channel's own rendering — NULL for in_app, which has no
+            separate send and reuses Notification.title instead. See services.notify's
+            per-channel rendering.
+        body:
+          type: string
+          readOnly: true
+          nullable: true
+          description: This channel's own rendering — NULL for in_app, which reuses
+            Notification.body instead.
+        provider:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Adapter name, e.g. 'console', 'ses'.
+        provider_message_id:
+          type: string
+          readOnly: true
+          nullable: true
+        recipient_address:
+          type: string
+          readOnly: true
+          description: Email/phone/device token, stored masked — see services.mask_address.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/DeliveryStatusEnum'
+          readOnly: true
+        attempts:
+          type: integer
+          readOnly: true
+        error_message:
+          type: string
+          readOnly: true
+          nullable: true
+        last_attempt_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attempts
+      - body
+      - channel
+      - created_at
+      - delivered_at
+      - error_message
+      - id
+      - last_attempt_at
+      - notification
+      - provider
+      - provider_message_id
+      - recipient_address
+      - status
+      - subject
+      - template_code
+    DeliveryReportResponse:
+      type: object
+      description: '`GET /delivery-logs:summary`''s real response shape — see views.py''s
+        `summary`.'
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryReportRow'
+      required:
+      - data
+    DeliveryReportRow:
+      type: object
+      description: One grouped count from `reports.delivery_report`.
+      properties:
+        group:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - group
+    DeliveryStatusEnum:
+      enum:
+      - queued
+      - sent
+      - delivered
+      - failed
+      - bounced
+      - skipped
+      type: string
+      description: |-
+        * `queued` - Queued
+        * `sent` - Sent
+        * `delivered` - Delivered
+        * `failed` - Failed
+        * `bounced` - Bounced
+        * `skipped` - Skipped
     Department:
       type: object
       properties:
@@ -15953,6 +16459,134 @@ components:
         * `draft` - Draft
         * `submitted` - Submitted
         * `locked` - Locked
+    NotificationCategoryEnum:
+      enum:
+      - attendance
+      - fees
+      - exams
+      - library
+      - transport
+      - academic
+      - general
+      - emergency
+      type: string
+      description: |-
+        * `attendance` - Attendance
+        * `fees` - Fees
+        * `exams` - Exams
+        * `library` - Library
+        * `transport` - Transport
+        * `academic` - Academic
+        * `general` - General
+        * `emergency` - Emergency
+    NotificationChannelEnum:
+      enum:
+      - email
+      - sms
+      - push
+      - in_app
+      - whatsapp
+      type: string
+      description: |-
+        * `email` - Email
+        * `sms` - SMS
+        * `push` - Push
+        * `in_app` - In-app
+        * `whatsapp` - WhatsApp
+    NotificationPreferenceRow:
+      type: object
+      description: One cell of the materialized category x channel matrix.
+      properties:
+        event_category:
+          type: string
+        channel:
+          type: string
+        is_enabled:
+          type: boolean
+      required:
+      - channel
+      - event_category
+      - is_enabled
+    NotificationPreferenceUpdate:
+      type: object
+      properties:
+        event_category:
+          $ref: '#/components/schemas/NotificationCategoryEnum'
+        channel:
+          $ref: '#/components/schemas/NotificationChannelEnum'
+        is_enabled:
+          type: boolean
+      required:
+      - channel
+      - event_category
+    NotificationTemplateOverride:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          description: Matches a core.notifications trigger's template_code.
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 150
+        channel:
+          $ref: '#/components/schemas/NotificationChannelEnum'
+        locale:
+          type: string
+          description: BCP-47 tag. Only 'en' is ever created in this plan — see the
+            module's §20 register for the deferred locale-variant work.
+          maxLength: 10
+        subject:
+          type: string
+          nullable: true
+          description: NULL for a subjectless channel (SMS).
+          maxLength: 200
+        body:
+          type: string
+        variables:
+          readOnly: true
+          description: Copied from the platform template at creation.
+        is_system:
+          type: boolean
+          readOnly: true
+        is_active:
+          type: boolean
+          description: Inactive falls back to the platform default, not to nothing.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - body
+      - channel
+      - code
+      - created_at
+      - id
+      - is_system
+      - name
+      - updated_at
+      - variables
+    NotificationTemplatePreview:
+      type: object
+      description: Response shape for `:preview` — rendered with sample data, never
+        persisted.
+      properties:
+        subject:
+          type: string
+          nullable: true
+        body:
+          type: string
+      required:
+      - body
+      - subject
     PaginatedAcademicSessionList:
       type: object
       properties:
@@ -16099,6 +16733,27 @@ components:
                 total_count:
                   type: integer
                 total_pages:
+                  type: integer
+    PaginatedDeliveryLogList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryLog'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
                   type: integer
     PaginatedDepartmentList:
       type: object
@@ -16611,6 +17266,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Marks'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedNotificationTemplateOverrideList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTemplateOverride'
         meta:
           type: object
           properties:
@@ -18321,6 +18997,51 @@ components:
         is_active:
           type: boolean
           description: Archived accounts reject new postings but keep their history.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedNotificationTemplateOverride:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          description: Matches a core.notifications trigger's template_code.
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 150
+        channel:
+          $ref: '#/components/schemas/NotificationChannelEnum'
+        locale:
+          type: string
+          description: BCP-47 tag. Only 'en' is ever created in this plan — see the
+            module's §20 register for the deferred locale-variant work.
+          maxLength: 10
+        subject:
+          type: string
+          nullable: true
+          description: NULL for a subjectless channel (SMS).
+          maxLength: 200
+        body:
+          type: string
+        variables:
+          readOnly: true
+          description: Copied from the platform template at creation.
+        is_system:
+          type: boolean
+          readOnly: true
+        is_active:
+          type: boolean
+          description: Inactive falls back to the platform default, not to nothing.
         created_at:
           type: string
           format: date-time

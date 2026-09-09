@@ -94,6 +94,12 @@ class TenantSettings(TimestampedModel):
         "reason `hr` gives: a module's settings should not crowd another's, and "
         "`academic` is already the busiest key on this row.",
     )
+    communication = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Communication config, e.g. notice_number_pattern. Its own "
+        "namespace for the reason `hr` and `finance` each got one.",
+    )
 
     objects = TenantScopedManager()
     all_tenants = AllTenantsManager()

@@ -89,11 +89,15 @@ def _attempt(tenant_id: uuid.UUID, delivery: DeliveryLog, addresses: dict[uuid.U
             RenderedMessage(
                 channel=delivery.channel,
                 recipient_address=address,
-                # The stored title/body are already rendered; re-rendering here
-                # would need the original context, which is deliberately not
-                # persisted (it carries the PII the template pulled from).
-                subject=notification.title,
-                body=notification.body,
+                # `DeliveryLog.subject`/`.body` carry this channel's own rendering
+                # (core.notifications.services.notify renders per channel); in-app
+                # has no separate send, so its row leaves them NULL and falls back
+                # to the Notification's own already-rendered title/body. Either
+                # way this is already-rendered content — re-rendering here would
+                # need the original context, which is deliberately not persisted
+                # (it carries the PII the template pulled from).
+                subject=delivery.subject if delivery.subject is not None else notification.title,
+                body=delivery.body if delivery.body is not None else notification.body,
                 template_code=delivery.template_code or "",
             )
         )
