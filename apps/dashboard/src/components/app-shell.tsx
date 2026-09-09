@@ -4,27 +4,19 @@ import type { Tenant } from "@schoolhub/types";
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
-  SidebarMenu,
-  SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
   cn,
-  useSidebar,
 } from "@schoolhub/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
+import { DashboardNav } from "@/components/dashboard-nav";
 import { LayoutControls } from "@/components/layout-controls";
 import { TenantTheme } from "@/components/tenant-theme";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -36,100 +28,6 @@ import { NAV_GROUPS, type NavGroup } from "@/lib/nav-items";
 import { usePreference, usePreferenceActions } from "@/lib/preferences/preferences-provider";
 import { canAccessModule } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
-
-/**
- * Rendered inside SidebarProvider so it can reach useSidebar() — needed for exactly one
- * thing: closing the mobile drawer on navigation. SidebarProvider's own mobile state has
- * no navigation-awareness of its own (confirmed by a real e2e regression: without this,
- * the drawer stayed open behind the new page after a link click). setOpenMobile(false) is
- * a no-op on desktop, where there's no drawer to close.
- */
-function DashboardNav({ groups, pathname }: { groups: NavGroup[]; pathname: string }) {
-  const t = useTranslations("nav");
-  const { setOpenMobile } = useSidebar();
-
-  return (
-    // One landmark wrapping every group, not one per group: e2e's dashboard.page.ts scopes
-    // every nav assertion to a single "Primary navigation" region, and a screen reader's
-    // landmark list should offer one navigation here, not four.
-    <nav aria-label={t("primary")}>
-      {groups.map((group) => (
-        <SidebarGroup key={group.key}>
-          <SidebarGroupLabel>{t(`groups.${group.key}`)}</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {group.items.map((item) => {
-                const label = t(item.key);
-                const Icon = item.icon;
-
-                if (item.status === "planned") {
-                  const badgeId = `nav-planned-${item.key}`;
-                  return (
-                    <SidebarMenuItem key={item.key}>
-                      {/*
-                        A button, never a Link: these five modules have no route, so a link
-                        here navigates to a 404 that reads as a broken app rather than as a
-                        feature that hasn't shipped. e2e's navLink() looks for links inside
-                        this landmark, so rendering one would also hand every navigation
-                        spec a target that 404s.
-
-                        aria-disabled rather than `disabled`: a disabled button is removed
-                        from the tab order entirely, so the one group of users who most
-                        need to be told *why* nothing happens would never reach the badge
-                        that says so.
-                      */}
-                      <SidebarMenuButton
-                        type="button"
-                        aria-disabled="true"
-                        aria-describedby={badgeId}
-                        title={t("plannedHint", { module: label })}
-                      >
-                        <Icon aria-hidden="true" />
-                        <span>{label}</span>
-                      </SidebarMenuButton>
-                      {/* A pill, not the bare numeral-style badge SidebarMenuBadge ships
-                          with by default: "Soon" is a word, not a count, and floating
-                          unstyled text beside a disabled item read as leftover/unstyled UI
-                          rather than an intentional label. */}
-                      <SidebarMenuBadge
-                        id={badgeId}
-                        className="rounded-full bg-sidebar-foreground/10 px-1.5 text-[0.625rem] font-semibold tracking-wide text-sidebar-foreground/70 uppercase"
-                      >
-                        {t("planned")}
-                      </SidebarMenuBadge>
-                    </SidebarMenuItem>
-                  );
-                }
-
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <SidebarMenuItem key={item.key}>
-                    <SidebarMenuButton asChild isActive={isActive}>
-                      <Link
-                        href={item.href}
-                        aria-current={isActive ? "page" : undefined}
-                        onClick={() => {
-                          setOpenMobile(false);
-                        }}
-                      >
-                        {/* aria-hidden and no label of its own: the accessible name of this
-                            link must be exactly the module's name. An icon that contributes
-                            so much as a word to it breaks every by-name nav locator in the
-                            e2e suite, and makes the name wrong for a screen reader too. */}
-                        <Icon aria-hidden="true" />
-                        <span>{label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      ))}
-    </nav>
-  );
-}
 
 /**
  * The authenticated chrome.
