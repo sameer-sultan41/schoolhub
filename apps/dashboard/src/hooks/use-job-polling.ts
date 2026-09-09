@@ -1,9 +1,23 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { JobRecord } from "@/features/students/job-types";
 import { apiClient } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
+
+type JobStatus = "queued" | "running" | "succeeded" | "failed";
+
+interface JobRecord {
+  id: string;
+  job_type: string;
+  status: JobStatus;
+  progress: number;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 const POLL_INTERVAL_MS = 1500;
 /** Must stay >= POLL_INTERVAL_MS — a shorter gcTime would let the cache entry

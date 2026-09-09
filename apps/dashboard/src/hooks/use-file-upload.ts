@@ -2,8 +2,39 @@
 
 import { ApiError } from "@schoolhub/api-client";
 import { useMutation } from "@tanstack/react-query";
-import type { CreatedUpload, UploadedFile } from "@/features/students/family-types";
 import { apiClient } from "@/lib/auth";
+
+type UploadedFileStatus = "pending" | "ready" | "quarantined";
+
+/** `POST /files` response — the presigned-upload fields, in addition to the file row. */
+interface CreatedUpload {
+  id: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  purpose: string;
+  status: UploadedFileStatus;
+  visibility: string;
+  created_at: string;
+  updated_at: string;
+  upload_url: string;
+  upload_method: string;
+  headers: Record<string, string>;
+  expires_at: string;
+}
+
+/** `POST /files/{id}:confirm` response — the file row alone, no presigned fields. */
+interface UploadedFile {
+  id: string;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  purpose: string;
+  status: UploadedFileStatus;
+  visibility: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface UploadArgs {
   file: File;
