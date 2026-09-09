@@ -84,8 +84,8 @@ class NotificationTemplateOverride(TenantOwnedModel):
 class NotificationPreference(TenantOwnedModel):
     """One user's opt-in for one (event_category, channel) pair.
 
-    A missing row means "enabled" — `services.is_channel_enabled` treats the
-    absence of a row as the default rather than requiring every user to be
+    A missing row means "enabled" — `services.bulk_is_channel_enabled` treats
+    the absence of a row as the default rather than requiring every user to be
     seeded with a full matrix, matching `notify()`'s own "until preferences
     exist, every trigger delivers at the mandatory floor" framing, generalized.
     """

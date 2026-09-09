@@ -10,8 +10,8 @@ absence alert") is answerable from the database alone.
 What is deliberately **not** here, all communication-module scope (Tier 4):
 quiet-hours deferral, suppression lists, SMS quotas, and provider status
 webhooks. Until those exist every trigger delivers at §4's mandatory floor — the
-in-app row always, on top of whatever `_is_channel_enabled` decides for the rest —
-which is the safe direction to be wrong in.
+in-app row always, on top of whatever the preference resolver decides for the
+rest — which is the safe direction to be wrong in.
 
 **Per-channel rendering (Tier 4).** Every channel used to reuse the single
 in-app-rendered `(title, body)` stored on `Notification` — correct for the
@@ -34,7 +34,17 @@ gets its own copy of what was already being read at that instant.
 must not import a Tier-4 app. Two channels are never gated, regardless of what
 the resolver returns: the mandatory in-app channel (`catalog.MANDATORY_CHANNEL`),
 and every channel on an `emergency`-category trigger — both are §4's "cannot be
-configured away" floor, so neither one even calls the resolver.
+configured away" floor, so neither is ever even looked up.
+
+The resolver is **batch-shaped**: `(user_ids, event_category, channel, tenant_id)
+-> {user_id: is_enabled}`, called once per gated channel in `notify()` — not once
+per recipient. A single-item signature was tried first and reverted: it made
+`_delivery_for`'s per-(recipient, channel) construction call into the resolver on
+every iteration, which is the exact per-recipient round-trip `resolve_addresses`
+above already avoids for email lookups, reintroduced for preferences instead. A
+40-guardian announcement across 2 channels was up to 80 calls into whatever the
+resolver does (a cache lookup at best, a query at worst) where the email lookup
+above costs one query for the same fan-out.
 """
 
 from __future__ import annotations
@@ -66,7 +76,7 @@ class UnknownTrigger(Exception):
     """An event key no module declared in its `notifications.py`."""
 
 
-_PreferenceResolver = Callable[[uuid.UUID, str, str, uuid.UUID], bool]
+_PreferenceResolver = Callable[[list[uuid.UUID], str, str, uuid.UUID], dict[uuid.UUID, bool]]
 _preference_resolver: _PreferenceResolver | None = None
 
 
@@ -74,24 +84,28 @@ def set_preference_resolver(fn: _PreferenceResolver | None) -> None:
     """Register (or clear, with `None`) the per-user channel-preference check.
 
     Called once from `apps.communication.apps.CommunicationConfig.ready()`. `fn`
-    takes `(user_id, event_category, channel, tenant_id)` and returns whether that
-    channel is enabled for that user. No resolver registered (the default, and
-    every state before communication's app-ready runs) means every channel is
-    enabled — the mandatory-floor-safe direction, and byte-identical to this
-    module's behaviour before preferences existed.
+    takes `(user_ids, event_category, channel, tenant_id)` and returns a
+    `{user_id: is_enabled}` map for exactly the ids given — a missing key means
+    enabled, the same "no row = enabled" default `apps.communication` itself
+    documents. No resolver registered (the default, and every state before
+    communication's app-ready runs) means every channel is enabled — the
+    mandatory-floor-safe direction, and byte-identical to this module's
+    behaviour before preferences existed.
     """
     global _preference_resolver
     _preference_resolver = fn
 
 
-def _is_channel_enabled(
-    *, tenant_id: uuid.UUID, user_id: uuid.UUID, category: str, channel: str
-) -> bool:
+def _enabled_map_for_channel(
+    *, tenant_id: uuid.UUID, recipients: list[Recipient], category: str, channel: str
+) -> dict[uuid.UUID, bool]:
+    """One resolver call for the whole recipient list, or `{}` (= everyone enabled)
+    for a channel/category this module's own floor already exempts from gating."""
     if channel == MANDATORY_CHANNEL or category == NotificationCategory.EMERGENCY:
-        return True
+        return {}
     if _preference_resolver is None:
-        return True
-    return _preference_resolver(user_id, category, channel, tenant_id)
+        return {}
+    return _preference_resolver([r.user_id for r in recipients], category, channel, tenant_id)
 
 
 @dataclass(frozen=True)
@@ -194,6 +208,16 @@ def notify(
         if template is not None:
             rendered_by_channel[channel] = template.render(context)
 
+    # One resolver call per channel for the whole recipient list, not one call
+    # per (recipient, channel) inside _delivery_for — see the module docstring's
+    # "Preference gating" section for the fan-out cost that shape used to have.
+    enabled_by_channel: dict[str, dict[uuid.UUID, bool]] = {
+        channel: _enabled_map_for_channel(
+            tenant_id=tenant_id, recipients=recipients, category=trigger.category, channel=channel
+        )
+        for channel in trigger.channels
+    }
+
     # Two bulk writes for the whole fan-out, not two per recipient. An absence
     # alert to a class of forty guardians was eighty round trips; §5 explicitly
     # expects one announcement to reach thousands.
@@ -204,6 +228,7 @@ def notify(
         title=title,
         body=body,
         rendered_by_channel=rendered_by_channel,
+        enabled_by_channel=enabled_by_channel,
         emails=emails,
         source_type=source_type,
         source_id=source_id,
@@ -226,6 +251,7 @@ def _persist_many(
     title: str,
     body: str,
     rendered_by_channel: dict[str, tuple[str, str]],
+    enabled_by_channel: dict[str, dict[uuid.UUID, bool]],
     emails: dict[uuid.UUID, str],
     source_type: str | None,
     source_id: uuid.UUID | None,
@@ -267,6 +293,7 @@ def _persist_many(
                 recipient=recipient,
                 email=emails.get(recipient.user_id),
                 rendered=rendered_by_channel.get(channel),
+                enabled=enabled_by_channel.get(channel, {}).get(recipient.user_id, True),
             )
             for notification, recipient in zip(notifications, recipients, strict=True)
             for channel in sorted(trigger.channels)
@@ -285,26 +312,25 @@ def _delivery_for(
     recipient: Recipient,
     email: str | None,
     rendered: tuple[str, str] | None,
+    enabled: bool,
 ) -> DeliveryLog:
     address = str(recipient.user_id) if channel == NotificationChannel.IN_APP else None
     if channel == NotificationChannel.EMAIL:
         address = email
 
-    enabled = _is_channel_enabled(
-        tenant_id=tenant_id, user_id=recipient.user_id, category=trigger.category, channel=channel
-    )
-
     # `skipped` with a reason rather than no row at all, per §6: a send that did
     # not happen is recorded, never silently dropped — that is what makes a
-    # delivery dashboard worth looking at.
+    # delivery dashboard worth looking at. A missing address is checked before
+    # a disabled preference: a recipient with neither should see the address
+    # problem, since fixing the preference alone still would not deliver anything.
     if channel not in available_channels():
         reason: str | None = f"No adapter for {channel} yet."
     elif channel != NotificationChannel.IN_APP and rendered is None:
         reason = f"No {channel} template for {trigger.template_code}."
-    elif not enabled:
-        reason = "Disabled by user preference."
     elif not address:
         reason = f"Recipient has no {channel} address."
+    elif not enabled:
+        reason = "Disabled by user preference."
     else:
         reason = None
 

@@ -13,12 +13,12 @@ class CommunicationConfig(AppConfig):
         # app-ready. See core/notifications/templates.py's and services.py's own
         # docstrings for what "no resolver registered" means to every caller that
         # existed before this module did.
-        from apps.communication.services import is_channel_enabled
+        from apps.communication.services import bulk_is_channel_enabled
         from apps.communication.templates_service import resolve_tenant_template
         from core.notifications import services as core_notification_services
         from core.notifications import templates as core_notification_templates
 
         core_notification_templates.set_override_resolver(resolve_tenant_template)
-        core_notification_services.set_preference_resolver(is_channel_enabled)
+        core_notification_services.set_preference_resolver(bulk_is_channel_enabled)
 
         from apps.communication import signals  # noqa: F401

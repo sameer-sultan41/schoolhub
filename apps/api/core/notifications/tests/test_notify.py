@@ -352,10 +352,16 @@ class OverrideResolverTests(NotifyTestCase):
 
 
 class PreferenceResolverTests(NotifyTestCase):
+    """The resolver is batch-shaped: `(user_ids, category, channel, tenant_id) ->
+    {user_id: is_enabled}` — one call per gated channel, not per recipient. See
+    services.py's module docstring for why a per-item signature was reverted."""
+
     channels = {NotificationChannel.IN_APP, NotificationChannel.EMAIL}
 
     def test_in_app_rendering_is_unaffected_by_a_registered_preference_resolver(self) -> None:
-        notify_services.set_preference_resolver(lambda user_id, category, channel, tenant_id: False)
+        notify_services.set_preference_resolver(
+            lambda user_ids, category, channel, tenant_id: dict.fromkeys(user_ids, False)
+        )
 
         created = self.run_notify()
 
@@ -370,7 +376,9 @@ class PreferenceResolverTests(NotifyTestCase):
         self,
     ) -> None:
         notify_services.set_preference_resolver(
-            lambda user_id, category, channel, tenant_id: channel != NotificationChannel.EMAIL
+            lambda user_ids, category, channel, tenant_id: dict.fromkeys(
+                user_ids, channel != NotificationChannel.EMAIL
+            )
         )
 
         created = self.run_notify()
@@ -383,6 +391,26 @@ class PreferenceResolverTests(NotifyTestCase):
         self.assertEqual(email_row.status, DeliveryStatus.SKIPPED)
         self.assertEqual(email_row.error_message, "Disabled by user preference.")
 
+    def test_a_missing_address_is_reported_even_when_the_channel_is_also_disabled(self) -> None:
+        """Skip-reason precedence: a recipient with neither should see the
+        address problem, since fixing the preference alone would still not
+        deliver anything."""
+        self.user.email = ""
+        self.user.save(update_fields=["email"])
+        notify_services.set_preference_resolver(
+            lambda user_ids, category, channel, tenant_id: dict.fromkeys(user_ids, False)
+        )
+
+        created = self.run_notify()
+
+        with tenant_context(self.tenant.id):
+            email_row = DeliveryLog.objects.get(
+                notification=created[0], channel=NotificationChannel.EMAIL
+            )
+
+        self.assertEqual(email_row.status, DeliveryStatus.SKIPPED)
+        self.assertIn("no email address", (email_row.error_message or "").lower())
+
     def test_an_emergency_category_notification_ignores_the_preference_resolver_entirely(
         self,
     ) -> None:
@@ -394,11 +422,11 @@ class PreferenceResolverTests(NotifyTestCase):
             channels=self.channels,
             variables=VARIABLES,
         )
-        called = []
+        called: list[str] = []
 
-        def resolver(user_id, category, channel, tenant_id):
+        def resolver(user_ids, category, channel, tenant_id):
             called.append(channel)
-            return False
+            return dict.fromkeys(user_ids, False)
 
         notify_services.set_preference_resolver(resolver)
 
@@ -417,6 +445,29 @@ class PreferenceResolverTests(NotifyTestCase):
 
         self.assertEqual(email_row.status, DeliveryStatus.QUEUED)
         self.assertNotIn(NotificationChannel.EMAIL, called)
+
+    def test_the_resolver_is_called_once_per_channel_not_once_per_recipient(self) -> None:
+        calls: list[tuple[int, str]] = []
+
+        def resolver(user_ids, category, channel, tenant_id):
+            calls.append((len(user_ids), channel))
+            return {}
+
+        notify_services.set_preference_resolver(resolver)
+        other_user = UserFactory(tenant=self.tenant, email="other@example.test")
+
+        with self.captureOnCommitCallbacks(execute=False), tenant_context(self.tenant.id):
+            notify(
+                EVENT,
+                tenant_id=self.tenant.pk,
+                recipients=[Recipient(user_id=self.user.pk), Recipient(user_id=other_user.pk)],
+                context={"name": "Ayesha"},
+            )
+
+        # One call for the whole recipient list, for the one gated channel
+        # (EMAIL) — not one call per recipient, and not one for the mandatory
+        # in-app channel, which never reaches the resolver at all.
+        self.assertEqual(calls, [(2, NotificationChannel.EMAIL)])
 
     def test_with_no_resolver_registered_every_channel_is_enabled(self) -> None:
         # The default state on `main` today, and every existing caller's contract.

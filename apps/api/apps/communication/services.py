@@ -10,6 +10,9 @@ from core.api.exceptions import DomainRuleViolation
 from core.notifications.models import NotificationCategory, NotificationChannel
 from core.notifications.templates import registry as platform_templates
 from core.notifications.templates import used_placeholders
+from core.tenancy.features import is_feature_enabled
+
+FEATURE = "module.communication"
 
 _PREFERENCE_CACHE_TTL = 300
 
@@ -45,9 +48,9 @@ def assert_override_is_valid(*, code: str, channel: str, subject: str | None, bo
 def assert_preference_may_be_saved(*, event_category: str, is_enabled: bool) -> None:
     """§11: the emergency category cannot be disabled — the mandatory floor.
 
-    `core.notifications.services._is_channel_enabled` also refuses to even ask
-    for emergency, so this is defense in depth against the row existing at all
-    with the wrong value, not the only thing standing between a user and it.
+    `core.notifications.services`'s own resolver-call site also refuses to even
+    ask for emergency, so this is defense in depth against the row existing at
+    all with the wrong value, not the only thing standing between a user and it.
     """
     if event_category == NotificationCategory.EMERGENCY and not is_enabled:
         raise DomainRuleViolation(
@@ -56,26 +59,64 @@ def assert_preference_may_be_saved(*, event_category: str, is_enabled: bool) -> 
         )
 
 
-def is_channel_enabled(
-    user_id: uuid.UUID, event_category: str, channel: str, tenant_id: uuid.UUID
-) -> bool:
+def bulk_is_channel_enabled(
+    user_ids: list[uuid.UUID], event_category: str, channel: str, tenant_id: uuid.UUID
+) -> dict[uuid.UUID, bool]:
     """Registered as `core.notifications.services`'s preference resolver.
 
-    One query populates the whole per-user matrix, cached — mirrors
-    `core.rbac.permissions.user_scopes`'s cache-per-user shape, for the same
-    reason: `_delivery_for` calls this once per (channel, recipient) in a
-    fan-out of thousands, and a query each would turn preference-checking into
-    the N+1 `notify()`'s own docstring already warns a per-recipient render
-    would be. A missing row means enabled — see `NotificationPreference`'s
-    docstring for why "no row" must not mean "ask again every time".
+    Batch-shaped — one call per (channel, fan-out), not one per (recipient,
+    channel): a per-item resolver was tried first and reverted, because
+    `_delivery_for` calls it once per row in `notify()`'s bulk-insert
+    comprehension, which reintroduced exactly the round-trip-per-recipient cost
+    `resolve_addresses` already avoids for email. Per-user cache is checked
+    first (`cache.get_many`), so a recipient whose matrix was already cached
+    from an earlier `notify()` call costs nothing here; only the misses reach
+    the table, in one query for the whole set. A missing key in the returned
+    map means enabled — see `NotificationPreference`'s docstring for why "no
+    row" must not mean "ask again every time".
     """
-    matrix = _preference_matrix(user_id=user_id, tenant_id=tenant_id)
-    return matrix.get((event_category, channel), True)
+    if not is_feature_enabled(FEATURE, tenant_id=tenant_id):
+        return {}
+
+    from apps.communication.models import NotificationPreference
+
+    cache_keys = {user_id: f"notif-pref:{tenant_id}:{user_id}" for user_id in user_ids}
+    cached = cache.get_many(cache_keys.values())
+
+    result: dict[uuid.UUID, bool] = {}
+    missing: list[uuid.UUID] = []
+    for user_id in user_ids:
+        matrix = cached.get(cache_keys[user_id])
+        if matrix is None:
+            missing.append(user_id)
+        else:
+            result[user_id] = matrix.get((event_category, channel), True)
+
+    if missing:
+        rows = NotificationPreference.objects.filter(
+            tenant_id=tenant_id, user_id__in=missing
+        ).values_list("user_id", "event_category", "channel", "is_enabled")
+        by_user: dict[uuid.UUID, dict[tuple[str, str], bool]] = {user_id: {} for user_id in missing}
+        for user_id, category, ch, is_enabled in rows:
+            by_user[user_id][(category, ch)] = is_enabled
+        cache.set_many(
+            {cache_keys[user_id]: matrix for user_id, matrix in by_user.items()},
+            _PREFERENCE_CACHE_TTL,
+        )
+        for user_id, matrix in by_user.items():
+            result[user_id] = matrix.get((event_category, channel), True)
+
+    return result
 
 
 def _preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[tuple[str, str], bool]:
-    """Trusts ambient tenant context — see `templates_service.resolve_tenant_template`'s
-    docstring for why this resolver does not rebind it."""
+    """The single-user path, for `materialize_preference_matrix`/`GET
+    /notification-preferences` — a viewer's own settings page, not a fan-out, so
+    the batch shape `bulk_is_channel_enabled` needs would only add complexity here.
+    """
+    if not is_feature_enabled(FEATURE, tenant_id=tenant_id):
+        return {}
+
     from apps.communication.models import NotificationPreference
 
     cache_key = f"notif-pref:{tenant_id}:{user_id}"
@@ -100,8 +141,8 @@ def materialize_preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -
 
     `GET /notification-preferences` returns this rather than the bare stored
     rows, so a client never has to know "no row" means enabled — the same
-    completeness `is_channel_enabled`'s own docstring argues for, now for the
-    read side instead of the delivery-gating side.
+    completeness `bulk_is_channel_enabled`'s own docstring argues for, now for
+    the read side instead of the delivery-gating side.
     """
     matrix = _preference_matrix(user_id=user_id, tenant_id=tenant_id)
     return [
