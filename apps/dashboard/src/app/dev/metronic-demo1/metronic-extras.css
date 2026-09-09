@@ -1,0 +1,11 @@
+@reference "../../globals.css";
+/* The header/sidebar fixed-offset mechanism (--header-height, --sidebar-width,
+   .header-fixed/.sidebar-fixed padding, sidebar-collapse hover-to-expand) —
+   without this, the `demo1`/`header-fixed`/`sidebar-fixed` body classes Shell
+   sets have nothing to key off, and the fixed header overlaps page content.
+   Scoped entirely under the `.demo1` class selector, so it can't leak outside
+   this route. */
+@import "@schoolhub/ui/styles/metronic/demos/demo1.css";
+@import "@schoolhub/ui/styles/metronic/components/scrollable.css";
+@import "@schoolhub/ui/styles/metronic/components/rating.css";
+@import "@schoolhub/ui/styles/metronic/components/apexcharts.css";

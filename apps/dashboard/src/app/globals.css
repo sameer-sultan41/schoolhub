@@ -1,28 +1,8 @@
 @import "tailwindcss";
-/* Supplies the animate-in/out, fade/zoom/slide utilities and data-[state] keyframes that
-   every Radix-backed component (Dialog, DropdownMenu, Select, Tooltip, Sheet, …) needs to
-   animate — without it those transitions are silent no-ops. */
 @import "tw-animate-css";
 @import "@schoolhub/ui/styles/theme.css";
-
-/* Colour presets. Imported after theme.css so their [data-theme-preset] rules win over
-   its :root defaults; a viewer picks one in the header's preferences popover.
-   ink-brass pins the platform's previous palette — see that file's own header for why
-   it has to exist now that it is no longer what :root happens to contain.
-   shared-chrome.css comes first so a preset wanting its OWN bespoke chrome (the way
-   Aurora's :root does) can still win — same-selector CSS resolves ties by source
-   order, so a later file beats this shared one. */
-@import "@schoolhub/ui/styles/presets/shared-chrome.css";
-@import "@schoolhub/ui/styles/presets/ink-brass.css";
-@import "@schoolhub/ui/styles/presets/azure.css";
-@import "@schoolhub/ui/styles/presets/cobalt.css";
 @import "@schoolhub/ui/styles/presets/metronic.css";
-@import "@schoolhub/ui/styles/presets/tangerine.css";
-@import "@schoolhub/ui/styles/presets/soft-pop.css";
-@import "@schoolhub/ui/styles/presets/brutalist.css";
-@import "@schoolhub/ui/styles/presets/neon.css";
 
-/* Tailwind v4 auto-detects sources in this app; the shared package needs an explicit hint. */
 @source "../../../../packages/ui/src";
 
 html,
@@ -35,10 +15,4 @@ body {
   color: var(--sh-color-foreground);
   font-family: var(--sh-font-body);
   -webkit-font-smoothing: antialiased;
-}
-
-/* Visible focus is a WCAG 2.1 AA requirement — never remove it. */
-:focus-visible {
-  outline: 2px solid var(--sh-color-ring);
-  outline-offset: 2px;
 }
