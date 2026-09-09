@@ -3,6 +3,7 @@
 import type { Tenant } from "@schoolhub/types";
 import {
   Sidebar,
+  SidebarCollapseToggle,
   SidebarContent,
   SidebarHeader,
   SidebarInset,
@@ -140,7 +141,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             mobileDescription={t("primary")}
             mobileCloseLabel={t("closeMenu")}
           >
-            <SidebarHeader>
+            <SidebarHeader className="relative">
               {/* Two renderings of the same name, because the rail is 3rem wide: the full
                   name would simply overflow it, which is what it did the moment `icon`
                   became a selectable collapse mode. The initial keeps the collapsed rail
@@ -159,6 +160,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 {tenantLabel.slice(0, 1)}
               </span>
+              {/* Demo1's floating edge toggle, additive to SidebarTrigger in the header
+                  (which remains the always-present, keyboard/mobile-safe control) — this
+                  one only appears once the sidebar is actually in icon-collapse mode. */}
+              <SidebarCollapseToggle toggleLabel={t("collapseSidebar")} />
             </SidebarHeader>
             <SidebarContent>
               <DashboardNav groups={visibleGroups} pathname={pathname} />

@@ -19,6 +19,7 @@
     "skipToContent": "Skip to main content",
     "primary": "Primary navigation",
     "closeMenu": "Close menu",
+    "collapseSidebar": "Collapse sidebar",
     "theme": {
       "label": "Change theme",
       "light": "Light",

@@ -241,6 +241,7 @@ export { Separator } from "./components/separator";
 
 export {
   Sidebar,
+  SidebarCollapseToggle,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
