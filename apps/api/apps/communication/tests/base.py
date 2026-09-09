@@ -19,11 +19,19 @@ from apps.communication.tests.factories import (
     grant,
 )
 
-# Every key PR A registers. §4's remaining keys (announcement/notice/thread/
-# broadcast) arrive with the PRs that ship their endpoints.
+# Every key PR A+B register. §4's remaining keys (thread/broadcast) arrive
+# with PR C's endpoints.
 ALL_KEYS = (
     "communication.announcement.view",
+    "communication.announcement.create",
+    "communication.announcement.update",
+    "communication.announcement.delete",
+    "communication.announcement.publish",
     "communication.notice.view",
+    "communication.notice.create",
+    "communication.notice.update",
+    "communication.notice.publish",
+    "communication.notice.acknowledge",
     "communication.template.view",
     "communication.template.update",
     "communication.notification-preference.update",

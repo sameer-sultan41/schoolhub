@@ -1,9 +1,9 @@
 """Factories for the communication tests.
 
-Re-exports `school_organization`'s tenant/user factories and `grant`/
-`authenticate`, matching every other module's `tests/factories.py`. This
-module's first PR has no student/campus dependency at all — templates and
-preferences are pure tenant + user concerns — so nothing else is pulled in yet.
+Re-exports `school_organization`'s tenant/user/class/section/house factories
+and `student_management`'s student/guardian factories — PR B's audience
+resolution needs the whole enrollment graph, unlike PR A's pure tenant + user
+concerns.
 """
 
 from __future__ import annotations
@@ -12,12 +12,29 @@ import uuid
 
 import factory
 
-from apps.communication.models import NotificationPreference, NotificationTemplateOverride
+from apps.communication.models import (
+    Announcement,
+    AudienceType,
+    Notice,
+    NotificationPreference,
+    NotificationTemplateOverride,
+)
 from apps.school_organization.tests.factories import (  # noqa: F401 — re-exported
+    AcademicSessionFactory,
+    CampusFactory,
+    ClassFactory,
+    HouseFactory,
+    SectionFactory,
     TenantFactory,
     UserFactory,
     authenticate,
     grant,
+)
+from apps.student_management.tests.factories import (  # noqa: F401 — re-exported
+    GuardianFactory,
+    StudentEnrollmentFactory,
+    StudentFactory,
+    StudentGuardianFactory,
 )
 from core.notifications.models import NotificationCategory, NotificationChannel
 from core.tenancy.context import tenant_context
@@ -62,3 +79,23 @@ class NotificationPreferenceFactory(factory.django.DjangoModelFactory):
     event_category = NotificationCategory.GENERAL
     channel = NotificationChannel.EMAIL
     is_enabled = True
+
+
+class AnnouncementFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Announcement
+
+    tenant = factory.SubFactory(TenantFactory)
+    title = factory.Sequence(lambda n: f"Announcement {n}")
+    body = "Body text."
+    audience_type = AudienceType.ALL
+
+
+class NoticeFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Notice
+
+    tenant = factory.SubFactory(TenantFactory)
+    title = factory.Sequence(lambda n: f"Notice {n}")
+    body = "Body text."
+    audience_type = AudienceType.ALL
