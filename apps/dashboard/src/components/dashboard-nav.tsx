@@ -52,9 +52,16 @@ export function DashboardNav({ groups, pathname }: { groups: NavGroup[]; pathnam
         >
           <Icon aria-hidden="true" />
           <span>{label}</span>
-          {/* A pill, not a bare numeral-style badge: "Soon" is a word, not a count. */}
+          {/* A pill, not a bare numeral-style badge: "Soon" is a word, not a count.
+              aria-hidden despite being visible: this span lives inside the button that
+              renders it, so without aria-hidden its text would fold into the button's own
+              accessible NAME ("Fees & Finance Soon") instead of staying "Fees & Finance"
+              with "Soon" as its DESCRIPTION — aria-describedby above still picks up this
+              element's text for that purpose regardless of its hidden state, per the ARIA
+              accessible-description computation. */}
           <span
             id={badgeId}
+            aria-hidden="true"
             className="ms-auto rounded-full bg-sidebar-foreground/10 px-1.5 text-[0.625rem] font-semibold tracking-wide text-sidebar-foreground/70 uppercase"
           >
             {t("planned")}

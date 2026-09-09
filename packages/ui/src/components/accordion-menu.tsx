@@ -8,7 +8,7 @@ import { cn } from "../lib/cn";
 
 /**
  * Ported from Metronic's own accordion-menu.tsx (Radix-Accordion-based nested menu),
- * with two departures required by this repo's conventions:
+ * with three departures required by this repo's conventions:
  *
  * 1. No `role="menu"`/`role="group"`/`role="presentation"` anywhere. The upstream source
  *    applies the WAI-ARIA `menu` pattern (which demands roving-tabindex arrow-key/Home/
@@ -24,6 +24,12 @@ import { cn } from "../lib/cn";
  *    default action (breaking ctrl/cmd/middle-click "open in new tab"). A real navigation
  *    link must be the sole interactive element, exactly like this package's own
  *    `SidebarMenuButton`/`Button` `asChild` paths.
+ * 3. Every `AccordionPrimitive.Header` here renders `asChild` with a plain `<div>` instead
+ *    of Radix's own default `<h3>`. A real heading per nav item pollutes the page's
+ *    heading outline and, concretely, made two elements answer to
+ *    `getByRole("heading", { name: "Dashboard" })` once a nav label happened to match the
+ *    page's own `<h1>` — caught by this repo's e2e suite, not by unit tests, since jsdom
+ *    has no default-heading-per-Header behavior surfaced the same way.
  */
 
 interface AccordionMenuContextValue {
@@ -236,67 +242,82 @@ function AccordionMenuItem({
   variant,
   asChild = false,
   onClick,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Item> &
+  value,
+  ...triggerProps
+}: Omit<
+  React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Trigger>,
+  "onClick" | "onKeyDown"
+> &
   VariantProps<typeof itemVariants> & {
     asChild?: boolean;
+    value: string;
     onClick?: React.MouseEventHandler<HTMLElement>;
   }) {
   const { classNames, selectedValue, matchPath, onItemClick } =
     React.useContext(AccordionMenuContext);
-  const dataSelected = matchPath(props.value) || selectedValue === props.value ? "true" : undefined;
+  const dataSelected = matchPath(value) || selectedValue === value ? "true" : undefined;
 
   if (asChild) {
     // The caller's single child (a <Link>, or a disabled <button> for a planned item) IS
     // the entire interactive element — no wrapping onClick/preventDefault, so real
     // navigation (including ctrl/cmd/middle-click) is never cancelled.
     return (
-      <AccordionPrimitive.Item className="flex" {...props}>
-        <AccordionPrimitive.Header className="flex w-full">
-          <AccordionPrimitive.Trigger
-            asChild
-            data-slot="accordion-menu-item"
-            data-selected={dataSelected}
-          >
-            {React.isValidElement(children)
-              ? React.cloneElement(children as React.ReactElement<{ className?: string }>, {
-                  className: cn(
-                    itemVariants({ variant }),
-                    classNames?.item,
-                    className,
-                    (children as React.ReactElement<{ className?: string }>).props.className,
-                  ),
-                })
-              : children}
-          </AccordionPrimitive.Trigger>
+      <AccordionPrimitive.Item className="flex" value={value}>
+        {/* asChild on Header, not its default <h3>: Radix's Accordion.Header renders a
+            real heading element, which is correct for FAQ-style accordion content but
+            wrong here — every nav item would become its own page heading, colliding with
+            the actual page <h1> the moment a nav label matches it (a real regression this
+            caught: two elements answered to getByRole("heading", { name: "Dashboard" })). */}
+        <AccordionPrimitive.Header asChild>
+          <div className="flex w-full">
+            <AccordionPrimitive.Trigger
+              asChild
+              data-slot="accordion-menu-item"
+              data-selected={dataSelected}
+            >
+              {React.isValidElement(children)
+                ? React.cloneElement(children as React.ReactElement<{ className?: string }>, {
+                    className: cn(
+                      itemVariants({ variant }),
+                      classNames?.item,
+                      className,
+                      (children as React.ReactElement<{ className?: string }>).props.className,
+                    ),
+                  })
+                : children}
+            </AccordionPrimitive.Trigger>
+          </div>
         </AccordionPrimitive.Header>
       </AccordionPrimitive.Item>
     );
   }
 
   return (
-    <AccordionPrimitive.Item className="flex" {...props}>
-      <AccordionPrimitive.Header className="flex w-full">
-        <AccordionPrimitive.Trigger
-          data-slot="accordion-menu-item"
-          className={cn(itemVariants({ variant }), classNames?.item, className)}
-          onClick={(e) => {
-            onItemClick?.(props.value, e);
-            onClick?.(e);
-            e.preventDefault();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
+    <AccordionPrimitive.Item className="flex" value={value}>
+      <AccordionPrimitive.Header asChild>
+        <div className="flex w-full">
+          <AccordionPrimitive.Trigger
+            data-slot="accordion-menu-item"
+            className={cn(itemVariants({ variant }), classNames?.item, className)}
+            onClick={(e) => {
+              onItemClick?.(value, e);
+              onClick?.(e);
               e.preventDefault();
-              const target = e.currentTarget as HTMLElement;
-              const firstChild = target.firstElementChild as HTMLElement | null;
-              firstChild?.click();
-            }
-          }}
-          data-selected={dataSelected}
-        >
-          {children}
-        </AccordionPrimitive.Trigger>
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const target = e.currentTarget as HTMLElement;
+                const firstChild = target.firstElementChild as HTMLElement | null;
+                firstChild?.click();
+              }
+            }}
+            data-selected={dataSelected}
+            {...triggerProps}
+          >
+            {children}
+          </AccordionPrimitive.Trigger>
+        </div>
       </AccordionPrimitive.Header>
     </AccordionPrimitive.Item>
   );
@@ -325,22 +346,26 @@ function AccordionMenuSubTrigger({
 }: React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Trigger>) {
   const { classNames } = React.useContext(AccordionMenuContext);
   return (
-    <AccordionPrimitive.Header className="flex">
-      <AccordionPrimitive.Trigger
-        data-slot="accordion-menu-sub-trigger"
-        className={cn(
-          "relative flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-foreground outline-hidden transition-colors select-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4",
-          classNames?.subTrigger,
-          className,
-        )}
-      >
-        {children}
-        <ChevronDown
-          data-slot="accordion-menu-sub-indicator"
-          aria-hidden="true"
-          className="ms-auto size-3.5! shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:-rotate-180"
-        />
-      </AccordionPrimitive.Trigger>
+    // asChild, not the default <h3>: see AccordionMenuItem's own comment on this — a nav
+    // tree's group triggers must not each become their own page heading.
+    <AccordionPrimitive.Header asChild>
+      <div className="flex">
+        <AccordionPrimitive.Trigger
+          data-slot="accordion-menu-sub-trigger"
+          className={cn(
+            "relative flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-foreground outline-hidden transition-colors select-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4",
+            classNames?.subTrigger,
+            className,
+          )}
+        >
+          {children}
+          <ChevronDown
+            data-slot="accordion-menu-sub-indicator"
+            aria-hidden="true"
+            className="ms-auto size-3.5! shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:-rotate-180"
+          />
+        </AccordionPrimitive.Trigger>
+      </div>
     </AccordionPrimitive.Header>
   );
 }

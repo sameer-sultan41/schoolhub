@@ -11,8 +11,9 @@
  * nothing invented. The data-grid, data-table, empty-state, stat-card, skeletons and
  * sidebar files are schoolhub's own and unaffected by that swap. `accordion-menu` is a
  * port-and-adapt, not a verbatim copy: Metronic's own source applies invalid ARIA `menu`
- * roles to persistent nav and nests a Link inside a button in a way that swallows real
- * navigation — both are fixed in this repo's version (see the file's own header comment).
+ * roles to persistent nav, nests a Link inside a button in a way that swallows real
+ * navigation, and renders a real `<h3>` heading per item — all three are fixed in this
+ * repo's version (see the file's own header comment).
  */
 export {
   Accordion,
