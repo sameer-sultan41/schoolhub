@@ -21,6 +21,14 @@ export function proxy(request: NextRequest): NextResponse {
   const { pathname, search } = request.nextUrl;
   const hasSession = request.cookies.has(SESSION_COOKIE_NAME);
 
+  // `/dev/*` is a temporary, unauthenticated visual-reference route (see
+  // app/dev/metronic-reference) — outside of development it 404s on its own (the page
+  // checks NODE_ENV itself), so letting it bypass the session check here isn't a real
+  // exposure, and it must bypass: nothing under `/dev` should ever bounce to /login.
+  if (pathname.startsWith("/dev/") && process.env.NODE_ENV !== "production") {
+    return NextResponse.next();
+  }
+
   // Signed in and heading for the sign-in page: send them where they meant to go.
   if (hasSession && isPublicPath(pathname)) {
     const nextParam = request.nextUrl.searchParams.get("next");
