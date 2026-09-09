@@ -39,7 +39,9 @@ class AudienceResolutionTestCase(TestCase):
             self.other_campus = CampusFactory(tenant=self.tenant)
             self.session = AcademicSessionFactory(tenant=self.tenant)
             self.school_class = ClassFactory(tenant=self.tenant)
-            self.section = SectionFactory(tenant=self.tenant, school_class=self.school_class)
+            self.section = SectionFactory(
+                tenant=self.tenant, campus=self.campus, school_class=self.school_class
+            )
             self.other_class = ClassFactory(tenant=self.tenant)
             self.house = HouseFactory(tenant=self.tenant)
 

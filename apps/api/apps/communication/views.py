@@ -242,17 +242,16 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     }
     http_method_names = ["get", "post", "patch", "head", "options"]
 
-    def retrieve(self, request: Request, pk: str | None = None) -> Response:
-        """`GET /notices/{id}` — `?format=pdf` returns the rendered document instead."""
+    @extend_schema(responses={200: None})
+    def download(self, request: Request, pk: str | None = None) -> Response:
+        """`GET /notices/{id}/download` — the notice rendered as a PDF document."""
         instance = self.get_object()
-        if request.query_params.get("format") == "pdf":
-            data = documents.render_notice(notice=instance, school_name=request.tenant.name)
-            response = HttpResponse(data, content_type="application/pdf")
-            response["Content-Disposition"] = (
-                f'inline; filename="notice-{instance.notice_no or instance.pk}.pdf"'
-            )
-            return response
-        return Response(self.get_serializer(instance).data)
+        data = documents.render_notice(notice=instance, school_name=request.tenant.name)
+        response = HttpResponse(data, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'inline; filename="notice-{instance.notice_no or instance.pk}.pdf"'
+        )
+        return response
 
     @extend_schema(request=None, responses={200: NoticeSerializer})
     def submit(self, request: Request, pk: str | None = None) -> Response:

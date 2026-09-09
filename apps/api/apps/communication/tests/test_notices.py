@@ -147,7 +147,7 @@ class NoticeEndpointTests(CommunicationAPITestCase):
         with tenant_context(self.tenant.id):
             notice = NoticeFactory(tenant=self.tenant, created_by=self.user.pk)
 
-        response = self.client.get(f"/api/v1/notices/{notice.pk}?format=pdf")
+        response = self.client.get(f"/api/v1/notices/{notice.pk}/download")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")

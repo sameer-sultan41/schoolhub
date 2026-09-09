@@ -6961,8 +6961,12 @@ paths:
   /api/v1/notices/{id}:
     get:
       operationId: notices_retrieve
-      description: '`GET /notices/{id}` — `?format=pdf` returns the rendered document
-        instead.'
+      description: |-
+        `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+
+        No `campus_id` column on this table (entities/communication.md) —
+        `scope_campus_field = None`, stated explicitly rather than left at the
+        mixin's default `campus_id`, which does not exist here.
       parameters:
       - in: path
         name: id
@@ -7020,6 +7024,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Notice'
           description: ''
+  /api/v1/notices/{id}/download:
+    get:
+      operationId: notices_download_retrieve
+      description: '`GET /notices/{id}/download` — the notice rendered as a PDF document.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notices
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/notices/{id}:acknowledge:
     post:
       operationId: notices_:acknowledge_create

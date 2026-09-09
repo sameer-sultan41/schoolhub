@@ -2890,7 +2890,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description `GET /notices/{id}` — `?format=pdf` returns the rendered document instead. */
+        /**
+         * @description `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+         *
+         *     No `campus_id` column on this table (entities/communication.md) —
+         *     `scope_campus_field = None`, stated explicitly rather than left at the
+         *     mixin's default `campus_id`, which does not exist here.
+         */
         get: operations["notices_retrieve"];
         put?: never;
         post?: never;
@@ -2905,6 +2911,23 @@ export interface paths {
          *     mixin's default `campus_id`, which does not exist here.
          */
         patch: operations["notices_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/notices/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /notices/{id}/download` — the notice rendered as a PDF document. */
+        get: operations["notices_download_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/notices/{id}:acknowledge": {
@@ -15771,6 +15794,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Notice"];
                 };
+            };
+        };
+    };
+    notices_download_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

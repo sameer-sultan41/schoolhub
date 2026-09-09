@@ -46,6 +46,11 @@ urlpatterns = [
         name="announcements-publish",
     ),
     path(
+        "notices/<uuid:pk>/download",
+        NoticeViewSet.as_view({"get": "download"}),
+        name="notices-download",
+    ),
+    path(
         "notices/<uuid:pk>:submit",
         NoticeViewSet.as_view({"post": "submit"}),
         name="notices-submit",
