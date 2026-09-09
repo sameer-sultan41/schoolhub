@@ -10,8 +10,30 @@ that have nothing to do with it.
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
 from core.notifications.templates import NotificationTemplate
+
+if TYPE_CHECKING:
+    from apps.communication.models import NotificationTemplateOverride
+
+
+def template_from_override(row: NotificationTemplateOverride) -> NotificationTemplate:
+    """The (code, channel, subject, body, variables) -> `NotificationTemplate` mapping.
+
+    Shared by `resolve_tenant_template` below and `views.py`'s `:preview` action —
+    one place, so the two can never drift on which fields make the dataclass.
+    Duck-typed against `core.notifications.templates.NotificationTemplate`: same
+    frozen dataclass shape, built fresh here rather than reused as an ORM row,
+    since `render()` only needs the four fields.
+    """
+    return NotificationTemplate(
+        code=row.code,
+        channel=row.channel,
+        subject=row.subject,
+        body=row.body,
+        variables=frozenset(row.variables),
+    )
 
 
 def resolve_tenant_template(
@@ -20,10 +42,7 @@ def resolve_tenant_template(
     """Registered as `core.notifications.templates`'s override resolver.
 
     Returns `None` for "no active override" — the common case, and not an
-    error — so `resolve()` falls through to the platform default. Duck-typed
-    against `core.notifications.templates.NotificationTemplate`: same frozen
-    dataclass shape, built fresh here rather than imported as a model instance,
-    since `render()` only needs the four fields, not an ORM row.
+    error — so `resolve()` falls through to the platform default.
 
     Trusts ambient tenant context rather than rebinding it, matching this
     module's own `services.resolve_addresses`: `notify()` always runs inside
@@ -34,22 +53,21 @@ def resolve_tenant_template(
     practice. A caller that invokes this resolver with no tenant bound gets an
     empty result from `TenantScopedManager`, the same fail-closed behaviour
     every other tenant-scoped read on the platform has.
+
+    `.alive()` matters here specifically: `NotificationTemplateOverride.objects`
+    (a `TenantScopedManager`) filters only by tenant — `deleted_at` exclusion is
+    the caller's job — and a soft delete (the viewset's default `destroy()`)
+    leaves `is_active` untouched, so without `.alive()` a deleted override would
+    still be found and rendered.
     """
     from apps.communication.models import NotificationTemplateOverride
 
     row = (
-        NotificationTemplateOverride.objects.filter(
-            tenant_id=tenant_id, code=code, channel=channel, locale=locale, is_active=True
-        )
+        NotificationTemplateOverride.objects.alive()
+        .filter(tenant_id=tenant_id, code=code, channel=channel, locale=locale, is_active=True)
         .only("code", "channel", "subject", "body", "variables")
         .first()
     )
     if row is None:
         return None
-    return NotificationTemplate(
-        code=row.code,
-        channel=row.channel,
-        subject=row.subject,
-        body=row.body,
-        variables=frozenset(row.variables),
-    )
+    return template_from_override(row)

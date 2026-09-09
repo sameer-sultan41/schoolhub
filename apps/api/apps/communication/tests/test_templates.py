@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.communication.services import assert_override_is_valid
 from apps.communication.templates_service import resolve_tenant_template
@@ -116,6 +117,22 @@ class ResolveTenantTemplateTests(TemplateOverrideTestCase):
                 channel=NotificationChannel.IN_APP,
                 is_active=False,
             )
+
+            result = resolve_tenant_template(CODE, NotificationChannel.IN_APP, "en", self.tenant.pk)
+
+        self.assertIsNone(result)
+
+    def test_a_soft_deleted_override_falls_back_to_the_platform_default(self) -> None:
+        """`.objects` filters only by tenant — `deleted_at` exclusion is the
+        caller's job via `.alive()`. `perform_destroy` soft-deletes by setting
+        `deleted_at` and leaves `is_active` untouched, so a deleted-but-still-
+        `is_active=True` row is exactly the case `.alive()` must catch here."""
+        with tenant_context(self.tenant.id):
+            override = NotificationTemplateOverrideFactory(
+                tenant=self.tenant, code=CODE, channel=NotificationChannel.IN_APP
+            )
+            override.deleted_at = timezone.now()
+            override.save(update_fields=["deleted_at"])
 
             result = resolve_tenant_template(CODE, NotificationChannel.IN_APP, "en", self.tenant.pk)
 

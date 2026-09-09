@@ -20,11 +20,11 @@ from apps.communication.serializers import (
     NotificationTemplateOverrideSerializer,
     NotificationTemplatePreviewSerializer,
 )
+from apps.communication.templates_service import template_from_override
 from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import TenantScopedViewSetMixin
 from core.notifications.models import DeliveryLog
-from core.notifications.templates import NotificationTemplate
 from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey
 
 FEATURE = "module.communication"
@@ -74,13 +74,7 @@ class NotificationTemplateOverrideViewSet(TenantScopedViewSetMixin, viewsets.Mod
         always has a value, which is the point of a preview.
         """
         instance: NotificationTemplateOverride = self.get_object()
-        template = NotificationTemplate(
-            code=instance.code,
-            channel=instance.channel,
-            subject=instance.subject,
-            body=instance.body,
-            variables=frozenset(instance.variables),
-        )
+        template = template_from_override(instance)
         sample_context: dict[str, object] = {
             variable: f"[{variable}]" for variable in instance.variables
         }
