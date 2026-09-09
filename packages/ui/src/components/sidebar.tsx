@@ -56,9 +56,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tool
  * is the control that must always be present for the sidebar to be operable without a mouse.
  */
 
-const SIDEBAR_WIDTH = "16rem";
+// Matches Metronic's own demo1.css exactly (`--sidebar-width: 280px`,
+// `--sidebar-width-collapse: 80px`) — confirmed against a live render of that file's
+// actual, unmodified sidebar at apps/dashboard/src/app/dev/metronic-reference.
+const SIDEBAR_WIDTH = "17.5rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
+const SIDEBAR_WIDTH_ICON = "5rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 interface SidebarContextValue {

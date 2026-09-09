@@ -6,6 +6,7 @@ import {
   AccordionMenuGroup,
   AccordionMenuItem,
   AccordionMenuLabel,
+  Badge,
   useSidebar,
 } from "@schoolhub/ui";
 import { useTranslations } from "next-intl";
@@ -13,28 +14,25 @@ import Link from "next/link";
 import type { NavGroup, NavItem } from "@/lib/nav-items";
 
 /**
- * AccordionMenu's own default item styling (accordion-menu.tsx's `itemVariants`) hardcodes
- * PAGE tokens (`hover:bg-accent`, `text-accent-foreground`) — the same class of bug this
- * repo's Button already documents for `ghost`/`outline` on a frame surface (see
- * `chrome-ghost`/`chrome-outline` in button.tsx): a hover fill built for the page can land
- * at low contrast, or invert entirely, against the sidebar rail. This override, matching
- * Metronic's own `sidebar-menu.tsx` classNames (text-colour-only hover, a muted fill only
- * once selected) but pointed at this repo's `sidebar-*` tokens instead of Metronic's plain
- * `muted`/`primary`, is what actually makes this render as the sidebar frame rather than
- * page content that happens to sit inside it.
+ * Metronic's own `sidebar-menu.tsx` classNames, verbatim (`lg:ps-1 space-y-3` /
+ * `gap-px` / the exact label and item strings, confirmed against a live render of that
+ * file's actual, unmodified sidebar at apps/dashboard/src/app/dev/metronic-reference) —
+ * plain page tokens (`muted`/`primary`/`accent-foreground`), not a sidebar-scoped
+ * abstraction: now that `--sh-color-chrome-*` is itself aliased 1:1 to those same page
+ * tokens (theme.css), there is no remaining daylight between "the sidebar's own tokens"
+ * and "the page's", so matching Metronic's file directly is simpler than maintaining a
+ * parallel `sidebar-*`-token version that resolves to the exact same values.
+ * `group-data-[collapsible=icon]:` additions (not in Metronic's own file, which has no
+ * icon-only rail mode at all) centre the icon and hide the label once the rail collapses
+ * — schoolhub's own `collapsible="icon"` preference, layered on top of the same visual
+ * base.
  */
 const navClassNames: AccordionMenuClassNames = {
-  root: "space-y-3",
-  // Hidden, not just visually de-emphasised, once the rail collapses to icon width:
-  // Metronic's own collapsed state hides section labels entirely (replacing them with a
-  // "…" marker) rather than leaving them to wrap/clip in a 3rem-wide rail.
+  root: "lg:ps-1 space-y-3",
+  group: "gap-px",
   label:
-    "px-2 pt-2.5 pb-1 text-[0.6875rem] font-semibold tracking-wider text-sidebar-foreground/70 uppercase group-data-[collapsible=icon]:hidden",
-  // group-data-[collapsible=icon]: centres the icon and drops the row to a square, exactly
-  // matching sidebarMenuButtonVariants' own icon-rail treatment in sidebar.tsx — without
-  // this, at 3rem the fixed-width row this class doesn't shrink at all and its label (see
-  // renderItem below) has nowhere to go but overflow past the rail's edge.
-  item: "h-8 justify-start gap-2 rounded-md px-2 text-sidebar-foreground hover:bg-transparent hover:text-sidebar-primary data-[selected=true]:bg-sidebar-accent data-[selected=true]:text-sidebar-accent-foreground data-[selected=true]:font-medium group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!",
+    "uppercase text-xs font-medium text-muted-foreground/70 pt-2.25 pb-px group-data-[collapsible=icon]:hidden",
+  item: "h-8 hover:bg-transparent text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-muted data-[selected=true]:font-medium group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!",
 };
 
 /**
@@ -78,23 +76,26 @@ export function DashboardNav({ groups, pathname }: { groups: NavGroup[]; pathnam
         >
           <Icon aria-hidden="true" />
           <span className="group-data-[collapsible=icon]:hidden">{label}</span>
-          {/* A pill, not a bare numeral-style badge: "Soon" is a word, not a count.
-              aria-hidden despite being visible: this span lives inside the button that
-              renders it, so without aria-hidden its text would fold into the button's own
-              accessible NAME ("Fees & Finance Soon") instead of staying "Fees & Finance"
-              with "Soon" as its DESCRIPTION — aria-describedby above still picks up this
-              element's text for that purpose regardless of its hidden state, per the ARIA
-              accessible-description computation. Hidden (not just this span's own text)
-              once the rail collapses to icon width — there's no room for a badge next to a
-              bare icon, and title above already carries the same "coming soon" meaning to
-              a mouse user hovering the icon. */}
-          <span
+          {/* Metronic's own badge treatment for a disabled item, verbatim
+              (variant="secondary" size="sm"). aria-hidden despite being visible: this
+              badge lives inside the button that renders it, so without aria-hidden its
+              text would fold into the button's own accessible NAME ("Fees & Finance
+              Soon") instead of staying "Fees & Finance" with "Soon" as its DESCRIPTION —
+              aria-describedby above still picks up this element's text for that purpose
+              regardless of its hidden state, per the ARIA accessible-description
+              computation. Hidden (not just this badge's own text) once the rail
+              collapses to icon width — there's no room for a badge next to a bare icon,
+              and title above already carries the same "coming soon" meaning to a mouse
+              user hovering the icon. */}
+          <Badge
             id={badgeId}
             aria-hidden="true"
-            className="ms-auto rounded-full bg-sidebar-foreground/10 px-1.5 text-[0.625rem] font-semibold tracking-wide text-sidebar-foreground/70 uppercase group-data-[collapsible=icon]:hidden"
+            variant="secondary"
+            size="sm"
+            className="ms-auto me-[-10px] group-data-[collapsible=icon]:hidden"
           >
             {t("planned")}
-          </span>
+          </Badge>
         </AccordionMenuItem>
       );
     }

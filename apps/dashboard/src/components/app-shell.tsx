@@ -141,22 +141,24 @@ export function AppShell({ children }: { children: ReactNode }) {
             mobileDescription={t("primary")}
             mobileCloseLabel={t("closeMenu")}
           >
-            <SidebarHeader className="relative">
-              {/* Two renderings of the same name, because the rail is 3rem wide: the full
-                  name would simply overflow it, which is what it did the moment `icon`
-                  became a selectable collapse mode. The initial keeps the collapsed rail
-                  identifiable — a school with two campuses open in two tabs still needs to
-                  tell them apart — and is aria-hidden because the name is already the
-                  accessible name of the drawer and of the nav landmark beneath it. */}
-              {/* chrome-, not page-, foregrounds throughout the rail: the frame is ink in
-                  both schemes, so `text-foreground` here would paint the school's name in
-                  the page's ink and lose it against the rail. */}
-              <span className="px-2 py-2 font-heading text-base font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+            {/* Metronic's own sidebar-header.tsx layout, verbatim (`relative flex
+                items-center justify-between px-3 lg:px-6`), confirmed against a live
+                render of that file's actual, unmodified sidebar at
+                apps/dashboard/src/app/dev/metronic-reference. */}
+            <SidebarHeader className="relative flex-row items-center justify-between px-3 py-5 lg:px-6">
+              {/* Two renderings of the same name, because the collapsed rail has no room
+                  for it: the full name would simply overflow it, which is what it did the
+                  moment `icon` became a selectable collapse mode. The initial keeps the
+                  collapsed rail identifiable — a school with two campuses open in two tabs
+                  still needs to tell them apart — and is aria-hidden because the name is
+                  already the accessible name of the drawer and of the nav landmark
+                  beneath it. */}
+              <span className="font-heading text-lg font-semibold text-foreground group-data-[collapsible=icon]:hidden">
                 {tenantLabel}
               </span>
               <span
                 aria-hidden="true"
-                className="hidden size-8 shrink-0 items-center justify-center rounded-[var(--sh-radius)] bg-sidebar-primary font-heading text-sm font-semibold text-sidebar-primary-foreground group-data-[collapsible=icon]:flex"
+                className="hidden size-8 shrink-0 items-center justify-center rounded-[var(--sh-radius)] bg-primary font-heading text-sm font-semibold text-primary-foreground group-data-[collapsible=icon]:flex"
               >
                 {tenantLabel.slice(0, 1)}
               </span>
@@ -193,7 +195,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 // instead of as two separate strips. A background here is not decoration
                 // either — a sticky header with a transparent one shows the page
                 // scrolling through it.
-                "flex items-center gap-2 border-b border-chrome-border bg-chrome px-6 py-3 text-chrome-foreground",
+                "flex items-center gap-2 border-b border-chrome-border bg-chrome px-5 py-2.5 text-chrome-foreground lg:px-7.5",
                 "[html[data-navbar-style=sticky]_&]:sticky",
                 "[html[data-navbar-style=sticky]_&]:top-0",
                 // z-40, not 50: the mobile sidebar renders as a Sheet whose overlay sits
