@@ -5,53 +5,84 @@ import { getPageNumbers } from "../lib/page-numbers";
 import { Button } from "./button";
 
 /**
- * shadcn/ui Pagination (registry new-york-v4), ported per AGENTS.md §0c.
+ * Pagination, composed from Metronic's own bare primitives
+ * (`metronic nextjs/components/ui/pagination.tsx`: `Pagination`, `PaginationContent`,
+ * `PaginationItem`, `PaginationEllipsis`) rather than a hand-rolled shadcn port —
+ * `PaginationContent`/`PaginationItem`/`PaginationEllipsis` below match Metronic's own
+ * `data-slot` attributes and class strings. The composed `Pagination` widget itself
+ * stays schoolhub's own: Metronic ships no page-window/prev-next composition at all,
+ * only unstyled parts the caller assembles by hand.
  *
- * Upstream ships seven unstyled slots (`Pagination`, `PaginationContent`,
- * `PaginationItem`, `PaginationLink`, `PaginationPrevious`, `PaginationNext`,
- * `PaginationEllipsis`) and leaves the caller to assemble them AND to compute the page
- * window by hand. Every caller in this repo wants the same assembly, so the composition
- * lives here and only `Pagination` is public — port what is used, not the whole registry
- * (the same call `toggle-group.tsx` made about upstream's standalone `Toggle`). The
- * upstream slot names survive as `data-slot` attributes so the DOM still reads like a
- * shadcn pagination.
+ * ── Where this deliberately does not match Metronic's own file ────────────────────
  *
- * ── The two required adaptations ──────────────────────────────────────────────────
- *
- * 1. Direction is logical, never physical. Upstream renders a bare `ChevronLeftIcon` /
- *    `ChevronRightIcon` pair and pads them with `sm:pl-2.5` / `sm:pr-2.5`. Under Urdu
- *    (`dir="rtl"`) "previous" is to the RIGHT, so a straight port points both arrows the
- *    wrong way. Both chevrons carry `rtl:rotate-180` — the same mirroring
- *    `dropdown-menu.tsx` already uses on its submenu chevron — and the padding is `ps`/
- *    `pe`. Nothing else needs mirroring: the buttons sit in a `flex` row, which the
- *    browser already reverses under `dir="rtl"`, so DOM order stays
- *    previous → numbers → next in both directions.
- *
- * 2. Every user-facing string is a required prop. Upstream hardcodes English in four
- *    places — `aria-label="pagination"` on the nav, `"Previous"`, `"Next"`, and
- *    `"More pages"` — and this package has no i18n of its own, so any default here always
- *    ships untranslated. They become `label`, `previousLabel`, `nextLabel` and
- *    `morePagesLabel`; the numbered buttons need one string PER page, so that one is a
- *    function, `goToPageLabel(page)`. Same rule as `Dialog.closeLabel`,
- *    `Sheet.closeLabel`, `Button.loadingLabel` and `DataTable`'s `emptyState`.
- *
- * ── Three further departures, each load-bearing ───────────────────────────────────
- *
- * a. `<button>`, not upstream's `<a>`. Previous/Next are DISABLED at the ends rather
- *    than dropped from the DOM — a control that vanishes is harder to reacquire than one
- *    that greys out, and the row stops changing width as you reach either end. An anchor
- *    cannot be disabled at all (HTML has no such attribute for it), and this API is
- *    callback-driven (`onPageChange`) rather than href-driven, so a real button is both
- *    the honest element and the only one that can express the state.
- * b. The ellipsis's `sr-only` text is a SIBLING of the glyph, not a child of it.
- *    Upstream nests `<span className="sr-only">More pages</span>` inside a span that is
- *    itself `aria-hidden`, which hides the only announcement it has — the label is dead
- *    text. Here `aria-hidden` covers the icon alone.
- * c. The active page is not distinguished by colour alone. `aria-current="page"` covers
- *    assistive tech, but a reader who cannot separate the fill from the ground still
- *    needs to find their place, so the current page also gains a border and a heavier
- *    weight (WCAG 1.4.1 Use of Colour).
+ * 1. `PaginationEllipsis`'s `aria-hidden` covers the icon only, not the whole span.
+ *    Metronic's own file puts `aria-hidden` on the outer `<span>`, which hides its own
+ *    `sr-only` "More pages" text along with the icon — a real bug, not a style choice.
+ *    Here the icon alone is `aria-hidden`, the label a sibling, so it still reaches
+ *    assistive tech.
+ * 2. Direction is logical, never physical. Metronic's file has no chevrons at all (that
+ *    is on the caller), so there is nothing to diverge from — but under Urdu
+ *    (`dir="rtl"`) "previous" is to the RIGHT, so both chevrons carry `rtl:rotate-180`
+ *    (the same mirroring `dropdown-menu.tsx` uses on its submenu chevron) and padding
+ *    is `ps`/`pe`.
+ * 3. Every user-facing string is a required prop, not Metronic's hardcoded
+ *    `aria-label="pagination"` / `"More pages"` — this package has no i18n of its own,
+ *    so a default here would always ship untranslated. `label`, `previousLabel`,
+ *    `nextLabel`, `morePagesLabel` (now `PaginationEllipsis`'s own required `label`
+ *    prop), and `goToPageLabel(page)` (one string per page, hence a function). Same
+ *    rule as `Dialog.closeLabel`, `Button.loadingLabel`.
+ * 4. Not `w-full` on the root. Metronic's own stretches so a standalone pager can
+ *    centre under a page of content; this one sits in `DataTable`'s footer beside a
+ *    row-range summary in a wrapping flex row, where `w-full` would push it onto its
+ *    own line.
+ * 5. The ellipsis is sized `size-7`/icon `size-3.5` here, not Metronic's own default
+ *    `h-9 w-9`/`h-4 w-4` — those defaults are sized for Metronic's own default-size
+ *    buttons; the numbered buttons beside it here are `size="sm"` (`h-7`), so the
+ *    bigger default would render oversized next to them.
+ * 6. `<button>`, not an `<a>`, for Previous/Next (Metronic's file doesn't render them
+ *    at all). They are DISABLED at the ends rather than dropped from the DOM — a
+ *    control that vanishes is harder to reacquire than one that greys out — and this
+ *    API is callback-driven (`onPageChange`), so a real button is the only element
+ *    that can express the state.
+ * 7. The active page is not distinguished by colour alone: `aria-current="page"`
+ *    covers assistive tech, but a reader who cannot separate the fill from the ground
+ *    still needs to find their place, so the current page also gains a border and a
+ *    heavier weight (WCAG 1.4.1 Use of Colour).
  */
+
+function PaginationContent({ className, ...props }: ComponentProps<"ul">) {
+  return (
+    <ul
+      data-slot="pagination-content"
+      className={cn("flex flex-row items-center gap-1", className)}
+      {...props}
+    />
+  );
+}
+
+function PaginationItem({ className, ...props }: ComponentProps<"li">) {
+  return <li data-slot="pagination-item" className={className} {...props} />;
+}
+
+function PaginationEllipsis({
+  className,
+  label,
+  ...props
+}: ComponentProps<"span"> & {
+  /** Announced where the window skips pages. Required — see the file header. */
+  label: string;
+}) {
+  return (
+    <span
+      data-slot="pagination-ellipsis"
+      className={cn("flex items-center justify-center", className)}
+      {...props}
+    >
+      <MoreHorizontalIcon aria-hidden="true" className="size-3.5" />
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
 
 /** One entry in the rendered row: a page button, or a gap where pages were skipped. */
 type PaginationSlot = { kind: "page"; page: number } | { kind: "gap"; edge: "start" | "end" };
@@ -102,7 +133,7 @@ export function Pagination({
   const pages = getPageNumbers(page, totalPages);
   // An empty window means totalPages <= 0 — no pages, so no control at all. Note this is
   // the ONLY hiding this component does; every other "unavailable" state is a disabled
-  // control, per (a) in the file header.
+  // control, per (6) in the file header.
   if (pages.length === 0) return null;
 
   const firstInWindow = pages[0] ?? 1;
@@ -116,17 +147,14 @@ export function Pagination({
 
   return (
     <nav
+      role="navigation"
       aria-label={label}
       data-slot="pagination"
-      // Not `w-full`: shadcn's own root stretches so a standalone pager can centre under
-      // a page of content, but this one sits in `DataTable`'s footer beside the row-range
-      // summary — a full-width child in that wrapping flex row takes a line of its own
-      // and pushes the pager onto a second row for no reason.
       className={cn("flex justify-center", className)}
       {...props}
     >
-      <ul data-slot="pagination-content" className="flex flex-row items-center gap-1">
-        <li data-slot="pagination-item">
+      <PaginationContent>
+        <PaginationItem>
           <Button
             variant="outline"
             size="sm"
@@ -143,21 +171,15 @@ export function Pagination({
                 never nameless — it just stops taking horizontal room it hasn't got. */}
             <span className="hidden sm:inline">{previousLabel}</span>
           </Button>
-        </li>
+        </PaginationItem>
 
         {slots.map((slot) =>
           slot.kind === "gap" ? (
-            <li key={`gap-${slot.edge}`} data-slot="pagination-item">
-              <span
-                data-slot="pagination-ellipsis"
-                className="flex size-8 items-center justify-center text-muted-foreground"
-              >
-                <MoreHorizontalIcon aria-hidden="true" className="size-3.5" />
-                <span className="sr-only">{morePagesLabel}</span>
-              </span>
-            </li>
+            <PaginationItem key={`gap-${slot.edge}`}>
+              <PaginationEllipsis label={morePagesLabel} className="size-7 text-muted-foreground" />
+            </PaginationItem>
           ) : (
-            <li key={slot.page} data-slot="pagination-item">
+            <PaginationItem key={slot.page}>
               <Button
                 variant={slot.page === page ? "outline" : "ghost"}
                 size="sm"
@@ -170,17 +192,17 @@ export function Pagination({
                   "min-w-8 px-2 font-numeric tabular-nums",
                   // Fill AND weight here, plus the border the `outline` variant adds over
                   // `ghost` above — three signals, so the current page is still findable
-                  // without colour perception. See (c) in the file header.
+                  // without colour perception. See (7) in the file header.
                   slot.page === page && "bg-muted font-bold",
                 )}
               >
                 {slot.page}
               </Button>
-            </li>
+            </PaginationItem>
           ),
         )}
 
-        <li data-slot="pagination-item">
+        <PaginationItem>
           <Button
             variant="outline"
             size="sm"
@@ -194,8 +216,10 @@ export function Pagination({
             <span className="hidden sm:inline">{nextLabel}</span>
             <ChevronRightIcon aria-hidden="true" className="size-3.5 rtl:rotate-180" />
           </Button>
-        </li>
-      </ul>
+        </PaginationItem>
+      </PaginationContent>
     </nav>
   );
 }
+
+export { PaginationContent, PaginationEllipsis, PaginationItem };

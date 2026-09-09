@@ -190,7 +190,12 @@ export { Kbd, kbdVariants } from "./components/kbd";
 
 export { Label } from "./components/label";
 
-export { Pagination } from "./components/pagination";
+export {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+} from "./components/pagination";
 export type { PaginationProps } from "./components/pagination";
 export { getPageNumbers, PAGE_WINDOW_SIZE } from "./lib/page-numbers";
 
