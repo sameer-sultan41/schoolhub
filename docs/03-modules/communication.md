@@ -206,21 +206,35 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md);
 
 Building as three stacked PRs. This section is updated by each.
 
-**PR A — templates and preferences (this PR).** Tenant-editable per-channel
+**PR A — templates and preferences.** Tenant-editable per-channel
 notification templates, per-user channel preferences, and the delivery
 dashboard — built on top of `core/notifications`, which already owns
 `notifications`/`delivery_logs`/`notify()`/the platform-default template
 registry (§15's note on that split still holds; see `entities/communication.md`).
-**PR B — announcements and notices.** Not yet started.
+**PR B — announcements and notices (this PR).** Feed-style announcements and
+formal, sequence-numbered notices with a publish-approval gate, both fanning
+out through the real `notify()`.
 **PR C — threads and emergency broadcast.** Not yet started.
 
 ### Built (PR A)
 
 | Area | State |
 | ---- | ----- |
-| `core/notifications` extension | `notify()` renders each channel's own template (previously every channel reused the single in-app-rendered string) and gates delivery through a registered preference resolver; both hooks self-register from this module's `AppConfig.ready()` so `core/` never imports a Tier-4 app. With neither hook registered, behaviour is unchanged from before this PR — regression-tested against attendance/fees_finance/examinations' existing `notify()` call sites |
+| `core/notifications` extension | `notify()` renders each channel's own template (previously every channel reused the single in-app-rendered string) and gates delivery through a batch-shaped preference resolver (`(user_ids, category, channel, tenant_id) -> {user_id: bool}` — one call per gated channel per fan-out, not one per recipient, after a review found the per-item version reintroduced the per-recipient round trip `resolve_addresses` already avoids for email); both hooks self-register from this module's `AppConfig.ready()` so `core/` never imports a Tier-4 app, and both are gated on the `module.communication` feature flag so a tenant that hasn't enabled the module pays a cached flag check rather than a table query on every `notify()` call platform-wide. With neither hook registered, behaviour is unchanged from before this module shipped — regression-tested against attendance/fees_finance/examinations' existing `notify()` call sites |
 | Entities | 2 of §15's 8 tables — `notification_templates` (as `NotificationTemplateOverride`), `notification_preferences` — tenant-owned with RLS policies. The other 6 are either already built (`notifications`, `delivery_logs`, owned by `core/notifications`) or arrive in PR B/C |
-| Templates | Tenant overrides validated against the platform template's declared variable set at save time; `code`/`channel` locked after creation; inactive rows fall back to the platform default, never to nothing |
+| Templates | Tenant overrides validated against the platform template's declared variable set *and* the subject/subjectless-channel shape (mirroring `TemplateRegistry.register()`'s own two-direction check) at save time; `code`/`channel` locked after creation; inactive or soft-deleted rows fall back to the platform default, never to nothing |
 | Preferences | A per-user category × channel matrix with "no row = enabled" as the default, cached per user and evicted on write; the `emergency` category is refused closed at the service layer, on top of `core/notifications`' own hard-coded bypass |
 | Endpoints | §16's `/notification-templates` (+ `:preview`), `/notification-preferences`, `/delivery-logs` (read-only, + `:summary` for §13's delivery report) |
-| Deferred | Locale variants beyond `en` (no `User.locale` field yet); SMS/push/WhatsApp providers (no `core/integrations`, same reasoning as fees-finance's payment gateway); quiet hours, suppression lists, SMS credit quotas (notifications.md §4/§6/§7's own words: communication-module scope, and there is no SMS provider yet to meter); a guardian/student-facing `GET /announcements`/`GET /notices` browse endpoint (guardians consume via the existing `GET /notifications` inbox; a browse endpoint is recorded as parent-portal's task) |
+| Deferred | Locale variants beyond `en` (no `User.locale` field yet); SMS/push/WhatsApp providers (no `core/integrations`, same reasoning as fees-finance's payment gateway); quiet hours, suppression lists, SMS credit quotas (notifications.md §4/§6/§7's own words: communication-module scope, and there is no SMS provider yet to meter) |
+
+### Built (PR B)
+
+| Area | State |
+| ---- | ----- |
+| Entities | 2 more of §15's 8 tables — `Announcement`, `Notice` — tenant-owned with RLS policies. `Notice` has no `campus_id` column (§15's own schema), unlike `Announcement`'s nullable one |
+| Audience resolution | `services.resolve_audience(audience_type, audience_filter, tenant_id)` — one query per branch: `all`/`staff`/`students`/`guardians`/`custom`, plus `class`/`section` which resolve to the **guardians** of enrolled students, not the students themselves, matching §8's own worked example ("targets classes 6-10 guardians"). `custom` validates every requested id belongs to the tenant, refusing the whole request rather than silently dropping foreign ids |
+| Announcements | Draft → scheduled → published → archived; `:publish` resolves the audience, asserts it's non-empty, and fans out through `notify()` once for the whole resolved list |
+| Notices | Draft → pending_approval → published → archived; `notice_no` allocated gaplessly at publish (`numbering.py`, mirrors `fees_finance/numbering.py`'s blank-the-`{seq}`-token pattern); approver must differ from drafter (auth-and-rbac §2.4, mirrors `fees_finance`'s refund-approval gate); optional acknowledgment, idempotent, tracked on the recipient's own `Notification.acknowledged_at` row rather than a new table; rendered to an A4 PDF (`GET /notices/{id}?format=pdf`) — no thermal layout, unlike fees-finance's receipts/vouchers |
+| Endpoints | §16's `/announcements` (+ `:publish`), `/notices` (+ `:submit`, `:publish`, `:acknowledge`) |
+| Notifications | §12's `communication.announcement-published` and `communication.notice-published` |
+| Deferred | A guardian/student-facing `GET /announcements`/`GET /notices` browse endpoint (guardians consume via the existing `GET /notifications` inbox; a browse endpoint is recorded as parent-portal's task); the acknowledgment-reminder Celery Beat sweep (`communication.notice-ack-reminder`, §12) — the per-recipient tracking it would read exists, the sweep itself does not yet; an acknowledgment-progress aggregate endpoint/report |
