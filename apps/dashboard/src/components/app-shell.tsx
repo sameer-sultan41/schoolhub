@@ -13,6 +13,8 @@ import {
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { AppBreadcrumb } from "@/components/app-breadcrumb";
+import { CommandPalette } from "@/components/command-palette";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { LayoutControls } from "@/components/layout-controls";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -103,7 +105,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           >
             <SidebarTrigger toggleLabel={t("primary")} />
+            <AppBreadcrumb />
             <div className="flex-1" />
+            <CommandPalette />
             <LayoutControls />
             <ThemeToggle />
             <UserMenu user={null} />
