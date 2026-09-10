@@ -1,6 +1,6 @@
-import { ApiClient, buildQueryString } from "./client";
-import { ApiError } from "./errors";
-import { collectPages } from "./pagination";
+import { ApiClient, buildQueryString } from "../client";
+import { ApiError } from "../errors";
+import { collectPages } from "../pagination";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   // Headers is a class, not a plain object — init.headers may be a real Headers instance
