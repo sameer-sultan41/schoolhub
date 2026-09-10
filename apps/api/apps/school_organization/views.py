@@ -23,19 +23,16 @@ from rest_framework.views import APIView
 from apps.school_organization import calendar, services
 from apps.school_organization.filters import (
     HouseFilterSet,
-    SectionFilterSet,
     SubjectFilterSet,
 )
 from apps.school_organization.models import (
     House,
-    Section,
     Subject,
 )
 from apps.school_organization.serializers import (
     HolidayCalendarSerializer,
     HouseSerializer,
     SchoolSettingsSerializer,
-    SectionSerializer,
     SubjectSerializer,
 )
 from core.api.pagination import PageNumberPagination
@@ -56,47 +53,6 @@ class BlockingDestroyMixin(TenantScopedViewSetMixin):
     def perform_destroy(self, instance) -> None:
         services.assert_deletable(instance)
         super().perform_destroy(instance)
-
-
-class SectionViewSet(BlockingDestroyMixin, TenantModelViewSet):
-    """Divisions of a class at a campus, with capacity (module doc §5.5)."""
-
-    queryset = Section.objects
-    serializer_class = SectionSerializer
-    filterset_class = SectionFilterSet
-    search_fields = ["name"]
-    # Page numbers, not a cursor: this list is bounded by one school's size and a
-    # reader navigates it by position. api-architecture.md §2.4.
-    pagination_class = PageNumberPagination
-    ordering = ["school_class_id", "name"]
-    # `class_name`/`campus_name` are the annotations from `get_queryset`, not
-    # `school_class__name`/`campus__name` — see DepartmentViewSet for why a `__`
-    # traversal here is a 500 for scoped principals.
-    # Only `created_at` is index-backed. sections_unique_name_per_class_campus
-    # leads with (tenant, class, campus), so it does nothing for a sort on
-    # `name` alone, and nothing indexes `capacity` (nullable — "unlimited" sorts
-    # last ascending). So `name`, `capacity`, `class_name` and `campus_name` are
-    # all a table scan plus a sort, with a join first for the annotated two.
-    ordering_fields = ["name", "capacity", "class_name", "campus_name", "created_at"]
-    ordering_annotations = ("class_name", "campus_name")
-    required_feature = "module.school"
-    required_permission = "school.section.view"
-    required_permission_map = {
-        "create": "school.section.create",
-        "update": "school.section.update",
-        "partial_update": "school.section.update",
-        "destroy": "school.section.delete",
-    }
-
-    def get_queryset(self):
-        # select_related keeps the list off a class/campus fetch per row; the
-        # annotations are what `?ordering=class_name|campus_name` sort on.
-        return (
-            super()
-            .get_queryset()
-            .select_related("school_class", "campus")
-            .annotate(class_name=F("school_class__name"), campus_name=F("campus__name"))
-        )
 
 
 class SubjectViewSet(BlockingDestroyMixin, TenantModelViewSet):

@@ -15,18 +15,8 @@ import django_filters
 
 from apps.school_organization.models import (
     House,
-    Section,
     Subject,
 )
-
-
-class SectionFilterSet(django_filters.FilterSet):
-    campus_id = django_filters.UUIDFilter(field_name="campus_id")
-    class_id = django_filters.UUIDFilter(field_name="school_class_id")
-
-    class Meta:
-        model = Section
-        fields = ["campus_id", "class_id", "is_active"]
 
 
 class SubjectFilterSet(django_filters.FilterSet):
