@@ -35,9 +35,9 @@ import {
   Switch,
 } from "@schoolhub/ui";
 
-import { logout } from "@/lib/auth";
 import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
+import { Services } from "@/services";
 
 // Ported from packages/ui's partials/topbar/user-dropdown-menu.tsx. The vendor
 // version reads a real next-auth session; this preview has no user-fetching wired up
@@ -219,12 +219,13 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
             size="sm"
             className="w-full"
             onClick={() => {
-              // logout() intentionally rethrows anything that isn't the expected
-              // ApiError (see its own comment in lib/auth.ts), so that rejection must
-              // be handled here rather than left as an unhandled promise rejection.
-              // The user still always reaches /login: the unexpected case is logged,
-              // not swallowed or re-thrown.
-              void logout()
+              // Services.auth.logout() intentionally rethrows anything that isn't the
+              // expected ApiError (see its own comment in
+              // services/modules/auth/auth-service.ts), so that rejection must be
+              // handled here rather than left as an unhandled promise rejection. The
+              // user still always reaches /login: the unexpected case is logged, not
+              // swallowed or re-thrown.
+              void Services.auth.logout()
                 .catch((error: unknown) => {
                   console.error("Sign-out request failed unexpectedly:", error);
                 })

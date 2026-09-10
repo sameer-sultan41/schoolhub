@@ -57,6 +57,7 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | ------- | ----- |
 | Auth guard (routing only, cookie presence) | `src/proxy.ts` (Next 16's rename of `middleware`) |
 | Access token in memory + refresh-on-401 | `src/lib/auth.ts` → `@schoolhub/api-client` |
+| Feature API calls (one file per domain, no hardcoded paths) | `src/services/endpoints.ts` + `src/services/modules/<domain>/`, aggregated as `Services` in `src/services/index.ts` |
 | Permission helpers (`hasPermission`, `<Can>`) | `src/lib/permissions.ts`, `src/components/can.tsx` |
 | TanStack Query client + key factory | `src/lib/query-client.ts` |
 | Validated public env | `src/lib/env.ts` |
@@ -70,11 +71,19 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 ## Adding a Module Screen
 
 1. Route: `src/app/(app)/<module>/page.tsx` (async server component for chrome).
-2. Feature code: `src/features/<module>/` — components, hooks, query definitions.
-3. Query keys via `queryKeys.list("<module>", "<resource>", params)`.
-4. Gate every action with `<Can permission="module.resource.action">`.
-5. Strings into `messages/en.json` **and** `messages/ur.json`.
-6. Co-locate tests as `*.test.tsx`.
+2. API calls: add a `<module>` entry to `src/services/endpoints.ts` (paths, or
+   param-taking functions for anything with an id); create
+   `src/services/modules/<module>/<module>-service.ts` with the actual `apiClient` calls,
+   typed against `packages/types`; register it in `src/services/index.ts` as
+   `Services.<module>`. See `src/services/modules/auth/` for the reference shape.
+3. Feature code: `src/features/<module>/` — components and hooks. A screen's
+   `useQuery`/`useMutation` calls `Services.<module>.<action>(...)` as its
+   `queryFn`/`mutationFn` — never `apiClient` directly, never a hardcoded path.
+4. Query keys via `queryKeys.list("<module>", "<resource>", params)`.
+5. Gate every action with `<Can permission="module.resource.action">`.
+6. Strings into `messages/en.json` **and** `messages/ur.json`.
+7. Co-locate tests in a sibling `__tests__/` folder (`__tests__/*.test.tsx`), not
+   `*.test.tsx` flat beside the source.
 
 ## Guidance To Load First
 

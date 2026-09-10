@@ -5,9 +5,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
-import messages from "../../../messages/en.json";
-import { login } from "@/lib/auth";
-import { LoginForm } from "./login-form";
+import messages from "../../../../messages/en.json";
+import { Services } from "@/services";
+import { LoginForm } from "../login-form";
 
 function renderLoginForm(ui: ReactElement = <LoginForm />) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -44,11 +44,11 @@ jest.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: mockGet }),
 }));
 
-jest.mock("@/lib/auth", () => ({
-  login: jest.fn(),
+jest.mock("@/services", () => ({
+  Services: { auth: { login: jest.fn() } },
 }));
 
-const mockLogin = login as jest.MockedFunction<typeof login>;
+const mockLogin = Services.auth.login as jest.MockedFunction<typeof Services.auth.login>;
 
 async function fillAndSubmit(identifier: string, password: string) {
   const user = userEvent.setup();
