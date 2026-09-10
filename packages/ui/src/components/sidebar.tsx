@@ -2,7 +2,7 @@
 
 import { Slot } from "@radix-ui/react-slot";
 import { type VariantProps, cva } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
+import { ChevronFirst, PanelLeftIcon } from "lucide-react";
 import {
   type ComponentProps,
   type CSSProperties,
@@ -56,9 +56,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tool
  * is the control that must always be present for the sidebar to be operable without a mouse.
  */
 
-const SIDEBAR_WIDTH = "16rem";
+// Matches Metronic's own demo1.css exactly (`--sidebar-width: 280px`,
+// `--sidebar-width-collapse: 80px`) — confirmed against a live render of that file's
+// actual, unmodified sidebar at apps/dashboard/src/app/dev/metronic-reference.
+const SIDEBAR_WIDTH = "17.5rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
+const SIDEBAR_WIDTH_ICON = "5rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 interface SidebarContextValue {
@@ -294,6 +297,57 @@ export function SidebarTrigger({
       {...props}
     >
       <PanelLeftIcon className="rtl:-scale-x-100" />
+      <span className="sr-only">{toggleLabel}</span>
+    </Button>
+  );
+}
+
+/**
+ * Demo1-style floating collapse/expand control, glued to the sidebar header's trailing
+ * edge — positioned like Metronic's own `sidebar-header.tsx` (`absolute start-full
+ * top-2/4 -translate-x-2/4 -translate-y-2/4`, a chevron that flips by collapsed state and
+ * mirrors for RTL). Deliberately NOT `chrome-outline`: this button straddles the rail's
+ * own trailing edge — half over the rail, half over the main content — and both of those
+ * surfaces are near-white in this platform's default light theme, so `chrome-outline`'s
+ * own subtle `border-chrome-border`/`text-chrome-muted` (correct for a control that sits
+ * ENTIRELY on one surface) rendered as a barely-visible sliver here, confirmed against a
+ * real screenshot. A visibly dark border plus a real shadow, independent of how light or
+ * dark either surrounding surface happens to be, is what actually keeps a boundary-
+ * straddling floating control legible. Distinct from SidebarTrigger (the always-present,
+ * keyboard/mobile-safe control in the header): this one is desktop-only decoration, hidden
+ * on mobile via the same `md:` breakpoint `Sidebar` itself uses for its own desktop/mobile
+ * split — not a duplicate `isMobile` check.
+ */
+export function SidebarCollapseToggle({
+  toggleLabel,
+  className,
+  onClick,
+  ...props
+}: ComponentProps<typeof Button> & { toggleLabel: string }) {
+  const { state, toggleSidebar } = useSidebar();
+
+  return (
+    <Button
+      data-sidebar="collapse-toggle"
+      variant="outline"
+      size="sm"
+      mode="icon"
+      className={cn(
+        "absolute start-full top-2/4 z-20 hidden size-7 -translate-x-2/4 -translate-y-2/4 border-sidebar-foreground/25 bg-sidebar text-sidebar-foreground shadow-md hover:border-sidebar-primary hover:text-sidebar-primary md:flex rtl:translate-x-2/4",
+        className,
+      )}
+      onClick={(event) => {
+        onClick?.(event);
+        toggleSidebar();
+      }}
+      {...props}
+    >
+      <ChevronFirst
+        className={cn(
+          "size-4! transition-transform duration-200",
+          state === "collapsed" ? "ltr:rotate-180" : "rtl:rotate-180",
+        )}
+      />
       <span className="sr-only">{toggleLabel}</span>
     </Button>
   );

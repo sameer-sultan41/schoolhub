@@ -21,7 +21,6 @@ import { useId } from "react";
 import {
   CONTENT_LAYOUTS,
   NAVBAR_STYLES,
-  SIDEBAR_COLLAPSE_MODES,
   SIDEBAR_VARIANTS,
   type PreferenceKey,
   type PreferenceValues,
@@ -31,7 +30,7 @@ import { usePreference, usePreferenceActions } from "@/lib/preferences/preferenc
 /**
  * The colour preset picker.
  *
- * A Select rather than a segmented group: five options with real names do not fit a row
+ * A Select rather than a segmented group: nine options with real names do not fit a row
  * of equal segments, and the names are the point — "School colours" has to be readable
  * for a viewer to understand what choosing anything else costs them.
  *
@@ -80,7 +79,7 @@ function PresetField() {
  * reader. aria-labelledby is the relationship that actually holds.
  *
  * Radix reports "" when the pressed item is pressed again. That is a deselect, not a
- * choice, so it is ignored — there is no "no sidebar variant" state to fall into.
+ * choice, so it is ignored — there is no "no preference" state to fall into.
  */
 function SegmentedField<K extends PreferenceKey>({
   preferenceKey,
@@ -128,6 +127,10 @@ function SegmentedField<K extends PreferenceKey>({
  * attribute and the cookie together — there is no Save. A layout choice is reversible and
  * its result is visible behind the popover as you make it, so a confirm step would only
  * be a step.
+ *
+ * Trimmed relative to the pre-Metronic-rebuild version: no sidebar-collapse-mode field.
+ * Metronic's sidebar only ever collapses to an icon rail (hover-to-expand); the old
+ * shell's "icon vs offcanvas" choice doesn't have two distinct behaviours to offer here.
  */
 export function LayoutControls() {
   const t = useTranslations("nav.preferences");
@@ -138,12 +141,13 @@ export function LayoutControls() {
     <Popover>
       <PopoverTrigger asChild>
         <Button
-          variant="chrome-ghost"
-          size="icon"
+          variant="ghost"
+          mode="icon"
+          shape="circle"
           aria-label={t("trigger")}
-          className="[&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110"
+          className="size-9 hover:bg-primary/10 hover:[&_svg]:text-primary [&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110"
         >
-          <Settings2 aria-hidden="true" className="size-4" />
+          <Settings2 aria-hidden="true" className="size-4.5!" />
         </Button>
       </PopoverTrigger>
       <PopoverContent label={t("title")} aria-describedby={descriptionId} className="w-80">
@@ -162,13 +166,6 @@ export function LayoutControls() {
             label={t("sidebarVariant.label")}
             options={SIDEBAR_VARIANTS}
             optionLabel={(value) => t(`sidebarVariant.${value}`)}
-          />
-
-          <SegmentedField
-            preferenceKey="sidebar_collapsible"
-            label={t("sidebarCollapse.label")}
-            options={SIDEBAR_COLLAPSE_MODES}
-            optionLabel={(value) => t(`sidebarCollapse.${value}`)}
           />
 
           <SegmentedField

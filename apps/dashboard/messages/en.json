@@ -19,6 +19,7 @@
     "skipToContent": "Skip to main content",
     "primary": "Primary navigation",
     "closeMenu": "Close menu",
+    "collapseSidebar": "Collapse sidebar",
     "theme": {
       "label": "Change theme",
       "light": "Light",
@@ -105,7 +106,9 @@
       "submit": "Sign in",
       "submitting": "Signing in",
       "forgotPassword": "Forgot your password?",
-      "genericError": "We could not sign you in. Check your details and try again."
+      "genericError": "We could not sign you in. Check your details and try again.",
+      "brandTitle": "Secure Dashboard Access",
+      "brandDescription": "A robust authentication gateway ensuring secure, efficient access to the SchoolHub dashboard."
     },
     "session": {
       "expiredTitle": "Your session expired",

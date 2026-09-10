@@ -66,7 +66,8 @@
  * instead of the accent carrying the whole brand.
  *
  * A fourth tier, `--sh-color-chrome-*`, skins the app frame (sidebar + header). It is
- * ink in both schemes and is NOT tenant-overridable — see its own comment in :root.
+ * aliased to the page's own tokens (matching Metronic's own flat sidebar/header) and is
+ * NOT tenant-overridable — see its own comment in :root.
  *
  * ── Contrast, measured ────────────────────────────────────────────────────────────
  *
@@ -81,10 +82,8 @@
  *                                                    surface-sunken: AA on all three)
  *   Green       #178257 -> oklch(0.538 0.114 160.3) (success — 4.8:1 on white, unchanged)
  *   Brick red   #C1443C -> oklch(0.560 0.162  27.2) (danger  — 5.1:1 on white, unchanged)
- *   Ink frame   #171F36 -> oklch(0.245 0.045 268)  (chrome — its foreground 13.25:1,
- *                                                    chrome-muted 5.65:1,
- *                                                    chrome-primary 5.90:1)
- *   Canvas      #FCFDFF -> oklch(0.993 0.003 265)  (background — ink on it 16.25:1)
+ *   Canvas      #FCFDFF -> oklch(0.993 0.003 265)  (background — ink on it 16.25:1;
+ *                                                    chrome is aliased to this same pair)
  */
 
 @theme inline {
@@ -171,15 +170,17 @@
 
   /*
    * The chrome tier — the app frame (sidebar rail + header), as opposed to the page
-   * inside it. It gets its own tier rather than reusing `surface` because it is the one
-   * region that stays dark in BOTH schemes: an ink frame around light content is what
-   * separates the two at a glance, and the previous arrangement (sidebar = surface)
-   * left the rail and the page the same near-white, so a 1px hairline was the only
-   * thing dividing them.
+   * inside it. It has its own token names rather than writing `bg-background` etc.
+   * directly at every call site, but the VALUES are aliased 1:1 to the page's own
+   * (background/foreground/muted-foreground/muted/border/primary) — matching Metronic's
+   * own admin-template look, where the sidebar and header are the same flat surface as
+   * the page, differentiated only by a border. A previous recessed/ink-frame design
+   * lived here and was deliberately retired in favour of that match (see git history).
    *
-   * It is deliberately NOT tenant-overridable. A frame is structure, not brand — and a
-   * tenant who picks a pale brand colour would otherwise get an unreadable rail. The
-   * brand still reaches the frame through `chrome-primary`, the active-nav colour.
+   * It is deliberately NOT tenant-overridable, same as before: a frame is structure, not
+   * brand, and a tenant who picks a pale brand colour would otherwise get an unreadable
+   * rail if this DID follow tenant branding. The brand still reaches the frame through
+   * `chrome-primary`, the active-nav colour — which now IS the page's own `primary`.
    */
   --color-chrome: var(--sh-color-chrome);
   --color-chrome-foreground: var(--sh-color-chrome-foreground);
@@ -189,9 +190,10 @@
   --color-chrome-primary: var(--sh-color-chrome-primary);
 
   /* shadcn's own sidebar names, pointed at the chrome tier so ported source keeps
-     working. `sidebar-primary-foreground` is chrome's own background, not the page's:
-     chrome-primary is a LIGHT ink-violet chosen to sit on a dark rail, so text on it
-     has to be dark. */
+     working. `sidebar-primary-foreground` uses chrome's own background (not
+     `--sh-color-primary-foreground` directly) so it keeps tracking whatever the chrome
+     tier resolves to if a future preset gives chrome its own bespoke values again —
+     today the two are the same white/near-white in light mode and identical in dark. */
   --color-sidebar: var(--sh-color-chrome);
   --color-sidebar-foreground: var(--sh-color-chrome-foreground);
   --color-sidebar-primary: var(--sh-color-chrome-primary);
@@ -335,30 +337,25 @@
   /*
    * The chrome tier — the sidebar rail and the header.
    *
-   * The frame is RECESSED, not inverted: one step below the page in light mode and one
-   * step below it in dark, so it reads as the surface the content sits on top of. It is
-   * a separate tier from `surface` only because that relationship has to hold in both
-   * schemes, and `surface` flips.
-   *
-   * An ink frame was tried here and pulled: a dark navy slab behind a light page is a
-   * strong look, but it is the look of a template rather than of this product, and it
-   * spends the page's entire colour budget on furniture. The frame's job is to sit
-   * still and let the content carry the colour.
-   *
-   * `chrome-primary` is a separate token rather than `var(--sh-color-primary)` so the
-   * frame can pick its own step per scheme: the two agree in light mode today, but a
-   * dark rail needs a lighter primary than the page does, and the presets that keep a
-   * light rail need to follow their own.
-   *
-   * Measured on --sh-color-chrome: foreground 15.21:1, muted 5.09:1, the active-item
-   * accent bar 4.78:1 (UI floor is 3:1), and the active label on its own tint 13.41:1.
+   * Aliased 1:1 to the page's own tokens (background/foreground/muted-foreground/muted/
+   * border/primary), not a recessed step of its own: the platform default is Metronic's
+   * own admin-template look, and Metronic's sidebar and header are the SAME flat surface
+   * as the page, differentiated only by a border — confirmed by rendering schoolhub's
+   * own nav through Metronic's actual (unmodified) header/sidebar markup side by side
+   * with this app's, at `apps/dashboard/src/app/dev/metronic-reference`. A previous
+   * recessed-frame design lived here (see git history) and was deliberately retired in
+   * favour of that match, not lost by accident — the `chrome-*` token names stay, so
+   * every component built against them (chrome-ghost, chrome-outline, Sidebar's own
+   * bg-sidebar) needs no change, but a preset wanting its OWN bespoke chrome again (the
+   * previous recessed frame, or something else) can still win by declaring its own
+   * `--sh-color-chrome-*` values, same as any other preset override in this file.
    */
-  --sh-color-chrome: oklch(0.972 0.006 265);
-  --sh-color-chrome-foreground: oklch(0.24 0.035 268);
-  --sh-color-chrome-muted: oklch(0.52 0.03 265);
-  --sh-color-chrome-accent: oklch(0.94 0.012 265);
-  --sh-color-chrome-border: oklch(0.9 0.014 265);
-  --sh-color-chrome-primary: oklch(0.55 0.21 274);
+  --sh-color-chrome: var(--sh-color-background);
+  --sh-color-chrome-foreground: var(--sh-color-foreground);
+  --sh-color-chrome-muted: var(--sh-color-muted-foreground);
+  --sh-color-chrome-accent: var(--sh-color-muted);
+  --sh-color-chrome-border: var(--sh-color-border);
+  --sh-color-chrome-primary: var(--sh-color-primary);
 
   /*
    * Status colours are product semantics, not branding — tenants do not override these
@@ -560,16 +557,14 @@
     --sh-color-primary-foreground: oklch(0.19 0.03 268);
     --sh-color-accent: oklch(0.8 0.13 200);
     --sh-color-accent-foreground: oklch(0.19 0.03 268);
-    /* Same relationship as light: the frame sits one step BELOW the page, so content
-       reads as being on top of it. That is why chrome goes darker than `background`
-       here rather than lighter — recession is the constant, not the direction of the
-       lightness step. */
-    --sh-color-chrome: oklch(0.165 0.028 268);
-    --sh-color-chrome-foreground: oklch(0.955 0.008 265);
-    --sh-color-chrome-muted: oklch(0.72 0.03 265);
-    --sh-color-chrome-accent: oklch(0.235 0.036 268);
-    --sh-color-chrome-border: oklch(0.28 0.038 268);
-    --sh-color-chrome-primary: oklch(0.7 0.14 274);
+    /* Aliased to the page's own tokens in dark mode too — see the light-mode :root
+       definition above for why the chrome tier no longer picks its own step. */
+    --sh-color-chrome: var(--sh-color-background);
+    --sh-color-chrome-foreground: var(--sh-color-foreground);
+    --sh-color-chrome-muted: var(--sh-color-muted-foreground);
+    --sh-color-chrome-accent: var(--sh-color-muted);
+    --sh-color-chrome-border: var(--sh-color-border);
+    --sh-color-chrome-primary: var(--sh-color-primary);
     /* success/warning share the same problem as primary above where their light-mode
        foreground would fail against a fill that's staying the same lightness (warning) or
        getting brighter (success) — both now pair with the same dark, near-page-background
@@ -637,12 +632,12 @@
   --sh-color-primary-foreground: oklch(0.19 0.03 268);
   --sh-color-accent: oklch(0.8 0.13 200);
   --sh-color-accent-foreground: oklch(0.19 0.03 268);
-  --sh-color-chrome: oklch(0.165 0.028 268);
-  --sh-color-chrome-foreground: oklch(0.955 0.008 265);
-  --sh-color-chrome-muted: oklch(0.72 0.03 265);
-  --sh-color-chrome-accent: oklch(0.235 0.036 268);
-  --sh-color-chrome-border: oklch(0.28 0.038 268);
-  --sh-color-chrome-primary: oklch(0.7 0.14 274);
+  --sh-color-chrome: var(--sh-color-background);
+  --sh-color-chrome-foreground: var(--sh-color-foreground);
+  --sh-color-chrome-muted: var(--sh-color-muted-foreground);
+  --sh-color-chrome-accent: var(--sh-color-muted);
+  --sh-color-chrome-border: var(--sh-color-border);
+  --sh-color-chrome-primary: var(--sh-color-primary);
   --sh-color-success: oklch(0.724 0.125 161.7);
   --sh-color-success-foreground: oklch(0.19 0.03 268);
   --sh-color-warning-foreground: oklch(0.19 0.03 268);

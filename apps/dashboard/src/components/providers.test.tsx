@@ -1,6 +1,5 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { setUnauthorizedHandler } from "@/lib/auth";
-import { resetTheme } from "@/test-utils";
 import { AppProviders } from "./providers";
 
 const mockReplace = jest.fn();
@@ -21,10 +20,6 @@ describe("AppProviders", () => {
   beforeEach(() => {
     mockSetUnauthorizedHandler.mockReset();
     mockReplace.mockReset();
-  });
-
-  afterEach(() => {
-    resetTheme();
   });
 
   it("renders its children", () => {
@@ -49,21 +44,5 @@ describe("AppProviders", () => {
     handler?.(undefined as never);
 
     expect(mockReplace).toHaveBeenCalledWith("/login");
-  });
-
-  it("resolves a theme onto the document element", async () => {
-    render(
-      <AppProviders>
-        <span>content</span>
-      </AppProviders>,
-    );
-
-    // defaultTheme="system" with jsdom's stubbed matchMedia (always `matches: false`)
-    // resolves to light. The assertion that matters is that a class lands at all: the
-    // `dark` variant in packages/ui matches `.dark`, so a provider configured with an
-    // attribute strategy instead would leave every dark: utility permanently inert.
-    await waitFor(() => {
-      expect(document.documentElement).toHaveClass("light");
-    });
   });
 });

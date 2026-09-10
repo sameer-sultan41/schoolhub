@@ -1,40 +1,57 @@
 import { getTranslations } from "next-intl/server";
-import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { Card, CardContent } from "@schoolhub/ui";
+import { toAbsoluteUrl } from "@/app/(app)/_metronic/helpers";
 
 /**
- * /login (and every other route under this group) is never a tenant's — it's shown
- * before a user, and therefore any tenant, is known. It renders SchoolHub's own
- * "Aurora" platform brand rather than the tenant-overridable default, by
- * overriding the same --sh-color-* variables every component already reads (bg-primary,
- * bg-surface, ...) with the never-tenant-overridable --sh-platform-* values from
- * theme.css — the identical mechanism TenantTheme uses to re-theme for a real tenant,
- * just scoped to this subtree instead of a fetched branding object. Every component
- * (Card, Button, Form, ...) needs zero changes to render correctly here: it only ever
- * reads --sh-color-primary etc, never knows or cares which tier supplied the value.
+ * Ported from the vendor Metronic Next.js template's app/(auth)/layouts/branded.tsx —
+ * the real split-screen chrome its own /signin route renders inside, not the old
+ * pre-Metronic dashboard's flat platform-branded box. Only the marketing copy is swapped
+ * from hardcoded English for real i18n strings (auth.login.brandTitle/brandDescription);
+ * everything else (image panel, logo, the form's Card) matches Metronic's own markup.
  */
-const PLATFORM_BRAND_STYLE: CSSProperties = {
-  "--sh-color-primary": "var(--sh-platform-color-primary)",
-  "--sh-color-primary-foreground": "var(--sh-platform-color-primary-foreground)",
-  "--sh-color-surface": "var(--sh-platform-color-surface)",
-  "--sh-color-surface-foreground": "var(--sh-platform-color-primary)",
-} as CSSProperties;
-
-/** Centered, platform-branded shell for the unauthenticated routes. */
 export default async function AuthLayout({ children }: { children: ReactNode }) {
-  const t = await getTranslations("app");
+  const t = await getTranslations("auth.login");
 
   return (
-    <main
-      style={PLATFORM_BRAND_STYLE}
-      className="flex min-h-dvh flex-col items-center justify-center bg-primary px-4 py-12"
-    >
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <p className="font-heading text-xl font-semibold text-primary-foreground">{t("name")}</p>
-          <p className="text-sm text-primary-foreground/70">{t("tagline")}</p>
+    <>
+      <style>
+        {`
+          .branded-bg {
+            background-image: url('${toAbsoluteUrl("/media/images/2600x1600/1.png")}');
+          }
+          .dark .branded-bg {
+            background-image: url('${toAbsoluteUrl("/media/images/2600x1600/1-dark.png")}');
+          }
+        `}
+      </style>
+      <div className="grid min-h-dvh lg:grid-cols-2">
+        <div className="order-2 flex items-center justify-center p-8 lg:order-1 lg:p-10">
+          <Card className="w-full max-w-[400px]">
+            <CardContent className="p-6">{children}</CardContent>
+          </Card>
         </div>
-        {children}
+
+        <div className="branded-bg xxl:bg-center order-1 bg-top bg-no-repeat lg:order-2 lg:m-5 lg:rounded-xl lg:border lg:border-border xl:bg-cover">
+          <div className="flex flex-col gap-4 p-8 lg:p-16">
+            <Link href="/dashboard">
+              <img
+                src={toAbsoluteUrl("/media/app/mini-logo.svg")}
+                className="h-[28px] max-w-none"
+                alt=""
+              />
+            </Link>
+
+            <div className="flex flex-col gap-3">
+              <h3 className="text-mono text-2xl font-semibold">{t("brandTitle")}</h3>
+              <div className="text-base font-medium text-secondary-foreground">
+                {t("brandDescription")}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </main>
+    </>
   );
 }

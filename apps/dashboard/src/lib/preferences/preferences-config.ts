@@ -8,39 +8,37 @@ import { THEME_PRESETS } from "@schoolhub/ui";
  * rather than trusted — a cookie is client-writable, and an unvalidated one would land
  * straight in a `data-` attribute.
  *
- * Two of the template's preferences are deliberately absent. `theme_mode`: next-themes
- * already owns the `.dark` class the dark variant matches, ships its own no-flicker
- * script, and its control is pinned by e2e as "Change theme" — a second owner of that
- * class is a race. `font`: --sh-font-body/--sh-font-heading carry the tenant's own branding, and
- * Urdu needs Noto Nastaliq, so a viewer-level font picker would fight both.
+ * Trimmed relative to the pre-Metronic-rebuild version: `sidebar_collapsible` and
+ * `sidebar_state` are gone. The old shell's shadcn/ui Sidebar genuinely had two distinct
+ * collapse behaviours ("icon" vs "offcanvas"); Metronic's own sidebar only ever collapses
+ * to an icon rail (hover-to-expand, `.sidebar-collapse` in demos/demo1.css) — offering a
+ * choice between two options that behave identically would be exactly the kind of
+ * decorative-but-inert control this app avoids elsewhere (see login-form.tsx dropping
+ * Metronic's non-functional "Remember me"). `content_layout` no longer needs its own
+ * `data-content-layout` CSS either — `partials/common/container.tsx` reads this preference
+ * directly instead of Metronic's separate `_metronic/settings.ts` `container` field, which
+ * only that one component ever read.
+ *
+ * `theme_preset` defaults to "metronic", not the pre-Metronic shell's "tenant" — this
+ * dashboard's whole shell is built on Metronic's look now, so a first-time visitor should
+ * see it rather than the platform's Aurora default. `theme_preset`'s own docs (THEME_PRESETS
+ * in packages/ui) still explain what "tenant" and every other value do.
  */
 
 export const SIDEBAR_VARIANTS = ["sidebar", "inset", "floating"] as const;
-export const SIDEBAR_COLLAPSE_MODES = ["icon", "offcanvas"] as const;
-export const SIDEBAR_STATES = ["expanded", "collapsed"] as const;
 export const CONTENT_LAYOUTS = ["full-width", "centered"] as const;
 export const NAVBAR_STYLES = ["sticky", "scroll"] as const;
 
 export const PREFERENCE_REGISTRY = {
   theme_preset: {
     values: THEME_PRESETS,
-    defaultValue: "tenant",
+    defaultValue: "metronic",
     attribute: "data-theme-preset",
   },
   sidebar_variant: {
     values: SIDEBAR_VARIANTS,
     defaultValue: "sidebar",
     attribute: "data-sidebar-variant",
-  },
-  sidebar_collapsible: {
-    values: SIDEBAR_COLLAPSE_MODES,
-    defaultValue: "icon",
-    attribute: "data-sidebar-collapsible",
-  },
-  sidebar_state: {
-    values: SIDEBAR_STATES,
-    defaultValue: "expanded",
-    attribute: "data-sidebar-state",
   },
   content_layout: {
     values: CONTENT_LAYOUTS,
