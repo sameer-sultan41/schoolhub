@@ -9,7 +9,7 @@ import {
   type DataTablePagePagination,
   type DataTableProps,
   type DataTableSort,
-} from "./data-table";
+} from "../data-table";
 
 interface Student {
   id: string;

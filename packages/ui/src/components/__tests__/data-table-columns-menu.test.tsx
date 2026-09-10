@@ -2,8 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UserCheck } from "lucide-react";
 import { useState } from "react";
-import type { DataTableColumn } from "./data-table";
-import { DataTableColumnsMenu } from "./data-table-columns-menu";
+import type { DataTableColumn } from "../data-table";
+import { DataTableColumnsMenu } from "../data-table-columns-menu";
 
 interface Student {
   id: string;

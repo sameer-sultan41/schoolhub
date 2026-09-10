@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { Users } from "lucide-react";
-import { Button } from "./button";
-import { EmptyState } from "./empty-state";
+import { Button } from "../button";
+import { EmptyState } from "../empty-state";
 
 const base = {
   icon: Users,
