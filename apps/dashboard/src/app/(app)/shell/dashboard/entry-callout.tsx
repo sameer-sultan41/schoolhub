@@ -1,63 +1,42 @@
-import { Fragment } from "react";
-import Link from "next/link";
+"use client";
 
-import {
-  AvatarGroup,
-  Button,
-  Card,
-  CardContent,
-  CardFooter,
-  cn,
-  toAbsoluteUrl,
-} from "@schoolhub/ui";
+import { useQuery } from "@tanstack/react-query";
 
-// Ported verbatim from the vendor Metronic Next.js template's
-// app/(protected)/components/demo1/light-sidebar/components/entry-callout.tsx.
+import { Card, CardContent, Skeleton, cn } from "@schoolhub/ui";
+
+import { Services } from "@/services";
+
+/**
+ * Repurposed from the vendor Metronic template's entry-callout.tsx (originally a
+ * KeenThemes marketing card) into a welcome banner naming the signed-in user. The
+ * original's "Get Started" CTA is dropped rather than pointed at a dead link — this
+ * branch has no other route to send it to yet.
+ */
 export function EntryCallout({ className }: { className?: string }) {
+  const { data: user, isPending } = useQuery({
+    queryKey: ["dashboard", "current-user"],
+    queryFn: () => Services.auth.fetchCurrentUser(),
+  });
+
   return (
-    <Fragment>
-      <style>
-        {`
-          .entry-callout-bg {
-            background-image: url('${toAbsoluteUrl("/media/images/2600x1600/2.png")}');
-          }
-          .dark .entry-callout-bg {
-            background-image: url('${toAbsoluteUrl("/media/images/2600x1600/2-dark.png")}');
-          }
-        `}
-      </style>
-      <Card className={cn("h-full", className)}>
-        <CardContent className="entry-callout-bg bg-[length:80%] [background-position:175%_25%] bg-no-repeat p-10 rtl:[background-position:-70%_25%]">
-          <div className="flex flex-col justify-center gap-4">
-            <AvatarGroup
-              size="size-10"
-              group={[
-                { filename: "300-4.png" },
-                { filename: "300-1.png" },
-                { filename: "300-2.png" },
-                { fallback: "S", variant: "text-white text-xs ring-background bg-green-500" },
-              ]}
-            />
+    <Card className={cn("h-full", className)}>
+      <CardContent className="flex h-full flex-col justify-center gap-4 p-10">
+        {isPending ? (
+          <>
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </>
+        ) : (
+          <>
             <h2 className="text-mono text-xl font-semibold">
-              Connect Today &amp; Join <br />
-              the{" "}
-              <Button mode="link" asChild className="text-xl font-semibold">
-                <Link href="#">KeenThemes Network</Link>
-              </Button>
+              Welcome back{user ? `, ${user.full_name}` : ""}
             </h2>
             <p className="text-sm leading-5.5 font-normal text-secondary-foreground">
-              Enhance your projects with premium themes and <br />
-              templates. Join the KeenThemes community today <br />
-              for top-quality designs and resources.
+              Here&apos;s what&apos;s happening across your school today.
             </p>
-          </div>
-        </CardContent>
-        <CardFooter className="justify-center">
-          <Button mode="link" underlined="dashed" asChild>
-            <Link href="#">Get Started</Link>
-          </Button>
-        </CardFooter>
-      </Card>
-    </Fragment>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

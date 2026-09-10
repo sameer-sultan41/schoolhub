@@ -1,88 +1,92 @@
-import {
-  RiBankLine,
-  RiFacebookCircleLine,
-  RiGoogleLine,
-  RiInstagramLine,
-  RiStore2Line,
-  type RemixiconComponentType,
-} from "@remixicon/react";
-import { ArrowDown, ArrowUp, EllipsisVertical, type LucideIcon } from "lucide-react";
+"use client";
 
-import {
-  Badge,
-  BadgeDot,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  DropdownMenu4,
-} from "@schoolhub/ui";
+import { Building2, GraduationCap, IdCard, type LucideIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
-// Ported from the vendor Metronic Next.js template's app/(protected)/components/
-// demo1/light-sidebar/components/highlights.tsx — the vendor's own social-channel
-// brand icons come from @remixicon/react (a new dependency), not lucide, since
-// lucide has no brand marks for Facebook/Instagram/Google/etc.
+import { BadgeDot, Card, CardContent, CardHeader, CardTitle, Skeleton } from "@schoolhub/ui";
+
+import { Services } from "@/services";
+
+/**
+ * Repurposed from the vendor Metronic template's highlights.tsx (originally a sales
+ * KPI card with social-channel trend rows) into a real reference-data overview. The
+ * original's per-row trend arrows/percentages are dropped rather than faked — the API
+ * has no historical comparison for these counts.
+ */
 interface HighlightsRow {
-  icon: LucideIcon | RemixiconComponentType;
+  icon: LucideIcon;
   text: string;
-  total: number;
-  stats: number;
-  increase: boolean;
+  total: number | null;
 }
 
-interface HighlightsItem {
-  badgeColor: string;
-  label: string;
+function formatValue(value: number | null): string {
+  return value === null ? "—" : value.toLocaleString();
 }
 
 export function Highlights({ limit }: { limit?: number }) {
-  const rows: HighlightsRow[] = [
-    { icon: RiStore2Line, text: "Online Store", total: 172, stats: 3.9, increase: true },
-    { icon: RiFacebookCircleLine, text: "Facebook", total: 85, stats: 0.7, increase: false },
-    { icon: RiInstagramLine, text: "Instagram", total: 36, stats: 8.2, increase: true },
-    { icon: RiGoogleLine, text: "Google", total: 26, stats: 8.2, increase: true },
-    { icon: RiBankLine, text: "Retail", total: 7, stats: 0.7, increase: false },
-  ];
+  const { data, isPending } = useQuery({
+    queryKey: ["dashboard", "overview"],
+    queryFn: () => Services.dashboard.fetchDashboardOverview(),
+  });
 
-  const items: HighlightsItem[] = [
-    { badgeColor: "bg-green-500", label: "Metronic" },
-    { badgeColor: "bg-destructive", label: "Bundle" },
-    { badgeColor: "bg-violet-500", label: "MetronicNest" },
+  if (isPending || !data) {
+    return (
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>Reference Overview</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 p-5 lg:p-7.5 lg:pt-4">
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-2 w-full" />
+          <div className="grid gap-3">
+            {[0, 1, 2].map((index) => (
+              <Skeleton key={index} className="h-5 w-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const segments = [
+    { label: "Classes", value: data.classes, color: "bg-green-500" },
+    { label: "Sections", value: data.sections, color: "bg-destructive" },
+    { label: "Subjects", value: data.subjects, color: "bg-violet-500" },
+  ];
+  const segmentTotal = segments.reduce((sum, segment) => sum + segment.value, 0);
+
+  const rows: HighlightsRow[] = [
+    { icon: GraduationCap, text: "Classes", total: data.classes },
+    { icon: IdCard, text: "Staff", total: data.staff },
+    { icon: Building2, text: "Campuses", total: data.campuses },
   ];
 
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Highlights</CardTitle>
-        <DropdownMenu4
-          trigger={
-            <Button variant="ghost" mode="icon">
-              <EllipsisVertical />
-            </Button>
-          }
-        />
+        <CardTitle>Reference Overview</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 p-5 lg:p-7.5 lg:pt-4">
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-normal text-secondary-foreground">All time sales</span>
-          <div className="flex items-center gap-2.5">
-            <span className="text-mono text-3xl font-semibold">$295.7k</span>
-            <Badge size="sm" variant="success" appearance="light">
-              +2.7%
-            </Badge>
+          <span className="text-sm font-normal text-secondary-foreground">Enrolled students</span>
+          <span className="text-mono text-3xl font-semibold">{formatValue(data.students)}</span>
+        </div>
+        {segmentTotal > 0 ? (
+          <div className="mb-1.5 flex items-center gap-1">
+            {segments.map((segment) => (
+              <div
+                key={segment.label}
+                className={`h-2 rounded-xs ${segment.color}`}
+                style={{ width: `${(segment.value / segmentTotal) * 100}%` }}
+              />
+            ))}
           </div>
-        </div>
-        <div className="mb-1.5 flex items-center gap-1">
-          <div className="h-2 w-full max-w-[60%] rounded-xs bg-green-500"></div>
-          <div className="h-2 w-full max-w-[25%] rounded-xs bg-destructive"></div>
-          <div className="h-2 w-full max-w-[15%] rounded-xs bg-violet-500"></div>
-        </div>
+        ) : null}
         <div className="mb-1 flex flex-wrap items-center gap-4">
-          {items.map((item, index) => (
-            <div key={index} className="flex items-center gap-1.5">
-              <BadgeDot className={item.badgeColor} />
-              <span className="text-sm font-normal text-foreground">{item.label}</span>
+          {segments.map((segment) => (
+            <div key={segment.label} className="flex items-center gap-1.5">
+              <BadgeDot className={segment.color} />
+              <span className="text-sm font-normal text-foreground">{segment.label}</span>
             </div>
           ))}
         </div>
@@ -91,20 +95,10 @@ export function Highlights({ limit }: { limit?: number }) {
           {rows.slice(0, limit).map((row, index) => (
             <div key={index} className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
-                <row.icon className="size-4.5 text-muted-foreground" />
+                <row.icon className="size-4.5 text-muted-foreground" aria-hidden="true" />
                 <span className="text-mono text-sm font-normal">{row.text}</span>
               </div>
-              <div className="flex items-center gap-6 text-sm font-medium text-foreground">
-                <span className="lg:text-right">${row.total}k</span>
-                <span className="flex items-center justify-end gap-1">
-                  {row.increase ? (
-                    <ArrowUp className="size-4 text-green-500" />
-                  ) : (
-                    <ArrowDown className="size-4 text-destructive" />
-                  )}
-                  {row.stats}%
-                </span>
-              </div>
+              <span className="text-sm font-medium text-foreground">{formatValue(row.total)}</span>
             </div>
           ))}
         </div>
