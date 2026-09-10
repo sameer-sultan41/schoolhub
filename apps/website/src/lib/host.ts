@@ -20,7 +20,14 @@ export function normalizeHost(rawHost: string | null | undefined): string | null
   return withoutPort;
 }
 
-const RESERVED_LABELS = new Set([
+/**
+ * Subdomain labels that can never belong to a tenant.
+ *
+ * The single canonical list — `lib/env.ts` re-exports this as `RESERVED_SUBDOMAINS` rather
+ * than keeping its own copy, after the two drifted into an identical-but-separately-maintained
+ * pair of Sets with different names.
+ */
+export const RESERVED_LABELS = new Set([
   "www",
   "api",
   "app",
