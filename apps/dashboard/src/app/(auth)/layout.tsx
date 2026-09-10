@@ -1,8 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Card, CardContent } from "@schoolhub/ui";
-import { toAbsoluteUrl } from "@/app/(app)/_metronic/helpers";
+import { Card, CardContent, toAbsoluteUrl } from "@schoolhub/ui";
 
 /**
  * Ported from the vendor Metronic Next.js template's app/(auth)/layouts/branded.tsx —
