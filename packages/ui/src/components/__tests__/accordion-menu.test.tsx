@@ -7,7 +7,7 @@ import {
   AccordionMenuSub,
   AccordionMenuSubContent,
   AccordionMenuSubTrigger,
-} from "./accordion-menu";
+} from "../accordion-menu";
 
 describe("AccordionMenu", () => {
   it("renders no menu/group/presentation roles — this is a nav tree, not an ARIA menu widget", () => {

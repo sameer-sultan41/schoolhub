@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { Users } from "lucide-react";
-import { StatCard } from "./stat-card";
+import { StatCard } from "../stat-card";
 
 const base = {
   label: "Enrolled students",

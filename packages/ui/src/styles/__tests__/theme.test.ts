@@ -11,8 +11,8 @@ import { join } from "node:path";
  * The colour literals below are the one place in this repo where they are legal — this
  * IS the file that owns them.
  */
-const css = readFileSync(join(__dirname, "theme.css"), "utf8");
-const branding = readFileSync(join(__dirname, "..", "lib", "branding.ts"), "utf8");
+const css = readFileSync(join(__dirname, "..", "theme.css"), "utf8");
+const branding = readFileSync(join(__dirname, "..", "..", "lib", "branding.ts"), "utf8");
 
 const CHART_SLOTS = [1, 2, 3, 4, 5, 6] as const;
 

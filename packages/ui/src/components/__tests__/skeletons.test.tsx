@@ -6,7 +6,7 @@ import {
   GridSkeleton,
   ScreenHeaderSkeleton,
   TableSkeleton,
-} from "./skeletons";
+} from "../skeletons";
 
 const pulses = (container: HTMLElement) => container.querySelectorAll(".animate-pulse");
 
