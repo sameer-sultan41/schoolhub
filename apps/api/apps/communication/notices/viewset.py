@@ -1,40 +1,41 @@
-"""Assembles `NoticeViewSet` from its per-action mixins under `views/` — one
-small file per capability, composed here via multiple inheritance (DRF's own
-idiom for exactly this: it's how `mixins.ListModelMixin`/`CreateModelMixin`
-already work). `apps/communication/urls.py` registers only this one class,
-exactly as it registered the monolithic `NoticeViewSet` before this split —
-routing and permissions are unchanged.
+"""`NoticeViewSet` — request handling for `/notices`.
+
+Thin: every rule lives in `services/<action>.py` (`notices/services/submit.py`,
+`publish.py`, `return_to_draft.py`, `acknowledge.py`), one function per action,
+independently unit-testable and reusable outside HTTP. This class is the one
+place all five actions are visible together — the HackSoft Django Styleguide's
+own convention (services split granularly, views stay one file per resource)
+rather than a further mixin-per-action split on the view side, which buys
+little here since a `ViewSet` already gives every action a clearly-bounded
+method.
 """
 
 from __future__ import annotations
 
+from django.http import HttpResponse
+from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
+from rest_framework.request import Request
+from rest_framework.response import Response
 
 from apps.communication.models import Notice
+from apps.communication.notices import documents
 from apps.communication.notices.filters import NoticeFilterSet
 from apps.communication.notices.serializers import NoticeSerializer
-from apps.communication.notices.views.acknowledge import AcknowledgeActionMixin
-from apps.communication.notices.views.download import DownloadActionMixin
-from apps.communication.notices.views.publish import PublishActionMixin
-from apps.communication.notices.views.return_to_draft import ReturnToDraftActionMixin
-from apps.communication.notices.views.submit import SubmitActionMixin
+from apps.communication.notices.services.acknowledge import acknowledge_notice
+from apps.communication.notices.services.publish import publish_notice
+from apps.communication.notices.services.return_to_draft import return_notice_to_draft
+from apps.communication.notices.services.submit import submit_notice
 from apps.communication.permission_classes import (
     FEATURE,
     OWN_PREFERENCE_PERMISSIONS,
     STAFF_PERMISSIONS,
 )
-from core.api.viewsets import TenantScopedViewSetMixin
+from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
+from core.audit.services import record_audit
 
 
-class NoticeViewSet(
-    SubmitActionMixin,
-    PublishActionMixin,
-    ReturnToDraftActionMixin,
-    AcknowledgeActionMixin,
-    DownloadActionMixin,
-    TenantScopedViewSetMixin,
-    viewsets.ModelViewSet,
-):
+class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     """`/notices` — formal, sequence-numbered notices with a publish-approval gate.
 
     No `campus_id` column on this table (entities/communication.md) —
@@ -69,3 +70,51 @@ class NoticeViewSet(
         if self.action == "acknowledge":
             return [permission() for permission in OWN_PREFERENCE_PERMISSIONS]
         return [permission() for permission in STAFF_PERMISSIONS]
+
+    @extend_schema(request=None, responses={200: NoticeSerializer})
+    def submit(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /notices/{id}:submit` — draft -> pending_approval."""
+        instance = self.get_object()
+        before = self.get_serializer(instance).data
+        submitted = submit_notice(instance, actor_id=request.user.pk)
+        after = self.get_serializer(submitted).data
+        record_audit(request, "submit", submitted, before=before, after=after)
+        return ActionResponse.ok(after, message="Notice submitted for approval.")
+
+    @extend_schema(request=None, responses={200: NoticeSerializer})
+    def publish(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /notices/{id}:publish` — pending_approval -> published."""
+        instance = self.get_object()
+        before = self.get_serializer(instance).data
+        published = publish_notice(instance, actor_id=request.user.pk)
+        after = self.get_serializer(published).data
+        record_audit(request, "publish", published, before=before, after=after)
+        return ActionResponse.ok(after, message="Notice published.")
+
+    @extend_schema(request=None, responses={200: NoticeSerializer})
+    def return_to_draft(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /notices/{id}:return-to-draft` — pending_approval -> draft, with comments."""
+        instance = self.get_object()
+        before = self.get_serializer(instance).data
+        returned = return_notice_to_draft(instance, actor_id=request.user.pk)
+        after = self.get_serializer(returned).data
+        record_audit(request, "return_to_draft", returned, before=before, after=after)
+        return ActionResponse.ok(after, message="Notice returned to draft.")
+
+    @extend_schema(request=None, responses={200: None})
+    def acknowledge(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge_notice`."""
+        instance = self.get_object()
+        acknowledge_notice(instance, actor_id=request.user.pk)
+        return ActionResponse.ok({}, message="Acknowledged.")
+
+    @extend_schema(responses={200: None})
+    def download(self, request: Request, pk: str | None = None) -> Response:
+        """`GET /notices/{id}/download` — the notice rendered as a PDF document."""
+        instance = self.get_object()
+        data = documents.render_notice(notice=instance, school_name=request.tenant.name)
+        response = HttpResponse(data, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'inline; filename="notice-{instance.notice_no or instance.pk}.pdf"'
+        )
+        return response

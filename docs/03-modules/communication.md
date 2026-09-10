@@ -218,12 +218,17 @@ out through the real `notify()`.
 **Post-PR-B refactor.** `apps/communication` restructured from shared
 `views.py`/`services.py` files into one package per resource
 (`notices/`, `announcements/`, `template_overrides/`, `preferences/`,
-`delivery/`), each with one small file per distinct action under
-`views/`/`services/`, composed via DRF mixin inheritance in a `viewset.py`.
-Pure reorganization, verified by regenerating `openapi.yaml`/`schema.d.ts`
-and diffing to nothing (two docstring-only `description` fields aside)
-against the pre-refactor commit — no endpoint, permission, or response shape
-changed. File paths named below reflect this new layout, not PR B's original
+`delivery/`) — a vertical slice per resource, matching the HackSoft Django
+Styleguide's own convention: `services/` splits granularly, one file per
+action, since that pays for itself (independently testable, reusable
+outside HTTP); `viewset.py` stays one file per resource, every action a
+plain method calling into its paired service function, since a `ViewSet`
+already gives each action a clearly-bounded home and a further mixin-per-
+action split on the view side bought little. Pure reorganization, verified
+by regenerating `openapi.yaml`/`schema.d.ts` and diffing to nothing (two
+docstring-only `description` fields aside) against the pre-refactor commit
+— no endpoint, permission, or response shape changed. File paths named
+below reflect this new layout, not PR B's original
 one.
 
 ### Built (PR A)
