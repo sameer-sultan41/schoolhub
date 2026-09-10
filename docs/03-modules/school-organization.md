@@ -209,3 +209,38 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md) 
 - *(recommendation)* Per-campus timezone override is modeled but should ship disabled unless a tenant genuinely spans timezones.
 - **Open:** does any target school need class groupings above "class" (e.g. wings/streams as a first-class entity), or is the `houses` + custom-fields mechanism sufficient? Default: not a first-class entity.
 - **Open:** whether closed sessions should permit late corrections (marks amendments) via a controlled exception workflow — proposed: yes, with `principal` approval and audit.
+
+## 20. Implementation notes
+
+**File-per-action layout refactor.** `apps/school_organization` restructured
+from shared `views.py`/`services.py`/`serializers.py`/`filters.py` files into
+one package per resource (`campuses/`, `departments/`, `academic_sessions/`,
+`terms/`, `classes/`, `sections/`, `subjects/`, `houses/`, `school_settings/`,
+`holiday_calendar/`) — the same layout `apps/communication` established (see
+`communication.md` §20), following the HackSoft Django Styleguide convention:
+`viewset.py`/`view.py` stays one file per resource, every action a plain
+method; `services/` splits granularly, one file per action, only where a
+resource actually has distinct actions worth separating
+(`academic_sessions/services/{activate,close,clone,validation}.py` — the one
+resource here with real state transitions). Singleton resources
+(`school_settings/`, `holiday_calendar/`) get a single `view.py`, matching
+`communication/preferences/view.py`'s precedent for the same shape.
+
+Unlike communication, this module does not split cleanly. `apps.
+school_organization.services`, `.views` (down to just `BlockingDestroyMixin`)
+and `.calendar` stay at the app root as a deliberate shared surface, because
+`attendance`, `academics`, `student_management` and `timetable` import
+specific functions from `apps.school_organization.services` directly, and
+`academics` imports `BlockingDestroyMixin` from `apps.school_organization.
+views` directly — moving them would mean editing import lines in four other
+apps for a purely internal reorganization, a bigger and riskier blast radius
+than this module's own size justified. See `apps/school_organization/
+services.py`'s own docstring for the exact function-by-function accounting
+of what stays flat and why.
+
+Pure reorganization, verified by regenerating `openapi.yaml`/`schema.d.ts`
+and diffing against the pre-refactor commit on every change — empty except
+one disclosed docstring-only `description` field (a stale cross-reference
+from `HolidayCalendarView`'s docstring to a class that had moved out of its
+file), fixed in the same commit that caused it. No endpoint, permission, or
+response shape changed anywhere in the module.

@@ -35,8 +35,8 @@ schoolhub-api/
 | `config/` | Settings split per environment; only env vars differ between deploys |
 | `core/` | Tenancy, RBAC, notifications, AI gateway — imported by apps, imports no app |
 | `apps/<module>/` | Mirrors the 19 module docs in [`../03-modules/`](../03-modules/) one-to-one |
-| `apps/<module>/services.py` | The only module-to-module surface; views never call another app's models |
-| `apps/<module>/tests/` | `test_models.py`, `test_services.py`, `test_api.py`, `test_tenancy.py` (mandatory cross-tenant tests) |
+| `apps/<module>/services.py` | The only module-to-module surface; views never call another app's models. **Exception: `school_organization`** — outgrew one shared `views.py`/`services.py` covering ten unrelated resources, and restructured into one package per resource (`campuses/`, `departments/`, `academic_sessions/`, `terms/`, `classes/`, `sections/`, `subjects/`, `houses/`, `school_settings/`, `holiday_calendar/`), each with its own `services/<action>.py` where the resource has real per-action logic to split; `services.py`/`views.py`/`calendar.py` stay at the app root as a deliberate shared surface for the functions other apps (`attendance`, `academics`, `student_management`, `timetable`) import directly. See [`school-organization.md`](../03-modules/school-organization.md)'s §20 for the layout and why |
+| `apps/<module>/tests/` | `test_models.py`, `test_services.py`, `test_api.py`, `test_cross_tenant.py` (mandatory cross-tenant tests — every built module uses this name; this doc previously called the same file `test_tenancy.py`, a name that was never actually used) |
 
 **Conventions:** `snake_case` Python modules; app names plural where the domain is (`students`), singular for concepts (`timetable`); permission keys and event names declared in `permissions.py`/`events.py` so they are grep-able and seed-able.
 
