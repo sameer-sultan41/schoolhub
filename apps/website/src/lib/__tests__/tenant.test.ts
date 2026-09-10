@@ -14,7 +14,7 @@ jest.mock("react", () => ({
 }));
 
 jest.mock("next/headers", () => ({ headers: jest.fn() }));
-jest.mock("./api", () => ({
+jest.mock("../api", () => ({
   readJson: jest.fn(),
   tenantTag: (id: string) => `tenant:${id}`,
 }));

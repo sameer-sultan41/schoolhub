@@ -18,7 +18,7 @@ jest.mock("react", () => ({
   ...jest.requireActual<typeof ReactModule>("react"),
   cache: (fn: unknown) => fn,
 }));
-jest.mock("./api", () => ({
+jest.mock("../api", () => ({
   readJson: jest.fn(),
   tenantTag: (id: string) => `tenant:${id}`,
   pageTag: (id: string, path: string) => `tenant:${id}:page:${path || "/"}`,
