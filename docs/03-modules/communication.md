@@ -218,9 +218,9 @@ out through the real `notify()`.
 **Post-PR-B refactor.** `apps/communication` restructured from shared
 `views.py`/`services.py` files into one package per resource
 (`notices/`, `announcements/`, `template_overrides/`, `preferences/`,
-`delivery/`) — a vertical slice per resource, matching the HackSoft Django
-Styleguide's own convention: `services/` splits granularly, one file per
-action, since that pays for itself (independently testable, reusable
+`delivery/`) — a vertical slice per resource, matching the convention the
+HackSoft Django Styleguide itself uses: `services/` splits granularly, one
+file per action, since that pays for itself (independently testable, reusable
 outside HTTP); `viewset.py` stays one file per resource, every action a
 plain method calling into its paired service function, since a `ViewSet`
 already gives each action a clearly-bounded home and a further mixin-per-

@@ -3,11 +3,11 @@
 Thin: every rule lives in `services/<action>.py` (`notices/services/submit.py`,
 `publish.py`, `return_to_draft.py`, `acknowledge.py`), one function per action,
 independently unit-testable and reusable outside HTTP. This class is the one
-place all five actions are visible together — the HackSoft Django Styleguide's
-own convention (services split granularly, views stay one file per resource)
-rather than a further mixin-per-action split on the view side, which buys
-little here since a `ViewSet` already gives every action a clearly-bounded
-method.
+place all five actions are visible together — matches the convention the
+HackSoft Django Styleguide itself uses (services split granularly, views
+stay one file per resource) rather than a further mixin-per-action split on
+the view side, which buys little here since a `ViewSet` already gives every
+action a clearly-bounded method.
 """
 
 from __future__ import annotations
