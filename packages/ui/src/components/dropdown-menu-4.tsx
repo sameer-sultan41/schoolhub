@@ -1,7 +1,6 @@
 "use client";
 
 import { type ReactNode } from "react";
-import Link from "next/link";
 import { FileUp, Pencil, Search, Trash2 } from "lucide-react";
 
 import {
@@ -12,36 +11,41 @@ import {
   DropdownMenuTrigger,
 } from "./dropdown-menu";
 
-/** A generic "..." card-actions menu: View/Edit/Export/Delete. Wire real hrefs/handlers per use. */
-export function DropdownMenu4({ trigger }: { trigger: ReactNode }) {
+interface DropdownMenu4Props {
+  trigger: ReactNode;
+  onView?: () => void;
+  onEdit?: () => void;
+  onExport?: () => void;
+  onDelete?: () => void;
+}
+
+/**
+ * A generic "..." card-actions menu: View/Edit/Export/Delete. Each action is a no-op
+ * until its handler prop is passed — DropdownMenuItem is already a real Radix menuitem,
+ * so there is no navigable `href` to wire (and no next/link dependency to add: this
+ * package has none).
+ */
+export function DropdownMenu4({ trigger, onView, onEdit, onExport, onDelete }: DropdownMenu4Props) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent className="w-[150px]" side="bottom" align="end">
-        <DropdownMenuItem asChild>
-          <Link href="#">
-            <Search />
-            <span>View</span>
-          </Link>
+        <DropdownMenuItem onClick={onView}>
+          <Search />
+          <span>View</span>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="#">
-            <Pencil />
-            <span>Edit</span>
-          </Link>
+        <DropdownMenuItem onClick={onEdit}>
+          <Pencil />
+          <span>Edit</span>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="#">
-            <FileUp />
-            <span>Export</span>
-          </Link>
+        <DropdownMenuItem onClick={onExport}>
+          <FileUp />
+          <span>Export</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="#">
-            <Trash2 />
-            <span>Delete</span>
-          </Link>
+        <DropdownMenuItem onClick={onDelete}>
+          <Trash2 />
+          <span>Delete</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
