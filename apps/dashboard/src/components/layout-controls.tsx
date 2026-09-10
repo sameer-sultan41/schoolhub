@@ -25,7 +25,7 @@ import {
   type PreferenceKey,
   type PreferenceValues,
 } from "@/store/preferences-config";
-import { usePreference, usePreferenceActions } from "@/lib/preferences/preferences-provider";
+import { usePreference, usePreferenceActions } from "@/providers/preferences-provider";
 
 /**
  * The colour preset picker.
