@@ -1,11 +1,4 @@
-"""The one function still registered from here: `apps.py` imports
-`bulk_is_channel_enabled` as `core.notifications`'s preference resolver.
-
-A duplicate, up-to-date copy already lives at
-`apps.communication.preferences.services.resolver.bulk_is_channel_enabled` —
-this file stays only until Task 7 rewires that one `apps.py` import and
-deletes it, matching `templates_service.py`'s own transitional state.
-"""
+"""The batch preference resolver registered with `core.notifications`."""
 
 from __future__ import annotations
 
@@ -13,11 +6,9 @@ import uuid
 
 from django.core.cache import cache
 
+from apps.communication.permission_classes import FEATURE
+from apps.communication.preferences.services.matrix import _PREFERENCE_CACHE_TTL
 from core.tenancy.features import is_feature_enabled
-
-FEATURE = "module.communication"
-
-_PREFERENCE_CACHE_TTL = 300
 
 
 def bulk_is_channel_enabled(

@@ -7,16 +7,10 @@ from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
-from apps.communication import reports, services
+from apps.communication import reports
 from apps.communication.filters import DeliveryLogFilterSet
-from apps.communication.serializers import (
-    DeliveryLogSerializer,
-    DeliveryReportResponseSerializer,
-    NotificationPreferenceRowSerializer,
-    NotificationPreferenceUpdateSerializer,
-)
+from apps.communication.serializers import DeliveryLogSerializer, DeliveryReportResponseSerializer
 from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import TenantScopedViewSetMixin
@@ -33,56 +27,6 @@ STAFF_PERMISSIONS = [
     HasPermissionKey,
     DenyRestrictedPrincipals,
 ]
-
-# Every tenant role reaches `NotificationPreferenceView` — §4's "all roles
-# (scope own)" — including guardians and students managing their own channels.
-OWN_PREFERENCE_PERMISSIONS = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
-
-
-class NotificationPreferenceView(TenantScopedViewSetMixin, APIView):
-    """`GET/PATCH /notification-preferences` — the caller's own channel matrix.
-
-    No `pk` in the path: this always resolves to `request.user`. §4 grants the
-    key to every tenant role at `own` scope, and "own" here means "the caller,
-    always" — there is no other user's matrix this endpoint could address.
-
-    `TenantScopedViewSetMixin` is mixed in for its `initial()`/`finalize_response()`
-    tenant binding alone — a plain `APIView` never gets `request.tenant` under real
-    JWT auth (only `TenantMiddleware`, session-only, and this mixin's `initial()`
-    ever set it; see the mixin's own docstring). Without it every real request 403s:
-    `RequiresModuleFeature` fails closed on `request.tenant is None`. The mixin's
-    other methods (`get_queryset`, `perform_create`) are `GenericAPIView`-only and
-    are never called here, so nothing else about mixing it into a bare `APIView`
-    matters.
-    """
-
-    permission_classes = OWN_PREFERENCE_PERMISSIONS
-    required_feature = FEATURE
-    required_permission = "communication.notification-preference.update"
-
-    @extend_schema(responses={200: NotificationPreferenceRowSerializer(many=True)})
-    def get(self, request: Request) -> Response:
-        matrix = services.materialize_preference_matrix(
-            user_id=request.user.pk, tenant_id=request.tenant.pk
-        )
-        return Response(NotificationPreferenceRowSerializer(matrix, many=True).data)
-
-    @extend_schema(
-        request=NotificationPreferenceUpdateSerializer(many=True),
-        responses={200: NotificationPreferenceRowSerializer(many=True)},
-    )
-    def patch(self, request: Request) -> Response:
-        serializer = NotificationPreferenceUpdateSerializer(
-            data=request.data if isinstance(request.data, list) else [request.data], many=True
-        )
-        serializer.is_valid(raise_exception=True)
-        services.save_preferences(
-            user_id=request.user.pk, tenant_id=request.tenant.pk, rows=serializer.validated_data
-        )
-        matrix = services.materialize_preference_matrix(
-            user_id=request.user.pk, tenant_id=request.tenant.pk
-        )
-        return Response(NotificationPreferenceRowSerializer(matrix, many=True).data)
 
 
 class DeliveryLogViewSet(
