@@ -1,4 +1,4 @@
-"""`services.resolve_audience` — one query per resolution branch."""
+"""`audience.resolve_audience` — one query per resolution branch."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from apps.communication import services
+from apps.communication import audience as services
 from apps.communication.models import AudienceType
 from apps.communication.tests.factories import (
     AcademicSessionFactory,
