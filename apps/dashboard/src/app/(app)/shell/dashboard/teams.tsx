@@ -121,7 +121,9 @@ export function Teams() {
       {
         accessorKey: "id",
         header: () => <DataGridTableRowSelectAll label="Select all staff" />,
-        cell: ({ row }) => <DataGridTableRowSelect row={row} label={`Select ${row.original.name}`} />,
+        cell: ({ row }) => (
+          <DataGridTableRowSelect row={row} label={`Select ${row.original.name}`} />
+        ),
         enableSorting: false,
         enableHiding: false,
         enableResizing: false,

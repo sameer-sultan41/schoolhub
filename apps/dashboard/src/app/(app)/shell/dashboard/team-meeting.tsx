@@ -84,7 +84,9 @@ export function TeamMeeting() {
     <Card className="h-full">
       <CardContent className="grow p-5 lg:p-7.5 lg:pt-6">
         <div className="mb-7.5 flex flex-col gap-1">
-          <span className="text-mono text-xl font-semibold">{nextSlot.subject_name ?? "Class"}</span>
+          <span className="text-mono text-xl font-semibold">
+            {nextSlot.subject_name ?? "Class"}
+          </span>
           <span className="text-sm font-semibold text-foreground">
             {timeRange(nextSlot.start_time, nextSlot.end_time)}
           </span>
@@ -108,7 +110,9 @@ export function TeamMeeting() {
               <Users size={16} className="text-base text-muted-foreground" aria-hidden="true" />
               Section
             </div>
-            <div className="pt-1.5 text-sm font-medium text-foreground">{nextSlot.section_name}</div>
+            <div className="pt-1.5 text-sm font-medium text-foreground">
+              {nextSlot.section_name}
+            </div>
           </div>
         </div>
       </CardContent>
