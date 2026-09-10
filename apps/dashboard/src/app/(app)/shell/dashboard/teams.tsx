@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Search, Users, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import {
   getCoreRowModel,
   getFilteredRowModel,
@@ -15,7 +16,6 @@ import {
 } from "@tanstack/react-table";
 
 import {
-  AvatarGroup,
   Button,
   Card,
   CardFooter,
@@ -31,13 +31,13 @@ import {
   DataGridTableRowSelectAll,
   EmptyState,
   Input,
-  Rating,
   ScrollArea,
   ScrollBar,
   Skeleton,
-  type AvatarGroupAvatar,
   type DataGridLabels,
 } from "@schoolhub/ui";
+
+import { Services } from "@/services";
 
 // This preview has no i18n wiring (see the plan's scope note), so this is the
 // one place with hardcoded English strings — @schoolhub/ui's DataGrid requires
@@ -65,123 +65,63 @@ const DATA_GRID_LABELS: DataGridLabels = {
   paginationNav: "Pagination",
 };
 
-// Ported verbatim (content, columns, table config) from the vendor Metronic
-// Next.js template's app/(protected)/components/demo1/light-sidebar/components/teams.tsx.
-interface TeamRow {
-  id: number;
+/**
+ * Repurposed from the vendor Metronic template's teams.tsx (originally seven
+ * hardcoded corporate "teams" with a star rating) into a real staff directory.
+ * "Rating" and "Members" (avatar groups) had no staff-record equivalent and are
+ * dropped rather than faked.
+ */
+interface StaffRow {
+  id: string;
   name: string;
-  description: string;
-  rating: number;
-  updated_at: string;
-  users: AvatarGroupAvatar[];
+  role: string;
+  updatedAt: string;
 }
 
-const DATA: TeamRow[] = [
-  {
-    id: 1,
-    name: "Product Management",
-    description: "Product development & lifecycle",
-    rating: 5,
-    updated_at: "21 Oct, 2024",
-    users: [
-      { path: "/media/avatars/300-4.png", fallback: "PM" },
-      { path: "/media/avatars/300-1.png", fallback: "PM" },
-      { path: "/media/avatars/300-2.png", fallback: "PM" },
-    ],
-  },
-  {
-    id: 2,
-    name: "Marketing Team",
-    description: "Campaigns & market analysis",
-    rating: 3.5,
-    updated_at: "15 Oct, 2024",
-    users: [
-      { path: "/media/avatars/300-4.png", fallback: "MT" },
-      { path: "", fallback: "MT" },
-    ],
-  },
-  {
-    id: 3,
-    name: "HR Department",
-    description: "Talent acquisition, employee welfare",
-    rating: 5,
-    updated_at: "10 Oct, 2024",
-    users: [
-      { path: "/media/avatars/300-4.png", fallback: "HR" },
-      { path: "/media/avatars/300-1.png", fallback: "HR" },
-      { path: "/media/avatars/300-2.png", fallback: "HR" },
-    ],
-  },
-  {
-    id: 4,
-    name: "Sales Division",
-    description: "Customer relations, sales strategy",
-    rating: 5,
-    updated_at: "05 Oct, 2024",
-    users: [
-      { path: "/media/avatars/300-24.png", fallback: "SD" },
-      { path: "/media/avatars/300-7.png", fallback: "SD" },
-    ],
-  },
-  {
-    id: 5,
-    name: "Development Team",
-    description: "Software development",
-    rating: 4.5,
-    updated_at: "01 Oct, 2024",
-    users: [
-      { path: "/media/avatars/300-3.png", fallback: "DT" },
-      { path: "/media/avatars/300-8.png", fallback: "DT" },
-      { path: "/media/avatars/300-9.png", fallback: "DT" },
-    ],
-  },
-  {
-    id: 6,
-    name: "Quality Assurance",
-    description: "Product testing",
-    rating: 5,
-    updated_at: "25 Sep, 2024",
-    users: [
-      { path: "/media/avatars/300-6.png", fallback: "QA" },
-      { path: "/media/avatars/300-5.png", fallback: "QA" },
-    ],
-  },
-  {
-    id: 7,
-    name: "Finance Team",
-    description: "Financial planning",
-    rating: 4,
-    updated_at: "20 Sep, 2024",
-    users: [
-      { path: "/media/avatars/300-10.png", fallback: "FT" },
-      { path: "/media/avatars/300-11.png", fallback: "FT" },
-    ],
-  },
-];
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 export function Teams() {
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 5 });
-  const [sorting, setSorting] = useState<SortingState>([{ id: "updated_at", desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: "updatedAt", desc: true }]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredData = useMemo(() => {
-    if (!searchQuery) return DATA;
-    return DATA.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
-  }, [searchQuery]);
+  const { data, isPending } = useQuery({
+    queryKey: ["dashboard", "staff-directory"],
+    queryFn: () => Services.dashboard.fetchStaffDirectory(),
+  });
 
-  const columns = useMemo<ColumnDef<TeamRow>[]>(
+  const rows = useMemo<StaffRow[]>(
+    () =>
+      (data ?? []).map((staff) => ({
+        id: staff.id,
+        name: `${staff.first_name} ${staff.last_name}`,
+        role:
+          staff.designation_name ??
+          (staff.staff_type === "teaching" ? "Teaching staff" : "Non-teaching staff"),
+        updatedAt: staff.updated_at,
+      })),
+    [data],
+  );
+
+  const filteredData = useMemo(() => {
+    if (!searchQuery) return rows;
+    const query = searchQuery.toLowerCase();
+    return rows.filter(
+      (row) => row.name.toLowerCase().includes(query) || row.role.toLowerCase().includes(query),
+    );
+  }, [rows, searchQuery]);
+
+  const columns = useMemo<ColumnDef<StaffRow>[]>(
     () => [
       {
         accessorKey: "id",
-        header: () => <DataGridTableRowSelectAll label="Select all teams" />,
-        cell: ({ row }) => (
-          <DataGridTableRowSelect row={row} label={`Select ${row.original.name}`} />
-        ),
+        header: () => <DataGridTableRowSelectAll label="Select all staff" />,
+        cell: ({ row }) => <DataGridTableRowSelect row={row} label={`Select ${row.original.name}`} />,
         enableSorting: false,
         enableHiding: false,
         enableResizing: false,
@@ -190,14 +130,14 @@ export function Teams() {
       {
         id: "name",
         accessorFn: (row) => row.name,
-        header: ({ column }) => <DataGridColumnHeader title="Team" column={column} />,
+        header: ({ column }) => <DataGridColumnHeader title="Staff" column={column} />,
         cell: ({ row }) => (
           <div className="flex flex-col gap-2">
             <span className="text-mono text-sm leading-none font-medium hover:text-primary">
               {row.original.name}
             </span>
             <span className="text-sm leading-3 font-normal text-secondary-foreground">
-              {row.original.description}
+              {row.original.role}
             </span>
           </div>
         ),
@@ -213,31 +153,13 @@ export function Teams() {
         },
       },
       {
-        id: "rating",
-        accessorFn: (row) => row.rating,
-        header: ({ column }) => <DataGridColumnHeader title="Rating" column={column} />,
-        cell: ({ row }) => <Rating rating={Math.floor(row.original.rating)} />,
-        enableSorting: true,
-        size: 135,
-        meta: { skeleton: <Skeleton className="h-5 w-[60px]" /> },
-      },
-      {
-        id: "updated_at",
-        accessorFn: (row) => row.updated_at,
+        id: "updatedAt",
+        accessorFn: (row) => row.updatedAt,
         header: ({ column }) => <DataGridColumnHeader title="Last Modified" column={column} />,
-        cell: ({ row }) => row.original.updated_at,
+        cell: ({ row }) => formatDate(row.original.updatedAt),
         enableSorting: true,
         size: 135,
         meta: { skeleton: <Skeleton className="h-5 w-[70px]" /> },
-      },
-      {
-        id: "users",
-        accessorFn: (row) => row.users,
-        header: ({ column }) => <DataGridColumnHeader title="Members" column={column} />,
-        cell: ({ row }) => <AvatarGroup group={row.original.users} size="size-8" />,
-        enableSorting: true,
-        size: 135,
-        meta: { skeleton: <Skeleton className="h-6 w-[75px]" /> },
       },
     ],
     [],
@@ -247,7 +169,7 @@ export function Teams() {
     columns,
     data: filteredData,
     pageCount: Math.ceil((filteredData.length || 0) / pagination.pageSize),
-    getRowId: (row) => String(row.id),
+    getRowId: (row) => row.id,
     state: { pagination, sorting, rowSelection },
     columnResizeMode: "onChange",
     onPaginationChange: setPagination,
@@ -264,6 +186,7 @@ export function Teams() {
     <DataGrid
       table={table}
       recordCount={filteredData.length || 0}
+      isLoading={isPending}
       tableLayout={{
         columnsPinnable: true,
         columnsMovable: true,
@@ -272,16 +195,16 @@ export function Teams() {
       }}
       labels={DATA_GRID_LABELS}
       emptyState={
-        <EmptyState icon={Users} title="No teams found" description="Try a different search." />
+        <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
     >
       <Card>
         <CardHeader className="py-3.5">
-          <CardTitle>Teams</CardTitle>
+          <CardTitle>Staff</CardTitle>
           <CardToolbar className="relative">
             <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search Teams..."
+              placeholder="Search Staff..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);

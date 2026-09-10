@@ -1,6 +1,5 @@
 "use client";
 
-import { type ReactNode } from "react";
 import Link from "next/link";
 import {
   BetweenHorizontalStart,
@@ -18,8 +17,12 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
   Badge,
   Button,
   DropdownMenu,
@@ -38,13 +41,29 @@ import {
 import { logout } from "@/lib/auth";
 import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
+import { Services } from "@/services";
 
-// Ported from packages/ui's partials/topbar/user-dropdown-menu.tsx. The vendor
-// version reads a real next-auth session; this preview has no user-fetching wired up
-// yet, so the identity shown is still Metronic's own sample profile (its usual demo
-// name/email) — but "Logout" and the Language switcher now call the real API/locale
-// mechanism, same as every other real piece of this app.
-const SAMPLE_USER = { name: "Jenny Klabber", email: "jenny@keenthemes.com" };
+/**
+ * Ported from packages/ui's partials/topbar/user-dropdown-menu.tsx. The vendor
+ * version reads a real next-auth session; this now reads the real signed-in user via
+ * `Services.auth.fetchCurrentUser()` (the same query `EntryCallout` uses — one cache
+ * entry, one request). The trigger avatar moved in here from `header.tsx` so both it
+ * and the panel's own avatar/name/email come from one fetch instead of two.
+ *
+ * No seeded account has an uploaded photo (`avatar_url` is null for all of them), so
+ * every account showing the same stock Metronic photo read as "still not dynamic" even
+ * though the name/email underneath it were real — `AvatarFallback` (Radix: renders
+ * automatically whenever `AvatarImage` has no `src` or fails to load) shows the
+ * person's own initials instead, which actually varies per account. `email` is
+ * nullable (phone-only accounts exist) — falls back to phone, then to nothing shown.
+ * The vendor's "Pro" billing badge is replaced with the user's real role.
+ */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0]}${parts[parts.length - 1]![0]}`.toUpperCase();
+}
 
 /** Metronic's own demo covered 5 unrelated languages with flags; this app ships 2. */
 const LOCALE_FLAGS: Record<SupportedLocale, string> = {
@@ -52,11 +71,26 @@ const LOCALE_FLAGS: Record<SupportedLocale, string> = {
   ur: "/media/flags/pakistan.svg",
 };
 
-export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
+export function UserDropdownMenu() {
   const t = useTranslations("nav");
   const locale = useLocale();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+  const {
+    data: user,
+    isPending,
+    isError,
+  } = useQuery({
+    queryKey: ["dashboard", "current-user"],
+    queryFn: () => Services.auth.fetchCurrentUser(),
+  });
+
+  // Distinct from "still loading": an error (e.g. the API unreachable) must not sit on
+  // the loading label forever, which reads as a hang rather than a real failure.
+  const displayName = isPending ? "Loading…" : isError ? "Unable to load profile" : (user?.full_name ?? "");
+  const contact = user?.email ?? user?.phone ?? null;
+  const initials = user ? initialsOf(user.full_name) : "?";
+  const roleLabel = user?.roles.length ? user.roles.map((role) => role.name).join(", ") : null;
 
   // Mirrors the pre-deletion user-menu.tsx's selectLocale: the locale is resolved
   // server-side from this same cookie (src/i18n/request.ts), including <html
@@ -72,33 +106,41 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>
+        <Avatar className="size-9 shrink-0 cursor-pointer rounded-full border-2 border-green-500">
+          {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={displayName} /> : null}
+          <AvatarFallback className="text-xs font-medium">{initials}</AvatarFallback>
+        </Avatar>
+      </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64" side="bottom" align="end">
         <div className="flex items-center justify-between p-3">
           <div className="flex items-center gap-2">
-            <img
-              className="h-9 w-9 rounded-full border border-border"
-              src="/media/avatars/300-2.png"
-              alt="User avatar"
-            />
+            <Avatar className="h-9 w-9">
+              {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={displayName} /> : null}
+              <AvatarFallback className="text-xs font-medium">{initials}</AvatarFallback>
+            </Avatar>
             <div className="flex flex-col">
               <Link
                 href="/account/home/get-started"
                 className="text-mono text-sm font-semibold hover:text-primary"
               >
-                {SAMPLE_USER.name}
+                {displayName}
               </Link>
-              <Link
-                href={`mailto:${SAMPLE_USER.email}`}
-                className="text-xs text-muted-foreground hover:text-primary"
-              >
-                {SAMPLE_USER.email}
-              </Link>
+              {contact ? (
+                <Link
+                  href={user?.email ? `mailto:${user.email}` : `tel:${contact}`}
+                  className="text-xs text-muted-foreground hover:text-primary"
+                >
+                  {contact}
+                </Link>
+              ) : null}
             </div>
           </div>
-          <Badge variant="primary" appearance="light" size="sm">
-            Pro
-          </Badge>
+          {roleLabel ? (
+            <Badge variant="primary" appearance="light" size="sm">
+              {roleLabel}
+            </Badge>
+          ) : null}
         </div>
 
         <DropdownMenuSeparator />
