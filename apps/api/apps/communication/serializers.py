@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.communication.models import NotificationPreference, NotificationTemplateOverride
+from apps.communication.models import (
+    Announcement,
+    Notice,
+    NoticeStatus,
+    NotificationPreference,
+    NotificationTemplateOverride,
+)
 from apps.communication.services import assert_override_is_valid, assert_preference_may_be_saved
 from core.notifications.models import DeliveryLog
 from core.notifications.templates import used_placeholders
@@ -123,3 +129,75 @@ class DeliveryReportResponseSerializer(serializers.Serializer):
     """`GET /delivery-logs:summary`'s real response shape — see views.py's `summary`."""
 
     data = DeliveryReportRowSerializer(many=True)
+
+
+class AnnouncementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Announcement
+        fields = [
+            "id",
+            "title",
+            "body",
+            "audience_type",
+            "audience_filter",
+            "campus_id",
+            "status",
+            "is_emergency",
+            "publish_at",
+            "expires_at",
+            "show_on_website",
+            "attachments",
+            "published_by",
+            "published_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "published_by",
+            "published_at",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class NoticeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notice
+        fields = [
+            "id",
+            "notice_no",
+            "title",
+            "body",
+            "notice_type",
+            "audience_type",
+            "audience_filter",
+            "status",
+            "requires_acknowledgment",
+            "publish_at",
+            "valid_until",
+            "show_on_website",
+            "attachments",
+            "approved_by",
+            "published_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "notice_no",
+            "status",
+            "approved_by",
+            "published_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs: dict) -> dict:
+        # Once submitted, a notice's content is what the approver is reviewing
+        # (or has already published) — editing it out from under them defeats
+        # the segregation-of-duties intent of the approval gate.
+        if self.instance is not None and self.instance.status != NoticeStatus.DRAFT:
+            raise serializers.ValidationError({"status": "Only a draft notice can be edited."})
+        return attrs

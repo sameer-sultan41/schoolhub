@@ -291,6 +291,12 @@ SPECTACULAR_SETTINGS = {
         "NotificationChannelEnum": "core.notifications.models.NotificationChannel",
         "NotificationCategoryEnum": "core.notifications.models.NotificationCategory",
         "DeliveryStatusEnum": "core.notifications.models.DeliveryStatus",
+        # communication's PR B — announcements and notices add four more
+        # `status`/type enums, `audience_type` shared between the two tables.
+        "CommunicationAudienceTypeEnum": "apps.communication.models.AudienceType",
+        "AnnouncementStatusEnum": "apps.communication.models.AnnouncementStatus",
+        "NoticeTypeEnum": "apps.communication.models.NoticeType",
+        "NoticeStatusEnum": "apps.communication.models.NoticeStatus",
     },
 }
 
