@@ -8,9 +8,11 @@ Foreign keys are exposed with their ``_id`` suffix to match the column names in
 docs/05-database/entities/academics.md and the filter names in the
 module doc §16.
 
-``CampusSerializer`` and ``DepartmentSerializer`` moved to their own packages
-(``campuses/serializers.py``, ``departments/serializers.py``) — this file now
-holds only the resources that haven't been split into their own package yet.
+``CampusSerializer``, ``DepartmentSerializer``, ``AcademicSessionSerializer``
+and ``SessionCloneSerializer`` moved to their own packages
+(``campuses/serializers.py``, ``departments/serializers.py``,
+``academic_sessions/serializers.py``) — this file now holds only the
+resources that haven't been split into their own package yet.
 """
 
 from __future__ import annotations
@@ -31,44 +33,6 @@ from apps.school_organization.models import (
     Term,
 )
 from apps.school_organization.serializer_helpers import READ_ONLY_FIELDS, fk, normalize_code
-
-
-class AcademicSessionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AcademicSession
-        fields = (
-            "id",
-            "name",
-            "start_date",
-            "end_date",
-            "status",
-            "is_current",
-            "created_at",
-            "updated_at",
-        )
-        # Lifecycle moves only through :activate and :close, which are separately
-        # permissioned and audited; a plain PATCH must not be able to flip them.
-        read_only_fields = (*READ_ONLY_FIELDS, "status", "is_current")
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        start = attrs.get("start_date") or getattr(self.instance, "start_date", None)
-        end = attrs.get("end_date") or getattr(self.instance, "end_date", None)
-        if start is None or end is None:
-            raise serializers.ValidationError(
-                {"start_date": "Both start_date and end_date are required."}
-            )
-        services.assert_no_session_overlap(
-            start_date=start, end_date=end, exclude_id=getattr(self.instance, "pk", None)
-        )
-        return attrs
-
-
-class SessionCloneSerializer(serializers.Serializer):
-    """Input for ``POST /academic-sessions/{id}:clone`` — the new session's identity."""
-
-    name = serializers.CharField(max_length=50)
-    start_date = serializers.DateField()
-    end_date = serializers.DateField()
 
 
 class TermSerializer(serializers.ModelSerializer):

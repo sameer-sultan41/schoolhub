@@ -14,19 +14,12 @@ from __future__ import annotations
 import django_filters
 
 from apps.school_organization.models import (
-    AcademicSession,
     Class,
     House,
     Section,
     Subject,
     Term,
 )
-
-
-class AcademicSessionFilterSet(django_filters.FilterSet):
-    class Meta:
-        model = AcademicSession
-        fields = ["status", "is_current"]
 
 
 class TermFilterSet(django_filters.FilterSet):

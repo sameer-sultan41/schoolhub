@@ -4,6 +4,10 @@ The constraints here are the last line of defence for structural integrity, so
 they are asserted against the database rather than against serializer behaviour:
 a rule that only lives in a serializer is not enforced for the bulk importer,
 Celery jobs or the admin.
+
+Service-rule tests here cover only the functions that stay in the module-root
+`services.py` (see that file's docstring for why); functions that moved into a
+resource package have their tests alongside them there.
 """
 
 from __future__ import annotations
@@ -14,13 +18,8 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from apps.school_organization import services
-from apps.school_organization.models import (
-    AcademicSession,
-    Campus,
-    ClassSubject,
-    House,
-    SessionStatus,
-)
+from apps.school_organization.models import Campus, House
+from apps.school_organization.tests.base import TenantFixtureMixin
 from apps.school_organization.tests.factories import (
     SESSION_END,
     SESSION_START,
@@ -34,14 +33,8 @@ from apps.school_organization.tests.factories import (
     TenantFactory,
     TermFactory,
 )
-from core.api.exceptions import Conflict, DomainRuleViolation
+from core.api.exceptions import DomainRuleViolation
 from core.tenancy.context import tenant_context
-
-
-class TenantFixtureMixin:
-    def setUp(self) -> None:
-        super().setUp()
-        self.tenant = TenantFactory()
 
 
 class UniquenessConstraintTests(TenantFixtureMixin, TestCase):
@@ -170,127 +163,12 @@ class CheckConstraintTests(TenantFixtureMixin, TestCase):
             )
 
 
-class SessionLifecycleServiceTests(TenantFixtureMixin, TestCase):
-    def setUp(self) -> None:
-        super().setUp()
-        self.actor_id = self.tenant.id  # Any UUID; only stored as updated_by.
-
-    def _complete_structure(self) -> AcademicSession:
-        campus = CampusFactory(tenant=self.tenant)
-        grade = ClassFactory(tenant=self.tenant)
-        SectionFactory(tenant=self.tenant, school_class=grade, campus=campus)
-        session = AcademicSessionFactory(tenant=self.tenant)
-        TermFactory(
-            tenant=self.tenant,
-            academic_session=session,
-            start_date=SESSION_START,
-            end_date=SESSION_END,
-        )
-        return session
-
-    def test_activation_requires_a_complete_structure(self) -> None:
-        with tenant_context(self.tenant.id):
-            session = AcademicSessionFactory(tenant=self.tenant)
-            with self.assertRaises(DomainRuleViolation):
-                services.activate_session(session, actor_id=self.actor_id)
-
-    def test_activation_reports_every_gap_at_once(self) -> None:
-        with tenant_context(self.tenant.id):
-            session = AcademicSessionFactory(tenant=self.tenant)
-            errors = services.session_completeness_errors(session)
-
-        self.assertEqual(len(errors), 3)
-
-    def test_activation_makes_the_session_current(self) -> None:
-        with tenant_context(self.tenant.id):
-            session = self._complete_structure()
-            activated = services.activate_session(session, actor_id=self.actor_id)
-
-            self.assertEqual(activated.status, SessionStatus.ACTIVE)
-            self.assertTrue(activated.is_current)
-
-    def test_activation_demotes_the_previous_current_session(self) -> None:
-        with tenant_context(self.tenant.id):
-            incumbent = AcademicSessionFactory(
-                tenant=self.tenant,
-                is_current=True,
-                status=SessionStatus.ACTIVE,
-                start_date=datetime.date(2024, 4, 1),
-                end_date=datetime.date(2025, 3, 31),
-            )
-            session = self._complete_structure()
-            services.activate_session(session, actor_id=self.actor_id)
-
-            incumbent.refresh_from_db()
-            self.assertFalse(incumbent.is_current)
-
-    def test_a_closed_session_cannot_be_reactivated(self) -> None:
-        with tenant_context(self.tenant.id):
-            session = self._complete_structure()
-            services.activate_session(session, actor_id=self.actor_id)
-            services.close_session(session, actor_id=self.actor_id)
-
-            with self.assertRaises(Conflict):
-                services.activate_session(session, actor_id=self.actor_id)
-
-    def test_only_an_active_session_can_be_closed(self) -> None:
-        with tenant_context(self.tenant.id):
-            session = AcademicSessionFactory(tenant=self.tenant)
-            with self.assertRaises(Conflict):
-                services.close_session(session, actor_id=self.actor_id)
-
-    def test_closed_sessions_are_not_writable(self) -> None:
-        with tenant_context(self.tenant.id):
-            session = self._complete_structure()
-            services.activate_session(session, actor_id=self.actor_id)
-            closed = services.close_session(session, actor_id=self.actor_id)
-
-            self.assertFalse(closed.is_writable)
-            with self.assertRaises(DomainRuleViolation):
-                services.assert_session_writable(closed)
-
-    def test_clone_copies_the_curriculum_forward(self) -> None:
-        with tenant_context(self.tenant.id):
-            source = AcademicSessionFactory(tenant=self.tenant)
-            grade = ClassFactory(tenant=self.tenant)
-            ClassSubjectFactory(
-                tenant=self.tenant,
-                academic_session=source,
-                school_class=grade,
-                subject=SubjectFactory(tenant=self.tenant),
-                weekly_periods=5,
-            )
-
-            target = services.clone_session(
-                source,
-                name="2028-29",
-                start_date=datetime.date(2028, 4, 1),
-                end_date=datetime.date(2029, 3, 31),
-                actor_id=self.actor_id,
-                tenant_id=self.tenant.id,
-            )
-
-            cloned = ClassSubject.objects.filter(academic_session=target)
-            self.assertEqual(cloned.count(), 1)
-            self.assertEqual(cloned.first().weekly_periods, 5)
-            self.assertEqual(target.status, SessionStatus.PLANNED)
-
-
 class DateWindowServiceTests(TenantFixtureMixin, TestCase):
-    def test_sessions_may_not_overlap(self) -> None:
-        with tenant_context(self.tenant.id):
-            AcademicSessionFactory(tenant=self.tenant)
-            with self.assertRaises(DomainRuleViolation):
-                services.assert_no_session_overlap(
-                    start_date=datetime.date(2026, 6, 1), end_date=datetime.date(2027, 6, 1)
-                )
-
-    def test_adjacent_sessions_are_allowed(self) -> None:
-        with tenant_context(self.tenant.id):
-            AcademicSessionFactory(tenant=self.tenant)
-            services.assert_no_session_overlap(
-                start_date=datetime.date(2027, 4, 1), end_date=datetime.date(2028, 3, 31)
-            )
+    """`assert_term_window` — the session-overlap half of this class moved to
+    `academic_sessions/tests/test_lifecycle.py::SessionOverlapServiceTests`
+    along with `assert_no_session_overlap` itself. This half stays until
+    `assert_term_window` moves into `terms/services.py`.
+    """
 
     def test_terms_must_nest_inside_their_session(self) -> None:
         with tenant_context(self.tenant.id):

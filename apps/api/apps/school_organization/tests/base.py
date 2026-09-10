@@ -1,4 +1,4 @@
-"""Shared base fixture for school-organization API tests."""
+"""Shared base fixtures for school-organization tests."""
 
 from __future__ import annotations
 
@@ -18,3 +18,11 @@ class SchoolOrganizationAPITestCase(APITestCase):
 
     def allow(self, *permission_keys: str) -> None:
         grant(self.user, *permission_keys)
+
+
+class TenantFixtureMixin:
+    """Base fixture for non-API (model/service-level) tests: one tenant, no client."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
