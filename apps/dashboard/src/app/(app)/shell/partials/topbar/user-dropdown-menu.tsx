@@ -107,7 +107,10 @@ export function UserDropdownMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Avatar className="size-9 shrink-0 cursor-pointer rounded-full border-2 border-green-500">
+        <Avatar
+          data-testid="user-menu-trigger"
+          className="size-9 shrink-0 cursor-pointer rounded-full border-2 border-green-500"
+        >
           {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={displayName} /> : null}
           <AvatarFallback className="text-xs font-medium">{initials}</AvatarFallback>
         </Avatar>
