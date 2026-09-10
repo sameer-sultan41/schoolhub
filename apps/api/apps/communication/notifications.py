@@ -3,10 +3,11 @@ being published. The remaining §12 rows (acknowledgment reminder, thread
 reply, emergency broadcast, delivery-failure alert, birthday) arrive with
 the PRs that produce those events.
 
-Every trigger registered here is called from exactly the `services.py`
-function that fires it — `publish_announcement`/`publish_notice` — matching
-the rule examinations' PR B review established: a registration with no
-caller persists no rows and is worse than not registering it at all.
+Every trigger registered here is called from exactly the one `services/`
+function that fires it — `announcements.services.publish.publish_announcement`/
+`notices.services.publish.publish_notice` — matching the rule examinations'
+PR B review established: a registration with no caller persists no rows and
+is worse than not registering it at all.
 """
 
 from core.notifications.catalog import registry as catalog

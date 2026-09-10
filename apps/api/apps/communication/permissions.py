@@ -49,7 +49,8 @@ NOTICE_ACKNOWLEDGERS = ("guardian", "student", "school_admin", "principal", "tea
 # §4 — "communication.broadcast.send … school_owner, principal, school_admin".
 # Deliberately narrower than the publishers above: §7 calls broadcast "audited,
 # MFA-recommended" and gives it no approval gate, so the permission itself is
-# the only mitigation — see apps/communication/services.py.
+# the only mitigation — enforced wherever PR C's broadcast/ package ends up
+# sending it, following this module's per-resource-package convention.
 BROADCAST_SENDERS = ("school_owner", "principal", "school_admin")
 
 # §4 — "communication.thread.create / communication.message.create … all

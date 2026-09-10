@@ -7045,7 +7045,7 @@ paths:
   /api/v1/notices/{id}:acknowledge:
     post:
       operationId: notices_:acknowledge_create
-      description: '`POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge_notice`.'
+      description: '`POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge`.'
       parameters:
       - in: path
         name: id

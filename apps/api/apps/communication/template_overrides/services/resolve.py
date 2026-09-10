@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from apps.communication.features import FEATURE
 from core.notifications.templates import NotificationTemplate
 
 if TYPE_CHECKING:
@@ -21,9 +22,9 @@ if TYPE_CHECKING:
 def template_from_override(row: NotificationTemplateOverride) -> NotificationTemplate:
     """The (code, channel, subject, body, variables) -> `NotificationTemplate` mapping.
 
-    Shared by `resolve_tenant_template` below and `views/preview.py`'s
-    `:preview` action — one place, so the two can never drift on which
-    fields make the dataclass. Duck-typed against
+    Shared by `resolve_tenant_template` below and `viewset.py`'s `:preview`
+    action — one place, so the two can never drift on which fields make the
+    dataclass. Duck-typed against
     `core.notifications.templates.NotificationTemplate`: same frozen
     dataclass shape, built fresh here rather than reused as an ORM row,
     since `render()` only needs the four fields.
@@ -71,7 +72,7 @@ def resolve_tenant_template(
     """
     from core.tenancy.features import is_feature_enabled
 
-    if not is_feature_enabled("module.communication", tenant_id=tenant_id):
+    if not is_feature_enabled(FEATURE, tenant_id=tenant_id):
         return None
 
     from apps.communication.models import NotificationTemplateOverride

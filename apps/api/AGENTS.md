@@ -24,6 +24,8 @@ core/rbac/         User, Role, Permission, UserRole, permission registry, DRF pe
 core/audit/        append-only audit log + recording services
 core/api/          response envelope, error handler, pagination, throttling, base viewsets
 apps/<module>/     one app per module doc — models/serializers/services/views/urls/permissions/tests
+                   (communication/ is the one exception: one package per resource, each with its
+                   own services/<action>.py + viewset.py — see docs/03-modules/communication.md §20)
 tests/             cross-cutting suites (RLS coverage, permission registry, cross-tenant matrix)
 ```
 

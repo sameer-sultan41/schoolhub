@@ -1,13 +1,17 @@
 """`NoticeViewSet` — request handling for `/notices`.
 
 Thin: every rule lives in `services/<action>.py` (`notices/services/submit.py`,
-`publish.py`, `return_to_draft.py`, `acknowledge.py`), one function per action,
-independently unit-testable and reusable outside HTTP. This class is the one
-place all five actions are visible together — matches the convention the
-HackSoft Django Styleguide itself uses (services split granularly, views
-stay one file per resource) rather than a further mixin-per-action split on
-the view side, which buys little here since a `ViewSet` already gives every
-action a clearly-bounded method.
+`publish.py`, `return_to_draft.py`, `acknowledge.py`), one function per action
+— this resource has five genuinely distinct state transitions, each worth its
+own file, independently unit-testable and reusable outside HTTP. Sibling
+resource packages split `services/` at whatever granularity their own actions
+warrant (`preferences/services/` groups by concern rather than one file per
+function, since it has none of this kind of per-action state machine); this
+file's own shape isn't a claim that every package matches it. `viewset.py`
+itself stays one file per resource everywhere, matching the convention the
+HackSoft Django Styleguide itself uses, rather than a further mixin-per-action
+split on the view side, which buys little here since a `ViewSet` already
+gives every action a clearly-bounded method.
 """
 
 from __future__ import annotations
@@ -103,7 +107,7 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
 
     @extend_schema(request=None, responses={200: None})
     def acknowledge(self, request: Request, pk: str | None = None) -> Response:
-        """`POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge_notice`."""
+        """`POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge`."""
         instance = self.get_object()
         acknowledge_notice(instance, actor_id=request.user.pk)
         return ActionResponse.ok({}, message="Acknowledged.")

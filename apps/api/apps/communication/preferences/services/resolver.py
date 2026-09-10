@@ -6,8 +6,8 @@ import uuid
 
 from django.core.cache import cache
 
-from apps.communication.permission_classes import FEATURE
-from apps.communication.preferences.services.matrix import _PREFERENCE_CACHE_TTL
+from apps.communication.features import FEATURE
+from apps.communication.preferences.services.matrix import PREFERENCE_CACHE_TTL
 from core.tenancy.features import is_feature_enabled
 
 
@@ -53,7 +53,7 @@ def bulk_is_channel_enabled(
             by_user[user_id][(category, ch)] = is_enabled
         cache.set_many(
             {cache_keys[user_id]: matrix for user_id, matrix in by_user.items()},
-            _PREFERENCE_CACHE_TTL,
+            PREFERENCE_CACHE_TTL,
         )
         for user_id, matrix in by_user.items():
             result[user_id] = matrix.get((event_category, channel), True)

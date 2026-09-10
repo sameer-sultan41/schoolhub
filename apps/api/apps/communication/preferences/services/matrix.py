@@ -6,13 +6,14 @@ import uuid
 
 from django.core.cache import cache
 
-from apps.communication.permission_classes import FEATURE
+from apps.communication.features import FEATURE
 from core.notifications.models import NotificationCategory, NotificationChannel
 from core.tenancy.features import is_feature_enabled
 
-#: Shared with `resolver.py`'s `bulk_is_channel_enabled` — both read/write the
-#: same `notif-pref:{tenant_id}:{user_id}` cache keys and must agree on TTL.
-_PREFERENCE_CACHE_TTL = 300
+#: Not private — imported by `resolver.py`'s `bulk_is_channel_enabled`, which
+#: reads/writes the same `notif-pref:{tenant_id}:{user_id}` cache keys and
+#: must agree on TTL.
+PREFERENCE_CACHE_TTL = 300
 
 
 def _preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[tuple[str, str], bool]:
@@ -35,7 +36,7 @@ def _preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[tupl
         "event_category", "channel", "is_enabled"
     )
     matrix = {(category, channel): is_enabled for category, channel, is_enabled in rows}
-    cache.set(cache_key, matrix, _PREFERENCE_CACHE_TTL)
+    cache.set(cache_key, matrix, PREFERENCE_CACHE_TTL)
     return matrix
 
 

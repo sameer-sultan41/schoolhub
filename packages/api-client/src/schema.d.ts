@@ -2939,7 +2939,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description `POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge_notice`. */
+        /** @description `POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge`. */
         post: operations["notices_:acknowledge_create"];
         delete?: never;
         options?: never;
