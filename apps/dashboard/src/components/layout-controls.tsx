@@ -24,7 +24,7 @@ import {
   SIDEBAR_VARIANTS,
   type PreferenceKey,
   type PreferenceValues,
-} from "@/lib/preferences/preferences-config";
+} from "@/store/preferences-config";
 import { usePreference, usePreferenceActions } from "@/lib/preferences/preferences-provider";
 
 /**
