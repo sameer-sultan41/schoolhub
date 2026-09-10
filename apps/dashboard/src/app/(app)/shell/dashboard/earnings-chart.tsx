@@ -30,7 +30,8 @@ export function EarningsChart() {
   const sessionId = useMemo(() => {
     const list = sessions.data ?? [];
     const current =
-      list.find((session) => session.is_current) ?? list.find((session) => session.status === "active");
+      list.find((session) => session.is_current) ??
+      list.find((session) => session.status === "active");
     return current?.id ?? null;
   }, [sessions.data]);
 

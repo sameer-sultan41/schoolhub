@@ -59,10 +59,10 @@ import { Services } from "@/services";
  * The vendor's "Pro" billing badge is replaced with the user's real role.
  */
 function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return `${parts[0]![0]}${parts[parts.length - 1]![0]}`.toUpperCase();
+  const [first, ...rest] = name.trim().split(/\s+/).filter(Boolean);
+  if (!first) return "?";
+  const last = rest.at(-1);
+  return last ? `${first[0]}${last[0]}`.toUpperCase() : first.slice(0, 2).toUpperCase();
 }
 
 /** Metronic's own demo covered 5 unrelated languages with flags; this app ships 2. */
@@ -87,7 +87,7 @@ export function UserDropdownMenu() {
 
   // Distinct from "still loading": an error (e.g. the API unreachable) must not sit on
   // the loading label forever, which reads as a hang rather than a real failure.
-  const displayName = isPending ? "Loading…" : isError ? "Unable to load profile" : (user?.full_name ?? "");
+  const displayName = isPending ? "Loading…" : isError ? "Unable to load profile" : user.full_name;
   const contact = user?.email ?? user?.phone ?? null;
   const initials = user ? initialsOf(user.full_name) : "?";
   const roleLabel = user?.roles.length ? user.roles.map((role) => role.name).join(", ") : null;
