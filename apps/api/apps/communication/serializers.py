@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.communication.models import (
-    Announcement,
-    NotificationPreference,
-    NotificationTemplateOverride,
-)
+from apps.communication.models import NotificationPreference, NotificationTemplateOverride
 from apps.communication.services import assert_override_is_valid, assert_preference_may_be_saved
 from core.notifications.models import DeliveryLog
 from core.notifications.templates import used_placeholders
@@ -127,34 +123,3 @@ class DeliveryReportResponseSerializer(serializers.Serializer):
     """`GET /delivery-logs:summary`'s real response shape — see views.py's `summary`."""
 
     data = DeliveryReportRowSerializer(many=True)
-
-
-class AnnouncementSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Announcement
-        fields = [
-            "id",
-            "title",
-            "body",
-            "audience_type",
-            "audience_filter",
-            "campus_id",
-            "status",
-            "is_emergency",
-            "publish_at",
-            "expires_at",
-            "show_on_website",
-            "attachments",
-            "published_by",
-            "published_at",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = [
-            "id",
-            "status",
-            "published_by",
-            "published_at",
-            "created_at",
-            "updated_at",
-        ]

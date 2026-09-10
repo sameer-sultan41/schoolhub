@@ -9,7 +9,6 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from apps.communication.views import (
-    AnnouncementViewSet,
     DeliveryLogViewSet,
     NotificationPreferenceView,
     NotificationTemplateOverrideViewSet,
@@ -20,7 +19,6 @@ router.register(
     "notification-templates", NotificationTemplateOverrideViewSet, basename="notification-templates"
 )
 router.register("delivery-logs", DeliveryLogViewSet, basename="delivery-logs")
-router.register("announcements", AnnouncementViewSet, basename="announcements")
 
 urlpatterns = [
     path(
@@ -38,11 +36,7 @@ urlpatterns = [
         NotificationPreferenceView.as_view(),
         name="notification-preferences",
     ),
-    path(
-        "announcements/<uuid:pk>:publish",
-        AnnouncementViewSet.as_view({"post": "publish"}),
-        name="announcements-publish",
-    ),
+    path("", include("apps.communication.announcements.urls")),
     path("", include("apps.communication.notices.urls")),
     *router.urls,
 ]

@@ -6,13 +6,14 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.communication.action_mixin import ActionMixinBase
 from apps.communication.notices.serializers import NoticeSerializer
 from apps.communication.notices.services.return_to_draft import return_notice_to_draft
 from core.api.viewsets import ActionResponse
 from core.audit.services import record_audit
 
 
-class ReturnToDraftActionMixin:
+class ReturnToDraftActionMixin(ActionMixinBase):
     @extend_schema(request=None, responses={200: NoticeSerializer})
     def return_to_draft(self, request: Request, pk: str | None = None) -> Response:
         """`POST /notices/{id}:return-to-draft` — pending_approval -> draft, with comments."""

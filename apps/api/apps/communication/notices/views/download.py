@@ -7,10 +7,11 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.communication.action_mixin import ActionMixinBase
 from apps.communication.notices import documents
 
 
-class DownloadActionMixin:
+class DownloadActionMixin(ActionMixinBase):
     @extend_schema(responses={200: None})
     def download(self, request: Request, pk: str | None = None) -> Response:
         """`GET /notices/{id}/download` — the notice rendered as a PDF document."""
