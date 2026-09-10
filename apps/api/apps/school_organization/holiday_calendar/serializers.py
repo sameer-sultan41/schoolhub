@@ -1,23 +1,5 @@
-"""Serializers for the school-organization module.
-
-Shape validation lives here; rules that need to look at other rows live in
-``services`` and are called from ``validate()`` so the same rule applies whether
-the write arrives from the API, the bulk importer or a Celery job.
-
-Foreign keys are exposed with their ``_id`` suffix to match the column names in
-docs/05-database/entities/academics.md and the filter names in the
-module doc §16.
-
-``CampusSerializer``, ``DepartmentSerializer``, ``AcademicSessionSerializer``,
-``SessionCloneSerializer``, ``TermSerializer``, ``ClassSerializer``,
-``SectionSerializer``, ``SubjectSerializer``, ``HouseSerializer`` and
-``SchoolSettingsSerializer`` moved to their own packages (``campuses/
-serializers.py``, ``departments/serializers.py``, ``academic_sessions/
-serializers.py``, ``terms/serializers.py``, ``classes/serializers.py``,
-``sections/serializers.py``, ``subjects/serializers.py``, ``houses/
-serializers.py``, ``school_settings/serializers.py``) — this file now holds
-only the ``holiday_calendar/`` resource, the last one left in the flat
-layout.
+"""`HolidayCalendarSerializer` — `/holiday-calendar` request/response shape
+(module doc §5.8, §16).
 """
 
 from __future__ import annotations

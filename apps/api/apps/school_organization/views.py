@@ -1,31 +1,21 @@
-"""HTTP layer for the school-organization module.
+"""``BlockingDestroyMixin`` — the one piece of school-organization's original
+flat HTTP layer still at the app root.
 
-Thin by design: every rule that needs to look at more than the request body lives
-in ``services``. Each viewset declares the permission key the endpoint requires —
-``HasPermissionKey`` fails closed when one is missing, so an undeclared endpoint
-is a 403, not an open door.
-
-``queryset`` is set to the *manager*, not ``manager.all()``. The tenant-scoped
-manager resolves the active tenant when its queryset is built, and DRF builds it
-per request; ``Model.objects.all()`` evaluated at class-definition time would be
-frozen empty because no tenant context exists at import.
+Every ViewSet and APIView that used to live in this file has moved into its
+own resource package (``campuses/``, ``departments/``, ``academic_sessions/``,
+``terms/``, ``classes/``, ``sections/``, ``subjects/``, ``houses/``,
+``school_settings/``, ``holiday_calendar/``). This mixin stays here, at this
+exact path and under this exact name, because ``apps/academics/views.py``
+imports it directly (``from apps.school_organization.views import
+BlockingDestroyMixin``) — the same kind of cross-app constraint that keeps
+parts of ``services.py`` at the module root; see that file's docstring for
+the full picture of what stays flat in this module and why.
 """
 
 from __future__ import annotations
 
-from django.db import transaction
-from drf_spectacular.utils import extend_schema
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
-
-from apps.school_organization import calendar, services
-from apps.school_organization.serializers import HolidayCalendarSerializer
-from core.api.permissions import RequiresModuleFeature
-from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
-from core.audit.services import record_audit
-from core.rbac.permissions import HasPermissionKey
-from core.tenancy.models import TenantSettings
+from apps.school_organization import services
+from core.api.viewsets import TenantScopedViewSetMixin
 
 
 class BlockingDestroyMixin(TenantScopedViewSetMixin):
@@ -33,117 +23,8 @@ class BlockingDestroyMixin(TenantScopedViewSetMixin):
 
     The PROTECT foreign keys would stop it anyway, but as an integrity error with
     no useful message; this turns it into a 422 naming the blocking relations.
-
-    Imported directly by ``apps/academics/views.py`` — see this module's
-    ``services.py`` docstring for the cross-app-import constraint that keeps
-    this file (and specifically this name, this path) in place even though
-    every ViewSet that used to live alongside it has moved into its own
-    resource package.
     """
 
     def perform_destroy(self, instance) -> None:
         services.assert_deletable(instance)
         super().perform_destroy(instance)
-
-
-class HolidayCalendarView(TenantScopedViewSetMixin, APIView):
-    """``GET/PUT /api/v1/holiday-calendar`` — §16's declared calendar resource.
-
-    A projection of ``tenant_settings.academic``, not its own table: see
-    ``apps/school_organization/calendar.py``'s header for why the calendar is
-    JSONB configuration rather than an entity. It exists as a route separate from
-    ``/school-settings`` because §16 declares it separately, and because
-    ``it_admin`` adjusting an unplanned closure mid-year (§8) is a different and
-    far more frequent act than editing the school profile. It shares the settings
-    permission keys, which §4 already describes as covering "academic
-    configuration (calendar, timezone, locale, currency)" — inventing
-    ``school.holiday-calendar.*`` would put keys in the registry that no module
-    doc declares and no seeded role holds.
-
-    PUT rather than PATCH, and §16 says PUT: each list named in the body is
-    replaced wholesale. Merging entry by entry would leave no way to *remove* a
-    holiday, which is exactly what a cancelled closure needs.
-
-    Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding:
-    this is a plain ``APIView``, so without it ``request.tenant`` is never set
-    and ``RequiresModuleFeature`` fails closed on every request before
-    ``is_feature_enabled`` is even checked — the same reason
-    ``school_settings/view.py::SchoolSettingsView`` mixes it in too.
-    """
-
-    permission_classes = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
-    required_feature = "module.school"
-    required_permission = "school.settings.view"
-    required_permission_map = {"put": "school.settings.update"}
-    serializer_class = HolidayCalendarSerializer
-
-    @extend_schema(responses={200: HolidayCalendarSerializer})
-    def get(self, request) -> Response:
-        return ActionResponse.ok(self._represent(self._academic(request)))
-
-    @extend_schema(request=HolidayCalendarSerializer, responses={200: HolidayCalendarSerializer})
-    def put(self, request) -> Response:
-        serializer = HolidayCalendarSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        changes = serializer.validated_data
-
-        settings_row = self._settings(request)
-        before = dict(settings_row.academic or {})
-        academic = dict(before)
-
-        if "working_days" in changes:
-            academic["working_days"] = changes["working_days"]
-        if "holidays" in changes:
-            academic["holidays"] = [
-                {
-                    "start_date": entry["start_date"].isoformat(),
-                    "end_date": entry["end_date"].isoformat(),
-                    "name": entry["name"],
-                    "campus_id": str(entry["campus_id"]) if entry.get("campus_id") else None,
-                }
-                for entry in changes["holidays"]
-            ]
-
-        with transaction.atomic():
-            settings_row.academic = academic
-            settings_row.updated_by = request.user.pk
-            settings_row.save(update_fields=["academic", "updated_by", "updated_at"])
-
-        record_audit(
-            request,
-            "update",
-            settings_row,
-            before=self._represent(before),
-            after=self._represent(academic),
-        )
-        return ActionResponse.ok(self._represent(academic), message="Calendar updated.")
-
-    @staticmethod
-    def _settings(request) -> TenantSettings:
-        """One settings row per tenant; provisioning may not have created it yet."""
-        row, _ = TenantSettings.objects.get_or_create(
-            tenant=request.tenant,
-            defaults={"created_by": request.user.pk, "updated_by": request.user.pk},
-        )
-        return row
-
-    @staticmethod
-    def _academic(request) -> dict:
-        row = TenantSettings.objects.filter(tenant=request.tenant).first()
-        return dict(row.academic or {}) if row is not None else {}
-
-    @staticmethod
-    def _represent(academic: dict) -> dict:
-        """Answer with the *effective* week, not the stored one.
-
-        A tenant that has configured nothing still operates Monday to Friday
-        (``calendar.DEFAULT_WORKING_DAYS``), and a GET that returned an empty
-        list would tell the caller the school never opens.
-        """
-        configured = academic.get("working_days")
-        working = (
-            sorted({day for day in configured if isinstance(day, int) and 0 <= day <= 6})
-            if isinstance(configured, list) and configured
-            else list(calendar.DEFAULT_WORKING_DAYS)
-        )
-        return {"working_days": working, "holidays": academic.get("holidays") or []}

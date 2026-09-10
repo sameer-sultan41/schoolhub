@@ -1,8 +1,10 @@
-"""Routes for the school-organization module (module doc §16)."""
+"""Routes for the school-organization module (module doc §16).
+
+Pure aggregator: every resource declares its own routes in its own package's
+``urls.py``, this file just includes them.
+"""
 
 from django.urls import include, path
-
-from apps.school_organization.views import HolidayCalendarView
 
 urlpatterns = [
     path("", include("apps.school_organization.campuses.urls")),
@@ -14,5 +16,5 @@ urlpatterns = [
     path("", include("apps.school_organization.subjects.urls")),
     path("", include("apps.school_organization.houses.urls")),
     path("", include("apps.school_organization.school_settings.urls")),
-    path("holiday-calendar", HolidayCalendarView.as_view(), name="holiday-calendar"),
+    path("", include("apps.school_organization.holiday_calendar.urls")),
 ]
