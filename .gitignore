@@ -39,3 +39,7 @@ graphify-out/
 
 # TypeScript incremental build cache — regenerated on every tsc/typecheck run
 *.tsbuildinfo
+
+# superpowers subagent-driven-development workspace — plan-scoped scratch (briefs,
+# reports, review packages, ledger), regenerated per plan run, never committed
+.superpowers/
