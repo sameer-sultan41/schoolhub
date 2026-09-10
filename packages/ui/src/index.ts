@@ -53,6 +53,9 @@ export {
   avatarStatusVariants,
 } from "./components/avatar";
 
+export { AvatarGroup } from "./components/avatar-group";
+export type { AvatarGroupAvatar, Avatars } from "./components/avatar-group";
+
 export { Badge, BadgeButton, BadgeDot, badgeVariants } from "./components/badge";
 export type { BadgeButtonProps, BadgeDotProps, BadgeProps } from "./components/badge";
 
@@ -177,6 +180,8 @@ export {
   DropdownMenuTrigger,
 } from "./components/dropdown-menu";
 
+export { DropdownMenu4 } from "./components/dropdown-menu-4";
+
 export { EmptyState } from "./components/empty-state";
 export type { EmptyStateProps } from "./components/empty-state";
 
@@ -220,6 +225,8 @@ export { Popover, PopoverContent, PopoverTrigger } from "./components/popover";
 export { Progress, ProgressCircle, ProgressRadial } from "./components/progress";
 
 export { RadioGroup, RadioGroupItem } from "./components/radio-group";
+
+export { Rating } from "./components/rating";
 
 export { ScrollArea, ScrollBar } from "./components/scroll-area";
 
@@ -328,3 +335,10 @@ export type { ThemePreset } from "./styles/presets";
 
 export { brandingToCssText, brandingToCssVariables, sanitizeCssValue } from "./lib/branding";
 export { cn } from "./lib/cn";
+
+export { useIsMobile } from "./hooks/use-mobile";
+export { useMenu } from "./hooks/use-menu";
+export { useScrollPosition } from "./hooks/use-scroll-position";
+
+export type { MenuConfig, MenuItem } from "./lib/menu-types";
+export { toAbsoluteUrl } from "./lib/to-absolute-url";

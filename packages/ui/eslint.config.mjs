@@ -15,18 +15,6 @@ import base from "@schoolhub/config/eslint";
  * repo's own WCAG 2.1 AA requirement (root AGENTS.md).
  */
 export default defineConfig([
-  // Metronic's own demo-page scaffolding, copied in alongside the primitive library but
-  // not yet wired into anything this package exports (see tsconfig.json's `exclude` for
-  // the same reasoning) — it uses this app's own Next.js path aliases and isn't part of
-  // the TypeScript program, so type-aware linting can't parse it either.
-  {
-    ignores: [
-      "src/components/layouts/**",
-      "src/components/partials/**",
-      "src/components/image-input/**",
-      "src/components/keenicons/**",
-    ],
-  },
   reactHooks.configs.flat.recommended,
   jsxA11y.flatConfigs.recommended,
   ...base,

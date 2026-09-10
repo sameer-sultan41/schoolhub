@@ -18,7 +18,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     // The preference data-attributes (data-theme-preset, data-sidebar-variant,
     // data-content-layout, data-navbar-style — see lib/preferences/preferences-config.ts)
-    // apply app-wide, not just under (app)/_metronic's Shell: (auth)/login has no sidebar
+    // apply app-wide, not just under (app)/shell's Shell: (auth)/login has no sidebar
     // to vary, but it still wants the same colour preset, so this can't be toggled on
     // mount by Shell alone. `readPreferencesFromCookies` is what lets the first server
     // render already agree with whatever a returning viewer chose last time — no

@@ -16,7 +16,7 @@ import { THEME_PRESETS } from "@schoolhub/ui";
  * decorative-but-inert control this app avoids elsewhere (see login-form.tsx dropping
  * Metronic's non-functional "Remember me"). `content_layout` no longer needs its own
  * `data-content-layout` CSS either — `partials/common/container.tsx` reads this preference
- * directly instead of Metronic's separate `_metronic/settings.ts` `container` field, which
+ * directly instead of Metronic's separate `shell/settings.ts` `container` field, which
  * only that one component ever read.
  *
  * `theme_preset` defaults to "metronic", not the pre-Metronic shell's "tenant" — this
