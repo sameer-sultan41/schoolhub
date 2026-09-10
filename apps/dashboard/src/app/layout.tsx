@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "next-themes";
-import { AppProviders } from "@/components/providers";
+import { AppProviders } from "@/providers/app-providers";
 import { directionFor } from "@/lib/env";
 import { preferenceDataAttributes } from "@/store/preferences-config";
 import { readPreferencesFromCookies } from "@/store/preferences-cookies.server";
-import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
+import { PreferencesProvider } from "@/providers/preferences-provider";
 
 import "./globals.css";
 
