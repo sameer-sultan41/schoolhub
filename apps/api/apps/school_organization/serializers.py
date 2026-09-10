@@ -7,11 +7,14 @@ the write arrives from the API, the bulk importer or a Celery job.
 Foreign keys are exposed with their ``_id`` suffix to match the column names in
 docs/05-database/entities/academics.md and the filter names in the
 module doc §16.
+
+``CampusSerializer`` moved to ``campuses/serializers.py`` — this file now holds
+only the resources that haven't been split into their own package yet.
 """
 
 from __future__ import annotations
 
-from typing import Any, overload
+from typing import Any
 
 from rest_framework import serializers
 
@@ -26,69 +29,11 @@ from apps.school_organization.models import (
     Subject,
     Term,
 )
-
-# Written by the base viewset from the request, never by the client.
-READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
-
-
-def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
-    """A tenant-scoped related field.
-
-    The *manager* is passed rather than ``manager.all()``: DRF re-evaluates it on
-    every request, so the tenant filter runs inside a tenant context. A queryset
-    built at import time would be frozen empty, and would silently reject every id.
-    """
-    return serializers.PrimaryKeyRelatedField(queryset=model.objects, **kwargs)
-
-
-@overload
-def _normalize_code(value: str) -> str: ...
-
-
-@overload
-def _normalize_code(value: None) -> None: ...
-
-
-def _normalize_code(value: str | None) -> str | None:
-    """Codes are matched by humans and by importers; case and padding are noise."""
-    return value.strip().upper() if value else value
-
-
-class CampusSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Campus
-        fields = (
-            "id",
-            "name",
-            "code",
-            "address",
-            "phone",
-            "email",
-            "timezone",
-            "head_staff_id",
-            "is_primary",
-            "is_active",
-            "created_at",
-            "updated_at",
-        )
-        read_only_fields = READ_ONLY_FIELDS
-
-    def validate_code(self, value: str) -> str:
-        return _normalize_code(value)
-
-    def validate_timezone(self, value: str | None) -> str | None:
-        if value and not services.is_valid_timezone(value):
-            raise serializers.ValidationError(f"'{value}' is not a valid IANA timezone.")
-        return value
-
-    def validate_head_staff_id(self, value):
-        return services.resolve_tenant_staff_id(
-            staff_id=value, tenant_id=self.context["request"].tenant.pk
-        )
+from apps.school_organization.serializer_helpers import READ_ONLY_FIELDS, fk, normalize_code
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
-    campus_id = _fk(Campus, source="campus", required=False, allow_null=True)
+    campus_id = fk(Campus, source="campus", required=False, allow_null=True)
 
     class Meta:
         model = Department
@@ -107,7 +52,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
         read_only_fields = READ_ONLY_FIELDS
 
     def validate_code(self, value: str) -> str:
-        return _normalize_code(value)
+        return normalize_code(value)
 
     def validate_head_staff_id(self, value):
         return services.resolve_tenant_staff_id(
@@ -154,7 +99,7 @@ class SessionCloneSerializer(serializers.Serializer):
 
 
 class TermSerializer(serializers.ModelSerializer):
-    academic_session_id = _fk(AcademicSession, source="academic_session")
+    academic_session_id = fk(AcademicSession, source="academic_session")
 
     class Meta:
         model = Term
@@ -198,7 +143,7 @@ class ClassSerializer(serializers.ModelSerializer):
         read_only_fields = READ_ONLY_FIELDS
 
     def validate_code(self, value: str | None) -> str | None:
-        return _normalize_code(value)
+        return normalize_code(value)
 
     def validate_level(self, value: int) -> int:
         if value < 1:
@@ -207,8 +152,8 @@ class ClassSerializer(serializers.ModelSerializer):
 
 
 class SectionSerializer(serializers.ModelSerializer):
-    class_id = _fk(Class, source="school_class")
-    campus_id = _fk(Campus, source="campus")
+    class_id = fk(Class, source="school_class")
+    campus_id = fk(Campus, source="campus")
 
     class Meta:
         model = Section
@@ -250,7 +195,7 @@ class SectionSerializer(serializers.ModelSerializer):
 
 
 class SubjectSerializer(serializers.ModelSerializer):
-    department_id = _fk(Department, source="department", required=False, allow_null=True)
+    department_id = fk(Department, source="department", required=False, allow_null=True)
 
     class Meta:
         model = Subject
@@ -268,7 +213,7 @@ class SubjectSerializer(serializers.ModelSerializer):
         read_only_fields = READ_ONLY_FIELDS
 
     def validate_code(self, value: str) -> str:
-        return _normalize_code(value)
+        return normalize_code(value)
 
 
 # `ClassSubjectSerializer` lived here until `/class-subjects` moved to academics
@@ -294,7 +239,7 @@ class HouseSerializer(serializers.ModelSerializer):
         read_only_fields = READ_ONLY_FIELDS
 
     def validate_code(self, value: str | None) -> str | None:
-        return _normalize_code(value)
+        return normalize_code(value)
 
     def validate_house_master_staff_id(self, value):
         return services.resolve_tenant_staff_id(

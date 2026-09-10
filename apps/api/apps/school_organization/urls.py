@@ -9,12 +9,11 @@ Two things are deliberate here:
   declared as explicit paths *before* the router's own patterns.
 """
 
-from django.urls import path
+from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from apps.school_organization.views import (
     AcademicSessionViewSet,
-    CampusViewSet,
     ClassViewSet,
     DepartmentViewSet,
     HolidayCalendarView,
@@ -26,7 +25,6 @@ from apps.school_organization.views import (
 )
 
 router = SimpleRouter(trailing_slash=False)
-router.register("campuses", CampusViewSet, basename="campuses")
 router.register("departments", DepartmentViewSet, basename="departments")
 router.register("academic-sessions", AcademicSessionViewSet, basename="academic-sessions")
 router.register("terms", TermViewSet, basename="terms")
@@ -36,6 +34,7 @@ router.register("subjects", SubjectViewSet, basename="subjects")
 router.register("houses", HouseViewSet, basename="houses")
 
 urlpatterns = [
+    path("", include("apps.school_organization.campuses.urls")),
     path("school-settings", SchoolSettingsView.as_view(), name="school-settings"),
     path("holiday-calendar", HolidayCalendarView.as_view(), name="holiday-calendar"),
     path(

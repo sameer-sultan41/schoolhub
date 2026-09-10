@@ -15,7 +15,6 @@ import django_filters
 
 from apps.school_organization.models import (
     AcademicSession,
-    Campus,
     Class,
     Department,
     House,
@@ -23,12 +22,6 @@ from apps.school_organization.models import (
     Subject,
     Term,
 )
-
-
-class CampusFilterSet(django_filters.FilterSet):
-    class Meta:
-        model = Campus
-        fields = ["is_active", "is_primary"]
 
 
 class DepartmentFilterSet(django_filters.FilterSet):

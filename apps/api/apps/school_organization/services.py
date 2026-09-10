@@ -303,20 +303,6 @@ def map_subject_to_class(
     )
 
 
-def clear_primary_campus(*, keep_id: uuid.UUID | None, actor_id: uuid.UUID) -> None:
-    """Demote the incumbent primary campus so a new one can take the flag.
-
-    Promoting a new primary is the operator's stated intent, so we demote rather
-    than reject. Must run *before* the promotion is written: the partial unique
-    index is checked per statement, so writing two primaries and fixing it up
-    afterwards would raise instead of succeeding.
-    """
-    demoted = Campus.objects.filter(is_primary=True)
-    if keep_id is not None:
-        demoted = demoted.exclude(pk=keep_id)
-    demoted.update(is_primary=False, updated_by=actor_id)
-
-
 def _live_dependents(instance) -> list[str]:
     """Names of relations that still hold non-deleted rows pointing at ``instance``."""
     blocking: list[str] = []
