@@ -9,12 +9,13 @@ docs/05-database/entities/academics.md and the filter names in the
 module doc §16.
 
 ``CampusSerializer``, ``DepartmentSerializer``, ``AcademicSessionSerializer``,
-``SessionCloneSerializer``, ``TermSerializer``, ``ClassSerializer`` and
-``SectionSerializer`` moved to their own packages (``campuses/
-serializers.py``, ``departments/serializers.py``, ``academic_sessions/
-serializers.py``, ``terms/serializers.py``, ``classes/serializers.py``,
-``sections/serializers.py``) — this file now holds only the resources that
-haven't been split into their own package yet.
+``SessionCloneSerializer``, ``TermSerializer``, ``ClassSerializer``,
+``SectionSerializer`` and ``SubjectSerializer`` moved to their own packages
+(``campuses/serializers.py``, ``departments/serializers.py``,
+``academic_sessions/serializers.py``, ``terms/serializers.py``, ``classes/
+serializers.py``, ``sections/serializers.py``, ``subjects/serializers.py``)
+— this file now holds only the resources that haven't been split into their
+own package yet.
 """
 
 from __future__ import annotations
@@ -22,36 +23,8 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.school_organization import services
-from apps.school_organization.models import Campus, Department, House, Subject
-from apps.school_organization.serializer_helpers import READ_ONLY_FIELDS, fk, normalize_code
-
-
-class SubjectSerializer(serializers.ModelSerializer):
-    department_id = fk(Department, source="department", required=False, allow_null=True)
-
-    class Meta:
-        model = Subject
-        fields = (
-            "id",
-            "name",
-            "code",
-            "subject_type",
-            "department_id",
-            "description",
-            "is_active",
-            "created_at",
-            "updated_at",
-        )
-        read_only_fields = READ_ONLY_FIELDS
-
-    def validate_code(self, value: str) -> str:
-        return normalize_code(value)
-
-
-# `ClassSubjectSerializer` lived here until `/class-subjects` moved to academics
-# in this PR. Nothing routed to it afterwards, so it is gone rather than left as
-# a second definition of the same wire shape for someone to edit by mistake.
-# `apps/academics/serializers.py::CurriculumSerializer` is the one.
+from apps.school_organization.models import Campus, House
+from apps.school_organization.serializer_helpers import READ_ONLY_FIELDS, normalize_code
 
 
 class HouseSerializer(serializers.ModelSerializer):

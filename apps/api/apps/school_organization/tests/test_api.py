@@ -9,19 +9,17 @@ from __future__ import annotations
 
 from rest_framework import status
 
-from apps.school_organization.models import SubjectType
 from apps.school_organization.tests.base import SchoolOrganizationAPITestCase
-from apps.school_organization.tests.factories import DepartmentFactory, HouseFactory, SubjectFactory
+from apps.school_organization.tests.factories import HouseFactory
 from core.tenancy.context import tenant_context
 
 
 class ListOrderingTests(SchoolOrganizationAPITestCase):
-    """`?ordering=` on the two structural lists the dashboard renders.
+    """`?ordering=` on the one structural list left here.
 
-    (Campuses', departments', classes' and sections' own ordering cases moved
-    to `campuses/tests/test_endpoints.py`, `departments/tests/test_endpoints.py`,
-    `classes/tests/test_endpoints.py` and `sections/tests/test_endpoints.py`
-    with the rest of those resources.)
+    (Campuses', departments', classes', sections' and subjects' own ordering
+    cases moved to their own packages' `tests/test_endpoints.py` with the rest
+    of those resources — houses is the last one still here.)
 
     Every case creates its rows in an order that disagrees with the ordering it
     asserts, so a passing test proves the sort ran rather than that insertion order
@@ -38,50 +36,6 @@ class ListOrderingTests(SchoolOrganizationAPITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         return [row["id"] for row in response.json()["data"]]
-
-    # ------------------------------------------------------------------ subjects
-
-    def test_subjects_sort_by_the_annotated_department_name(self) -> None:
-        self.allow("school.subject.view")
-        with tenant_context(self.tenant.id):
-            science = DepartmentFactory(tenant=self.tenant, name="Science", code="SCI")
-            arts = DepartmentFactory(tenant=self.tenant, name="Arts", code="ART")
-            algebra = SubjectFactory(
-                tenant=self.tenant, name="Algebra", code="ALG", department=science
-            )
-            drawing = SubjectFactory(
-                tenant=self.tenant, name="Drawing", code="DRW", department=arts
-            )
-
-        # Arts before Science, the opposite of the subjects' own name order.
-        self.assertEqual(
-            self._ids("/api/v1/subjects?ordering=department_name"),
-            [str(drawing.pk), str(algebra.pk)],
-        )
-        self.assertEqual(
-            self._ids("/api/v1/subjects?ordering=-department_name"),
-            [str(algebra.pk), str(drawing.pk)],
-        )
-
-    def test_subjects_ignore_an_undeclared_ordering_field(self) -> None:
-        self.allow("school.subject.view")
-        with tenant_context(self.tenant.id):
-            algebra = SubjectFactory(
-                tenant=self.tenant,
-                name="Algebra",
-                code="ALG",
-                subject_type=SubjectType.ELECTIVE,
-            )
-            drawing = SubjectFactory(
-                tenant=self.tenant, name="Drawing", code="DRW", subject_type=SubjectType.CORE
-            )
-
-        # `subject_type` filters but does not sort; honoured, "core" < "elective"
-        # would lead with Drawing.
-        self.assertEqual(
-            self._ids("/api/v1/subjects?ordering=subject_type"),
-            [str(algebra.pk), str(drawing.pk)],
-        )
 
     # -------------------------------------------------------------------- houses
 

@@ -11,11 +11,9 @@ from apps.school_organization.views import (
     HolidayCalendarView,
     HouseViewSet,
     SchoolSettingsView,
-    SubjectViewSet,
 )
 
 router = SimpleRouter(trailing_slash=False)
-router.register("subjects", SubjectViewSet, basename="subjects")
 router.register("houses", HouseViewSet, basename="houses")
 
 urlpatterns = [
@@ -25,6 +23,7 @@ urlpatterns = [
     path("", include("apps.school_organization.terms.urls")),
     path("", include("apps.school_organization.classes.urls")),
     path("", include("apps.school_organization.sections.urls")),
+    path("", include("apps.school_organization.subjects.urls")),
     path("school-settings", SchoolSettingsView.as_view(), name="school-settings"),
     path("holiday-calendar", HolidayCalendarView.as_view(), name="holiday-calendar"),
     *router.urls,
