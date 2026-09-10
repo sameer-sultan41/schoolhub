@@ -1,4 +1,4 @@
-import { collectPages, fetchPage } from "@schoolhub/api-client";
+import { fetchPage } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 
@@ -16,6 +16,15 @@ interface CountableRecord {
   id: string;
 }
 
+/**
+ * Reads a count straight from the server's own `total_count` rather than draining pages.
+ * Every reference list this dashboard counts (`/classes`, `/sections`, `/subjects`,
+ * `/campuses`, `/students`, `/staff`) uses page-number pagination, confirmed directly
+ * against a running API — `collectPages`/`paginate` only walk *cursor* pagination
+ * (they follow `next_cursor`), so used against these endpoints they silently stop after
+ * page one instead of reporting an error, undercounting any list bigger than one page.
+ * `null` means the endpoint didn't report a total — never a fabricated zero.
+ */
 async function fetchTotal(path: string): Promise<number | null> {
   const page = await fetchPage<CountableRecord>(apiClient, path, { query: { page_size: 1 } });
   const pagination = page.pagination;
@@ -23,19 +32,13 @@ async function fetchTotal(path: string): Promise<number | null> {
   return pagination.total_count ?? null;
 }
 
-async function fetchCount(path: string): Promise<number> {
-  const items = await collectPages<CountableRecord>(apiClient, path);
-  return items.length;
-}
-
 export interface DashboardOverview {
-  /** `null` when the endpoint didn't report a total — never a fabricated zero. */
   students: number | null;
   staff: number | null;
-  classes: number;
-  sections: number;
-  subjects: number;
-  campuses: number;
+  classes: number | null;
+  sections: number | null;
+  subjects: number | null;
+  campuses: number | null;
 }
 
 /** Headline counts shared by the School Snapshot and Reference Overview widgets. */
@@ -43,10 +46,10 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
   const [students, staff, classes, sections, subjects, campuses] = await Promise.all([
     fetchTotal(endpoints.dashboard.students),
     fetchTotal(endpoints.dashboard.staff),
-    fetchCount(endpoints.dashboard.classes),
-    fetchCount(endpoints.dashboard.sections),
-    fetchCount(endpoints.dashboard.subjects),
-    fetchCount(endpoints.dashboard.campuses),
+    fetchTotal(endpoints.dashboard.classes),
+    fetchTotal(endpoints.dashboard.sections),
+    fetchTotal(endpoints.dashboard.subjects),
+    fetchTotal(endpoints.dashboard.campuses),
   ]);
   return { students, staff, classes, sections, subjects, campuses };
 }
@@ -118,7 +121,18 @@ export interface StaffDirectoryRecord {
   updated_at: string;
 }
 
-/** Every staff member — the staff-directory table drains this once. */
+/** `/staff`'s own hard page-size ceiling (api-architecture.md §2.4). */
+const MAX_PAGE_SIZE = 100;
+
+/**
+ * Every staff member, up to one page. `/staff` is page-number paginated, not cursor —
+ * `collectPages` only walks cursors, so it silently returned page one only; this reads
+ * one large page directly instead. A school with more than 100 staff loses the rest for
+ * now, same trade-off `PENDING_PREVIEW_SIZE`-style caps make elsewhere in this app.
+ */
 export async function fetchStaffDirectory(): Promise<StaffDirectoryRecord[]> {
-  return collectPages<StaffDirectoryRecord>(apiClient, endpoints.dashboard.staff);
+  const { items } = await fetchPage<StaffDirectoryRecord>(apiClient, endpoints.dashboard.staff, {
+    query: { page_size: MAX_PAGE_SIZE },
+  });
+  return items;
 }
