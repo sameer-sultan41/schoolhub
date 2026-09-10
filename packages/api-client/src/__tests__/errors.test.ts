@@ -1,4 +1,4 @@
-import { ApiError, codeForStatus, parseErrorEnvelope } from "./errors";
+import { ApiError, codeForStatus, parseErrorEnvelope } from "../errors";
 
 function error(status: number, code = "x"): ApiError {
   return new ApiError({ code, message: "m", status, url: "/students" });

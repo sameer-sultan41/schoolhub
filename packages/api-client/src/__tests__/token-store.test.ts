@@ -1,5 +1,5 @@
-import { ApiError } from "./errors";
-import { createAccessTokenStore, refreshAccessToken } from "./token-store";
+import { ApiError } from "../errors";
+import { createAccessTokenStore, refreshAccessToken } from "../token-store";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers({ "Content-Type": "application/json" });
