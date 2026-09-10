@@ -46,8 +46,9 @@ class NotificationTemplateOverride(TenantOwnedModel):
     """A tenant's own wording for one (code, channel, locale) render target.
 
     `variables` is copied from the platform template's declared set at creation
-    time and re-validated on every edit (`services.assert_override_is_valid`) —
-    never author-editable itself, since widening it would let a tenant declare a
+    time and re-validated on every edit
+    (`template_overrides.services.validate.assert_override_is_valid`) — never
+    author-editable itself, since widening it would let a tenant declare a
     placeholder the platform template's context never supplies.
 
     `is_system` rows are seeded at tenant provisioning for every platform

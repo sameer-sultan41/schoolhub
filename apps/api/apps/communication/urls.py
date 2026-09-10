@@ -8,24 +8,12 @@ pattern.
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from apps.communication.views import (
-    DeliveryLogViewSet,
-    NotificationPreferenceView,
-    NotificationTemplateOverrideViewSet,
-)
+from apps.communication.views import DeliveryLogViewSet, NotificationPreferenceView
 
 router = SimpleRouter(trailing_slash=False)
-router.register(
-    "notification-templates", NotificationTemplateOverrideViewSet, basename="notification-templates"
-)
 router.register("delivery-logs", DeliveryLogViewSet, basename="delivery-logs")
 
 urlpatterns = [
-    path(
-        "notification-templates/<uuid:pk>:preview",
-        NotificationTemplateOverrideViewSet.as_view({"post": "preview"}),
-        name="notification-templates-preview",
-    ),
     path(
         "delivery-logs:summary",
         DeliveryLogViewSet.as_view({"get": "summary"}),
@@ -36,6 +24,7 @@ urlpatterns = [
         NotificationPreferenceView.as_view(),
         name="notification-preferences",
     ),
+    path("", include("apps.communication.template_overrides.urls")),
     path("", include("apps.communication.announcements.urls")),
     path("", include("apps.communication.notices.urls")),
     *router.urls,

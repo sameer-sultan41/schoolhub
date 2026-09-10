@@ -1,106 +1,16 @@
-"""`NotificationTemplateOverride` — a tenant's own wording for a platform template."""
+"""`resolve_tenant_template` — the `core.notifications` override resolver."""
 
 from __future__ import annotations
 
-from django.db import IntegrityError, connection, transaction
-from django.test import TestCase
+from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.communication.services import assert_override_is_valid
-from apps.communication.templates_service import resolve_tenant_template
-from apps.communication.tests.factories import (
-    NotificationTemplateOverrideFactory,
-    TenantFactory,
-    enable_feature,
-)
-from core.api.exceptions import DomainRuleViolation
+from apps.communication.template_overrides.services.resolve import resolve_tenant_template
+from apps.communication.template_overrides.tests.base import CODE, TemplateOverrideTestCase
+from apps.communication.tests.factories import NotificationTemplateOverrideFactory, TenantFactory
 from core.notifications.models import NotificationChannel
-from core.notifications.templates import registry as platform_templates
 from core.tenancy.context import tenant_context
-
-CODE = "communication-test.template"
-
-
-class TemplateOverrideTestCase(TestCase):
-    """Registers a throwaway platform template so overrides have something to check against."""
-
-    def setUp(self) -> None:
-        super().setUp()
-        self._saved_templates = platform_templates._templates.copy()  # noqa: SLF001
-        platform_templates.register(
-            CODE,
-            channel=NotificationChannel.IN_APP,
-            subject="Platform subject {{ name }}",
-            body="Platform body {{ name }}",
-            variables={"name"},
-        )
-        platform_templates.register(
-            CODE,
-            channel=NotificationChannel.SMS,
-            body="SMS body {{ name }}",
-            variables={"name"},
-        )
-        self.tenant = TenantFactory()
-        enable_feature(self.tenant)
-
-    def tearDown(self) -> None:
-        platform_templates._templates = self._saved_templates  # noqa: SLF001
-        super().tearDown()
-
-
-class OverrideValidationTests(TemplateOverrideTestCase):
-    def test_a_tenant_can_override_the_body_of_a_platform_template(self) -> None:
-        with tenant_context(self.tenant.id):
-            override = NotificationTemplateOverrideFactory(
-                tenant=self.tenant,
-                code=CODE,
-                channel=NotificationChannel.IN_APP,
-                subject="Custom {{ name }}",
-                body="Custom body {{ name }}",
-                variables=["name"],
-            )
-
-        self.assertEqual(override.body, "Custom body {{ name }}")
-
-    def test_an_override_cannot_reference_a_variable_the_platform_template_did_not_declare(
-        self,
-    ) -> None:
-        with self.assertRaises(DomainRuleViolation):
-            assert_override_is_valid(
-                code=CODE,
-                channel=NotificationChannel.IN_APP,
-                subject="Hi {{ secret }}",
-                body="Body",
-            )
-
-    def test_an_override_for_a_code_the_platform_does_not_declare_is_refused(self) -> None:
-        with self.assertRaises(DomainRuleViolation):
-            assert_override_is_valid(
-                code="no.such.trigger", channel=NotificationChannel.IN_APP, subject="Hi", body="x"
-            )
-
-    def test_an_sms_override_may_not_declare_a_subject(self) -> None:
-        with self.assertRaises(DomainRuleViolation):
-            assert_override_is_valid(
-                code=CODE, channel=NotificationChannel.SMS, subject="Nope", body="Body"
-            )
-
-    def test_a_subject_bearing_channels_override_must_have_one(self) -> None:
-        with self.assertRaises(DomainRuleViolation):
-            assert_override_is_valid(
-                code=CODE, channel=NotificationChannel.IN_APP, subject=None, body="Body"
-            )
-
-    def test_two_overrides_cannot_share_a_tenant_code_channel_locale(self) -> None:
-        with tenant_context(self.tenant.id):
-            NotificationTemplateOverrideFactory(
-                tenant=self.tenant, code=CODE, channel=NotificationChannel.IN_APP
-            )
-            with self.assertRaises(IntegrityError), transaction.atomic():
-                NotificationTemplateOverrideFactory(
-                    tenant=self.tenant, code=CODE, channel=NotificationChannel.IN_APP
-                )
 
 
 class ResolveTenantTemplateTests(TemplateOverrideTestCase):
@@ -203,16 +113,3 @@ class FeatureGateTests(TemplateOverrideTestCase):
         # an override exists above (created deliberately, to prove it is ignored).
         queries = [q["sql"] for q in captured.captured_queries]
         self.assertFalse(any("notification_templates" in sql for sql in queries), queries)
-
-
-class SystemSeededTemplateTests(TemplateOverrideTestCase):
-    def test_a_system_seeded_templates_code_and_channel_are_immutable_by_convention(self) -> None:
-        """`is_system` marks the row as seeded; services.py never exposes an
-        update path for `code`/`channel` on such a row — the serializer (Task
-        A4) is what actually enforces this; here the flag itself round-trips."""
-        with tenant_context(self.tenant.id):
-            override = NotificationTemplateOverrideFactory(
-                tenant=self.tenant, code=CODE, channel=NotificationChannel.IN_APP, is_system=True
-            )
-
-        self.assertTrue(override.is_system)

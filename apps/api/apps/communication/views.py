@@ -10,17 +10,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.communication import reports, services
-from apps.communication.filters import DeliveryLogFilterSet, NotificationTemplateOverrideFilterSet
-from apps.communication.models import NotificationTemplateOverride
+from apps.communication.filters import DeliveryLogFilterSet
 from apps.communication.serializers import (
     DeliveryLogSerializer,
     DeliveryReportResponseSerializer,
     NotificationPreferenceRowSerializer,
     NotificationPreferenceUpdateSerializer,
-    NotificationTemplateOverrideSerializer,
-    NotificationTemplatePreviewSerializer,
 )
-from apps.communication.templates_service import template_from_override
 from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import TenantScopedViewSetMixin
@@ -41,47 +37,6 @@ STAFF_PERMISSIONS = [
 # Every tenant role reaches `NotificationPreferenceView` — §4's "all roles
 # (scope own)" — including guardians and students managing their own channels.
 OWN_PREFERENCE_PERMISSIONS = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
-
-
-class NotificationTemplateOverrideViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
-    """`/notification-templates` — tenant overrides of the platform defaults."""
-
-    permission_classes = STAFF_PERMISSIONS
-    queryset = NotificationTemplateOverride.objects
-    serializer_class = NotificationTemplateOverrideSerializer
-    filterset_class = NotificationTemplateOverrideFilterSet
-    search_fields = ["code", "name"]
-    ordering_fields = ["code", "channel", "created_at"]
-    scope_campus_field = None
-    required_feature = FEATURE
-    required_permission = "communication.template.view"
-    required_permission_map = {
-        "create": "communication.template.update",
-        "update": "communication.template.update",
-        "partial_update": "communication.template.update",
-        "destroy": "communication.template.update",
-        "preview": "communication.template.view",
-    }
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-
-    @extend_schema(request=None, responses={200: NotificationTemplatePreviewSerializer})
-    def preview(self, request: Request, pk: str | None = None) -> Response:
-        """`POST /notification-templates/{id}:preview` — renders with sample data.
-
-        Never persists. Sample values are `[variable]`, one per declared
-        placeholder, so a missing-variable render error (the real renderer's
-        loudest failure mode) can never happen here — every declared variable
-        always has a value, which is the point of a preview.
-        """
-        instance: NotificationTemplateOverride = self.get_object()
-        template = template_from_override(instance)
-        sample_context: dict[str, object] = {
-            variable: f"[{variable}]" for variable in instance.variables
-        }
-        subject, body = template.render(sample_context)
-        return Response(
-            NotificationTemplatePreviewSerializer({"subject": subject or None, "body": body}).data
-        )
 
 
 class NotificationPreferenceView(TenantScopedViewSetMixin, APIView):

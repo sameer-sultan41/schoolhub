@@ -62,8 +62,9 @@ for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL, Notifica
         variables=_NOTICE_VARS,
     )
 # SMS has no subject concept — `TemplateRegistry.register` refuses a `subject`
-# for this channel, the same rule `services.assert_override_is_valid` mirrors
-# for tenant overrides.
+# for this channel, the same rule
+# `template_overrides.services.validate.assert_override_is_valid` mirrors for
+# tenant overrides.
 templates.register(
     NOTICE_PUBLISHED,
     channel=NotificationChannel.SMS,
