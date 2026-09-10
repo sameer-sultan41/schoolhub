@@ -1,10 +1,4 @@
-"""Query filters for the communication module.
-
-Every FK/relation filter is an explicit typed filter, never a `Meta.fields`
-entry — `timetable/filters.py`'s documented reasoning (a `ModelChoiceFilter`
-builds its validation queryset with no tenant bound, and under RLS that answers
-400 for the caller's own ids) holds identically here.
-"""
+"""Query filters for `/delivery-logs`."""
 
 from __future__ import annotations
 

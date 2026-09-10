@@ -1,4 +1,4 @@
-"""`reports.delivery_report` — one query, regardless of how many rows it groups."""
+"""`services.report.delivery_report` — one query, regardless of how many rows it groups."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from apps.communication import reports
+from apps.communication.delivery.services import report
 from apps.communication.tests.factories import TenantFactory
 from core.notifications.models import DeliveryLog, DeliveryStatus, Notification, NotificationChannel
 from core.tenancy.context import tenant_context
@@ -54,7 +54,7 @@ class DeliveryReportTests(TestCase):
                 status=DeliveryStatus.SENT,
             )
 
-            rows = reports.delivery_report(DeliveryLog.objects.all(), group_by="channel")
+            rows = report.delivery_report(DeliveryLog.objects.all(), group_by="channel")
 
         self.assertEqual(
             rows,
@@ -81,10 +81,10 @@ class DeliveryReportTests(TestCase):
             )
 
             with CaptureQueriesContext(connection) as captured:
-                reports.delivery_report(DeliveryLog.objects.all(), group_by="channel")
+                report.delivery_report(DeliveryLog.objects.all(), group_by="channel")
 
         self.assertEqual(len(captured.captured_queries), 1)
 
     def test_an_unrecognised_group_by_raises(self) -> None:
         with tenant_context(self.tenant.id), self.assertRaises(KeyError):
-            reports.delivery_report(DeliveryLog.objects.all(), group_by="nonsense")
+            report.delivery_report(DeliveryLog.objects.all(), group_by="nonsense")

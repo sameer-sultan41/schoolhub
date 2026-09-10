@@ -6272,11 +6272,11 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /** @description `GET /delivery-logs:summary`'s real response shape — see views.py's `summary`. */
+        /** @description `GET /delivery-logs:summary`'s real response shape — see `views/summary.py`. */
         DeliveryReportResponse: {
             data: components["schemas"]["DeliveryReportRow"][];
         };
-        /** @description One grouped count from `reports.delivery_report`. */
+        /** @description One grouped count from `services.report.delivery_report`. */
         DeliveryReportRow: {
             group: string;
             count: number;

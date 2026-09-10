@@ -1,4 +1,4 @@
-"""API-level tests for the delivery-logs endpoints."""
+"""`/delivery-logs` — HTTP endpoint round trips."""
 
 from __future__ import annotations
 

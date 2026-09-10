@@ -14552,8 +14552,7 @@ components:
       - template_code
     DeliveryReportResponse:
       type: object
-      description: '`GET /delivery-logs:summary`''s real response shape — see views.py''s
-        `summary`.'
+      description: '`GET /delivery-logs:summary`''s real response shape — see `views/summary.py`.'
       properties:
         data:
           type: array
@@ -14563,7 +14562,7 @@ components:
       - data
     DeliveryReportRow:
       type: object
-      description: One grouped count from `reports.delivery_report`.
+      description: One grouped count from `services.report.delivery_report`.
       properties:
         group:
           type: string

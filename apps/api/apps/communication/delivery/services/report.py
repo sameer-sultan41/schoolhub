@@ -1,13 +1,13 @@
 """§13's delivery report, as a pure query function.
 
 Mirrors `apps.fees_finance.reports`'s contract: takes an **already-scoped**
-queryset rather than building its own — `DeliveryLogViewSet.summary` is the
-only caller in this PR, and it passes its own `get_queryset()`'s result, so
-the aggregation never sees a row the requester's record scope would hide.
+queryset rather than building its own — `SummaryActionMixin.summary` is the
+only caller, and it passes its own `get_queryset()`'s result, so the
+aggregation never sees a row the requester's record scope would hide.
 
 One query, aggregated in the database — a Python loop over a tenant's delivery
 history would return the right counts and time out on the tenant that sends
-the most. `tests/test_reports.py`'s `assertNumQueries` is what keeps it that way.
+the most. `tests/test_report.py`'s `assertNumQueries` is what keeps it that way.
 """
 
 from __future__ import annotations

@@ -33,13 +33,13 @@ class DeliveryLogSerializer(serializers.ModelSerializer):
 
 
 class DeliveryReportRowSerializer(serializers.Serializer):
-    """One grouped count from `reports.delivery_report`."""
+    """One grouped count from `services.report.delivery_report`."""
 
     group = serializers.CharField()
     count = serializers.IntegerField()
 
 
 class DeliveryReportResponseSerializer(serializers.Serializer):
-    """`GET /delivery-logs:summary`'s real response shape — see views.py's `summary`."""
+    """`GET /delivery-logs:summary`'s real response shape — see `views/summary.py`."""
 
     data = DeliveryReportRowSerializer(many=True)
