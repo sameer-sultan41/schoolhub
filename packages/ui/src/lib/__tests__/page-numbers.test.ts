@@ -1,4 +1,4 @@
-import { PAGE_WINDOW_SIZE, getPageNumbers } from "./page-numbers";
+import { PAGE_WINDOW_SIZE, getPageNumbers } from "../page-numbers";
 
 describe("getPageNumbers", () => {
   it("returns nothing when there is nothing to paginate", () => {

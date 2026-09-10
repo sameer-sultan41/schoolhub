@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { Bar, BarChart, XAxis } from "recharts";
-import { ChartContainer, type ChartConfig } from "./chart";
+import { ChartContainer, type ChartConfig } from "../chart";
 
 const config = {
   load: { label: "Periods taught", color: "var(--sh-color-chart-1)" },
