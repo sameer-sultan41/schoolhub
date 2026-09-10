@@ -5,14 +5,15 @@ import { ChevronFirst } from "lucide-react";
 
 import { Button, cn, toAbsoluteUrl } from "@schoolhub/ui";
 
-import { useSettings } from "@/app/(app)/shell/settings-provider";
+import { usePreference, usePreferenceActions } from "@/providers/preferences-provider";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/sidebar-header.tsx.
 export function SidebarHeader() {
-  const { settings, storeOption } = useSettings();
+  const sidebarCollapsed = usePreference("sidebar_collapsed");
+  const { setPreference } = usePreferenceActions();
 
   const handleToggleClick = () => {
-    storeOption("layouts.demo1.sidebarCollapse", !settings.layouts.demo1.sidebarCollapse);
+    setPreference("sidebar_collapsed", sidebarCollapsed === "collapsed" ? "expanded" : "collapsed");
   };
 
   return (
@@ -50,7 +51,7 @@ export function SidebarHeader() {
         variant="outline"
         className={cn(
           "absolute start-full top-2/4 size-7 -translate-x-2/4 -translate-y-2/4 rtl:translate-x-2/4",
-          settings.layouts.demo1.sidebarCollapse ? "ltr:rotate-180" : "rtl:rotate-180",
+          sidebarCollapsed === "collapsed" ? "ltr:rotate-180" : "rtl:rotate-180",
         )}
       >
         <ChevronFirst className="size-4!" />
