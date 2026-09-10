@@ -14,17 +14,10 @@ from __future__ import annotations
 import django_filters
 
 from apps.school_organization.models import (
-    Class,
     House,
     Section,
     Subject,
 )
-
-
-class ClassFilterSet(django_filters.FilterSet):
-    class Meta:
-        model = Class
-        fields = ["is_active", "level"]
 
 
 class SectionFilterSet(django_filters.FilterSet):

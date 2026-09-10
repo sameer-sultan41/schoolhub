@@ -9,11 +9,11 @@ docs/05-database/entities/academics.md and the filter names in the
 module doc §16.
 
 ``CampusSerializer``, ``DepartmentSerializer``, ``AcademicSessionSerializer``,
-``SessionCloneSerializer`` and ``TermSerializer`` moved to their own packages
-(``campuses/serializers.py``, ``departments/serializers.py``,
-``academic_sessions/serializers.py``, ``terms/serializers.py``) — this file
-now holds only the resources that haven't been split into their own package
-yet.
+``SessionCloneSerializer``, ``TermSerializer`` and ``ClassSerializer`` moved
+to their own packages (``campuses/serializers.py``, ``departments/
+serializers.py``, ``academic_sessions/serializers.py``, ``terms/
+serializers.py``, ``classes/serializers.py``) — this file now holds only the
+resources that haven't been split into their own package yet.
 """
 
 from __future__ import annotations
@@ -25,21 +25,6 @@ from rest_framework import serializers
 from apps.school_organization import services
 from apps.school_organization.models import Campus, Class, Department, House, Section, Subject
 from apps.school_organization.serializer_helpers import READ_ONLY_FIELDS, fk, normalize_code
-
-
-class ClassSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Class
-        fields = ("id", "name", "code", "level", "is_active", "created_at", "updated_at")
-        read_only_fields = READ_ONLY_FIELDS
-
-    def validate_code(self, value: str | None) -> str | None:
-        return normalize_code(value)
-
-    def validate_level(self, value: int) -> int:
-        if value < 1:
-            raise serializers.ValidationError("level starts at 1; it orders the promotion ladder.")
-        return value
 
 
 class SectionSerializer(serializers.ModelSerializer):

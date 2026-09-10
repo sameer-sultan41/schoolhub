@@ -94,11 +94,11 @@ class SectionEndpointTests(SchoolOrganizationAPITestCase):
 
 
 class ListOrderingTests(SchoolOrganizationAPITestCase):
-    """`?ordering=` on the four structural lists the dashboard renders.
+    """`?ordering=` on the three structural lists the dashboard renders.
 
-    (Campuses' and departments' own ordering cases moved to
-    `campuses/tests/test_endpoints.py` and `departments/tests/test_endpoints.py`
-    with the rest of those resources.)
+    (Campuses', departments' and classes' own ordering cases moved to
+    `campuses/tests/test_endpoints.py`, `departments/tests/test_endpoints.py`
+    and `classes/tests/test_endpoints.py` with the rest of those resources.)
 
     Every case creates its rows in an order that disagrees with the ordering it
     asserts, so a passing test proves the sort ran rather than that insertion order
@@ -118,34 +118,6 @@ class ListOrderingTests(SchoolOrganizationAPITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         return [row["id"] for row in response.json()["data"]]
-
-    # ------------------------------------------------------------------- classes
-
-    def test_classes_sort_by_level_and_name(self) -> None:
-        self.allow("school.class.view")
-        with tenant_context(self.tenant.id):
-            ten = ClassFactory(tenant=self.tenant, name="Grade 10", code="G10", level=10)
-            two = ClassFactory(tenant=self.tenant, name="Grade 2", code="G2", level=2)
-
-        # `level` is the promotion ladder and sorts numerically; `name` is a string,
-        # so it puts "Grade 10" before "Grade 2". Both are offered because the table
-        # renders both, and they are not the same order.
-        self.assertEqual(self._ids("/api/v1/classes?ordering=level"), [str(two.pk), str(ten.pk)])
-        self.assertEqual(self._ids("/api/v1/classes?ordering=-level"), [str(ten.pk), str(two.pk)])
-        self.assertEqual(self._ids("/api/v1/classes?ordering=name"), [str(ten.pk), str(two.pk)])
-        self.assertEqual(self._ids("/api/v1/classes?ordering=-code"), [str(two.pk), str(ten.pk)])
-
-    def test_classes_ignore_an_undeclared_ordering_field(self) -> None:
-        self.allow("school.class.view")
-        with tenant_context(self.tenant.id):
-            ten = ClassFactory(tenant=self.tenant, name="Grade 10", level=10, is_active=False)
-            two = ClassFactory(tenant=self.tenant, name="Grade 2", level=2)
-
-        # `is_active` filters this endpoint but does not sort it; honoured, false
-        # first would lead with Grade 10 instead of the default `level` order.
-        self.assertEqual(
-            self._ids("/api/v1/classes?ordering=is_active"), [str(two.pk), str(ten.pk)]
-        )
 
     # ------------------------------------------------------------------ sections
 

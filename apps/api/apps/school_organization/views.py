@@ -22,19 +22,16 @@ from rest_framework.views import APIView
 
 from apps.school_organization import calendar, services
 from apps.school_organization.filters import (
-    ClassFilterSet,
     HouseFilterSet,
     SectionFilterSet,
     SubjectFilterSet,
 )
 from apps.school_organization.models import (
-    Class,
     House,
     Section,
     Subject,
 )
 from apps.school_organization.serializers import (
-    ClassSerializer,
     HolidayCalendarSerializer,
     HouseSerializer,
     SchoolSettingsSerializer,
@@ -59,35 +56,6 @@ class BlockingDestroyMixin(TenantScopedViewSetMixin):
     def perform_destroy(self, instance) -> None:
         services.assert_deletable(instance)
         super().perform_destroy(instance)
-
-
-class ClassViewSet(BlockingDestroyMixin, TenantModelViewSet):
-    """Grade levels; ``level`` is the promotion ladder (module doc §5.5)."""
-
-    # Tenant-wide: "Grade 6" is defined once and every campus uses it. A campus
-    # admin must see it to create a section in it.
-    scope_campus_field = None
-    queryset = Class.objects
-    serializer_class = ClassSerializer
-    filterset_class = ClassFilterSet
-    search_fields = ["name", "code"]
-    # Page numbers, not a cursor: this list is bounded by one school's size and a
-    # reader navigates it by position. api-architecture.md §2.4.
-    pagination_class = PageNumberPagination
-    ordering = ["level"]
-    # `level` and `name` each ride a partial unique on (tenant, <col>), and
-    # `created_at` has its own index. `code` is nullable and
-    # classes_unique_code_per_tenant excludes NULL rows, so an unfiltered
-    # `?ordering=code` cannot use it — that one is a table scan plus a sort.
-    ordering_fields = ["level", "name", "code", "created_at"]
-    required_feature = "module.school"
-    required_permission = "school.class.view"
-    required_permission_map = {
-        "create": "school.class.create",
-        "update": "school.class.update",
-        "partial_update": "school.class.update",
-        "destroy": "school.class.delete",
-    }
 
 
 class SectionViewSet(BlockingDestroyMixin, TenantModelViewSet):

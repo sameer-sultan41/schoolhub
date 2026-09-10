@@ -8,7 +8,6 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from apps.school_organization.views import (
-    ClassViewSet,
     HolidayCalendarView,
     HouseViewSet,
     SchoolSettingsView,
@@ -17,7 +16,6 @@ from apps.school_organization.views import (
 )
 
 router = SimpleRouter(trailing_slash=False)
-router.register("classes", ClassViewSet, basename="classes")
 router.register("sections", SectionViewSet, basename="sections")
 router.register("subjects", SubjectViewSet, basename="subjects")
 router.register("houses", HouseViewSet, basename="houses")
@@ -27,6 +25,7 @@ urlpatterns = [
     path("", include("apps.school_organization.departments.urls")),
     path("", include("apps.school_organization.academic_sessions.urls")),
     path("", include("apps.school_organization.terms.urls")),
+    path("", include("apps.school_organization.classes.urls")),
     path("school-settings", SchoolSettingsView.as_view(), name="school-settings"),
     path("holiday-calendar", HolidayCalendarView.as_view(), name="holiday-calendar"),
     *router.urls,
