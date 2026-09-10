@@ -1,4 +1,4 @@
-import { parseTenantSlug } from "./host";
+import { parseTenantSlug } from "../host";
 
 describe("parseTenantSlug", () => {
   const PLATFORM = "localhost";

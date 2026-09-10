@@ -43,14 +43,14 @@ describe("auth", () => {
   });
 
   it("wires two clients: one direct, one through the auth proxy", async () => {
-    await import("./auth");
+    await import("../auth");
     expect(mockClientConfigs).toHaveLength(2);
     expect(mockClientConfigs[1]?.baseUrl).toBe("/api/auth");
   });
 
   describe("login", () => {
     it("stores the access token and sets the session cookie", async () => {
-      const { login, accessTokenStore } = await import("./auth");
+      const { login, accessTokenStore } = await import("../auth");
       mockPost.mockResolvedValueOnce({
         data: {
           access_token: "at-1",
@@ -84,7 +84,7 @@ describe("auth", () => {
 
   describe("logout", () => {
     it("clears the token and cookie even when the request fails with an ApiError", async () => {
-      const { login, logout, accessTokenStore } = await import("./auth");
+      const { login, logout, accessTokenStore } = await import("../auth");
       const { ApiError } = await importApiClient();
       mockPost.mockResolvedValueOnce({
         data: {
@@ -115,7 +115,7 @@ describe("auth", () => {
     });
 
     it("re-throws a non-ApiError failure", async () => {
-      const { logout } = await import("./auth");
+      const { logout } = await import("../auth");
       mockPost.mockRejectedValueOnce(new Error("network down"));
 
       await expect(logout()).rejects.toThrow("network down");
@@ -124,7 +124,7 @@ describe("auth", () => {
 
   describe("fetchCurrentUser", () => {
     it("returns the authenticated user payload", async () => {
-      const { fetchCurrentUser } = await import("./auth");
+      const { fetchCurrentUser } = await import("../auth");
       mockGet.mockResolvedValueOnce({ data: { id: "u1", email: "a@test.invalid" } });
 
       const user = await fetchCurrentUser();
@@ -136,7 +136,7 @@ describe("auth", () => {
 
   describe("restoreSession", () => {
     it("returns null when the refresh cookie has nothing to offer", async () => {
-      const { restoreSession } = await import("./auth");
+      const { restoreSession } = await import("../auth");
       mockRefresh.mockResolvedValueOnce(null);
 
       await expect(restoreSession()).resolves.toBeNull();
@@ -144,7 +144,7 @@ describe("auth", () => {
     });
 
     it("refreshes, then fetches the user, on a cold load", async () => {
-      const { restoreSession } = await import("./auth");
+      const { restoreSession } = await import("../auth");
       mockRefresh.mockResolvedValueOnce("at-2");
       mockGet.mockResolvedValueOnce({ data: { id: "u2" } });
 
@@ -156,7 +156,7 @@ describe("auth", () => {
     });
 
     it("clears state and returns null when the user fetch fails", async () => {
-      const { restoreSession, accessTokenStore } = await import("./auth");
+      const { restoreSession, accessTokenStore } = await import("../auth");
       mockRefresh.mockResolvedValueOnce("at-3");
       mockGet.mockRejectedValueOnce(new Error("boom"));
 
@@ -167,7 +167,7 @@ describe("auth", () => {
     it("rethrows a throttled refresh instead of reporting a signed-out session", async () => {
       // Returning null here reads as "signed out" all the way up to the app shell, so a
       // cold load during a throttle window used to drop a still-valid session at /login.
-      const { restoreSession } = await import("./auth");
+      const { restoreSession } = await import("../auth");
       const { ApiError } = await importApiClient();
       const throttled = new ApiError({
         code: "rate_limited",
@@ -182,7 +182,7 @@ describe("auth", () => {
     });
 
     it("rethrows a transient user-fetch failure and keeps the session intact", async () => {
-      const { restoreSession, accessTokenStore } = await import("./auth");
+      const { restoreSession, accessTokenStore } = await import("../auth");
       const { ApiError } = await importApiClient();
       mockRefresh.mockResolvedValueOnce("at-8");
       accessTokenStore.set("at-8", 900);
@@ -197,7 +197,7 @@ describe("auth", () => {
 
   describe("setUnauthorizedHandler", () => {
     it("lets the app override the default 401 handler", async () => {
-      const { setUnauthorizedHandler, accessTokenStore } = await import("./auth");
+      const { setUnauthorizedHandler, accessTokenStore } = await import("../auth");
       const handler = jest.fn();
       setUnauthorizedHandler(handler);
 
@@ -213,7 +213,7 @@ describe("auth", () => {
     });
 
     it("the default handler (before any override) just clears the token store", async () => {
-      const { accessTokenStore } = await import("./auth");
+      const { accessTokenStore } = await import("../auth");
       const { ApiError } = await importApiClient();
       const directClientConfig = mockClientConfigs[0];
       accessTokenStore.set("at-5", 900);
@@ -230,7 +230,7 @@ describe("auth", () => {
 
   describe("the direct client's getAccessToken/refreshAccessToken config", () => {
     it("getAccessToken reads whatever is currently in the token store", async () => {
-      const { accessTokenStore } = await import("./auth");
+      const { accessTokenStore } = await import("../auth");
       const directClientConfig = mockClientConfigs[0];
       accessTokenStore.set("at-6", 900);
 
@@ -238,7 +238,7 @@ describe("auth", () => {
     });
 
     it("refreshAccessToken clears the store and resolves null when the proxy has nothing", async () => {
-      const { accessTokenStore } = await import("./auth");
+      const { accessTokenStore } = await import("../auth");
       const directClientConfig = mockClientConfigs[0];
       accessTokenStore.set("stale", 900);
       mockRefreshAccessToken.mockResolvedValueOnce(null);
@@ -248,7 +248,7 @@ describe("auth", () => {
     });
 
     it("refreshAccessToken stores and returns the new token when the proxy refreshes", async () => {
-      const { accessTokenStore } = await import("./auth");
+      const { accessTokenStore } = await import("../auth");
       const directClientConfig = mockClientConfigs[0];
       mockRefreshAccessToken.mockResolvedValueOnce({ accessToken: "at-7", expiresIn: 900 });
 
@@ -259,7 +259,7 @@ describe("auth", () => {
     it("refreshAccessToken lets a transient failure through with the token untouched", async () => {
       // The `.catch(() => null)` that used to wrap this call turned a throttled or
       // unreachable refresh into "session over", clearing a perfectly good session.
-      const { accessTokenStore } = await import("./auth");
+      const { accessTokenStore } = await import("../auth");
       const { ApiError } = await importApiClient();
       const directClientConfig = mockClientConfigs[0];
       accessTokenStore.set("still-good", 900);
@@ -279,7 +279,7 @@ describe("auth", () => {
 
   describe("the auth-proxy client's getAccessToken config", () => {
     it("also reads from the shared token store", async () => {
-      const { accessTokenStore } = await import("./auth");
+      const { accessTokenStore } = await import("../auth");
       const authProxyClientConfig = mockClientConfigs[1];
       accessTokenStore.set("at-8", 900);
 

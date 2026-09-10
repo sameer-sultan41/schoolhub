@@ -5,9 +5,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
-import messages from "../../../messages/en.json";
+import messages from "../../../../messages/en.json";
 import { login } from "@/lib/auth";
-import { LoginForm } from "./login-form";
+import { LoginForm } from "../login-form";
 
 function renderLoginForm(ui: ReactElement = <LoginForm />) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
