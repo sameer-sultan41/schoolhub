@@ -17,7 +17,7 @@
  * wider rule.
  */
 
-const PORT_SUFFIX_PATTERN = /:\d+$/;
+import { Regex } from "@/utils/regex";
 
 /** `<platform_domain>` alone is the website's apex/landing page — never a dashboard host. */
 function dashboardApex(platformDomain: string): string {
@@ -33,7 +33,7 @@ function dashboardApex(platformDomain: string): string {
  * `a.b.app.localhost` (more than one label)            -> null (not a recognized tenant host)
  */
 export function parseTenantSlug(hostname: string, platformDomain: string): string | null {
-  const host = hostname.trim().toLowerCase().replace(PORT_SUFFIX_PATTERN, "");
+  const host = hostname.trim().toLowerCase().replace(Regex.PORT_SUFFIX, "");
   const apex = dashboardApex(platformDomain);
 
   if (host === apex) return null;
