@@ -1,8 +1,8 @@
 """API tests for the school-organization endpoints (module doc §16).
 
 Paths are written out literally rather than reversed: the URL shape *is* the
-contract (``/api/v1/campuses``, ``/api/v1/academic-sessions/{id}:activate``), and
-a test that reverses the name would keep passing after the contract broke.
+contract (``/api/v1/campuses``), and a test that reverses the name would keep
+passing after the contract broke.
 """
 
 from __future__ import annotations
@@ -10,61 +10,6 @@ from __future__ import annotations
 from rest_framework import status
 
 from apps.school_organization.tests.base import SchoolOrganizationAPITestCase
-from apps.school_organization.tests.factories import HouseFactory
-from core.tenancy.context import tenant_context
-
-
-class ListOrderingTests(SchoolOrganizationAPITestCase):
-    """`?ordering=` on the one structural list left here.
-
-    (Campuses', departments', classes', sections' and subjects' own ordering
-    cases moved to their own packages' `tests/test_endpoints.py` with the rest
-    of those resources — houses is the last one still here.)
-
-    Every case creates its rows in an order that disagrees with the ordering it
-    asserts, so a passing test proves the sort ran rather than that insertion order
-    happened to match. `StableOrderingFilter` appends `pk`, so ties resolve by a
-    random UUID — no case here leaves two rows tied on the column it sorts by.
-
-    The undeclared-field cases carry as much weight as the sorts. `ordering_fields`
-    is an allowlist and DRF drops anything outside it *silently*, so the only way to
-    tell an ignored parameter from an honoured one is to give the undeclared column
-    values that would visibly reorder the list.
-    """
-
-    def _ids(self, url: str) -> list[str]:
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
-        return [row["id"] for row in response.json()["data"]]
-
-    # -------------------------------------------------------------------- houses
-
-    def test_houses_sort_by_code(self) -> None:
-        self.allow("school.house.view")
-        with tenant_context(self.tenant.id):
-            falcon = HouseFactory(tenant=self.tenant, name="Falcon", code="RED")
-            heron = HouseFactory(tenant=self.tenant, name="Heron", code="BLU")
-
-        # `code` inverts the `name` order, so this fails if the parameter is dropped.
-        self.assertEqual(self._ids("/api/v1/houses?ordering=code"), [str(heron.pk), str(falcon.pk)])
-        self.assertEqual(
-            self._ids("/api/v1/houses?ordering=-code"), [str(falcon.pk), str(heron.pk)]
-        )
-        self.assertEqual(self._ids("/api/v1/houses?ordering=name"), [str(falcon.pk), str(heron.pk)])
-
-    def test_houses_ignore_an_undeclared_ordering_field(self) -> None:
-        self.allow("school.house.view")
-        with tenant_context(self.tenant.id):
-            falcon = HouseFactory(tenant=self.tenant, name="Falcon", code="RED", color="red")
-            heron = HouseFactory(tenant=self.tenant, name="Heron", code="BLU", color="blue")
-
-        by_name = [str(falcon.pk), str(heron.pk)]
-
-        # A real-but-undeclared column and a column that does not exist at all are
-        # both dropped: 200 in the default order, never a 400 and never a 500.
-        self.assertEqual(self._ids("/api/v1/houses?ordering=color"), by_name)
-        self.assertEqual(self._ids("/api/v1/houses?ordering=not_a_column"), by_name)
-
 
 # `/class-subjects` moved to academics in this PR — the route is unchanged but
 # the keys and the feature flag are not, so its endpoint tests moved with it to

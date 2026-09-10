@@ -20,20 +20,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.school_organization import calendar, services
-from apps.school_organization.filters import (
-    HouseFilterSet,
-)
-from apps.school_organization.models import (
-    House,
-)
 from apps.school_organization.serializers import (
     HolidayCalendarSerializer,
-    HouseSerializer,
     SchoolSettingsSerializer,
 )
-from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
-from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
+from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.rbac.permissions import HasPermissionKey
 from core.tenancy.models import TenantSettings
@@ -44,38 +36,17 @@ class BlockingDestroyMixin(TenantScopedViewSetMixin):
 
     The PROTECT foreign keys would stop it anyway, but as an integrity error with
     no useful message; this turns it into a 422 naming the blocking relations.
+
+    Imported directly by ``apps/academics/views.py`` — see this module's
+    ``services.py`` docstring for the cross-app-import constraint that keeps
+    this file (and specifically this name, this path) in place even though
+    every ViewSet that used to live alongside it has moved into its own
+    resource package.
     """
 
     def perform_destroy(self, instance) -> None:
         services.assert_deletable(instance)
         super().perform_destroy(instance)
-
-
-class HouseViewSet(BlockingDestroyMixin, TenantModelViewSet):
-    """Houses/groups used for sports, discipline and points (module doc §5.7)."""
-
-    # Tenant-wide: houses span campuses by design.
-    scope_campus_field = None
-    queryset = House.objects
-    serializer_class = HouseSerializer
-    filterset_class = HouseFilterSet
-    search_fields = ["name", "code"]
-    # Page numbers, not a cursor: this list is bounded by one school's size and a
-    # reader navigates it by position. api-architecture.md §2.4.
-    pagination_class = PageNumberPagination
-    ordering = ["name"]
-    # `name` rides houses_unique_name_per_tenant and `created_at` its own index.
-    # `code` is nullable and houses_unique_code_per_tenant excludes NULL, so
-    # sorting by it is a table scan plus a sort.
-    ordering_fields = ["name", "code", "created_at"]
-    required_feature = "module.school"
-    required_permission = "school.house.view"
-    required_permission_map = {
-        "create": "school.house.create",
-        "update": "school.house.update",
-        "partial_update": "school.house.update",
-        "destroy": "school.house.delete",
-    }
 
 
 class SchoolSettingsView(TenantScopedViewSetMixin, APIView):

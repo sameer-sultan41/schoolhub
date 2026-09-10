@@ -10,12 +10,13 @@ module doc §16.
 
 ``CampusSerializer``, ``DepartmentSerializer``, ``AcademicSessionSerializer``,
 ``SessionCloneSerializer``, ``TermSerializer``, ``ClassSerializer``,
-``SectionSerializer`` and ``SubjectSerializer`` moved to their own packages
-(``campuses/serializers.py``, ``departments/serializers.py``,
-``academic_sessions/serializers.py``, ``terms/serializers.py``, ``classes/
-serializers.py``, ``sections/serializers.py``, ``subjects/serializers.py``)
-— this file now holds only the resources that haven't been split into their
-own package yet.
+``SectionSerializer``, ``SubjectSerializer`` and ``HouseSerializer`` moved to
+their own packages (``campuses/serializers.py``, ``departments/
+serializers.py``, ``academic_sessions/serializers.py``, ``terms/
+serializers.py``, ``classes/serializers.py``, ``sections/serializers.py``,
+``subjects/serializers.py``, ``houses/serializers.py``) — this file now
+holds only the two singleton-resource serializers (``school_settings/``,
+``holiday_calendar/``) that haven't moved into their own package yet.
 """
 
 from __future__ import annotations
@@ -23,33 +24,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.school_organization import services
-from apps.school_organization.models import Campus, House
-from apps.school_organization.serializer_helpers import READ_ONLY_FIELDS, normalize_code
-
-
-class HouseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = House
-        fields = (
-            "id",
-            "name",
-            "code",
-            "color",
-            "motto",
-            "house_master_staff_id",
-            "is_active",
-            "created_at",
-            "updated_at",
-        )
-        read_only_fields = READ_ONLY_FIELDS
-
-    def validate_code(self, value: str | None) -> str | None:
-        return normalize_code(value)
-
-    def validate_house_master_staff_id(self, value):
-        return services.resolve_tenant_staff_id(
-            staff_id=value, tenant_id=self.context["request"].tenant.pk
-        )
+from apps.school_organization.models import Campus
 
 
 class SchoolSettingsSerializer(serializers.Serializer):
