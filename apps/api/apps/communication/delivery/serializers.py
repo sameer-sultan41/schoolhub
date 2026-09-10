@@ -40,6 +40,6 @@ class DeliveryReportRowSerializer(serializers.Serializer):
 
 
 class DeliveryReportResponseSerializer(serializers.Serializer):
-    """`GET /delivery-logs:summary`'s real response shape — see `views/summary.py`."""
+    """`GET /delivery-logs:summary`'s real response shape — see `viewset.py`'s `summary`."""
 
     data = DeliveryReportRowSerializer(many=True)

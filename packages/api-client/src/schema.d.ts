@@ -6272,7 +6272,7 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /** @description `GET /delivery-logs:summary`'s real response shape — see `views/summary.py`. */
+        /** @description `GET /delivery-logs:summary`'s real response shape — see `viewset.py`'s `summary`. */
         DeliveryReportResponse: {
             data: components["schemas"]["DeliveryReportRow"][];
         };

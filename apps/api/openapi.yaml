@@ -14552,7 +14552,8 @@ components:
       - template_code
     DeliveryReportResponse:
       type: object
-      description: '`GET /delivery-logs:summary`''s real response shape — see `views/summary.py`.'
+      description: '`GET /delivery-logs:summary`''s real response shape — see `viewset.py`''s
+        `summary`.'
       properties:
         data:
           type: array
