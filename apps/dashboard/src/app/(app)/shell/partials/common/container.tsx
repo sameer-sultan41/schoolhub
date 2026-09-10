@@ -4,7 +4,7 @@ import { type ReactNode } from "react";
 
 import { cn } from "@schoolhub/ui";
 
-import { usePreference } from "@/lib/preferences/preferences-provider";
+import { usePreference } from "@/providers/preferences-provider";
 
 // Ported from packages/ui's partials/common/container.tsx. cva's two-option
 // variant was inlined as a plain conditional to avoid a new

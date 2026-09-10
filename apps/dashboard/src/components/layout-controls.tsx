@@ -24,8 +24,8 @@ import {
   SIDEBAR_VARIANTS,
   type PreferenceKey,
   type PreferenceValues,
-} from "@/lib/preferences/preferences-config";
-import { usePreference, usePreferenceActions } from "@/lib/preferences/preferences-provider";
+} from "@/store/preferences-config";
+import { usePreference, usePreferenceActions } from "@/providers/preferences-provider";
 
 /**
  * The colour preset picker.

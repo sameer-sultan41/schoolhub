@@ -67,6 +67,16 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 **Never** put the access token in `localStorage` or a readable cookie, and never add a
 `tenant_id` request parameter — the tenant always comes from the authenticated context.
 
+## Where Shared Code Lives
+
+| Kind of code | Goes in | Convention |
+| ------------- | ------- | ---------- |
+| App-wide React Context (preferences, query client) | `src/providers/` | One file per provider — the Provider component and its own `useXxx()` accessor hook live together in the same file (e.g. `preferences-provider.tsx` exports both `PreferencesProvider` and `usePreference`). |
+| Client-side state stores (Zustand) and their supporting config/persistence | `src/store/` | One file per concern (`preferences-store.ts`, `preferences-config.ts`, `preferences-cookies.client.ts`/`.server.ts`), not a single catch-all `store.ts`. |
+| Stateless cross-cutting helpers: constants, regex, formatting | `src/utils/` | One file per concern (`constants.ts`, `regex.ts`, …), no barrel — every consumer imports directly from the specific file. Add a new file the moment a second concern needs one; don't pre-create empty ones. |
+| Reusable, non-provider-bound hooks | `src/hooks/` | One file per hook. Doesn't exist yet — nothing in this app needs a standalone hook today; a provider's own accessor hook stays in its provider file instead (see above). Create it the moment the first real one lands. |
+| Module feature code | `src/features/<module>/` | Components, hooks, and query definitions specific to one module (see "Adding a Module Screen" above). |
+
 ## Adding a Module Screen
 
 1. Route: `src/app/(app)/<module>/page.tsx` (async server component for chrome).
@@ -74,7 +84,7 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 3. Query keys via `queryKeys.list("<module>", "<resource>", params)`.
 4. Gate every action with `<Can permission="module.resource.action">`.
 5. Strings into `messages/en.json` **and** `messages/ur.json`.
-6. Co-locate tests as `*.test.tsx`.
+6. Co-locate tests in a sibling `__tests__/` folder (`__tests__/*.test.tsx`), not `*.test.tsx` flat beside the source.
 
 ## Guidance To Load First
 

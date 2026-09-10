@@ -1,4 +1,4 @@
-import { directionFor, env, isSupportedLocale, SUPPORTED_LOCALES } from "./env";
+import { directionFor, env, isSupportedLocale, SUPPORTED_LOCALES } from "../env";
 
 describe("env", () => {
   it("parses the test environment's public config", () => {
@@ -11,7 +11,7 @@ describe("env", () => {
     process.env.NEXT_PUBLIC_API_BASE_URL = "not-a-url";
     jest.resetModules();
 
-    await expect(import("./env")).rejects.toThrow("Invalid dashboard environment configuration");
+    await expect(import("../env")).rejects.toThrow("Invalid dashboard environment configuration");
 
     process.env.NEXT_PUBLIC_API_BASE_URL = original;
     jest.resetModules();

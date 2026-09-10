@@ -36,7 +36,7 @@ import {
 } from "@schoolhub/ui";
 
 import { logout } from "@/lib/auth";
-import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
+import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/utils/constants";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
 
 // Ported from packages/ui's partials/topbar/user-dropdown-menu.tsx. The vendor

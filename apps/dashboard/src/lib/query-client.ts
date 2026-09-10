@@ -1,6 +1,6 @@
 import { ApiError } from "@schoolhub/api-client";
 import { QueryClient, defaultShouldDehydrateQuery } from "@tanstack/react-query";
-import { DEFAULT_QUERY_GC_TIME_MS, DEFAULT_QUERY_STALE_TIME_MS } from "@/lib/constants";
+import { DEFAULT_QUERY_GC_TIME_MS, DEFAULT_QUERY_STALE_TIME_MS } from "@/utils/constants";
 
 /**
  * TanStack Query owns all server state (tech-stack.md §3).
