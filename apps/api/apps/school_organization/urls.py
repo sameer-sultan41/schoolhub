@@ -15,7 +15,6 @@ from rest_framework.routers import SimpleRouter
 from apps.school_organization.views import (
     AcademicSessionViewSet,
     ClassViewSet,
-    DepartmentViewSet,
     HolidayCalendarView,
     HouseViewSet,
     SchoolSettingsView,
@@ -25,7 +24,6 @@ from apps.school_organization.views import (
 )
 
 router = SimpleRouter(trailing_slash=False)
-router.register("departments", DepartmentViewSet, basename="departments")
 router.register("academic-sessions", AcademicSessionViewSet, basename="academic-sessions")
 router.register("terms", TermViewSet, basename="terms")
 router.register("classes", ClassViewSet, basename="classes")
@@ -35,6 +33,7 @@ router.register("houses", HouseViewSet, basename="houses")
 
 urlpatterns = [
     path("", include("apps.school_organization.campuses.urls")),
+    path("", include("apps.school_organization.departments.urls")),
     path("school-settings", SchoolSettingsView.as_view(), name="school-settings"),
     path("holiday-calendar", HolidayCalendarView.as_view(), name="holiday-calendar"),
     path(

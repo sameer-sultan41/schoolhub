@@ -277,10 +277,11 @@ class TermEndpointTests(SchoolOrganizationAPITestCase):
 
 
 class ListOrderingTests(SchoolOrganizationAPITestCase):
-    """`?ordering=` on the five structural lists the dashboard renders.
+    """`?ordering=` on the four structural lists the dashboard renders.
 
-    (Campuses' own ordering cases moved to `campuses/tests/test_endpoints.py`
-    with the rest of that resource.)
+    (Campuses' and departments' own ordering cases moved to
+    `campuses/tests/test_endpoints.py` and `departments/tests/test_endpoints.py`
+    with the rest of those resources.)
 
     Every case creates its rows in an order that disagrees with the ordering it
     asserts, so a passing test proves the sort ran rather than that insertion order
@@ -300,52 +301,6 @@ class ListOrderingTests(SchoolOrganizationAPITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         return [row["id"] for row in response.json()["data"]]
-
-    # ---------------------------------------------------------------- departments
-
-    def test_departments_sort_by_the_annotated_campus_name(self) -> None:
-        self.allow("school.department.view")
-        with tenant_context(self.tenant.id):
-            north = CampusFactory(tenant=self.tenant, name="North", code="NORTH")
-            east = CampusFactory(tenant=self.tenant, name="East", code="EAST")
-            arts = DepartmentFactory(tenant=self.tenant, name="Arts", code="ART", campus=north)
-            science = DepartmentFactory(tenant=self.tenant, name="Science", code="SCI", campus=east)
-            shared = DepartmentFactory(tenant=self.tenant, name="Admin", code="ADM")
-
-        # `campus_name` is the annotation, not `campus__name`. Campus order (East,
-        # North) is the opposite of the departments' own name order, and `shared`
-        # spans every campus — a NULL, which Postgres sorts last ascending and
-        # first descending.
-        self.assertEqual(
-            self._ids("/api/v1/departments?ordering=campus_name"),
-            [str(science.pk), str(arts.pk), str(shared.pk)],
-        )
-        self.assertEqual(
-            self._ids("/api/v1/departments?ordering=-campus_name"),
-            [str(shared.pk), str(arts.pk), str(science.pk)],
-        )
-
-    def test_departments_ignore_an_undeclared_or_traversing_ordering_field(self) -> None:
-        self.allow("school.department.view")
-        with tenant_context(self.tenant.id):
-            north = CampusFactory(tenant=self.tenant, name="North", code="NORTH")
-            east = CampusFactory(tenant=self.tenant, name="East", code="EAST")
-            arts = DepartmentFactory(
-                tenant=self.tenant, name="Arts", code="ART", campus=north, description="Zulu"
-            )
-            science = DepartmentFactory(
-                tenant=self.tenant, name="Science", code="SCI", campus=east, description="Alpha"
-            )
-
-        by_name = [str(arts.pk), str(science.pk)]
-
-        # Both would lead with Science if they sorted: `description` is a real
-        # column outside the allowlist, and `campus__name` is the relation
-        # traversal `ordering_fields` must never contain. Dropping the traversal is
-        # what keeps a scoped principal's `SELECT DISTINCT` from raising
-        # ProgrammingError.
-        self.assertEqual(self._ids("/api/v1/departments?ordering=description"), by_name)
-        self.assertEqual(self._ids("/api/v1/departments?ordering=campus__name"), by_name)
 
     # ------------------------------------------------------------------- classes
 
