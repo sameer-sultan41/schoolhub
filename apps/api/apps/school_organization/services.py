@@ -27,13 +27,14 @@ shared by several sibling packages inside this app (timezone validation by
 `departments/`, `sections/` and `houses/`) with no single package that owns
 them.
 
-`assert_term_window` is the one function still here that *will* move — into
-`terms/services.py` once that package is split out — kept here only because
-splitting terms is a separate task from this one. (This module's layout is
-mid-rollout; the finished shape and the reasoning behind it will land as a
-new section in `docs/03-modules/school-organization.md` once every resource
-has its own package, following the precedent `communication.md` §20 set for
-the same layout.)
+This is this file's final shape: `classes`, `sections`, `subjects`, `houses`,
+`school_settings` and `holiday_calendar` still have their own ViewSet/APIView
+sitting in the flat `views.py` awaiting their own package, but none of them
+need anything further out of `services.py` once they move. The finished
+layout and the reasoning behind it will land as a new section in
+`docs/03-modules/school-organization.md` once every resource has its own
+package, following the precedent `communication.md` §20 set for the same
+layout.
 """
 
 from __future__ import annotations
@@ -41,7 +42,6 @@ from __future__ import annotations
 import functools
 import uuid
 import zoneinfo
-from datetime import date
 
 from django.db.models import QuerySet
 
@@ -53,7 +53,6 @@ from apps.school_organization.models import (
     Section,
     SessionStatus,
     Subject,
-    Term,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
 
@@ -81,32 +80,6 @@ def assert_session_writable(session: AcademicSession) -> None:
         raise DomainRuleViolation(
             f"Academic session '{session.name}' is {session.status} and cannot be modified."
         )
-
-
-def assert_term_window(
-    *,
-    session: AcademicSession,
-    start_date: date,
-    end_date: date,
-    exclude_id: uuid.UUID | None = None,
-) -> None:
-    """Terms must nest inside their session and not overlap their siblings (§11)."""
-    if end_date <= start_date:
-        raise DomainRuleViolation("end_date must be after start_date.")
-    if start_date < session.start_date or end_date > session.end_date:
-        raise DomainRuleViolation(
-            f"Term dates must fall inside the session window "
-            f"({session.start_date} – {session.end_date})."
-        )
-
-    siblings = Term.objects.alive().filter(
-        academic_session=session, start_date__lte=end_date, end_date__gte=start_date
-    )
-    if exclude_id is not None:
-        siblings = siblings.exclude(pk=exclude_id)
-    sibling = siblings.first()
-    if sibling is not None:
-        raise DomainRuleViolation(f"Term dates overlap term '{sibling.name}'.")
 
 
 def section_seats_remaining(section: Section, *, occupied: int) -> int | None:

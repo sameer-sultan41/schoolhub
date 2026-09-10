@@ -18,16 +18,7 @@ from apps.school_organization.models import (
     House,
     Section,
     Subject,
-    Term,
 )
-
-
-class TermFilterSet(django_filters.FilterSet):
-    academic_session_id = django_filters.UUIDFilter(field_name="academic_session_id")
-
-    class Meta:
-        model = Term
-        fields = ["academic_session_id"]
 
 
 class ClassFilterSet(django_filters.FilterSet):

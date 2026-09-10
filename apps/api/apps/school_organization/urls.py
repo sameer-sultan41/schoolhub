@@ -14,11 +14,9 @@ from apps.school_organization.views import (
     SchoolSettingsView,
     SectionViewSet,
     SubjectViewSet,
-    TermViewSet,
 )
 
 router = SimpleRouter(trailing_slash=False)
-router.register("terms", TermViewSet, basename="terms")
 router.register("classes", ClassViewSet, basename="classes")
 router.register("sections", SectionViewSet, basename="sections")
 router.register("subjects", SubjectViewSet, basename="subjects")
@@ -28,6 +26,7 @@ urlpatterns = [
     path("", include("apps.school_organization.campuses.urls")),
     path("", include("apps.school_organization.departments.urls")),
     path("", include("apps.school_organization.academic_sessions.urls")),
+    path("", include("apps.school_organization.terms.urls")),
     path("school-settings", SchoolSettingsView.as_view(), name="school-settings"),
     path("holiday-calendar", HolidayCalendarView.as_view(), name="holiday-calendar"),
     *router.urls,

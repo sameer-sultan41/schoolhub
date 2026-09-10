@@ -16,7 +16,6 @@ from __future__ import annotations
 from django.db import transaction
 from django.db.models import F
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -27,14 +26,12 @@ from apps.school_organization.filters import (
     HouseFilterSet,
     SectionFilterSet,
     SubjectFilterSet,
-    TermFilterSet,
 )
 from apps.school_organization.models import (
     Class,
     House,
     Section,
     Subject,
-    Term,
 )
 from apps.school_organization.serializers import (
     ClassSerializer,
@@ -43,7 +40,6 @@ from apps.school_organization.serializers import (
     SchoolSettingsSerializer,
     SectionSerializer,
     SubjectSerializer,
-    TermSerializer,
 )
 from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
@@ -63,35 +59,6 @@ class BlockingDestroyMixin(TenantScopedViewSetMixin):
     def perform_destroy(self, instance) -> None:
         services.assert_deletable(instance)
         super().perform_destroy(instance)
-
-
-class TermViewSet(
-    TenantScopedViewSetMixin,
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.UpdateModelMixin,
-    viewsets.GenericViewSet,
-):
-    """Terms of a session. Governed by the academic-session permission keys (§4)."""
-
-    # Tenant-wide, following its session.
-    scope_campus_field = None
-    queryset = Term.objects
-    serializer_class = TermSerializer
-    filterset_class = TermFilterSet
-    search_fields = ["name"]
-    ordering_fields = ["sequence", "start_date"]
-    required_feature = "module.school"
-    required_permission = "school.academic-session.view"
-    required_permission_map = {
-        "create": "school.academic-session.create",
-        "update": "school.academic-session.update",
-        "partial_update": "school.academic-session.update",
-    }
-
-    def get_queryset(self):
-        return super().get_queryset().select_related("academic_session")
 
 
 class ClassViewSet(BlockingDestroyMixin, TenantModelViewSet):

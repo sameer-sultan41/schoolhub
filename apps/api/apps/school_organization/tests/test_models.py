@@ -163,40 +163,6 @@ class CheckConstraintTests(TenantFixtureMixin, TestCase):
             )
 
 
-class DateWindowServiceTests(TenantFixtureMixin, TestCase):
-    """`assert_term_window` — the session-overlap half of this class moved to
-    `academic_sessions/tests/test_lifecycle.py::SessionOverlapServiceTests`
-    along with `assert_no_session_overlap` itself. This half stays until
-    `assert_term_window` moves into `terms/services.py`.
-    """
-
-    def test_terms_must_nest_inside_their_session(self) -> None:
-        with tenant_context(self.tenant.id):
-            session = AcademicSessionFactory(tenant=self.tenant)
-            with self.assertRaises(DomainRuleViolation):
-                services.assert_term_window(
-                    session=session,
-                    start_date=datetime.date(2026, 1, 1),
-                    end_date=datetime.date(2026, 6, 1),
-                )
-
-    def test_terms_may_not_overlap_siblings(self) -> None:
-        with tenant_context(self.tenant.id):
-            session = AcademicSessionFactory(tenant=self.tenant)
-            TermFactory(
-                tenant=self.tenant,
-                academic_session=session,
-                start_date=datetime.date(2026, 4, 1),
-                end_date=datetime.date(2026, 8, 31),
-            )
-            with self.assertRaises(DomainRuleViolation):
-                services.assert_term_window(
-                    session=session,
-                    start_date=datetime.date(2026, 8, 1),
-                    end_date=datetime.date(2026, 12, 31),
-                )
-
-
 class CapacityAndDeletionServiceTests(TenantFixtureMixin, TestCase):
     def test_an_uncapped_section_never_runs_out_of_seats(self) -> None:
         with tenant_context(self.tenant.id):

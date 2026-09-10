@@ -8,11 +8,12 @@ Foreign keys are exposed with their ``_id`` suffix to match the column names in
 docs/05-database/entities/academics.md and the filter names in the
 module doc §16.
 
-``CampusSerializer``, ``DepartmentSerializer``, ``AcademicSessionSerializer``
-and ``SessionCloneSerializer`` moved to their own packages
+``CampusSerializer``, ``DepartmentSerializer``, ``AcademicSessionSerializer``,
+``SessionCloneSerializer`` and ``TermSerializer`` moved to their own packages
 (``campuses/serializers.py``, ``departments/serializers.py``,
-``academic_sessions/serializers.py``) — this file now holds only the
-resources that haven't been split into their own package yet.
+``academic_sessions/serializers.py``, ``terms/serializers.py``) — this file
+now holds only the resources that haven't been split into their own package
+yet.
 """
 
 from __future__ import annotations
@@ -22,55 +23,8 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.school_organization import services
-from apps.school_organization.models import (
-    AcademicSession,
-    Campus,
-    Class,
-    Department,
-    House,
-    Section,
-    Subject,
-    Term,
-)
+from apps.school_organization.models import Campus, Class, Department, House, Section, Subject
 from apps.school_organization.serializer_helpers import READ_ONLY_FIELDS, fk, normalize_code
-
-
-class TermSerializer(serializers.ModelSerializer):
-    academic_session_id = fk(AcademicSession, source="academic_session")
-
-    class Meta:
-        model = Term
-        fields = (
-            "id",
-            "academic_session_id",
-            "name",
-            "sequence",
-            "start_date",
-            "end_date",
-            "created_at",
-            "updated_at",
-        )
-        read_only_fields = READ_ONLY_FIELDS
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        session = attrs.get("academic_session") or getattr(self.instance, "academic_session", None)
-        start = attrs.get("start_date") or getattr(self.instance, "start_date", None)
-        end = attrs.get("end_date") or getattr(self.instance, "end_date", None)
-        if session is None:
-            raise serializers.ValidationError({"academic_session_id": "This field is required."})
-        if start is None or end is None:
-            raise serializers.ValidationError(
-                {"start_date": "Both start_date and end_date are required."}
-            )
-
-        services.assert_session_writable(session)
-        services.assert_term_window(
-            session=session,
-            start_date=start,
-            end_date=end,
-            exclude_id=getattr(self.instance, "pk", None),
-        )
-        return attrs
 
 
 class ClassSerializer(serializers.ModelSerializer):
