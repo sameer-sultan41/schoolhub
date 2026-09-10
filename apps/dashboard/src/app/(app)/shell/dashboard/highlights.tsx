@@ -48,10 +48,13 @@ export function Highlights({ limit }: { limit?: number }) {
     );
   }
 
+  // Coalesced to 0 here specifically for the proportional bar — an unknown count
+  // contributes no width to a proportion. The row list below still shows the raw
+  // nullable value via formatValue, which renders "—" rather than a fabricated 0.
   const segments = [
-    { label: "Classes", value: data.classes, color: "bg-green-500" },
-    { label: "Sections", value: data.sections, color: "bg-destructive" },
-    { label: "Subjects", value: data.subjects, color: "bg-violet-500" },
+    { label: "Classes", value: data.classes ?? 0, color: "bg-green-500" },
+    { label: "Sections", value: data.sections ?? 0, color: "bg-destructive" },
+    { label: "Subjects", value: data.subjects ?? 0, color: "bg-violet-500" },
   ];
   const segmentTotal = segments.reduce((sum, segment) => sum + segment.value, 0);
 

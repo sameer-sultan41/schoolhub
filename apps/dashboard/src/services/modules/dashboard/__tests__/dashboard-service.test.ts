@@ -102,7 +102,13 @@ describe("DashboardService", () => {
     it("passes the academic session id as a query parameter", async () => {
       const { fetchTeacherLoadSummary } = await import("../dashboard-service");
       const load = [
-        { staff_id: "s1", name: "Ayesha Khan", weekly_periods: 18, allocations: 4, over_norm: false },
+        {
+          staff_id: "s1",
+          name: "Ayesha Khan",
+          weekly_periods: 18,
+          allocations: 4,
+          over_norm: false,
+        },
       ];
       mockGet.mockResolvedValue({ data: load });
 

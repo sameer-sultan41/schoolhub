@@ -36,9 +36,10 @@ describe("Highlights", () => {
     renderWithProviders(<Highlights limit={2} />);
 
     expect(await screen.findByText("1,280")).toBeInTheDocument();
-    // Only the first two rows (Classes, Staff) render — Campuses is cut by limit={2}.
-    expect(screen.getByText("Classes")).toBeInTheDocument();
-    expect(screen.getByText("Staff")).toBeInTheDocument();
+    // "Classes" also appears in the segment legend above the row list, so it's not a
+    // reliable marker for "did the row render" — "Staff" and "Campuses" only ever
+    // appear in the row list, which is what limit={2} actually caps.
+    expect(await screen.findByText("Staff")).toBeInTheDocument();
     expect(screen.queryByText("Campuses")).not.toBeInTheDocument();
   });
 

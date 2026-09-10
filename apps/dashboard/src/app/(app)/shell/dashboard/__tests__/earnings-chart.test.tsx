@@ -23,7 +23,9 @@ const mockFetchAcademicSessions = Services.dashboard.fetchAcademicSessions as je
   typeof Services.dashboard.fetchAcademicSessions
 >;
 const mockFetchTeacherLoadSummary = Services.dashboard
-  .fetchTeacherLoadSummary as jest.MockedFunction<typeof Services.dashboard.fetchTeacherLoadSummary>;
+  .fetchTeacherLoadSummary as jest.MockedFunction<
+  typeof Services.dashboard.fetchTeacherLoadSummary
+>;
 
 const CURRENT_SESSION = { id: "sess-1", name: "2026-27", status: "active", is_current: true };
 
