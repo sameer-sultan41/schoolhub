@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
-import { LOGIN_PATH } from "@/lib/constants";
+import { LOGIN_PATH } from "@/utils/constants";
 
 /**
  * Auth guard. (Next 16 renamed the `middleware` convention to `proxy`.)

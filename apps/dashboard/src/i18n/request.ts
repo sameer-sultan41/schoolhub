@@ -1,5 +1,5 @@
 import { getRequestConfig } from "next-intl/server";
-import { LOCALE_COOKIE_NAME } from "@/lib/constants";
+import { LOCALE_COOKIE_NAME } from "@/utils/constants";
 import { cookies } from "next/headers";
 import type * as EnMessages from "../../messages/en.json";
 import { env, isSupportedLocale } from "@/lib/env";
@@ -16,7 +16,7 @@ type Messages = typeof EnMessages;
  * own `locale` at sign-in is still to be done — until then a returning user gets the
  * default until they choose, which is why the switch exists at all.
  */
-// Re-exported, not redeclared: the name is owned by `lib/constants.ts` so a client
+// Re-exported, not redeclared: the name is owned by `utils/constants.ts` so a client
 // component can import it too (this module is server-only, via `next/headers`).
 // Existing importers of this path keep working.
 export { LOCALE_COOKIE_NAME };

@@ -35,7 +35,7 @@ import {
   Switch,
 } from "@schoolhub/ui";
 
-import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
+import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/utils/constants";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
 import { Services } from "@/services";
 

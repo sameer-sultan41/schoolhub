@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { setUnauthorizedHandler } from "@/lib/auth";
-import { LOGIN_PATH } from "@/lib/constants";
+import { LOGIN_PATH } from "@/utils/constants";
 import { getQueryClient } from "@/lib/query-client";
 
 /**
