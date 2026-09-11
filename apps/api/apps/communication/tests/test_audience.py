@@ -1,4 +1,4 @@
-"""`services.resolve_audience` — one query per resolution branch."""
+"""`audience.resolve_audience` — one query per resolution branch."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from apps.communication import services
+from apps.communication import audience
 from apps.communication.models import AudienceType
 from apps.communication.tests.factories import (
     AcademicSessionFactory,
@@ -73,7 +73,7 @@ class AudienceResolutionTestCase(TestCase):
 class AllStaffTests(AudienceResolutionTestCase):
     def test_all_resolves_every_active_user(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.ALL, audience_filter=None, tenant_id=self.tenant.pk
             )
 
@@ -90,7 +90,7 @@ class AllStaffTests(AudienceResolutionTestCase):
                 is_restricted_principal=True,
             )
 
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.STAFF, audience_filter=None, tenant_id=self.tenant.pk
             )
 
@@ -104,7 +104,7 @@ class AllStaffTests(AudienceResolutionTestCase):
             matching_role = grant(matching_user, "communication.announcement.view")
             grant(other_user, "communication.announcement.view")
 
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.STAFF,
                 audience_filter={"role_slugs": [matching_role.slug]},
                 tenant_id=self.tenant.pk,
@@ -115,7 +115,7 @@ class AllStaffTests(AudienceResolutionTestCase):
 
     def test_all_is_a_single_query(self) -> None:
         with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
-            services.resolve_audience(
+            audience.resolve_audience(
                 audience_type=AudienceType.ALL, audience_filter=None, tenant_id=self.tenant.pk
             )
 
@@ -125,7 +125,7 @@ class AllStaffTests(AudienceResolutionTestCase):
 class StudentsAndGuardiansTests(AudienceResolutionTestCase):
     def test_students_resolves_the_students_own_portal_account(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.STUDENTS, audience_filter=None, tenant_id=self.tenant.pk
             )
 
@@ -133,7 +133,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
 
     def test_guardians_resolves_the_guardian_not_the_student(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.GUARDIANS,
                 audience_filter=None,
                 tenant_id=self.tenant.pk,
@@ -153,7 +153,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
                 has_portal_access=False,
             )
 
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.GUARDIANS,
                 audience_filter=None,
                 tenant_id=self.tenant.pk,
@@ -163,7 +163,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
 
     def test_class_audience_type_resolves_to_guardians_of_that_class(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.CLASS,
                 audience_filter={"class_ids": [str(self.school_class.pk)]},
                 tenant_id=self.tenant.pk,
@@ -173,7 +173,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
 
     def test_class_audience_type_excludes_guardians_of_a_different_class(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.CLASS,
                 audience_filter={"class_ids": [str(self.other_class.pk)]},
                 tenant_id=self.tenant.pk,
@@ -183,13 +183,13 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
 
     def test_class_audience_type_without_class_ids_is_refused(self) -> None:
         with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation):
-            services.resolve_audience(
+            audience.resolve_audience(
                 audience_type=AudienceType.CLASS, audience_filter=None, tenant_id=self.tenant.pk
             )
 
     def test_section_audience_type_without_section_ids_is_refused(self) -> None:
         with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation):
-            services.resolve_audience(
+            audience.resolve_audience(
                 audience_type=AudienceType.SECTION,
                 audience_filter={"class_ids": [str(self.school_class.pk)]},
                 tenant_id=self.tenant.pk,
@@ -200,7 +200,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
             self.student_user.is_active = False
             self.student_user.save(update_fields=["is_active"])
 
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.STUDENTS, audience_filter=None, tenant_id=self.tenant.pk
             )
 
@@ -211,7 +211,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
             self.guardian_user.is_active = False
             self.guardian_user.save(update_fields=["is_active"])
 
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.GUARDIANS, audience_filter=None, tenant_id=self.tenant.pk
             )
 
@@ -221,7 +221,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
         with tenant_context(self.tenant.id):
             other_house = HouseFactory(tenant=self.tenant)
 
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.GUARDIANS,
                 audience_filter={"house_ids": [str(other_house.pk)]},
                 tenant_id=self.tenant.pk,
@@ -231,7 +231,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
 
     def test_campus_narrows_guardians(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.GUARDIANS,
                 audience_filter={"campus_ids": [str(self.other_campus.pk)]},
                 tenant_id=self.tenant.pk,
@@ -241,7 +241,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
 
     def test_guardians_is_a_single_query(self) -> None:
         with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
-            services.resolve_audience(
+            audience.resolve_audience(
                 audience_type=AudienceType.GUARDIANS,
                 audience_filter=None,
                 tenant_id=self.tenant.pk,
@@ -253,7 +253,7 @@ class StudentsAndGuardiansTests(AudienceResolutionTestCase):
 class CustomAudienceTests(AudienceResolutionTestCase):
     def test_custom_resolves_the_named_user_ids(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.CUSTOM,
                 audience_filter={"user_ids": [str(self.guardian_user.pk)]},
                 tenant_id=self.tenant.pk,
@@ -267,7 +267,7 @@ class CustomAudienceTests(AudienceResolutionTestCase):
             foreign_user = UserFactory(tenant=other_tenant)
 
         with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation):
-            services.resolve_audience(
+            audience.resolve_audience(
                 audience_type=AudienceType.CUSTOM,
                 audience_filter={"user_ids": [str(foreign_user.pk)]},
                 tenant_id=self.tenant.pk,
@@ -275,7 +275,7 @@ class CustomAudienceTests(AudienceResolutionTestCase):
 
     def test_empty_user_ids_resolves_to_nothing(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.CUSTOM,
                 audience_filter={"user_ids": []},
                 tenant_id=self.tenant.pk,
@@ -328,7 +328,7 @@ class CampusScopedAudienceTests(AudienceResolutionTestCase):
 
     def test_campus_scoped_staff_excludes_a_different_campus(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.STAFF,
                 audience_filter=None,
                 tenant_id=self.tenant.pk,
@@ -341,7 +341,7 @@ class CampusScopedAudienceTests(AudienceResolutionTestCase):
 
     def test_campus_scoped_guardians_excludes_a_different_campus(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.GUARDIANS,
                 audience_filter=None,
                 tenant_id=self.tenant.pk,
@@ -353,7 +353,7 @@ class CampusScopedAudienceTests(AudienceResolutionTestCase):
 
     def test_campus_scoped_students_excludes_a_different_campus(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.STUDENTS,
                 audience_filter=None,
                 tenant_id=self.tenant.pk,
@@ -365,7 +365,7 @@ class CampusScopedAudienceTests(AudienceResolutionTestCase):
 
     def test_campus_scoped_all_excludes_a_different_campus(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.ALL,
                 audience_filter=None,
                 tenant_id=self.tenant.pk,
@@ -382,7 +382,7 @@ class CampusScopedAudienceTests(AudienceResolutionTestCase):
 
     def test_custom_audience_is_not_narrowed_by_campus(self) -> None:
         with tenant_context(self.tenant.id):
-            recipients = services.resolve_audience(
+            recipients = audience.resolve_audience(
                 audience_type=AudienceType.CUSTOM,
                 audience_filter={"user_ids": [str(self.other_campus_guardian_user.pk)]},
                 tenant_id=self.tenant.pk,
@@ -395,7 +395,7 @@ class CampusScopedAudienceTests(AudienceResolutionTestCase):
 class AssertAudienceNonEmptyTests(TestCase):
     def test_an_empty_list_is_refused(self) -> None:
         with self.assertRaises(DomainRuleViolation):
-            services.assert_audience_is_nonempty([])
+            audience.assert_audience_is_nonempty([])
 
     def test_a_nonempty_list_is_fine(self) -> None:
-        services.assert_audience_is_nonempty([uuid.uuid4()])
+        audience.assert_audience_is_nonempty([uuid.uuid4()])

@@ -1,42 +1,22 @@
-"""`NotificationPreference`, and `bulk_is_channel_enabled` — the preference
-resolver `core.notifications` calls.
-"""
+"""`bulk_is_channel_enabled` — the preference resolver `core.notifications` calls."""
 
 from __future__ import annotations
 
 import uuid
 
 from django.core.cache import cache
-from django.db import IntegrityError, connection, transaction
+from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from apps.communication.models import NotificationPreference
-from apps.communication.services import assert_preference_may_be_saved, bulk_is_channel_enabled
+from apps.communication.preferences.services.resolver import bulk_is_channel_enabled
 from apps.communication.tests.factories import (
     NotificationPreferenceFactory,
     TenantFactory,
     enable_feature,
 )
-from core.api.exceptions import DomainRuleViolation
 from core.notifications.models import NotificationCategory, NotificationChannel
 from core.tenancy.context import tenant_context
-
-
-class EmergencyFloorTests(TestCase):
-    def test_disabling_the_emergency_category_is_refused(self) -> None:
-        with self.assertRaises(DomainRuleViolation):
-            assert_preference_may_be_saved(
-                event_category=NotificationCategory.EMERGENCY, is_enabled=False
-            )
-
-    def test_enabling_the_emergency_category_is_fine(self) -> None:
-        assert_preference_may_be_saved(
-            event_category=NotificationCategory.EMERGENCY, is_enabled=True
-        )
-
-    def test_disabling_a_non_emergency_category_is_fine(self) -> None:
-        assert_preference_may_be_saved(event_category=NotificationCategory.FEES, is_enabled=False)
 
 
 class BulkIsChannelEnabledTests(TestCase):
@@ -148,42 +128,3 @@ class BulkIsChannelEnabledTests(TestCase):
                 [self.user_id], NotificationCategory.FEES, NotificationChannel.EMAIL, self.tenant.pk
             )
             self.assertFalse(second[self.user_id])
-
-
-class PreferenceModelTests(TestCase):
-    def setUp(self) -> None:
-        super().setUp()
-        self.tenant = TenantFactory()
-
-    def test_two_preferences_cannot_share_a_tenant_user_category_channel(self) -> None:
-        user_id = uuid.uuid4()
-        with tenant_context(self.tenant.id):
-            NotificationPreferenceFactory(
-                tenant=self.tenant,
-                user_id=user_id,
-                event_category=NotificationCategory.FEES,
-                channel=NotificationChannel.EMAIL,
-            )
-            with self.assertRaises(IntegrityError), transaction.atomic():
-                NotificationPreferenceFactory(
-                    tenant=self.tenant,
-                    user_id=user_id,
-                    event_category=NotificationCategory.FEES,
-                    channel=NotificationChannel.EMAIL,
-                )
-
-    def test_filter_owned_by_user_returns_only_the_callers_own_rows(self) -> None:
-        owner_id = uuid.uuid4()
-        other_id = uuid.uuid4()
-        with tenant_context(self.tenant.id):
-            NotificationPreferenceFactory(tenant=self.tenant, user_id=owner_id)
-            NotificationPreferenceFactory(tenant=self.tenant, user_id=other_id)
-
-            class _FakeUser:
-                pk = owner_id
-
-            rows = NotificationPreference.filter_owned_by_user(
-                NotificationPreference.objects.all(), _FakeUser()
-            )
-
-            self.assertEqual({row.user_id for row in rows}, {owner_id})
