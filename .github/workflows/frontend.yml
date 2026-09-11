@@ -28,7 +28,7 @@ on:
     # would eventually run these — but "eventually, after the parent merges" is
     # not a gate, and the whole point of stacking is to review the child before
     # then.
-    branches: [main, "feat/**", "fix/**", "chore/**"]
+    branches: [main, "feat/**", "fix/**", "chore/**", "refactor/**"]
     paths:
       - "apps/dashboard/**"
       - "apps/website/**"
