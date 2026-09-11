@@ -7047,7 +7047,7 @@ paths:
   /api/v1/notices/{id}:acknowledge:
     post:
       operationId: notices_:acknowledge_create
-      description: '`POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge_notice`.'
+      description: '`POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge`.'
       parameters:
       - in: path
         name: id
@@ -14554,7 +14554,7 @@ components:
       - template_code
     DeliveryReportResponse:
       type: object
-      description: '`GET /delivery-logs:summary`''s real response shape — see views.py''s
+      description: '`GET /delivery-logs:summary`''s real response shape — see `viewset.py`''s
         `summary`.'
       properties:
         data:
@@ -14565,7 +14565,7 @@ components:
       - data
     DeliveryReportRow:
       type: object
-      description: One grouped count from `reports.delivery_report`.
+      description: One grouped count from `services.report.delivery_report`.
       properties:
         group:
           type: string

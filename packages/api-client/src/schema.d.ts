@@ -2941,7 +2941,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description `POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge_notice`. */
+        /** @description `POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge`. */
         post: operations["notices_:acknowledge_create"];
         delete?: never;
         options?: never;
@@ -6274,11 +6274,11 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /** @description `GET /delivery-logs:summary`'s real response shape — see views.py's `summary`. */
+        /** @description `GET /delivery-logs:summary`'s real response shape — see `viewset.py`'s `summary`. */
         DeliveryReportResponse: {
             data: components["schemas"]["DeliveryReportRow"][];
         };
-        /** @description One grouped count from `reports.delivery_report`. */
+        /** @description One grouped count from `services.report.delivery_report`. */
         DeliveryReportRow: {
             group: string;
             count: number;

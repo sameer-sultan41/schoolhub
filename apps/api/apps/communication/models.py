@@ -46,14 +46,16 @@ class NotificationTemplateOverride(TenantOwnedModel):
     """A tenant's own wording for one (code, channel, locale) render target.
 
     `variables` is copied from the platform template's declared set at creation
-    time and re-validated on every edit (`services.assert_override_is_valid`) —
-    never author-editable itself, since widening it would let a tenant declare a
+    time and re-validated on every edit
+    (`template_overrides.services.validate.assert_override_is_valid`) — never
+    author-editable itself, since widening it would let a tenant declare a
     placeholder the platform template's context never supplies.
 
     `is_system` rows are seeded at tenant provisioning for every platform
     default so a tenant sees something to edit rather than a blank list; body
-    and subject are editable, `code`/`channel` are locked (`services.py`), the
-    same `is_system` split `fees_finance.LedgerAccount` already uses.
+    and subject are editable, `code`/`channel` are locked
+    (`template_overrides.serializers.NotificationTemplateOverrideSerializer.validate`),
+    the same `is_system` split `fees_finance.LedgerAccount` already uses.
     """
 
     code = models.CharField(
@@ -97,8 +99,8 @@ class NotificationTemplateOverride(TenantOwnedModel):
 class NotificationPreference(TenantOwnedModel):
     """One user's opt-in for one (event_category, channel) pair.
 
-    A missing row means "enabled" — `services.bulk_is_channel_enabled` treats
-    the absence of a row as the default rather than requiring every user to be
+    A missing row means "enabled" — `preferences.services.resolver.bulk_is_channel_enabled`
+    treats the absence of a row as the default rather than requiring every user to be
     seeded with a full matrix, matching `notify()`'s own "until preferences
     exist, every trigger delivers at the mandatory floor" framing, generalized.
     """
@@ -137,7 +139,7 @@ class Announcement(TenantOwnedModel):
     """Feed-style post with audience targeting and a draft/schedule/publish lifecycle.
 
     `audience_type`/`audience_filter` are resolved to recipient user ids by
-    `services.resolve_audience` at publish time, never stored resolved — the
+    `audience.resolve_audience` at publish time, never stored resolved — the
     audience a school-wide announcement reaches must reflect who is enrolled
     *now*, not who was enrolled when it was drafted.
     """
@@ -249,7 +251,8 @@ class Notice(TenantOwnedModel):
             ),
             # Segregation of duties, as far as a CHECK carries it — mirrors
             # `fees_finance.Expense`'s identical `..._approver_is_not_the_submitter`
-            # constraint. `services.publish_notice` already enforces this; this is
+            # constraint. `notices.services.publish.publish_notice` already enforces
+            # this; this is
             # defense in depth against a direct write or a future code path that
             # forgets the check.
             models.CheckConstraint(

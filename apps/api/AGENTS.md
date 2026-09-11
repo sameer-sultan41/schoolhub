@@ -24,9 +24,10 @@ core/rbac/         User, Role, Permission, UserRole, permission registry, DRF pe
 core/audit/        append-only audit log + recording services
 core/api/          response envelope, error handler, pagination, throttling, base viewsets
 apps/<module>/     one app per module doc — models/serializers/services/views/urls/permissions/tests
-                   (school_organization/ is the one exception: one package per resource, each
-                   with its own services/<action>.py + viewset.py/view.py where the resource
-                   needs one — see docs/03-modules/school-organization.md §20)
+                   (communication/ and school_organization/ are the two exceptions: one package
+                   per resource, each with its own services/<action>.py + viewset.py/view.py
+                   where the resource needs one — see docs/03-modules/communication.md §20 and
+                   docs/03-modules/school-organization.md §20)
 tests/             cross-cutting suites (RLS coverage, permission registry, cross-tenant matrix)
 ```
 
