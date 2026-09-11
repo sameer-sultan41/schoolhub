@@ -6,8 +6,6 @@ resource before this refactor — a pre-existing gap, not one introduced here.
 
 from __future__ import annotations
 
-from rest_framework import status
-
 from apps.school_organization.tests.base import SchoolOrganizationAPITestCase
 from apps.school_organization.tests.factories import HouseFactory
 from core.tenancy.context import tenant_context
@@ -16,12 +14,10 @@ from core.tenancy.context import tenant_context
 class HouseEndpointTests(SchoolOrganizationAPITestCase):
     # Each case creates its rows in an order that disagrees with the ordering it
     # asserts, so a passing test proves the sort ran rather than that insertion
-    # order happened to match.
-
-    def _ids(self, url: str) -> list[str]:
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
-        return [row["id"] for row in response.json()["data"]]
+    # order happened to match. `StableOrderingFilter` appends `pk`, so ties
+    # resolve by a random UUID — no case here leaves two rows tied on the
+    # column it sorts by. `_ids()` (GET a URL, assert 200, return the row ids
+    # in order) is inherited from `SchoolOrganizationAPITestCase`.
 
     def test_sort_by_code(self) -> None:
         self.allow("school.house.view")

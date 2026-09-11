@@ -1,5 +1,10 @@
 """`AcademicSessionViewSet` — request handling for `/academic-sessions`
 (module doc §5.4, §7).
+
+``queryset`` is set to the *manager*, not ``manager.all()``. The tenant-scoped
+manager resolves the active tenant when its queryset is built, and DRF builds it
+per request; ``Model.objects.all()`` evaluated at class-definition time would be
+frozen empty because no tenant context exists at import.
 """
 
 from __future__ import annotations

@@ -15,7 +15,7 @@ from django.test import TestCase
 from apps.school_organization.academic_sessions.services.activate import activate_session
 from apps.school_organization.academic_sessions.services.clone import clone_session
 from apps.school_organization.academic_sessions.services.close import close_session
-from apps.school_organization.academic_sessions.services.validation import (
+from apps.school_organization.academic_sessions.services.validate import (
     assert_no_session_overlap,
     session_completeness_errors,
 )
@@ -146,8 +146,9 @@ class SessionLifecycleServiceTests(TenantFixtureMixin, TestCase):
 class SessionOverlapServiceTests(TenantFixtureMixin, TestCase):
     """`assert_no_session_overlap` — the other half of the old `DateWindowServiceTests`.
 
-    Term-window tests stay in `tests/test_models.py::DateWindowServiceTests`
-    until the terms package moves `assert_term_window` out of the module root.
+    Term-window tests (the other half of that class) are in
+    `terms/tests/test_validation.py::TermWindowServiceTests`, alongside
+    `assert_term_window` itself.
     """
 
     def test_sessions_may_not_overlap(self) -> None:

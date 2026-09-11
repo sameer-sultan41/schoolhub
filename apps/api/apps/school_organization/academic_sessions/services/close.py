@@ -12,6 +12,7 @@ import uuid
 
 from django.db import transaction
 
+from apps.school_organization.academic_sessions.services.locking import locked_session
 from apps.school_organization.models import AcademicSession, SessionStatus
 from core.api.exceptions import Conflict
 
@@ -19,7 +20,7 @@ from core.api.exceptions import Conflict
 @transaction.atomic
 def close_session(session: AcademicSession, *, actor_id: uuid.UUID) -> AcademicSession:
     """Close an active session, locking it against further transactional writes (§7.2)."""
-    session = AcademicSession.objects.select_for_update().get(pk=session.pk)
+    session = locked_session(session)
 
     if session.status != SessionStatus.ACTIVE:
         raise Conflict(f"Only an active session can be closed; this one is {session.status}.")

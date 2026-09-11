@@ -7,7 +7,7 @@ from datetime import date
 
 from django.db import transaction
 
-from apps.school_organization.academic_sessions.services.validation import (
+from apps.school_organization.academic_sessions.services.validate import (
     assert_no_session_overlap,
 )
 from apps.school_organization.models import AcademicSession, ClassSubject, SessionStatus

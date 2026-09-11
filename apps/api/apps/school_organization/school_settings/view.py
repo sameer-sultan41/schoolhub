@@ -2,8 +2,9 @@
 
 No split into per-action files: a singleton resource has no distinct
 actions the way `academic_sessions` does, so one file holds the whole
-view — matching `communication/preferences/view.py`'s precedent for the
-same shape of resource.
+view — the same shape `apps/communication`'s `preferences/view.py` uses
+for its own singleton resource (PR #73, adopting the same file-per-action
+layout independently).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.school_organization.school_settings.serializers import SchoolSettingsSerializer
+from apps.school_organization.tenant_settings import get_settings_row
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
@@ -46,7 +48,7 @@ class SchoolSettingsView(TenantScopedViewSetMixin, APIView):
 
     @extend_schema(responses={200: SchoolSettingsSerializer})
     def get(self, request) -> Response:
-        return ActionResponse.ok(self._represent(request, self._settings(request)))
+        return ActionResponse.ok(self._represent(request, get_settings_row(request)))
 
     @extend_schema(request=SchoolSettingsSerializer, responses={200: SchoolSettingsSerializer})
     def patch(self, request) -> Response:
@@ -54,7 +56,7 @@ class SchoolSettingsView(TenantScopedViewSetMixin, APIView):
         serializer.is_valid(raise_exception=True)
         changes = serializer.validated_data
 
-        settings_row = self._settings(request)
+        settings_row = get_settings_row(request)
         before = self._represent(request, settings_row)
 
         with transaction.atomic():
@@ -75,15 +77,6 @@ class SchoolSettingsView(TenantScopedViewSetMixin, APIView):
         after = self._represent(request, settings_row)
         record_audit(request, "update", settings_row, before=before, after=after)
         return ActionResponse.ok(after, message="School settings updated.")
-
-    @staticmethod
-    def _settings(request) -> TenantSettings:
-        """One settings row per tenant; provisioning may not have created it yet."""
-        row, _ = TenantSettings.objects.get_or_create(
-            tenant=request.tenant,
-            defaults={"created_by": request.user.pk, "updated_by": request.user.pk},
-        )
-        return row
 
     @staticmethod
     def _represent(request, settings_row: TenantSettings) -> dict:

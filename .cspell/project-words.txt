@@ -227,6 +227,7 @@ smallint
 spreadsheetml
 sslmode
 stockouts
+Styleguide
 subnetting
 subprocessor
 subprocessors

@@ -10,6 +10,13 @@ imports it directly (``from apps.school_organization.views import
 BlockingDestroyMixin``) — the same kind of cross-app constraint that keeps
 parts of ``services.py`` at the module root; see that file's docstring for
 the full picture of what stays flat in this module and why.
+
+Every one of those moved ViewSets/APIViews still declares
+``required_permission``/``required_permission_map`` on itself, in its own
+package — that requirement doesn't live in this file any more, but it hasn't
+gone away: ``HasPermissionKey`` fails closed when one is missing, so an
+undeclared endpoint is a 403, not an open door. An 11th resource package
+needs one too.
 """
 
 from __future__ import annotations

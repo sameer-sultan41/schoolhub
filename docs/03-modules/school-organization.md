@@ -216,15 +216,16 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md) 
 from shared `views.py`/`services.py`/`serializers.py`/`filters.py` files into
 one package per resource (`campuses/`, `departments/`, `academic_sessions/`,
 `terms/`, `classes/`, `sections/`, `subjects/`, `houses/`, `school_settings/`,
-`holiday_calendar/`) — the same layout `apps/communication` established (see
-`communication.md` §20), following the HackSoft Django Styleguide convention:
-`viewset.py`/`view.py` stays one file per resource, every action a plain
-method; `services/` splits granularly, one file per action, only where a
-resource actually has distinct actions worth separating
-(`academic_sessions/services/{activate,close,clone,validation}.py` — the one
-resource here with real state transitions). Singleton resources
-(`school_settings/`, `holiday_calendar/`) get a single `view.py`, matching
-`communication/preferences/view.py`'s precedent for the same shape.
+`holiday_calendar/`) — the same layout `apps/communication` is adopting in
+PR #73 (see `communication.md` §20), independently, following the HackSoft
+Django Styleguide convention: `viewset.py`/`view.py` stays one file per
+resource, every action a plain method; `services/` splits granularly, one
+file per action, only where a resource actually has distinct actions worth
+separating (`academic_sessions/services/{activate,close,clone,validation}.py`
+— the one resource here with real state transitions). Singleton resources
+(`school_settings/`, `holiday_calendar/`) get a single `view.py`, the same
+shape `apps/communication`'s `preferences/view.py` uses for its own
+singleton resource.
 
 Unlike communication, this module does not split cleanly. `apps.
 school_organization.services`, `.views` (down to just `BlockingDestroyMixin`)

@@ -1,12 +1,12 @@
 """Serializer field-building helpers shared by every resource package below.
 
-Used by campuses, departments, terms, sections, classes, subjects and houses'
-serializers — no single package owns these, so, following the same
-shared-by-more-than-one-sibling rule `services.py` and `views.py` use (see
-their docstrings), they live here rather than in any one resource's
-`serializers.py`. Unlike those two files, nothing outside this app imports
-this one, so it carries no external-contract constraint — it exists purely to
-avoid five copies of the same two helpers.
+Used by campuses, departments, academic_sessions, terms, sections, classes,
+subjects and houses' serializers — no single package owns these, so,
+following the same shared-by-more-than-one-sibling rule `services.py` and
+`views.py` use (see their docstrings), they live here rather than in any one
+resource's `serializers.py`. Unlike those two files, nothing outside this app
+imports this one, so it carries no external-contract constraint — it exists
+purely to avoid eight copies of the same two helpers.
 """
 
 from __future__ import annotations

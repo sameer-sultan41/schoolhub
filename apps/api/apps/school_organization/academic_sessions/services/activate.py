@@ -12,7 +12,8 @@ import uuid
 
 from django.db import transaction
 
-from apps.school_organization.academic_sessions.services.validation import (
+from apps.school_organization.academic_sessions.services.locking import locked_session
+from apps.school_organization.academic_sessions.services.validate import (
     session_completeness_errors,
 )
 from apps.school_organization.models import AcademicSession, SessionStatus
@@ -23,7 +24,7 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 @transaction.atomic
 def activate_session(session: AcademicSession, *, actor_id: uuid.UUID) -> AcademicSession:
     """Make ``session`` the tenant's current session after the §7.1 completeness check."""
-    session = AcademicSession.objects.select_for_update().get(pk=session.pk)
+    session = locked_session(session)
 
     if session.status in LOCKED_SESSION_STATES:
         raise Conflict(f"A {session.status} session cannot be activated.")

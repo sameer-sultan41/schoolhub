@@ -118,16 +118,19 @@ class CampusEndpointTests(SchoolOrganizationAPITestCase):
     #
     # Each case creates its rows in an order that disagrees with the ordering it
     # asserts, so a passing test proves the sort ran rather than that insertion
-    # order happened to match. The undeclared-field case carries as much weight
+    # order happened to match. `StableOrderingFilter` appends `pk`, so ties
+    # resolve by a random UUID — no case here leaves two rows tied on the
+    # column it sorts by.
+    #
+    # The undeclared-field case carries as much weight
     # as the sorts: `ordering_fields` is an allowlist and DRF drops anything
     # outside it *silently*, so the only way to tell an ignored parameter from an
     # honoured one is to give the undeclared column values that would visibly
     # reorder the list.
-
-    def _ids(self, url: str) -> list[str]:
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
-        return [row["id"] for row in response.json()["data"]]
+    #
+    # `_ids()` — GET a URL, assert 200, return the row ids in order — is
+    # inherited from `SchoolOrganizationAPITestCase`; every ordering test in
+    # this module's resource packages shares it.
 
     def test_sort_by_name(self) -> None:
         self.allow("school.campus.view")

@@ -35,9 +35,9 @@ READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
 
 
 def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
-    """A tenant-scoped related field — see school_organization/serializers.py's
-
-    identical helper for why the *manager*, not ``manager.all()``, is passed.
+    """A tenant-scoped related field — see school_organization/
+    serializer_helpers.py's identical ``fk()`` helper for why the *manager*,
+    not ``manager.all()``, is passed.
     """
     return serializers.PrimaryKeyRelatedField(queryset=model.objects, **kwargs)
 

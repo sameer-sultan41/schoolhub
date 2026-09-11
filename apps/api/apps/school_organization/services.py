@@ -27,14 +27,15 @@ shared by several sibling packages inside this app (timezone validation by
 `departments/`, `sections/` and `houses/`) with no single package that owns
 them.
 
-This is this file's final shape: `classes`, `sections`, `subjects`, `houses`,
-`school_settings` and `holiday_calendar` still have their own ViewSet/APIView
-sitting in the flat `views.py` awaiting their own package, but none of them
-need anything further out of `services.py` once they move. The finished
-layout and the reasoning behind it will land as a new section in
-`docs/03-modules/school-organization.md` once every resource has its own
-package, following the precedent `communication.md` §20 set for the same
-layout.
+This is this file's final shape: every ViewSet/APIView that used to live in
+the flat `views.py` (`campuses`, `departments`, `academic_sessions`, `terms`,
+`classes`, `sections`, `subjects`, `houses`, `school_settings`,
+`holiday_calendar`) now has its own package, and `views.py` itself holds only
+`BlockingDestroyMixin` — see that file's own docstring. The finished layout
+and the reasoning behind it are documented in
+`docs/03-modules/school-organization.md` §20, following the precedent
+`communication.md` §20 sets for the same layout (adopted independently on
+`apps/communication`, in parallel with this module).
 """
 
 from __future__ import annotations
@@ -57,9 +58,10 @@ from apps.school_organization.models import (
 from core.api.exceptions import Conflict, DomainRuleViolation
 
 # Sessions in these states reject every write from transactional modules (§11).
-# Shared with `academic_sessions/services/activate.py` and `close.py`, which
-# check the same states when transitioning a session — not private, since it
-# is read from outside this module.
+# Shared with `academic_sessions/services/activate.py`, which checks the same
+# states when activating a session — not private, since it is read from
+# outside this module. `close.py` checks `status != ACTIVE` directly instead,
+# since closing only ever applies to an active session.
 LOCKED_SESSION_STATES = frozenset({SessionStatus.CLOSED, SessionStatus.ARCHIVED})
 
 

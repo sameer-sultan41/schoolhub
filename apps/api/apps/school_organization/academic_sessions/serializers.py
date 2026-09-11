@@ -8,7 +8,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.school_organization.academic_sessions.services.validation import (
+from apps.school_organization.academic_sessions.services.validate import (
     assert_no_session_overlap,
 )
 from apps.school_organization.models import AcademicSession

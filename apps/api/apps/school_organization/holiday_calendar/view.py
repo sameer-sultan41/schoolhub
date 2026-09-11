@@ -1,9 +1,10 @@
 """`HolidayCalendarView` — `GET/PUT /holiday-calendar` (module doc §16).
 
 No split into per-action files: a singleton resource has no distinct actions
-the way `academic_sessions` does, so one file holds the whole view — matching
-`communication/preferences/view.py`'s precedent for the same shape of
-resource, and `school_settings/view.py` in this module.
+the way `academic_sessions` does, so one file holds the whole view — the same
+shape `school_settings/view.py` uses in this module, and `apps/communication`'s
+`preferences/view.py` uses for its own singleton resource (PR #73, adopting
+the same file-per-action layout independently).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from rest_framework.views import APIView
 
 from apps.school_organization import calendar
 from apps.school_organization.holiday_calendar.serializers import HolidayCalendarSerializer
+from apps.school_organization.tenant_settings import get_settings_row
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
@@ -64,7 +66,7 @@ class HolidayCalendarView(TenantScopedViewSetMixin, APIView):
         serializer.is_valid(raise_exception=True)
         changes = serializer.validated_data
 
-        settings_row = self._settings(request)
+        settings_row = get_settings_row(request)
         before = dict(settings_row.academic or {})
         academic = dict(before)
 
@@ -94,15 +96,6 @@ class HolidayCalendarView(TenantScopedViewSetMixin, APIView):
             after=self._represent(academic),
         )
         return ActionResponse.ok(self._represent(academic), message="Calendar updated.")
-
-    @staticmethod
-    def _settings(request) -> TenantSettings:
-        """One settings row per tenant; provisioning may not have created it yet."""
-        row, _ = TenantSettings.objects.get_or_create(
-            tenant=request.tenant,
-            defaults={"created_by": request.user.pk, "updated_by": request.user.pk},
-        )
-        return row
 
     @staticmethod
     def _academic(request) -> dict:
