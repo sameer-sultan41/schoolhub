@@ -1,4 +1,4 @@
-"""Constraint-level tests for the staff-management models."""
+"""Constraint-level tests for the `Staff` model."""
 
 from __future__ import annotations
 
@@ -7,24 +7,11 @@ import datetime
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from apps.school_organization.tests.factories import CampusFactory, TenantFactory, UserFactory
+from apps.school_organization.tests.factories import UserFactory
 from apps.staff_management.models import Staff
-from apps.staff_management.tests.factories import (
-    DEFAULT_JOINING_DATE,
-    FileFactory,
-    StaffDocumentFactory,
-    StaffFactory,
-    StaffQualificationFactory,
-)
+from apps.staff_management.tests.base import TenantFixtureMixin
+from apps.staff_management.tests.factories import DEFAULT_JOINING_DATE, StaffFactory
 from core.tenancy.context import tenant_context
-
-
-class TenantFixtureMixin:
-    def setUp(self) -> None:
-        super().setUp()
-        self.tenant = TenantFactory()
-        with tenant_context(self.tenant.id):
-            self.campus = CampusFactory(tenant=self.tenant)
 
 
 class StaffConstraintTests(TenantFixtureMixin, TestCase):
@@ -95,81 +82,6 @@ class StaffConstraintTests(TenantFixtureMixin, TestCase):
                 exit_date=DEFAULT_JOINING_DATE,
             )
         self.assertEqual(staff.exit_date, DEFAULT_JOINING_DATE)
-
-
-class StaffQualificationConstraintTests(TenantFixtureMixin, TestCase):
-    def test_a_decided_qualification_without_a_verifier_is_rejected(self) -> None:
-        with tenant_context(self.tenant.id):
-            staff = StaffFactory(tenant=self.tenant, campus=self.campus)
-            with self.assertRaises(IntegrityError), transaction.atomic():
-                StaffQualificationFactory(
-                    tenant=self.tenant, staff=staff, verification_status="verified"
-                )
-
-    def test_a_pending_qualification_with_a_verifier_already_set_is_rejected(self) -> None:
-        with tenant_context(self.tenant.id):
-            staff = StaffFactory(tenant=self.tenant, campus=self.campus)
-            with self.assertRaises(IntegrityError), transaction.atomic():
-                StaffQualificationFactory(
-                    tenant=self.tenant,
-                    staff=staff,
-                    verification_status="pending",
-                    verified_by="00000000-0000-0000-0000-000000000000",
-                    verified_at=datetime.datetime.now(datetime.UTC),
-                )
-
-    def test_a_decided_qualification_with_a_verifier_is_accepted(self) -> None:
-        """Positive control: the constraint pairs the columns, it does not forbid a decision."""
-        with tenant_context(self.tenant.id):
-            staff = StaffFactory(tenant=self.tenant, campus=self.campus)
-            qualification = StaffQualificationFactory(
-                tenant=self.tenant,
-                staff=staff,
-                verification_status="verified",
-                verified_by="00000000-0000-0000-0000-000000000000",
-                verified_at=datetime.datetime.now(datetime.UTC),
-            )
-        self.assertEqual(qualification.verification_status, "verified")
-
-
-class StaffDocumentConstraintTests(TenantFixtureMixin, TestCase):
-    def test_a_decided_document_without_a_verifier_is_rejected(self) -> None:
-        with tenant_context(self.tenant.id):
-            staff = StaffFactory(tenant=self.tenant, campus=self.campus)
-            file = FileFactory(tenant=self.tenant)
-            with self.assertRaises(IntegrityError), transaction.atomic():
-                StaffDocumentFactory(
-                    tenant=self.tenant, staff=staff, file=file, verification_status="verified"
-                )
-
-    def test_a_pending_document_with_a_verifier_already_set_is_rejected(self) -> None:
-        with tenant_context(self.tenant.id):
-            staff = StaffFactory(tenant=self.tenant, campus=self.campus)
-            file = FileFactory(tenant=self.tenant)
-            with self.assertRaises(IntegrityError), transaction.atomic():
-                StaffDocumentFactory(
-                    tenant=self.tenant,
-                    staff=staff,
-                    file=file,
-                    verification_status="pending",
-                    verified_by="00000000-0000-0000-0000-000000000000",
-                    verified_at=datetime.datetime.now(datetime.UTC),
-                )
-
-    def test_a_decided_document_with_a_verifier_is_accepted(self) -> None:
-        """Positive control: the constraint pairs the columns, it does not forbid a decision."""
-        with tenant_context(self.tenant.id):
-            staff = StaffFactory(tenant=self.tenant, campus=self.campus)
-            file = FileFactory(tenant=self.tenant)
-            document = StaffDocumentFactory(
-                tenant=self.tenant,
-                staff=staff,
-                file=file,
-                verification_status="rejected",
-                verified_by="00000000-0000-0000-0000-000000000000",
-                verified_at=datetime.datetime.now(datetime.UTC),
-            )
-        self.assertEqual(document.verification_status, "rejected")
 
 
 class FilterAssignedToUserTests(TenantFixtureMixin, TestCase):

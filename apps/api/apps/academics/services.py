@@ -830,7 +830,7 @@ def notify_allocation_changed(
     *, allocation: TeacherSubjectAllocation, tenant_id: uuid.UUID
 ) -> None:
     """Never lets a notification failure undo the allocation — see
-    staff_management.services._notify_invited for the same reasoning."""
+    staff_management/staff/services/invite.py's _notify_invited for the same reasoning."""
     from core.notifications.services import Recipient, notify
 
     if not allocation.staff.user_id:

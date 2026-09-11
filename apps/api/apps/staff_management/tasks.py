@@ -20,7 +20,10 @@ from core.tenancy.tasks import TenantAwareTask
 
 @shared_task(base=TenantAwareTask, bind=True)
 def import_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
-    from apps.staff_management.services import import_staff_row, parse_import_rows
+    from apps.staff_management.staff.services.import_staff import (
+        import_staff_row,
+        parse_import_rows,
+    )
 
     with tenant_atomic(uuid.UUID(tenant_id)):
         job = BackgroundJob.objects.get(pk=job_id)
@@ -63,7 +66,7 @@ def import_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
 
 @shared_task(base=TenantAwareTask, bind=True)
 def export_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
-    from apps.staff_management.services import build_staff_export_csv
+    from apps.staff_management.staff.services.export_staff import build_staff_export_csv
     from core.files.services import create_ready_file
 
     with tenant_atomic(uuid.UUID(tenant_id)):
