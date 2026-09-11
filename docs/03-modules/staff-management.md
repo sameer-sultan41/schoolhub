@@ -207,3 +207,47 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - *(recommendation)* Keep salary data entirely in fees-finance payroll tables; this module stores no compensation figures, simplifying its visibility model.
 - **Open:** should visiting/contract staff bypass parts of onboarding (fewer mandatory documents)? Proposed: per-employment-type document requirement sets, tenant-configurable.
 - **Open:** whether performance indicators should include AI-derived scores by default — proposed: off by default, tenant opt-in with staff disclosure.
+
+## 20. Implementation notes
+
+**File-per-action layout refactor.** `apps/staff_management` restructured
+from shared `views.py`/`services.py`/`serializers.py`/`filters.py` files into
+one package per resource (`staff/`, `designations/`, `staff_qualifications/`,
+`staff_documents/`) — the same layout already applied to `apps/communication`
+(PR #73) and `apps/school_organization` (PR #75; see those modules' own
+§20). `viewset.py` stays one file per resource, every action a plain method;
+`services/` splits granularly, one file per action, only where a resource
+actually has distinct actions worth separating (`staff/services/
+{create,numbering,invite,exit,import_staff,export_staff}.py` — the one
+resource here with real per-action logic: creation, employee-number
+allocation, the invite/exit lifecycle actions, and the two bulk jobs).
+`designations/`, `staff_qualifications/` and `staff_documents/` each get a
+single flat `services.py` — none of the three has enough distinct action
+logic to warrant its own `services/` subpackage.
+
+Like `school_organization`, this module does not split cleanly: four
+functions stay at the app root as a deliberate shared surface, each used by
+more than one of the four packages (or, in one case, by another app
+entirely). `resolve_tenant_staff_id` is imported directly by
+`apps.school_organization.services` to validate staff-reference columns
+across several of that app's own resource packages — the one genuine
+cross-app dependency. `_tenant_settings`, `assert_file_usable` and
+`_verify_record` are each read by two or three of the four sibling packages
+(employee-number pattern lookup, the shared file-purpose/status check, and
+the generic verify-with-lock helper respectively). See `apps/
+staff_management/services.py`'s own docstring for the exact accounting.
+`views.py` similarly keeps only `_StaffModuleViewSetMixin` (every package's
+permission stack) and `_NestedUnderStaffMixin` (the two nested-under-staff
+routes). `admin.py`, `apps.py`, `models.py`/`migrations/`, `features.py`,
+`permissions.py`, `uploads.py`, `notifications.py` and `tasks.py` are
+unchanged in place — the last five are magic-module-name files Django/Celery
+autodiscovery requires at the app root (`module_has_submodule` for the
+first four, `app.autodiscover_tasks()` for `tasks.py`), not a design choice
+specific to this refactor.
+
+Pure reorganization, verified by regenerating `openapi.yaml`/`schema.d.ts`
+and diffing against `main` — empty except one disclosed docstring-only
+`description` field (`InviteRequestSerializer`'s cross-reference to
+`services.invite_staff`, updated to name its new location,
+`services/invite.py`). No endpoint, permission, or response shape changed
+anywhere in the module.

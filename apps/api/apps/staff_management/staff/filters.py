@@ -1,4 +1,4 @@
-"""Filter set for the staff-management module.
+"""Filter set for `/staff` (module doc §16).
 
 Every filterable field is listed explicitly — see school_organization/houses/
 filters.py for why. Filter names match the module doc §16.

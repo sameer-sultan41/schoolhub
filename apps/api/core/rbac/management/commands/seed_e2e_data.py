@@ -646,7 +646,7 @@ class Command(BaseCommand):
         a single teacher cannot stand on both sides of one.
 
         Created through the ORM with an explicit `employee_number` rather than through
-        `staff_management.services.create_staff`, which allocates one from the tenant's
+        `staff_management.staff.services.create.create_staff`, which allocates one from the tenant's
         numbering pattern via `TenantCounter` — a fresh number every run, so the row
         could not be looked up again and re-seeding would pile up staff. The explicit
         number is the idempotency key, exactly as `admission_number` is for the seeded

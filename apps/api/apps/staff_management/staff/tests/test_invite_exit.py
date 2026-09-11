@@ -10,35 +10,13 @@ import datetime
 
 from django.core.cache import cache
 from rest_framework import status
-from rest_framework.test import APITestCase
 
-from apps.school_organization.tests.factories import (
-    CampusFactory,
-    ClassFactory,
-    SectionFactory,
-    TenantFactory,
-    UserFactory,
-    authenticate,
-    grant,
-)
-from apps.staff_management.tests.factories import DEFAULT_JOINING_DATE, StaffFactory, enable_feature
+from apps.school_organization.tests.factories import ClassFactory, SectionFactory, UserFactory
+from apps.staff_management.tests.base import StaffManagementAPITestCase
+from apps.staff_management.tests.factories import DEFAULT_JOINING_DATE, StaffFactory
 from core.rbac.models import Permission, Role, RolePermission, User, UserRole
 from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
-
-
-class StaffManagementAPITestCase(APITestCase):
-    def setUp(self) -> None:
-        super().setUp()
-        self.tenant = TenantFactory()
-        self.user = UserFactory(tenant=self.tenant)
-        authenticate(self.client, self.user)
-        enable_feature(self.tenant, "module.staff")
-        with tenant_context(self.tenant.id):
-            self.campus = CampusFactory(tenant=self.tenant)
-
-    def allow(self, *keys: str) -> None:
-        grant(self.user, *keys)
 
 
 class InviteTests(StaffManagementAPITestCase):
@@ -68,7 +46,7 @@ class InviteTests(StaffManagementAPITestCase):
 
         In-app only, deliberately: the account is still inactive with an unusable
         password, so an email claiming it is ready would be untrue — see
-        `services.invite_staff` and `notifications.py`.
+        `staff/services/invite.py`'s `invite_staff` and `notifications.py`.
         """
         from core.notifications.models import (
             DeliveryLog,

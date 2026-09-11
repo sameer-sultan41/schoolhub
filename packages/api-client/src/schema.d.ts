@@ -7197,8 +7197,8 @@ export interface components {
         };
         /**
          * @description No email is sent (§17 gap — no notification infrastructure exists yet,
-         *     see services.invite_staff's docstring); this only creates and links the
-         *     account plus assigns the requested roles.
+         *     see services/invite.py's ``invite_staff`` docstring); this only creates and
+         *     links the account plus assigns the requested roles.
          */
         InviteRequest: {
             role_ids?: string[];
