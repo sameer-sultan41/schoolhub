@@ -67,8 +67,10 @@ def resolve_tenant_staff_id(
 ) -> uuid.UUID | None:
     """Tenant-checked resolution of a ``*_staff_id`` reference from another module.
 
-    Used by ``school_organization.serializers`` to validate ``head_staff_id`` /
-    ``class_teacher_staff_id`` / ``house_master_staff_id`` — those columns are
+    Used by several of school-organization's resource-package serializers
+    (``campuses/``, ``departments/``, ``sections/``, ``houses/``) to validate
+    ``head_staff_id`` / ``class_teacher_staff_id`` / ``house_master_staff_id``
+    — those columns are
     plain UUIDs for the same cross-tenant-leak reason ``Staff.user_id`` is (see
     the model docstring), and previously had no ownership check at all.
     Imported lazily by the caller to avoid a hard import-time dependency in the

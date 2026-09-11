@@ -2224,10 +2224,11 @@ export interface paths {
          *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
          *     holiday, which is exactly what a cancelled closure needs.
          *
-         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
-         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
-         *     plain ``APIView``, so without it ``request.tenant`` is never set and
-         *     ``RequiresModuleFeature`` fails closed on every request.
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding:
+         *     this is a plain ``APIView``, so without it ``request.tenant`` is never set
+         *     and ``RequiresModuleFeature`` fails closed on every request before
+         *     ``is_feature_enabled`` is even checked — the same reason
+         *     ``school_settings/view.py::SchoolSettingsView`` mixes it in too.
          */
         get: operations["holiday_calendar_retrieve"];
         /**
@@ -2248,10 +2249,11 @@ export interface paths {
          *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
          *     holiday, which is exactly what a cancelled closure needs.
          *
-         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
-         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
-         *     plain ``APIView``, so without it ``request.tenant`` is never set and
-         *     ``RequiresModuleFeature`` fails closed on every request.
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding:
+         *     this is a plain ``APIView``, so without it ``request.tenant`` is never set
+         *     and ``RequiresModuleFeature`` fails closed on every request before
+         *     ``is_feature_enabled`` is even checked — the same reason
+         *     ``school_settings/view.py::SchoolSettingsView`` mixes it in too.
          */
         put: operations["holiday_calendar_update"];
         post?: never;

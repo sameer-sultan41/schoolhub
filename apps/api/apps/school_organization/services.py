@@ -1,15 +1,41 @@
-"""Business rules for the school-organization module.
+"""Shared surface for school-organization: cross-app and cross-package logic.
 
-Views stay thin: everything here is a rule from
-docs/03-modules/school-organization.md §7 (workflows) and §11
-(validations). Keeping it out of serializers means the same rules apply to the
-onboarding wizard, the bulk importer and Celery jobs, none of which go through a
-serializer.
+This file is not a leftover — it is a deliberate part of the layout. Unlike
+communication's fully-split `services.py` (which had no consumers outside
+that app), several functions here are imported directly by other apps:
 
-Concurrency note: the session lifecycle transitions take a row lock and run inside
-an explicit transaction because "exactly one current session per tenant" is a
-partial unique index — without the lock two simultaneous activations would race to
-an IntegrityError instead of an orderly 409.
+- `assert_session_writable` — `apps/attendance/services.py`,
+  `apps/academics/services.py`, `apps/student_management/services.py`,
+  `apps/timetable/services.py`
+- `map_subject_to_class` — `apps/academics/views.py`
+- `assert_section_capacity` (and its helpers `section_seats_remaining`,
+  `assert_capacity_not_below_occupancy`, kept alongside it rather than split
+  across files for the same capacity concern) — `apps/student_management/
+  services.py`
+
+Moving them into a resource package would mean editing import lines in
+other apps for a purely internal reorganization — a bigger, riskier blast
+radius than this module's own size justifies. `_live_dependents` stays here
+too, alongside `assert_deletable`, for a narrower reason: `apps/academics/
+tests/test_api.py` patches it by name via
+`mock.patch.object(school_services, "_live_dependents", ...)`, which pins it
+to this exact module.
+
+`is_valid_timezone` and `resolve_tenant_staff_id` stay here because they are
+shared by several sibling packages inside this app (timezone validation by
+`campuses/` and `school_settings/`; staff-id resolution by `campuses/`,
+`departments/`, `sections/` and `houses/`) with no single package that owns
+them.
+
+This is this file's final shape: every ViewSet/APIView that used to live in
+the flat `views.py` (`campuses`, `departments`, `academic_sessions`, `terms`,
+`classes`, `sections`, `subjects`, `houses`, `school_settings`,
+`holiday_calendar`) now has its own package, and `views.py` itself holds only
+`BlockingDestroyMixin` — see that file's own docstring. The finished layout
+and the reasoning behind it are documented in
+`docs/03-modules/school-organization.md` §20, following the precedent
+`communication.md` §20 sets for the same layout (adopted independently on
+`apps/communication`, in parallel with this module).
 """
 
 from __future__ import annotations
@@ -17,9 +43,7 @@ from __future__ import annotations
 import functools
 import uuid
 import zoneinfo
-from datetime import date
 
-from django.db import transaction
 from django.db.models import QuerySet
 
 from apps.school_organization.models import (
@@ -30,12 +54,15 @@ from apps.school_organization.models import (
     Section,
     SessionStatus,
     Subject,
-    Term,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
 
 # Sessions in these states reject every write from transactional modules (§11).
-_LOCKED_SESSION_STATES = frozenset({SessionStatus.CLOSED, SessionStatus.ARCHIVED})
+# Shared with `academic_sessions/services/activate.py`, which checks the same
+# states when activating a session — not private, since it is read from
+# outside this module. `close.py` checks `status != ACTIVE` directly instead,
+# since closing only ever applies to an active session.
+LOCKED_SESSION_STATES = frozenset({SessionStatus.CLOSED, SessionStatus.ARCHIVED})
 
 
 @functools.cache
@@ -51,176 +78,10 @@ def is_valid_timezone(name: str) -> bool:
 
 def assert_session_writable(session: AcademicSession) -> None:
     """Guard for any write scoped to a session. Closed/archived sessions are read-only."""
-    if session.status in _LOCKED_SESSION_STATES:
+    if session.status in LOCKED_SESSION_STATES:
         raise DomainRuleViolation(
             f"Academic session '{session.name}' is {session.status} and cannot be modified."
         )
-
-
-def assert_no_session_overlap(
-    *, start_date: date, end_date: date, exclude_id: uuid.UUID | None = None
-) -> None:
-    """Sessions may not overlap: two live school years would make enrollment ambiguous."""
-    if end_date <= start_date:
-        raise DomainRuleViolation("end_date must be after start_date.")
-
-    clashes = AcademicSession.objects.alive().filter(
-        start_date__lte=end_date, end_date__gte=start_date
-    )
-    if exclude_id is not None:
-        clashes = clashes.exclude(pk=exclude_id)
-    clash = clashes.first()
-    if clash is not None:
-        raise DomainRuleViolation(
-            f"Dates overlap academic session '{clash.name}' "
-            f"({clash.start_date} – {clash.end_date})."
-        )
-
-
-def assert_term_window(
-    *,
-    session: AcademicSession,
-    start_date: date,
-    end_date: date,
-    exclude_id: uuid.UUID | None = None,
-) -> None:
-    """Terms must nest inside their session and not overlap their siblings (§11)."""
-    if end_date <= start_date:
-        raise DomainRuleViolation("end_date must be after start_date.")
-    if start_date < session.start_date or end_date > session.end_date:
-        raise DomainRuleViolation(
-            f"Term dates must fall inside the session window "
-            f"({session.start_date} – {session.end_date})."
-        )
-
-    siblings = Term.objects.alive().filter(
-        academic_session=session, start_date__lte=end_date, end_date__gte=start_date
-    )
-    if exclude_id is not None:
-        siblings = siblings.exclude(pk=exclude_id)
-    sibling = siblings.first()
-    if sibling is not None:
-        raise DomainRuleViolation(f"Term dates overlap term '{sibling.name}'.")
-
-
-def session_completeness_errors(session: AcademicSession) -> list[str]:
-    """Everything that blocks activation, as one list — an operator fixes it in one pass.
-
-    The checks are the activation gate from §7.1: somewhere to teach, something to
-    teach, and a term calendar that actually covers the year.
-    """
-    errors: list[str] = []
-
-    if not Campus.objects.alive().filter(is_active=True).exists():
-        errors.append("At least one active campus is required.")
-
-    sectioned_classes = (
-        Class.objects.alive()
-        .filter(is_active=True, sections__deleted_at__isnull=True, sections__is_active=True)
-        .distinct()
-    )
-    if not sectioned_classes.exists():
-        errors.append("At least one active class with an active section is required.")
-
-    terms = list(session.terms.filter(deleted_at__isnull=True).order_by("start_date"))
-    if not terms:
-        errors.append("At least one term is required.")
-    elif terms[0].start_date > session.start_date or terms[-1].end_date < session.end_date:
-        errors.append("Term dates must cover the whole session window.")
-
-    return errors
-
-
-@transaction.atomic
-def activate_session(session: AcademicSession, *, actor_id: uuid.UUID) -> AcademicSession:
-    """Make ``session`` the tenant's current session after the §7.1 completeness check."""
-    session = AcademicSession.objects.select_for_update().get(pk=session.pk)
-
-    if session.status in _LOCKED_SESSION_STATES:
-        raise Conflict(f"A {session.status} session cannot be activated.")
-    if session.status == SessionStatus.ACTIVE and session.is_current:
-        raise Conflict(f"Session '{session.name}' is already active.")
-
-    errors = session_completeness_errors(session)
-    if errors:
-        raise DomainRuleViolation({"structure": errors})
-
-    # Demote the incumbent first: the partial unique index allows only one current row.
-    AcademicSession.objects.filter(is_current=True).exclude(pk=session.pk).update(
-        is_current=False, updated_by=actor_id
-    )
-
-    session.status = SessionStatus.ACTIVE
-    session.is_current = True
-    session.updated_by = actor_id
-    session.save(update_fields=["status", "is_current", "updated_by", "updated_at"])
-    return session
-
-
-@transaction.atomic
-def close_session(session: AcademicSession, *, actor_id: uuid.UUID) -> AcademicSession:
-    """Close an active session, locking it against further transactional writes (§7.2)."""
-    session = AcademicSession.objects.select_for_update().get(pk=session.pk)
-
-    if session.status != SessionStatus.ACTIVE:
-        raise Conflict(f"Only an active session can be closed; this one is {session.status}.")
-
-    session.status = SessionStatus.CLOSED
-    session.is_current = False
-    session.updated_by = actor_id
-    session.save(update_fields=["status", "is_current", "updated_by", "updated_at"])
-    return session
-
-
-@transaction.atomic
-def clone_session(
-    source: AcademicSession,
-    *,
-    name: str,
-    start_date: date,
-    end_date: date,
-    actor_id: uuid.UUID,
-    tenant_id: uuid.UUID,
-) -> AcademicSession:
-    """Create next year's session and copy the curriculum forward (§7.2).
-
-    Classes, sections and subjects are structural and persist across years, so only
-    the session-scoped curriculum rows need copying; terms are re-dated by hand
-    because term boundaries rarely map one-to-one onto a new calendar.
-    """
-    assert_no_session_overlap(start_date=start_date, end_date=end_date)
-
-    target = AcademicSession.objects.create(
-        tenant_id=tenant_id,
-        name=name,
-        start_date=start_date,
-        end_date=end_date,
-        status=SessionStatus.PLANNED,
-        is_current=False,
-        created_by=actor_id,
-        updated_by=actor_id,
-    )
-
-    cloned = [
-        ClassSubject(
-            tenant_id=tenant_id,
-            academic_session=target,
-            school_class_id=row.school_class_id,
-            subject_id=row.subject_id,
-            campus_id=row.campus_id,
-            is_elective=row.is_elective,
-            elective_group=row.elective_group,
-            weekly_periods=row.weekly_periods,
-            notes=row.notes,
-            created_by=actor_id,
-            updated_by=actor_id,
-        )
-        for row in ClassSubject.objects.alive().filter(academic_session=source)
-    ]
-    if cloned:
-        ClassSubject.objects.bulk_create(cloned)
-
-    return target
 
 
 def section_seats_remaining(section: Section, *, occupied: int) -> int | None:
@@ -301,20 +162,6 @@ def map_subject_to_class(
         created_by=actor_id,
         updated_by=actor_id,
     )
-
-
-def clear_primary_campus(*, keep_id: uuid.UUID | None, actor_id: uuid.UUID) -> None:
-    """Demote the incumbent primary campus so a new one can take the flag.
-
-    Promoting a new primary is the operator's stated intent, so we demote rather
-    than reject. Must run *before* the promotion is written: the partial unique
-    index is checked per statement, so writing two primaries and fixing it up
-    afterwards would raise instead of succeeding.
-    """
-    demoted = Campus.objects.filter(is_primary=True)
-    if keep_id is not None:
-        demoted = demoted.exclude(pk=keep_id)
-    demoted.update(is_primary=False, updated_by=actor_id)
 
 
 def _live_dependents(instance) -> list[str]:

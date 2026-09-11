@@ -27,12 +27,21 @@ from apps.school_organization.models import (
     Term,
 )
 from core.rbac.models import Permission, RecordScope, Role, RolePermission, User, UserRole
-from core.tenancy.models import Tenant, TenantStatus
+from core.tenancy.context import tenant_context
+from core.tenancy.models import Tenant, TenantSettings, TenantStatus
 
 TEST_PASSWORD = "test-password-12345"
 
 SESSION_START = datetime.date(2026, 4, 1)
 SESSION_END = datetime.date(2027, 3, 31)
+
+# Chosen for their weekday, used across the calendar/holiday-calendar test
+# suites — a test that says `date(2026, 9, 5)` and means "a Saturday" is
+# unreadable a year from now.
+SATURDAY = datetime.date(2026, 9, 5)
+SUNDAY = datetime.date(2026, 9, 6)
+MONDAY = datetime.date(2026, 9, 7)
+FRIDAY = datetime.date(2026, 9, 4)
 
 
 class TenantFactory(factory.django.DjangoModelFactory):
@@ -195,3 +204,26 @@ def authenticate(client, user: User) -> None:
 
     client.force_login(user)
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}")
+
+
+def holiday(start: str, name: str, end: str | None = None, campus_id=None) -> dict:
+    """One entry in the stored (and wire) holiday shape.
+
+    A builder rather than literals at each call site: an entry is four keys, two
+    of which are almost always the same date, and the repetition buried what each
+    test was actually varying. Shared by `tests/test_calendar.py` (tests
+    `calendar.py` directly) and `holiday_calendar/tests/test_endpoints.py`
+    (tests the `/holiday-calendar` view) — both read the same stored shape.
+    """
+    entry = {"start_date": start, "end_date": end or start, "name": name}
+    if campus_id is not None:
+        entry["campus_id"] = str(campus_id)
+    return entry
+
+
+def configure(tenant, academic: dict) -> None:
+    """Write the tenant's academic configuration the way the endpoint would."""
+    with tenant_context(tenant.id):
+        row, _ = TenantSettings.objects.get_or_create(tenant=tenant)
+        row.academic = academic
+        row.save(update_fields=["academic", "updated_at"])

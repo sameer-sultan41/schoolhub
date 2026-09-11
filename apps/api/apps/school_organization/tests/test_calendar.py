@@ -9,6 +9,11 @@ attendance is usable before anyone opens the settings screen.
 Dates here are chosen for their weekday and named in the assertion, because a
 test that says `date(2026, 9, 5)` and means "a Saturday" is unreadable a year
 from now.
+
+`HolidayCalendarEndpointTests` (the `/holiday-calendar` view) moved to
+`holiday_calendar/tests/test_endpoints.py` — this file stays service-level,
+testing `calendar.py` directly, which stays in the module root (see that
+file's own header for why).
 """
 
 from __future__ import annotations
@@ -16,44 +21,19 @@ from __future__ import annotations
 import datetime
 
 from django.test import TestCase
-from rest_framework.test import APITestCase
 
 from apps.school_organization import calendar
 from apps.school_organization.tests.factories import (
+    FRIDAY,
+    MONDAY,
+    SATURDAY,
+    SUNDAY,
     CampusFactory,
     TenantFactory,
-    UserFactory,
-    authenticate,
-    grant,
+    configure,
+    holiday,
 )
 from core.tenancy.context import tenant_context
-from core.tenancy.models import TenantSettings
-
-SATURDAY = datetime.date(2026, 9, 5)
-SUNDAY = datetime.date(2026, 9, 6)
-MONDAY = datetime.date(2026, 9, 7)
-FRIDAY = datetime.date(2026, 9, 4)
-
-
-def holiday(start: str, name: str, end: str | None = None, campus_id=None) -> dict:
-    """One entry in the stored (and wire) holiday shape.
-
-    A builder rather than literals at each call site: an entry is four keys, two
-    of which are almost always the same date, and the repetition buried what each
-    test was actually varying.
-    """
-    entry = {"start_date": start, "end_date": end or start, "name": name}
-    if campus_id is not None:
-        entry["campus_id"] = str(campus_id)
-    return entry
-
-
-def configure(tenant, academic: dict) -> None:
-    """Write the tenant's academic configuration the way the endpoint would."""
-    with tenant_context(tenant.id):
-        row, _ = TenantSettings.objects.get_or_create(tenant=tenant)
-        row.academic = academic
-        row.save(update_fields=["academic", "updated_at"])
 
 
 class WorkingDayTests(TestCase):
@@ -184,100 +164,6 @@ class DayWindowTests(TestCase):
             self.assertEqual(window.start, calendar.DEFAULT_DAY_WINDOW.start)
             self.assertEqual(window.end, calendar.DEFAULT_DAY_WINDOW.end)
             self.assertEqual(window.grace_minutes, 0)
-
-
-class HolidayCalendarEndpointTests(APITestCase):
-    """`GET/PUT /api/v1/holiday-calendar` — school-organization.md §16."""
-
-    url = "/api/v1/holiday-calendar"
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.tenant = TenantFactory()
-        self.user = UserFactory(tenant=self.tenant)
-        authenticate(self.client, self.user)
-        grant(self.user, "school.settings.view", "school.settings.update")
-        with tenant_context(self.tenant.id):
-            self.campus = CampusFactory(tenant=self.tenant)
-
-    def test_get_returns_the_defaults_for_an_unconfigured_tenant(self) -> None:
-        response = self.client.get(self.url)
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["working_days"], [0, 1, 2, 3, 4])
-        self.assertEqual(response.data["data"]["holidays"], [])
-
-    def test_put_replaces_the_whole_list(self) -> None:
-        """§16 says PUT, not PATCH: merging entry by entry would leave no way to
-        *remove* a holiday, which is what a cancelled closure needs."""
-        first = self.client.put(
-            self.url,
-            {
-                "working_days": [0, 1, 2, 3, 4],
-                "holidays": [holiday("2026-12-25", "Christmas")],
-            },
-            format="json",
-        )
-        self.assertEqual(first.status_code, 200)
-
-        second = self.client.put(
-            self.url,
-            {"holidays": [holiday("2027-03-23", "Republic Day")]},
-            format="json",
-        )
-        self.assertEqual(second.status_code, 200)
-
-        response = self.client.get(self.url)
-        names = [entry["name"] for entry in response.data["data"]["holidays"]]
-        self.assertEqual(names, ["Republic Day"])
-
-    def test_the_calendar_the_endpoint_wrote_is_the_one_marking_reads(self) -> None:
-        """The point of the whole task: what an admin saves is what
-        `is_working_day` answers with."""
-        self.client.put(
-            self.url,
-            {"holidays": [holiday("2026-09-07", "Founders Day")]},
-            format="json",
-        )
-        with tenant_context(self.tenant.id):
-            self.assertFalse(calendar.is_working_day(MONDAY))
-
-    def test_a_range_that_ends_before_it_starts_is_refused(self) -> None:
-        response = self.client.put(
-            self.url,
-            {"holidays": [holiday("2026-12-26", "Backwards", end="2026-12-24")]},
-            format="json",
-        )
-        self.assertEqual(response.status_code, 400)
-
-    def test_an_empty_working_week_is_refused(self) -> None:
-        response = self.client.put(self.url, {"working_days": []}, format="json")
-
-        self.assertEqual(response.status_code, 400)
-
-    def test_another_tenants_campus_cannot_be_named_in_a_holiday(self) -> None:
-        """These live in JSONB, so there is no FK to do the ownership check —
-        the serializer does it, or a smuggled id is stored unchallenged."""
-        other_tenant = TenantFactory()
-        with tenant_context(other_tenant.id):
-            foreign_campus = CampusFactory(tenant=other_tenant)
-
-        response = self.client.put(
-            self.url,
-            {"holidays": [holiday("2026-09-07", "Theirs", campus_id=foreign_campus.pk)]},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 400)
-
-    def test_view_permission_alone_cannot_write(self) -> None:
-        reader = UserFactory(tenant=self.tenant)
-        authenticate(self.client, reader)
-        grant(reader, "school.settings.view")
-
-        response = self.client.put(self.url, {"working_days": [0, 1]}, format="json")
-
-        self.assertEqual(response.status_code, 403)
 
 
 class WorkingDayMapTests(TestCase):
