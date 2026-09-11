@@ -11,9 +11,17 @@ from core.notifications.models import NotificationCategory, NotificationChannel
 from core.tenancy.features import is_feature_enabled
 
 #: Not private — imported by `resolver.py`'s `bulk_is_channel_enabled`, which
-#: reads/writes the same `notif-pref:{tenant_id}:{user_id}` cache keys and
+#: reads/writes the same cache keys (via `preference_cache_key` below) and
 #: must agree on TTL.
 PREFERENCE_CACHE_TTL = 300
+
+
+def preference_cache_key(*, tenant_id: uuid.UUID, user_id: uuid.UUID) -> str:
+    """The one place this key is built — `_preference_matrix`,
+    `evict_preference_cache` and `resolver.bulk_is_channel_enabled` must all
+    agree on it, or a write from one and a read from another silently miss.
+    """
+    return f"notif-pref:{tenant_id}:{user_id}"
 
 
 def _preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[tuple[str, str], bool]:
@@ -27,7 +35,7 @@ def _preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[tupl
 
     from apps.communication.models import NotificationPreference
 
-    cache_key = f"notif-pref:{tenant_id}:{user_id}"
+    cache_key = preference_cache_key(tenant_id=tenant_id, user_id=user_id)
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -41,7 +49,7 @@ def _preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[tupl
 
 
 def evict_preference_cache(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
-    cache.delete(f"notif-pref:{tenant_id}:{user_id}")
+    cache.delete(preference_cache_key(tenant_id=tenant_id, user_id=user_id))
 
 
 def materialize_preference_matrix(*, user_id: uuid.UUID, tenant_id: uuid.UUID) -> list[dict]:

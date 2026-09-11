@@ -7,7 +7,10 @@ import uuid
 from django.core.cache import cache
 
 from apps.communication.features import FEATURE
-from apps.communication.preferences.services.matrix import PREFERENCE_CACHE_TTL
+from apps.communication.preferences.services.matrix import (
+    PREFERENCE_CACHE_TTL,
+    preference_cache_key,
+)
 from core.tenancy.features import is_feature_enabled
 
 
@@ -32,7 +35,9 @@ def bulk_is_channel_enabled(
 
     from apps.communication.models import NotificationPreference
 
-    cache_keys = {user_id: f"notif-pref:{tenant_id}:{user_id}" for user_id in user_ids}
+    cache_keys = {
+        user_id: preference_cache_key(tenant_id=tenant_id, user_id=user_id) for user_id in user_ids
+    }
     cached = cache.get_many(cache_keys.values())
 
     result: dict[uuid.UUID, bool] = {}

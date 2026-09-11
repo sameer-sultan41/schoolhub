@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from django.test import TestCase
 
+from apps.communication.tests.base import PlatformTemplateFixtureMixin
 from apps.communication.tests.factories import TenantFactory, enable_feature
 from core.notifications.models import NotificationChannel
 from core.notifications.templates import registry as platform_templates
@@ -12,10 +13,9 @@ from core.notifications.templates import registry as platform_templates
 CODE = "communication-test.template"
 
 
-class TemplateOverrideTestCase(TestCase):
+class TemplateOverrideTestCase(PlatformTemplateFixtureMixin, TestCase):
     def setUp(self) -> None:
         super().setUp()
-        self._saved_templates = platform_templates._templates.copy()  # noqa: SLF001
         platform_templates.register(
             CODE,
             channel=NotificationChannel.IN_APP,
@@ -31,7 +31,3 @@ class TemplateOverrideTestCase(TestCase):
         )
         self.tenant = TenantFactory()
         enable_feature(self.tenant)
-
-    def tearDown(self) -> None:
-        platform_templates._templates = self._saved_templates  # noqa: SLF001
-        super().tearDown()

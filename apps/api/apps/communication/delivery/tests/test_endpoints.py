@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rest_framework import status
 
-from apps.communication.tests.base import CommunicationAPITestCase
+from apps.communication.tests.base import CommunicationAPITestCase, PlatformTemplateFixtureMixin
 from core.notifications.catalog import registry as catalog
 from core.notifications.models import NotificationCategory, NotificationChannel
 from core.notifications.templates import registry as platform_templates
@@ -21,11 +21,10 @@ class DeliveryLogEndpointTests(CommunicationAPITestCase):
                 self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class DeliverySummaryEndpointTests(CommunicationAPITestCase):
+class DeliverySummaryEndpointTests(PlatformTemplateFixtureMixin, CommunicationAPITestCase):
     def setUp(self) -> None:
         super().setUp()
         self._saved_catalog = catalog._triggers.copy()  # noqa: SLF001
-        self._saved_templates = platform_templates._templates.copy()  # noqa: SLF001
         catalog.register(
             CODE,
             template_code=CODE,
@@ -43,7 +42,6 @@ class DeliverySummaryEndpointTests(CommunicationAPITestCase):
 
     def tearDown(self) -> None:
         catalog._triggers = self._saved_catalog  # noqa: SLF001
-        platform_templates._templates = self._saved_templates  # noqa: SLF001
         super().tearDown()
 
     def test_summary_groups_by_channel_by_default(self) -> None:

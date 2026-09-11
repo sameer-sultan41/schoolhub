@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.communication import audience
 from apps.communication.models import Notice, NoticeStatus
 from apps.communication.notices import numbering
+from apps.communication.notices.services.locking import locked_notice
 from core.api.exceptions import DomainRuleViolation
 from core.notifications.services import Recipient, notify
 
@@ -18,7 +19,7 @@ def publish_notice(notice: Notice, *, actor_id: uuid.UUID) -> Notice:
     """The approver must differ from the drafter — auth-and-rbac.md §2.4,
     checked here so the rule holds regardless of which door a caller
     approves through, the same shape `fees_finance.decide_refund` uses."""
-    locked = Notice.objects.select_for_update().get(pk=notice.pk)
+    locked = locked_notice(notice)
     if locked.status != NoticeStatus.PENDING_APPROVAL:
         raise DomainRuleViolation(
             {"status": "A notice must be pending approval before it can be published."}

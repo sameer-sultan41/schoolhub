@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rest_framework import status
 
-from apps.communication.tests.base import CommunicationAPITestCase
+from apps.communication.tests.base import CommunicationAPITestCase, PlatformTemplateFixtureMixin
 from apps.communication.tests.factories import NotificationTemplateOverrideFactory
 from core.notifications.models import NotificationChannel
 from core.notifications.templates import registry as platform_templates
@@ -13,10 +13,9 @@ from core.tenancy.context import tenant_context
 CODE = "communication-api-test.event"
 
 
-class TemplateEndpointTests(CommunicationAPITestCase):
+class TemplateEndpointTests(PlatformTemplateFixtureMixin, CommunicationAPITestCase):
     def setUp(self) -> None:
         super().setUp()
-        self._saved_templates = platform_templates._templates.copy()  # noqa: SLF001
         platform_templates.register(
             CODE,
             channel=NotificationChannel.IN_APP,
@@ -24,10 +23,6 @@ class TemplateEndpointTests(CommunicationAPITestCase):
             body="Body for {{ name }}",
             variables={"name"},
         )
-
-    def tearDown(self) -> None:
-        platform_templates._templates = self._saved_templates  # noqa: SLF001
-        super().tearDown()
 
     def test_creating_an_override_with_an_undeclared_variable_is_refused(self) -> None:
         response = self.client.post(

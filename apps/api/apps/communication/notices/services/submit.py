@@ -5,11 +5,12 @@ from __future__ import annotations
 import uuid
 
 from apps.communication.models import Notice, NoticeStatus
+from apps.communication.notices.services.locking import locked_notice
 from core.api.exceptions import DomainRuleViolation
 
 
 def submit_notice(notice: Notice, *, actor_id: uuid.UUID) -> Notice:
-    locked = Notice.objects.select_for_update().get(pk=notice.pk)
+    locked = locked_notice(notice)
     if locked.status != NoticeStatus.DRAFT:
         raise DomainRuleViolation(
             {"status": f"Only a draft notice can be submitted (this one is {locked.status})."}
