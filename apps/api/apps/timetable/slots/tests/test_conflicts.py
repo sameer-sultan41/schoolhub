@@ -1,8 +1,8 @@
 """The conflict engine, tested directly rather than through the API.
 
-`conflicts.py` is the piece three callers share — the per-edit check, `:validate`
-and `:publish` (§6) — so a bug here is a bug in all three at once, and it is worth
-exercising without an HTTP round trip in the way.
+`slots/conflicts.py` is the piece three callers share — the per-edit check,
+`:validate` and `:publish` (§6) — so a bug here is a bug in all three at once,
+and it is worth exercising without an HTTP round trip in the way.
 
 Two properties matter beyond "does it find the clash":
 
@@ -23,8 +23,8 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.timetable.conflicts import Thresholds, detect_conflicts, has_hard_conflicts
 from apps.timetable.models import SlotStatus, TimetableSlot
+from apps.timetable.slots.conflicts import Thresholds, detect_conflicts, has_hard_conflicts
 from apps.timetable.tests.base import TimetableAPITestCase
 from apps.timetable.tests.factories import (
     CampusFactory,

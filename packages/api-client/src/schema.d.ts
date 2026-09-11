@@ -10063,7 +10063,12 @@ export interface components {
          * @enum {string}
          */
         SettlementImportStatusEnum: "processing" | "completed" | "failed";
-        /** @description The substitution overlay on one cell of `GET /timetables/my`. */
+        /**
+         * @description The substitution overlay on one cell of `GET /timetables/my`.
+         *
+         *     Private to `EffectiveSlotSerializer` — moved alongside it rather than left
+         *     at the root, since nothing else references it.
+         */
         SlotSubstitution: {
             /** Format: uuid */
             readonly id: string;
@@ -10638,7 +10643,7 @@ export interface components {
          *
          *     The session is optional: a school runs one current session at a time and the
          *     grid UI has no reason to name it, so an omitted value resolves to the
-         *     tenant's `is_current` session (see `TimetableViewSet._resolve_session`).
+         *     tenant's `is_current` session (see `viewset._resolve_session`).
          */
         TimetableSessionRequest: {
             /**

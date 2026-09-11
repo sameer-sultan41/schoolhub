@@ -13,8 +13,8 @@ import uuid
 from rest_framework import status
 
 from apps.staff_management.models import EmploymentStatus, StaffType
-from apps.timetable import services
 from apps.timetable.models import SubstitutionStatus, TeacherSubstitution
+from apps.timetable.substitutions import services
 from apps.timetable.tests.base import TimetableAPITestCase
 from apps.timetable.tests.factories import (
     MONDAY,
