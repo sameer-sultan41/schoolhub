@@ -1,5 +1,6 @@
 import {
   Bolt,
+  IdCard,
   LayoutGrid,
   Package,
   ScrollText,
@@ -32,6 +33,8 @@ export const MENU_SIDEBAR: MenuConfig = [
       { title: "Dark Sidebar", path: "/dev/metronic-demo1/dark-sidebar" },
     ],
   },
+  { heading: "School" },
+  { title: "Staff", icon: IdCard, path: "/staff" },
   { heading: "User" },
   {
     title: "Public Profile",

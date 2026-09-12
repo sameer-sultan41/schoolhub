@@ -29,7 +29,12 @@ export function DataGridPagination({ sizes = DEFAULT_SIZES }: DataGridPagination
   const to = Math.min((pageIndex + 1) * pageSize, recordCount);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4">
+    // `w-full`: `CardFooter` is itself a flex row with no `justify-between` of its own,
+    // so without this a flex item sizes to its own content (shrink-to-fit) rather than
+    // the footer's real width — this div's own `justify-between` below then only spreads
+    // its two groups across that shrunk width, not the actual footer, which is exactly
+    // the "everything bunched on the left" bug this fixes.
+    <div className="flex w-full flex-wrap items-center justify-between gap-3 border-t border-border p-4">
       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
         {sizes.length > 0 && (
           <label className="flex items-center gap-2">

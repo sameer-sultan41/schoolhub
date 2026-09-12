@@ -46,8 +46,12 @@ import { Button } from "./button";
  *    that can express the state.
  * 7. The active page is not distinguished by colour alone: `aria-current="page"`
  *    covers assistive tech, but a reader who cannot separate the fill from the ground
- *    still needs to find their place, so the current page also gains a border and a
- *    heavier weight (WCAG 1.4.1 Use of Colour).
+ *    still needs to find their place, so the current page also gains a heavier font
+ *    weight alongside the fill (WCAG 1.4.1 Use of Colour) — no border, though: every
+ *    button here (prev/next and numbered alike) is `variant="ghost" mode="icon"`,
+ *    matching `metronic nextjs/components/ui/data-grid-pagination.tsx`'s own borderless,
+ *    icon-only prev/next and flat `bg-accent`-on-active page buttons exactly, rather
+ *    than the outlined/text-labelled buttons this file used before.
  */
 
 function PaginationContent({ className, ...props }: ComponentProps<"ul">) {
@@ -156,20 +160,17 @@ export function Pagination({
       <PaginationContent>
         <PaginationItem>
           <Button
-            variant="outline"
+            variant="ghost"
+            mode="icon"
             size="sm"
             aria-label={previousLabel}
             disabled={page <= 1}
             onClick={() => {
               onPageChange(page - 1);
             }}
-            className="gap-1 px-2.5 sm:ps-2.5"
+            className="size-7"
           >
-            <ChevronLeftIcon aria-hidden="true" className="size-3.5 rtl:rotate-180" />
-            {/* Hidden below `sm` so five numbers plus two word-labels still fit a phone.
-                aria-label above carries the same string either way, so the control is
-                never nameless — it just stops taking horizontal room it hasn't got. */}
-            <span className="hidden sm:inline">{previousLabel}</span>
+            <ChevronLeftIcon aria-hidden="true" className="size-4 rtl:rotate-180" />
           </Button>
         </PaginationItem>
 
@@ -181,7 +182,8 @@ export function Pagination({
           ) : (
             <PaginationItem key={slot.page}>
               <Button
-                variant={slot.page === page ? "outline" : "ghost"}
+                variant="ghost"
+                mode="icon"
                 size="sm"
                 aria-label={goToPageLabel(slot.page)}
                 aria-current={slot.page === page ? "page" : undefined}
@@ -189,10 +191,11 @@ export function Pagination({
                   onPageChange(slot.page);
                 }}
                 className={cn(
-                  "min-w-8 px-2 font-numeric tabular-nums",
-                  // Fill AND weight here, plus the border the `outline` variant adds over
-                  // `ghost` above — three signals, so the current page is still findable
-                  // without colour perception. See (7) in the file header.
+                  "size-7 font-numeric tabular-nums",
+                  // Fill AND weight, not colour alone, so the current page is still
+                  // findable without colour perception (WCAG 1.4.1) — no border, though:
+                  // that would diverge from the vendor's own borderless ghost styling,
+                  // which this now otherwise matches exactly.
                   slot.page === page && "bg-muted font-bold",
                 )}
               >
@@ -204,17 +207,17 @@ export function Pagination({
 
         <PaginationItem>
           <Button
-            variant="outline"
+            variant="ghost"
+            mode="icon"
             size="sm"
             aria-label={nextLabel}
             disabled={page >= totalPages}
             onClick={() => {
               onPageChange(page + 1);
             }}
-            className="gap-1 px-2.5 sm:pe-2.5"
+            className="size-7"
           >
-            <span className="hidden sm:inline">{nextLabel}</span>
-            <ChevronRightIcon aria-hidden="true" className="size-3.5 rtl:rotate-180" />
+            <ChevronRightIcon aria-hidden="true" className="size-4 rtl:rotate-180" />
           </Button>
         </PaginationItem>
       </PaginationContent>

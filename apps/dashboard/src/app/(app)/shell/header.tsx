@@ -144,15 +144,7 @@ export function Header() {
             }
           />
           <LayoutControls />
-          <UserDropdownMenu
-            trigger={
-              <img
-                className="size-9 shrink-0 cursor-pointer rounded-full border-2 border-green-500"
-                src={toAbsoluteUrl("/media/avatars/300-2.png")}
-                alt="User Avatar"
-              />
-            }
-          />
+          <UserDropdownMenu />
         </div>
       </Container>
     </header>

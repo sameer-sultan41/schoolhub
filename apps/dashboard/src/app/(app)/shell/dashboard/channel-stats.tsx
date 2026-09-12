@@ -1,66 +1,71 @@
-import { Fragment } from "react";
+"use client";
 
-import { Card, CardContent, toAbsoluteUrl } from "@schoolhub/ui";
+import { Building2, GraduationCap, IdCard, Users, type LucideIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
-// Ported verbatim from the vendor Metronic Next.js template's
-// app/(protected)/components/demo1/light-sidebar/components/channel-stats.tsx.
-interface ChannelStatsItem {
-  logo: string;
-  logoDark?: string;
-  info: string;
+import { Card, CardContent, Skeleton } from "@schoolhub/ui";
+
+import { Services } from "@/services";
+
+/**
+ * Repurposed from the vendor Metronic template's channel-stats.tsx (originally four
+ * social-media follower counts) into four real school headline counts — see
+ * `services/modules/dashboard/dashboard-service.ts`'s `fetchDashboardOverview`.
+ */
+interface SnapshotItem {
+  icon: LucideIcon;
+  value: number | null;
   desc: string;
 }
 
+function formatValue(value: number | null): string {
+  return value === null ? "—" : value.toLocaleString();
+}
+
 export function ChannelStats() {
-  const items: ChannelStatsItem[] = [
-    { logo: "linkedin-2.svg", info: "9.3k", desc: "Amazing mates" },
-    { logo: "youtube-2.svg", info: "24k", desc: "Lessons Views" },
-    { logo: "instagram-03.svg", info: "608", desc: "New subscribers" },
-    { logo: "tiktok.svg", logoDark: "tiktok-dark.svg", info: "2.5k", desc: "Stream audience" },
+  const { data, isPending } = useQuery({
+    queryKey: ["dashboard", "overview"],
+    queryFn: () => Services.dashboard.fetchDashboardOverview(),
+  });
+
+  if (isPending || !data) {
+    return (
+      <>
+        {[0, 1, 2, 3].map((index) => (
+          <Card key={index}>
+            <CardContent className="flex h-full flex-col justify-between gap-6 p-5">
+              <Skeleton className="size-7" />
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </>
+    );
+  }
+
+  const items: SnapshotItem[] = [
+    { icon: Users, value: data.students, desc: "Enrolled students" },
+    { icon: IdCard, value: data.staff, desc: "Staff members" },
+    { icon: GraduationCap, value: data.classes, desc: "Classes" },
+    { icon: Building2, value: data.campuses, desc: "Campuses" },
   ];
 
   return (
-    <Fragment>
-      <style>
-        {`
-          .channel-stats-bg {
-            background-image: url('${toAbsoluteUrl("/media/images/2600x1600/bg-3.png")}');
-          }
-          .dark .channel-stats-bg {
-            background-image: url('${toAbsoluteUrl("/media/images/2600x1600/bg-3-dark.png")}');
-          }
-        `}
-      </style>
+    <>
       {items.map((item, index) => (
         <Card key={index}>
-          <CardContent className="channel-stats-bg flex h-full flex-col justify-between gap-6 bg-cover bg-[right_top_-1.7rem] bg-no-repeat p-0 rtl:bg-[left_top_-1.7rem]">
-            {item.logoDark ? (
-              <>
-                <img
-                  src={toAbsoluteUrl(`/media/brand-logos/${item.logo}`)}
-                  className="ms-5 mt-4 w-7 dark:hidden"
-                  alt="image"
-                />
-                <img
-                  src={toAbsoluteUrl(`/media/brand-logos/${item.logoDark}`)}
-                  className="light:hidden ms-5 mt-4 w-7"
-                  alt="image"
-                />
-              </>
-            ) : (
-              <img
-                src={toAbsoluteUrl(`/media/brand-logos/${item.logo}`)}
-                className="ms-5 mt-4 w-7"
-                alt="image"
-              />
-            )}
-            <div className="flex flex-col gap-1 px-5 pb-4">
-              <span className="text-mono text-3xl font-semibold">{item.info}</span>
+          <CardContent className="flex h-full flex-col justify-between gap-6 p-5">
+            <item.icon className="size-7 text-muted-foreground" aria-hidden="true" />
+            <div className="flex flex-col gap-1">
+              <span className="text-mono text-3xl font-semibold">{formatValue(item.value)}</span>
               <span className="text-sm font-normal text-muted-foreground">{item.desc}</span>
             </div>
           </CardContent>
         </Card>
       ))}
-    </Fragment>
+    </>
   );
 }
