@@ -1,5 +1,6 @@
 import { AuthService } from "./modules/auth";
 import { DashboardService } from "./modules/dashboard";
+import { FilesService } from "./modules/files";
 
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
@@ -15,4 +16,5 @@ import { DashboardService } from "./modules/dashboard";
 export const Services = {
   auth: AuthService,
   dashboard: DashboardService,
+  files: FilesService,
 } as const;

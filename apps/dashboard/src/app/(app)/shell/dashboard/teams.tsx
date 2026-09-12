@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Search, Users, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -34,36 +35,10 @@ import {
   ScrollArea,
   ScrollBar,
   Skeleton,
-  type DataGridLabels,
 } from "@schoolhub/ui";
 
 import { Services } from "@/services";
-
-// This preview has no i18n wiring (see the plan's scope note), so this is the
-// one place with hardcoded English strings — @schoolhub/ui's DataGrid requires
-// them explicitly rather than defaulting, precisely so a real i18n consumer
-// can never forget to supply a translation.
-const DATA_GRID_LABELS: DataGridLabels = {
-  sortAscending: (column) => `Sort ${column} ascending`,
-  sortDescending: (column) => `Sort ${column} descending`,
-  pinToStart: "Pin to start",
-  pinToEnd: "Pin to end",
-  unpinColumn: (column) => `Unpin ${column}`,
-  moveToStart: "Move to start",
-  moveToEnd: "Move to end",
-  dragToReorderColumn: "Drag to reorder column",
-  dragToReorderRow: "Drag to reorder row",
-  resizeColumn: (column) => `Resize ${column} column`,
-  columnsMenuLabel: "Columns",
-  columnsMenuTitle: "Toggle columns",
-  rowsPerPage: "Rows per page",
-  pageRangeSummary: ({ from, to, count }) => `${from}-${to} of ${count}`,
-  previousPage: "Previous page",
-  nextPage: "Next page",
-  goToPage: (page) => `Go to page ${page}`,
-  morePages: "More pages",
-  paginationNav: "Pagination",
-};
+import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 
 /**
  * Repurposed from the vendor Metronic template's teams.tsx (originally seven
@@ -195,7 +170,7 @@ export function Teams() {
         columnsVisibility: true,
         cellBorder: true,
       }}
-      labels={DATA_GRID_LABELS}
+      labels={DASHBOARD_DATA_GRID_LABELS}
       emptyState={
         <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
@@ -203,28 +178,33 @@ export function Teams() {
       <Card>
         <CardHeader className="py-3.5">
           <CardTitle>Staff</CardTitle>
-          <CardToolbar className="relative">
-            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search Staff..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-              }}
-              className="w-40 ps-9"
-            />
-            {searchQuery.length > 0 && (
-              <Button
-                mode="icon"
-                variant="ghost"
-                className="absolute end-1.5 top-1/2 h-6 w-6 -translate-y-1/2"
-                onClick={() => {
-                  setSearchQuery("");
+          <CardToolbar className="flex items-center gap-3">
+            <Link href="/staff" className="text-sm font-medium text-primary hover:underline">
+              View all
+            </Link>
+            <div className="relative">
+              <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search Staff..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
                 }}
-              >
-                <X />
-              </Button>
-            )}
+                className="w-40 ps-9"
+              />
+              {searchQuery.length > 0 && (
+                <Button
+                  mode="icon"
+                  variant="ghost"
+                  className="absolute end-1.5 top-1/2 h-6 w-6 -translate-y-1/2"
+                  onClick={() => {
+                    setSearchQuery("");
+                  }}
+                >
+                  <X />
+                </Button>
+              )}
+            </div>
           </CardToolbar>
         </CardHeader>
         <CardTable>

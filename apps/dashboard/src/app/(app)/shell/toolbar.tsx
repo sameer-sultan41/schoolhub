@@ -23,12 +23,18 @@ export function ToolbarActions({ children }: { children?: ReactNode }) {
   return <div className="flex items-center gap-2.5">{children}</div>;
 }
 
+/** Every page's own fixed root — `MENU_SIDEBAR` has no literal "Home" entry (its actual
+ * first entry is "Dashboards"), so this is prepended here rather than derived from the
+ * menu tree, the same way every page in this app's own reference gets an "hardcoded" Home
+ * crumb ahead of its real breadcrumb chain. */
+const HOME_CRUMB: MenuItem = { title: "Home", path: "/dashboard" };
+
 export function ToolbarBreadcrumbs() {
   const pathname = usePathname();
   const { getBreadcrumb, isActive } = useMenu(pathname);
-  const items: MenuItem[] = getBreadcrumb(MENU_SIDEBAR);
+  const items: MenuItem[] = [HOME_CRUMB, ...getBreadcrumb(MENU_SIDEBAR)];
 
-  if (items.length === 0) return null;
+  if (items.length <= 1) return null;
 
   return (
     <div className="[.header_&]:below-lg:hidden mb-2.5 flex items-center gap-1.25 text-xs font-medium lg:mb-0 lg:text-sm">

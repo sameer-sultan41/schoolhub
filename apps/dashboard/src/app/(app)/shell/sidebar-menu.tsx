@@ -72,7 +72,15 @@ export function SidebarMenu() {
     }
     return (
       <AccordionMenuItem key={index} value={item.path || ""} className="text-sm font-medium">
-        <Link href={item.path || "#"} className="flex grow items-center justify-between gap-2">
+        {/* Deliberately dropped the vendor's own `justify-between` here (verified
+            verbatim in the real Metronic source) — with only an icon and a title as
+            children, `justify-between` pushes the title to the row's far end instead of
+            immediately after the icon. The vendor's own menu config never actually hits
+            this branch (every root item with an `icon` also has `children`, which takes
+            the `AccordionMenuSubTrigger` path below instead), so this was latent,
+            unexercised markup — "Staff" (a real root-level icon item with no children)
+            is the first item anywhere to ever render through it. */}
+        <Link href={item.path || "#"} className="flex grow items-center gap-2">
           {item.icon && <item.icon data-slot="accordion-menu-icon" />}
           <span data-slot="accordion-menu-title">{item.title}</span>
         </Link>

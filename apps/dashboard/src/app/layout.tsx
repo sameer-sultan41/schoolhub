@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "@schoolhub/ui/toaster";
 import { AppProviders } from "@/components/providers";
 import { directionFor } from "@/lib/env";
 import { preferenceDataAttributes } from "@/lib/preferences/preferences-config";
@@ -39,6 +40,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             </PreferencesProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
+        <Toaster />
       </body>
     </html>
   );

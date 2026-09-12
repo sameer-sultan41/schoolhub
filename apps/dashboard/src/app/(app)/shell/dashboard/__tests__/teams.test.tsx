@@ -24,7 +24,10 @@ describe("Teams", () => {
         first_name: "Ayesha",
         last_name: "Khan",
         designation_name: "Head Teacher",
+        department_name: "Academics",
+        campus_name: "Main Campus",
         staff_type: "teaching",
+        employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
       },
     ]);
@@ -42,7 +45,10 @@ describe("Teams", () => {
         first_name: "Bilal",
         last_name: "Ahmed",
         designation_name: null,
+        department_name: "Administration",
+        campus_name: "Main Campus",
         staff_type: "non_teaching",
+        employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
       },
     ]);
@@ -59,7 +65,10 @@ describe("Teams", () => {
         first_name: "Ayesha",
         last_name: "Khan",
         designation_name: "Head Teacher",
+        department_name: "Academics",
+        campus_name: "Main Campus",
         staff_type: "teaching",
+        employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
       },
       {
@@ -67,7 +76,10 @@ describe("Teams", () => {
         first_name: "Bilal",
         last_name: "Ahmed",
         designation_name: "Accountant",
+        department_name: "Administration",
+        campus_name: "Main Campus",
         staff_type: "non_teaching",
+        employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
       },
     ]);
@@ -88,5 +100,26 @@ describe("Teams", () => {
     renderWithProviders(<Teams />);
 
     expect(await screen.findByText("No staff found")).toBeInTheDocument();
+  });
+
+  it("links to the full staff directory", async () => {
+    mockFetchStaffDirectory.mockResolvedValue([
+      {
+        id: "st-1",
+        first_name: "Ayesha",
+        last_name: "Khan",
+        designation_name: "Head Teacher",
+        department_name: "Academics",
+        campus_name: "Main Campus",
+        staff_type: "teaching",
+        employment_status: "active",
+        updated_at: "2026-09-01T00:00:00Z",
+      },
+    ]);
+
+    renderWithProviders(<Teams />);
+    await screen.findByText("Ayesha Khan");
+
+    expect(screen.getByRole("link", { name: "View all" })).toHaveAttribute("href", "/staff");
   });
 });
