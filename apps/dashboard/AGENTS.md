@@ -67,6 +67,23 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 **Never** put the access token in `localStorage` or a readable cookie, and never add a
 `tenant_id` request parameter — the tenant always comes from the authenticated context.
 
+> **On the `refactor/ui-test-layout-v2` branch lineage** (the vendor Metronic demo1
+> shell under `src/app/(app)/shell/`), the only piece of the infrastructure below
+> that is genuinely missing is permission gating: no `src/lib/permissions.ts`/`<Can>`
+> exists yet. `src/features/*` already exists (`src/features/auth/login-form.tsx`
+> backs the login page), and `queryKeys.list(module, resource, params)` already
+> exists and is tested (`src/lib/query-client.ts`) — this shell's own new modules
+> simply don't reach for either of those yet. Likewise, `next-intl` and its
+> `messages/en.json`/`messages/ur.json` are wired app-wide; it's only this shell's
+> own content (the header, the dashboard widgets, `/staff`) that isn't hooked up to
+> it. Modules added there (e.g. `/staff`) follow the lighter pattern the demo1
+> dashboard route itself already uses instead: a route folder rendering a
+> `"use client"` content component, calls routed through `Services.dashboard.*`
+> (`src/services/`), plain literal-array TanStack Query keys, no permission gate,
+> hardcoded English strings. Follow the full convention below — real translations
+> and `queryKeys.list` included — once this branch's own modules adopt `main`'s
+> permission system and pick up the i18n wiring that already exists.
+
 ## Adding a Module Screen
 
 1. Route: `src/app/(app)/<module>/page.tsx` (async server component for chrome).

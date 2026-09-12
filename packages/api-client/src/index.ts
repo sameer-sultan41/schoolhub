@@ -38,7 +38,7 @@ export {
   getNextPageParam,
   paginate,
 } from "./pagination";
-export type { PaginateOptions } from "./pagination";
+export type { PaginateOptions, Page } from "./pagination";
 
 export { createAccessTokenStore, refreshAccessToken } from "./token-store";
 export type { AccessTokenStore, RefreshOptions } from "./token-store";
