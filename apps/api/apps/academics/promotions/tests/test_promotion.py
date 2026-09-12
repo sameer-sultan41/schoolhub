@@ -14,9 +14,10 @@ from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
-from apps.academics import services, tasks
+from apps.academics import tasks
 from apps.academics.models import PromotionDecision, PromotionStatus, StudentPromotion
-from apps.academics.serializers import PromotionDecisionSerializer
+from apps.academics.promotions import services
+from apps.academics.promotions.serializers import PromotionDecisionSerializer
 from apps.academics.tests.base import AcademicsAPITestCase
 from apps.academics.tests.factories import (
     SectionFactory,

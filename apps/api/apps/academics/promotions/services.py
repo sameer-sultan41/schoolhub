@@ -1,9 +1,9 @@
-"""Business rules for the academics module.
+"""Business rules for `/student-promotions` — academics.md §6, §7, §11.
 
-Views stay thin: everything here is a rule from docs/03-modules/academics.md §6
-(sub-features), §7 (workflows) and §11 (validations). Keeping it out of
-serializers means the same rules apply to the API, the bulk importer and the
-Celery jobs — the layering student_management and staff_management already use.
+Views stay thin: everything here is a rule from the module doc's sub-features
+(§6), workflows (§7) and validations (§11). Keeping it out of serializers means
+the same rules apply to the API, the bulk importer and the Celery jobs — the
+layering student_management and staff_management already use.
 """
 
 from __future__ import annotations
@@ -11,330 +11,23 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Callable
-from datetime import date
 
 from django.db import transaction
-from django.db.models import Q
 from django.http import Http404
 from django.utils import timezone
 
 from apps.academics import notifications
-from apps.academics.models import (
-    PromotionDecision,
-    PromotionStatus,
-    StudentPromotion,
-    TeacherSubjectAllocation,
-)
-from apps.school_organization.models import AcademicSession, Class, ClassSubject, Section, Subject
+from apps.academics.models import PromotionDecision, PromotionStatus, StudentPromotion
+from apps.school_organization.models import AcademicSession, Class, Section
 from apps.school_organization.services import assert_session_writable
-from apps.staff_management.models import EmploymentStatus, Staff, StaffType
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from core.api.exceptions import Conflict, DomainRuleViolation
 
 logger = logging.getLogger(__name__)
 
-# §11: "load warnings at tenant-configured norm, hard cap optional". Advisory
-# only — the doc calls these warnings, so they ride along in `meta` rather than
-# rejecting the write.
-DEFAULT_WEEKLY_PERIOD_NORM = 30
-
 # §12's "promotion batch pending approval" goes to the `principal`; the key is
 # what the endpoint actually gates on, so it is what the fan-out resolves.
 PROMOTION_APPROVAL_KEY = "academics.promotion.approve"
-
-
-# ---------------------------------------------------------------------------
-# Curriculum
-# ---------------------------------------------------------------------------
-
-
-def assert_curriculum_writable(session: AcademicSession) -> None:
-    """§11's session lock: closed sessions are read-only for curriculum."""
-    assert_session_writable(session)
-
-
-def assert_elective_group_has_options(
-    *, session: AcademicSession, school_class: Class, elective_group: str, exclude_pk=None
-) -> None:
-    """§11: an elective group needs at least two options to be a choice at all.
-
-    Checked when a row is *removed from* or *added to* a group rather than on
-    every write: a group of one is a group being built up, and rejecting the
-    first row would make it impossible to create the second.
-    """
-    if not elective_group:
-        return
-    siblings = ClassSubject.objects.alive().filter(
-        academic_session=session, school_class=school_class, elective_group=elective_group
-    )
-    if exclude_pk is not None:
-        siblings = siblings.exclude(pk=exclude_pk)
-    if siblings.count() == 0:
-        raise DomainRuleViolation(
-            {
-                "elective_group": (
-                    f"Removing this leaves '{elective_group}' with no options. An elective "
-                    "group needs at least two."
-                )
-            }
-        )
-
-
-def assert_term_plans_reference_session_terms(
-    *, session: AcademicSession, term_plans: list | None
-) -> None:
-    """§11: term plans must reference terms of the same session.
-
-    A plan pointing at another session's term is silently wrong rather than
-    loudly broken — it would render, and be attached to the wrong dates — so it
-    is worth the extra query.
-    """
-    if not term_plans:
-        return
-
-    referenced = {str(entry.get("term_id")) for entry in term_plans if entry.get("term_id")}
-    if not referenced:
-        return
-
-    valid = {
-        str(pk) for pk in session.terms.filter(deleted_at__isnull=True).values_list("pk", flat=True)
-    }
-    stray = referenced - valid
-    if stray:
-        raise DomainRuleViolation(
-            {"term_plans": f"These terms do not belong to this session: {', '.join(sorted(stray))}"}
-        )
-
-
-@transaction.atomic
-def clone_curriculum(
-    *,
-    source_session: AcademicSession,
-    target_session: AcademicSession,
-    tenant_id: uuid.UUID,
-    actor_id: uuid.UUID,
-) -> dict[str, int]:
-    """Copy every curriculum row from one session to another (§5.1, §7.1).
-
-    Skips rows the target already has rather than failing the whole clone: a
-    clone re-run after a partial failure, or after someone hand-added a subject,
-    should converge rather than refuse. That makes this safe to retry, which is
-    what the `202` + job contract implies.
-    """
-    assert_curriculum_writable(target_session)
-    if source_session.pk == target_session.pk:
-        raise DomainRuleViolation(
-            {"source_academic_session_id": "Source and target sessions must differ."}
-        )
-
-    existing = set(
-        ClassSubject.objects.alive()
-        .filter(academic_session=target_session)
-        .values_list("school_class_id", "subject_id", "campus_id")
-    )
-
-    to_create = []
-    skipped = 0
-    for row in ClassSubject.objects.alive().filter(academic_session=source_session):
-        key = (row.school_class_id, row.subject_id, row.campus_id)
-        if key in existing:
-            skipped += 1
-            continue
-        to_create.append(
-            ClassSubject(
-                tenant_id=tenant_id,
-                academic_session=target_session,
-                school_class_id=row.school_class_id,
-                subject_id=row.subject_id,
-                campus_id=row.campus_id,
-                is_elective=row.is_elective,
-                elective_group=row.elective_group,
-                weekly_periods=row.weekly_periods,
-                # Deliberately not copied: syllabus_file_id (last year's document
-                # is not this year's) and term_plans (they reference the source
-                # session's terms, which assert_term_plans_reference_session_terms
-                # would reject on the very next edit).
-                notes=row.notes,
-                created_by=actor_id,
-                updated_by=actor_id,
-            )
-        )
-
-    if to_create:
-        ClassSubject.objects.bulk_create(to_create, batch_size=500)
-
-    return {"created": len(to_create), "skipped": skipped}
-
-
-# ---------------------------------------------------------------------------
-# Teacher allocation
-# ---------------------------------------------------------------------------
-
-
-def assert_staff_is_active_teacher(staff: Staff) -> None:
-    """§11: the allocated staff member must be active teaching staff."""
-    if staff.employment_status != EmploymentStatus.ACTIVE:
-        raise DomainRuleViolation(
-            {"staff_id": "This staff member is not active and cannot be allocated."}
-        )
-    if staff.staff_type != StaffType.TEACHING:
-        raise DomainRuleViolation({"staff_id": "Only teaching staff can be allocated a subject."})
-
-
-def assert_subject_in_class_curriculum(
-    *, session: AcademicSession, section: Section, subject: Subject
-) -> None:
-    """§11: allocating to a section requires the subject in that class's curriculum.
-
-    Without this, a section could be taught a subject the class does not study —
-    which timetable would then schedule and examinations would then grade.
-    """
-    in_curriculum = (
-        ClassSubject.objects.alive()
-        .filter(academic_session=session, school_class_id=section.school_class_id, subject=subject)
-        .exists()
-    )
-    if not in_curriculum:
-        raise DomainRuleViolation(
-            {
-                "subject_id": (
-                    "This subject is not in the curriculum for this section's class in this "
-                    "session. Add it to the curriculum first."
-                )
-            }
-        )
-
-
-def weekly_load_by_staff(*, session: AcademicSession) -> dict[uuid.UUID, int]:
-    """Weekly period load per teacher for a session, in two queries flat.
-
-    The obvious implementation — walk each allocation and look up its curriculum
-    row — is an N+1, and the allocation grid renders every teacher at once, so it
-    would be one query per cell. Instead both sides are fetched once and joined
-    in Python: allocations with their section's class id, and the session's
-    curriculum keyed by (class, subject).
-
-    An allocation's own `weekly_periods` wins when set; that override column
-    exists precisely so a teacher taking a subject at non-standard frequency does
-    not distort the load maths.
-
-    "Current" is a window, not just an open end: `effective_to IS NULL` on its
-    own also matches an allocation that starts next term, so a teacher lined up
-    for September counts against today's norm and the §11 warning fires on load
-    nobody is carrying yet. A null `effective_from` means the allocation has
-    been in force all along.
-    """
-    curriculum = {
-        (row["school_class_id"], row["subject_id"]): row["weekly_periods"]
-        for row in ClassSubject.objects.alive()
-        .filter(academic_session=session)
-        .values("school_class_id", "subject_id", "weekly_periods")
-    }
-
-    today = timezone.localdate()
-    totals: dict[uuid.UUID, int] = {}
-    allocations = (
-        TeacherSubjectAllocation.objects.alive()
-        .filter(
-            Q(effective_from__isnull=True) | Q(effective_from__lte=today),
-            academic_session=session,
-            effective_to__isnull=True,
-        )
-        .values("staff_id", "subject_id", "weekly_periods", "section__school_class_id")
-    )
-    for allocation in allocations:
-        periods = allocation["weekly_periods"]
-        if periods is None:
-            key = (allocation["section__school_class_id"], allocation["subject_id"])
-            periods = curriculum.get(key, 0)
-        totals[allocation["staff_id"]] = totals.get(allocation["staff_id"], 0) + periods
-    return totals
-
-
-def teacher_weekly_load(*, staff: Staff, session: AcademicSession) -> int:
-    """One teacher's load. Prefer `weekly_load_by_staff` for more than one."""
-    return weekly_load_by_staff(session=session).get(staff.pk, 0)
-
-
-def load_warnings(*, staff: Staff, session: AcademicSession, norm: int | None = None) -> list[dict]:
-    """Advisory over-load warnings for the allocation grid (§5.3, §11).
-
-    Returned in the response `meta`, never raised: the module doc calls these
-    warnings, and a school mid-way through building next year's grid needs to be
-    able to save an over-loaded state and fix it afterwards.
-    """
-    ceiling = norm or DEFAULT_WEEKLY_PERIOD_NORM
-    load = teacher_weekly_load(staff=staff, session=session)
-    if load <= ceiling:
-        return []
-    return [
-        {
-            "code": "teacher_over_norm",
-            "staff_id": str(staff.pk),
-            "weekly_periods": load,
-            "norm": ceiling,
-        }
-    ]
-
-
-@transaction.atomic
-def create_allocation(
-    *,
-    session: AcademicSession,
-    section: Section,
-    subject: Subject,
-    staff: Staff,
-    is_primary: bool = True,
-    weekly_periods: int | None = None,
-    effective_from: date | None = None,
-    tenant_id: uuid.UUID,
-    actor_id: uuid.UUID,
-) -> TeacherSubjectAllocation:
-    assert_session_writable(session)
-    assert_staff_is_active_teacher(staff)
-    assert_subject_in_class_curriculum(session=session, section=section, subject=subject)
-
-    if is_primary:
-        _end_date_current_primary(
-            session=session, section=section, subject=subject, actor_id=actor_id
-        )
-
-    return TeacherSubjectAllocation.objects.create(
-        tenant_id=tenant_id,
-        academic_session=session,
-        section=section,
-        subject=subject,
-        staff=staff,
-        is_primary=is_primary,
-        weekly_periods=weekly_periods,
-        effective_from=effective_from,
-        created_by=actor_id,
-        updated_by=actor_id,
-    )
-
-
-def _end_date_current_primary(
-    *, session: AcademicSession, section: Section, subject: Subject, actor_id: uuid.UUID
-) -> None:
-    """End-date the outgoing primary rather than deleting it (§6).
-
-    "Reassignment mid-session preserves history (old allocation end-dated, not
-    deleted)" — and it is also what keeps `tsa_one_primary_per_section_subject`
-    satisfiable, since that constraint only counts allocations with no
-    `effective_to`.
-    """
-    TeacherSubjectAllocation.objects.alive().filter(
-        academic_session=session,
-        section=section,
-        subject=subject,
-        is_primary=True,
-        effective_to__isnull=True,
-    ).update(effective_to=timezone.now().date(), updated_by=actor_id, updated_at=timezone.now())
-
-
-# ---------------------------------------------------------------------------
-# Promotion
-# ---------------------------------------------------------------------------
 
 
 def next_class_for(*, from_class: Class, tenant_id: uuid.UUID) -> Class | None:
@@ -460,9 +153,9 @@ def assert_batch_in_status(*, batch_id: uuid.UUID, expected: str) -> list[Studen
     the rows until commit is what stops a simultaneous `:approve` and `:reject`
     from each passing this check and each writing — which would leave
     `status=rejected` alongside a populated `approved_by`, a state
-    `promotions_approval_fields_together` does not forbid because it only couples
-    `approved_by` with `approved_at`. `_transition` restates the status in the
-    UPDATE's own WHERE as the second layer.
+    `promotions_approval_fields_together` does not forbid because it only
+    couples `approved_by` with `approved_at`. `_transition` restates the status
+    in the UPDATE's own WHERE as the second layer.
     """
     rows = list(batch_queryset(batch_id, for_update=True))
     if not rows:
@@ -826,34 +519,6 @@ def _mark_executed(row: StudentPromotion, actor_id: uuid.UUID) -> None:
 # ---------------------------------------------------------------------------
 
 
-def notify_allocation_changed(
-    *, allocation: TeacherSubjectAllocation, tenant_id: uuid.UUID
-) -> None:
-    """Never lets a notification failure undo the allocation — see
-    staff_management/staff/services/invite.py's _notify_invited for the same reasoning."""
-    from core.notifications.services import Recipient, notify
-
-    if not allocation.staff.user_id:
-        return
-    try:
-        with transaction.atomic():
-            notify(
-                notifications.ALLOCATION_CHANGED,
-                tenant_id=tenant_id,
-                recipients=[Recipient(user_id=allocation.staff.user_id)],
-                context={
-                    "teacher.first_name": allocation.staff.first_name,
-                    "section.name": allocation.section.name,
-                    "subject.name": allocation.subject.name,
-                    "session.name": allocation.academic_session.name,
-                },
-                source_type="teacher_subject_allocation",
-                source_id=allocation.pk,
-            )
-    except Exception:
-        logger.exception("allocation-changed notification failed for %s", allocation.pk)
-
-
 def _promotion_approvers(tenant_id: uuid.UUID) -> set[uuid.UUID]:
     """Everyone in this tenant who holds `academics.promotion.approve`.
 
@@ -879,10 +544,11 @@ def _promotion_approvers(tenant_id: uuid.UUID) -> set[uuid.UUID]:
 def notify_promotion_pending(*, rows: list[StudentPromotion], tenant_id: uuid.UUID) -> None:
     """§12: a submitted batch tells the people who can approve it.
 
-    Same shape as `notify_allocation_changed` above — recipients resolved to a
-    set, nothing sent when it is empty, and the send savepointed and swallowed so
-    a template or transport fault cannot undo a transition that already
-    happened.
+    Same shape as `notify_allocation_changed` in
+    `apps.academics.teacher_allocations.services` — recipients resolved to a
+    set, nothing sent when it is empty, and the send savepointed and swallowed
+    so a template or transport
+    fault cannot undo a transition that already happened.
     """
     from core.notifications.services import Recipient, notify
 
