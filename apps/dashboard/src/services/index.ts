@@ -1,4 +1,5 @@
 import { AuthService } from "./modules/auth";
+import { TenantService } from "./modules/tenant";
 
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
@@ -8,8 +9,9 @@ import { AuthService } from "./modules/auth";
  * convention).
  *
  * Add a domain here the moment its module lands, following the same
- * `services/modules/<domain>/{<domain>-service.ts,index.ts}` shape as `auth`.
+ * `services/modules/<domain>/{<domain>-service.ts,index.ts}` shape as `auth` and `tenant`.
  */
 export const Services = {
   auth: AuthService,
+  tenant: TenantService,
 } as const;

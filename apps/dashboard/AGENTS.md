@@ -74,8 +74,9 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 2. API calls: add a `<module>` entry to `src/services/endpoints.ts` (paths, or
    param-taking functions for anything with an id); create
    `src/services/modules/<module>/<module>-service.ts` with the actual `apiClient` calls,
-   typed against `packages/types`; register it in `src/services/index.ts` as
-   `Services.<module>`. See `src/services/modules/auth/` for the reference shape.
+   typed against `packages/types` or the feature's own local types; register it in
+   `src/services/index.ts` as `Services.<module>`. See `src/services/modules/auth/` for the
+   reference shape, or `src/services/modules/tenant/` for the smallest one.
 3. Feature code: `src/features/<module>/` — components and hooks. A screen's
    `useQuery`/`useMutation` calls `Services.<module>.<action>(...)` as its
    `queryFn`/`mutationFn` — never `apiClient` directly, never a hardcoded path.

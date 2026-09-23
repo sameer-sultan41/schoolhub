@@ -21,4 +21,8 @@ export const endpoints = {
     me: "/auth/me",
     refresh: "/refresh",
   },
+  tenant: {
+    /** The authenticated user's own tenant — name, branding, locale, contact. */
+    current: "/tenant",
+  },
 } as const;
