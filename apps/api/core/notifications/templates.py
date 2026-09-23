@@ -166,7 +166,8 @@ class TemplateRegistry:
 def used_placeholders(*texts: str) -> set[str]:
     """Every `{{ variable }}` name referenced across the given texts.
 
-    Public because `apps.communication.services.assert_override_is_valid` needs
+    Public because
+    `apps.communication.template_overrides.services.validate.assert_override_is_valid` needs
     the identical extraction to check a tenant's proposed override against the
     platform template's declared set — the same rule this module enforces at
     registration, re-run at edit time. One regex, one place it can drift.

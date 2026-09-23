@@ -1,10 +1,11 @@
 """Notification triggers and platform default templates — academics.md §12.
 
 Six rows in the module doc; four are registered here and three of those are
-emitted: `allocation-changed` from `services.create_allocation`,
-`promotion-pending` from `services.submit_batch`, and `promotion-outcome` from
-`services.approve_batch` and `services.reject_batch`. The three gaps are listed
-rather than silently omitted so they stay greppable:
+emitted: `allocation-changed` from `teacher_allocations.services.
+create_allocation`, `promotion-pending` from `promotions.services.
+submit_batch`, and `promotion-outcome` from `promotions.services.
+approve_batch` and `promotions.services.reject_batch`. The three gaps are
+listed rather than silently omitted so they stay greppable:
 
 - `academics.curriculum-approved` has templates but no caller. §4 marks
   `academics.curriculum.approve` a recommendation and there is no sign-off

@@ -21,10 +21,10 @@
  * — /login chrome, the platform-landing page, the unknown-host page — because those are
  * shown before any tenant is known, or to nobody's tenant at all.
  *
- * The palette this replaced is not gone: `presets/ink-brass.css` pins it, so the
- * "Ink & Brass" entry in the dashboard's Colours menu still means what it says. That
- * file exists precisely because `ink-brass` used to have no stylesheet — it WAS this
- * :root — so changing these defaults would otherwise have silently redefined it.
+ * The palette this replaced ("Ink & Brass") is not gone, just not live right now: it had
+ * its own `presets/ink-brass.css` pinning it as a standalone Colours-menu entry, removed
+ * along with the other non-Metronic presets (see presets.ts's TODO) — recoverable
+ * verbatim from git history whenever multi-theme support returns.
  *
  * ── Why the palette moved ─────────────────────────────────────────────────────────
  *
