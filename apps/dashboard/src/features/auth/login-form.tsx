@@ -23,10 +23,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { login } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { parseTenantSlug } from "@/lib/host";
 import { getQueryClient, queryKeys } from "@/lib/query-client";
+import { Services } from "@/services";
 
 /**
  * Zod schema mirrors the API's validation (module doc §11) so the user gets instant feedback,
@@ -53,7 +53,7 @@ export function LoginForm() {
   const { handleSubmit, setError } = form;
 
   const mutation = useMutation({
-    mutationFn: login,
+    mutationFn: Services.auth.login,
     onSuccess: () => {
       // Fire-and-forget: the redirect below does not need the cache to have settled first.
       void getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
