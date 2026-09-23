@@ -36,6 +36,21 @@ shows every `status: "ready"` nav item and every quick action unconditionally, m
 pre-reset order (`SidebarTrigger` → `AppBreadcrumb` → spacer → `CommandPalette` →
 `LayoutControls` → `ThemeToggle` → `UserMenu`).
 
+**Chunk 3 (done): full shell reset onto `_metronic/`.** Chunks 1-2's approach — schoolhub's
+own `SidebarProvider`/`app-shell.tsx`/`dashboard-nav.tsx` composition — was itself torn out
+and replaced with a near-verbatim port of Metronic's actual Demo1 shell into
+`apps/dashboard/src/app/(app)/_metronic/` (`shell.tsx`, `sidebar.tsx`, `sidebar-menu.tsx`,
+`sidebar-header.tsx`, `header.tsx`, `settings-provider.tsx`, `menu-config.ts`, etc.). This
+supersedes the "Behavior stays schoolhub's own" decision below, which described chunks 1-2
+and is no longer accurate — see the correction inline. Every remaining business route and
+the placeholder `/dashboard` page were removed as part of the same reset, and Metronic's
+Demo1 preview was promoted to the real `/dashboard` route. Two gaps this chunk's review
+caught were fixed in the same pass: `sidebar.tsx`'s root and the mobile `SheetBody` wrapping
+`SidebarMenu` now carry `role="navigation"`/`aria-label={t("primary")}` (translated, matches
+`e2e`'s `getByRole("navigation", { name: "Primary navigation" })`), and `shell.tsx` now has a
+`window` keydown listener for Ctrl/Cmd+B that calls the same `storeOption` toggle
+`sidebar-header.tsx`'s button already used.
+
 ## Decisions
 
 - **Port, don't vendor.** Root `AGENTS.md` §0d. Metronic's actual Demo1 source lives at
@@ -51,10 +66,14 @@ pre-reset order (`SidebarTrigger` → `AppBreadcrumb` → spacer → `CommandPal
   frame" tier (an earlier design, deliberately retired). Confirmed against Metronic's own
   `bg-background`-only sidebar/header. See `packages/ui/src/styles/theme.css`'s own header
   comment for the full rationale.
-- **Behavior stays schoolhub's own.** `SidebarProvider`'s state machine (mobile Sheet,
-  Ctrl/Cmd+B, cookie-persisted collapse via layout preferences, RTL logical positioning,
-  i18n-required labels) is never replaced by Metronic's `useSettings`/`document.body`-class
-  approach — only the visual shape is ported.
+- **~~Behavior stays schoolhub's own~~ — superseded by chunk 3.** This described chunks 1-2's
+  `SidebarProvider` composition, which chunk 3 removed entirely. The shipped shell now uses
+  Metronic's own `useSettings`/`document.body`-class approach verbatim (see
+  `settings-provider.tsx`'s header comment), including mobile Sheet and collapse. Chunk 3
+  brought behavior back in line on the two pieces this doc had promised — nav
+  landmark/i18n label and Ctrl/Cmd+B — but via that `useSettings`/body-class mechanism, not
+  `SidebarProvider`'s context/state-machine one. RTL logical positioning still holds, via the
+  vendor `demo1.css`/`metronic-extras.css` rules the port carries over.
 
 ## Backlog (explicitly deferred, not lost)
 

@@ -6,7 +6,7 @@ import { useIsMobile } from "@schoolhub/ui";
 import { Footer } from "@/app/(app)/shell/footer";
 import { Header } from "@/app/(app)/shell/header";
 import { Sidebar } from "@/app/(app)/shell/sidebar";
-import { usePreference } from "@/providers/preferences-provider";
+import { usePreference, usePreferenceActions } from "@/providers/preferences-provider";
 
 // Ported from packages/ui's vendored layouts/demo1/layout.tsx (Metronic's own Demo1
 // shell). `data-theme-preset="metronic"` is set on <html> by the root layout now, not
@@ -15,6 +15,7 @@ import { usePreference } from "@/providers/preferences-provider";
 export function Shell({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const sidebarCollapsed = usePreference("sidebar_collapsed");
+  const { setPreference } = usePreferenceActions();
 
   useEffect(() => {
     const bodyClass = document.body.classList;
@@ -24,6 +25,19 @@ export function Shell({ children }: { children: ReactNode }) {
       bodyClass.remove("sidebar-collapse");
     }
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "b" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setPreference("sidebar_collapsed", sidebarCollapsed === "collapsed" ? "expanded" : "collapsed");
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [sidebarCollapsed, setPreference]);
 
   useEffect(() => {
     const bodyClass = document.body.classList;

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@schoolhub/ui";
 
@@ -9,10 +10,13 @@ import { SidebarMenu } from "@/app/(app)/shell/sidebar-menu";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/sidebar.tsx.
 export function Sidebar() {
+  const t = useTranslations("nav");
   const pathname = usePathname();
 
   return (
     <div
+      role="navigation"
+      aria-label={t("primary")}
       className={cn(
         "sidebar shrink-0 flex-col items-stretch bg-background lg:fixed lg:top-0 lg:bottom-0 lg:z-20 lg:flex lg:border-e lg:border-border",
         pathname.includes("dark-sidebar") && "dark",

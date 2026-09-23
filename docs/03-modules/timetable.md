@@ -204,3 +204,45 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - Fixed weekly cycle assumed; rotating multi-week cycles (Week A/B) deferred to a future enhancement (recommendation).
 - Teacher availability constraints and max-load thresholds are recommendations pending client confirmation of policy.
 - iCal feeds and room-booking for non-teaching events (meetings) are future-phase recommendations.
+
+## 20. Implementation notes
+
+**File-per-action layout refactor.** `apps/timetable` restructured from
+shared `views.py`/`services.py`/`serializers.py`/`filters.py` files into one
+package per resource (`rooms/`, `periods/`, `slots/`, `substitutions/`) —
+the same layout already applied to `apps/communication`, `apps/
+school_organization`, and `apps/staff_management` (see those modules' own
+§20). `viewset.py` stays one file per resource, every action a plain method;
+`services.py` splits per package only where a resource has real business
+logic — `rooms/` has none at all (its fields need no service-level rule).
+
+The conflict-detection engine (`conflicts.py`) moved into `slots/` as a
+whole file, unchanged — it has no consumer outside the slot/timetable-grid
+domain (no other package, no other app imports it).
+
+Two functions stay at the app root as a deliberate shared surface:
+`assert_staff_is_active_teacher` (used by both `slots/` and
+`substitutions/` — a slot's own teacher and a substitution's absent/
+substitute staff are the same check) and a thin `propose_substitutions_for_
+absence` wrapper. The real substitution logic — manual create/approve/
+reject and the automatic proposal engine attendance drives — lives entirely
+in `substitutions/services.py` as one cohesive file (splitting the automatic
+half from the manual half would fragment logic that calls back and forth
+into itself); the root wrapper exists only so `apps.attendance.tasks`'
+existing cross-app import, `from apps.timetable.services import
+propose_substitutions_for_absence`, keeps resolving. The wrapper's import is
+lazy (inside the function body), not module-level — `substitutions/
+services.py` itself imports `assert_staff_is_active_teacher` from this same
+root module, and a module-level re-export in both directions would race
+Python's import machinery depending on which module loads first.
+`views.py`/`serializers.py` keep their own equivalent shared pieces
+(`FEATURE`/`STAFF_PERMISSIONS`/`SCAFFOLDING_VIEW_KEY`, `_fk`/
+`READ_ONLY_FIELDS`).
+
+`permissions.py`, `features.py`, and `notifications.py` are unchanged at the
+root — autodiscovery (`module_has_submodule`) requires them there.
+
+Pure reorganization: `openapi.yaml`/`schema.d.ts` differ from `main` by two
+disclosed docstring-only lines (a serializer's new ownership note, and an
+updated cross-reference to a function that moved). No endpoint, permission,
+or response shape changed anywhere in the module.

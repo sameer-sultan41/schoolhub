@@ -11,7 +11,7 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from apps.communication.models import NotificationPreference
-from apps.communication.services import evict_preference_cache
+from apps.communication.preferences.services.matrix import evict_preference_cache
 
 
 @receiver([post_save, post_delete], sender=NotificationPreference)

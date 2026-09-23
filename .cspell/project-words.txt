@@ -81,6 +81,7 @@ filtersets
 formatjs
 Fraunces
 frontends
+frontmatter
 gantt
 gapless
 gatekeeping
@@ -227,6 +228,7 @@ smallint
 spreadsheetml
 sslmode
 stockouts
+Styleguide
 subnetting
 subprocessor
 subprocessors

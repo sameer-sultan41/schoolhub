@@ -243,3 +243,38 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - *(recommendation)* Curriculum sign-off (`academics.curriculum.approve`) is proposed, not client-confirmed — small schools may prefer to skip the gate via workflow configuration.
 - **Open:** are per-campus curriculum differences a real requirement for target schools, or is tenant-wide curriculum sufficient? Modeled as optional override, default off.
 - **Open:** where student elective choices are stored — proposed as a small extension on `student_enrollments` (JSONB `elective_subject_ids`) rather than a new table; to be settled in the consistency pass.
+
+## 20. Implementation notes
+
+**File-per-action layout refactor.** `apps/academics` restructured from
+shared `views.py`/`services.py`/`serializers.py`/`filters.py` files into one
+package per resource (`curriculum/`, `teacher_allocations/`,
+`promotions/`) — the same layout already applied to `apps/communication`,
+`apps/school_organization`, `apps/staff_management`, and `apps/timetable`
+(see those modules' own §20). `viewset.py` stays one file per resource,
+every action a plain method; each package gets a single flat `services.py`
+rather than a `services/` subpackage — none of the three resources has
+enough distinct per-action logic to warrant the extra split (`promotions/`
+comes closest, with its `:submit`/`:approve`/`:reject`/`:execute`/`:revert`
+lifecycle, but the functions share enough state-machine plumbing —
+`batch_queryset`, `_transition`, the two `_assert_*` guards — that one file
+reads more coherently than five thin ones).
+
+Unlike `school_organization`, `staff_management`, and `timetable`, this
+module split **cleanly** — every function in the old `services.py` and
+every class in the old `views.py`/`filters.py` belonged to exactly one
+resource once traced, with the sole exception of two symbols genuinely
+shared by all three: `FEATURE = "module.academics"` (root `views.py`) and
+`_fk`/`READ_ONLY_FIELDS` (root `serializers.py`). The old `services.py` and
+`filters.py` are deleted entirely — nothing was left to keep at the app
+root. `permissions.py`, `features.py`, and `uploads.py` are unchanged in
+place — Django/Celery autodiscovery requires them there. `tasks.py` keeps
+its Celery registration unchanged but has one necessary one-line edit: its
+`execute_batch` import now points at `promotions.services`.
+
+Pure reorganization: `openapi.yaml`/`schema.d.ts` are **byte-identical** to
+`main`. A handful of prose cross-references inside moved docstrings and
+`notifications.py`'s own "where does each trigger fire from" note needed
+updating to name the new package paths — none of that prose reaches the
+API contract. No
+endpoint, permission, or response shape changed anywhere in the module.
