@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapPin, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -34,8 +34,20 @@ function timeRange(start: string, end: string): string {
  * Zoom meeting card) into the viewer's own current or next class today, read from their
  * real timetable.
  */
+/** Re-renders the card every minute so "current/next class" doesn't go stale on a tab left open. */
+function useNow(intervalMs: number): Date {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+
+  return now;
+}
+
 export function TeamMeeting() {
-  const now = useMemo(() => new Date(), []);
+  const now = useNow(60_000);
   const date = useMemo(() => toIsoDate(now), [now]);
 
   const { data, isPending } = useQuery({
