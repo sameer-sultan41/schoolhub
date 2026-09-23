@@ -30,7 +30,10 @@ export function Shell({ children }: { children: ReactNode }) {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "b" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        setPreference("sidebar_collapsed", sidebarCollapsed === "collapsed" ? "expanded" : "collapsed");
+        setPreference(
+          "sidebar_collapsed",
+          sidebarCollapsed === "collapsed" ? "expanded" : "collapsed",
+        );
       }
     }
     window.addEventListener("keydown", handleKeyDown);
