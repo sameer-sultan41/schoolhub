@@ -225,7 +225,8 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
               // handled here rather than left as an unhandled promise rejection. The
               // user still always reaches /login: the unexpected case is logged, not
               // swallowed or re-thrown.
-              void Services.auth.logout()
+              void Services.auth
+                .logout()
                 .catch((error: unknown) => {
                   console.error("Sign-out request failed unexpectedly:", error);
                 })

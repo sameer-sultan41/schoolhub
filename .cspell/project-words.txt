@@ -81,6 +81,7 @@ filtersets
 formatjs
 Fraunces
 frontends
+frontmatter
 gantt
 gapless
 gatekeeping
