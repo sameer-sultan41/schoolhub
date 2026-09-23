@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { RESERVED_LABELS } from "./host";
+
 /**
  * Renderer configuration.
  *
@@ -32,15 +34,5 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 
-/** Subdomain labels that can never belong to a tenant. */
-export const RESERVED_SUBDOMAINS = new Set([
-  "www",
-  "api",
-  "app",
-  "admin",
-  "dashboard",
-  "static",
-  "cdn",
-  "mail",
-  "status",
-]);
+/** Re-exported, not redeclared: `lib/host.ts` owns the one canonical list. */
+export const RESERVED_SUBDOMAINS = RESERVED_LABELS;

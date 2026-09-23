@@ -44,7 +44,7 @@ from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
 # Inside AcademicSessionFactory's default 2026-04-01 .. 2027-03-31 window, and a
 # Monday — `day_of_week=0` on TimetableSlotFactory means Monday while the tenant
-# week-start setting does not exist (services._slot_weekday).
+# week-start setting does not exist (substitutions.services._slot_weekday).
 MONDAY = datetime.date(2026, 4, 6)
 TUESDAY = datetime.date(2026, 4, 7)
 
@@ -53,7 +53,7 @@ def period_window(sequence: int) -> tuple[datetime.time, datetime.time]:
     """A 45-minute window derived from the period's place in the day.
 
     Derived rather than fixed so periods created with adjacent sequences really
-    do adjoin — `conflicts._consecutive_load` measures a run on `sequence`, and a
+    do adjoin — `slots.conflicts._consecutive_load` measures a run on `sequence`, and a
     fixture whose times contradicted its sequences would make those tests lie.
 
     Wraps at 12 so a long test run's global factory counter cannot produce an

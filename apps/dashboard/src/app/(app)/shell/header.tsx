@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, LayoutGrid, Menu, MessageCircleMore, Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   Button,
@@ -36,6 +37,7 @@ import { SidebarMenu } from "@/app/(app)/shell/sidebar-menu";
 // (Public Profile/Network/Store/My Account), adding no capability the sidebar
 // didn't already have once the sidebar became permission-aware.
 export function Header() {
+  const t = useTranslations("nav");
   const [isSidebarSheetOpen, setIsSidebarSheetOpen] = useState(false);
 
   const pathname = usePathname();
@@ -70,7 +72,7 @@ export function Header() {
             {mobileMode && (
               <Sheet open={isSidebarSheetOpen} onOpenChange={setIsSidebarSheetOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" mode="icon">
+                  <Button variant="ghost" mode="icon" aria-label={t("primary")}>
                     <Menu className="text-muted-foreground/70" />
                   </Button>
                 </SheetTrigger>
@@ -81,7 +83,11 @@ export function Header() {
                   closeLabel="Close"
                 >
                   <SheetHeader className="space-y-0 p-0" />
-                  <SheetBody className="overflow-y-auto p-0">
+                  <SheetBody
+                    className="overflow-y-auto p-0"
+                    role="navigation"
+                    aria-label={t("primary")}
+                  >
                     <SidebarMenu />
                   </SheetBody>
                 </SheetContent>

@@ -1,40 +1,18 @@
 """Routes for the communication module — communication.md §16.
 
-Explicit `path()` entries come before `*router.urls`, matching every other
-module: a colon-action would otherwise be swallowed by the router's detail
-pattern.
+Each resource owns its own routes; this file only aggregates them, the
+Django/DRF equivalent of the reference's `core/base.py` mounting every
+resource's router onto one API instance.
 """
 
-from django.urls import path
-from rest_framework.routers import SimpleRouter
+from __future__ import annotations
 
-from apps.communication.views import (
-    DeliveryLogViewSet,
-    NotificationPreferenceView,
-    NotificationTemplateOverrideViewSet,
-)
-
-router = SimpleRouter(trailing_slash=False)
-router.register(
-    "notification-templates", NotificationTemplateOverrideViewSet, basename="notification-templates"
-)
-router.register("delivery-logs", DeliveryLogViewSet, basename="delivery-logs")
+from django.urls import include, path
 
 urlpatterns = [
-    path(
-        "notification-templates/<uuid:pk>:preview",
-        NotificationTemplateOverrideViewSet.as_view({"post": "preview"}),
-        name="notification-templates-preview",
-    ),
-    path(
-        "delivery-logs:summary",
-        DeliveryLogViewSet.as_view({"get": "summary"}),
-        name="delivery-logs-summary",
-    ),
-    path(
-        "notification-preferences",
-        NotificationPreferenceView.as_view(),
-        name="notification-preferences",
-    ),
-    *router.urls,
+    path("", include("apps.communication.template_overrides.urls")),
+    path("", include("apps.communication.preferences.urls")),
+    path("", include("apps.communication.delivery.urls")),
+    path("", include("apps.communication.announcements.urls")),
+    path("", include("apps.communication.notices.urls")),
 ]

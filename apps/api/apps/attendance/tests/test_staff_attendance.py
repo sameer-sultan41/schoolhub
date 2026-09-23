@@ -419,7 +419,7 @@ class CoverCampusScopeTests(TestCase):
         one, so an approver had no reason to notice a teacher assigned to a
         period at the other end of the city."""
         from apps.timetable.models import SlotStatus
-        from apps.timetable.services import _first_free_substitute
+        from apps.timetable.substitutions.services import _first_free_substitute
         from apps.timetable.tests.factories import PeriodFactory, TimetableSlotFactory
 
         with tenant_context(self.tenant.id):
@@ -442,7 +442,7 @@ class CoverCampusScopeTests(TestCase):
     def test_a_substitute_at_the_same_campus_is_proposed(self) -> None:
         """The control: the filter must not have refused everyone."""
         from apps.timetable.models import SlotStatus
-        from apps.timetable.services import _first_free_substitute
+        from apps.timetable.substitutions.services import _first_free_substitute
         from apps.timetable.tests.factories import PeriodFactory, TimetableSlotFactory
 
         with tenant_context(self.tenant.id):

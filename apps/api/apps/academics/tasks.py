@@ -27,7 +27,7 @@ from core.tenancy.tasks import TenantAwareTask
 
 @shared_task(base=TenantAwareTask, bind=True)
 def execute_promotion_batch_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
-    from apps.academics.services import execute_batch
+    from apps.academics.promotions.services import execute_batch
 
     with tenant_atomic(uuid.UUID(tenant_id)):
         job = BackgroundJob.objects.get(pk=job_id)
