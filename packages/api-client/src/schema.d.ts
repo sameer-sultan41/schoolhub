@@ -204,6 +204,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/announcements` — feed-style posts with audience targeting.
+         *
+         *     §3 does not list guardians/students among announcement authors, approvers
+         *     or browsers of drafts — drafting, publishing and this endpoint's own reads
+         *     are staff-only; `communication.announcement.view`'s default roles (§4)
+         *     already narrow who actually holds the key.
+         */
+        get: operations["announcements_list"];
+        put?: never;
+        /**
+         * @description `/announcements` — feed-style posts with audience targeting.
+         *
+         *     §3 does not list guardians/students among announcement authors, approvers
+         *     or browsers of drafts — drafting, publishing and this endpoint's own reads
+         *     are staff-only; `communication.announcement.view`'s default roles (§4)
+         *     already narrow who actually holds the key.
+         */
+        post: operations["announcements_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/announcements` — feed-style posts with audience targeting.
+         *
+         *     §3 does not list guardians/students among announcement authors, approvers
+         *     or browsers of drafts — drafting, publishing and this endpoint's own reads
+         *     are staff-only; `communication.announcement.view`'s default roles (§4)
+         *     already narrow who actually holds the key.
+         */
+        get: operations["announcements_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * @description `/announcements` — feed-style posts with audience targeting.
+         *
+         *     §3 does not list guardians/students among announcement authors, approvers
+         *     or browsers of drafts — drafting, publishing and this endpoint's own reads
+         *     are staff-only; `communication.announcement.view`'s default roles (§4)
+         *     already narrow who actually holds the key.
+         */
+        delete: operations["announcements_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description `/announcements` — feed-style posts with audience targeting.
+         *
+         *     §3 does not list guardians/students among announcement authors, approvers
+         *     or browsers of drafts — drafting, publishing and this endpoint's own reads
+         *     are staff-only; `communication.announcement.view`'s default roles (§4)
+         *     already narrow who actually holds the key.
+         */
+        patch: operations["announcements_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/announcements/{id}:publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /announcements/{id}:publish`. */
+        post: operations["announcements_:publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/attendance-corrections": {
         parameters: {
             query?: never;
@@ -2135,10 +2224,11 @@ export interface paths {
          *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
          *     holiday, which is exactly what a cancelled closure needs.
          *
-         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
-         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
-         *     plain ``APIView``, so without it ``request.tenant`` is never set and
-         *     ``RequiresModuleFeature`` fails closed on every request.
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding:
+         *     this is a plain ``APIView``, so without it ``request.tenant`` is never set
+         *     and ``RequiresModuleFeature`` fails closed on every request before
+         *     ``is_feature_enabled`` is even checked — the same reason
+         *     ``school_settings/view.py::SchoolSettingsView`` mixes it in too.
          */
         get: operations["holiday_calendar_retrieve"];
         /**
@@ -2159,10 +2249,11 @@ export interface paths {
          *     replaced wholesale. Merging entry by entry would leave no way to *remove* a
          *     holiday, which is exactly what a cancelled closure needs.
          *
-         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding,
-         *     for the reason ``SchoolSettingsView`` above documents at length: this is a
-         *     plain ``APIView``, so without it ``request.tenant`` is never set and
-         *     ``RequiresModuleFeature`` fails closed on every request.
+         *     Mixes in ``TenantScopedViewSetMixin`` for its ``initial()`` tenant binding:
+         *     this is a plain ``APIView``, so without it ``request.tenant`` is never set
+         *     and ``RequiresModuleFeature`` fails closed on every request before
+         *     ``is_feature_enabled`` is even checked — the same reason
+         *     ``school_settings/view.py::SchoolSettingsView`` mixes it in too.
          */
         put: operations["holiday_calendar_update"];
         post?: never;
@@ -2758,6 +2849,151 @@ export interface paths {
          *     UI shows.
          */
         post: operations["marks:bulk_entry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+         *
+         *     No `campus_id` column on this table (entities/communication.md) —
+         *     `scope_campus_field = None`, stated explicitly rather than left at the
+         *     mixin's default `campus_id`, which does not exist here.
+         */
+        get: operations["notices_list"];
+        put?: never;
+        /**
+         * @description `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+         *
+         *     No `campus_id` column on this table (entities/communication.md) —
+         *     `scope_campus_field = None`, stated explicitly rather than left at the
+         *     mixin's default `campus_id`, which does not exist here.
+         */
+        post: operations["notices_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+         *
+         *     No `campus_id` column on this table (entities/communication.md) —
+         *     `scope_campus_field = None`, stated explicitly rather than left at the
+         *     mixin's default `campus_id`, which does not exist here.
+         */
+        get: operations["notices_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description `/notices` — formal, sequence-numbered notices with a publish-approval gate.
+         *
+         *     No `campus_id` column on this table (entities/communication.md) —
+         *     `scope_campus_field = None`, stated explicitly rather than left at the
+         *     mixin's default `campus_id`, which does not exist here.
+         */
+        patch: operations["notices_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/notices/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /notices/{id}/download` — the notice rendered as a PDF document. */
+        get: operations["notices_download_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/{id}:acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /notices/{id}:acknowledge`. Idempotent — see `services.acknowledge`. */
+        post: operations["notices_:acknowledge_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/{id}:publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /notices/{id}:publish` — pending_approval -> published. */
+        post: operations["notices_:publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/{id}:return-to-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /notices/{id}:return-to-draft` — pending_approval -> draft, with comments. */
+        post: operations["notices_:return_to_draft_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/{id}:submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /notices/{id}:submit` — draft -> pending_approval. */
+        post: operations["notices_:submit_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5609,6 +5845,53 @@ export interface components {
          * @enum {string}
          */
         AdmitCardStatusEnum: "generated" | "issued" | "revoked";
+        Announcement: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            /** @description Rich text (sanitized HTML/Markdown). */
+            body: string;
+            audience_type?: components["schemas"]["CommunicationAudienceTypeEnum"];
+            /** @description Role slugs / class, section, house, campus ids / user ids for 'custom'. */
+            audience_filter?: unknown;
+            /**
+             * Format: uuid
+             * @description campuses(id); NULL means all campuses.
+             */
+            campus_id?: string | null;
+            readonly status: components["schemas"]["AnnouncementStatusEnum"];
+            /** @description Emergency posts bypass preferences on fan-out. */
+            is_emergency?: boolean;
+            /** Format: date-time */
+            publish_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Hidden from feeds after expiry.
+             */
+            expires_at?: string | null;
+            show_on_website?: boolean;
+            /** @description Array of files.id. */
+            attachments?: unknown;
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly published_by: string | null;
+            /** Format: date-time */
+            readonly published_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `scheduled` - Scheduled
+         *     * `published` - Published
+         *     * `archived` - Archived
+         * @enum {string}
+         */
+        AnnouncementStatusEnum: "draft" | "scheduled" | "published" | "archived";
         /**
          * @description * `staff` - Staff
          *     * `student` - Student
@@ -5893,6 +6176,17 @@ export interface components {
             target_academic_session_id: string;
         };
         /**
+         * @description * `all` - All
+         *     * `staff` - Staff
+         *     * `students` - Students
+         *     * `guardians` - Guardians
+         *     * `class` - Class
+         *     * `section` - Section
+         *     * `custom` - Custom
+         * @enum {string}
+         */
+        CommunicationAudienceTypeEnum: "all" | "staff" | "students" | "guardians" | "class" | "section" | "custom";
+        /**
          * @description Body for `:approve` / `:reject` — an optional note, nothing else.
          *
          *     The decision itself is the route, not a field: a single endpoint taking
@@ -5980,11 +6274,11 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /** @description `GET /delivery-logs:summary`'s real response shape — see views.py's `summary`. */
+        /** @description `GET /delivery-logs:summary`'s real response shape — see `viewset.py`'s `summary`. */
         DeliveryReportResponse: {
             data: components["schemas"]["DeliveryReportRow"][];
         };
-        /** @description One grouped count from `reports.delivery_report`. */
+        /** @description One grouped count from `services.report.delivery_report`. */
         DeliveryReportRow: {
             group: string;
             count: number;
@@ -6903,8 +7197,8 @@ export interface components {
         };
         /**
          * @description No email is sent (§17 gap — no notification infrastructure exists yet,
-         *     see services.invite_staff's docstring); this only creates and links the
-         *     account plus assigns the requested roles.
+         *     see services/invite.py's ``invite_staff`` docstring); this only creates and
+         *     links the account plus assigns the requested roles.
          */
         InviteRequest: {
             role_ids?: string[];
@@ -7215,6 +7509,52 @@ export interface components {
          * @enum {string}
          */
         MarksStatusEnum: "draft" | "submitted" | "locked";
+        Notice: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description Assigned at publish from the tenant sequence. */
+            readonly notice_no: string | null;
+            title: string;
+            body: string;
+            notice_type?: components["schemas"]["NoticeTypeEnum"];
+            audience_type?: components["schemas"]["CommunicationAudienceTypeEnum"];
+            audience_filter?: unknown;
+            readonly status: components["schemas"]["NoticeStatusEnum"];
+            requires_acknowledgment?: boolean;
+            /** Format: date-time */
+            publish_at?: string | null;
+            /** Format: date */
+            valid_until?: string | null;
+            show_on_website?: boolean;
+            attachments?: unknown;
+            /**
+             * Format: uuid
+             * @description users(id); must differ from created_by.
+             */
+            readonly approved_by: string | null;
+            /** Format: date-time */
+            readonly published_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `pending_approval` - Pending approval
+         *     * `published` - Published
+         *     * `archived` - Archived
+         * @enum {string}
+         */
+        NoticeStatusEnum: "draft" | "pending_approval" | "published" | "archived";
+        /**
+         * @description * `general` - General
+         *     * `circular` - Circular
+         *     * `event` - Event
+         *     * `urgent` - Urgent
+         * @enum {string}
+         */
+        NoticeTypeEnum: "general" | "circular" | "event" | "urgent";
         /**
          * @description * `attendance` - Attendance
          *     * `fees` - Fees
@@ -7286,6 +7626,16 @@ export interface components {
         };
         PaginatedAdmitCardList: {
             data?: components["schemas"]["AdmitCard"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedAnnouncementList: {
+            data?: components["schemas"]["Announcement"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -7610,6 +7960,16 @@ export interface components {
                 };
             };
         };
+        PaginatedNoticeList: {
+            data?: components["schemas"]["Notice"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedNotificationTemplateOverrideList: {
             data?: components["schemas"]["NotificationTemplateOverride"][];
             meta?: {
@@ -7919,6 +8279,45 @@ export interface components {
             end_date?: string;
             readonly status?: components["schemas"]["AcademicSessionStatusEnum"];
             readonly is_current?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedAnnouncement: {
+            /** Format: uuid */
+            readonly id?: string;
+            title?: string;
+            /** @description Rich text (sanitized HTML/Markdown). */
+            body?: string;
+            audience_type?: components["schemas"]["CommunicationAudienceTypeEnum"];
+            /** @description Role slugs / class, section, house, campus ids / user ids for 'custom'. */
+            audience_filter?: unknown;
+            /**
+             * Format: uuid
+             * @description campuses(id); NULL means all campuses.
+             */
+            campus_id?: string | null;
+            readonly status?: components["schemas"]["AnnouncementStatusEnum"];
+            /** @description Emergency posts bypass preferences on fan-out. */
+            is_emergency?: boolean;
+            /** Format: date-time */
+            publish_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Hidden from feeds after expiry.
+             */
+            expires_at?: string | null;
+            show_on_website?: boolean;
+            /** @description Array of files.id. */
+            attachments?: unknown;
+            /**
+             * Format: uuid
+             * @description users(id).
+             */
+            readonly published_by?: string | null;
+            /** Format: date-time */
+            readonly published_at?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -8501,6 +8900,36 @@ export interface components {
             readonly is_system?: boolean;
             /** @description Archived accounts reject new postings but keep their history. */
             is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedNotice: {
+            /** Format: uuid */
+            readonly id?: string;
+            /** @description Assigned at publish from the tenant sequence. */
+            readonly notice_no?: string | null;
+            title?: string;
+            body?: string;
+            notice_type?: components["schemas"]["NoticeTypeEnum"];
+            audience_type?: components["schemas"]["CommunicationAudienceTypeEnum"];
+            audience_filter?: unknown;
+            readonly status?: components["schemas"]["NoticeStatusEnum"];
+            requires_acknowledgment?: boolean;
+            /** Format: date-time */
+            publish_at?: string | null;
+            /** Format: date */
+            valid_until?: string | null;
+            show_on_website?: boolean;
+            attachments?: unknown;
+            /**
+             * Format: uuid
+             * @description users(id); must differ from created_by.
+             */
+            readonly approved_by?: string | null;
+            /** Format: date-time */
+            readonly published_at?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -9634,7 +10063,12 @@ export interface components {
          * @enum {string}
          */
         SettlementImportStatusEnum: "processing" | "completed" | "failed";
-        /** @description The substitution overlay on one cell of `GET /timetables/my`. */
+        /**
+         * @description The substitution overlay on one cell of `GET /timetables/my`.
+         *
+         *     Private to `EffectiveSlotSerializer` — moved alongside it rather than left
+         *     at the root, since nothing else references it.
+         */
         SlotSubstitution: {
             /** Format: uuid */
             readonly id: string;
@@ -10209,7 +10643,7 @@ export interface components {
          *
          *     The session is optional: a school runs one current session at a time and the
          *     grid UI has no reason to name it, so an omitted value resolves to the
-         *     tenant's `is_current` session (see `TimetableViewSet._resolve_session`).
+         *     tenant's `is_current` session (see `viewset._resolve_session`).
          */
         TimetableSessionRequest: {
             /**
@@ -10681,6 +11115,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdmitCard"];
+                };
+            };
+        };
+    };
+    announcements_list: {
+        parameters: {
+            query?: {
+                audience_type?: string;
+                campus_id?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                is_emergency?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                show_on_website?: boolean;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedAnnouncementList"];
+                };
+            };
+        };
+    };
+    announcements_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Announcement"];
+                "application/x-www-form-urlencoded": components["schemas"]["Announcement"];
+                "multipart/form-data": components["schemas"]["Announcement"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Announcement"];
+                };
+            };
+        };
+    };
+    announcements_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this announcement. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Announcement"];
+                };
+            };
+        };
+    };
+    announcements_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this announcement. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    announcements_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this announcement. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedAnnouncement"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedAnnouncement"];
+                "multipart/form-data": components["schemas"]["PatchedAnnouncement"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Announcement"];
+                };
+            };
+        };
+    };
+    "announcements_:publish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Announcement"];
                 };
             };
         };
@@ -15127,6 +15711,216 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    notices_list: {
+        parameters: {
+            query?: {
+                audience_type?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                notice_type?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                requires_acknowledgment?: boolean;
+                /** @description A search term. */
+                search?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedNoticeList"];
+                };
+            };
+        };
+    };
+    notices_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Notice"];
+                "application/x-www-form-urlencoded": components["schemas"]["Notice"];
+                "multipart/form-data": components["schemas"]["Notice"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notice"];
+                };
+            };
+        };
+    };
+    notices_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this notice. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notice"];
+                };
+            };
+        };
+    };
+    notices_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this notice. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedNotice"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedNotice"];
+                "multipart/form-data": components["schemas"]["PatchedNotice"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notice"];
+                };
+            };
+        };
+    };
+    notices_download_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "notices_:acknowledge_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "notices_:publish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notice"];
+                };
+            };
+        };
+    };
+    "notices_:return_to_draft_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notice"];
+                };
+            };
+        };
+    };
+    "notices_:submit_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notice"];
+                };
             };
         };
     };

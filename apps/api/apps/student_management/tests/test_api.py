@@ -1,7 +1,7 @@
 """API-level tests for the student-management module.
 
 URLs are literal strings, not ``reverse()`` — the URL *is* the contract (see
-school_organization/tests/test_api.py's identical convention).
+school_organization/houses/tests/test_endpoints.py's identical convention).
 """
 
 from __future__ import annotations

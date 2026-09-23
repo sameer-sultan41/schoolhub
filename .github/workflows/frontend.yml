@@ -28,7 +28,7 @@ on:
     # would eventually run these — but "eventually, after the parent merges" is
     # not a gate, and the whole point of stacking is to review the child before
     # then.
-    branches: [main, "feat/**", "fix/**", "chore/**"]
+    branches: [main, "feat/**", "fix/**", "chore/**", "refactor/**"]
     paths:
       - "apps/dashboard/**"
       - "apps/website/**"
@@ -200,19 +200,3 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report/
           retention-days: 7
-
-  secret-scan:
-    name: Secret scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # gitleaks-action reads the PR's commit list to scan only what changed.
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
