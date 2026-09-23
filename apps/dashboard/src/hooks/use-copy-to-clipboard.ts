@@ -16,16 +16,16 @@ export function useCopyToClipboard({
   // firing the write-text call without ever learning whether it worked.
   const copyToClipboard = (value: string): Promise<boolean> => {
     // `navigator.clipboard` itself is `undefined` outside a secure context (an http
-    // LAN IP, a non-TLS staging host) — `?.` guards against reading `.writeText` off
-    // `undefined`, which would otherwise throw synchronously before this check could
-    // help.
-    if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
-      return Promise.resolve(false);
-    }
+    // LAN IP, a non-TLS staging host), even though the DOM lib types it as always
+    // present — widening it here keeps the guard honest instead of reading
+    // `.writeText` off `undefined`, which would otherwise throw synchronously.
+    const clipboard =
+      typeof window === "undefined" ? undefined : (navigator.clipboard as Clipboard | undefined);
+    if (!clipboard) return Promise.resolve(false);
 
     if (!value) return Promise.resolve(false);
 
-    return navigator.clipboard.writeText(value).then(
+    return clipboard.writeText(value).then(
       () => {
         setIsCopied(true);
 
@@ -39,7 +39,7 @@ export function useCopyToClipboard({
 
         return true;
       },
-      (error) => {
+      (error: unknown) => {
         console.error(error);
         return false;
       },

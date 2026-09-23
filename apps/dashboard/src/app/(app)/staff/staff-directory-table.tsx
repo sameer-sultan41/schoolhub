@@ -173,7 +173,9 @@ function ActionsCell({
     // use-copy-to-clipboard.ts) — the toast reflects that instead of firing
     // unconditionally, which would otherwise claim success even when the Clipboard
     // API is unavailable (no secure context) or the write itself rejects.
-    copyToClipboard(row.original.id).then((success) => {
+    // `copyToClipboard` never rejects (a failed write resolves `false`), so there is no
+    // rejection for this chain to handle.
+    void copyToClipboard(row.original.id).then((success) => {
       if (success) {
         toast.success("Staff ID copied");
       } else {
@@ -195,12 +197,20 @@ function ActionsCell({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="end">
-        <DropdownMenuItem onClick={() => onEdit(row.original.id)}>Edit</DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            onEdit(row.original.id);
+          }}
+        >
+          Edit
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={handleCopyId}>Copy ID</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
-          onClick={() => onDelete(row.original.id, row.original.name)}
+          onClick={() => {
+            onDelete(row.original.id, row.original.name);
+          }}
         >
           Delete
         </DropdownMenuItem>
@@ -328,7 +338,7 @@ export function StaffDirectoryTable() {
   }
 
   const activeSortOrder =
-    sort?.id === JOINING_DATE_SORT_ID ? (sort?.desc ? "newest" : "oldest") : undefined;
+    sort?.id === JOINING_DATE_SORT_ID ? (sort.desc ? "newest" : "oldest") : undefined;
 
   const columns = useMemo<ColumnDef<StaffRow>[]>(
     () => [
@@ -404,7 +414,9 @@ export function StaffDirectoryTable() {
         id: "campus",
         accessorFn: (row) => row.campus,
         header: ({ column }) => <DataGridColumnHeader title="Campus" column={column} />,
-        cell: ({ row }) => <span className="font-normal text-foreground">{row.original.campus}</span>,
+        cell: ({ row }) => (
+          <span className="font-normal text-foreground">{row.original.campus}</span>
+        ),
         enableSorting: true,
         size: 180,
         meta: { skeleton: <Skeleton className="h-4 w-[100px]" /> },
@@ -431,8 +443,12 @@ export function StaffDirectoryTable() {
         cell: ({ row }) => (
           <ActionsCell
             row={row}
-            onEdit={(id) => setFormDialog({ mode: "edit", staffId: id })}
-            onDelete={(id, name) => setExitDialog({ staffIds: [id], staffNames: [name] })}
+            onEdit={(id) => {
+              setFormDialog({ mode: "edit", staffId: id });
+            }}
+            onDelete={(id, name) => {
+              setExitDialog({ staffIds: [id], staffNames: [name] });
+            }}
           />
         ),
         enableSorting: false,
@@ -559,14 +575,11 @@ export function StaffDirectoryTable() {
                           <Checkbox
                             id={`status-${value}`}
                             checked={statusFilter === value}
-                            onCheckedChange={(checked) =>
-                              handleStatusToggle(checked === true, value)
-                            }
+                            onCheckedChange={(checked) => {
+                              handleStatusToggle(checked === true, value);
+                            }}
                           />
-                          <Label
-                            htmlFor={`status-${value}`}
-                            className="grow font-normal"
-                          >
+                          <Label htmlFor={`status-${value}`} className="grow font-normal">
                             {meta.label}
                           </Label>
                         </div>
@@ -600,9 +613,9 @@ export function StaffDirectoryTable() {
                         <Checkbox
                           id="sort-newest-joiners"
                           checked={activeSortOrder === "newest"}
-                          onCheckedChange={(checked) =>
-                            handleSortOrderToggle(checked === true, true)
-                          }
+                          onCheckedChange={(checked) => {
+                            handleSortOrderToggle(checked === true, true);
+                          }}
                         />
                         <Label htmlFor="sort-newest-joiners" className="grow font-normal">
                           Newest joiners
@@ -612,9 +625,9 @@ export function StaffDirectoryTable() {
                         <Checkbox
                           id="sort-oldest-joiners"
                           checked={activeSortOrder === "oldest"}
-                          onCheckedChange={(checked) =>
-                            handleSortOrderToggle(checked === true, false)
-                          }
+                          onCheckedChange={(checked) => {
+                            handleSortOrderToggle(checked === true, false);
+                          }}
                         />
                         <Label htmlFor="sort-oldest-joiners" className="grow font-normal">
                           Oldest joiners
@@ -656,7 +669,9 @@ export function StaffDirectoryTable() {
             {selectedIds.length > 0 && (
               <Button
                 variant="destructive"
-                onClick={() => setExitDialog({ staffIds: selectedIds, staffNames: selectedNames })}
+                onClick={() => {
+                  setExitDialog({ staffIds: selectedIds, staffNames: selectedNames });
+                }}
               >
                 Exit selected ({selectedIds.length})
               </Button>

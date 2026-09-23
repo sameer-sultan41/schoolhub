@@ -46,18 +46,15 @@ const mockExitStaff = Services.dashboard.exitStaff as jest.MockedFunction<
 const mockToastSuccess = toast.success as jest.MockedFunction<typeof toast.success>;
 const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
 
-// jsdom (26.1.0, confirmed by grepping its lib for "clipboard") implements no Clipboard
-// API at all, so `navigator.clipboard` is `undefined` by default — `useCopyToClipboard`
-// reads `navigator.clipboard.writeText` unconditionally, which throws without this.
-// Defined once at module scope (not per-test): jsdom's `navigator` has no pre-existing
-// `clipboard` descriptor to fight, and `clearMocks` in jest.config.ts already resets
-// `mockWriteText`'s call history before every test.
-const mockWriteText = jest.fn().mockResolvedValue(undefined);
-Object.defineProperty(navigator, "clipboard", {
-  value: { writeText: mockWriteText },
-  writable: true,
-  configurable: true,
-});
+/**
+ * jsdom implements no Clipboard API, but `userEvent.setup()` installs its own stub on
+ * `navigator.clipboard` — replacing whatever was defined there before it ran, and resetting
+ * it after every test. So the spy has to go on that stub, after `setup()`: a module-scope
+ * mock would be silently swapped out and never called.
+ */
+function spyOnClipboardWrite() {
+  return jest.spyOn(navigator.clipboard, "writeText");
+}
 
 /**
  * Disambiguates a popover's own trigger button from a same-named sortable column
@@ -70,10 +67,15 @@ Object.defineProperty(navigator, "clipboard", {
  * button, wrapped in a `DropdownMenuTrigger asChild` whenever the table is
  * pinnable/movable/hideable (as this one is), instead carries `aria-haspopup="menu"`
  * (confirmed against `@radix-ui/react-dropdown-menu`'s own `DropdownMenuTrigger`).
+ *
+ * A prefix match, not an exact one: the trigger also renders the active choice as a badge
+ * inside itself, so with the default "active" filter the Status trigger's name is
+ * "Status Active".
  */
 function popoverTrigger(label: string) {
   return (accessibleName: string, element: Element) =>
-    accessibleName === label && element.getAttribute("aria-haspopup") === "dialog";
+    (accessibleName === label || accessibleName.startsWith(`${label} `)) &&
+    element.getAttribute("aria-haspopup") === "dialog";
 }
 
 function staffRecord() {
@@ -121,14 +123,16 @@ describe("StaffDirectoryTable", () => {
     renderWithProviders(<StaffDirectoryTable />);
 
     expect(await screen.findByText("Ayesha Khan")).toBeInTheDocument();
-    expect(screen.getByText("Head Teacher")).toBeInTheDocument();
-    expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByText("Main Campus")).toBeInTheDocument();
+    const row = screen.getByText("Ayesha Khan").closest("tr");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText("Head Teacher")).toBeInTheDocument();
+    // Scoped to the row: the Status filter trigger also shows "Active" as its badge,
+    // since the directory defaults to the active filter.
+    expect(within(row as HTMLElement).getByText("Active")).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText("Main Campus")).toBeInTheDocument();
 
     // No `AvatarImage`/`src` is ever rendered — `StaffSerializer.photo_file_id` has no
     // resolvable URL anywhere in the API today, so the Member cell shows initials only.
-    const row = screen.getByText("Ayesha Khan").closest("tr");
-    expect(row).not.toBeNull();
     expect(within(row as HTMLElement).queryByRole("img")).not.toBeInTheDocument();
     expect(within(row as HTMLElement).getByText("AK")).toBeInTheDocument();
   });
@@ -149,7 +153,7 @@ describe("StaffDirectoryTable", () => {
 
     renderWithProviders(<StaffDirectoryTable />);
 
-    expect(await screen.findByText(/couldn.t load the staff directory/i)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn't load the staff directory/i)).toBeInTheDocument();
   });
 
   it("shows a permission-denied message on a 403, distinct from the generic error", async () => {
@@ -162,7 +166,7 @@ describe("StaffDirectoryTable", () => {
     expect(
       await screen.findByText(/you don.t have access to the staff directory/i),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/couldn.t load the staff directory/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load the staff directory/i)).not.toBeInTheDocument();
   });
 
   it("re-fetches with a search query after the user types, debounced", async () => {
@@ -207,6 +211,9 @@ describe("StaffDirectoryTable", () => {
       );
     });
 
+    // The header button is also the trigger for its column menu (pin/move/hide), which
+    // opens modally on the same click and hides the rest of the page until it closes.
+    await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "Role" }));
 
     await waitFor(() => {
@@ -389,6 +396,9 @@ describe("StaffDirectoryTable", () => {
       );
     });
 
+    // Close the Campus column menu that same click opened (modal — see the sort test).
+    await user.keyboard("{Escape}");
+
     // The preset is gone, not just superseded in the query: the trigger's badge (and so
     // its accessible name) reverts to the bare "Sort Order" label.
     expect(screen.getByRole("button", { name: "Sort Order" })).toBeInTheDocument();
@@ -404,10 +414,11 @@ describe("StaffDirectoryTable", () => {
     await screen.findByText("Ayesha Khan");
 
     const user = userEvent.setup();
+    const writeText = spyOnClipboardWrite();
     await user.click(screen.getByRole("button", { name: "Actions for Ayesha Khan" }));
     await user.click(screen.getByRole("menuitem", { name: "Copy ID" }));
 
-    expect(mockWriteText).toHaveBeenCalledWith("st-1");
+    expect(writeText).toHaveBeenCalledWith("st-1");
 
     // `handleCopyId` now awaits `copyToClipboard`'s returned promise before toasting
     // (see staff-directory-table.tsx and use-copy-to-clipboard.ts), so the success
@@ -423,12 +434,12 @@ describe("StaffDirectoryTable", () => {
       items: [staffRecord()],
       pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
     });
-    mockWriteText.mockRejectedValueOnce(new Error("denied"));
 
     renderWithProviders(<StaffDirectoryTable />);
     await screen.findByText("Ayesha Khan");
 
     const user = userEvent.setup();
+    spyOnClipboardWrite().mockRejectedValueOnce(new Error("denied"));
     await user.click(screen.getByRole("button", { name: "Actions for Ayesha Khan" }));
     await user.click(screen.getByRole("menuitem", { name: "Copy ID" }));
 
@@ -493,9 +504,7 @@ describe("StaffDirectoryTable", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("checkbox", { name: "Select Ayesha Khan" }));
 
-    expect(
-      await screen.findByRole("button", { name: "Exit selected (1)" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Exit selected (1)" })).toBeInTheDocument();
   });
 
   it("clicking the bulk button opens ExitStaffDialog with every selected id/name, correctly paired even when rows are checked out of order", async () => {
@@ -534,10 +543,10 @@ describe("StaffDirectoryTable", () => {
       await screen.findByRole("heading", { name: "Exit 2 staff members" }),
     ).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/^exit date$/i), {
+    fireEvent.change(screen.getByLabelText(/^exit date\s*\*?$/i), {
       target: { value: "2026-09-10" },
     });
-    await user.type(screen.getByLabelText(/^exit reason$/i), "Bulk exit test");
+    await user.type(screen.getByLabelText(/^exit reason\s*\*?$/i), "Bulk exit test");
     await user.click(screen.getByRole("button", { name: /^exit staff members$/i }));
 
     await waitFor(() => {
@@ -545,7 +554,9 @@ describe("StaffDirectoryTable", () => {
     });
     // The right name shows up next to the failing id — proves selectedIds/selectedNames
     // stayed paired by row, not by click sequence.
-    expect(await screen.findByText(/Bilal Ahmed — This staff member has already exited/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Bilal Ahmed — This staff member has already exited/),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Ayesha Khan — /)).not.toBeInTheDocument();
   });
 
@@ -566,10 +577,10 @@ describe("StaffDirectoryTable", () => {
 
     expect(await screen.findByRole("heading", { name: "Exit staff member" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/^exit date$/i), {
+    fireEvent.change(screen.getByLabelText(/^exit date\s*\*?$/i), {
       target: { value: "2026-09-10" },
     });
-    await user.type(screen.getByLabelText(/^exit reason$/i), "Resigned voluntarily");
+    await user.type(screen.getByLabelText(/^exit reason\s*\*?$/i), "Resigned voluntarily");
     await user.click(screen.getByRole("button", { name: /^exit staff member$/i }));
 
     // The dialog closing on genuine success is what triggers the selection clear (see

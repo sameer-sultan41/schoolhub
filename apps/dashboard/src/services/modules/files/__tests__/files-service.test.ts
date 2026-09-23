@@ -51,7 +51,7 @@ describe("uploadFile", () => {
       return Promise.resolve({ data: { id: "file-1", status: "ready" } });
     });
     const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
 
     const fileId = await uploadFile(fakeFile(), "staff_photo");
 
@@ -73,7 +73,7 @@ describe("uploadFile", () => {
     const { uploadFile, FileUploadError } = await import("../files-service");
     mockPost.mockRejectedValue(new Error("boom"));
     const fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
 
     await expect(uploadFile(fakeFile(), "staff_photo")).rejects.toMatchObject({
       step: "create",
@@ -93,7 +93,7 @@ describe("uploadFile", () => {
       },
     });
     const fetchMock = jest.fn().mockResolvedValue({ ok: false, status: 500 });
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
 
     await expect(uploadFile(fakeFile(), "staff_photo")).rejects.toMatchObject({ step: "put" });
     // Only the /files create call happened — no :confirm call.
@@ -111,7 +111,7 @@ describe("uploadFile", () => {
       },
     });
     mockPost.mockRejectedValueOnce(new Error("confirm failed"));
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 }) as unknown as typeof fetch;
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
 
     await expect(uploadFile(fakeFile(), "staff_photo")).rejects.toMatchObject({ step: "confirm" });
   });

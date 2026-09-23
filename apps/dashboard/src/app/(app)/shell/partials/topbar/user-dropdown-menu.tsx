@@ -86,11 +86,7 @@ export function UserDropdownMenu() {
 
   // Distinct from "still loading": an error (e.g. the API unreachable) must not sit on
   // the loading label forever, which reads as a hang rather than a real failure.
-  const displayName = isPending
-    ? "Loading…"
-    : isError || !user
-      ? "Unable to load profile"
-      : user.full_name;
+  const displayName = isPending ? "Loading…" : isError ? "Unable to load profile" : user.full_name;
   const contact = user?.email ?? user?.phone ?? null;
   const initials = user ? initialsOf(user.full_name) : "?";
   const roleLabel = user?.roles.length ? user.roles.map((role) => role.name).join(", ") : null;

@@ -36,7 +36,10 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Services } from "@/services";
-import type { CreateStaffInput, StaffDetailRecord } from "@/services/modules/dashboard/dashboard-service";
+import type {
+  CreateStaffInput,
+  StaffDetailRecord,
+} from "@/services/modules/dashboard/dashboard-service";
 
 /**
  * One dialog, two jobs: creating a brand-new staff member and editing an existing one.
@@ -317,10 +320,21 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
   // after closing once would be silently skipped as "already applied" (RHF sees a
   // deep-equal object to what it cached the first time) and the form would stay blank.
   // An explicit imperative `reset` here has no such cache, so it re-applies every time.
+  //
+  // `populatedStaffId` records which staff member's values the form now holds, and the
+  // fields stay behind the loading placeholder until it matches `staffId`. The order is
+  // load-bearing: Radix's `Select` mirrors its value into a hidden native `<select>` and,
+  // when that value changes before the matching `<option>` has registered (true for
+  // every select on the render straight after mount), reads the native select's `""`
+  // back through `onValueChange` — silently blanking Staff type and Campus, so Save fails
+  // validation. Mounting the fields only after the reset means each Select starts on its
+  // real value instead of changing to it.
+  const [populatedStaffId, setPopulatedStaffId] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
     if (mode === "edit" && staffDetailQuery.data) {
       form.reset(detailToFormValues(staffDetailQuery.data));
+      setPopulatedStaffId(staffDetailQuery.data.id);
     }
   }, [open, mode, staffDetailQuery.data, form]);
 
@@ -330,6 +344,7 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
   useEffect(() => {
     if (!open) {
       form.reset(EMPTY_DEFAULTS);
+      setPopulatedStaffId(null);
       setLocalPreviewUrl(null);
       setUploadStatus("idle");
       setUploadError(null);
@@ -415,16 +430,20 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
       setUploadStatus("idle");
     } catch (error) {
       setUploadStatus("error");
-      setUploadError(
-        error instanceof Error ? error.message : "The photo could not be uploaded.",
-      );
+      setUploadError(error instanceof Error ? error.message : "The photo could not be uploaded.");
     }
   }
 
   const firstName = form.watch("first_name");
   const lastName = form.watch("last_name");
   const photoFileId = form.watch("photo_file_id");
-  const isDetailLoading = mode === "edit" && staffDetailQuery.isPending;
+  // Also true for the one render between the detail arriving and the reset effect
+  // applying it — see `populatedStaffId` above for why the fields must not mount then.
+  // A failed detail fetch (no data to wait on) still falls through to the form, as before.
+  const isDetailLoading =
+    mode === "edit" &&
+    (staffDetailQuery.isPending ||
+      (staffDetailQuery.data !== undefined && populatedStaffId !== staffId));
 
   const reportsToOptions = (staffDirectoryQuery.data ?? []).filter(
     (staff) => !(mode === "edit" && staff.id === staffId),

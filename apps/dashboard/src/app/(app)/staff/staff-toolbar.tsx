@@ -6,7 +6,12 @@ import { m } from "motion/react";
 
 import { Button } from "@schoolhub/ui";
 
-import { Toolbar, ToolbarActions, ToolbarBreadcrumbs, ToolbarHeading } from "@/app/(app)/shell/toolbar";
+import {
+  Toolbar,
+  ToolbarActions,
+  ToolbarBreadcrumbs,
+  ToolbarHeading,
+} from "@/app/(app)/shell/toolbar";
 import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
 import { Services } from "@/services";
 

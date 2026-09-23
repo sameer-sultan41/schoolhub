@@ -100,7 +100,11 @@ function detailRecord(overrides: Partial<StaffDetailRecord> = {}): StaffDetailRe
  * selects start out `disabled` while their own `useQuery` is still pending (the dialog's
  * documented "Loading…" placeholder state) — waiting for the trigger to become enabled
  * before clicking it avoids a click that silently does nothing. */
-async function chooseOption(user: ReturnType<typeof userEvent.setup>, label: RegExp, option: RegExp) {
+async function chooseOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: RegExp,
+  option: RegExp,
+) {
   const trigger = await waitFor(() => {
     const element = screen.getByRole("combobox", { name: label });
     expect(element).not.toBeDisabled();
@@ -118,12 +122,12 @@ function setDate(input: HTMLElement, value: string) {
 }
 
 async function fillRequiredCreateFields(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/^first name$/i), "Ayesha");
-  await user.type(screen.getByLabelText(/^last name$/i), "Khan");
+  await user.type(screen.getByLabelText(/^first name\s*\*?$/i), "Ayesha");
+  await user.type(screen.getByLabelText(/^last name\s*\*?$/i), "Khan");
   await chooseOption(user, /^staff type$/i, /^teaching$/i);
   await chooseOption(user, /^campus$/i, /^main campus$/i);
-  setDate(screen.getByLabelText(/^joining date$/i), "2026-09-01");
-  await user.type(screen.getByLabelText(/^phone$/i), "+92-300-0000000");
+  setDate(screen.getByLabelText(/^joining date\s*\*?$/i), "2026-09-01");
+  await user.type(screen.getByLabelText(/^phone\s*\*?$/i), "+92-300-0000000");
 }
 
 describe("StaffFormDialog", () => {
@@ -155,9 +159,7 @@ describe("StaffFormDialog", () => {
       const onOpenChange = jest.fn();
       const user = userEvent.setup();
 
-      renderWithProviders(
-        <StaffFormDialog open mode="create" onOpenChange={onOpenChange} />,
-      );
+      renderWithProviders(<StaffFormDialog open mode="create" onOpenChange={onOpenChange} />);
       await screen.findByRole("combobox", { name: /^campus$/i });
 
       await fillRequiredCreateFields(user);
@@ -193,21 +195,19 @@ describe("StaffFormDialog", () => {
       const onOpenChange = jest.fn();
       const user = userEvent.setup();
 
-      renderWithProviders(
-        <StaffFormDialog open mode="create" onOpenChange={onOpenChange} />,
-      );
+      renderWithProviders(<StaffFormDialog open mode="create" onOpenChange={onOpenChange} />);
       await screen.findByRole("combobox", { name: /^campus$/i });
 
       // Everything except `last_name` is filled in.
-      await user.type(screen.getByLabelText(/^first name$/i), "Ayesha");
+      await user.type(screen.getByLabelText(/^first name\s*\*?$/i), "Ayesha");
       await chooseOption(user, /^staff type$/i, /^teaching$/i);
       await chooseOption(user, /^campus$/i, /^main campus$/i);
-      setDate(screen.getByLabelText(/^joining date$/i), "2026-09-01");
-      await user.type(screen.getByLabelText(/^phone$/i), "+92-300-0000000");
+      setDate(screen.getByLabelText(/^joining date\s*\*?$/i), "2026-09-01");
+      await user.type(screen.getByLabelText(/^phone\s*\*?$/i), "+92-300-0000000");
       await user.click(screen.getByRole("button", { name: /add member/i }));
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/^last name$/i)).toHaveAttribute("aria-invalid", "true");
+        expect(screen.getByLabelText(/^last name\s*\*?$/i)).toHaveAttribute("aria-invalid", "true");
       });
       expect(mockCreateStaff).not.toHaveBeenCalled();
     });
@@ -302,7 +302,9 @@ describe("StaffFormDialog", () => {
       // Close the dialog — this drives the existing close-effect's
       // `form.reset(EMPTY_DEFAULTS)`, and `staffDetailQuery` disables (staffId irrelevant
       // while `open` is false).
-      rerender(<StaffFormDialog open={false} mode="edit" staffId="st-1" onOpenChange={onOpenChange} />);
+      rerender(
+        <StaffFormDialog open={false} mode="edit" staffId="st-1" onOpenChange={onOpenChange} />,
+      );
       await waitFor(() => {
         expect(screen.queryByDisplayValue("Ayesha")).not.toBeInTheDocument();
       });
@@ -380,18 +382,14 @@ describe("StaffFormDialog", () => {
       const onOpenChange = jest.fn();
       const user = userEvent.setup();
 
-      renderWithProviders(
-        <StaffFormDialog open mode="create" onOpenChange={onOpenChange} />,
-      );
+      renderWithProviders(<StaffFormDialog open mode="create" onOpenChange={onOpenChange} />);
       await screen.findByRole("combobox", { name: /^campus$/i });
 
       await fillRequiredCreateFields(user);
-      await user.type(screen.getByLabelText(/^national id$/i), "12345");
+      await user.type(screen.getByLabelText(/^national id\s*\*?$/i), "12345");
       await user.click(screen.getByRole("button", { name: /add member/i }));
 
-      expect(
-        await screen.findByText("This national ID is already in use."),
-      ).toBeInTheDocument();
+      expect(await screen.findByText("This national ID is already in use.")).toBeInTheDocument();
       // A mapped field error has somewhere to show already (its own FormMessage) — the
       // generic top-of-form fallback must not also render the same failure a second time.
       expect(screen.queryByText("Invalid")).not.toBeInTheDocument();
@@ -413,9 +411,7 @@ describe("StaffFormDialog", () => {
       const onOpenChange = jest.fn();
       const user = userEvent.setup();
 
-      renderWithProviders(
-        <StaffFormDialog open mode="create" onOpenChange={onOpenChange} />,
-      );
+      renderWithProviders(<StaffFormDialog open mode="create" onOpenChange={onOpenChange} />);
       await screen.findByRole("combobox", { name: /^campus$/i });
 
       await fillRequiredCreateFields(user);

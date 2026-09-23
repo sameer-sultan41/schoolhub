@@ -12,9 +12,14 @@
  * of where the importing file lives, so there's nothing to miscount.
  *
  * A same-directory `./foo` import is unaffected — only a parent-crossing `../` is forbidden.
+ *
+ * Scoped to `src/**` for the same reason it is opt-in: `@/*` maps only into `./src/*`, so a
+ * workspace-root file (e.g. `prettier.config.mjs` extending the repo root's config via
+ * `../../prettier.config.mjs`) has no alias to switch to.
  */
 export default [
   {
+    files: ["src/**"],
     rules: {
       "no-restricted-imports": [
         "error",

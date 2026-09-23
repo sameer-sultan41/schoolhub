@@ -64,7 +64,10 @@ const exitFormSchema = z.object({
   exit_reason: z
     .string()
     .min(1, "Exit reason is required")
-    .max(EXIT_REASON_MAX_LENGTH, `Exit reason must be ${EXIT_REASON_MAX_LENGTH} characters or fewer`),
+    .max(
+      EXIT_REASON_MAX_LENGTH,
+      `Exit reason must be ${EXIT_REASON_MAX_LENGTH} characters or fewer`,
+    ),
   // Genuinely optional — "" (the untouched default, and the Select's own placeholder
   // state) is mapped to "field omitted" below, exactly like `exitStaff` (Task 2) expects,
   // never sent through as a literal empty string.
@@ -98,7 +101,12 @@ function labelFor(id: string, staffIds: string[], staffNames?: string[]): string
   return name ?? id;
 }
 
-export function ExitStaffDialog({ open, onOpenChange, staffIds, staffNames }: ExitStaffDialogProps) {
+export function ExitStaffDialog({
+  open,
+  onOpenChange,
+  staffIds,
+  staffNames,
+}: ExitStaffDialogProps) {
   const queryClient = useQueryClient();
   const isBulk = staffIds.length > 1;
 
@@ -138,7 +146,7 @@ export function ExitStaffDialog({ open, onOpenChange, staffIds, staffNames }: Ex
         if (result.status === "fulfilled") {
           succeeded.push(id);
         } else {
-          const { reason } = result;
+          const reason: unknown = result.reason;
           failed.push({
             id,
             message: reason instanceof ApiError ? reason.message : "Unknown error",

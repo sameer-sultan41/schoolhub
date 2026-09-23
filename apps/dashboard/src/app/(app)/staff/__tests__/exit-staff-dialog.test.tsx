@@ -53,8 +53,8 @@ function setDate(input: HTMLElement, value: string) {
 }
 
 async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>, reason: string) {
-  setDate(screen.getByLabelText(/^exit date$/i), "2026-09-10");
-  await user.type(screen.getByLabelText(/^exit reason$/i), reason);
+  setDate(screen.getByLabelText(/^exit date\s*\*?$/i), "2026-09-10");
+  await user.type(screen.getByLabelText(/^exit reason\s*\*?$/i), reason);
 }
 
 describe("ExitStaffDialog", () => {
@@ -70,9 +70,7 @@ describe("ExitStaffDialog", () => {
     const onOpenChange = jest.fn();
     const user = userEvent.setup();
 
-    renderWithProviders(
-      <ExitStaffDialog open staffIds={["st-1"]} onOpenChange={onOpenChange} />,
-    );
+    renderWithProviders(<ExitStaffDialog open staffIds={["st-1"]} onOpenChange={onOpenChange} />);
 
     await fillRequiredFields(user, "Resigned voluntarily");
     await user.click(screen.getByRole("button", { name: /^exit staff member$/i }));
@@ -163,12 +161,10 @@ describe("ExitStaffDialog", () => {
     const onOpenChange = jest.fn();
     const user = userEvent.setup();
 
-    renderWithProviders(
-      <ExitStaffDialog open staffIds={["st-1"]} onOpenChange={onOpenChange} />,
-    );
+    renderWithProviders(<ExitStaffDialog open staffIds={["st-1"]} onOpenChange={onOpenChange} />);
 
-    setDate(screen.getByLabelText(/^exit date$/i), "2026-09-10");
-    const reasonInput = screen.getByLabelText(/^exit reason$/i);
+    setDate(screen.getByLabelText(/^exit date\s*\*?$/i), "2026-09-10");
+    const reasonInput = screen.getByLabelText(/^exit reason\s*\*?$/i);
     // Typed via fireEvent, not user.type, purely for speed — 301 characters one keystroke
     // at a time is unnecessarily slow and adds nothing user.type's own event simulation
     // would catch here (there is no per-keystroke masking/formatting on this field, unlike
@@ -186,9 +182,7 @@ describe("ExitStaffDialog", () => {
     const onOpenChange = jest.fn();
     const user = userEvent.setup();
 
-    renderWithProviders(
-      <ExitStaffDialog open staffIds={[]} onOpenChange={onOpenChange} />,
-    );
+    renderWithProviders(<ExitStaffDialog open staffIds={[]} onOpenChange={onOpenChange} />);
 
     const submitButton = screen.getByRole("button", { name: /^exit staff member$/i });
     await fillRequiredFields(user, "Nothing to actually exit");
