@@ -125,7 +125,7 @@ const staffFormSchema = z.object({
   employment_type: z.string().optional(),
   joining_date: z.string().min(1),
   phone: z.string().min(1),
-  email: z.literal("").or(z.string().email()).optional(),
+  email: z.literal("").or(z.email()).optional(),
   national_id: z.string().optional(),
   public_bio: z.string().optional(),
   // Not `.optional()` at this level, unlike every other optional field above: this
