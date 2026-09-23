@@ -14,7 +14,7 @@ import { Sidebar } from "@/app/(app)/_metronic/sidebar";
 // mounted.
 export function Shell({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
-  const { settings, setOption } = useSettings();
+  const { settings, setOption, storeOption } = useSettings();
 
   useEffect(() => {
     const bodyClass = document.body.classList;
@@ -24,6 +24,19 @@ export function Shell({ children }: { children: ReactNode }) {
       bodyClass.remove("sidebar-collapse");
     }
   }, [settings]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "b" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        storeOption("layouts.demo1.sidebarCollapse", !settings.layouts.demo1.sidebarCollapse);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [settings, storeOption]);
 
   useEffect(() => {
     setOption("layout", "demo1");
