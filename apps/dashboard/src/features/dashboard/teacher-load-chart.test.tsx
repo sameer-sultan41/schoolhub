@@ -19,7 +19,9 @@ const mockFetchAcademicSessions = Services.dashboard.fetchAcademicSessions as je
   typeof Services.dashboard.fetchAcademicSessions
 >;
 const mockFetchTeacherLoadSummary = Services.dashboard
-  .fetchTeacherLoadSummary as jest.MockedFunction<typeof Services.dashboard.fetchTeacherLoadSummary>;
+  .fetchTeacherLoadSummary as jest.MockedFunction<
+  typeof Services.dashboard.fetchTeacherLoadSummary
+>;
 
 const FULL_ACCESS: PermissionKey[] = [
   "academics.teacher-allocation.view",

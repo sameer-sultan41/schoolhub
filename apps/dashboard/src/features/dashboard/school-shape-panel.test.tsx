@@ -58,7 +58,10 @@ function countedPage(total: number): Page<{ id: string }> {
  * this is the guard for the day one does.
  */
 function uncountedPage(): Page<{ id: string }> {
-  return { items: rows(1), pagination: { next_cursor: "abc", previous_cursor: null, page_size: 1 } };
+  return {
+    items: rows(1),
+    pagination: { next_cursor: "abc", previous_cursor: null, page_size: 1 },
+  };
 }
 
 /** Grant exactly this list; every other key answers false, as `<Can>` would in production. */

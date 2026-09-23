@@ -1,10 +1,17 @@
 import { collectPages, fetchPage } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
-import type { PromotionBatchRecord, TeacherLoadSummaryRow } from "@/features/academics/academics-types";
+import type {
+  PromotionBatchRecord,
+  TeacherLoadSummaryRow,
+} from "@/features/academics/academics-types";
 import { PENDING_PREVIEW_SIZE } from "@/features/dashboard/dashboard-constants";
 import type { AcademicSessionSummary, CountableRecord } from "@/features/dashboard/dashboard-types";
 import type { ClassOption, SectionOption } from "@/features/students/enrollment-types";
-import type { MyTimetable, PeriodRecord, SubstitutionRecord } from "@/features/timetable/timetable-types";
+import type {
+  MyTimetable,
+  PeriodRecord,
+  SubstitutionRecord,
+} from "@/features/timetable/timetable-types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 
