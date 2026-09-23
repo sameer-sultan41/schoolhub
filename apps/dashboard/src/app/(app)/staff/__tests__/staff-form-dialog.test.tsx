@@ -11,6 +11,12 @@ import { renderWithProviders } from "@/test-utils";
 
 import { StaffFormDialog } from "../staff-form-dialog";
 
+// The create-mode flows type ~30 characters into a dialog that re-renders in full on every
+// keystroke (its top-level `form.watch(...)` calls), plus two Select picks — honestly more
+// than Jest's 5s default on a loaded CI runner. A test that times out also keeps running
+// in the background and skews the next one, so the budget is raised for the whole file.
+jest.setTimeout(20_000);
+
 jest.mock("@/services", () => ({
   Services: {
     dashboard: {

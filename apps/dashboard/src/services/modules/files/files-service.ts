@@ -46,7 +46,7 @@ export type FileUploadStep = "create" | "put" | "confirm";
  */
 export class FileUploadError extends Error {
   readonly step: FileUploadStep;
-  readonly cause?: unknown;
+  override readonly cause?: unknown;
 
   constructor(step: FileUploadStep, message: string, cause?: unknown) {
     super(message);
