@@ -215,8 +215,13 @@ function filterAndOrder(staff: Staff[], params: URLSearchParams): Staff[] {
 
   const descending = ordering.startsWith("-");
   const field = (descending ? ordering.slice(1) : ordering) as keyof Staff;
+  // Every orderable field is a string (or null); anything else sorts as "".
+  const sortKey = (member: Staff) => {
+    const value = member[field];
+    return typeof value === "string" ? value : "";
+  };
   return [...matching].sort((a, b) => {
-    const order = String(a[field] ?? "").localeCompare(String(b[field] ?? ""));
+    const order = sortKey(a).localeCompare(sortKey(b));
     return descending ? -order : order;
   });
 }
