@@ -1,4 +1,4 @@
-import { brandingToCssText, brandingToCssVariables, sanitizeCssValue } from "./branding";
+import { brandingToCssText, brandingToCssVariables, sanitizeCssValue } from "../branding";
 
 describe("brandingToCssVariables", () => {
   it("maps tenant branding onto --sh-* custom properties", () => {

@@ -820,3 +820,7 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   (`docs/02-architecture/auth-and-rbac.md` §2.1); the permission class fails closed.
 - The API contract is generated, not hand-written — `apps/api/openapi.yaml` and
   `packages/api-client/src/schema.d.ts` change together, in one commit.
+- Every TS package/app tests in a sibling `__tests__/` folder next to the source it
+  covers, not `*.test.ts(x)` co-located flat beside it — `packages/ui`, `apps/dashboard`,
+  `apps/website`, and `packages/api-client` all moved to this convention; new test files
+  go straight into `__tests__/` rather than being co-located and moved later.
