@@ -13,7 +13,7 @@
  * neither preset's stylesheet — it has no switcher, and every page there must wear its
  * tenant's brand.
  *
- * TODO(multi-theme): six other presets — ink-brass, azure, cobalt, tangerine, soft-pop,
+ * TODO(multi-theme): seven other presets — ink-brass, azure, cobalt, tangerine, soft-pop,
  * brutalist, neon — existed here and were removed to keep the product on a single
  * Metronic look while that's the only palette actively being worked on. Nothing about
  * them was wrong; their stylesheets (and this array's former entries) are recoverable

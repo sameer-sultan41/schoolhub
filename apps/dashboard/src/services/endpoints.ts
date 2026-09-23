@@ -11,12 +11,6 @@
  * service function does) — infrastructure, not a module's API call, but it still reads its
  * one path from here rather than hardcoding it.
  *
- * `dashboard`'s entries overlap in places with other backend areas — `classes` and
- * `sections` are also read by school-organization work that has no dashboard service of
- * its own yet. That's accepted for now rather than invented away with speculative
- * domains the app doesn't have module screens for. When a real `school-organization`
- * module lands, these two constants can move there instead of staying duplicated.
- *
  * Add a new domain the moment a real module needs one — this file has exactly the paths
  * this app actually calls today, nothing speculative.
  */
@@ -30,21 +24,5 @@ export const endpoints = {
   tenant: {
     /** The authenticated user's own tenant — name, branding, locale, contact. */
     current: "/tenant",
-  },
-  dashboard: {
-    classes: "/classes",
-    sections: "/sections",
-    subjects: "/subjects",
-    rooms: "/rooms",
-    houses: "/houses",
-    campuses: "/campuses",
-    students: "/students",
-    staff: "/staff",
-    academicSessions: "/academic-sessions",
-    teacherLoadSummary: "/teacher-subject-allocations/load-summary",
-    teacherSubstitutions: "/teacher-substitutions",
-    studentPromotions: "/student-promotions",
-    myTimetable: "/timetables/my",
-    periods: "/periods",
   },
 } as const;

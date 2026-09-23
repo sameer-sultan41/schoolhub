@@ -15,7 +15,7 @@
  *
  * Only listing an ID here is what opts a preset INTO this shared mapping — presets.ts's
  * own THEME_PRESETS array is the source of truth for which preset ids exist; this list
- * mirrors it, minus "tenant" (no stylesheet at all). TODO(multi-theme): six other
+ * mirrors it, minus "tenant" (no stylesheet at all). TODO(multi-theme): seven other
  * presets used to be listed here too (see presets.ts's own TODO) — re-add each one's
  * selector when its stylesheet comes back.
  */

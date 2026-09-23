@@ -28,7 +28,7 @@ Build)**, per [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.m
 | Module | API | Dashboard screens | E2E | Spec doc |
 | ------ | --- | ------------------ | --- | -------- |
 | school-organization | done (+ the `/holiday-calendar` calendar §16 declared and nothing had built — `attendance` marks against it) | — (platform-admin/setup UI not built) | live-lane API journeys only (no dashboard UI to drive) — CRUD + tenant isolation for all 9 resources, plus the academic-session `:activate`/`:close`/`:clone` lifecycle | done |
-| student-management | done (CRUD, guardians/documents/files, enrollment lifecycle/transfers, import/export/ID cards); **in progress** — `emergency_contacts`/`guardians`/`student_guardians`/`transfers` split into their own resource packages (matching the file-per-action-layout convention already applied to staff-management/timetable/academics/school-organization/communication), but the old flat files (`serializers.py`, `filters.py`, etc.) and `apps.py`/`urls.py` wiring haven't been updated to point at them yet — the new packages exist unused alongside the old ones | was done (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs, import wizard, ID-card batch action) — **removed** by the `apps/dashboard` shell reset, rebuilt in a later chunk (`docs/metronic-dashboard-shell.md`) | — | done |
+| student-management | done (CRUD, guardians/documents/files, enrollment lifecycle/transfers, import/export/ID cards); **in progress** — `emergency_contacts`/`guardians`/`student_guardians`/`transfers` split into their own resource packages (matching the file-per-action-layout convention already applied to staff-management/timetable/academics/school-organization/communication), but the old flat files (`serializers.py`, `filters.py`, etc.) and `apps.py`/`urls.py` wiring haven't been updated to point at them yet — the new packages exist unused alongside the old ones; `transfers/tests/` also has no test file of its own yet, unlike its three sibling packages (the old `student_management/tests/test_enrollment_transfers.py` still covers the still-wired code path) | was done (list/detail/create/edit + Guardians/Emergency contacts/Documents/History tabs, enroll/change-section/withdraw + transfer dialogs, import wizard, ID-card batch action) — **removed** by the `apps/dashboard` shell reset, rebuilt in a later chunk (`docs/metronic-dashboard-shell.md`) | — | done |
 | staff-management | done (CRUD, designations, qualifications/documents with verification, invite/exit, import/export) | was done (list/detail/create/edit + Qualifications/Documents tabs, import wizard) — **removed** by the `apps/dashboard` shell reset, rebuilt in a later chunk (`docs/metronic-dashboard-shell.md`) | — | done |
 | academics | done (curriculum CRUD + `:clone`, teacher allocation + load summary, the promotion batch state machine with segregation of duties and idempotent execution) | — (never built) | live-lane API journeys + one promotion browser CUJ | done |
 | timetable | done (rooms/periods CRUD, draft slot grid with `meta.conflicts` on every edit, `:validate` / `:publish` with supersede-by-end-dating, `GET /timetables/my` for teacher/student/guardian, substitutions + `:approve`/`:reject`) | was done (week grid editor, conflict panel, publish action, My timetable, substitutions queue) — **removed** by the `apps/dashboard` shell reset, rebuilt in a later chunk (`docs/metronic-dashboard-shell.md`) | live-lane API journeys + one build-and-publish browser CUJ | done |
@@ -86,12 +86,15 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 
 - **`apps/dashboard/src/components/app-shell.tsx` and its four `features/dashboard/*`
   panels (capacity-chart, pending-work-panel, school-shape-panel, teacher-load-chart,
-  use-school-day) are recovered, uncommitted work from a stale local branch that predates
-  the shell reset — nothing in the app imports `app-shell.tsx` any more (the real shell is
-  `apps/dashboard/src/app/(app)/shell/`). Committed as-is per explicit instruction rather
-  than discarded; needs a rewrite against the current shell architecture, and the
-  `Services.tenant`/`Services.dashboard` modules these files' tests exercise are the only
-  part of this that's actually wired into anything live today.**
+  use-school-day) — recovered from a stale local branch that predates the shell reset —
+  were dropped from this PR rather than committed. Review confirmed they don't just sit
+  unused: they import five type/constant files (`features/{academics,students,timetable}/
+  *-types.ts`, `features/dashboard/dashboard-{constants,types}.ts`) that PR #65's shell
+  reset deliberately deleted (commit `9548054`), so the files fail to typecheck and their
+  own tests fail to even collect. `Services.dashboard`/`dashboard-service.ts` (the one
+  piece that depended on them) was dropped too; `Services.tenant`/`tenant-service.ts` has
+  no such dependency and is the only part of that recovered work that's kept, merged
+  cleanly alongside `Services.auth`.
 - **PR #42's review found ten issues and one was a privilege-escalation path.**
   `StudentAttendanceViewSet` drops `DenyRestrictedPrincipals` so students and
   guardians can read their own attendance (§4 grants them an `own`-scoped view) —
