@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { setUnauthorizedHandler } from "@/lib/auth";
-import { AppProviders } from "./providers";
+import { AppProviders } from "../app-providers";
 
 const mockReplace = jest.fn();
 

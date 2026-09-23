@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "next-themes";
-import { AppProviders } from "@/components/providers";
+import { AppProviders } from "@/providers/app-providers";
 import { directionFor } from "@/lib/env";
-import { preferenceDataAttributes } from "@/lib/preferences/preferences-config";
-import { readPreferencesFromCookies } from "@/lib/preferences/preferences-cookies.server";
-import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
+import { preferenceDataAttributes } from "@/store/preferences-config";
+import { readPreferencesFromCookies } from "@/store/preferences-cookies.server";
+import { PreferencesProvider } from "@/providers/preferences-provider";
 
 import "./globals.css";
 
@@ -17,7 +17,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   return (
     // The preference data-attributes (data-theme-preset, data-sidebar-variant,
-    // data-content-layout, data-navbar-style — see lib/preferences/preferences-config.ts)
+    // data-content-layout, data-navbar-style — see store/preferences-config.ts)
     // apply app-wide, not just under (app)/shell's Shell: (auth)/login has no sidebar
     // to vary, but it still wants the same colour preset, so this can't be toggled on
     // mount by Shell alone. `readPreferencesFromCookies` is what lets the first server

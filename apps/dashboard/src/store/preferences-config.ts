@@ -23,11 +23,16 @@ import { THEME_PRESETS } from "@schoolhub/ui";
  * dashboard's whole shell is built on Metronic's look now, so a first-time visitor should
  * see it rather than the platform's Aurora default. `theme_preset`'s own docs (THEME_PRESETS
  * in packages/ui) still explain what "tenant" and every other value do.
+ *
+ * `sidebar_collapsed` absorbs the one real leaf value `shell/settings.ts`'s Metronic-demo
+ * `Settings.layouts.demo1.sidebarCollapse` held — that provider's other leaf, `sidebarTheme`,
+ * had no writer anywhere in the app and is dropped rather than migrated.
  */
 
 export const SIDEBAR_VARIANTS = ["sidebar", "inset", "floating"] as const;
 export const CONTENT_LAYOUTS = ["full-width", "centered"] as const;
 export const NAVBAR_STYLES = ["sticky", "scroll"] as const;
+export const SIDEBAR_COLLAPSE_STATES = ["expanded", "collapsed"] as const;
 
 export const PREFERENCE_REGISTRY = {
   theme_preset: {
@@ -49,6 +54,11 @@ export const PREFERENCE_REGISTRY = {
     values: NAVBAR_STYLES,
     defaultValue: "sticky",
     attribute: "data-navbar-style",
+  },
+  sidebar_collapsed: {
+    values: SIDEBAR_COLLAPSE_STATES,
+    defaultValue: "expanded",
+    attribute: "data-sidebar-collapsed",
   },
 } as const;
 
