@@ -34,14 +34,7 @@
       "preset": {
         "label": "Colours",
         "tenant": "School colours",
-        "ink-brass": "Ink & Brass",
-        "azure": "Azure",
-        "cobalt": "Cobalt",
-        "metronic": "Metronic",
-        "tangerine": "Tangerine",
-        "soft-pop": "Soft Pop",
-        "brutalist": "Brutalist",
-        "neon": "Neon"
+        "metronic": "Metronic"
       },
       "sidebarVariant": {
         "label": "Sidebar",
