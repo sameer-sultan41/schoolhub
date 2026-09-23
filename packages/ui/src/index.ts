@@ -9,7 +9,11 @@
  * own component, copied verbatim — no variant or structural changes, per explicit
  * instruction. This barrel exports exactly what each file itself exports, nothing more,
  * nothing invented. The data-grid, data-table, empty-state, stat-card, skeletons and
- * sidebar files are schoolhub's own and unaffected by that swap.
+ * sidebar files are schoolhub's own and unaffected by that swap. `accordion-menu` is a
+ * port-and-adapt, not a verbatim copy: Metronic's own source applies invalid ARIA `menu`
+ * roles to persistent nav, nests a Link inside a button in a way that swallows real
+ * navigation, and renders a real `<h3>` heading per item — all three are fixed in this
+ * repo's version (see the file's own header comment).
  */
 export {
   Accordion,
@@ -17,6 +21,19 @@ export {
   AccordionItem,
   AccordionTrigger,
 } from "./components/accordion";
+
+export {
+  AccordionMenu,
+  AccordionMenuGroup,
+  AccordionMenuIndicator,
+  AccordionMenuItem,
+  AccordionMenuLabel,
+  AccordionMenuSeparator,
+  AccordionMenuSub,
+  AccordionMenuSubContent,
+  AccordionMenuSubTrigger,
+  type AccordionMenuClassNames,
+} from "./components/accordion-menu";
 
 export {
   Alert,
@@ -225,6 +242,7 @@ export { Separator } from "./components/separator";
 
 export {
   Sidebar,
+  SidebarCollapseToggle,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,

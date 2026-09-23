@@ -1,13 +1,39 @@
 import { ApiError } from "@schoolhub/api-client";
 import type { LoginResponse } from "@schoolhub/types";
-import { screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { makeUser, renderWithProviders } from "@/test-utils";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactElement } from "react";
+import messages from "../../../messages/en.json";
 import { login } from "@/lib/auth";
 import { LoginForm } from "./login-form";
 
+function renderLoginForm(ui: ReactElement = <LoginForm />) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </NextIntlClientProvider>,
+  );
+}
+
 function makeLoginResponse(): LoginResponse {
-  return { access_token: "at-1", expires_in: 900, user: makeUser() };
+  return {
+    access_token: "at-1",
+    expires_in: 900,
+    user: {
+      id: "u1",
+      email: "admin@cityschool.test",
+      phone: null,
+      full_name: "Ayesha Khan",
+      avatar_url: null,
+      locale: "en",
+      tenant_id: "t1",
+      roles: [],
+      permissions: [],
+    },
+  };
 }
 
 const mockReplace = jest.fn();
@@ -39,17 +65,30 @@ describe("LoginForm", () => {
   });
 
   it("renders the sign-in fields", () => {
-    renderWithProviders(<LoginForm />);
+    renderLoginForm();
 
     expect(screen.getByLabelText(/email, phone, or username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
   });
 
+  it("toggles the password field's visibility", async () => {
+    renderLoginForm();
+    const user = userEvent.setup();
+    const passwordInput = screen.getByLabelText(/^password/i);
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    await user.click(screen.getByRole("button", { name: /show password/i }));
+    expect(passwordInput).toHaveAttribute("type", "text");
+
+    await user.click(screen.getByRole("button", { name: /hide password/i }));
+    expect(passwordInput).toHaveAttribute("type", "password");
+  });
+
   it("redirects to /dashboard on a successful sign-in with no next param", async () => {
     mockLogin.mockResolvedValue(makeLoginResponse());
 
-    renderWithProviders(<LoginForm />);
+    renderLoginForm();
     await fillAndSubmit("admin@cityschool.test", "secret123");
 
     await waitFor(() => {
@@ -67,7 +106,7 @@ describe("LoginForm", () => {
     mockGet.mockReturnValue("/students");
     mockLogin.mockResolvedValue(makeLoginResponse());
 
-    renderWithProviders(<LoginForm />);
+    renderLoginForm();
     await fillAndSubmit("admin@cityschool.test", "secret123");
 
     await waitFor(() => {
@@ -79,7 +118,7 @@ describe("LoginForm", () => {
     mockGet.mockReturnValue("https://evil.example.com");
     mockLogin.mockResolvedValue(makeLoginResponse());
 
-    renderWithProviders(<LoginForm />);
+    renderLoginForm();
     await fillAndSubmit("admin@cityschool.test", "secret123");
 
     await waitFor(() => {
@@ -98,7 +137,7 @@ describe("LoginForm", () => {
       }),
     );
 
-    renderWithProviders(<LoginForm />);
+    renderLoginForm();
     await fillAndSubmit("nobody", "secret123");
 
     await waitFor(() => {
@@ -117,7 +156,7 @@ describe("LoginForm", () => {
       }),
     );
 
-    renderWithProviders(<LoginForm />);
+    renderLoginForm();
     await fillAndSubmit("admin@cityschool.test", "wrong");
 
     await waitFor(() => {
@@ -132,7 +171,7 @@ describe("LoginForm", () => {
       new ApiError({ code: "server_error", message: "boom", status: 500, url: "/login" }),
     );
 
-    renderWithProviders(<LoginForm />);
+    renderLoginForm();
     await fillAndSubmit("admin@cityschool.test", "secret123");
 
     await waitFor(() => {

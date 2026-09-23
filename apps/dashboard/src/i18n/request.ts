@@ -12,9 +12,9 @@ type Messages = typeof EnMessages;
  * follows the user/tenant preference, not the URL.
  *
  * The cookie is written by the account menu's language switch
- * (`components/user-menu.tsx`). Writing it from the authenticated user's own `locale` at
- * sign-in is still to be done — until then a returning user gets the default until they
- * choose, which is why the switch exists at all.
+ * (`components/user-menu.tsx`, not yet rebuilt). Writing it from the authenticated user's
+ * own `locale` at sign-in is still to be done — until then a returning user gets the
+ * default until they choose, which is why the switch exists at all.
  */
 // Re-exported, not redeclared: the name is owned by `lib/constants.ts` so a client
 // component can import it too (this module is server-only, via `next/headers`).

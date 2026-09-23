@@ -14,9 +14,8 @@ const PreferencesContext = createContext<PreferencesStore | null>(null);
 /**
  * `initialValues` comes from the server's own cookie read, so the first client render
  * already agrees with the `<html data-*>` attributes the server stamped. There is no
- * hydration gap to paper over and no "synced yet?" flag — the template this is adapted
- * from needs one only because its root layout is static; ours already reads a cookie for
- * the locale, so it can read these too.
+ * hydration gap to paper over and no "synced yet?" flag — the root layout already reads
+ * a cookie for the locale, so it can read these too.
  */
 export function PreferencesProvider({
   initialValues,
