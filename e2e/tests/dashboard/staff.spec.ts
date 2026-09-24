@@ -19,6 +19,13 @@ import {
 const campus = buildCampus({ id: "campus-main", name: "Main Campus" });
 const designation = buildDesignation({ id: "designation-teacher", name: "Teacher" });
 
+const PHOTO_URL = "https://storage.e2e.test/tenants/e2e/staff.photo/ayesha.png";
+// A 1×1 PNG — enough for Chromium to decode and report a natural width.
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 function directory() {
   return [
     buildStaff({
@@ -30,6 +37,7 @@ function directory() {
       designation_id: designation.id,
       designation_name: designation.name,
       phone: "+92-300-1111111",
+      photo_url: PHOTO_URL,
     }),
     buildStaff({
       id: "staff-bilal",
@@ -44,12 +52,16 @@ function directory() {
 }
 
 test.describe("staff directory", () => {
-  test.beforeEach(async ({ mockApi, signedIn: _signedIn, staffPage }) => {
+  test.beforeEach(async ({ page, mockApi, signedIn: _signedIn, staffPage }) => {
     // Registered after `signedIn`'s dashboard-home stubs, so these `/staff` and
     // `/campuses` handlers win (MockApi prefers the most recently registered route).
     mockApi.use(
       schoolOrganizationModule({ campuses: [campus] }),
       staffModule({ staff: directory(), designations: [designation] }),
+    );
+    // Storage is not the API, so MockApi never sees the photo request — serve it here.
+    await page.route(PHOTO_URL, (route) =>
+      route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
     );
     await staffPage.goto();
     await expect(staffPage.row("Ayesha Khan")).toBeVisible();
@@ -152,5 +164,16 @@ test.describe("staff directory", () => {
     // of it on the refetch — and nobody else does.
     await expect(staffPage.row("Bilal Ahmed")).toHaveCount(0);
     await expect(staffPage.row("Ayesha Khan")).toBeVisible();
+  });
+
+  test("shows a staff member's photo, and initials for one without", async ({ staffPage }) => {
+    const photo = staffPage.rowPhoto("Ayesha Khan");
+    await expect(photo).toHaveAttribute("src", PHOTO_URL);
+    await expect
+      .poll(() => photo.evaluate((image: HTMLImageElement) => image.naturalWidth))
+      .toBe(1);
+
+    await expect(staffPage.rowPhoto("Bilal Ahmed")).toHaveCount(0);
+    await expect(staffPage.row("Bilal Ahmed").getByText("BA")).toBeVisible();
   });
 });

@@ -12,6 +12,7 @@ export interface Staff {
   gender: "male" | "female" | "other" | "unspecified";
   date_of_birth: string | null;
   photo_file_id: string | null;
+  photo_url: string | null;
   staff_type: "teaching" | "non_teaching";
   campus_id: string;
   campus_name: string;
@@ -45,6 +46,7 @@ export function buildStaff(overrides: Partial<Staff> = {}): Staff {
     gender: "male",
     date_of_birth: "1985-06-01",
     photo_file_id: null,
+    photo_url: null,
     staff_type: "teaching",
     campus_id: "campus-0001",
     campus_name: "Main Campus",

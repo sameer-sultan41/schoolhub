@@ -21,6 +21,12 @@ export class StaffPage extends BasePage {
     return this.table.getByRole("row").filter({ hasText: name });
   }
 
+  /** A row's avatar photo. Decorative (`alt=""`, the name sits beside it), so it has no
+   * accessible name to locate by — the element is the only handle. */
+  rowPhoto(name: string): Locator {
+    return this.row(name).locator("img");
+  }
+
   get searchInput(): Locator {
     return this.page.getByRole("textbox", { name: "Search staff" });
   }
