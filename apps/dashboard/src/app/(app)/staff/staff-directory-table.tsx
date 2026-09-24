@@ -58,6 +58,7 @@ import {
 
 import { Services } from "@/services";
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
+import { stableSignedUrl } from "@/lib/stable-signed-url";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
 import { ExitStaffDialog } from "@/app/(app)/staff/exit-staff-dialog";
@@ -299,7 +300,8 @@ export function StaffDirectoryTable() {
         campus: staff.campus_name,
         status: staff.employment_status,
         updatedAt: staff.updated_at,
-        photoUrl: staff.photo_url,
+        // A refetch re-signs every link; keep the one in use so avatars don't blink.
+        photoUrl: stableSignedUrl(staff.photo_url),
       })),
     [data],
   );

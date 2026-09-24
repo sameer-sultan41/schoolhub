@@ -36,6 +36,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Services } from "@/services";
+import { stableSignedUrl } from "@/lib/stable-signed-url";
 import type {
   CreateStaffInput,
   StaffDetailRecord,
@@ -441,7 +442,9 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
   // matches the record's, the saved link is for the old photo.
   const savedPhoto = mode === "edit" ? staffDetailQuery.data : undefined;
   const savedPhotoUrl =
-    savedPhoto && photoFileId === (savedPhoto.photo_file_id ?? "") ? savedPhoto.photo_url : null;
+    savedPhoto && photoFileId === (savedPhoto.photo_file_id ?? "")
+      ? stableSignedUrl(savedPhoto.photo_url)
+      : null;
   const previewUrl = localPreviewUrl ?? savedPhotoUrl;
   // Also true for the one render between the detail arriving and the reset effect
   // applying it — see `populatedStaffId` above for why the fields must not mount then.
