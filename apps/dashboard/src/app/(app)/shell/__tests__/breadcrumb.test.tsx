@@ -11,6 +11,18 @@ jest.mock("next/navigation", () => ({
 }));
 
 describe("Breadcrumb", () => {
+  it("never warns on a duplicate key, even when Home and the active leaf share a path", () => {
+    // On /dashboard itself, HOME_CRUMB and the active "Light Sidebar" leaf both point at
+    // "/dashboard" — a real collision the first version of this component keyed on path.
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    pathname = "/dashboard";
+
+    render(<Breadcrumb />);
+
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it("always leads with Home, linked, even for a top-level page", () => {
     pathname = "/staff";
     render(<Breadcrumb />);

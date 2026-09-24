@@ -40,7 +40,9 @@ export function Breadcrumb() {
           const active = item.path ? isActive(item.path) : false;
 
           return (
-            <Fragment key={item.path ?? item.title ?? index}>
+            // Position, not `item.path`: HOME_CRUMB and the active leaf can share a path
+            // (both "/dashboard" on the dashboard route itself), which collided as a key.
+            <Fragment key={index}>
               <li className={cn("min-w-0", isLast && "truncate")}>
                 {item.path && !isLast ? (
                   <Link
