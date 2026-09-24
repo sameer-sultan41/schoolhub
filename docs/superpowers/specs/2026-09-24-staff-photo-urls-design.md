@@ -113,7 +113,7 @@ see that record, and it comfortably outlives the dashboard's query cache (30 s s
     readers do not read it twice.
 11. **Edit dialog** (`staff-form-dialog.tsx`). The current-photo preview uses `photo_url`,
     replacing the "Photo on file" text. A newly picked file's local preview still wins until
-    save; the existing `["staff"]` invalidation then refetches the list with the new link.
+    save; the existing `["staff"]` invalidation then fetches the list again, with the new link.
 12. Remove the comments in both files that say no photo URL exists.
 
 ### E2E mock

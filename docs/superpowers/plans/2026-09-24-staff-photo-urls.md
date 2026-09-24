@@ -92,7 +92,7 @@ are prerequisites: Task 2 edits the same signer, and every later task shows toas
 
 - [ ] **Step 1: Confirm the tree holds exactly these five changes**
 
-Run: `git status --short | grep -v celerybeat`
+Run: `git status --short -- apps/api/core apps/api/config apps/dashboard packages`
 Expected:
 ```
  M apps/api/config/settings/base.py
@@ -328,11 +328,10 @@ def _reset_presigner(*, setting: str, **kwargs: object) -> None:
 - [ ] **Step 3: Verify against the local stack (manual, not a test run)**
 
 SigV4 must still work with MinIO for uploads and downloads. Log in as the demo owner and run the
-three-step upload by hand (API container autoreloads from the mounted source):
+three-step upload by hand (the API container reloads itself from the mounted source):
 
 ```bash
-S=$(mktemp -d); printf '\x89PNG\r\n\x1a\n' > $S/p.png
-python3 -c "import zlib,struct;c=lambda t,d:struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff);open('$S/p.png','wb').write(b'\x89PNG\r\n\x1a\n'+c(b'IHDR',struct.pack('>IIBBBBB',1,1,8,2,0,0,0))+c(b'IDAT',zlib.compress(b'\x00\xff\x00\x00'))+c(b'IEND',b''))"
+S=$(mktemp -d); echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" | base64 -d > $S/p.png
 TOKEN=$(curl -s -X POST -H 'Content-Type: application/json' -d '{"identifier":"owner@demo.localhost","password":"demo12345"}' http://localhost:3000/api/auth/login | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['access_token'])")
 R=$(curl -6 -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "{\"original_name\":\"p.png\",\"mime_type\":\"image/png\",\"size_bytes\":$(stat -f%z $S/p.png),\"purpose\":\"staff.photo\"}" http://localhost:8000/api/v1/files)
 ID=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])"); URL=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['upload_url'])")
