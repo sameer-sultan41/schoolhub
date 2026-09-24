@@ -83,20 +83,32 @@ class S3Presigner:
     """boto3-backed. Same behaviour against real S3 or a MinIO-compatible endpoint."""
 
     def __init__(self) -> None:
+        self._client = self._build_client(settings.S3_ENDPOINT_URL)
+        # Presigning is offline, so a client for the public host opens no connection. SigV4
+        # signs the host, so rewriting the URL's host afterwards would break the signature.
+        public_endpoint = settings.S3_PUBLIC_ENDPOINT_URL or settings.S3_ENDPOINT_URL
+        self._signing_client = (
+            self._client
+            if public_endpoint == settings.S3_ENDPOINT_URL
+            else self._build_client(public_endpoint)
+        )
+        self._bucket = settings.S3_BUCKET_NAME
+
+    @staticmethod
+    def _build_client(endpoint_url: str):
         import boto3
 
-        self._client = boto3.client(
+        return boto3.client(
             "s3",
-            endpoint_url=settings.S3_ENDPOINT_URL,
+            endpoint_url=endpoint_url,
             aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             region_name=settings.S3_REGION_NAME,
         )
-        self._bucket = settings.S3_BUCKET_NAME
 
     def presign_upload(self, *, storage_key: str, mime_type: str) -> PresignedUpload:
         now = datetime.datetime.now(datetime.UTC)
-        url = self._client.generate_presigned_url(
+        url = self._signing_client.generate_presigned_url(
             "put_object",
             Params={"Bucket": self._bucket, "Key": storage_key, "ContentType": mime_type},
             ExpiresIn=_UPLOAD_EXPIRY_SECONDS,
@@ -109,7 +121,7 @@ class S3Presigner:
         )
 
     def presign_download(self, *, storage_key: str) -> str:
-        return self._client.generate_presigned_url(
+        return self._signing_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": self._bucket, "Key": storage_key},
             ExpiresIn=_DOWNLOAD_EXPIRY_SECONDS,
