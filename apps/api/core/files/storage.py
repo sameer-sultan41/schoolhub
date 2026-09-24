@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from django.conf import settings
+from django.core.signals import setting_changed
+from django.dispatch import receiver
 
 _UPLOAD_EXPIRY_SECONDS = 900
 _DOWNLOAD_EXPIRY_SECONDS = 300
@@ -168,6 +170,18 @@ class S3Presigner:
         )
 
 
+_STORAGE_SETTINGS = frozenset(
+    {
+        "S3_ENDPOINT_URL",
+        "S3_PUBLIC_ENDPOINT_URL",
+        "S3_BUCKET_NAME",
+        "S3_REGION_NAME",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+    }
+)
+
+
 @functools.cache
 def get_presigner() -> Presigner:
     """One per process: building boto3 clients costs far more than signing, and a built
@@ -175,3 +189,9 @@ def get_presigner() -> Presigner:
     if settings.S3_ENDPOINT_URL:
         return S3Presigner()
     return NullPresigner()
+
+
+@receiver(setting_changed)
+def _reset_presigner(*, setting: str, **kwargs: object) -> None:
+    if setting in _STORAGE_SETTINGS:
+        get_presigner.cache_clear()
