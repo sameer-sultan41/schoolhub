@@ -22,6 +22,16 @@ const config: Config = {
     // importing it under Jest would trip the `declare const` it deliberately
     // leaves unassigned. tsc/ESLint still walk it via their own glob include.
     "!src/i18n/messages.types-check.ts",
+    // The vendor Metronic demo1 shell, ported as-is: the layout frame and the topbar's
+    // dummy-content widgets (fake notifications, chat, apps, search). What this app wires
+    // to real data stays measured — shell/dashboard/*, the user menu, menu-config,
+    // toolbar, data-grid-labels. `**` rather than `(app)`: the glob engine reads bare
+    // parentheses as a regex group, so a literal `(app)` segment would never match.
+    "!src/app/**/shell/{breadcrumb,content,footer,header,settings-provider,shell,sidebar,sidebar-header,sidebar-menu}.tsx",
+    "!src/app/**/shell/{general-config,settings}.ts",
+    "!src/app/**/shell/partials/common/**",
+    "!src/app/**/shell/partials/topbar/{apps-dropdown-menu,chat-sheet,notification-item,notifications-sheet,search-dialog}.tsx",
+    "!src/app/**/shell/partials/topbar/search/**",
   ],
   coverageThreshold: {
     global: {
