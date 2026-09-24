@@ -31,6 +31,8 @@ class S3PresignerEndpointTests(SimpleTestCase):
 
     @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
     def test_presigned_urls_fall_back_to_the_storage_endpoint(self):
-        upload = S3Presigner().presign_upload(storage_key="tenants/t/photo.png", mime_type="image/png")
+        upload = S3Presigner().presign_upload(
+            storage_key="tenants/t/photo.png", mime_type="image/png"
+        )
 
         self.assertEqual(urlsplit(upload.upload_url).netloc, "minio:9000")
