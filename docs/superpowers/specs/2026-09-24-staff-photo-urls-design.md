@@ -9,7 +9,7 @@ A staff member's uploaded photo never appears in the dashboard. The `/staff` dir
 edit dialog show initials even after a successful upload, because the staff API returns only
 `photo_file_id` — a bare id — and nothing turns that id into an image the browser can load.
 
-The only existing path is `GET /files/{id}:download`, which returns one signed link per call.
+The only existing path is `POST /files/{id}:download`, which returns one signed link per call.
 Using it from the list would mean one extra request per row (N+1 from the browser), and the
 dashboard could not use a plain API URL as an `<img src>` anyway: its access token lives in
 memory, not in a cookie, so an image request cannot authenticate itself.
@@ -73,7 +73,7 @@ client, which is why the signer becomes a shared, per-process instance (below).
    signed for the host the browser reaches.
 3. **`presign_download` options.** It accepts an optional expiry and an optional
    `Cache-Control` value, passed to S3 as `ResponseCacheControl` so storage sends it back as
-   a response header. Defaults are unchanged, so `GET /files/{id}:download` keeps its current
+   a response header. Defaults are unchanged, so `POST /files/{id}:download` keeps its current
    5-minute links. The `Presigner` protocol and `NullPresigner` take the same keyword
    arguments.
 4. **`get_display_url(file) -> str | None`** (new, `core/files/services.py`, beside

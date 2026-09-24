@@ -21,7 +21,7 @@ Playwright 1.62.
 - Photos are private: links are only minted inside tenant-scoped, permission-checked responses.
 - Display links: valid `FILE_DISPLAY_URL_TTL_SECONDS` (default `3600`), with
   `Cache-Control: private, max-age=<ttl>`.
-- `GET /files/{id}:download` keeps its 5-minute (`300` s) links — defaults unchanged.
+- `POST /files/{id}:download` keeps its 5-minute (`300` s) links — defaults unchanged.
 - Signing uses SigV4: `botocore.config.Config(signature_version="s3v4")`.
 - `photo_url` is `null` unless the file is `ready` and not soft-deleted.
 - **Never run tests, linters or type checkers locally** (repo `AGENTS.md` + the owner's rule):
