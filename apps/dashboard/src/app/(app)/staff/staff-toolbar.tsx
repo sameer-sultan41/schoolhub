@@ -6,12 +6,7 @@ import { m } from "motion/react";
 
 import { Button } from "@schoolhub/ui";
 
-import {
-  Toolbar,
-  ToolbarActions,
-  ToolbarBreadcrumbs,
-  ToolbarHeading,
-} from "@/app/(app)/shell/toolbar";
+import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
 import { Services } from "@/services";
 
@@ -84,7 +79,6 @@ export function StaffToolbar() {
       <ToolbarHeading
         description={
           <div className="flex flex-col gap-2">
-            <ToolbarBreadcrumbs />
             <div className="flex flex-wrap items-center gap-1.5 font-medium">
               <span className="text-base text-secondary-foreground">All Members:</span>
               <span className="me-2">

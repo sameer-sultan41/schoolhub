@@ -1,22 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useIsMobile } from "@schoolhub/ui";
 
-import { Breadcrumb } from "@/app/(app)/shell/breadcrumb";
-import { Container } from "@/app/(app)/shell/partials/common/container";
-
-// Ported verbatim from packages/ui's layouts/demo1/components/content.tsx.
+// Ported from packages/ui's layouts/demo1/components/content.tsx — trimmed of its own
+// mobile-only Breadcrumb: the header now renders the app's one breadcrumb trail on every
+// breakpoint (see header.tsx), so a second copy here would repeat it under itself.
 export function Content({ children }: { children: ReactNode }) {
-  const mobile = useIsMobile();
-
   return (
     <div className="content grow pt-5" role="content">
-      {mobile && (
-        <Container>
-          <Breadcrumb />
-        </Container>
-      )}
       {children}
     </div>
   );
