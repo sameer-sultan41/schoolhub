@@ -1,12 +1,13 @@
-"""S3Presigner's endpoint split: the API reaches storage on one host, the browser on another."""
+"""S3Presigner and get_presigner: which host links are signed for, how they are signed, what
+download links carry, and one shared signer per process."""
 
 from __future__ import annotations
 
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from django.test import SimpleTestCase, override_settings
 
-from core.files.storage import S3Presigner
+from core.files.storage import S3Presigner, get_presigner
 
 STORAGE = {
     "S3_ENDPOINT_URL": "http://minio:9000",
@@ -36,3 +37,48 @@ class S3PresignerEndpointTests(SimpleTestCase):
         )
 
         self.assertEqual(urlsplit(upload.upload_url).netloc, "minio:9000")
+
+
+class S3PresignerSignatureTests(SimpleTestCase):
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="http://localhost:9000")
+    def test_links_are_signed_with_sigv4(self):
+        url = S3Presigner().presign_download(storage_key="tenants/t/photo.png")
+
+        query = parse_qs(urlsplit(url).query)
+        # AWS S3 buckets created since 2020 reject the legacy V2 `Signature` parameter.
+        self.assertEqual(query.get("X-Amz-Algorithm"), ["AWS4-HMAC-SHA256"])
+        self.assertNotIn("Signature", query)
+
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_download_links_default_to_five_minutes(self):
+        url = S3Presigner().presign_download(storage_key="tenants/t/photo.png")
+
+        self.assertEqual(parse_qs(urlsplit(url).query).get("X-Amz-Expires"), ["300"])
+
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_download_links_take_an_expiry_and_a_cache_control(self):
+        url = S3Presigner().presign_download(
+            storage_key="tenants/t/photo.png",
+            expires_in=3600,
+            cache_control="private, max-age=3600",
+        )
+
+        query = parse_qs(urlsplit(url).query)
+        self.assertEqual(query.get("X-Amz-Expires"), ["3600"])
+        self.assertEqual(query.get("response-cache-control"), ["private, max-age=3600"])
+
+
+class GetPresignerTests(SimpleTestCase):
+    def test_returns_one_shared_instance(self):
+        # Building boto3 clients costs ~6 ms warm (443 ms cold); signing costs ~0.1 ms.
+        self.assertIs(get_presigner(), get_presigner())
+
+    def test_a_storage_setting_change_rebuilds_it(self):
+        before = get_presigner()
+
+        with override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL=""):
+            during = get_presigner()
+            self.assertIsInstance(during, S3Presigner)
+
+        self.assertIsNot(during, before)
+        self.assertIsNot(get_presigner(), during)
