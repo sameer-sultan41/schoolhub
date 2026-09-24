@@ -41,6 +41,7 @@ function makeRecord(overrides: Partial<StaffDirectoryRecord> = {}): StaffDirecto
     staff_type: "teaching",
     employment_status: "exited",
     updated_at: "2026-09-01T00:00:00Z",
+    photo_url: null,
     ...overrides,
   };
 }

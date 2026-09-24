@@ -72,6 +72,19 @@ function spyOnClipboardWrite() {
  * inside itself, so with the default "active" filter the Status trigger's name is
  * "Status Active".
  */
+/** jsdom never loads images, so Radix's `AvatarImage` would wait forever. Report every
+ * image as already loaded (width 1) or broken (width 0); returns the restore function. */
+function stubImageLoading(result: "loaded" | "broken") {
+  const complete = jest.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
+  const width = jest
+    .spyOn(HTMLImageElement.prototype, "naturalWidth", "get")
+    .mockReturnValue(result === "loaded" ? 1 : 0);
+  return () => {
+    complete.mockRestore();
+    width.mockRestore();
+  };
+}
+
 function popoverTrigger(label: string) {
   return (accessibleName: string, element: Element) =>
     (accessibleName === label || accessibleName.startsWith(`${label} `)) &&
@@ -89,6 +102,7 @@ function staffRecord() {
     staff_type: "teaching" as const,
     employment_status: "active",
     updated_at: "2026-09-01T00:00:00Z",
+    photo_url: null,
   };
 }
 
@@ -105,6 +119,7 @@ function secondStaffRecord() {
     staff_type: "non_teaching" as const,
     employment_status: "active",
     updated_at: "2026-09-01T00:00:00Z",
+    photo_url: null,
   };
 }
 
@@ -114,7 +129,7 @@ describe("StaffDirectoryTable", () => {
     mockExitStaff.mockReset();
   });
 
-  it("renders a page of staff: name, role, status badge, campus, and initials (never a photo)", async () => {
+  it("renders a page of staff: name, role, status badge, campus, and initials when there is no photo", async () => {
     mockFetchStaffPage.mockResolvedValue({
       items: [staffRecord()],
       pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
@@ -131,10 +146,47 @@ describe("StaffDirectoryTable", () => {
     expect(within(row as HTMLElement).getByText("Active")).toBeInTheDocument();
     expect(within(row as HTMLElement).getByText("Main Campus")).toBeInTheDocument();
 
-    // No `AvatarImage`/`src` is ever rendered — `StaffSerializer.photo_file_id` has no
-    // resolvable URL anywhere in the API today, so the Member cell shows initials only.
     expect(within(row as HTMLElement).queryByRole("img")).not.toBeInTheDocument();
     expect(within(row as HTMLElement).getByText("AK")).toBeInTheDocument();
+  });
+
+  it("shows the staff photo when the record has one", async () => {
+    const restoreImages = stubImageLoading("loaded");
+    try {
+      mockFetchStaffPage.mockResolvedValue({
+        items: [{ ...staffRecord(), photo_url: "https://storage.test/ayesha.png" }],
+        pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
+      });
+
+      renderWithProviders(<StaffDirectoryTable />);
+
+      const row = (await screen.findByText("Ayesha Khan")).closest("tr") as HTMLElement;
+      // Decorative (`alt=""` — the name sits beside it), so it has no accessible role.
+      await waitFor(() => {
+        expect(row.querySelector("img")).toHaveAttribute("src", "https://storage.test/ayesha.png");
+      });
+      expect(within(row).queryByText("AK")).not.toBeInTheDocument();
+    } finally {
+      restoreImages();
+    }
+  });
+
+  it("falls back to initials when the photo fails to load", async () => {
+    const restoreImages = stubImageLoading("broken");
+    try {
+      mockFetchStaffPage.mockResolvedValue({
+        items: [{ ...staffRecord(), photo_url: "https://storage.test/expired.png" }],
+        pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
+      });
+
+      renderWithProviders(<StaffDirectoryTable />);
+
+      const row = (await screen.findByText("Ayesha Khan")).closest("tr") as HTMLElement;
+      expect(await within(row).findByText("AK")).toBeInTheDocument();
+      expect(row.querySelector("img")).toBeNull();
+    } finally {
+      restoreImages();
+    }
   });
 
   it("shows the empty state when the directory has no staff", async () => {

@@ -437,6 +437,12 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
   const firstName = form.watch("first_name");
   const lastName = form.watch("last_name");
   const photoFileId = form.watch("photo_file_id");
+  // The saved photo, until the user picks a replacement: once `photo_file_id` no longer
+  // matches the record's, the saved link is for the old photo.
+  const savedPhoto = mode === "edit" ? staffDetailQuery.data : undefined;
+  const savedPhotoUrl =
+    savedPhoto && photoFileId === (savedPhoto.photo_file_id ?? "") ? savedPhoto.photo_url : null;
+  const previewUrl = localPreviewUrl ?? savedPhotoUrl;
   // Also true for the one render between the detail arriving and the reset effect
   // applying it — see `populatedStaffId` above for why the fields must not mount then.
   // A failed detail fetch (no data to wait on) still falls through to the form, as before.
@@ -562,7 +568,7 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
                     <p className="text-sm font-medium text-foreground">Photo</p>
                     <div className="flex items-center gap-3">
                       <Avatar className="size-12 shrink-0">
-                        {localPreviewUrl ? <AvatarImage src={localPreviewUrl} alt="" /> : null}
+                        {previewUrl ? <AvatarImage src={previewUrl} alt="" /> : null}
                         <AvatarFallback>{initialsOf(`${firstName} ${lastName}`)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 space-y-1">
@@ -583,7 +589,7 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
                             {uploadError}
                           </p>
                         ) : null}
-                        {uploadStatus !== "uploading" && !localPreviewUrl && photoFileId ? (
+                        {uploadStatus !== "uploading" && !previewUrl && photoFileId ? (
                           <p className="text-xs text-muted-foreground">Photo on file</p>
                         ) : null}
                       </div>

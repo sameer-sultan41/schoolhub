@@ -160,6 +160,7 @@ describe("DashboardService", () => {
           designation_name: "Head Teacher",
           staff_type: "teaching",
           updated_at: "2026-09-01T00:00:00Z",
+          photo_url: null,
         },
       ];
       mockGet.mockResolvedValue({ data: staff, meta: {} });
@@ -185,6 +186,7 @@ describe("DashboardService", () => {
           staff_type: "teaching",
           employment_status: "active",
           updated_at: "2026-09-01T00:00:00Z",
+          photo_url: null,
         },
       ];
       mockGet.mockResolvedValue({
@@ -312,6 +314,7 @@ describe("DashboardService", () => {
         staff_type: "teaching",
         employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
+        photo_url: null,
       };
       mockPost.mockResolvedValue({ data: created });
 
@@ -355,6 +358,7 @@ describe("DashboardService", () => {
         staff_type: "teaching",
         employment_status: "active",
         updated_at: "2026-09-02T00:00:00Z",
+        photo_url: null,
       };
       mockPatch.mockResolvedValue({ data: updated });
 
@@ -384,6 +388,7 @@ describe("DashboardService", () => {
         staff_type: "teaching",
         employment_status: "resigned",
         updated_at: "2026-09-10T00:00:00Z",
+        photo_url: null,
         exit_date: "2026-09-10",
         exit_reason: "Relocating",
       };

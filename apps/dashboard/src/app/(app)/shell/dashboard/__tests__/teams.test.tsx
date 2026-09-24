@@ -29,6 +29,7 @@ describe("Teams", () => {
         staff_type: "teaching",
         employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
+        photo_url: null,
       },
     ]);
 
@@ -50,6 +51,7 @@ describe("Teams", () => {
         staff_type: "non_teaching",
         employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
+        photo_url: null,
       },
     ]);
 
@@ -70,6 +72,7 @@ describe("Teams", () => {
         staff_type: "teaching",
         employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
+        photo_url: null,
       },
       {
         id: "st-2",
@@ -81,6 +84,7 @@ describe("Teams", () => {
         staff_type: "non_teaching",
         employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
+        photo_url: null,
       },
     ]);
 
@@ -114,6 +118,7 @@ describe("Teams", () => {
         staff_type: "teaching",
         employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
+        photo_url: null,
       },
     ]);
 

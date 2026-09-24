@@ -20,6 +20,7 @@ import { ApiError } from "@schoolhub/api-client";
 import {
   Avatar,
   AvatarFallback,
+  AvatarImage,
   Badge,
   BadgeDot,
   Button,
@@ -82,6 +83,7 @@ interface StaffRow {
   campus: string;
   status: string;
   updatedAt: string;
+  photoUrl: string | null;
 }
 
 /**
@@ -135,11 +137,8 @@ function statusMeta(status: string): { variant: StatusVariant; label: string } {
 
 /** Same convention as `shell/partials/topbar/user-dropdown-menu.tsx`'s own `initialsOf`
  * (non-null-assertion-free array destructure) — duplicated rather than imported since
- * that one is private to its own module. Avatars here never attempt a photo `src`:
- * `StaffSerializer.photo_file_id` has no resolvable URL anywhere in the API today
- * (`core/files/serializers.py`'s `FileSerializer` has no `url` field), so a real photo
- * would mean guessing a URL pattern that might not exist or might leak cross-tenant —
- * initials are the only honest fallback available. */
+ * that one is private to its own module. Also what shows while a photo loads, and
+ * whenever it fails to (an expired link, a deleted object). */
 function initialsOf(name: string): string {
   const [first, ...rest] = name.trim().split(/\s+/).filter(Boolean);
   if (!first) return "?";
@@ -300,6 +299,7 @@ export function StaffDirectoryTable() {
         campus: staff.campus_name,
         status: staff.employment_status,
         updatedAt: staff.updated_at,
+        photoUrl: staff.photo_url,
       })),
     [data],
   );
@@ -366,6 +366,7 @@ export function StaffDirectoryTable() {
         cell: ({ row }) => (
           <div className="flex items-center gap-4">
             <Avatar className="size-9 shrink-0">
+              {row.original.photoUrl ? <AvatarImage src={row.original.photoUrl} alt="" /> : null}
               <AvatarFallback>{initialsOf(row.original.name)}</AvatarFallback>
             </Avatar>
             <span className="text-mono text-sm font-medium">{row.original.name}</span>

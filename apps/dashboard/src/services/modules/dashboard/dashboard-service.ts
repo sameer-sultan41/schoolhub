@@ -122,6 +122,10 @@ export interface StaffDirectoryRecord {
   staff_type: "teaching" | "non_teaching";
   employment_status: string;
   updated_at: string;
+  /** Signed display link for the staff photo (`StaffSerializer.photo_url`), or `null` when
+   * there is none or its upload isn't confirmed. It expires (1 h) and can fail to load, so
+   * always render it over an initials fallback. */
+  photo_url: string | null;
   // Both real fields on `StaffSerializer` (`apps/api/apps/staff_management/
   // serializers.py`'s `Meta.fields`), read-only there and set only by the `:exit`
   // colon-action — never a plain PATCH. Included here (optional, since a listing
@@ -392,6 +396,7 @@ export interface StaffDetailRecord {
   gender: string | null;
   date_of_birth: string | null;
   photo_file_id: string | null;
+  photo_url: string | null;
   staff_type: "teaching" | "non_teaching";
   campus_id: string;
   department_id: string | null;

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ApiError } from "@schoolhub/api-client";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -63,6 +63,9 @@ const mockUpdateStaff = Services.dashboard.updateStaff as jest.MockedFunction<
   typeof Services.dashboard.updateStaff
 >;
 const mockToastSuccess = toast.success as jest.MockedFunction<typeof toast.success>;
+const mockUploadFile = Services.files.uploadFile as jest.MockedFunction<
+  typeof Services.files.uploadFile
+>;
 
 /** Every reference-data query the dialog fires on open, given sane empty-ish defaults —
  * each test overrides only the ones it actually cares about. */
@@ -82,6 +85,7 @@ function detailRecord(overrides: Partial<StaffDetailRecord> = {}): StaffDetailRe
     gender: null,
     date_of_birth: null,
     photo_file_id: null,
+    photo_url: null,
     staff_type: "teaching",
     campus_id: "c1",
     department_id: null,
@@ -127,6 +131,35 @@ function setDate(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value } });
 }
 
+/** jsdom never loads images, so Radix's `AvatarImage` would wait forever. Report every
+ * image as already loaded (width 1) or broken (width 0); returns the restore function. */
+function stubImageLoading(result: "loaded" | "broken") {
+  const complete = jest.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
+  const width = jest
+    .spyOn(HTMLImageElement.prototype, "naturalWidth", "get")
+    .mockReturnValue(result === "loaded" ? 1 : 0);
+  return () => {
+    complete.mockRestore();
+    width.mockRestore();
+  };
+}
+
+/** jsdom has no object URLs; the dialog creates one for a picked file's local preview.
+ * Descriptors, not method references, so restoring trips no unbound-method lint. */
+function stubObjectUrls(url: string) {
+  const saved = ["createObjectURL", "revokeObjectURL"].map(
+    (name) => [name, Object.getOwnPropertyDescriptor(URL, name)] as const,
+  );
+  Object.defineProperty(URL, "createObjectURL", { value: jest.fn(() => url), configurable: true });
+  Object.defineProperty(URL, "revokeObjectURL", { value: jest.fn(), configurable: true });
+  return () => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(URL, name, descriptor);
+      else Reflect.deleteProperty(URL, name);
+    }
+  };
+}
+
 async function fillRequiredCreateFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/^first name\s*\*?$/i), "Ayesha");
   await user.type(screen.getByLabelText(/^last name\s*\*?$/i), "Khan");
@@ -161,6 +194,7 @@ describe("StaffFormDialog", () => {
         staff_type: "teaching",
         employment_status: "active",
         updated_at: "2026-09-01T00:00:00Z",
+        photo_url: null,
       });
       const onOpenChange = jest.fn();
       const user = userEvent.setup();
@@ -233,6 +267,7 @@ describe("StaffFormDialog", () => {
         staff_type: "teaching",
         employment_status: "active",
         updated_at: "2026-09-02T00:00:00Z",
+        photo_url: null,
       });
       const onOpenChange = jest.fn();
       const user = userEvent.setup();
@@ -341,6 +376,7 @@ describe("StaffFormDialog", () => {
           staff_type: "teaching",
           employment_status: "active",
           updated_at: "2026-09-01T00:00:00Z",
+          photo_url: null,
         },
         {
           id: "st-2",
@@ -352,6 +388,7 @@ describe("StaffFormDialog", () => {
           staff_type: "teaching",
           employment_status: "active",
           updated_at: "2026-09-01T00:00:00Z",
+          photo_url: null,
         },
       ]);
       mockFetchStaffById.mockResolvedValue(detailRecord());
@@ -370,6 +407,64 @@ describe("StaffFormDialog", () => {
       await user.click(reportsToTrigger);
       expect(await screen.findByRole("option", { name: /bilal ahmed/i })).toBeInTheDocument();
       expect(screen.queryByRole("option", { name: /ayesha khan/i })).not.toBeInTheDocument();
+    });
+
+    it("shows the saved photo in the preview", async () => {
+      const restoreImages = stubImageLoading("loaded");
+      try {
+        mockReferenceData();
+        mockFetchStaffById.mockResolvedValue(
+          detailRecord({ photo_file_id: "file-1", photo_url: "https://storage.test/ayesha.png" }),
+        );
+
+        renderWithProviders(
+          <StaffFormDialog open mode="edit" staffId="st-1" onOpenChange={jest.fn()} />,
+        );
+
+        const dialog = await screen.findByRole("dialog", { name: "Edit staff member" });
+        await waitFor(() => {
+          expect(dialog.querySelector("img")).toHaveAttribute(
+            "src",
+            "https://storage.test/ayesha.png",
+          );
+        });
+        expect(within(dialog).queryByText("Photo on file")).not.toBeInTheDocument();
+      } finally {
+        restoreImages();
+      }
+    });
+
+    it("shows the newly picked photo instead of the saved one", async () => {
+      const restoreImages = stubImageLoading("loaded");
+      const restoreObjectUrls = stubObjectUrls("blob:new-photo");
+      // Unmounted before the stubs are restored: the dialog revokes its object URL on unmount.
+      let unmount: (() => void) | undefined;
+      try {
+        mockReferenceData();
+        mockFetchStaffById.mockResolvedValue(
+          detailRecord({ photo_file_id: "file-1", photo_url: "https://storage.test/ayesha.png" }),
+        );
+        mockUploadFile.mockResolvedValue("file-2");
+        const user = userEvent.setup();
+
+        ({ unmount } = renderWithProviders(
+          <StaffFormDialog open mode="edit" staffId="st-1" onOpenChange={jest.fn()} />,
+        ));
+
+        const dialog = await screen.findByRole("dialog", { name: "Edit staff member" });
+        await user.upload(
+          await within(dialog).findByLabelText("Staff photo"),
+          new File(["png"], "new.png", { type: "image/png" }),
+        );
+
+        await waitFor(() => {
+          expect(dialog.querySelector("img")).toHaveAttribute("src", "blob:new-photo");
+        });
+      } finally {
+        unmount?.();
+        restoreObjectUrls();
+        restoreImages();
+      }
     });
   });
 
