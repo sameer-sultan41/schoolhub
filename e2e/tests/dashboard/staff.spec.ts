@@ -20,9 +20,10 @@ const campus = buildCampus({ id: "campus-main", name: "Main Campus" });
 const designation = buildDesignation({ id: "designation-teacher", name: "Teacher" });
 
 const PHOTO_URL = "https://storage.e2e.test/tenants/e2e/staff.photo/ayesha.png";
-// A 1×1 PNG — enough for Chromium to decode and report a natural width.
-const PNG_1X1 = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+// A 1×2 (portrait) PNG — non-square, so the test can prove the photo is cropped to the
+// circle rather than squashed into it.
+const PNG_1X2 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAIAAAAW4yFwAAAAEElEQVR4nGPQyr/BcCNfCwALkALjSLKGVwAAAABJRU5ErkJggg==",
   "base64",
 );
 
@@ -61,7 +62,7 @@ test.describe("staff directory", () => {
     );
     // Storage is not the API, so MockApi never sees the photo request — serve it here.
     await page.route(PHOTO_URL, (route) =>
-      route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X1 }),
+      route.fulfill({ status: 200, contentType: "image/png", body: PNG_1X2 }),
     );
     await staffPage.goto();
     await expect(staffPage.row("Ayesha Khan")).toBeVisible();
@@ -170,8 +171,12 @@ test.describe("staff directory", () => {
     const photo = staffPage.rowPhoto("Ayesha Khan");
     await expect(photo).toHaveAttribute("src", PHOTO_URL);
     await expect
-      .poll(() => photo.evaluate((image: HTMLImageElement) => image.naturalWidth))
-      .toBe(1);
+      .poll(() => photo.evaluate((image: HTMLImageElement) => image.naturalHeight))
+      .toBe(2);
+    // Cropped to the circle, not stretched: a portrait photo keeps its proportions.
+    await expect
+      .poll(() => photo.evaluate((image: HTMLImageElement) => getComputedStyle(image).objectFit))
+      .toBe("cover");
 
     await expect(staffPage.rowPhoto("Bilal Ahmed")).toHaveCount(0);
     await expect(staffPage.row("Bilal Ahmed").getByText("BA")).toBeVisible();
