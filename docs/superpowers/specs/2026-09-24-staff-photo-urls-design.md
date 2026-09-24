@@ -139,8 +139,10 @@ see that record, and it comfortably outlives the dashboard's query cache (30 s s
   joined row, so no link can be minted for another tenant's file. Storage keys are tenant-prefixed and the bucket stays private.
 - A link is a bearer capability for at most one hour; `Cache-Control: private` keeps shared
   caches (proxies, CDNs) from storing the image.
-- Write paths are unchanged: `photo_file_id` is still validated by `_fk` and
-  `assert_file_usable` (right purpose, upload confirmed).
+- `photo_file_id` is validated by `_fk` and `assert_file_usable` (right purpose, upload
+  confirmed) on create **and** on update — `StaffSerializer.validate_photo_file_id`, added
+  after review found PATCH skipped the check. The current photo passes unchanged, so records
+  whose photo predates the check stay editable.
 
 ## Testing
 

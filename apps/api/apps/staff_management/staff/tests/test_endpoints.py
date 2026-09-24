@@ -351,7 +351,8 @@ class StaffPhotoUrlTests(StaffManagementAPITestCase):
     def _staff_with_photo(self, **file_overrides):
         with tenant_context(self.tenant.id):
             photo = FileFactory(
-                tenant=self.tenant, purpose="staff.photo", mime_type="image/png", **file_overrides
+                tenant=self.tenant,
+                **{"purpose": "staff.photo", "mime_type": "image/png", **file_overrides},
             )
             staff = StaffFactory(tenant=self.tenant, campus=self.campus, photo_file=photo)
         return staff, photo
@@ -389,6 +390,38 @@ class StaffPhotoUrlTests(StaffManagementAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertIn(photo.storage_key, response.json()["data"]["photo_url"])
+
+    def test_patch_rejects_a_file_that_is_not_a_staff_photo(self) -> None:
+        self.allow("staff.staff.view", "staff.staff.update")
+        staff, photo = self._staff_with_photo()
+        with tenant_context(self.tenant.id):
+            document = FileFactory(
+                tenant=self.tenant, purpose="staff.document", mime_type="image/png"
+            )
+
+        response = self.client.patch(
+            f"/api/v1/staff/{staff.pk}", {"photo_file_id": str(document.pk)}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertEqual(staff.photo_file_id, photo.pk)
+
+    def test_patch_still_accepts_the_current_photo_unchanged(self) -> None:
+        # The dashboard re-sends photo_file_id on every edit; a record whose photo predates
+        # the purpose check must stay editable.
+        self.allow("staff.staff.view", "staff.staff.update")
+        staff, legacy = self._staff_with_photo(purpose="staff.document")
+
+        response = self.client.patch(
+            f"/api/v1/staff/{staff.pk}",
+            {"photo_file_id": str(legacy.pk), "first_name": "Renamed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["first_name"], "Renamed")
 
     def test_listing_photos_costs_no_query_per_row(self) -> None:
         self.allow("staff.staff.view")

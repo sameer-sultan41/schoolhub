@@ -17,8 +17,10 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.school_organization.models import Campus, Department
+from apps.staff_management import uploads
 from apps.staff_management.models import Designation, EmploymentStatus, Staff
 from apps.staff_management.serializers import READ_ONLY_FIELDS, _fk
+from apps.staff_management.services import assert_file_usable
 from apps.staff_management.staff.services.create import (
     assert_department_active,
     assert_designation_active,
@@ -94,6 +96,14 @@ class StaffSerializer(serializers.ModelSerializer):
         # employment_status/exit_date/exit_reason move only through the :exit
         # colon-action (§4/§7 exit workflow), never a plain PATCH.
         read_only_fields = (*READ_ONLY_FIELDS, "employment_status", "exit_date", "exit_reason")
+
+    def validate_photo_file_id(self, value: File | None) -> File | None:
+        # `_fk()` only proves the file exists in this tenant. Without this, a PATCH could
+        # point the photo at any ready file (a CNIC scan) and photo_url would sign it for
+        # every viewer. The current photo passes unchecked: edits re-send it unchanged.
+        if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
+            assert_file_usable(file=value, purpose=uploads.STAFF_PHOTO.key)
+        return value
 
     def validate_employee_number(self, value: str) -> str:
         if self.instance is not None:
