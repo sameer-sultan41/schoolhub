@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from django.db import transaction
 
 from core.api.exceptions import Conflict, DomainRuleViolation
@@ -119,6 +120,22 @@ def confirm_upload(*, file: File, actor_id: uuid.UUID) -> File:
 
 def get_download_url(file: File) -> str:
     return get_presigner().presign_download(storage_key=file.storage_key)
+
+
+def get_display_url(file: File) -> str | None:
+    """A link for rendering the file inline (an avatar), or ``None`` if it must not show.
+
+    Checks ``deleted_at`` itself: ``select_related`` joins a soft-deleted row regardless of
+    the default manager.
+    """
+    if file.status != FileStatus.READY or file.deleted_at is not None:
+        return None
+    ttl = settings.FILE_DISPLAY_URL_TTL_SECONDS
+    return get_presigner().presign_download(
+        storage_key=file.storage_key,
+        expires_in=ttl,
+        cache_control=f"private, max-age={ttl}",
+    )
 
 
 def create_ready_file(
