@@ -9229,6 +9229,8 @@ export interface components {
             date_of_birth?: string | null;
             /** Format: uuid */
             photo_file_id?: string | null;
+            /** Format: uri */
+            readonly photo_url?: string | null;
             staff_type?: components["schemas"]["StaffTypeEnum"];
             /** Format: uuid */
             campus_id?: string;
@@ -10100,6 +10102,8 @@ export interface components {
             date_of_birth?: string | null;
             /** Format: uuid */
             photo_file_id?: string | null;
+            /** Format: uri */
+            readonly photo_url: string | null;
             staff_type: components["schemas"]["StaffTypeEnum"];
             /** Format: uuid */
             campus_id: string;

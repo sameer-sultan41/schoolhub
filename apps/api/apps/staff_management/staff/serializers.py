@@ -28,6 +28,7 @@ from apps.staff_management.staff.services.create import (
     resolve_tenant_user_id,
 )
 from core.files.models import File
+from core.files.serializers import SignedFileURLField
 
 
 class StaffSerializer(serializers.ModelSerializer):
@@ -36,6 +37,9 @@ class StaffSerializer(serializers.ModelSerializer):
     designation_id = _fk(Designation, source="designation", required=False, allow_null=True)
     reports_to_staff_id = _fk(Staff, source="reports_to", required=False, allow_null=True)
     photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
+    # The photo above as a display link. get_queryset's select_related("photo_file") keeps it
+    # from costing a query per row.
+    photo_url = SignedFileURLField(source="photo_file")
     # Explicitly optional, not read-only: the service always generates it
     # server-side on create (viewset.py's perform_create never reads it out of
     # validated_data) and validate_employee_number rejects a changed value on
@@ -64,6 +68,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "gender",
             "date_of_birth",
             "photo_file_id",
+            "photo_url",
             "staff_type",
             "campus_id",
             "campus_name",
