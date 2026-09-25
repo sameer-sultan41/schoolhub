@@ -95,9 +95,7 @@ test.describe("keyboard shortcut", () => {
             elWidth: cs?.width,
             elPosition: cs?.position,
             elDisplay: cs?.display,
-            rect: el?.getBoundingClientRect
-              ? JSON.parse(JSON.stringify(el.getBoundingClientRect()))
-              : null,
+            rectWidth: el?.getBoundingClientRect().width,
             viewport: { w: window.innerWidth, h: window.innerHeight },
           };
         }),
