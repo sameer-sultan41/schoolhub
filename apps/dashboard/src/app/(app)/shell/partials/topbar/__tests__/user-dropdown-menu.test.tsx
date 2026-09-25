@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
@@ -8,23 +8,33 @@ import messages from "../../../../../../../messages/en.json";
 import { Services } from "@/services";
 import { UserDropdownMenu } from "../user-dropdown-menu";
 
+// Module-scoped, not created inside the mock factories below: `useRouter`/`useTheme` are
+// called fresh on every render, and a factory that returns `{ replace: jest.fn() }`
+// inline would hand a NEW mock to each render — a test asserting "called with X" would be
+// asserting on whichever jest.fn() happened to back the render that handled the click,
+// not one it can reliably hold a reference to.
+const mockRouterReplace = jest.fn();
+const mockRouterRefresh = jest.fn();
+const mockSetTheme = jest.fn();
+
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: jest.fn() }),
+  useRouter: () => ({ replace: mockRouterReplace, refresh: mockRouterRefresh }),
 }));
 
 jest.mock("next-themes", () => ({
-  useTheme: () => ({ theme: "light", setTheme: jest.fn() }),
+  useTheme: () => ({ theme: "light", setTheme: mockSetTheme }),
 }));
 
 jest.mock("@/lib/auth", () => ({ logout: jest.fn() }));
 
 jest.mock("@/services", () => ({
-  Services: { auth: { fetchCurrentUser: jest.fn() } },
+  Services: { auth: { fetchCurrentUser: jest.fn(), logout: jest.fn() } },
 }));
 
 const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFunction<
   typeof Services.auth.fetchCurrentUser
 >;
+const mockLogout = Services.auth.logout as jest.MockedFunction<typeof Services.auth.logout>;
 
 function renderMenu(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -43,7 +53,25 @@ async function openMenu() {
 describe("UserDropdownMenu", () => {
   beforeEach(() => {
     mockFetchCurrentUser.mockReset();
+    mockLogout.mockReset();
+    mockRouterReplace.mockReset();
+    mockRouterRefresh.mockReset();
+    mockSetTheme.mockReset();
   });
+
+  function baseUser() {
+    return {
+      id: "u1",
+      email: "school_admin@demo.localhost",
+      phone: null,
+      full_name: "School Admin Demo",
+      avatar_url: null,
+      locale: "en",
+      tenant_id: "t1",
+      roles: [],
+      permissions: [],
+    };
+  }
 
   it("shows the real signed-in user's name, contact and role, not a hardcoded sample profile", async () => {
     mockFetchCurrentUser.mockResolvedValue({
@@ -125,5 +153,85 @@ describe("UserDropdownMenu", () => {
 
     await screen.findByText("No Role");
     expect(screen.queryByText("Pro")).not.toBeInTheDocument();
+  });
+
+  describe("Logout", () => {
+    it("signs out and always lands on /login, even on a genuine failure", async () => {
+      mockFetchCurrentUser.mockResolvedValue(baseUser());
+      mockLogout.mockResolvedValue(undefined);
+      const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+      const user = userEvent.setup();
+
+      renderMenu(<UserDropdownMenu />);
+      await openMenu();
+      await user.click(await screen.findByRole("button", { name: "Logout" }));
+
+      expect(mockLogout).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(mockRouterReplace).toHaveBeenCalledWith("/login");
+      });
+      expect(consoleError).not.toHaveBeenCalled();
+
+      consoleError.mockRestore();
+    });
+
+    it("still reaches /login when the sign-out request itself fails, and logs it", async () => {
+      mockFetchCurrentUser.mockResolvedValue(baseUser());
+      const failure = new Error("network down");
+      mockLogout.mockRejectedValue(failure);
+      const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+      const user = userEvent.setup();
+
+      renderMenu(<UserDropdownMenu />);
+      await openMenu();
+      await user.click(await screen.findByRole("button", { name: "Logout" }));
+
+      await waitFor(() => {
+        expect(mockRouterReplace).toHaveBeenCalledWith("/login");
+      });
+      expect(consoleError).toHaveBeenCalledWith("Sign-out request failed unexpectedly:", failure);
+
+      consoleError.mockRestore();
+    });
+  });
+
+  describe("Dark Mode", () => {
+    it("switching it on calls setTheme('dark')", async () => {
+      mockFetchCurrentUser.mockResolvedValue(baseUser());
+      const user = userEvent.setup();
+
+      renderMenu(<UserDropdownMenu />);
+      await openMenu();
+      await user.click(await screen.findByRole("switch"));
+
+      expect(mockSetTheme).toHaveBeenCalledWith("dark");
+    });
+  });
+
+  describe("Language", () => {
+    it("picking the already-active locale is a no-op — no cookie write, no refresh", async () => {
+      mockFetchCurrentUser.mockResolvedValue(baseUser());
+      const user = userEvent.setup();
+
+      renderMenu(<UserDropdownMenu />);
+      await openMenu();
+      await user.click(await screen.findByRole("menuitem", { name: /Language/i }));
+      await user.click(await screen.findByRole("menuitemradio", { name: /English/i }));
+
+      expect(mockRouterRefresh).not.toHaveBeenCalled();
+    });
+
+    it("picking a different locale sets the locale cookie and refreshes the server render", async () => {
+      mockFetchCurrentUser.mockResolvedValue(baseUser());
+      const user = userEvent.setup();
+
+      renderMenu(<UserDropdownMenu />);
+      await openMenu();
+      await user.click(await screen.findByRole("menuitem", { name: /Language/i }));
+      await user.click(await screen.findByRole("menuitemradio", { name: /اردو/ }));
+
+      expect(document.cookie).toContain("sh_locale=ur");
+      expect(mockRouterRefresh).toHaveBeenCalledTimes(1);
+    });
   });
 });
