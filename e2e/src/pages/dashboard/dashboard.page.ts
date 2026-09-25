@@ -10,6 +10,20 @@ export class DashboardPage extends BasePage {
   }
 
   /**
+   * The desktop sidebar rail specifically, by its own `data-testid`.
+   *
+   * Not `nav`: that locator's name is `t("nav.primary")`, which is itself translated —
+   * fine for an English-locale test, useless for one that renders under `ur`. And a bare
+   * `getByRole("navigation")` strict-mode-violates here regardless of locale, because the
+   * footer and the header breadcrumb are both real, separately-named `nav` landmarks on
+   * this page too. This is the one control on the page whose testid exists purely to give
+   * a locale-independent test something unambiguous to grab.
+   */
+  get desktopSidebar(): Locator {
+    return this.page.getByTestId("app-sidebar-nav");
+  }
+
+  /**
    * A navigation entry by its visible label, e.g. `navLink("Fees & Finance")`.
    *
    * Deliberately a link and nothing else: a module with no route yet renders as a disabled
@@ -34,7 +48,9 @@ export class DashboardPage extends BasePage {
    */
   async openUserMenu(): Promise<Locator> {
     await this.userMenu.click();
-    return this.page.getByRole("menuitem", { name: "Sign out" });
+    // A plain button in the panel's footer, not a menuitem — the trigger's own name is
+    // "Logout" (user-dropdown-menu.tsx), not "Sign out".
+    return this.page.getByRole("button", { name: "Logout" });
   }
 
   /**

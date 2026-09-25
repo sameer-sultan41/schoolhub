@@ -40,9 +40,11 @@ test.describe("sidebar direction", () => {
     // Not dashboardPage.nav: that locator hardcodes the English accessible name, and the
     // nav's name is itself translated under ur (confirmed against the real accessibility
     // tree — the correct Urdu translation of "Primary navigation") — exactly what a real
-    // RTL user gets, and exactly why this asserts by role alone rather than switching to
-    // a second, ur-specific locator.
-    const nav = page.getByRole("navigation");
+    // RTL user gets. Not a bare getByRole("navigation") either: the footer and the header
+    // breadcrumb are both separately-named nav landmarks on this same page, so a
+    // role-only query strict-mode-violates regardless of locale. dashboardPage.desktopSidebar
+    // is the one locale-independent way to reach this specific landmark.
+    const nav = dashboardPage.desktopSidebar;
     await expect(nav).toBeVisible();
     const box = await nav.boundingBox();
     const viewport = page.viewportSize();
@@ -97,9 +99,12 @@ test.describe("mobile navigation drawer", () => {
     await page.setViewportSize({ width: 500, height: 800 });
     await dashboardPage.goto();
 
-    // Below the breakpoint, Sidebar's own isMobile check swaps to the Sheet-based render
-    // entirely — the desktop nav isn't in the tree at all, only the trigger is.
-    await expect(page.getByRole("navigation")).toHaveCount(0);
+    // Below the breakpoint, Shell's own isMobile check drops <Sidebar /> from the tree
+    // entirely (apps/dashboard/.../shell/shell.tsx: `{!isMobile && <Sidebar />}`) — only
+    // the trigger remains. Scoped to the desktop rail specifically, not a bare
+    // getByRole("navigation"): the footer and header breadcrumb are separately-named nav
+    // landmarks that stay mounted on mobile too, so a role-only count is never 0 here.
+    await expect(dashboardPage.desktopSidebar).toHaveCount(0);
 
     await page.getByRole("button", { name: "Primary navigation" }).click();
 
