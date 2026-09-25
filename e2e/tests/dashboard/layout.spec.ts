@@ -110,10 +110,13 @@ test.describe("mobile navigation drawer", () => {
 
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
     await expect(nav).toBeVisible();
-    const studentsLink = nav.getByRole("link", { name: "Dashboard" });
-    await expect(studentsLink).toBeVisible();
+    // "Light Sidebar" is the actual current label for the /dashboard entry (menu-config.ts's
+    // "Dashboards" group still carries its original Metronic demo item names) — not this
+    // test's concern to rename, just to click whatever really routes to /dashboard.
+    const dashboardLink = nav.getByRole("link", { name: "Light Sidebar" });
+    await expect(dashboardLink).toBeVisible();
 
-    await studentsLink.click();
+    await dashboardLink.click();
 
     await expect(page).toHaveURL(/\/dashboard/);
     // The drawer must not survive a client-side route change — SidebarProvider's mobile
