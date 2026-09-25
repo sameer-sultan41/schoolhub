@@ -13,6 +13,14 @@ import { DashboardPageContent } from "../dashboard-page-content";
  * to stay pending — never resolving is fine here, since nothing in this file asserts on
  * a widget's own rendered data.
  */
+// `ToolbarHeading` (inside `Toolbar`) calls `usePathname()` to resolve a fallback title
+// from menu-config.ts — outside a real Next.js App Router tree `usePathname()` returns
+// `null`, and `useMenu`'s own `isActive` unconditionally calls `pathname.startsWith(...)`,
+// which throws on it. Same fixed-pathname convention as staff-toolbar.test.tsx.
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard",
+}));
+
 jest.mock("@/lib/preferences/preferences-cookies.client", () => ({
   writePreferenceCookie: jest.fn(),
 }));
