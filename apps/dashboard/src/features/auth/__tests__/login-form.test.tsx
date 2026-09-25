@@ -37,10 +37,11 @@ function makeLoginResponse(): LoginResponse {
 }
 
 const mockReplace = jest.fn();
+const mockRefresh = jest.fn();
 const mockGet = jest.fn();
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({ replace: mockReplace, refresh: mockRefresh }),
   useSearchParams: () => ({ get: mockGet }),
 }));
 
@@ -61,6 +62,7 @@ describe("LoginForm", () => {
   beforeEach(() => {
     mockLogin.mockReset();
     mockReplace.mockReset();
+    mockRefresh.mockReset();
     mockGet.mockReset().mockReturnValue(null);
   });
 

@@ -210,13 +210,16 @@ function detailToFormValues(detail: StaffDetailRecord): StaffFormValues {
 }
 
 /**
- * A genuinely untouched `""` maps to `undefined` — the key omitted from the request
- * body. `gender`/`date_of_birth`/`email`/`national_id`/`public_bio`/`photo_file_id`
- * never offer a UNSET_VALUE "None" option (see their `<Select>`/`<Input>` above), so
- * for those fields `""` is the only sentinel this ever sees.
+ * A genuinely untouched `""`, or UNSET_VALUE ("None") for a field where "None" has no
+ * server-side meaning, both map to `undefined` — the key omitted from the request body.
+ * `employment_type` offers "None" in its `<Select>` but its model field has no
+ * `null=True` of its own, so there's nothing a "clear" could mean server-side; its
+ * UNSET_VALUE stays a no-op here, same as before. Every other field this is used for
+ * (`gender`/`date_of_birth`/`email`/`national_id`/`public_bio`/`photo_file_id`) never
+ * offers UNSET_VALUE at all, so `""` is the only sentinel those ever see.
  */
 function optional(value: string): string | undefined {
-  return value === "" ? undefined : value;
+  return value === "" || value === UNSET_VALUE ? undefined : value;
 }
 
 /**
@@ -226,9 +229,7 @@ function optional(value: string): string | undefined {
  * user actively asking to clear the relation, mapped to a real `null` so `updateStaff`
  * sends it through and the API actually clears it — DRF's PrimaryKeyRelatedField
  * rejects `""` outright (it tries to look up a row with that pk), so `null` is the only
- * value that works here. `employment_type` also offers "None" but keeps `optional`
- * above, not this: its model field has no `null=True` of its own — there's nothing a
- * "clear" could mean server-side, so its UNSET_VALUE stays a no-op (same as before).
+ * value that works here.
  */
 function optionalClearable(value: string): string | null | undefined {
   if (value === UNSET_VALUE) return null;

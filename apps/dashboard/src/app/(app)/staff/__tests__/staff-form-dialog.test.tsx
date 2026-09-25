@@ -292,9 +292,12 @@ describe("StaffFormDialog", () => {
           lastName: "Khan",
           staffType: "teaching",
           phone: "+92000000000",
-          departmentId: undefined,
-          designationId: undefined,
-          reportsToStaffId: undefined,
+          // null, not undefined: detailRecord()'s department/designation/reports_to are
+          // all null, so the form loads each Select on UNSET_VALUE ("None") — submitting
+          // unchanged sends an explicit null for each, same as an active clear would.
+          departmentId: null,
+          designationId: null,
+          reportsToStaffId: null,
           photoFileId: undefined,
           gender: undefined,
           dateOfBirth: undefined,

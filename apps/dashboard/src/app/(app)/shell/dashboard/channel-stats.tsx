@@ -37,7 +37,7 @@ export function ChannelStats() {
     );
   }
 
-  if (isPending || !data) {
+  if (isPending) {
     return (
       <>
         {[0, 1, 2, 3].map((index) => (
