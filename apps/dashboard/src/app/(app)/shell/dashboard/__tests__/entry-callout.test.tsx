@@ -24,6 +24,14 @@ describe("EntryCallout", () => {
     expect(screen.queryByText(/Welcome back/)).not.toBeInTheDocument();
   });
 
+  it("still greets, without a name, if the current-user fetch fails", async () => {
+    mockFetchCurrentUser.mockRejectedValue(new Error("network down"));
+
+    renderWithProviders(<EntryCallout />);
+
+    expect(await screen.findByText("Welcome back")).toBeInTheDocument();
+  });
+
   it("greets the signed-in user by name once loaded", async () => {
     mockFetchCurrentUser.mockResolvedValue({
       id: "u1",

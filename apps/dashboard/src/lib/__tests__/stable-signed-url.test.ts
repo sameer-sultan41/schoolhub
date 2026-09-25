@@ -39,6 +39,10 @@ describe("stableSignedUrl", () => {
     expect(stableSignedUrl(other, T0)).toBe(other);
   });
 
+  it("passes through a string that isn't a URL at all, rather than throwing", () => {
+    expect(stableSignedUrl("not a url", T0)).toBe("not a url");
+  });
+
   it("passes through links it cannot date, and null", () => {
     const first = "https://null-presigner.invalid/tenants/t/e.png";
     const second = "https://null-presigner.invalid/tenants/t/e.png?v=2";
