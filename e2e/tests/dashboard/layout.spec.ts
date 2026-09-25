@@ -75,32 +75,17 @@ test.describe("keyboard shortcut", () => {
     // at x=0 and narrows it to `--sidebar-width-icon` instead — so the old assertion
     // failed against a sidebar that was collapsing perfectly well. Width is what changes
     // under either mode.
+    //
+    // The pointer matters here: demo1.css gives a collapsed rail a deliberate hover-to-peek
+    // affordance (`.sidebar-collapse .sidebar:hover { width: var(--sidebar-default-width) }`),
+    // and Playwright's virtual pointer defaults to (0,0) — geometrically inside the sidebar,
+    // which sits at the viewport's top-left corner — so without an explicit move away first,
+    // every check below was accidentally "hovering" the collapsed rail back to full width the
+    // entire time (confirmed via a live computed-style dump: --sidebar-width correctly read
+    // 80px on the element itself, yet its rendered width stayed exactly 280px throughout).
+    const awayFromSidebar = { x: 700, y: 400 };
     await page.keyboard.press("Control+b");
-    await page.waitForTimeout(500);
-    // eslint-disable-next-line no-console -- temporary diagnostic, removed once root-caused
-    console.log(
-      "DIAG",
-      JSON.stringify(
-        await page.evaluate(() => {
-          const matches = document.querySelectorAll('[data-testid="app-sidebar-nav"]');
-          const el = matches[0];
-          const cs = el ? getComputedStyle(el) : null;
-          return {
-            matchCount: matches.length,
-            bodyClass: document.body.className,
-            elClass: el?.className,
-            elInlineStyle: el?.getAttribute("style"),
-            bodySidebarWidthVar: getComputedStyle(document.body).getPropertyValue("--sidebar-width"),
-            elSidebarWidthVar: cs?.getPropertyValue("--sidebar-width"),
-            elWidth: cs?.width,
-            elPosition: cs?.position,
-            elDisplay: cs?.display,
-            rectWidth: el?.getBoundingClientRect().width,
-            viewport: { w: window.innerWidth, h: window.innerHeight },
-          };
-        }),
-      ),
-    );
+    await page.mouse.move(awayFromSidebar.x, awayFromSidebar.y);
     await expect.poll(async () => (await nav.boundingBox())?.width).toBeLessThan(openWidth / 2);
 
     // The regression this test exists for: SidebarProvider's own toggleSidebar/setOpen
@@ -111,6 +96,7 @@ test.describe("keyboard shortcut", () => {
     // it already held and React silently dropped it: the sidebar collapsed once and
     // then never came back.
     await page.keyboard.press("Control+b");
+    await page.mouse.move(awayFromSidebar.x, awayFromSidebar.y);
     await expect.poll(async () => (await nav.boundingBox())?.width).toBeGreaterThan(openWidth - 10);
   });
 });
