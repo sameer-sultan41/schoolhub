@@ -1,5 +1,6 @@
 import {
   Bolt,
+  GraduationCap,
   IdCard,
   LayoutGrid,
   Package,
@@ -34,7 +35,8 @@ export const MENU_SIDEBAR: MenuConfig = [
     ],
   },
   { heading: "School" },
-  { title: "Staff", icon: IdCard, path: "/staff" },
+  { title: "Students", icon: GraduationCap, path: "/students", module: "students" },
+  { title: "Staff", icon: IdCard, path: "/staff", module: "staff" },
   { heading: "User" },
   {
     title: "Public Profile",

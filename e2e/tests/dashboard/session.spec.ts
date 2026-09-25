@@ -66,10 +66,7 @@ test.describe("navigation is filtered by permission", () => {
 test.describe("a user with no permissions", () => {
   test.use({ authUser: buildUserWithoutPermissions() });
 
-  // Nav is not permission-filtered yet — every NAV_GROUPS entry renders regardless of the
-  // viewer's permissions (see docs/metronic-dashboard-shell.md's backlog). Skipped until
-  // that chunk lands.
-  test.skip("sees no module links at all", async ({ dashboardPage, signedIn: _signedIn }) => {
+  test("sees no module links at all", async ({ dashboardPage, signedIn: _signedIn }) => {
     await dashboardPage.goto();
 
     await expect(dashboardPage.nav).toBeVisible();
