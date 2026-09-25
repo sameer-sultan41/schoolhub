@@ -110,17 +110,20 @@ test.describe("mobile navigation drawer", () => {
 
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
     await expect(nav).toBeVisible();
-    // "Light Sidebar" is the actual current label for the /dashboard entry (menu-config.ts's
-    // "Dashboards" group still carries its original Metronic demo item names) — not this
-    // test's concern to rename, just to click whatever really routes to /dashboard.
-    const dashboardLink = nav.getByRole("link", { name: "Light Sidebar" });
-    await expect(dashboardLink).toBeVisible();
+    // A link to a genuinely different route, not "Light Sidebar" (the current entry for
+    // /dashboard, menu-config.ts's original Metronic demo naming): the close-on-navigate
+    // behaviour below is keyed on the pathname actually changing (header.tsx's
+    // `pathname !== prevPathname` effect), so clicking a same-page link would never
+    // exercise it — that isn't a bug, it's correctly a no-op.
+    const staffLink = nav.getByRole("link", { name: "Staff" });
+    await expect(staffLink).toBeVisible();
 
-    await dashboardLink.click();
+    await staffLink.click();
 
-    await expect(page).toHaveURL(/\/dashboard/);
-    // The drawer must not survive a client-side route change — SidebarProvider's mobile
-    // state has no navigation-aware close of its own; this only holds if the app wires it.
+    await expect(page).toHaveURL(/\/staff/);
+    // The drawer must not survive a client-side route change — the header's own
+    // isSidebarSheetOpen state closes on any pathname change; this only holds if that
+    // effect actually fires for a real navigation.
     await expect(nav).toHaveCount(0);
   });
 });
