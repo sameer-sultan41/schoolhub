@@ -35,6 +35,20 @@ describe("LayoutControls", () => {
     expect(document.documentElement.getAttribute("data-sidebar-variant")).toBe("floating");
   });
 
+  it("re-clicking the already-pressed option is a deselect Radix reports as '' — ignored, not cleared", async () => {
+    const user = userEvent.setup();
+    renderControls(<LayoutControls />);
+
+    await user.click(screen.getByRole("button", { name: "Preferences" }));
+    const floating = await screen.findByRole("radio", { name: "Floating" });
+    await user.click(floating);
+    await user.click(floating);
+
+    // Still "floating", not fallen back to "sidebar": there is no "no preference" state
+    // for this control to collapse into.
+    expect(document.documentElement.getAttribute("data-sidebar-variant")).toBe("floating");
+  });
+
   it("Reset to defaults puts every preference — including one just changed — back", async () => {
     const user = userEvent.setup();
     renderControls(<LayoutControls />);

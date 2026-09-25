@@ -343,6 +343,49 @@ describe("DashboardService", () => {
       });
       expect(result).toEqual(created);
     });
+
+    it("includes every optional field when the caller provides all of them", async () => {
+      const { createStaff } = await import("../dashboard-service");
+      mockPost.mockResolvedValue({ data: {} });
+
+      await createStaff({
+        campusId: "campus-1",
+        joiningDate: "2026-09-01",
+        firstName: "Ayesha",
+        lastName: "Khan",
+        staffType: "teaching",
+        phone: "+92-300-0000000",
+        departmentId: "dept-1",
+        designationId: "des-1",
+        reportsToStaffId: "staff-1",
+        userId: "user-1",
+        photoFileId: "file-1",
+        gender: "female",
+        dateOfBirth: "1990-01-01",
+        employmentType: "full_time",
+        email: "ayesha@example.com",
+        nationalId: "12345",
+        publicBio: "Bio",
+        address: { line1: "1 Main St" },
+      });
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/staff",
+        expect.objectContaining({
+          department_id: "dept-1",
+          designation_id: "des-1",
+          reports_to_staff_id: "staff-1",
+          user_id: "user-1",
+          photo_file_id: "file-1",
+          gender: "female",
+          date_of_birth: "1990-01-01",
+          employment_type: "full_time",
+          national_id: "12345",
+          public_bio: "Bio",
+          address: { line1: "1 Main St" },
+        }),
+      );
+    });
   });
 
   describe("updateStaff", () => {
@@ -372,6 +415,64 @@ describe("DashboardService", () => {
         designation_id: "des-2",
       });
       expect(result).toEqual(updated);
+    });
+
+    it("includes every required-ish and optional field when the caller provides all of them", async () => {
+      const { updateStaff } = await import("../dashboard-service");
+      mockPatch.mockResolvedValue({ data: {} });
+
+      await updateStaff("st-1", {
+        campusId: "campus-2",
+        joiningDate: "2026-09-02",
+        firstName: "Ayesha",
+        lastName: "Siddiqui",
+        staffType: "non_teaching",
+        phone: "+92-300-2222222",
+        departmentId: "dept-2",
+        designationId: "des-2",
+        reportsToStaffId: "staff-2",
+        userId: "user-2",
+        photoFileId: "file-2",
+        gender: "female",
+        dateOfBirth: "1990-01-01",
+        employmentType: "part_time",
+        email: "ayesha@example.com",
+        nationalId: "54321",
+        publicBio: "Bio",
+        address: { line1: "2 Main St" },
+      });
+
+      expect(mockPatch).toHaveBeenCalledWith(
+        "/staff/st-1",
+        expect.objectContaining({
+          campus_id: "campus-2",
+          joining_date: "2026-09-02",
+          first_name: "Ayesha",
+          last_name: "Siddiqui",
+          staff_type: "non_teaching",
+          department_id: "dept-2",
+          designation_id: "des-2",
+          reports_to_staff_id: "staff-2",
+          user_id: "user-2",
+          photo_file_id: "file-2",
+          gender: "female",
+          date_of_birth: "1990-01-01",
+          employment_type: "part_time",
+          email: "ayesha@example.com",
+          national_id: "54321",
+          public_bio: "Bio",
+          address: { line1: "2 Main St" },
+        }),
+      );
+    });
+
+    it("sends an empty body when nothing, not even phone, has changed", async () => {
+      const { updateStaff } = await import("../dashboard-service");
+      mockPatch.mockResolvedValue({ data: {} });
+
+      await updateStaff("st-1", {});
+
+      expect(mockPatch).toHaveBeenCalledWith("/staff/st-1", {});
     });
   });
 
