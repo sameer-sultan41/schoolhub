@@ -34,9 +34,22 @@ export class DashboardPage extends BasePage {
     return this.nav.getByRole("link", { name });
   }
 
-  /** The avatar button in the header; the account menu hangs off it. */
+  /**
+   * The avatar trigger in the header; the account menu hangs off it.
+   *
+   * By testid, not role+name: the Avatar (user-dropdown-menu.tsx) carries no accessible
+   * name or button role of its own — Radix's DropdownMenuTrigger asChild composition
+   * doesn't synthesize one, so it shows up in the accessibility tree as a nameless
+   * generic element (confirmed against a real CI accessibility snapshot). A prior
+   * getByRole("button", { name: "Account" }) here didn't fail loudly; it silently
+   * matched an unrelated "Account" link nested in the sidebar's own "My Account"
+   * accordion instead, which is worse than a locator that can't find anything. The
+   * trigger's own testid ("user-menu-trigger") already exists in the source for exactly
+   * this reason. The underlying gap — this control has no accessible name at all — is
+   * itself worth filing as an accessibility bug.
+   */
   get userMenu(): Locator {
-    return this.page.getByRole("button", { name: "Account" });
+    return this.page.getByTestId("user-menu-trigger");
   }
 
   /**
