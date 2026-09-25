@@ -5,6 +5,9 @@ import { render } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
 import messages from "../../../../../../../messages/en.json";
+
+const ENGLISH_LABEL = messages.nav.locale.en;
+const URDU_LABEL = messages.nav.locale.ur;
 import { Services } from "@/services";
 import { UserDropdownMenu } from "../user-dropdown-menu";
 
@@ -216,7 +219,9 @@ describe("UserDropdownMenu", () => {
       renderMenu(<UserDropdownMenu />);
       await openMenu();
       await user.click(await screen.findByRole("menuitem", { name: /Language/i }));
-      await user.click(await screen.findByRole("menuitemradio", { name: /English/i }));
+      await user.click(
+        await screen.findByRole("menuitemradio", { name: new RegExp(ENGLISH_LABEL) }),
+      );
 
       expect(mockRouterRefresh).not.toHaveBeenCalled();
     });
@@ -228,7 +233,7 @@ describe("UserDropdownMenu", () => {
       renderMenu(<UserDropdownMenu />);
       await openMenu();
       await user.click(await screen.findByRole("menuitem", { name: /Language/i }));
-      await user.click(await screen.findByRole("menuitemradio", { name: /اردو/ }));
+      await user.click(await screen.findByRole("menuitemradio", { name: new RegExp(URDU_LABEL) }));
 
       expect(document.cookie).toContain("sh_locale=ur");
       expect(mockRouterRefresh).toHaveBeenCalledTimes(1);

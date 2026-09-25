@@ -30,7 +30,7 @@ describe("LayoutControls", () => {
     renderControls(<LayoutControls />);
 
     await user.click(screen.getByRole("button", { name: "Preferences" }));
-    await user.click(await screen.findByRole("button", { name: "Floating" }));
+    await user.click(await screen.findByRole("radio", { name: "Floating" }));
 
     expect(document.documentElement.getAttribute("data-sidebar-variant")).toBe("floating");
   });
@@ -40,7 +40,7 @@ describe("LayoutControls", () => {
     renderControls(<LayoutControls />);
 
     await user.click(screen.getByRole("button", { name: "Preferences" }));
-    await user.click(await screen.findByRole("button", { name: "Floating" }));
+    await user.click(await screen.findByRole("radio", { name: "Floating" }));
     expect(document.documentElement.getAttribute("data-sidebar-variant")).toBe("floating");
 
     await user.click(screen.getByRole("button", { name: "Reset to defaults" }));
