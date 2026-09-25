@@ -76,6 +76,22 @@ test.describe("keyboard shortcut", () => {
     // failed against a sidebar that was collapsing perfectly well. Width is what changes
     // under either mode.
     await page.keyboard.press("Control+b");
+    // eslint-disable-next-line no-console -- temporary diagnostic, removed once root-caused
+    console.log(
+      "DIAG",
+      JSON.stringify(
+        await page.evaluate(() => {
+          const el = document.querySelector('[data-testid="app-sidebar-nav"]');
+          const cs = el ? getComputedStyle(el) : null;
+          return {
+            bodyClass: document.body.className,
+            sidebarWidthVar: getComputedStyle(document.body).getPropertyValue("--sidebar-width"),
+            elWidth: cs?.width,
+            viewport: { w: window.innerWidth, h: window.innerHeight },
+          };
+        }),
+      ),
+    );
     await expect.poll(async () => (await nav.boundingBox())?.width).toBeLessThan(openWidth / 2);
 
     // The regression this test exists for: SidebarProvider's own toggleSidebar/setOpen
