@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, Skeleton } from "@schoolhub/ui";
 
 import { Services } from "@/services";
+import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
 /** Local calendar date as `YYYY-MM-DD`. Local, not UTC: "today" is the viewer's today. */
 function toIsoDate(now: Date): string {
@@ -54,7 +55,7 @@ export function TeamMeeting() {
   const now = useNow(60_000);
   const date = useMemo(() => toIsoDate(now), [now]);
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: ["dashboard", "my-timetable", date],
     queryFn: () => Services.dashboard.fetchMyTimetable(date),
   });
@@ -70,6 +71,14 @@ export function TeamMeeting() {
         .find((slot) => timeToMinutes(slot.end_time) > nowMinutes) ?? null
     );
   }, [data, now]);
+
+  if (isError) {
+    return (
+      <Card className="h-full">
+        <QueryErrorMessage error={error} />
+      </Card>
+    );
+  }
 
   if (isPending) {
     return (

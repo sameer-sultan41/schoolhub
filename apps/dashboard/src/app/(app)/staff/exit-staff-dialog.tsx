@@ -170,6 +170,9 @@ export function ExitStaffDialog({
         // the same batch failed, so the directory/toolbar queries are invalidated
         // regardless of whether every id made it through.
         void queryClient.invalidateQueries({ queryKey: ["staff"] });
+        // Dashboard-home's widgets key their own queries off a separate ["dashboard", ...]
+        // prefix (see staff-form-dialog.tsx's own mutation for why this needs its own call).
+        void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       }
 
       if (result.failed.length === 0) {

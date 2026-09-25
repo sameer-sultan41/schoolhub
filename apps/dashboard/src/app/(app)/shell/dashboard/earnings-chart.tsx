@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, Skeleton } from "@schoolhub/ui";
 
 import { Services } from "@/services";
+import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
 // apexcharts touches `window` at import time, so it's loaded client-only via
 // next/dynamic — same reasoning as the vendor template's own earnings-chart.tsx.
@@ -50,6 +51,8 @@ export function EarningsChart() {
   );
 
   const isPending = sessions.isPending || (sessionId !== null && load.isPending);
+  const isError = sessions.isError || load.isError;
+  const queryError = sessions.error ?? load.error;
 
   const options: ApexOptions = {
     series: [{ name: "Weekly periods", data: rows.map((row) => row.weekly_periods) }],
@@ -85,7 +88,9 @@ export function EarningsChart() {
         <CardTitle>Teacher Load</CardTitle>
       </CardHeader>
       <CardContent className="flex grow flex-col items-stretch justify-end px-3 py-1">
-        {isPending ? (
+        {isError ? (
+          <QueryErrorMessage error={queryError} />
+        ) : isPending ? (
           <Skeleton className="h-[250px] w-full" />
         ) : rows.length > 0 ? (
           <ApexChart

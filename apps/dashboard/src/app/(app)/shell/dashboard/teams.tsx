@@ -39,6 +39,7 @@ import {
 
 import { Services } from "@/services";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
+import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
 /**
  * Repurposed from the vendor Metronic template's teams.tsx (originally seven
@@ -65,7 +66,7 @@ export function Teams() {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: ["dashboard", "staff-directory"],
     queryFn: () => Services.dashboard.fetchStaffDirectory(),
   });
@@ -158,6 +159,17 @@ export function Teams() {
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
+
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader className="py-3.5">
+          <CardTitle>Staff</CardTitle>
+        </CardHeader>
+        <QueryErrorMessage error={error} />
+      </Card>
+    );
+  }
 
   return (
     <DataGrid

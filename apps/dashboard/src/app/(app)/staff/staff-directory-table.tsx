@@ -316,6 +316,20 @@ export function StaffDirectoryTable() {
   const recordCount = pageMeta?.total_count ?? rows.length;
   const pageCount = pageMeta && "total_pages" in pageMeta ? pageMeta.total_pages : 1;
 
+  // Exiting the last remaining row(s) on the current page can shrink pageCount below
+  // the page the viewer is still on — clamp back rather than showing an empty page.
+  // Independent of the filter/search/sort reset above: that one always jumps to page 0
+  // on ANY change to those inputs, this one only moves when the CURRENT page has
+  // actually become invalid, regardless of why the record count changed.
+  useEffect(() => {
+    setPagination((current) => {
+      const lastValidIndex = Math.max(0, pageCount - 1);
+      return current.pageIndex > lastValidIndex
+        ? { ...current, pageIndex: lastValidIndex }
+        : current;
+    });
+  }, [pageCount]);
+
   function handleStatusToggle(checked: boolean, value: string) {
     setStatusFilter(checked ? value : undefined);
   }

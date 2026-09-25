@@ -276,9 +276,12 @@ export interface CreateStaffInput {
   lastName: string;
   staffType: "teaching" | "non_teaching";
   phone: string;
-  departmentId?: string;
-  designationId?: string;
-  reportsToStaffId?: string;
+  // `| null` (unlike every other optional field below): the API's own field is a
+  // nullable FK (`PrimaryKeyRelatedField(allow_null=True)`), so an explicit `null`
+  // is how a caller says "clear this relation" — `undefined` still means "leave alone."
+  departmentId?: string | null;
+  designationId?: string | null;
+  reportsToStaffId?: string | null;
   userId?: string;
   photoFileId?: string;
   gender?: string;

@@ -210,19 +210,29 @@ function detailToFormValues(detail: StaffDetailRecord): StaffFormValues {
 }
 
 /**
- * Every optional field maps a genuinely untouched `""` (or the `UNSET_VALUE` sentinel)
- * to `undefined` — the key omitted from the request body — rather than sending an empty
- * string through. This is a deliberate, uniform simplification: `CreateStaffInput`/
- * `UpdateStaffInput` (Task 2) type every optional field as `string | undefined`, with no
- * `null` arm, so there is no wire-level way to say "clear this back to empty" through
- * these functions as they exist today. Rather than sending a raw `""` for some fields
- * (risky for an FK/enum-shaped one — `department_id: ""`/`gender: ""` is likely a 400)
- * and not others, every optional field is treated the same: this form can set or change
- * an optional field, but cannot explicitly blank one back out. See the task report for
- * the full reasoning.
+ * A genuinely untouched `""` maps to `undefined` — the key omitted from the request
+ * body. `gender`/`date_of_birth`/`email`/`national_id`/`public_bio`/`photo_file_id`
+ * never offer a UNSET_VALUE "None" option (see their `<Select>`/`<Input>` above), so
+ * for those fields `""` is the only sentinel this ever sees.
  */
 function optional(value: string): string | undefined {
-  return value === "" || value === UNSET_VALUE ? undefined : value;
+  return value === "" ? undefined : value;
+}
+
+/**
+ * Same as `optional`, but for the three fields whose API side is a nullable FK
+ * (`department_id`/`designation_id`/`reports_to_staff_id`, all `PrimaryKeyRelatedField
+ * (allow_null=True)` in `staff/serializers.py`): choosing UNSET_VALUE ("None") is the
+ * user actively asking to clear the relation, mapped to a real `null` so `updateStaff`
+ * sends it through and the API actually clears it — DRF's PrimaryKeyRelatedField
+ * rejects `""` outright (it tries to look up a row with that pk), so `null` is the only
+ * value that works here. `employment_type` also offers "None" but keeps `optional`
+ * above, not this: its model field has no `null=True` of its own — there's nothing a
+ * "clear" could mean server-side, so its UNSET_VALUE stays a no-op (same as before).
+ */
+function optionalClearable(value: string): string | null | undefined {
+  if (value === UNSET_VALUE) return null;
+  return value === "" ? undefined : value;
 }
 
 function buildAddress(address: StaffFormValues["address"]): Record<string, unknown> | undefined {
@@ -240,9 +250,9 @@ function buildStaffInput(values: StaffFormValues): CreateStaffInput {
     lastName: values.last_name,
     staffType: values.staff_type as CreateStaffInput["staffType"],
     phone: values.phone,
-    departmentId: optional(values.department_id ?? ""),
-    designationId: optional(values.designation_id ?? ""),
-    reportsToStaffId: optional(values.reports_to_staff_id ?? ""),
+    departmentId: optionalClearable(values.department_id ?? ""),
+    designationId: optionalClearable(values.designation_id ?? ""),
+    reportsToStaffId: optionalClearable(values.reports_to_staff_id ?? ""),
     photoFileId: optional(values.photo_file_id ?? ""),
     gender: optional(values.gender ?? ""),
     dateOfBirth: optional(values.date_of_birth ?? ""),
@@ -279,6 +289,15 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
   useEffect(() => {
     openRef.current = open;
   }, [open]);
+
+  // Same reasoning as `openRef`, for the record this dialog is currently open FOR: the
+  // dialog can stay open across a `staffId` change (edit A, then edit B without closing
+  // in between) — `openRef` alone would still be `true` and let a stale upload from A's
+  // session land in B's form.
+  const staffIdRef = useRef(staffId);
+  useEffect(() => {
+    staffIdRef.current = staffId;
+  }, [staffId]);
 
   // Gated on `open` so the dialog never fetches any of these before it's ever opened.
   const campusesQuery = useQuery({
@@ -375,6 +394,11 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
       // newly created staff member is immediately selectable as someone else's "Reports
       // to" option too, without a page reload.
       void queryClient.invalidateQueries({ queryKey: ["staff"] });
+      // The dashboard-home widgets (channel-stats, highlights, teams, …) key their own
+      // queries off ["dashboard", ...] instead — a separate prefix the line above never
+      // touches, so they'd otherwise keep showing stale staff counts/names/photos after
+      // this save until something else happened to refetch them.
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       onOpenChange(false);
       toast.success(mode === "create" ? "Staff member added" : "Staff member updated");
     },
@@ -412,6 +436,10 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
     event.target.value = "";
     if (!file) return;
 
+    // Captured now, not read from the closed-over `staffId` param after the await below —
+    // same reasoning as `openRef`.
+    const uploadStartedForStaffId = staffId;
+
     if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
     setLocalPreviewUrl(URL.createObjectURL(file));
     setUploadStatus("uploading");
@@ -419,14 +447,15 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
 
     try {
       const fileId = await Services.files.uploadFile(file, "staff.photo");
-      // The dialog may have been closed (and possibly reopened for a different staff
-      // member, or in create mode) while this upload was in flight — writing into the
-      // form at that point would silently leak this resolved upload into whatever the
-      // dialog now shows, so bail out rather than call setValue on a closed dialog.
-      // Reads `openRef.current`, not the closed-over `open` param: this function's own
-      // closure was created back when the upload started, so a bare `open` here would
-      // always see that render's value, never a close that happened during the `await`.
-      if (!openRef.current) return;
+      // The dialog may have been closed, or stayed open but switched to a different
+      // staff member (or to create mode), while this upload was in flight — writing
+      // into the form at that point would silently leak this resolved upload into
+      // whatever the dialog now shows, so bail out rather than call setValue for a
+      // record this upload was never for. Both reads are refs, not the closed-over
+      // `open`/`staffId` params: this function's own closure was created back when the
+      // upload started, so bare reads of either would always see that render's values,
+      // never a close or a record switch that happened during the `await`.
+      if (!openRef.current || staffIdRef.current !== uploadStartedForStaffId) return;
       form.setValue("photo_file_id", fileId, { shouldDirty: true });
       setUploadStatus("idle");
     } catch (error) {

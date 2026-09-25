@@ -13,7 +13,7 @@ import { Services } from "@/services";
  * branch has no other route to send it to yet.
  */
 export function EntryCallout({ className }: { className?: string }) {
-  const { data: user, isPending } = useQuery({
+  const { data: user, isPending, isError } = useQuery({
     queryKey: ["dashboard", "current-user"],
     queryFn: () => Services.auth.fetchCurrentUser(),
   });
@@ -29,7 +29,13 @@ export function EntryCallout({ className }: { className?: string }) {
         ) : (
           <>
             <h2 className="text-mono text-xl font-semibold">
-              Welcome back{user ? `, ${user.full_name}` : ""}
+              {/* A failed fetch still greets, without a name — a name-less "Welcome
+                  back" is a fine, honest fallback for a banner (unlike a stats widget
+                  showing fabricated numbers), so this stays a plain conditional rather
+                  than a QueryErrorMessage. isError is checked explicitly rather than
+                  left implicit in `user` being undefined, so this reads as a chosen
+                  fallback and not an accidental one. */}
+              Welcome back{!isError && user ? `, ${user.full_name}` : ""}
             </h2>
             <p className="text-sm leading-5.5 font-normal text-secondary-foreground">
               Here&apos;s what&apos;s happening across your school today.

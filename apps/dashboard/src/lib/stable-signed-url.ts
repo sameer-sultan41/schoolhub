@@ -27,6 +27,17 @@ function expiresAt(url: URL): number | null {
   return Date.UTC(year, month - 1, day, hour, minute, second) + ttlSeconds * 1000;
 }
 
+/** Drops every entry whose cached link has already crossed the same "adopt fresh"
+ * threshold a lookup would — an object nobody has asked about in a while (a photo
+ * removed from view, a staff member no longer in any loaded page) never gets its own
+ * removal path, so each call opportunistically sweeps rather than only ever growing. */
+function evictStale(now: number): void {
+  for (const [object, url] of inUse) {
+    const expiry = expiresAt(new URL(url));
+    if (expiry !== null && expiry - now <= MIN_REMAINING_MS) inUse.delete(object);
+  }
+}
+
 export function stableSignedUrl(url: string | null, now: number = Date.now()): string | null {
   if (!url) return url;
   let parsed: URL;
@@ -35,6 +46,7 @@ export function stableSignedUrl(url: string | null, now: number = Date.now()): s
   } catch {
     return url;
   }
+  evictStale(now);
   const object = `${parsed.origin}${parsed.pathname}`;
   const previous = inUse.get(object);
   if (previous) {

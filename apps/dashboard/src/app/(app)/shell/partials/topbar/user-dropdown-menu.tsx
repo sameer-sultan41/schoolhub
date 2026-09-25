@@ -40,6 +40,7 @@ import {
 
 import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
+import { stableSignedUrl } from "@/lib/stable-signed-url";
 import { Services } from "@/services";
 
 /**
@@ -90,6 +91,10 @@ export function UserDropdownMenu() {
   const contact = user?.email ?? user?.phone ?? null;
   const initials = user ? initialsOf(user.full_name) : "?";
   const roleLabel = user?.roles.length ? user.roles.map((role) => role.name).join(", ") : null;
+  // Same re-signed-on-every-fetch link as staff photos (see stable-signed-url.ts) —
+  // without this, every current-user refetch (e.g. after selectLocale's router.refresh())
+  // blinks this avatar to initials and re-downloads the same image.
+  const avatarUrl = stableSignedUrl(user?.avatar_url ?? null);
 
   // Mirrors the pre-deletion user-menu.tsx's selectLocale: the locale is resolved
   // server-side from this same cookie (src/i18n/request.ts), including <html
@@ -110,7 +115,7 @@ export function UserDropdownMenu() {
           data-testid="user-menu-trigger"
           className="size-9 shrink-0 cursor-pointer rounded-full border-2 border-green-500"
         >
-          {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={displayName} /> : null}
+          {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
           <AvatarFallback className="text-xs font-medium">{initials}</AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
@@ -118,7 +123,7 @@ export function UserDropdownMenu() {
         <div className="flex items-center justify-between p-3">
           <div className="flex items-center gap-2">
             <Avatar className="h-9 w-9">
-              {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={displayName} /> : null}
+              {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
               <AvatarFallback className="text-xs font-medium">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col">

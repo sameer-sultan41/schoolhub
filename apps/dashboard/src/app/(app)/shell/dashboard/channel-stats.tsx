@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, Skeleton } from "@schoolhub/ui";
 
 import { Services } from "@/services";
+import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
 /**
  * Repurposed from the vendor Metronic template's channel-stats.tsx (originally four
@@ -23,10 +24,18 @@ function formatValue(value: number | null): string {
 }
 
 export function ChannelStats() {
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: ["dashboard", "overview"],
     queryFn: () => Services.dashboard.fetchDashboardOverview(),
   });
+
+  if (isError) {
+    return (
+      <Card className="col-span-full">
+        <QueryErrorMessage error={error} />
+      </Card>
+    );
+  }
 
   if (isPending || !data) {
     return (

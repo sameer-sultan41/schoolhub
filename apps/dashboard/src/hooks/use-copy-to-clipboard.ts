@@ -10,6 +10,13 @@ export function useCopyToClipboard({
   onCopy?: () => void;
 } = {}) {
   const [isCopied, setIsCopied] = React.useState(false);
+  const resetTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  React.useEffect(() => {
+    return () => {
+      clearTimeout(resetTimeoutRef.current);
+    };
+  }, []);
 
   // Returns a `Promise<boolean>` (resolves `true` on a genuine write, `false`
   // otherwise) so a caller can show a success/failure toast honestly, instead of
@@ -33,7 +40,8 @@ export function useCopyToClipboard({
           onCopy();
         }
 
-        setTimeout(() => {
+        clearTimeout(resetTimeoutRef.current);
+        resetTimeoutRef.current = setTimeout(() => {
           setIsCopied(false);
         }, timeout);
 

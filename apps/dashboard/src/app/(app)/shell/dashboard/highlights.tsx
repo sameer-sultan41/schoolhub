@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BadgeDot, Card, CardContent, CardHeader, CardTitle, Skeleton } from "@schoolhub/ui";
 
 import { Services } from "@/services";
+import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
 /**
  * Repurposed from the vendor Metronic template's highlights.tsx (originally a sales
@@ -24,10 +25,21 @@ function formatValue(value: number | null): string {
 }
 
 export function Highlights({ limit }: { limit?: number }) {
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: ["dashboard", "overview"],
     queryFn: () => Services.dashboard.fetchDashboardOverview(),
   });
+
+  if (isError) {
+    return (
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>Reference Overview</CardTitle>
+        </CardHeader>
+        <QueryErrorMessage error={error} />
+      </Card>
+    );
+  }
 
   if (isPending || !data) {
     return (
