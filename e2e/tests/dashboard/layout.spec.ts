@@ -76,17 +76,28 @@ test.describe("keyboard shortcut", () => {
     // failed against a sidebar that was collapsing perfectly well. Width is what changes
     // under either mode.
     await page.keyboard.press("Control+b");
+    await page.waitForTimeout(500);
     // eslint-disable-next-line no-console -- temporary diagnostic, removed once root-caused
     console.log(
       "DIAG",
       JSON.stringify(
         await page.evaluate(() => {
-          const el = document.querySelector('[data-testid="app-sidebar-nav"]');
+          const matches = document.querySelectorAll('[data-testid="app-sidebar-nav"]');
+          const el = matches[0];
           const cs = el ? getComputedStyle(el) : null;
           return {
+            matchCount: matches.length,
             bodyClass: document.body.className,
-            sidebarWidthVar: getComputedStyle(document.body).getPropertyValue("--sidebar-width"),
+            elClass: el?.className,
+            elInlineStyle: el?.getAttribute("style"),
+            bodySidebarWidthVar: getComputedStyle(document.body).getPropertyValue("--sidebar-width"),
+            elSidebarWidthVar: cs?.getPropertyValue("--sidebar-width"),
             elWidth: cs?.width,
+            elPosition: cs?.position,
+            elDisplay: cs?.display,
+            rect: el?.getBoundingClientRect
+              ? JSON.parse(JSON.stringify(el.getBoundingClientRect()))
+              : null,
             viewport: { w: window.innerWidth, h: window.innerHeight },
           };
         }),
