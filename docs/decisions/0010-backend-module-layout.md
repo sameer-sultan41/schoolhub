@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-26
-- **Enforced by:** review only — the [`schoolhub-backend-module`](../../.claude/skills/schoolhub-backend-module/SKILL.md) skill documents the layout (planned: a `change-reviewer` agent checking new code against it)
+- **Enforced by:** review only — the [`schoolhub-backend-module`](../../.claude/skills/schoolhub-backend-module/SKILL.md) skill documents the layout, and the [`change-reviewer`](../../.claude/agents/change-reviewer.md) agent checks new code against it
 
 ## Context
 

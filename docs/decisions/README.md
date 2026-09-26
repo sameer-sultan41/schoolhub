@@ -29,7 +29,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 
 | # | Decision | Status | Enforced by |
 | - | -------- | ------ | ----------- |
-| [0001](0001-record-decisions.md) | Record architecture decisions as ADRs | Accepted | review only (planned: PR template + reviewer agents) |
+| [0001](0001-record-decisions.md) | Record architecture decisions as ADRs | Accepted | review only — PR template checklist, `plan-reviewer` / `change-reviewer` agents |
 | [0002](0002-single-monorepo.md) | One monorepo, not four repositories | Accepted | review only |
 | [0003](0003-tenant-isolation-rls.md) | Tenant isolation in PostgreSQL Row-Level Security | Accepted | `apps/api/tests/test_rls_coverage.py`, `test_rls_enforcement.py`, `infra-compose.yml` |
 | [0004](0004-cross-tenant-404.md) | Cross-tenant access returns 404, never 403 | Accepted | per-app `tests/test_cross_tenant.py` |
@@ -43,6 +43,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0012](0012-tests-in-dunder-tests.md) | Frontend tests live in sibling `__tests__/` folders | Accepted | review only (planned: CI placement check) |
 | [0013](0013-cross-app-dependencies.md) | Cross-app dependency rules for the backend | Accepted | review only (planned: import-linter) |
 | [0014](0014-no-hardcoded-values.md) | Every value has one owner — no hardcoding | Accepted | partly: `messages.types-check.ts`, `test_endpoint_contracts.py` (planned: ESLint + ruff rules) |
+| [0015](0015-independent-plan-review.md) | Non-trivial plans pass an independent reviewer before approval | Accepted | `.claude/hooks/plan_review_gate.py` (tested in `repo-hygiene.yml`), `plan-review-record` CI job |
 
 "Planned" items land in the stacked PRs described in
 [`../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md`](../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md);
