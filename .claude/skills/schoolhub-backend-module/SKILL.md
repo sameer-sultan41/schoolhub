@@ -109,7 +109,9 @@ apps/api/apps/<module>/
    ```
    The one safe fallback is a single-purpose viewset whose `required_permission` is itself the
    write key (the import/export viewsets). Restrict `http_method_names` to what the module doc's
-   §16 actually exposes. The default paginator is a cursor paginator; bounded
+   §16 actually exposes. `WritePermissionContractTests` in `apps/api/tests/test_endpoint_contracts.py`
+   walks every route and fails when a write method would fall back to a `.view` key, or to no
+   key at all; fix the map, never the test. The default paginator is a cursor paginator; bounded
    admin lists use `core.api.pagination.PageNumberPagination`.
    Business rules go in `services.py`, not the viewset or serializer (fat services, thin views).
    Another module's data is changed only through *its* services (ADR-0013). Any query inside a

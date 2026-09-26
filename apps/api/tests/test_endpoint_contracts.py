@@ -27,9 +27,18 @@ EXEMPT_PATTERNS = (
 )
 
 
-def _api_views() -> list[tuple[str, type]]:
-    """Every DRF view registered under /api/v1/, as (route, view class)."""
-    views: list[tuple[str, type]] = []
+# DRF's SAFE_METHODS, lower-cased the way `http_method_names` and ViewSet action maps spell them.
+SAFE_METHODS = frozenset({"get", "head", "options"})
+
+
+def _api_routes() -> list[tuple[str, type, dict[str, str] | None]]:
+    """Every DRF route under /api/v1/, as (route, view class, method -> action map or None).
+
+    A ViewSet route carries the map it was built with (`{"post": "approve"}`, by a router or by
+    an explicit `as_view({...})`); an APIView route has none, and its permission lookup uses
+    the HTTP method itself.
+    """
+    routes: list[tuple[str, type, dict[str, str] | None]] = []
 
     def walk(resolver, prefix=""):
         for pattern in resolver.url_patterns:
@@ -40,10 +49,15 @@ def _api_views() -> list[tuple[str, type]]:
             callback = getattr(pattern, "callback", None)
             view_class = getattr(callback, "cls", None) or getattr(callback, "view_class", None)
             if view_class is not None:
-                views.append((route, view_class))
+                routes.append((route, view_class, getattr(callback, "actions", None)))
 
     walk(get_resolver())
-    return [(route, view) for route, view in views if route.startswith("api/v1/")]
+    return [route for route in routes if route[0].startswith("api/v1/")]
+
+
+def _api_views() -> list[tuple[str, type]]:
+    """Every DRF view registered under /api/v1/, as (route, view class)."""
+    return [(route, view) for route, view, _ in _api_routes()]
 
 
 def _is_exempt(route: str) -> bool:
@@ -88,6 +102,47 @@ class EndpointContractTests(TestCase):
             and AllowAny not in getattr(view, "permission_classes", [])
         ]
         self.assertEqual(offenders, [], f"Endpoints not enforcing HasPermissionKey: {offenders}")
+
+
+class WritePermissionContractTests(TestCase):
+    """A write is never authorised by a read key.
+
+    `HasPermissionKey._required_key` looks the action up in `required_permission_map` and falls
+    back to `required_permission` when it is missing. When that fallback is the resource's
+    `.view` key, a PATCH or colon-action left out of the map is open to everyone who may *read*
+    the resource; when there is no fallback, the route rejects every request. Neither shows up
+    in a happy-path test, so this resolves the key for every write route the way the
+    permission class does.
+    """
+
+    def test_no_write_route_falls_back_to_a_read_key(self):
+        offenders: list[str] = []
+        for route, view, actions in _api_routes():
+            guarded = HasPermissionKey in getattr(view, "permission_classes", [])
+            if _is_exempt(route) or not guarded:
+                continue
+            # A method outside http_method_names is answered 405 whatever the permission says.
+            allowed = set(getattr(view, "http_method_names", ())) - SAFE_METHODS
+            if actions is None:
+                writes = [(method, method) for method in sorted(allowed) if hasattr(view, method)]
+            else:
+                writes = [(method, name) for method, name in actions.items() if method in allowed]
+            mapping = getattr(view, "required_permission_map", None) or {}
+            fallback = getattr(view, "required_permission", None)
+            for method, action in writes:
+                if mapping.get(action):
+                    continue
+                if fallback is None or fallback.rpartition(".")[2] == "view":
+                    offenders.append(
+                        f"{method.upper()} {route} ({view.__name__}.{action}) -> {fallback!r}"
+                    )
+        self.assertEqual(
+            offenders,
+            [],
+            "These write routes are missing from required_permission_map, so they fall back to "
+            "required_permission — a read key or none. Map each action to its write key "
+            "(schoolhub-backend-module skill, step 4):\n" + "\n".join(offenders),
+        )
 
 
 def _inline_permission_keys() -> list[tuple[str, int, str]]:
