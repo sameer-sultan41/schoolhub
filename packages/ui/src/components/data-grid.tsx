@@ -131,16 +131,7 @@ export interface DataGridTableLayout {
   rowsDraggable?: boolean;
 }
 
-/**
- * `DataGrid`'s own wrapper already draws the one outer border + rounded corner + clip
- * for the whole grid — nesting a `Card`'s own full bordered/rounded/shadowed box
- * directly inside it, with zero gap, draws a second, mismatched-radius border at every
- * corner (`Card`'s fixed `rounded-xl` vs this package's themeable `--sh-radius` token
- * never agree). Apply this to any `<Card>` wrapping a `<DataGridTable>` — `Card` still
- * owns the internal layout (header/table/footer spacing), just not the outer frame.
- * Exported so this fix lives in one place instead of being copy-pasted (with a
- * copy-pasted comment) at every call site that nests the two.
- */
+// Strips Card's own border/radius so it doesn't double up with DataGrid's outer frame — apply to any Card wrapping a DataGridTable.
 export const DATA_GRID_CARD_CLASSNAME = "rounded-none border-0 shadow-none";
 
 export interface DataGridProps<TData extends object> {

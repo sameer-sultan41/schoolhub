@@ -725,17 +725,7 @@
   --sh-direction: rtl;
 }
 
-/*
- * The one non-token rule in this file: Chrome/Safari paint a saved-credential input
- * with a fixed yellow UA background that a plain `background-color` rule can't win
- * against — WebKit only lets its own `-webkit-box-shadow`/`-webkit-text-fill-color`
- * override that. An inset shadow the size of the field repaints it in the real
- * `--sh-color-background`/`-foreground`, and the absurdly long `transition` delays
- * WebKit's own fade so it never flashes yellow first (the standard fix for this; see
- * caniuse "input" autofill styling notes). Belongs here, not in one app's own
- * `globals.css`: the bug is generic to any `<input>` in ANY consumer of this design
- * system (both apps import this file), not a dashboard-only concern.
- */
+/* Overrides Chrome/Safari's yellow autofill background — shared here since both apps hit it. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
