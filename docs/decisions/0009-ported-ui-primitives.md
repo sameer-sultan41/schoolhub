@@ -2,7 +2,7 @@
 
 - **Status:** Accepted — licence question open, see Consequences (supersedes the old root `AGENTS.md` §0c "prefer shadcn/ui" rule, which predates the Metronic migration; §0d's "never vendor the source wholesale" stays in force, now in `packages/ui/AGENTS.md`, until the licence question below is decided)
 - **Date:** 2026-09-26 (recording a decision already in effect)
-- **Enforced by:** TypeScript — label and fallback-text props are *required* (`Dialog.closeLabel`, `Sheet.closeLabel`, `Button.loadingLabel`, `DataTable`'s empty-state and pagination labels). The RTL rule is review only (planned: an ESLint physical-direction ban).
+- **Enforced by:** TypeScript — label and fallback-text props are *required* (`Dialog.closeLabel`, `Sheet.closeLabel`, `Button.loadingLabel`, `DataTable`'s empty-state and pagination labels). The RTL rule is enforced by ESLint's physical-direction class ban (`PHYSICAL_DIRECTION` in `packages/config/eslint.boundaries.mjs`) in `packages/ui`, `apps/dashboard` and `apps/website`, with existing violations in the baselines.
 
 ## Context
 

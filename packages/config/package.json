@@ -6,14 +6,18 @@
   "type": "module",
   "exports": {
     "./eslint": "./eslint.base.mjs",
-    "./eslint-no-relative-parent-imports": "./eslint.no-relative-parent-imports.mjs"
+    "./eslint-no-relative-parent-imports": "./eslint.no-relative-parent-imports.mjs",
+    "./eslint-warnings-as-errors": "./eslint.warnings-as-errors.mjs",
+    "./eslint-boundaries": "./eslint.boundaries.mjs"
   },
   "files": [
     "eslint.base.mjs",
-    "eslint.no-relative-parent-imports.mjs"
+    "eslint.no-relative-parent-imports.mjs",
+    "eslint.warnings-as-errors.mjs",
+    "eslint.boundaries.mjs"
   ],
   "scripts": {
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "lint:fix": "eslint --fix",
     "typecheck": "echo \"@schoolhub/config has no TypeScript source\"",
     "test": "jest --passWithNoTests",

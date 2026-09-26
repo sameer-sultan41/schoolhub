@@ -1,5 +1,6 @@
 import { revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { SHA256_PREFIX_PATTERN } from "@/lib/regex";
 
 /**
@@ -27,7 +28,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 async function isSignatureValid(rawBody: string, signature: string | null): Promise<boolean> {
-  const secret = process.env.REVALIDATE_WEBHOOK_SECRET;
+  const secret = env.REVALIDATE_WEBHOOK_SECRET;
   if (!secret || !signature) return false;
 
   const key = await crypto.subtle.importKey(

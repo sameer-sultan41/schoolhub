@@ -1,3 +1,5 @@
+import { PARENT_RELATIVE, restrictedImports } from "./eslint.boundaries.mjs";
+
 /**
  * Forbids "../" (and "../../", etc.) imports in favor of the "@/" alias.
  *
@@ -16,23 +18,8 @@
  * Scoped to `src/**` for the same reason it is opt-in: `@/*` maps only into `./src/*`, so a
  * workspace-root file (e.g. `prettier.config.mjs` extending the repo root's config via
  * `../../prettier.config.mjs`) has no alias to switch to.
+ *
+ * A workspace that needs more import bans for some of these files builds one combined entry
+ * with `restrictedImports` from `./eslint.boundaries.mjs` instead — see that file for why.
  */
-export default [
-  {
-    files: ["src/**"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["../**"],
-              message:
-                'Use the "@/" alias instead of a parent-relative import ("../", "../../", etc.) — a same-directory "./foo" import is still fine.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-];
+export default [restrictedImports(["src/**"], [PARENT_RELATIVE])];

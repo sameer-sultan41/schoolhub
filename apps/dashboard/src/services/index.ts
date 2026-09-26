@@ -4,6 +4,13 @@ import { FilesService } from "./modules/files";
 import { TenantService } from "./modules/tenant";
 
 /**
+ * `ApiError` is re-exported so feature code can `instanceof`-check API failures without
+ * importing `@schoolhub/api-client` — `@/services` is the only API surface outside this
+ * directory and `src/lib/auth.ts` (ADR-0011), and ESLint enforces that.
+ */
+export { ApiError } from "@schoolhub/api-client";
+
+/**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
  * and calls `Services.<domain>.<action>(...)` — never `apiClient` and never a service
  * module's file directly — so every call site self-documents which domain it's calling

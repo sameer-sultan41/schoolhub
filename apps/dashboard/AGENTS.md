@@ -64,7 +64,8 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Tenant branding → CSS variables | Not rebuilt since the shell reset: `Services.tenant` fetches branding, nothing applies it yet (`docs/metronic-dashboard-shell.md` backlog) |
 | Locale resolution (no locale routing) | `src/i18n/request.ts`, `messages/*.json` |
 | Route groups | `src/app/(auth)/…` unauthenticated · `src/app/(app)/…` authenticated |
-| Imports | `@/…` alias only — ESLint bans `../` parent-relative imports (`packages/config/eslint.no-relative-parent-imports.mjs`) |
+| Imports | `@/…` alias only — ESLint bans `../` parent-relative imports, and bans `@schoolhub/api-client` in `src/app`, `src/features`, `src/components`, `src/hooks` (import `ApiError` from `@/services`) |
+| Lint baseline | `eslint-suppressions.json` freezes existing violations and may only shrink (ADR-0014); fixing one means pruning its entry |
 
 **Never** put the access token in `localStorage` or a readable cookie, and never add a
 `tenant_id` request parameter — the tenant always comes from the authenticated context.
@@ -85,7 +86,8 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 5. Gate every action by its `module.resource.action` key. The `<Can permission="…">` component
    this implies is not built yet (see the wiring table) — the first screen that needs
    action-level gating adds it to `src/components/`, backed by `src/lib/permissions.ts`.
-6. Strings into `messages/en.json` **and** `messages/ur.json`.
+6. Strings into `messages/en.json` **and** `messages/ur.json` — `react/jsx-no-literals` rejects
+   JSX text that isn't translated.
 7. Co-locate tests in a sibling `__tests__/` folder (`__tests__/*.test.tsx`), not
    `*.test.tsx` flat beside the source.
 

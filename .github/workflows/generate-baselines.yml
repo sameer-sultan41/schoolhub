@@ -1,0 +1,63 @@
+name: generate-baselines
+
+# Regenerates the ESLint suppression baselines (ADR-0014) in CI and uploads them as a patch.
+# Agents never run linters locally (ADR-0007), so a baseline is produced here, downloaded
+# (`gh run download <run-id> -n eslint-baselines`), applied with `git apply`, reviewed and
+# committed like any other change. The shrink check in repo-hygiene.yml then guarantees the
+# committed baseline only ever goes down.
+#
+# Triggers: add the `generate-baselines` label to a PR (runs against that PR's head), or run it
+# by hand from the Actions tab once this file is on main.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  PNPM_VERSION: "9.15.0"
+
+jobs:
+  eslint-suppressions:
+    name: ESLint suppression baselines
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'generate-baselines'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The PR's own head, not the synthetic merge: the patch must apply to the branch.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Suppress every current violation, per workspace
+        # --force: never replay a cached lint result — the point is to run ESLint now.
+        # Each workspace's `lint` script is `eslint --max-warnings 0`; the extra args land after it.
+        run: pnpm turbo run lint --force --continue -- --suppress-all
+
+      - name: Package the baseline files as a patch
+        run: |
+          git ls-files --others --exclude-standard -- '*eslint-suppressions.json' | xargs -r git add -N
+          git diff -- '*eslint-suppressions.json' > eslint-baselines.patch
+          echo "baseline files changed:"
+          git diff --stat -- '*eslint-suppressions.json'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eslint-baselines
+          path: eslint-baselines.patch
+          if-no-files-found: error

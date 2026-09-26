@@ -601,3 +601,11 @@ either this file or `project-status.md`.
   Deliberately absent, all communication scope: preferences, quiet hours,
   suppression lists, SMS quotas, provider status webhooks, the SSE badge stream,
   and §6's full five-stage retry schedule.
+
+- **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
+  deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and
+  turns the hooks on mid-PR, so pre-commit would reject the rule commit before its baseline
+  existed. The `@playwright/test` import ban in `e2e/tests/**` shipped without it. Add the plugin
+  in its own PR (`pnpm --filter @schoolhub/e2e add -D eslint-plugin-playwright`, then its
+  `flat/recommended` config for `tests/**`, then regenerate the e2e baseline).
+

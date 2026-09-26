@@ -7,15 +7,11 @@
 import { NextRequest } from "next/server";
 import { proxy } from "../proxy";
 
-const ORIGINAL_PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN;
-
-beforeEach(() => {
-  process.env.NEXT_PUBLIC_PLATFORM_DOMAIN = "schoolhub.pk";
-});
-
-afterAll(() => {
-  process.env.NEXT_PUBLIC_PLATFORM_DOMAIN = ORIGINAL_PLATFORM_DOMAIN;
-});
+// The proxy reads the platform domain from the validated public env module (ADR-0014), which
+// is parsed once at import — so the test pins it by mocking the module, not process.env.
+jest.mock("../lib/env.client", () => ({
+  publicEnv: { NEXT_PUBLIC_PLATFORM_DOMAIN: "schoolhub.pk", NEXT_PUBLIC_API_ORIGIN: "" },
+}));
 
 function makeRequest(host: string, path = "/", extraHeaders: Record<string, string> = {}) {
   return new NextRequest(`https://${host}${path}`, {

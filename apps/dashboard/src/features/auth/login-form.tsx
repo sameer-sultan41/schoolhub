@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ApiError } from "@schoolhub/api-client";
 import {
   Alert,
   AlertDescription,
@@ -26,7 +25,7 @@ import { z } from "zod";
 import { env } from "@/lib/env";
 import { parseTenantSlug } from "@/lib/host";
 import { getQueryClient, queryKeys } from "@/lib/query-client";
-import { Services } from "@/services";
+import { ApiError, Services } from "@/services";
 
 /**
  * Zod schema mirrors the API's validation (module doc §11) so the user gets instant feedback,

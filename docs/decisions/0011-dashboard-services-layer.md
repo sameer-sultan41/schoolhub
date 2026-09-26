@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-26 (recording a decision already in effect)
-- **Enforced by:** review only (planned: an ESLint `no-restricted-imports` ban on `@schoolhub/api-client` outside `src/services/**` and `src/lib/auth.ts`)
+- **Enforced by:** ESLint `no-restricted-imports` in `apps/dashboard/eslint.config.mjs` (the `API_CLIENT` pattern from `packages/config/eslint.boundaries.mjs`), applied to the UI layers `src/app`, `src/features`, `src/components` and `src/hooks`; existing violations are frozen in `apps/dashboard/eslint-suppressions.json`
 
 ## Context
 
@@ -21,11 +21,12 @@ Every backend call follows a three-part shape:
 
 Components and hooks call `Services.<domain>.<action>(...)` as their `queryFn`/`mutationFn`.
 They never import `apiClient`, never import `@schoolhub/api-client`, and never write a path
-string. `ApiError`, which feature code needs for `instanceof` checks, is to be re-exported
-from `@/services` so that `@/services` is the only import surface; until that lands, the
-`schoolhub-api-services` skill's allowance for `import { ApiError } from
-"@schoolhub/api-client"` stands, and the skill changes in the same PR as the re-export. Each domain gets its own module: staff calls belong in
-`services/modules/staff/`, not in `Services.dashboard`.
+string. `ApiError`, which feature code needs for `instanceof` checks, is re-exported from
+`@/services`, so `@/services` is the UI's only import surface. Only the transport layer —
+`src/services/**` and `src/lib/**` (auth, the query client) — imports `@schoolhub/api-client`;
+`src/lib` sits below `src/services`, so it can't import the facade without inverting the layers.
+Each domain gets its own module: staff calls belong in `services/modules/staff/`, not in
+`Services.dashboard`.
 
 ## Alternatives considered
 
@@ -37,7 +38,7 @@ from `@/services` so that `@/services` is the only import surface; until that la
 
 ## Consequences
 
-Today the staff screens route through `Services.dashboard.*` — known drift. Five feature files
-import `ApiError` straight from `@schoolhub/api-client`, which is allowed today and moves to
-`@/services` when the re-export and the lint rule land. Query keys come from the `queryKeys` factory in
+Today the staff screens route through `Services.dashboard.*` — known drift, on the backlog.
+`staff-directory-table.tsx` still imports `ApiError` from the client package; it is suppressed
+in the baseline until the staff screens move to `src/features/staff/`. Query keys come from the `queryKeys` factory in
 `src/lib/query-client.ts`, not inline arrays.

@@ -222,3 +222,37 @@ jobs:
         # ref to fetch. (A `git fetch --depth=1` here would mark the base tip shallow and widen
         # the range to all history; the script refuses shallow clones for that reason.)
         run: python3 .githooks/lib/check_commit_msg.py --range "HEAD^1..HEAD^2"
+
+  # ADR-0012: a frontend test lives in a sibling __tests__/ folder. The convention was applied
+  # once (80f4af0) and drifted back, which is why it is checked rather than written down.
+  test-placement:
+    name: Frontend tests live in __tests__/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: No *.test.ts(x) outside a __tests__/ folder under apps/*/src or packages/*/src
+        run: |
+          stray=$(git ls-files -- 'apps/*/src/*' 'packages/*/src/*' | grep -E '\.test\.tsx?$' | grep -v '/__tests__/' || true)
+          if [ -n "$stray" ]; then
+            echo "$stray" | while IFS= read -r f; do
+              echo "::error file=$f::Move this test into a sibling __tests__/ folder (ADR-0012)."
+            done
+            exit 1
+          fi
+          echo "all frontend tests are in __tests__/ folders"
+
+  # ADR-0014: each workspace's eslint-suppressions.json freezes existing violations and may
+  # only shrink. ESLint already fails on stale entries; this stops the file from growing.
+  lint-baselines:
+    name: Lint baselines only shrink
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Run the checker's unit tests
+        run: python3 -m unittest discover -s .github/scripts/tests -v
+      - name: Compare every baseline with the PR's base
+        # HEAD^1 is the base tip of the PR's synthetic merge commit.
+        run: python3 .github/scripts/check_baselines_shrink.py HEAD^1

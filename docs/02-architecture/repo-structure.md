@@ -83,9 +83,9 @@ schoolhub/
 | ---- | ----------- |
 | Backend apps may import other apps' `models`; writes and business rules go through the owning app's `services`; no app imports another's `views`/`viewset`/`urls`/`reports`/`tasks` | review only (planned: import-linter) — [ADR-0013](../decisions/0013-cross-app-dependencies.md) |
 | `core/` imports no app | review only (planned: import-linter) — [ADR-0013](../decisions/0013-cross-app-dependencies.md) |
-| `@schoolhub/api-client` is imported only in `apps/dashboard/src/services/**` and `src/lib/auth.ts` | review only (planned: ESLint) — [ADR-0011](../decisions/0011-dashboard-services-layer.md) |
-| No `../` parent-relative imports; use the `@/` alias | ESLint `no-restricted-imports` in `apps/dashboard` (`packages/config/eslint.no-relative-parent-imports.mjs`); planned for the other workspaces |
-| Apps never import each other; packages never import apps | Workspace boundaries (neither is a dependency of the other); the `../` ban catches relative-path imports across that boundary in `apps/dashboard` only — review only elsewhere (planned: extend the ban) |
+| UI layers (`src/app`, `src/features`, `src/components`, `src/hooks`) never import `@schoolhub/api-client`; only the transport layer (`src/services/**`, `src/lib/**`) does | ESLint `no-restricted-imports` — [ADR-0011](../decisions/0011-dashboard-services-layer.md) |
+| No `../` parent-relative imports; use the `@/` alias | ESLint `no-restricted-imports` in `apps/dashboard` and `apps/website` (`PARENT_RELATIVE` in `packages/config/eslint.boundaries.mjs`); tests exempt |
+| Apps never import each other; packages never import apps | Workspace boundaries (neither is a dependency of the other), plus the `../` ban in the apps and the `INTO_APPS` ban in `packages/*` |
 | Route files stay thin; feature code lives in `src/features/<module>/` | review only |
 
 ## 4. Configuration & Environment Management

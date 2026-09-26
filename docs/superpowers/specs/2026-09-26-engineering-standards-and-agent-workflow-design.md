@@ -372,6 +372,21 @@ Every plan states `**Tier:** n` near the top.
 
 ### PR 4: Frontend lint ratchet
 
+> **Amendments made during PR 4** (stop rule 3):
+>
+> - **API-client ban scope:** UI layers (`src/app`, `src/features`, `src/components`, `src/hooks`)
+>   only. `src/lib/**` is transport infrastructure below `src/services`, so it keeps importing
+>   the client; making it import `@/services` would invert the layers.
+> - **`packages/*`** get an `INTO_APPS` ban instead of the `../` ban — they have no `@/` alias
+>   and legitimately use `../` inside themselves.
+> - **Baseline generation:** a `generate-baselines.yml` workflow triggered by the
+>   `generate-baselines` PR label (a `workflow_dispatch` workflow can only be run once it is on
+>   `main`, which the unmerged stack isn't).
+> - **`eslint-plugin-playwright` deferred** (see `docs/deferred-work.md`); the `@playwright/test`
+>   import ban shipped without it.
+> - **Warnings:** one shared `warningsAsErrors()` wrapper raises every `warn` to `error` instead of
+>   listing rules one by one.
+
 Load `turborepo`/`next-best-practices` first, and use Context7 for ESLint 9.39 suppressions and eslint-config-next 16.3 docs.
 
 **Order inside the PR:**
