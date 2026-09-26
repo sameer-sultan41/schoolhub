@@ -24,8 +24,9 @@ always-running `repo-hygiene` check, so applying it would tighten, not loosen, p
 returned `403 Upgrade to GitHub Pro or make this repository public`; that no longer applies.)
 
 Rulesets are available now; this one is unapplied by choice, because classic protection
-already covers the essentials. To apply it — or to add the newer checks to classic protection
-instead — use either:
+already covers the essentials. (To add the newer checks to *classic* protection instead, use the
+`required_status_checks/contexts` command in `docs/project-status.md` "Start here" item 0.) To
+apply this ruleset, use either:
 
 ```bash
 gh api -X POST repos/<owner>/<repo>/rulesets --input .github/rulesets/main.json
