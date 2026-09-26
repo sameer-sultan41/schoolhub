@@ -172,7 +172,8 @@ class HardeningTests(GateTestCase):
         self.assert_allowed(run_gate(payload(plan)))
 
     def test_bolded_verdict_word_counts(self) -> None:
-        for line in ("Verdict: **APPROVE**", "- **Verdict:** **REVISE** — two findings", "### Verdict: APPROVE"):
+        lines = ("Verdict: **APPROVE**", "- **Verdict:** **REVISE** — two findings", "### Verdict: APPROVE", "**Verdict:** __REVISE__")
+        for line in lines:
             with self.subTest(line=line):
                 self.assert_allowed(run_gate(payload(f"**Work tier:** 2\n\n## Independent review\n\n{line}\n")))
 
@@ -273,6 +274,10 @@ class TranscriptBindingTests(GateTestCase):
         log = jsonl({"type": "assistant", "message": {"content": [text]}})
         self.assert_denied(run_gate(payload(REVIEWED, transcript=self.transcript(log))), "transcript")
 
+    def test_subagent_type_on_another_tool_does_not_count(self) -> None:
+        log = jsonl(tool_use("Bash", {"command": "true", "subagent_type": "plan-reviewer"}))
+        self.assert_denied(run_gate(payload(REVIEWED, transcript=self.transcript(log))), "transcript")
+
     def test_dispatch_json_inside_a_tool_result_does_not_count(self) -> None:
         result = {"type": "tool_result", "content": '{"subagent_type":"plan-reviewer","skill":"review-plan"}'}
         log = jsonl({"type": "user", "message": {"content": [result]}})
@@ -309,7 +314,8 @@ class ReviewerRanTests(unittest.TestCase):
     def test_false_and_true_from_a_real_file(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "session.jsonl"
-            path.write_text("not json\n" + NO_REVIEWER, encoding="utf-8")
+            # Passes the cheap pre-filter but isn't JSON: must be skipped, not crash the scan.
+            path.write_text('{"subagent_type":"plan-reviewer"\n' + NO_REVIEWER, encoding="utf-8")
             self.assertIs(self.reviewer_ran({"transcript_path": str(path)}), False)
             path.write_text(NO_REVIEWER + jsonl(tool_use("Agent", {"subagent_type": "plan-reviewer"})), encoding="utf-8")
             self.assertIs(self.reviewer_ran({"transcript_path": str(path)}), True)
