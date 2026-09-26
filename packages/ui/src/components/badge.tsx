@@ -31,6 +31,16 @@ const badgeVariants = cva(
         info: "bg-[var(--color-info-accent,var(--color-violet-500))] text-[var(--color-info-foreground,var(--color-white))]",
         outline: "bg-transparent border border-border text-secondary-foreground",
         destructive: "bg-destructive text-destructive-foreground",
+        /**
+         * `--sh-color-rose`/`--sh-color-rose-foreground` (theme.css) — a real theme token
+         * now, not an inline literal: for a status that isn't positive, negative, or a
+         * warning (e.g. a "resigned" employment status). 342° was picked as the one real
+         * gap in this palette's hue wheel (see theme.css's own comment on the token for
+         * the math) — reads as clearly its own colour rather than a shade of red or
+         * violet, and (like success/warning/danger/info) brightens with a flipped
+         * foreground in dark mode rather than staying a fixed literal.
+         */
+        rose: "bg-rose text-rose-foreground",
       },
       appearance: {
         default: "",
@@ -89,6 +99,12 @@ const badgeVariants = cva(
         className:
           "text-[var(--color-destructive-accent,var(--color-red-700))] bg-[var(--color-destructive-soft,var(--color-red-50))] dark:bg-[var(--color-destructive-soft,var(--color-red-950))] dark:text-[var(--color-destructive-soft,var(--color-red-600))]",
       },
+      {
+        variant: "rose",
+        appearance: "light",
+        className:
+          "text-[oklch(0.4_0.16_342)] bg-[oklch(0.96_0.025_342)] dark:bg-[oklch(0.28_0.05_342)] dark:text-[oklch(0.75_0.12_342)]",
+      },
       /* Outline */
       {
         variant: "primary",
@@ -120,6 +136,12 @@ const badgeVariants = cva(
         className:
           "text-[var(--color-destructive-accent,var(--color-red-700))] border-[var(--color-destructive-soft,var(--color-red-100))] bg-[var(--color-destructive-soft,var(--color-red-50))] dark:bg-[var(--color-destructive-soft,var(--color-red-950))] dark:border-[var(--color-destructive-soft,var(--color-red-900))] dark:text-[var(--color-destructive-soft,var(--color-red-600))]",
       },
+      {
+        variant: "rose",
+        appearance: "outline",
+        className:
+          "text-[oklch(0.42_0.16_342)] border-[oklch(0.88_0.05_342)] bg-[oklch(0.97_0.02_342)] dark:bg-[oklch(0.28_0.05_342)] dark:border-[oklch(0.32_0.06_342)] dark:text-[oklch(0.72_0.12_342)]",
+      },
       /* Ghost */
       {
         variant: "primary",
@@ -150,6 +172,11 @@ const badgeVariants = cva(
         variant: "destructive",
         appearance: "ghost",
         className: "text-destructive",
+      },
+      {
+        variant: "rose",
+        appearance: "ghost",
+        className: "text-rose",
       },
 
       { size: "lg", appearance: "ghost", className: "px-0" },

@@ -1,6 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { toast } from "sonner";
 
 import { ApiError } from "@schoolhub/api-client";
 import { Services } from "@/services";
@@ -27,12 +26,13 @@ jest.mock("@/services", () => ({
   },
 }));
 
-// `handleCopyId` (staff-directory-table.tsx) calls `toast.success(...)`/`toast.error(...)`
-// directly (not `toast(...)`). `ExitStaffDialog`'s own `onSuccess` (rendered here via the
-// bulk "Exit selected" flow) additionally calls `toast.warning(...)` on a mixed-outcome
-// partial-failure batch — without a `warning` stub that call is `undefined(...)`, which
-// throws synchronously inside the mutation's success handler and resets `mutation.data`
-// before the failure list ever renders, silently breaking the partial-failure test below.
+// `StaffFormDialog` (Edit) and `ExitStaffDialog` (Delete / bulk Exit selected), both
+// rendered from this table, call `toast.success`/`toast.error` on their own save/exit
+// flows. `ExitStaffDialog`'s own `onSuccess` (rendered here via the bulk "Exit selected"
+// flow) additionally calls `toast.warning(...)` on a mixed-outcome partial-failure batch
+// — without a `warning` stub that call is `undefined(...)`, which throws synchronously
+// inside the mutation's success handler and resets `mutation.data` before the failure
+// list ever renders, silently breaking the partial-failure test below.
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
@@ -43,18 +43,6 @@ const mockFetchStaffPage = Services.dashboard.fetchStaffPage as jest.MockedFunct
 const mockExitStaff = Services.dashboard.exitStaff as jest.MockedFunction<
   typeof Services.dashboard.exitStaff
 >;
-const mockToastSuccess = toast.success as jest.MockedFunction<typeof toast.success>;
-const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
-
-/**
- * jsdom implements no Clipboard API, but `userEvent.setup()` installs its own stub on
- * `navigator.clipboard` — replacing whatever was defined there before it ran, and resetting
- * it after every test. So the spy has to go on that stub, after `setup()`: a module-scope
- * mock would be silently swapped out and never called.
- */
-function spyOnClipboardWrite() {
-  return jest.spyOn(navigator.clipboard, "writeText");
-}
 
 /**
  * Disambiguates a popover's own trigger button from a same-named sortable column
@@ -456,51 +444,6 @@ describe("StaffDirectoryTable", () => {
     expect(screen.getByRole("button", { name: "Sort Order" })).toBeInTheDocument();
   });
 
-  it("Copy ID copies the row's real id and confirms with a toast once the write resolves", async () => {
-    mockFetchStaffPage.mockResolvedValue({
-      items: [staffRecord()],
-      pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
-    });
-
-    renderWithProviders(<StaffDirectoryTable />);
-    await screen.findByText("Ayesha Khan");
-
-    const user = userEvent.setup();
-    const writeText = spyOnClipboardWrite();
-    await user.click(screen.getByRole("button", { name: "Actions for Ayesha Khan" }));
-    await user.click(screen.getByRole("menuitem", { name: "Copy ID" }));
-
-    expect(writeText).toHaveBeenCalledWith("st-1");
-
-    // `handleCopyId` now awaits `copyToClipboard`'s returned promise before toasting
-    // (see staff-directory-table.tsx and use-copy-to-clipboard.ts), so the success
-    // toast lands after the write resolves, not synchronously with the click.
-    await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith("Staff ID copied");
-    });
-    expect(mockToastError).not.toHaveBeenCalled();
-  });
-
-  it("Copy ID shows a distinct failure toast when the clipboard write fails, never a false success", async () => {
-    mockFetchStaffPage.mockResolvedValue({
-      items: [staffRecord()],
-      pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
-    });
-
-    renderWithProviders(<StaffDirectoryTable />);
-    await screen.findByText("Ayesha Khan");
-
-    const user = userEvent.setup();
-    spyOnClipboardWrite().mockRejectedValueOnce(new Error("denied"));
-    await user.click(screen.getByRole("button", { name: "Actions for Ayesha Khan" }));
-    await user.click(screen.getByRole("menuitem", { name: "Copy ID" }));
-
-    await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith("Couldn't copy staff ID");
-    });
-    expect(mockToastSuccess).not.toHaveBeenCalled();
-  });
-
   it("Edit opens the staff form dialog in edit mode for that row", async () => {
     mockFetchStaffPage.mockResolvedValue({
       items: [staffRecord()],
@@ -511,12 +454,7 @@ describe("StaffDirectoryTable", () => {
     await screen.findByText("Ayesha Khan");
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Actions for Ayesha Khan" }));
-
-    const editItem = screen.getByRole("menuitem", { name: "Edit" });
-    expect(editItem).not.toHaveAttribute("aria-disabled", "true");
-
-    await user.click(editItem);
+    await user.click(screen.getByRole("button", { name: "Edit Ayesha Khan" }));
 
     expect(await screen.findByRole("heading", { name: "Edit staff member" })).toBeInTheDocument();
   });
@@ -531,12 +469,7 @@ describe("StaffDirectoryTable", () => {
     await screen.findByText("Ayesha Khan");
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Actions for Ayesha Khan" }));
-
-    const deleteItem = screen.getByRole("menuitem", { name: "Delete" });
-    expect(deleteItem).not.toHaveAttribute("aria-disabled", "true");
-
-    await user.click(deleteItem);
+    await user.click(screen.getByRole("button", { name: "Delete Ayesha Khan" }));
 
     expect(await screen.findByRole("heading", { name: "Exit staff member" })).toBeInTheDocument();
   });

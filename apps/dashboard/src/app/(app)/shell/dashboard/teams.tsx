@@ -187,7 +187,12 @@ export function Teams() {
         <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
     >
-      <Card>
+      {/* rounded-none/border-0/shadow-none: DataGrid's own wrapper already draws the one
+          outer border + rounded corner + clip for this whole grid — see
+          staff-directory-table.tsx's own comment on this same pattern for why nesting
+          Card's full bordered/rounded box directly inside it drew a second, mismatched
+          border at every corner. */}
+      <Card className="rounded-none border-0 shadow-none">
         <CardHeader className="py-3.5">
           <CardTitle>Staff</CardTitle>
           <CardToolbar className="flex items-center gap-3">
@@ -225,7 +230,9 @@ export function Teams() {
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </CardTable>
-        <CardFooter>
+        {/* border-t-0: DataGridPagination draws its own top border already — CardFooter's
+            default variant would otherwise draw a second one on the same seam. */}
+        <CardFooter className="border-t-0">
           <DataGridPagination />
         </CardFooter>
       </Card>

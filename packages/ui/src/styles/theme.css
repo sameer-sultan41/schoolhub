@@ -113,6 +113,8 @@
   --color-danger-foreground: var(--sh-color-danger-foreground);
   --color-info: var(--sh-color-info);
   --color-info-foreground: var(--sh-color-info-foreground);
+  --color-rose: var(--sh-color-rose);
+  --color-rose-foreground: var(--sh-color-rose-foreground);
   --color-overlay: var(--sh-color-overlay);
 
   /*
@@ -201,7 +203,10 @@
   --color-sidebar-accent: var(--sh-color-chrome-accent);
   --color-sidebar-accent-foreground: var(--sh-color-chrome-foreground);
   --color-sidebar-border: var(--sh-color-chrome-border);
-  /* Neutral, matching --sh-color-ring's own reasoning above — not chrome-primary. */
+  /* Neutral, deliberately NOT matching --sh-color-ring's own primary tint below: the
+     sidebar is its own chrome/frame tier (see sidebar-primary's own reasoning
+     elsewhere for why it doesn't share the page's primary), so its focus ring stays
+     on that tier's own muted tone instead of picking up the page's brand hue. */
   --color-sidebar-ring: var(--sh-color-chrome-muted);
 
   /*
@@ -283,17 +288,16 @@
   --sh-color-muted-foreground: oklch(0.52 0.03 265);
   --sh-color-border: oklch(0.905 0.014 265);
   /*
-   * A neutral mid-tone, not `var(--sh-color-primary)` — shadcn's own docs describe ring
-   * as "a functional accessibility tool... a mid-tone that ensures visible keyboard
-   * focus indicators without competing with primary branding," the same restraint
-   * Metronic's own theme applies (its ring is zinc-400, unrelated to its blue primary).
-   * Tying ring to the brand hue made every focus outline in the app full-saturation
-   * indigo — visible, but competing with primary rather than staying out of its way.
-   * `muted-foreground` already clears 4.5:1 as TEXT against every surface tone in this
-   * palette, comfortably above the 3:1 a non-text focus indicator needs, so it carries
-   * over as a ring colour with no new contrast work.
+   * Primary itself, by explicit product decision — a deliberately visible, on-brand
+   * focus outline rather than the neutral mid-tone shadcn's own docs recommend ("a
+   * functional accessibility tool that ensures visible focus without competing with
+   * primary branding"). `var()`, not a literal: this way every preset's own focus
+   * ring automatically matches THAT preset's own primary hue (Metronic's own blue
+   * included) and every dark-mode block already carries a contrast-corrected primary
+   * of its own (see the dark-mode blocks below), so no separate ring override is
+   * needed there either.
    */
-  --sh-color-ring: var(--sh-color-muted-foreground);
+  --sh-color-ring: var(--sh-color-primary);
 
   /*
    * Three surface planes, not one. `sunken` is for wells that sit BEHIND the page —
@@ -380,6 +384,17 @@
   --sh-color-danger-foreground: oklch(1 0 0);
   --sh-color-info: oklch(0.51 0.118 218);
   --sh-color-info-foreground: oklch(1 0 0);
+  /*
+   * A status colour for something that's neither positive, negative, nor a warning
+   * (e.g. a "resigned" employment status) — not part of the success/warning/danger/
+   * info set above, so it gets its own hue rather than overloading one of theirs.
+   * 342° sits in the one real gap in this palette's hue wheel: danger (~27°), warning
+   * (~55.6°), success (~160.3°), accent, primary and info (~218°/274°/293° across this
+   * file) leave roughly 293°→27° with nothing in it; 342° is near its midpoint, so
+   * this reads as clearly its own colour rather than a shade of red or violet.
+   */
+  --sh-color-rose: oklch(0.55 0.18 342);
+  --sh-color-rose-foreground: oklch(1 0 0);
 
   /*
    * A modal/sheet scrim, not a themed surface — its one job is to dim whatever is behind
@@ -587,6 +602,9 @@
        5.56:1 on surface-raised. */
     --sh-color-info: oklch(0.702 0.106 218);
     --sh-color-info-foreground: oklch(0.19 0.03 268);
+    /* Same brighten-and-flip-foreground treatment as success/warning/danger/info above. */
+    --sh-color-rose: oklch(0.72 0.15 342);
+    --sh-color-rose-foreground: oklch(0.19 0.03 268);
     /* The gradient's start stop follows --sh-color-primary, which LIGHTENS in dark mode —
        so left unpinned the hero band inverted from a dark surface with light text into a
        LIGHT surface with light text. The band is a fixed dark surface by design, in both
@@ -645,6 +663,9 @@
   --sh-color-danger-foreground: oklch(0.19 0.03 268);
   --sh-color-info: oklch(0.702 0.106 218);
   --sh-color-info-foreground: oklch(0.19 0.03 268);
+  /* Same as the @media (prefers-color-scheme: dark) block above. */
+  --sh-color-rose: oklch(0.72 0.15 342);
+  --sh-color-rose-foreground: oklch(0.19 0.03 268);
   /* The gradient's start stop follows --sh-color-primary, which LIGHTENS in dark mode —
      so left unpinned the hero band inverted from a dark surface with light text into a
      LIGHT surface with light text. The band is a fixed dark surface by design, in both

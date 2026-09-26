@@ -49,10 +49,24 @@ export function SidebarMenu() {
     group: "gap-px",
     label: "uppercase text-xs font-medium text-muted-foreground/70 pt-2.25 pb-px",
     separator: "",
-    item: "h-8 hover:bg-transparent text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-muted data-[selected=true]:font-medium",
+    // bg-muted, this component's original background for a selected item, is barely
+    // distinguishable from the sidebar's own bg-background under the Metronic preset
+    // (oklch L .967 vs 1 — a 0.033 gap, effectively invisible) — bg-primary/10 gives the
+    // selected row a real, visible highlight, and matches the primary-tinted "this is
+    // active" language already used elsewhere on this page (filter buttons, badges).
+    // rounded-xl (overriding itemVariants' own rounded-lg) + font-semibold (overriding
+    // its plain text-sm) is what makes the highlight read as a soft, bold "pill" rather
+    // than a faint tinted rectangle. hover:bg-primary/5 replaces the vendor's flat
+    // hover:bg-transparent with a real (if subtle) hover state of its own, and
+    // transition-all + active:scale gives both the hover tint and the selected
+    // highlight a soft animated feel instead of snapping in instantly.
+    // "group" marks the row as the hover source for the icon's own group-hover:scale-110
+    // below — the icon is a descendant (directly, or one level down through the leaf
+    // item's <Link>), so it still picks up the row's :hover regardless of nesting depth.
+    item: "group h-8 rounded-xl transition-all duration-200 ease-out hover:bg-primary/5 active:scale-[0.98] text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-primary/10 data-[selected=true]:font-semibold",
     sub: "",
     subTrigger:
-      "h-8 hover:bg-transparent text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-muted data-[selected=true]:font-medium",
+      "group h-8 rounded-xl transition-all duration-200 ease-out hover:bg-primary/5 active:scale-[0.98] text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-primary/10 data-[selected=true]:font-semibold",
     subContent: "py-0",
     indicator: "",
   };
@@ -69,7 +83,12 @@ export function SidebarMenu() {
       return (
         <AccordionMenuSub key={index} value={item.path || `root-${index}`}>
           <AccordionMenuSubTrigger className="text-sm font-medium">
-            {item.icon && <item.icon data-slot="accordion-menu-icon" />}
+            {item.icon && (
+              <item.icon
+                data-slot="accordion-menu-icon"
+                className="transition-transform duration-200 group-hover:scale-110"
+              />
+            )}
             <span data-slot="accordion-menu-title">{item.title}</span>
           </AccordionMenuSubTrigger>
           <AccordionMenuSubContent
@@ -94,7 +113,12 @@ export function SidebarMenu() {
             unexercised markup — "Staff" (a real root-level icon item with no children)
             is the first item anywhere to ever render through it. */}
         <Link href={item.path || "#"} className="flex grow items-center gap-2">
-          {item.icon && <item.icon data-slot="accordion-menu-icon" />}
+          {item.icon && (
+            <item.icon
+              data-slot="accordion-menu-icon"
+              className="transition-transform duration-200 group-hover:scale-110"
+            />
+          )}
           <span data-slot="accordion-menu-title">{item.title}</span>
         </Link>
       </AccordionMenuItem>

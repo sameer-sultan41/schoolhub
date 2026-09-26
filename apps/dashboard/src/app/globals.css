@@ -25,3 +25,18 @@ body {
   font-family: var(--sh-font-body);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Chrome/Safari paint a saved-credential input with a fixed yellow UA background that a
+   plain `background-color` rule can't win against — WebKit only lets its own
+   `-webkit-box-shadow`/`-webkit-text-fill-color` override that. An inset shadow the size
+   of the field repaints it in this app's real `--sh-color-background`/`-foreground`, and
+   the absurdly long `transition` delays WebKit's own fade so it never flashes yellow
+   first (the standard fix for this; see caniuse "input" autofill styling notes). */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--sh-color-foreground);
+  -webkit-box-shadow: 0 0 0px 1000px var(--sh-color-background) inset;
+  box-shadow: 0 0 0px 1000px var(--sh-color-background) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}

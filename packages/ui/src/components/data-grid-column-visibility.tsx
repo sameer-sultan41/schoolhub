@@ -41,7 +41,7 @@ export function DataGridColumnVisibility() {
             match the toolbar's `Input`/`Select` beside it, both h-10 themselves. `sm`
             (h-8) made this the one short control in an otherwise even row. */}
         <Button variant="outline">
-          <Columns3 aria-hidden="true" />
+          <Columns3 className="text-primary" aria-hidden="true" />
           {labels.columnsMenuLabel}
         </Button>
       </DropdownMenuTrigger>

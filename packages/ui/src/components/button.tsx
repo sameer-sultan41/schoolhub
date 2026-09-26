@@ -37,6 +37,15 @@ const buttonVariants = cva(
         "outline-danger":
           "border border-destructive/40 bg-transparent text-destructive hover:bg-destructive/10",
         /**
+         * Same shape as `outline-danger` above, primary-tinted instead of destructive —
+         * for a control that toggles some ACTIVE state (a filter currently applied, a
+         * preset currently selected) rather than announcing a dangerous action. Unlike
+         * `outline-danger`, the tint shows at rest (`bg-primary/5`), not only on hover:
+         * the whole point is to be visible as "engaged" without a hover to reveal it.
+         */
+        "outline-primary":
+          "border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
+        /**
          * The two frame variants, also not part of Metronic's own variant set — for
          * controls that sit in the header or the sidebar rail rather than on the page.
          * `ghost`/`outline` hardcode the PAGE's tokens (`text-accent-foreground`,
@@ -52,6 +61,14 @@ const buttonVariants = cva(
       appearance: {
         default: "",
         ghost: "",
+        /**
+         * Not part of Metronic's own Button — the same "colour on its own soft, always-
+         * visible tint" treatment Badge's `appearance="light"` already has, now on Button
+         * too: unlike `ghost` (transparent at rest, tinted only on hover), `light` shows
+         * its tint at rest, for a control (e.g. a row-level icon action) that should read
+         * as colour-coded at a glance, not just on hover.
+         */
+        light: "",
       },
       underline: {
         solid: "",
@@ -326,6 +343,40 @@ const buttonVariants = cva(
         variant: "ghost",
         mode: "icon",
         className: "text-muted-foreground",
+      },
+
+      // Light — bg tint visible at rest (see the `appearance.light` comment above),
+      // plus its own hover/pressed shades. Scoped to the two variants that actually use
+      // it today; add another `variant`'s entry here rather than a per-call-site
+      // className if a third colour needs it.
+      {
+        variant: "primary",
+        appearance: "light",
+        className:
+          "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary data-[state=open]:bg-primary/15",
+      },
+      {
+        variant: "destructive",
+        appearance: "light",
+        className:
+          "bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive data-[state=open]:bg-destructive/15",
+      },
+      {
+        // secondary is already a muted/gray tone rather than a vivid one (unlike
+        // primary/destructive), so its "light" is a softer dim of that same tone rather
+        // than a new hue — mirrors Badge's own `variant="secondary" appearance="light"`.
+        variant: "secondary",
+        appearance: "light",
+        className:
+          "bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 data-[state=open]:bg-secondary/60",
+      },
+      // An icon-only `light` button is just a colour swap on a small tap target — a
+      // little motion makes the hover/press state easier to notice. Same scale language
+      // sidebar-menu.tsx's own icons already use.
+      {
+        appearance: "light",
+        mode: "icon",
+        className: "transition-transform duration-200 hover:scale-110 active:scale-95",
       },
 
       // Size
