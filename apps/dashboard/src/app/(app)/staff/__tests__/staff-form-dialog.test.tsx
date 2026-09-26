@@ -18,6 +18,8 @@ import { StaffFormDialog } from "../staff-form-dialog";
 jest.setTimeout(20_000);
 
 jest.mock("@/services", () => ({
+  // The real class: components `instanceof`-check it, and tests build `new ApiError(...)`.
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     dashboard: {
       fetchCampuses: jest.fn(),

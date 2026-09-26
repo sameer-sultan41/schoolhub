@@ -68,8 +68,8 @@ class PlatformTemplateFixtureMixin:
 
     def setUp(self) -> None:
         super().setUp()
-        self._saved_templates = platform_templates._templates.copy()  # noqa: SLF001
+        self._saved_templates = platform_templates._templates.copy()
 
     def tearDown(self) -> None:
-        platform_templates._templates = self._saved_templates  # noqa: SLF001
+        platform_templates._templates = self._saved_templates
         super().tearDown()

@@ -15,6 +15,8 @@ import { StaffDirectoryTable } from "../staff-directory-table";
 // itself needs these present (resolved to empty arrays) or a test crashes with "not a
 // function" the moment a dialog opens. `exitStaff` backs the Delete/"Exit selected" flow.
 jest.mock("@/services", () => ({
+  // The real class: components `instanceof`-check it, and tests build `new ApiError(...)`.
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     dashboard: {
       fetchStaffPage: jest.fn(),

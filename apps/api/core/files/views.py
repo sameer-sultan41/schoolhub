@@ -44,7 +44,13 @@ class FileViewSet(
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
     required_permission = "platform.file.view"
-    required_permission_map = {"create": "platform.file.create", "confirm": "platform.file.create"}
+    required_permission_map = {
+        "create": "platform.file.create",
+        "confirm": "platform.file.create",
+        # A read over POST: issuing a short-lived signed URL changes nothing, and the registry
+        # defines platform.file.view as exactly this. Mapped explicitly so it isn't a fallback.
+        "download": "platform.file.view",
+    }
 
     def get_queryset(self):
         # Deliberately does NOT call TenantScopedViewSetMixin.get_queryset(): File has

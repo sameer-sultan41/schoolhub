@@ -21,6 +21,6 @@ def readiness(request):
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
-    except Exception:
+    except Exception:  # noqa: BLE001
         return JsonResponse({"status": "unavailable"}, status=503)
     return JsonResponse({"status": "ready"})

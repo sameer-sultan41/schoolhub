@@ -30,8 +30,8 @@ const nextConfig: NextConfig = {
      * Next 16 type-checks builds by shelling out to the project-local `tsc` CLI. Our
      * `typescript` dependency is the TS 6 API alias (`@typescript/typescript6`, which ships
      * `tsc6`, not `tsc`) because typescript-eslint and eslint-config-next require that API —
-     * see the root AGENTS.md. So point Next at the JavaScript compiler API instead, which the
-     * TS 6 package does provide.
+     * see docs/02-architecture/tech-stack.md §8. So point Next at the JavaScript compiler API
+     * instead, which the TS 6 package does provide.
      *
      * TypeScript 7 still checks this project: `pnpm typecheck` runs the native `tsc` from
      * `@typescript/native`, and it is a required CI check.

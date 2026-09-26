@@ -2,10 +2,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
-import messages from "../../messages/en.json";
+import messages from "../../../messages/en.json";
 import { PREFERENCE_DEFAULTS } from "@/lib/preferences/preferences-config";
 import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
-import { LayoutControls } from "./layout-controls";
+import { LayoutControls } from "../layout-controls";
 
 jest.mock("@/lib/preferences/preferences-cookies.client", () => ({
   writePreferenceCookie: jest.fn(),

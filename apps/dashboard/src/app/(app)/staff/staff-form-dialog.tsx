@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ApiError } from "@schoolhub/api-client";
 import {
   Alert,
   AlertDescription,
@@ -35,7 +34,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { Services } from "@/services";
+import { ApiError, Services } from "@/services";
 import { stableSignedUrl } from "@/lib/stable-signed-url";
 import type {
   CreateStaffInput,

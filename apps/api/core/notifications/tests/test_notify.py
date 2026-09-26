@@ -70,21 +70,21 @@ class NotifyTestCase(TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self._saved_catalog = catalog._triggers.copy()  # noqa: SLF001 — module registry
-        self._saved_templates = template_registry._templates.copy()  # noqa: SLF001
+        self._saved_catalog = catalog._triggers.copy()
+        self._saved_templates = template_registry._templates.copy()
         # Both resolver hooks default to None (no communication app registered in
         # this suite) — saved/restored here too so a test that registers one
         # cannot leak it into an unrelated test run in the same process.
-        self._saved_override_resolver = templates_module._override_resolver  # noqa: SLF001
-        self._saved_preference_resolver = notify_services._preference_resolver  # noqa: SLF001
+        self._saved_override_resolver = templates_module._override_resolver
+        self._saved_preference_resolver = notify_services._preference_resolver
         _register_test_trigger(channels=self.channels)
 
         self.tenant = TenantFactory()
         self.user = UserFactory(tenant=self.tenant, email="parent@example.test")
 
     def tearDown(self) -> None:
-        catalog._triggers = self._saved_catalog  # noqa: SLF001 — restoring a module registry
-        template_registry._templates = self._saved_templates  # noqa: SLF001
+        catalog._triggers = self._saved_catalog
+        template_registry._templates = self._saved_templates
         templates_module.set_override_resolver(self._saved_override_resolver)
         notify_services.set_preference_resolver(self._saved_preference_resolver)
         super().tearDown()
@@ -261,7 +261,7 @@ class PerChannelRenderingTests(NotifyTestCase):
         # _register_test_trigger's EMAIL template is byte-identical to the
         # in-app one, which would not catch this task's regression. Re-register
         # EMAIL with deliberately different wording.
-        template_registry._templates.pop((CODE, NotificationChannel.EMAIL), None)  # noqa: SLF001
+        template_registry._templates.pop((CODE, NotificationChannel.EMAIL), None)
         template_registry.register(
             CODE,
             channel=NotificationChannel.EMAIL,

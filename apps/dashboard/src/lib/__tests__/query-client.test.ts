@@ -1,5 +1,5 @@
 import { ApiError } from "@schoolhub/api-client";
-import { getQueryClient, makeQueryClient, queryKeys } from "./query-client";
+import { getQueryClient, makeQueryClient, queryKeys } from "../query-client";
 
 function makeApiError(status: number): ApiError {
   return new ApiError({ code: "x", message: "x", status, url: "/x" });

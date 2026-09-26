@@ -8,8 +8,9 @@ dist/
 .venv/
 venv/
 
-# Django
+# Django / Celery
 *.log
+celerybeat-schedule*
 staticfiles/
 media/
 local_settings.py

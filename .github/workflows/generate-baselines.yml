@@ -1,0 +1,134 @@
+name: generate-baselines
+
+# Produces, in CI, the files agents must never generate locally (ADR-0007): the ESLint suppression
+# baselines (ADR-0014) — pruned, then re-suppressed — and Prettier formatting. Everything lands in
+# one patch: `gh run download <run-id> -n ci-generated`, `git apply ci-generated.patch`, review,
+# commit. The shrink check in repo-hygiene.yml then guarantees a committed baseline only goes down,
+# so this workflow can't be used to hide a new violation.
+#
+# Triggers: add the `generate-baselines` label to a PR (runs against that PR's head), or run it
+# by hand from the Actions tab once this file is on main.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  PNPM_VERSION: "9.15.0"
+
+jobs:
+  generate:
+    name: Baselines and formatting
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'generate-baselines'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The PR's own head, not the synthetic merge: the patch must apply to the branch.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # --force on both: never replay a cached lint result — the point is to run ESLint now.
+      # Each workspace's `lint` script is `eslint --max-warnings 0`; the extra args land after it.
+      - name: Prune suppressions that no longer match anything
+        # Exits non-zero while unsuppressed violations remain; the next step settles those.
+        run: pnpm turbo run lint --force --continue -- --prune-suppressions || true
+
+      - name: Suppress every remaining violation, per workspace
+        run: pnpm turbo run lint --force --continue -- --suppress-all
+
+      - name: Format with Prettier
+        run: pnpm format
+
+      - name: Package every change as one patch
+        run: |
+          git ls-files --others --exclude-standard -- '*eslint-suppressions.json' | xargs -r git add -N
+          git diff > ci-generated.patch
+          echo "files changed:"
+          git diff --stat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-generated
+          path: ci-generated.patch
+          if-no-files-found: error
+
+  # Backend counterpart (ADR-0014): ruff noqa baselines for newly selected rules, dead-noqa
+  # removal, formatting — and a report of which core packages already pass mypy's
+  # disallow_untyped_defs, so the per-package override list can grow safely.
+  python:
+    name: Ruff baselines, formatting and mypy report
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'generate-baselines'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: ./.github/actions/setup-api-env
+
+      - name: Drop dead noqa codes, then baseline what remains
+        # Order matters: RUF100's fix removes codes that suppress nothing (with BLE/TID251 now
+        # selected, their noqas count as used). Running --add-noqa first would instead suppress
+        # RUF100 itself on those lines, freezing the dead comments.
+        # Format before baselining too: a noqa added to a line that ruff format then wraps ends up
+        # on a short line, where RUF100 flags it as dead.
+        run: |
+          uv run ruff check --fix . || true
+          uv run ruff format .
+          uv run ruff check --add-noqa .
+          uv run ruff format .
+
+      - name: Report which core packages pass disallow_untyped_defs
+        run: |
+          set +e
+          uv run mypy core --disallow-untyped-defs --no-error-summary > mypy-untyped.txt
+          status=$?
+          set -e
+          # 0 = clean, 1 = type errors (expected); anything else means mypy itself failed and the
+          # report would wrongly list every package as clean.
+          if [ "$status" -gt 1 ]; then cat mypy-untyped.txt; exit "$status"; fi
+          python3 - <<'PY'
+          import pathlib, re
+          errors = pathlib.Path("mypy-untyped.txt").read_text().splitlines()
+          dirty = {".".join(pathlib.Path(line.split(":")[0]).parts[:2]) for line in errors if re.match(r"^core/", line)}
+          packages = sorted(
+              f"core.{p.name}" for p in pathlib.Path("core").iterdir()
+              if p.is_dir() and (p / "__init__.py").exists()
+          )
+          report = ["clean: " + ", ".join(p for p in packages if p not in dirty),
+                    "dirty: " + ", ".join(p for p in packages if p in dirty), "", *errors]
+          pathlib.Path("mypy-untyped-report.txt").write_text("\n".join(report) + "\n")
+          print(report[0]); print(report[1])
+          PY
+
+      - name: Package the changes as one patch
+        working-directory: .
+        run: git diff -- apps/api > api-generated.patch && git diff --stat -- apps/api
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-generated
+          path: |
+            api-generated.patch
+            apps/api/mypy-untyped-report.txt
+          if-no-files-found: error

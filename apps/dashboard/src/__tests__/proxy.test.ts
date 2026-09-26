@@ -5,7 +5,7 @@
  * which jsdom (this project's default testEnvironment) does not provide.
  */
 import { NextRequest } from "next/server";
-import { proxy } from "./proxy";
+import { proxy } from "../proxy";
 
 function makeRequest(path: string, { session = false }: { session?: boolean } = {}) {
   const url = `https://app.schoolhub.test${path}`;

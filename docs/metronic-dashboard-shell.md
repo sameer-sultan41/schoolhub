@@ -53,7 +53,7 @@ caught were fixed in the same pass: `sidebar.tsx`'s root and the mobile `SheetBo
 
 ## Decisions
 
-- **Port, don't vendor.** Root `AGENTS.md` §0d. Metronic's actual Demo1 source lives at
+- **Port, don't vendor.** [`packages/ui/AGENTS.md`](../packages/ui/AGENTS.md) (formerly root `AGENTS.md` §0d). Metronic's actual Demo1 source lives at
   `packages/ui/src/components/layouts/demo1/**`, copied in during an earlier PR
   (`2de85c5`) and deliberately excluded from `packages/ui/src/tsconfig.json`'s `include`
   (`layouts/`, `partials/`) — it imports from modules that don't exist in this repo

@@ -134,9 +134,13 @@ jobs:
       # apps/**, packages/**, e2e/** and infra/** when the doc was consolidated to
       # cover the backend too — a backend-only PR is exactly the kind of change most
       # likely to invalidate the per-module implementation matrix.
+      # docs/deferred-work.md also satisfies the gate: it was split out of the status doc
+      # (its old 'Deliberately NOT done' section) to keep that doc short, and recording a
+      # deferral is exactly the kind of status change this gate exists to force.
       - name: Backend- or frontend-surface PRs must update the status doc
         run: |
-          git fetch origin "$GITHUB_BASE_REF" --depth=1
+          # No re-fetch: the fetch-depth: 0 checkout already has origin/<base>, and a
+          # `git fetch --depth=1` would mark the base tip shallow.
           CHANGED=$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")
           echo "Changed files:"
           echo "$CHANGED"
@@ -147,8 +151,8 @@ jobs:
           fi
 
           if echo "$CHANGED" | grep -qE '^(apps/|packages/|e2e/|infra/)'; then
-            if ! echo "$CHANGED" | grep -qxF 'docs/project-status.md'; then
-              echo "::error file=docs/project-status.md::This PR changes apps/, packages/, e2e/, or infra/ but does not update docs/project-status.md. Update the 'Done' table, the per-module implementation matrix, and if applicable the 'Deliberately NOT done' / 'Start here next session' sections. If this change genuinely doesn't shift project status (a dependency patch, a typo fix), add [skip-status-doc] to the PR title."
+            if ! echo "$CHANGED" | grep -qxE 'docs/(project-status|deferred-work)\.md'; then
+              echo "::error file=docs/project-status.md::This PR changes apps/, packages/, e2e/, or infra/ but updates neither docs/project-status.md nor docs/deferred-work.md. Update project-status.md's 'Done' table, the per-module implementation matrix and 'Start here next session', and/or record deferred items in deferred-work.md. If this change genuinely doesn't shift project status (a dependency patch, a typo fix), add [skip-status-doc] to the PR title."
               exit 1
             fi
           fi
@@ -171,3 +175,84 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The ExitPlanMode gate (.claude/hooks/plan_review_gate.py, ADR-0015) is code that runs in
+  # every agent session; a broken path or quote would either trap sessions in plan mode or
+  # silently stop gating. Its tests run the exact command registered in .claude/settings.json.
+  plan-review-gate:
+    name: Plan-review gate tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run the gate's unit tests
+        run: python3 -m unittest discover -s .claude/hooks/tests -v
+
+  # Superpowers specs and plans are Tier 2 designs; ADR-0015 requires an independent review
+  # before approval, recorded in the file as an `## Independent review` block with a Verdict
+  # line. Files dated before the rule (2026-09-26) are grandfathered by their filename date.
+  plan-review-record:
+    name: Specs and plans carry an independent review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: New or changed specs/plans dated 2026-09-26+ pass the review rule
+        # Same rule as the ExitPlanMode gate: the script imports its decide(). HEAD^1 is the
+        # base tip of the synthetic merge commit, so no base ref needs fetching.
+        run: python3 .claude/hooks/check_review_records.py "HEAD^1"
+
+  # ADR-0016: Conventional Commit subjects, no AI attribution, and a `Root cause:` line on
+  # every `fix` commit. The local commit-msg hook runs the same script; this is the authority,
+  # since a hook can be skipped or not installed. Merge commits are skipped (--no-merges).
+  commit-messages:
+    name: Commit messages follow the convention
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Run the checker's unit tests
+        run: python3 -m unittest discover -s .githooks/tests -v
+      - name: Check every commit in this PR
+        # A pull_request checkout's HEAD is GitHub's synthetic merge commit: HEAD^1 is the base
+        # tip and HEAD^2 the PR head, so HEAD^1..HEAD^2 is exactly this PR's commits — no base
+        # ref to fetch. (A `git fetch --depth=1` here would mark the base tip shallow and widen
+        # the range to all history; the script refuses shallow clones for that reason.)
+        run: python3 .githooks/lib/check_commit_msg.py --range "HEAD^1..HEAD^2"
+
+  # ADR-0012: a frontend test lives in a sibling __tests__/ folder. The convention was applied
+  # once (80f4af0) and drifted back, which is why it is checked rather than written down.
+  test-placement:
+    name: Frontend tests live in __tests__/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: No *.test.ts(x) outside a __tests__/ folder under apps/*/src or packages/*/src
+        run: |
+          stray=$(git ls-files -- 'apps/*/src/*' 'packages/*/src/*' | grep -E '\.test\.tsx?$' | grep -v '/__tests__/' || true)
+          if [ -n "$stray" ]; then
+            echo "$stray" | while IFS= read -r f; do
+              echo "::error file=$f::Move this test into a sibling __tests__/ folder (ADR-0012)."
+            done
+            exit 1
+          fi
+          echo "all frontend tests are in __tests__/ folders"
+
+  # ADR-0014: each workspace's eslint-suppressions.json freezes existing violations and may
+  # only shrink. ESLint already fails on stale entries; this stops the file from growing.
+  lint-baselines:
+    name: Lint baselines only shrink
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Run the checker's unit tests
+        run: python3 -m unittest discover -s .github/scripts/tests -v
+      - name: Compare every baseline with the PR's base
+        # HEAD^1 is the base tip of the PR's synthetic merge commit.
+        run: python3 .github/scripts/check_baselines_shrink.py HEAD^1

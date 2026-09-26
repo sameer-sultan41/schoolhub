@@ -45,6 +45,7 @@
     ".git/**",
     ".cspell/project-words.txt",
     "COMMENT: Metronic's own CSS, vendored verbatim as a reference source for the metronic colour preset — not this repo's own prose, and not to be edited to satisfy the spellchecker.",
-    "packages/ui/src/styles/metronic/**"
+    "packages/ui/src/styles/metronic/**",
+    "**/eslint-suppressions.json"
   ]
 }

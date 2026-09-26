@@ -21,12 +21,12 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 `DOCS = <repo root>/docs`
 
 1. `DOCS/AGENTS.md` — project summary, locked vocabulary, invariants. Always.
-2. `DOCS/docs/02-architecture/website-builder.md` — the rendering architecture: Host-header
+2. `DOCS/02-architecture/website-builder.md` — the rendering architecture: Host-header
    tenant resolution, theme system, ISR + publish invalidation, SEO, security boundary. This is
    your primary spec.
-3. `DOCS/docs/03-modules/website-cms.md` — the functional spec of pages, sections, navigation,
+3. `DOCS/03-modules/website-cms.md` — the functional spec of pages, sections, navigation,
    news/events/gallery, forms.
-4. `DOCS/docs/05-database/entities/website-cms.md` — the content schema you read.
+4. `DOCS/05-database/entities/website-cms.md` — the content schema you read.
 
 ## Hard Rules
 
@@ -57,6 +57,9 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Theme registry + token contract | `src/themes/index.ts`, `src/themes/default/` |
 | Publish invalidation webhook (HMAC) | `src/app/api/revalidate/route.ts` |
 | Unknown host landing | `src/app/platform-landing/page.tsx` (the proxy rewrites here) |
+| Configuration | `src/lib/env.ts` (server: secrets, platform domain — never import from a client component) · `src/lib/env.client.ts` (public `NEXT_PUBLIC_*` only, all optional) |
+| Public form submission (the one write path) | `src/lib/public-api.ts` — browser → public API, endpoint registry; never through `api.ts` |
+| Imports and lint baseline | `@/…` alias only (ESLint bans `../` outside tests); `eslint-suppressions.json` may only shrink (ADR-0014) |
 
 ### The rules those files encode
 

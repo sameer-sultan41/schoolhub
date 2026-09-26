@@ -17,7 +17,7 @@ returns whatever it was told to.
 | You're testing | Layer | Where |
 | --------------- | ----- | ----- |
 | A Django model, service, serializer, validator, permission class, or API endpoint | Backend | `apps/api/apps/<module>/tests/` or `apps/api/core/<area>/tests/` |
-| A dashboard/website React component, hook, form, or route handler in isolation | Jest + RTL | co-located `*.test.ts(x)` next to the source file |
+| A dashboard/website React component, hook, form, or route handler in isolation | Jest + RTL | a sibling `__tests__/` folder next to the source file |
 | A user-visible flow through the dashboard or website, with the API stubbed in-browser | E2E mocked | `e2e/tests/dashboard/` or `e2e/tests/website/` |
 | Anything whose correctness depends on the real database, real RLS, real cross-tenant isolation, or a real login/refresh cycle | E2E live | `e2e/tests/live/` |
 
@@ -31,7 +31,7 @@ to make it pass, and never add a `live` spec to the PR gate (`e2e/AGENTS.md`).
 
 Read `apps/api/AGENTS.md` and `apps/api/docs/ENGINEERING_STANDARDS.md` §5 first.
 
-1. **Django's built-in test runner, not pytest.** `apps/api/apps/ENGINEERING_STANDARDS.md`
+1. **Django's built-in test runner, not pytest.** `apps/api/docs/ENGINEERING_STANDARDS.md`
    and CI (`uv run coverage run manage.py test`) are the ground truth — `TestCase` /
    `rest_framework.test.APITestCase`. (`docs/07-quality/testing-strategy.md` §2 mentions
    pytest; the code disagrees with the doc, and the code + CI win.)
@@ -48,7 +48,8 @@ Read `apps/api/AGENTS.md` and `apps/api/docs/ENGINEERING_STANDARDS.md` §5 first
    `enable_feature(self.tenant, "module.<name>")`. Extend the module's own base class
    rather than duplicating that setup.
 5. **Permission tests use `self.allow("module.resource.action")`** (granted mid-test to
-   assert a 403→200 transition) — see `apps/academics/tests/test_api.py`.
+   assert a 403→200 transition; defined in `apps/api/apps/academics/tests/base.py`) — see
+   `apps/api/apps/academics/curriculum/tests/test_endpoints.py`.
 6. **Every new endpoint needs a `test_cross_tenant.py` entry.** Pattern: grant every
    permission key in the module so a denial can only come from tenant scoping, create
    parallel tenant-A/tenant-B data, assert tenant-A callers get **404, never 403** against
@@ -70,11 +71,11 @@ Read the app's own `AGENTS.md` first (`apps/dashboard/AGENTS.md` §"Hard Rules" 
 `apps/website/AGENTS.md`'s testing note).
 
 1. **Jest + React Testing Library**, via `next/jest` (`jest.config.ts` in each app) —
-   the spec (`docs/07-quality/testing-strategy.md`) says Vitest; the team chose Jest, and
-   the actual config wins.
-2. **Co-locate as `*.test.ts(x)`** next to the file under test (`src/proxy.test.ts` next
-   to `src/proxy.ts`, `src/app/page.test.tsx` next to `src/app/page.tsx`, etc.) — this
-   repo does not use a mirrored `__tests__/` tree.
+   not Vitest ([ADR-0008](../../../docs/decisions/0008-jest-not-vitest.md)).
+2. **Tests live in a sibling `__tests__/` folder** next to the file under test
+   (`src/lib/__tests__/auth.test.ts` for `src/lib/auth.ts`) — never flat beside the source
+   ([ADR-0012](../../../docs/decisions/0012-tests-in-dunder-tests.md)). A handful of flat
+   leftovers still exist in `apps/dashboard`; don't copy them.
 3. **Global test setup lives in each app's `jest.setup.ts`** — `matchMedia`,
    `ResizeObserver`, pointer-capture and `scrollIntoView` shims for jsdom gaps that
    Radix/Recharts hit unconditionally, plus default `NEXT_PUBLIC_*` env vars. Extend that
@@ -106,8 +107,8 @@ follow them, especially the login-throttle section if the spec touches `live`.
    never a raw object literal; the builders track the real error-code map
    (`apps/api/core/api/exceptions.py`) and break loudly when the contract changes.
 5. **Every spec is independent** (`fullyParallel: true`) — do not depend on spec order or
-   shared mutable state across files, except the one shared `live-setup` login the auth-
-   throttle section explicitly allows.
+   shared mutable state across files. (The `live-setup` project exists but nothing uses it
+   today — see `e2e/AGENTS.md`.)
 6. **`live` specs each do their own real login** (guest `storageState`, then
    `loginPage.signIn(...)`) — refresh-token rotation makes a shared session unsafe past
    one cold navigation per run. `tests/live/api/*` specs use the worker-scoped
