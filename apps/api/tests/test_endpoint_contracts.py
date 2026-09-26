@@ -5,6 +5,9 @@ endpoint is enrolled automatically. That is the point: the protection cannot be
 forgotten by whoever adds the next module.
 """
 
+import ast
+from pathlib import Path
+
 from django.test import TestCase
 from django.urls import get_resolver
 from rest_framework.permissions import AllowAny
@@ -85,6 +88,44 @@ class EndpointContractTests(TestCase):
             and AllowAny not in getattr(view, "permission_classes", [])
         ]
         self.assertEqual(offenders, [], f"Endpoints not enforcing HasPermissionKey: {offenders}")
+
+
+def _inline_permission_keys() -> list[tuple[str, int, str]]:
+    """Every string literal passed as the key to `has_permission_key(user, "<key>")` in app code.
+
+    `required_permission` / `required_permission_map` are validated through the URLconf above;
+    keys checked inline in a method body or serializer never reach it, so they are found by
+    reading the source.
+    """
+    root = Path(__file__).resolve().parents[1]
+    found: list[tuple[str, int, str]] = []
+    for package in ("apps", "core"):
+        for path in (root / package).rglob("*.py"):
+            parts = path.relative_to(root).parts
+            if "tests" in parts or "migrations" in parts:
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+                if name != "has_permission_key" or len(node.args) < 2:
+                    continue
+                key = node.args[1]
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    found.append((str(path.relative_to(root)), node.lineno, key.value))
+    return found
+
+
+class InlinePermissionKeyTests(TestCase):
+    def test_inline_permission_key_literals_exist_in_the_registry(self):
+        """A typo'd inline key silently denies (or grants nothing) — it must be registered."""
+        keys = _inline_permission_keys()
+        self.assertTrue(keys, "expected at least one inline has_permission_key() call to check")
+        unregistered = [
+            f"{path}:{line} {key!r}" for path, line, key in keys if key not in registry.keys()
+        ]
+        self.assertEqual(unregistered, [], "Unregistered inline permission keys:\n" + "\n".join(unregistered))
 
 
 class PermissionRegistryTests(TestCase):

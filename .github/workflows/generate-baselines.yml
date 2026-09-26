@@ -68,3 +68,56 @@ jobs:
           name: ci-generated
           path: ci-generated.patch
           if-no-files-found: error
+
+  # Backend counterpart (ADR-0014): ruff noqa baselines for newly selected rules, dead-noqa
+  # removal, formatting — and a report of which core packages already pass mypy's
+  # disallow_untyped_defs, so the per-package override list can grow safely.
+  python:
+    name: Ruff baselines, formatting and mypy report
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'generate-baselines'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: ./.github/actions/setup-api-env
+
+      - name: Add a noqa for every existing violation, then drop dead ones
+        run: |
+          uv run ruff check --add-noqa .
+          uv run ruff check --fix . || true
+          uv run ruff format .
+
+      - name: Report which core packages pass disallow_untyped_defs
+        run: |
+          uv run mypy core --disallow-untyped-defs --no-error-summary > mypy-untyped.txt || true
+          python3 - <<'PY'
+          import pathlib, re
+          errors = pathlib.Path("mypy-untyped.txt").read_text().splitlines()
+          dirty = {".".join(pathlib.Path(line.split(":")[0]).parts[:2]) for line in errors if re.match(r"^core/", line)}
+          packages = sorted(
+              f"core.{p.name}" for p in pathlib.Path("core").iterdir()
+              if p.is_dir() and (p / "__init__.py").exists()
+          )
+          report = ["clean: " + ", ".join(p for p in packages if p not in dirty),
+                    "dirty: " + ", ".join(p for p in packages if p in dirty), "", *errors]
+          pathlib.Path("mypy-untyped-report.txt").write_text("\n".join(report) + "\n")
+          print(report[0]); print(report[1])
+          PY
+
+      - name: Package the changes as one patch
+        working-directory: .
+        run: git diff -- apps/api > api-generated.patch && git diff --stat -- apps/api
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-generated
+          path: |
+            api-generated.patch
+            apps/api/mypy-untyped-report.txt
+          if-no-files-found: error
+
