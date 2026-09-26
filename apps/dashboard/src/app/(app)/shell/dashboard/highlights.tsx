@@ -41,7 +41,7 @@ export function Highlights({ limit }: { limit?: number }) {
     );
   }
 
-  if (isPending || !data) {
+  if (isPending) {
     return (
       <Card className="h-full">
         <CardHeader>

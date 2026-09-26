@@ -127,4 +127,14 @@ describe("Teams", () => {
 
     expect(screen.getByRole("link", { name: "View all" })).toHaveAttribute("href", "/staff");
   });
+
+  it("shows the error's own message rather than an empty table when the fetch fails", async () => {
+    mockFetchStaffDirectory.mockRejectedValue(new Error("directory unreachable"));
+
+    renderWithProviders(<Teams />);
+
+    expect(await screen.findByText("directory unreachable")).toBeInTheDocument();
+    expect(screen.getByText("Staff")).toBeInTheDocument();
+    expect(screen.queryByText("No staff found")).not.toBeInTheDocument();
+  });
 });

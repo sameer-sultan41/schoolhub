@@ -58,4 +58,13 @@ describe("ChannelStats", () => {
 
     expect(await screen.findAllByText("—")).toHaveLength(2);
   });
+
+  it("shows the error's own message rather than a fabricated count when the fetch fails", async () => {
+    mockFetchDashboardOverview.mockRejectedValue(new Error("overview unreachable"));
+
+    renderWithProviders(<ChannelStats />);
+
+    expect(await screen.findByText("overview unreachable")).toBeInTheDocument();
+    expect(screen.queryByText("Enrolled students")).not.toBeInTheDocument();
+  });
 });

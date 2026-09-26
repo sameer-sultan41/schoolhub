@@ -67,4 +67,13 @@ describe("EarningsChart", () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId("apex-chart")).not.toBeInTheDocument();
   });
+
+  it("shows the error's own message rather than an empty chart when the session fetch fails", async () => {
+    mockFetchAcademicSessions.mockRejectedValue(new Error("sessions unreachable"));
+
+    renderWithProviders(<EarningsChart />);
+
+    expect(await screen.findByText("sessions unreachable")).toBeInTheDocument();
+    expect(screen.queryByTestId("apex-chart")).not.toBeInTheDocument();
+  });
 });

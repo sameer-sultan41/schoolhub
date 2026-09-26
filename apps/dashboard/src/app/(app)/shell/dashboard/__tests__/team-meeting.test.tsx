@@ -124,4 +124,13 @@ describe("TeamMeeting", () => {
 
     expect(await screen.findByText("No more classes today")).toBeInTheDocument();
   });
+
+  it("shows the error's own message rather than an empty state when the timetable fetch fails", async () => {
+    mockFetchMyTimetable.mockRejectedValue(new Error("timetable unreachable"));
+
+    renderWithProviders(<TeamMeeting />);
+
+    expect(await screen.findByText("timetable unreachable")).toBeInTheDocument();
+    expect(screen.queryByText("No more classes today")).not.toBeInTheDocument();
+  });
 });

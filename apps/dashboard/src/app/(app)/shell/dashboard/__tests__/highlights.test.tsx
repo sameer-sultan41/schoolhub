@@ -61,4 +61,14 @@ describe("Highlights", () => {
     // match both and prove nothing.
     expect(container.querySelectorAll('div[style*="width"]')).toHaveLength(0);
   });
+
+  it("shows the error's own message rather than fabricated counts when the fetch fails", async () => {
+    mockFetchDashboardOverview.mockRejectedValue(new Error("overview unreachable"));
+
+    renderWithProviders(<Highlights limit={3} />);
+
+    expect(await screen.findByText("overview unreachable")).toBeInTheDocument();
+    expect(screen.getByText("Reference Overview")).toBeInTheDocument();
+    expect(screen.queryByText("Enrolled students")).not.toBeInTheDocument();
+  });
 });
