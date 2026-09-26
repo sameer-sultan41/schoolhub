@@ -81,14 +81,15 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 - **Classic branch protection is active on `main`** (verified with
   `gh api repos/{owner}/{repo}/branches/main/protection`): a pull request is required
   (0 approvals), six checks are required and strict — the original `repo-hygiene` jobs (Prettier,
-  Markdown links, Secret scan, cspell, Workflow YAML, project-status sync; the two plan-review jobs
-  added later are not yet required) — admins are included, and
+  Markdown links, Secret scan, cspell, Workflow YAML, project-status sync; the plan-review and
+  commit-message jobs added later are not yet required) — admins are included, and
   force-push and deletion are blocked. Linear history is **off**, so merge commits land
   ([ADR-0006](decisions/0006-merge-commits.md)). The `api` and `frontend` jobs are **not**
   required checks (they are path-filtered, so requiring them would block PRs that never trigger
   them) — "green before merge" for backend and frontend is still discipline.
 - [`.github/rulesets/main.json`](../.github/rulesets/main.json) is **not applied** (no rulesets
-  exist). It still requires linear history and squash/rebase only, contradicting ADR-0006.
+  exist). It now matches ADR-0006 (merge commits only, no linear-history rule) and requires the
+  always-running `repo-hygiene` checks, so applying it would add, not remove, protection.
 
 ## Deliberately NOT done
 
@@ -99,6 +100,11 @@ with its reasoning. Read the entry for the area you are about to touch before re
 
 ## Start here next session
 
+0. **Make the new checks blocking** (owner, once the engineering-standards stack #82–#86 has
+   merged): add `Plan-review gate tests`, `Specs and plans carry an independent review` and
+   `Commit messages follow the convention` to `main`'s required status checks —
+   `gh api -X POST repos/{owner}/{repo}/branches/main/protection/required_status_checks/contexts -f 'contexts[]=Plan-review gate tests' -f 'contexts[]=Specs and plans carry an independent review' -f 'contexts[]=Commit messages follow the convention'`.
+   Until then they report but don't block (ADR-0015, ADR-0016).
 1. **CI is the source of truth for coverage** — the 85% `Test (coverage)` floor is a
    ratchet (never decreases), so a new PR without its own tests fails this check —
    expected, not a gate bug. Check the latest `frontend.yml` run for the current

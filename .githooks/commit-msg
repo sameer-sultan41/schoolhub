@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Commit-message gate (ADR-0016): Conventional Commit subject, no AI attribution, and a
+# `Root cause:` line on every `fix` commit. The rules live in lib/check_commit_msg.py so this
+# hook and CI's `repo-hygiene.yml` "Commit messages follow the convention" job apply the same
+# ones — CI is the authority; this just catches it before the push.
+#
+# Skip once:      git commit --no-verify     (humans only — agents never skip hooks)
+# Skip session:   SKIP_HOOKS=1 git commit
+set -o pipefail
+
+. "$(dirname "$0")/lib/common.sh"
+
+if [ "${SKIP_HOOKS:-0}" = "1" ]; then
+  warn "SKIP_HOOKS=1 — commit-msg check skipped"
+  exit 0
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  warn "python3 not found — commit-message check skipped (CI still runs it)"
+  exit 0
+fi
+
+if python3 "$REPO_ROOT/.githooks/lib/check_commit_msg.py" "$1"; then
+  ok "commit message"
+  exit 0
+fi
+note "your message is saved in $1 — fix it and commit again"
+exit 1
