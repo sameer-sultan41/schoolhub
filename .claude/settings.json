@@ -14,7 +14,8 @@
     "g-typescript-skill": "off",
     "g-django-testing-skill": "off",
     "g-nextjs-testing-skill": "off",
-    "g-dashboard-testing-skill": "off"
+    "g-dashboard-testing-skill": "off",
+    "g-terraform-skill": "off"
   },
   "hooks": {
     "PreToolUse": [

@@ -37,8 +37,8 @@ In this repository, **this file, `docs/decisions/` and `.claude/` override the o
 sourcebook** injected at session start. Its LinkedUnion conventions — `LU-` ticket branches,
 US spelling, `app_id` query scoping, migrations in their own PR, the `g-flow` tiers and the
 `lu-*` agents — do not apply here. `.claude/settings.json` switches off `g-flow`,
-`g-python-skill`, `g-typescript-skill` and the three `g-*-testing-skill` skills, and denies the
-`lu-*` agents. When guidance conflicts: this repo's docs and ADRs first (product decisions no
+`g-python-skill`, `g-typescript-skill`, `g-terraform-skill` (`infra/AGENTS.md` governs Terraform
+here) and the three `g-*-testing-skill` skills, and denies the `lu-*` agents. When guidance conflicts: this repo's docs and ADRs first (product decisions no
 vendor has an opinion on), then the vendor skills below, then generic guidance.
 
 ## Before Coding
