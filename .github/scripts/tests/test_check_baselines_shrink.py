@@ -98,6 +98,20 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(self.run_main("HEAD"), 0)
 
 
+class RuleSelection(unittest.TestCase):
+    def test_letter_prefixes_must_match_exactly(self) -> None:
+        # The bug this pins: the base's "B" (bugbear) once counted as selecting BLE001.
+        self.assertFalse(shrink.rule_selects("B", "BLE001"))
+        self.assertTrue(shrink.rule_selects("B", "B001"))
+
+    def test_digit_prefixes_and_exact_codes(self) -> None:
+        self.assertTrue(shrink.rule_selects("BLE", "BLE001"))
+        self.assertTrue(shrink.rule_selects("TID", "TID251"))
+        self.assertTrue(shrink.rule_selects("TID251", "TID251"))
+        self.assertFalse(shrink.rule_selects("TID252", "TID251"))
+        self.assertTrue(shrink.rule_selects("ALL", "BLE001"))
+
+
 class KnownViolationsParsing(unittest.TestCase):
     def test_literal_with_generators_is_evaluated_without_importing(self):
         source = (
@@ -148,7 +162,8 @@ class BackendBaselines(unittest.TestCase):
         self.assertEqual(shrink.backend_growth("HEAD"), [])
 
     def test_the_pr_that_first_selects_a_rule_may_create_its_baseline(self) -> None:
-        Path("apps/api/pyproject.toml").write_text('[tool.ruff.lint]\nselect = ["E"]\n')
+        # "B" (bugbear) at the base must not count as having selected BLE.
+        Path("apps/api/pyproject.toml").write_text('[tool.ruff.lint]\nselect = ["E", "B"]\n')
         subprocess.run(["git", "add", "-A"], check=True)
         subprocess.run(
             ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "unselect"], check=True

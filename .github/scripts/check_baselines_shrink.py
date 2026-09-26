@@ -122,13 +122,25 @@ def selected_at(ref: str) -> list[str]:
     return tomllib.loads(result.stdout).get("tool", {}).get("ruff", {}).get("lint", {}).get("select", [])
 
 
+def rule_selects(rule: str, code: str) -> bool:
+    """Whether a ruff selector selects a code: letters must match exactly, digits by prefix.
+
+    `B` selects `B001` (flake8-bugbear) but not `BLE001` (flake8-blind-except); `TID` selects
+    `TID251`; `TID251` selects only itself.
+    """
+    rule_match, code_match = re.fullmatch(r"([A-Z]+)(\d*)", rule), re.fullmatch(r"([A-Z]+)(\d+)", code)
+    if not rule_match or not code_match:
+        return rule == "ALL"
+    return rule_match[1] == code_match[1] and code_match[2].startswith(rule_match[2])
+
+
 def backend_growth(ref: str) -> list[str]:
     found: list[str] = []
     before, after = noqa_counts(ref), noqa_counts(None)
     base_selection = selected_at(ref)
     for code in RATCHETED_NOQA:
         # The PR that first selects a rule creates its baseline; it is only a ratchet from then on.
-        if not any(code.startswith(rule) for rule in base_selection):
+        if not any(rule_selects(rule, code) for rule in base_selection):
             continue
         if after[code] > before[code]:
             found.append(f"`# noqa: {code}` count {before[code]} -> {after[code]} under apps/api — fix the code instead")
