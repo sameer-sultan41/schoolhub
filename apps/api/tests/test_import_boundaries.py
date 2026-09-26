@@ -108,8 +108,7 @@ class ImportBoundaryTests(SimpleTestCase):
             [],
             "ADR-0013: core imports no app, and apps never import another app's "
             "views/viewsets/viewset/view/urls/reports/tasks — go through that app's services "
-            "instead:\n"
-            + "\n".join(f"  {source} -> {target}" for source, target in new),
+            "instead:\n" + "\n".join(f"  {source} -> {target}" for source, target in new),
         )
 
     def test_known_violations_list_only_shrinks(self):
