@@ -79,7 +79,7 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   commits by convention ([ADR-0006](decisions/0006-merge-commits.md)). Head branches are **not**
   auto-deleted on merge.
 - **Classic branch protection is active on `main`** (verified with
-  `gh api repos/sameer-sultan41/schoolhub/branches/main/protection`): a pull request is required
+  `gh api repos/{owner}/{repo}/branches/main/protection`): a pull request is required
   (0 approvals), six checks are required and strict — every `repo-hygiene` job (Prettier, Markdown
   links, Secret scan, cspell, Workflow YAML, project-status sync) — admins are included, and
   force-push and deletion are blocked. Linear history is **off**, so merge commits land
