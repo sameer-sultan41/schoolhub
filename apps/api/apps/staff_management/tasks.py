@@ -57,7 +57,7 @@ def import_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
                 "errors": errors,
             },
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         # Deliberately not re-raised — see import_students_task's identical
         # comment: each write above already committed independently, so
         # nothing is left for a re-raise to roll back.
@@ -83,5 +83,5 @@ def export_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
             actor_id=uuid.UUID(actor_id),
         )
         mark_succeeded(job=job, result={"result_file_id": str(file.pk)})
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         mark_failed(job=job, error=str(exc))

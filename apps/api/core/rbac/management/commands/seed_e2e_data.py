@@ -64,7 +64,7 @@ E2E_OTHER_ADMIN_EMAIL = "e2e-admin-other@schoolhub.test"
 # Dev/CI-only seed data, matches e2e/src/env.ts's own fallback. `or`, not
 # `.get(key, default)`: an unset CI secret still sets the env var to an empty
 # string via `-e VAR` in the workflow, which `.get` would happily return.
-E2E_ADMIN_PASSWORD = os.environ.get("E2E_LIVE_ADMIN_PASSWORD") or "e2e-not-a-real-password"  # noqa: S105
+E2E_ADMIN_PASSWORD = os.environ.get("E2E_LIVE_ADMIN_PASSWORD") or "e2e-not-a-real-password"  # noqa: TID251
 
 E2E_CAMPUS_CODE = "MAIN"
 E2E_CLASS_NAME = "Grade 1"

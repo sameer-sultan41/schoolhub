@@ -112,7 +112,9 @@ class ViolationRuleTests(SimpleTestCase):
     """The rule itself, on synthetic imports."""
 
     def test_another_apps_models_are_allowed(self):
-        self.assertIsNone(_violation("apps.examinations.services", "apps.student_management.models"))
+        self.assertIsNone(
+            _violation("apps.examinations.services", "apps.student_management.models")
+        )
 
     def test_another_apps_views_are_not(self):
         self.assertEqual(
@@ -124,7 +126,9 @@ class ViolationRuleTests(SimpleTestCase):
         self.assertIsNone(_violation("apps.timetable.rooms.viewset", "apps.timetable.views"))
 
     def test_core_may_not_import_any_app(self):
-        self.assertEqual(_violation("core.notifications.services", "apps.communication.models"), "apps")
+        self.assertEqual(
+            _violation("core.notifications.services", "apps.communication.models"), "apps"
+        )
 
     def test_non_app_imports_are_ignored(self):
         self.assertIsNone(_violation("apps.timetable.views", "core.api.pagination"))

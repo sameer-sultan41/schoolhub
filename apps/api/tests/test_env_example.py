@@ -34,7 +34,9 @@ def keys_read_by_settings() -> set[str]:
                 continue
             func = node.func
             is_env = (isinstance(func, ast.Name) and func.id == "env") or (
-                isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "env"
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "env"
             )
             first = node.args[0]
             if is_env and isinstance(first, ast.Constant) and isinstance(first.value, str):
@@ -50,12 +52,18 @@ def keys_in_example() -> set[str]:
 class EnvExampleTests(SimpleTestCase):
     def test_every_setting_read_from_the_environment_is_documented(self):
         missing = sorted(keys_read_by_settings() - keys_in_example())
-        self.assertEqual(missing, [], "Add these to apps/api/.env.example with a dummy value and a comment.")
+        self.assertEqual(
+            missing, [], "Add these to apps/api/.env.example with a dummy value and a comment."
+        )
 
     def test_the_example_lists_nothing_the_settings_ignore(self):
         stale = sorted(keys_in_example() - keys_read_by_settings() - NOT_READ_BY_SETTINGS)
-        self.assertEqual(stale, [], "apps/api/.env.example lists keys nothing reads — rename or remove them.")
+        self.assertEqual(
+            stale, [], "apps/api/.env.example lists keys nothing reads — rename or remove them."
+        )
 
     def test_the_allowlist_is_still_needed(self):
         overlap = sorted(NOT_READ_BY_SETTINGS & keys_read_by_settings())
-        self.assertEqual(overlap, [], "The settings now read these — drop them from NOT_READ_BY_SETTINGS.")
+        self.assertEqual(
+            overlap, [], "The settings now read these — drop them from NOT_READ_BY_SETTINGS."
+        )

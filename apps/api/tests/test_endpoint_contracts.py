@@ -123,9 +123,13 @@ class InlinePermissionKeyTests(TestCase):
         keys = _inline_permission_keys()
         self.assertTrue(keys, "expected at least one inline has_permission_key() call to check")
         unregistered = [
-            f"{path}:{line} {key!r}" for path, line, key in keys if key not in registry.keys()
+            f"{path}:{line} {key!r}"
+            for path, line, key in keys
+            if key not in registry.keys()  # noqa: SIM118
         ]
-        self.assertEqual(unregistered, [], "Unregistered inline permission keys:\n" + "\n".join(unregistered))
+        self.assertEqual(
+            unregistered, [], "Unregistered inline permission keys:\n" + "\n".join(unregistered)
+        )
 
 
 class PermissionRegistryTests(TestCase):

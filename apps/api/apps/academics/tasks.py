@@ -44,7 +44,7 @@ def execute_promotion_batch_task(self, *, tenant_id: str, job_id: str, actor_id:
         # guardian did the work it could. `failed` on the job itself is reserved
         # for the batch never having run — a bad id, a lost tenant context.
         mark_succeeded(job=job, result=report)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         # Deliberately not re-raised — see
         # apps.student_management.tasks.import_students_task's identical comment.
         mark_failed(job=job, error=str(exc))

@@ -90,8 +90,11 @@ jobs:
         # Order matters: RUF100's fix removes codes that suppress nothing (with BLE/TID251 now
         # selected, their noqas count as used). Running --add-noqa first would instead suppress
         # RUF100 itself on those lines, freezing the dead comments.
+        # Format before baselining too: a noqa added to a line that ruff format then wraps ends up
+        # on a short line, where RUF100 flags it as dead.
         run: |
           uv run ruff check --fix . || true
+          uv run ruff format .
           uv run ruff check --add-noqa .
           uv run ruff format .
 
