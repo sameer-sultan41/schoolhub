@@ -6,7 +6,6 @@ forgotten by whoever adds the next module.
 """
 
 import ast
-from pathlib import Path
 
 from django.test import SimpleTestCase, TestCase
 from django.urls import get_resolver
@@ -14,6 +13,7 @@ from rest_framework.permissions import AllowAny
 
 from core.rbac.permissions import HasPermissionKey
 from core.rbac.registry import registry
+from tests.source_tree import source_modules
 
 # Endpoints that are legitimately unauthenticated or permission-free.
 EXEMPT_PATTERNS = (
@@ -98,7 +98,6 @@ def _inline_permission_keys() -> list[tuple[str, int, str]]:
     reading the source. Two forms: `has_permission_key(user, "<key>")` (or `key="<key>"`) and
     `"<key>" in effective_permission_keys(user)`.
     """
-    root = Path(__file__).resolve().parents[1]
     found: list[tuple[str, int, str]] = []
 
     def called(node: ast.AST, name: str) -> bool:
@@ -111,26 +110,21 @@ def _inline_permission_keys() -> list[tuple[str, int, str]]:
         is_str = isinstance(node, ast.Constant) and isinstance(node.value, str)
         return node.value if is_str else None
 
-    for package in ("apps", "core"):
-        for path in (root / package).rglob("*.py"):
-            parts = path.relative_to(root).parts
-            if "tests" in parts or "migrations" in parts:
-                continue
-            where = str(path.relative_to(root))
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-                key = None
-                if called(node, "has_permission_key"):
-                    positional = node.args[1] if len(node.args) > 1 else None
-                    keyword = next((kw.value for kw in node.keywords if kw.arg == "key"), None)
-                    key = literal(positional or keyword)
-                elif (
-                    isinstance(node, ast.Compare)
-                    and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops)
-                    and any(called(c, "effective_permission_keys") for c in node.comparators)
-                ):
-                    key = literal(node.left)
-                if key is not None:
-                    found.append((where, node.lineno, key))
+    for module in source_modules():
+        for node in ast.walk(module.tree):
+            key = None
+            if called(node, "has_permission_key"):
+                positional = node.args[1] if len(node.args) > 1 else None
+                keyword = next((kw.value for kw in node.keywords if kw.arg == "key"), None)
+                key = literal(positional or keyword)
+            elif (
+                isinstance(node, ast.Compare)
+                and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops)
+                and any(called(c, "effective_permission_keys") for c in node.comparators)
+            ):
+                key = literal(node.left)
+            if key is not None:
+                found.append((module.relative, node.lineno, key))
     return found
 
 

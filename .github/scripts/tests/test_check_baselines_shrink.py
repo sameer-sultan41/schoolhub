@@ -113,17 +113,44 @@ class RuleSelection(unittest.TestCase):
 
 
 class KnownViolationsParsing(unittest.TestCase):
-    def test_literal_with_generators_is_evaluated_without_importing(self):
-        source = (
-            "KNOWN_VIOLATIONS = frozenset({\n"
-            "    ('apps.a.x', 'apps.b.views'),\n"
-            "    *(('core.seed', f'apps.{app}') for app in ('c', 'd')),\n"
-            "})\n"
-        )
-        self.assertEqual(
-            shrink.known_violations(source),
-            {("apps.a.x", "apps.b.views"), ("core.seed", "apps.c"), ("core.seed", "apps.d")},
-        )
+    PAIRS = {("apps.a.x", "apps.b.views"), ("core.seed", "apps.c")}
+
+    def test_frozenset_literal(self) -> None:
+        source = "KNOWN_VIOLATIONS = frozenset({\n    ('apps.a.x', 'apps.b.views'),\n    ('core.seed', 'apps.c'),\n})\n"
+        self.assertEqual(shrink.known_violations(source), self.PAIRS)
+
+    def test_annotated_assignment(self) -> None:
+        # The bug this pins: an annotated constant once fell through to an empty set, and an
+        # empty "before" or "after" makes every comparison pass.
+        source = "KNOWN_VIOLATIONS: frozenset[tuple[str, str]] = frozenset({('apps.a.x', 'apps.b.views'), ('core.seed', 'apps.c')})\n"
+        self.assertEqual(shrink.known_violations(source), self.PAIRS)
+
+    def test_bare_set_literal(self) -> None:
+        source = "KNOWN_VIOLATIONS = {('apps.a.x', 'apps.b.views'), ('core.seed', 'apps.c')}\n"
+        self.assertEqual(shrink.known_violations(source), self.PAIRS)
+
+    def test_missing_assignment_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            shrink.known_violations("VIOLATIONS = frozenset()\n")
+
+    def test_non_literal_raises_instead_of_being_evaluated(self) -> None:
+        source = "KNOWN_VIOLATIONS = frozenset({*(('core.seed', f'apps.{a}') for a in ('c',))})\n"
+        with self.assertRaises(ValueError):
+            shrink.known_violations(source)
+
+    def test_wrong_shape_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            shrink.known_violations("KNOWN_VIOLATIONS = frozenset({('apps.a.x',)})\n")
+
+
+class NoqaCounting(unittest.TestCase):
+    def test_codes_are_counted_in_every_form_ruff_accepts(self) -> None:
+        text = "a  # noqa: E501, F401  reason\nb  #NOQA:E501\nc  # noqa: S105 S106\n"
+        self.assertEqual(shrink.count_noqa(text), {"E501": 2, "F401": 1, "S105": 1, "S106": 1})
+
+    def test_blanket_noqa_is_counted(self) -> None:
+        # The bug this pins: a code-less `# noqa` silences every rule but was invisible.
+        self.assertEqual(shrink.count_noqa("a  # noqa\nb  # noqa -- legacy\n"), {shrink.BLANKET: 2})
 
 
 class BackendBaselines(unittest.TestCase):
@@ -171,6 +198,28 @@ class BackendBaselines(unittest.TestCase):
         with Path("apps/api/tasks.py").open("a") as f:
             f.write("try:\n    y()\nexcept Exception:  # noqa: BLE001\n    pass\n")
         self.assertEqual(shrink.backend_growth("HEAD"), [])
+
+    def test_a_new_blanket_noqa_fails(self) -> None:
+        with Path("apps/api/tasks.py").open("a") as f:
+            f.write("import os  # noqa\n")
+        self.assertEqual(len(shrink.backend_growth("HEAD")), 1)
+
+    def test_every_code_selected_at_the_base_is_ratcheted(self) -> None:
+        # E501 is selected through "E"; no hand-kept list has to name it.
+        with Path("apps/api/tasks.py").open("a") as f:
+            f.write("x = 1  # noqa: E501\n")
+        self.assertEqual(len(shrink.backend_growth("HEAD")), 1)
+
+    def test_tests_and_migrations_are_out_of_scope(self) -> None:
+        Path("apps/api/app/migrations").mkdir(parents=True)
+        Path("apps/api/app/migrations/0001_initial.py").write_text("x = 1  # noqa: E501\n")
+        Path("apps/api/tests/test_x.py").write_text("x = 1  # noqa: BLE001\n")
+        self.assertEqual(shrink.backend_growth("HEAD"), [])
+
+    def test_an_unreadable_known_violations_fails_loudly(self) -> None:
+        Path("apps/api/tests/test_import_boundaries.py").write_text("VIOLATIONS = frozenset()\n")
+        with self.assertRaises(ValueError):
+            shrink.backend_growth("HEAD")
 
     def test_a_new_known_violation_fails(self) -> None:
         Path("apps/api/tests/test_import_boundaries.py").write_text(

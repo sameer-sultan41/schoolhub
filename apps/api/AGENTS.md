@@ -76,7 +76,8 @@ AGENTS.md:
 8. **Do not run tests, linters, or typechecks locally.** Commit, push, and let CI report —
    CI is the source of truth. Fix against CI, never `--no-verify`.
 9. **Never add a `Co-Authored-By` trailer or any AI attribution** to a commit or PR.
-10. **Never grow a baseline to get green.** No new `# noqa: BLE001` / `# noqa: TID251`, no new
+10. **Never grow a baseline to get green.** No new `# noqa` for a selected rule outside tests
+    (any code — the count per code may only fall; blanket `# noqa` is banned), no new
     `KNOWN_VIOLATIONS` entry, no lowered coverage floor — fix the code. The `lint-baselines` CI job
     fails on any of these (ADR-0014). Configuration is read only in `config/settings/` (ruff TID251).
 

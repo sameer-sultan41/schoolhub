@@ -144,7 +144,7 @@ apps/api/apps/<module>/
 
 ## Don't
 
-- Don't import another app's `views`/`viewset`/`urls`/`reports`/`tasks` (ADR-0013).
+- Don't import another app's `views`/`viewset`/`viewsets`/`urls`/`reports`/`tasks` (ADR-0013).
 - Don't read `os.environ` outside `config/settings/*` (ADR-0014).
 - Don't hand-edit `openapi.yaml` or `schema.d.ts`.
 - Don't run the test suite locally — push and read CI (ADR-0007).

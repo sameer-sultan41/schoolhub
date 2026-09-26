@@ -5,10 +5,15 @@
 
 Three baselines, one rule — none may grow against <base-ref>:
 - every `eslint-suppressions.json` (frontend, below);
-- the backend's ratcheted `# noqa` codes (RATCHETED_NOQA under apps/api, migrations excluded) —
-  RUF100 removes dead ones, this stops new ones;
+- the backend's `# noqa` comments: the count per rule code, and of blanket `# noqa` (no codes,
+  which silences every rule on the line), in apps/api's non-test, non-migration Python. Every
+  code whose rule the base already selects is ratcheted — derived from pyproject.toml, not a
+  hand-kept list, so a rule selected later is covered without anyone remembering to add it.
+  RUF100 removes dead noqas, ruff's PGH004 rejects blanket ones, and this stops new ones.
+  Tests are out of scope (a test may legitimately suppress; per-file-ignores in pyproject.toml
+  are the reviewed mechanism there), as are generated migrations;
 - `KNOWN_VIOLATIONS` in apps/api/tests/test_import_boundaries.py — the test fails on stale
-  entries, this stops new ones.
+  entries, this stops new ones. It is read with `ast.literal_eval`, so it must stay a literal.
 
 Compares every `eslint-suppressions.json` in the working tree with the same file at
 <base-ref> (repo-hygiene passes HEAD^1, the base tip of the PR's merge commit). The change
@@ -30,11 +35,20 @@ import re
 import subprocess
 import sys
 import tomllib
+from collections import Counter
 from pathlib import Path, PurePosixPath
 
 BASELINE = "eslint-suppressions.json"
-RATCHETED_NOQA = ("BLE001", "TID251")
-NOQA = re.compile(r"#\s*noqa:\s*([A-Z0-9, ]+)")
+# `# noqa`, `#noqa:E501`, `# NOQA: F401, E501  reason` — ruff's forms. No codes means blanket.
+NOQA = re.compile(r"#\s*(?i:noqa)(?::\s*(?P<codes>[A-Z]+[0-9]+(?:[\s,]+[A-Z]+[0-9]+)*))?")
+BLANKET = "blanket"
+# Where noqa comments are ratcheted: apps/api's own Python, minus tests and generated migrations.
+NOQA_SCOPE = (
+    ":(glob)apps/api/**/*.py",
+    ":(glob,exclude)apps/api/**/migrations/**",
+    ":(glob,exclude)apps/api/**/tests/**",
+    ":(glob,exclude)apps/api/**/test_*.py",
+)
 BOUNDARIES_TEST = "apps/api/tests/test_import_boundaries.py"
 
 
@@ -83,43 +97,69 @@ def growth(before: dict, after: dict, moved: dict[str, str]) -> list[str]:
     return found
 
 
-def noqa_counts(ref: str | None) -> dict[str, int]:
-    """Occurrences of each ratcheted noqa code under apps/api (migrations excluded).
-
-    ref=None reads the working tree; otherwise the tree at ref (via `git grep <ref>`).
-    """
-    args = ["grep", "-h", "-I", "-E", "#[[:space:]]*noqa:"]
-    if ref:
-        args.append(ref)
-    args += ["--", "apps/api", ":(exclude)apps/api/**/migrations/**"]
-    out = _git(*args, check=False).stdout
-    counts = {code: 0 for code in RATCHETED_NOQA}
-    for line in out.splitlines():
-        for match in NOQA.finditer(line):
-            for code in (c.strip() for c in match.group(1).split(",")):
-                if code in counts:
-                    counts[code] += 1
+def count_noqa(text: str) -> Counter[str]:
+    """Occurrences of each noqa code in text, blanket `# noqa` counted under BLANKET."""
+    counts: Counter[str] = Counter()
+    for match in NOQA.finditer(text):
+        codes = match["codes"]
+        counts.update(re.split(r"[\s,]+", codes) if codes else [BLANKET])
     return counts
 
 
-def known_violations(source: str) -> set[tuple[str, str]]:
-    """Evaluate the KNOWN_VIOLATIONS literal from the boundaries test's source (no imports run)."""
+def noqa_counts(ref: str | None) -> Counter[str]:
+    """count_noqa over NOQA_SCOPE: the working tree (ref=None, untracked files included, like
+    baseline_files) or the tree at ref (`git grep <ref>`)."""
+    source = ["-E", "#[[:space:]]*noqa", ref] if ref else ["--untracked", "-E", "#[[:space:]]*noqa"]
+    result = _git("grep", "-h", "-I", "-i", *source, "--", *NOQA_SCOPE, check=False)
+    if result.returncode > 1:  # 1 is "no match"; anything above is git failing
+        raise RuntimeError(f"git grep failed: {result.stderr.strip()}")
+    return count_noqa(result.stdout)
+
+
+def known_violations(source: str, origin: str = BOUNDARIES_TEST) -> set[tuple[str, str]]:
+    """The KNOWN_VIOLATIONS set in the boundaries test's source, read with ast.literal_eval.
+
+    Accepts `KNOWN_VIOLATIONS = frozenset({...})`, a bare set literal, and an annotated form.
+    Raises ValueError when there is no such assignment or it isn't a literal set of string
+    pairs: a reader that quietly returned an empty set would let every addition through.
+    """
     for node in ast.parse(source).body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(target, ast.Name) and target.id == "KNOWN_VIOLATIONS" for target in node.targets
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        else:
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "KNOWN_VIOLATIONS" for target in targets):
+            continue
+        if (  # frozenset({...}) / set({...}): the one call literal_eval can't take
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id in {"frozenset", "set"}
+            and len(value.args) == 1
+            and not value.keywords
         ):
-            expression = compile(ast.Expression(node.value), BOUNDARIES_TEST, "eval")
-            # Literals, tuples, f-strings and generators only; no builtins are reachable.
-            return set(eval(expression, {"__builtins__": {}, "frozenset": frozenset}))
-    return set()
+            value = value.args[0]
+        try:
+            entries = ast.literal_eval(value)
+        except (ValueError, TypeError, SyntaxError) as exc:
+            raise ValueError(f"{origin}: KNOWN_VIOLATIONS must be a literal set of (source, target) pairs") from exc
+        if not isinstance(entries, (set, frozenset)) or not all(
+            isinstance(entry, tuple) and len(entry) == 2 and all(isinstance(part, str) for part in entry)
+            for entry in entries
+        ):
+            raise ValueError(f"{origin}: KNOWN_VIOLATIONS must be a set of (source, target) string pairs")
+        return set(entries)
+    raise ValueError(f"{origin}: no KNOWN_VIOLATIONS assignment found")
 
 
 def selected_at(ref: str) -> list[str]:
-    """ruff's `select` list in apps/api/pyproject.toml at ref ([] if unreadable)."""
+    """ruff's `select` + `extend-select` in apps/api/pyproject.toml at ref ([] if unreadable)."""
     result = _git("show", f"{ref}:apps/api/pyproject.toml", check=False)
     if result.returncode != 0:
         return []
-    return tomllib.loads(result.stdout).get("tool", {}).get("ruff", {}).get("lint", {}).get("select", [])
+    lint = tomllib.loads(result.stdout).get("tool", {}).get("ruff", {}).get("lint", {})
+    return [*lint.get("select", []), *lint.get("extend-select", [])]
 
 
 def rule_selects(rule: str, code: str) -> bool:
@@ -140,15 +180,18 @@ def backend_growth(ref: str) -> list[str]:
     found: list[str] = []
     before, after = noqa_counts(ref), noqa_counts(None)
     base_selection = selected_at(ref)
-    for code in RATCHETED_NOQA:
-        # The PR that first selects a rule creates its baseline; it is only a ratchet from then on.
-        if not any(rule_selects(rule, code) for rule in base_selection):
+    for code in sorted(after):
+        if after[code] <= before[code]:
             continue
-        if after[code] > before[code]:
+        if code == BLANKET:
+            found.append(f"blanket `# noqa` count {before[code]} -> {after[code]} under apps/api — name the rule, or fix the code")
+        # The PR that first selects a rule creates its baseline; it is only a ratchet from then on.
+        elif any(rule_selects(rule, code) for rule in base_selection):
             found.append(f"`# noqa: {code}` count {before[code]} -> {after[code]} under apps/api — fix the code instead")
     old = _git("show", f"{ref}:{BOUNDARIES_TEST}", check=False)
     if old.returncode == 0 and Path(BOUNDARIES_TEST).is_file():
-        added = known_violations(Path(BOUNDARIES_TEST).read_text(encoding="utf-8")) - known_violations(old.stdout)
+        current = known_violations(Path(BOUNDARIES_TEST).read_text(encoding="utf-8"))
+        added = current - known_violations(old.stdout, f"{ref}:{BOUNDARIES_TEST}")
         found += [f"new KNOWN_VIOLATIONS entry {source} -> {target} — go through that app's services" for source, target in sorted(added)]
     return found
 
@@ -184,7 +227,11 @@ def main(argv: list[str]) -> int:
         failed = failed or bool(grew) or bool(stale)
         if not grew and not stale:
             print(f"ok: {path}")
-    backend = backend_growth(ref)
+    try:
+        backend = backend_growth(ref)
+    except (ValueError, RuntimeError) as exc:
+        print(f"::error::backend baselines could not be read — {exc}")
+        return 1
     for item in backend:
         print(f"::error::backend baseline grew — {item} (ADR-0013/ADR-0014).")
     if not backend:

@@ -37,7 +37,7 @@ Frontend counterparts: https://nextjs.org/docs · https://nextjs.org/docs/app/gu
 
 Follows PEP 8, enforced by Ruff (`pyproject.toml` → `[tool.ruff]`), not by review comments.
 
-- **Line length 100.** Rule set: `E, F, I, UP, B, DJ, S, C4, RET, SIM, RUF100, BLE, TID251` — pycodestyle, pyflakes, import sorting, pyupgrade, bugbear, Django-specific checks, bandit security, comprehensions, returns, simplify, no dead `noqa`, no blind `except Exception`, and no `os.environ`/`os.getenv` outside `config/settings/` (ADR-0014). Existing violations carry a CI-generated `# noqa`; fixing one makes RUF100 flag its noqa, so the baseline only shrinks.
+- **Line length 100.** Rule set: `E, F, I, UP, B, DJ, S, C4, RET, SIM, RUF100, PGH004, BLE, TID251` — pycodestyle, pyflakes, import sorting, pyupgrade, bugbear, Django-specific checks, bandit security, comprehensions, returns, simplify, no dead `noqa`, no blanket `noqa`, no blind `except Exception`, and no `os.environ`/`os.getenv` outside `config/settings/` (ADR-0014). Existing violations carry a CI-generated `# noqa`; fixing one makes RUF100 flag its noqa, and the `lint-baselines` job fails when the count of any selected code grows in non-test code, so the baseline only shrinks.
 - **Type hints on every public function**, using modern syntax (`str | None`, `list[str]`), not `Optional`/`List`. `from __future__ import annotations` where forward references need it.
 - **Docstrings (PEP 257)** on modules, classes, and any non-obvious function: state *why*, not a restatement of the signature.
 - **Naming:** `snake_case` functions/variables, `PascalCase` classes, `UPPER_SNAKE` constants, `_leading_underscore` for module-private.

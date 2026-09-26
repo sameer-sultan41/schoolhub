@@ -1,9 +1,9 @@
 """Cross-app import rules (ADR-0013), checked by reading the source rather than trusting review.
 
 - `core/` imports no app.
-- An app never imports another app's `views`, `viewset`, `view`, `urls`, `reports` or `tasks`
-  modules. Importing another app's `models` is fine (foreign keys, querysets); changing its data
-  goes through that app's `services`.
+- An app never imports another app's `views`, `viewsets`, `viewset`, `view`, `urls`, `reports`
+  or `tasks` modules. Importing another app's `models` is fine (foreign keys, querysets);
+  changing its data goes through that app's `services`.
 
 Tests and migrations are out of scope: test factories legitimately cross apps, and migrations
 are generated.
@@ -12,18 +12,21 @@ Why a contract test rather than import-linter: a forbidden contract can't expres
 app's views, but not your own" without one contract per app, and this repo already keeps its
 architectural rules as tests that walk the code (test_rls_coverage.py,
 test_endpoint_contracts.py). KNOWN_VIOLATIONS is the baseline: it may only shrink — the test
-fails on a new violation *and* on an entry that no longer occurs.
+fails on a new violation *and* on an entry that no longer occurs, and the `lint-baselines` CI
+job (.github/scripts/check_baselines_shrink.py) fails on an added entry. That job reads the set
+with `ast.literal_eval`, so keep it a plain literal: spelled-out tuples, no comprehensions.
 """
 
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 
 from django.test import SimpleTestCase
 
-API_ROOT = Path(__file__).resolve().parents[1]
-INTERNAL_MODULES = frozenset({"views", "viewset", "view", "urls", "reports", "tasks"})
+from tests.source_tree import source_modules
+
+# "viewsets" as well as the documented singular: it is DRF's idiomatic name and core/api uses it.
+INTERNAL_MODULES = frozenset({"views", "viewsets", "viewset", "view", "urls", "reports", "tasks"})
 
 # (importing module, imported target). Remove an entry when its import is fixed — the test
 # fails until you do, so the list can't go stale.
@@ -35,34 +38,19 @@ KNOWN_VIOLATIONS = frozenset(
         ("apps.examinations.services", "apps.attendance.reports"),
         # Seed commands build cross-module fixtures; they move to a top-level seeding package.
         # One entry per app, so a seed command reaching into a NEW app still fails.
-        *(
-            ("core.rbac.management.commands.seed_all_roles", f"apps.{app}")
-            for app in (
-                "academics",
-                "school_organization",
-                "staff_management",
-                "student_management",
-                "timetable",
-            )
-        ),
-        *(
-            ("core.rbac.management.commands.seed_e2e_data", f"apps.{app}")
-            for app in (
-                "academics",
-                "attendance",
-                "school_organization",
-                "staff_management",
-                "student_management",
-                "timetable",
-            )
-        ),
+        ("core.rbac.management.commands.seed_all_roles", "apps.academics"),
+        ("core.rbac.management.commands.seed_all_roles", "apps.school_organization"),
+        ("core.rbac.management.commands.seed_all_roles", "apps.staff_management"),
+        ("core.rbac.management.commands.seed_all_roles", "apps.student_management"),
+        ("core.rbac.management.commands.seed_all_roles", "apps.timetable"),
+        ("core.rbac.management.commands.seed_e2e_data", "apps.academics"),
+        ("core.rbac.management.commands.seed_e2e_data", "apps.attendance"),
+        ("core.rbac.management.commands.seed_e2e_data", "apps.school_organization"),
+        ("core.rbac.management.commands.seed_e2e_data", "apps.staff_management"),
+        ("core.rbac.management.commands.seed_e2e_data", "apps.student_management"),
+        ("core.rbac.management.commands.seed_e2e_data", "apps.timetable"),
     }
 )
-
-
-def _module_name(path: Path) -> str:
-    parts = path.relative_to(API_ROOT).with_suffix("").parts
-    return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
 
 
 def _imported_modules(tree: ast.AST, package: str = "") -> set[str]:
@@ -94,7 +82,8 @@ def _violation(source: str, target: str) -> str | None:
     source_parts = source.split(".")
     if source_parts[0] == "core":
         return ".".join(target_parts[:2])
-    if source_parts[0] == "apps" and target_parts[1] != source_parts[1]:
+    # len > 1: apps/__init__.py is the namespace itself, not an app, so it has no "other app".
+    if source_parts[0] == "apps" and len(source_parts) > 1 and target_parts[1] != source_parts[1]:
         for index, part in enumerate(target_parts[2:], start=2):
             if part in INTERNAL_MODULES:
                 return ".".join(target_parts[: index + 1])
@@ -103,18 +92,11 @@ def _violation(source: str, target: str) -> str | None:
 
 def find_violations() -> set[tuple[str, str]]:
     violations: set[tuple[str, str]] = set()
-    for package in ("apps", "core"):
-        for path in (API_ROOT / package).rglob("*.py"):
-            relative = path.relative_to(API_ROOT).parts
-            if "tests" in relative or "migrations" in relative:
-                continue
-            source = _module_name(path)
-            package = source if path.name == "__init__.py" else source.rpartition(".")[0]
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for target in _imported_modules(tree, package):
-                broken = _violation(source, target)
-                if broken:
-                    violations.add((source, broken))
+    for module in source_modules():
+        for target in _imported_modules(module.tree, module.package):
+            broken = _violation(module.name, target)
+            if broken:
+                violations.add((module.name, broken))
     return violations
 
 
@@ -172,3 +154,13 @@ class ViolationRuleTests(SimpleTestCase):
 
     def test_non_app_imports_are_ignored(self):
         self.assertIsNone(_violation("apps.timetable.views", "core.api.pagination"))
+
+    def test_another_apps_plural_viewsets_module_is_not_allowed(self):
+        self.assertEqual(
+            _violation("apps.timetable.views", "apps.academics.viewsets.CurriculumViewSet"),
+            "apps.academics.viewsets",
+        )
+
+    def test_the_apps_namespace_package_itself_is_not_an_app(self):
+        # apps/__init__.py normalises to the one-part name "apps"; it must not raise IndexError.
+        self.assertIsNone(_violation("apps", "apps.attendance.views"))
