@@ -6,9 +6,10 @@
 
 Rules:
 1. Subject is a Conventional Commit, `type(scope)!: summary` with type in TYPES, or a subject
-   git generates itself: `Merge …`, `Revert "…"`, `Reapply "…"`.
+   git generates itself: `Revert "…"`, `Reapply "…"`, and `Merge …` while a merge is in progress.
 2. No AI attribution: no `Co-authored-by:` naming an AI tool, no "Generated with/by <AI tool>"
-   line.
+   line. Tools are matched by identity (vendor or bot address, product name), not bare words,
+   so a person called Devin or Claude, or a line about the product's own AI features, passes.
 3. A `fix` commit names its cause: a body line `Root cause: <text on the same line>`. This is
    the anti-hotfix rule; writing the cause down forces finding it first.
 
@@ -16,9 +17,10 @@ Range mode checks what will land on `main` (PRs merge with merge commits, ADR-00
 commit survives), so it additionally rejects `fixup!`/`squash!`/`amend!` commits and `diag:`
 commits, which are fine locally but must not be merged (AGENTS.md stop rule 4).
 
-Hook mode strips comment lines and everything below the scissors line, as git does, using the
-repository's `core.commentChar`. Range mode strips nothing: git has already recorded the
-message, and a subject such as `#42 fix login` really is the subject.
+Hook mode strips git's own template — lines that are just the comment character or the
+comment character plus whitespace, and everything below the scissors line — using the
+repository's `core.commentChar`. A line such as `#42 fix login` is kept: with `git commit -m`
+git records it verbatim. Range mode strips nothing: git has already recorded the message.
 """
 
 from __future__ import annotations
@@ -33,31 +35,39 @@ TYPES = (
     "ci", "perf", "build", "revert", "diag",
 )  # fmt: skip
 SUBJECT = re.compile(r"^(?P<type>" + "|".join(TYPES) + r")(\([^()\s][^()]*\))?!?: \S")
-GIT_SUBJECT = re.compile(r'^(Merge |Revert "|Reapply ")')
+GIT_SUBJECT = re.compile(r'^(Revert "|Reapply ")')
+MERGE_SUBJECT = re.compile(r"^Merge ")
 LOCAL_ONLY_SUBJECT = re.compile(r"^(fixup|squash|amend)! ")
-AI = r"(claude|anthropic|chatgpt|openai|gpt-?\d|copilot|codex|cursor|gemini|devin|\bai\b)"
-CO_AUTHOR = re.compile(r"^\s*co-authored-by\s*:.*" + AI, re.IGNORECASE | re.MULTILINE)
-GENERATED = re.compile(r"^\W*generated (with|by)\b.*" + AI, re.IGNORECASE | re.MULTILINE)
+# AI tools by identity: vendor/bot addresses and product names, never a bare first name.
+AI_TOOL = (
+    r"(@anthropic\.com|@openai\.com|copilot@users\.noreply\.github\.com|cursoragent@cursor\.com"
+    r"|devin-ai-integration|\bclaude[ -]code\b|\bclaude (opus|sonnet|haiku|fable)\b|\bgithub copilot\b"
+    r"|\bchatgpt\b|\bopenai codex\b|\bgemini code assist\b|\bcursor agent\b)"
+)
+CO_AUTHOR = re.compile(r"^\s*co-authored-by\s*:.*" + AI_TOOL, re.IGNORECASE | re.MULTILINE)
+GENERATED = re.compile(r"^\W*generated (with|by)\b.*" + AI_TOOL, re.IGNORECASE | re.MULTILINE)
 ROOT_CAUSE = re.compile(r"^root cause:[ \t]*\S", re.IGNORECASE | re.MULTILINE)
 SCISSORS = " ------------------------ >8 ------------------------"
 
 
 def strip_comments(message: str, comment_char: str = "#") -> str:
-    """Drop comment lines and everything below the scissors line, as git does."""
+    """Drop git's template: comment-char lines (bare or followed by whitespace) and the scissors block."""
     kept: list[str] = []
     for line in message.splitlines():
         if line.startswith(comment_char + SCISSORS):
             break
-        if not line.startswith(comment_char):
-            kept.append(line)
+        if line == comment_char or line.startswith(comment_char + " ") or line.startswith(comment_char + "\t"):
+            continue
+        kept.append(line)
     return "\n".join(kept)
 
 
-def problems(message: str, *, landing: bool = False) -> list[str]:
+def problems(message: str, *, landing: bool = False, merging: bool = False) -> list[str]:
     """Return every rule the message breaks; an empty list means it passes.
 
     `landing=True` is range mode: the commit is about to be merged, so local-only commits
-    (fixup!/squash!/amend!, diag:) are rejected too.
+    (fixup!/squash!/amend!, diag:) are rejected too. `merging=True` means git is recording a
+    merge (MERGE_HEAD exists), the only time a `Merge …` subject is git's own.
     """
     text = "\n".join(line.rstrip() for line in message.splitlines()).strip()
     if not text:
@@ -70,7 +80,7 @@ def problems(message: str, *, landing: bool = False) -> list[str]:
     if GENERATED.search(text):
         found.append('remove the "Generated with <AI tool>" line: commits carry no AI attribution (AGENTS.md)')
 
-    if GIT_SUBJECT.match(subject):
+    if GIT_SUBJECT.match(subject) or (merging and MERGE_SUBJECT.match(subject)):
         return found
     if LOCAL_ONLY_SUBJECT.match(subject):
         if landing:
@@ -122,12 +132,16 @@ def comment_char() -> str:
     return value if len(value) == 1 else "#"  # "auto" can't be known here; git defaults to "#"
 
 
+def merge_in_progress() -> bool:
+    return subprocess.run(["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"], capture_output=True).returncode == 0
+
+
 def main(argv: list[str]) -> int:
     if len(argv) == 3 and argv[1] == "--range":
         return check_range(argv[2])
     if len(argv) == 2:
         message = strip_comments(Path(argv[1]).read_text(encoding="utf-8"), comment_char())
-        issues = problems(message)
+        issues = problems(message, merging=merge_in_progress())
         for issue in issues:
             print(f"✗ commit message: {issue}", file=sys.stderr)
         return 1 if issues else 0

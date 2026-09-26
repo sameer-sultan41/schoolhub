@@ -40,5 +40,7 @@ a PR lands on `main`. One script holds the rules; the local hook and CI both run
 Local hooks now install themselves (`prepare`), so the pre-commit and pre-push gates that were
 never enabled on working clones start running. A `fix` for trivial fallout (a lint rule CI
 caught) still needs a one-line cause, e.g. `Root cause: ESLint's no-floating-promises flagged
-the new handler`. Humans can bypass the hook with `--no-verify`; CI still reports the PR red,
+the new handler`. GitHub's default titles for accepted review suggestions (`Update x.py`,
+`Apply suggestions from code review`) fail the subject rule — retitle them `type(scope): …`
+when accepting. Humans can bypass the hook with `--no-verify`; CI still reports the PR red,
 and blocks the merge once the job is a required check.

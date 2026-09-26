@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import subprocess
 import sys
@@ -15,8 +17,8 @@ import check_commit_msg as cm  # its directory is put on sys.path just above
 
 
 class PassingMessages(unittest.TestCase):
-    def assert_passes(self, message: str, *, landing: bool = False) -> None:
-        self.assertEqual(cm.problems(message, landing=landing), [], message)
+    def assert_passes(self, message: str, **kwargs: bool) -> None:
+        self.assertEqual(cm.problems(message, **kwargs), [], message)
 
     def test_feature_with_scope(self) -> None:
         self.assert_passes("feat(dashboard): wire the staff screen to real data\n")
@@ -38,9 +40,12 @@ class PassingMessages(unittest.TestCase):
     def test_root_cause_is_case_insensitive(self) -> None:
         self.assert_passes("fix: x\n\nroot cause: y\n")
 
-    def test_git_generated_subjects(self) -> None:
-        for subject in ("Merge branch 'main' into feat/x", 'Revert "feat: x"', 'Reapply "feat: x"'):
+    def test_git_revert_and_reapply_subjects(self) -> None:
+        for subject in ('Revert "feat: x"', 'Reapply "feat: x"'):
             self.assert_passes(subject + "\n", landing=True)
+
+    def test_merge_subject_while_git_is_merging(self) -> None:
+        self.assert_passes("Merge branch 'main' into feat/x\n", merging=True)
 
     def test_local_only_subjects_pass_while_writing(self) -> None:
         for subject in ("fixup! feat: x", "squash! fix: y", "amend! docs: z"):
@@ -52,18 +57,24 @@ class PassingMessages(unittest.TestCase):
     def test_generated_prose_that_is_not_an_ai_tool(self) -> None:
         # f35edc2's real body line; "generated" is everyday vocabulary here (ADR-0005).
         self.assert_passes("chore: add the lockfile\n\nGenerated with `pnpm install --lockfile-only` (resolution only).\n")
+        self.assert_passes("docs: map\n\nGenerated with graphify from docs/04-ai/ai-features.md\n")
 
-    def test_human_co_author_is_allowed(self) -> None:
-        # GitHub's "commit suggestion" button adds the reviewer as co-author.
-        self.assert_passes("docs: tidy\n\nCo-authored-by: A Reviewer <reviewer@example.com>\n", landing=True)
+    def test_human_co_authors_are_allowed(self) -> None:
+        # GitHub's "commit suggestion" button adds the reviewer; people can be called Devin or Claude.
+        for trailer in (
+            "Co-authored-by: A Reviewer <reviewer@example.com>",
+            "Co-authored-by: Devin Shah <devin@example.com>",
+            "Co-authored-by: Claude Martin <claude@example.com>",
+        ):
+            self.assert_passes(f"docs: tidy\n\n{trailer}\n", landing=True)
 
     def test_empty_message_is_left_to_git(self) -> None:
         self.assert_passes("\n\n")
 
 
 class FailingMessages(unittest.TestCase):
-    def assert_fails(self, message: str, mentions: str, *, landing: bool = False) -> None:
-        issues = cm.problems(message, landing=landing)
+    def assert_fails(self, message: str, mentions: str, **kwargs: bool) -> None:
+        issues = cm.problems(message, **kwargs)
         self.assertTrue(issues, f"expected a failure for {message!r}")
         self.assertIn(mentions, " ".join(issues))
 
@@ -76,17 +87,24 @@ class FailingMessages(unittest.TestCase):
     def test_root_cause_text_must_be_on_the_same_line(self) -> None:
         self.assert_fails("fix: x\n\nRoot cause:\n\nIt crashed.\n", "Root cause")
 
-    def test_root_cause_in_the_subject_does_not_count(self) -> None:
-        self.assert_fails("fix: Root cause: typo\n", "Root cause")
-
-    def test_ai_co_author_trailer(self) -> None:
-        self.assert_fails("feat: x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n", "Co-authored-by")
+    def test_ai_co_author_trailers(self) -> None:
+        for trailer in (
+            "Co-Authored-By: Claude <noreply@anthropic.com>",
+            "Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>",
+        ):
+            self.assert_fails(f"feat: x\n\n{trailer}\n", "Co-authored-by")
 
     def test_generated_with_an_ai_tool(self) -> None:
         self.assert_fails("feat: x\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n", "Generated with")
 
-    def test_attribution_is_caught_even_on_merge_subjects(self) -> None:
-        self.assert_fails("Merge branch 'main'\n\nCo-authored-by: Copilot <c@github.com>\n", "Co-authored-by")
+    def test_attribution_is_caught_on_merge_subjects_too(self) -> None:
+        self.assert_fails("Merge branch 'main'\n\nCo-authored-by: Claude <noreply@anthropic.com>\n", "Co-authored-by", merging=True)
+
+    def test_hand_written_merge_subject(self) -> None:
+        # Without a merge in progress (or in range mode, where real merges are skipped),
+        # "Merge ..." is just a subject that dodges the type and Root cause checks.
+        self.assert_fails("Merge the login fix\n", "subject must be")
+        self.assert_fails("Merge the login fix\n", "subject must be", landing=True)
 
     def test_non_conventional_subject(self) -> None:
         self.assert_fails("Update stuff\n", "subject must be")
@@ -100,10 +118,6 @@ class FailingMessages(unittest.TestCase):
     def test_missing_space_after_colon(self) -> None:
         self.assert_fails("feat:x\n", "subject must be")
 
-    def test_hash_subject_is_checked_in_range_mode(self) -> None:
-        # Recorded messages are not comment-stripped: "#42 ..." really is the subject.
-        self.assert_fails("#42 hotfix login\n", "subject must be", landing=True)
-
     def test_fixup_does_not_land(self) -> None:
         self.assert_fails("fixup! feat: x\n", "squash this", landing=True)
 
@@ -112,26 +126,29 @@ class FailingMessages(unittest.TestCase):
 
 
 class CommentStripping(unittest.TestCase):
-    def test_comment_lines_are_dropped(self) -> None:
-        text = cm.strip_comments("docs: tidy\n\n# Please enter the commit message\n# Co-Authored-By: Claude\n")
+    def test_git_template_lines_are_dropped(self) -> None:
+        text = cm.strip_comments("docs: tidy\n\n# Please enter the commit message\n#\n# Co-Authored-By: Claude Code\n")
         self.assertEqual(cm.problems(text), [])
 
     def test_text_below_scissors_is_dropped(self) -> None:
-        text = cm.strip_comments(f"docs: tidy\n\n#{cm.SCISSORS}\n+Generated with Claude\n")
+        text = cm.strip_comments(f"docs: tidy\n\n#{cm.SCISSORS}\n+Generated with Claude Code\n")
         self.assertEqual(cm.problems(text), [])
 
+    def test_hash_subject_is_kept(self) -> None:
+        # `git commit -m "#42 fix login"` records that subject verbatim.
+        self.assertIn("#42 fix login", cm.strip_comments("#42 fix login\n"))
+
     def test_custom_comment_char(self) -> None:
-        text = cm.strip_comments("docs: tidy\n; a comment line\n", ";")
-        self.assertNotIn("comment line", text)
+        self.assertNotIn("a comment line", cm.strip_comments("docs: tidy\n; a comment line\n", ";"))
 
 
-class RangeMode(unittest.TestCase):
-    """--range against a throwaway repo."""
-
+class GitRepoTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._cwd = os.getcwd()
         self._tmp = tempfile.TemporaryDirectory()
-        os.chdir(self._tmp.name)
+        self.root = Path(self._tmp.name) / "repo"
+        self.root.mkdir()
+        os.chdir(self.root)
         self._git("init", "-q", "-b", "main")
         self._commit("docs: base", "a")
 
@@ -149,15 +166,35 @@ class RangeMode(unittest.TestCase):
         self._git("add", "-A")
         self._git("commit", "-q", "-m", message)
 
+    def run_main(self, *argv: str) -> tuple[int, str]:
+        # Capture stdout: the script prints `::error::` lines, which GitHub Actions would turn
+        # into real annotations on the check that runs these tests.
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = cm.main(["check_commit_msg.py", *argv])
+        return code, out.getvalue()
+
+
+class RangeMode(GitRepoTestCase):
     def test_clean_range_passes(self) -> None:
         self._commit("feat: one", "b")
         self._commit("fix: two\n\nRoot cause: three", "c")
-        self.assertEqual(cm.main(["x", "--range", "HEAD~2..HEAD"]), 0)
+        code, out = self.run_main("--range", "HEAD~2..HEAD")
+        self.assertEqual(code, 0)
+        self.assertIn("checking 2 commit(s)", out)
 
     def test_one_bad_commit_fails_the_range(self) -> None:
         self._commit("feat: one", "b")
         self._commit("fix: no cause given", "c")
-        self.assertEqual(cm.main(["x", "--range", "HEAD~2..HEAD"]), 1)
+        code, out = self.run_main("--range", "HEAD~2..HEAD")
+        self.assertEqual(code, 1)
+        self.assertIn("'fix: no cause given'", out)
+
+    def test_hash_subject_recorded_by_git_fails(self) -> None:
+        self._commit("#42 hotfix login", "b")  # `-m` keeps the line verbatim
+        code, out = self.run_main("--range", "HEAD~1..HEAD")
+        self.assertEqual(code, 1)
+        self.assertIn("#42 hotfix login", out)
 
     def test_merge_commits_are_skipped(self) -> None:
         self._git("checkout", "-q", "-b", "topic")
@@ -166,7 +203,18 @@ class RangeMode(unittest.TestCase):
         self._commit("docs: on main", "m", "main.txt")
         # A merge commit whose message breaks every rule must not be checked (--no-merges).
         self._git("merge", "-q", "--no-ff", "topic", "-m", "not a conventional subject at all")
-        self.assertEqual(cm.main(["x", "--range", "HEAD~1..HEAD"]), 0)
+        code, out = self.run_main("--range", "HEAD~1..HEAD")
+        self.assertEqual(code, 0)
+        self.assertIn("checking 1 commit(s)", out)
+
+    def test_shallow_clone_is_refused(self) -> None:
+        self._commit("feat: one", "b")
+        shallow = Path(self._tmp.name) / "shallow"
+        subprocess.run(["git", "clone", "-q", "--depth=1", self.root.as_uri(), str(shallow)], check=True, capture_output=True)
+        os.chdir(shallow)
+        code, out = self.run_main("--range", "HEAD..HEAD")
+        self.assertEqual(code, 2)
+        self.assertIn("shallow clone", out)
 
 
 class HookScript(unittest.TestCase):
@@ -187,6 +235,9 @@ class HookScript(unittest.TestCase):
 
     def test_hook_accepts_a_good_message(self) -> None:
         self.assertEqual(self.run_hook("docs: fine\n"), 0)
+
+    def test_hook_ignores_git_template_comments(self) -> None:
+        self.assertEqual(self.run_hook("docs: fine\n\n# Co-Authored-By: Claude <noreply@anthropic.com>\n"), 0)
 
     def test_hook_rejects_an_ai_trailer(self) -> None:
         self.assertEqual(self.run_hook("feat: x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"), 1)

@@ -349,6 +349,23 @@ Every plan states `**Tier:** n` near the top.
 
 ### PR 3: Turn the gates on, plus commit hygiene
 
+> **As built (PR #86, after two review rounds; stop rule 3):**
+>
+> - **Checker:** a stdlib Python script, `.githooks/lib/check_commit_msg.py` (not
+>   `check-commit-msg.sh`), shared by the hook and CI, with unit tests in `.githooks/tests/`.
+> - **Attribution:** only AI co-authors and "Generated with <AI tool>" lines are rejected, matched
+>   by tool identity (vendor/bot address, product name). Human co-authors pass.
+> - **Subjects:** `Revert "`/`Reapply "` always pass; `Merge …` only while git is merging.
+>   `fixup!`/`squash!`/`amend!` and `diag:` pass locally but fail in CI (they would land on `main`).
+> - **CI range:** `HEAD^1..HEAD^2` of the PR's synthetic merge commit, with no base fetch; a
+>   `--depth=1` re-fetch marked the base tip shallow and widened ranges to all history. The
+>   script refuses shallow clones.
+> - **`prepare`:** guarded to run only when the package is the top of its own git repo.
+> - **pre-commit:** ruff scoped to `apps/api/` (what CI lints); gitleaks uses `--exit-code 3` to
+>   separate leaks from tool errors.
+> - **Ruleset:** `main.json` corrected (merge commits only, always-running checks) but left
+>   unapplied, because the public repo already has classic protection.
+
 **Auto-install the hooks.** Add a root `package.json` script, `"prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks && git config blame.ignoreRevsFile .git-blame-ignore-revs || true"`.
 - It's a no-op in the dashboard and website Docker builds, which copy only manifests and no `.git` (`apps/dashboard/Dockerfile:20-26`).
 - In CI it sets local config harmlessly.
