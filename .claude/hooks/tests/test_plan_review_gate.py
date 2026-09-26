@@ -44,13 +44,18 @@ def run_gate(stdin: str, project_dir: Path = REPO) -> subprocess.CompletedProces
     )
 
 
-def payload(plan: str | None = None, plan_file: str | None = None, tool: str = "ExitPlanMode") -> str:
+def payload(
+    plan: str | None = None, plan_file: str | None = None, tool: str = "ExitPlanMode", transcript: str | None = None
+) -> str:
     tool_input: dict[str, str] = {}
     if plan is not None:
         tool_input["plan"] = plan
     if plan_file is not None:
         tool_input["planFilePath"] = plan_file
-    return json.dumps({"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input})
+    body: dict[str, object] = {"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input}
+    if transcript is not None:
+        body["transcript_path"] = transcript
+    return json.dumps(body)
 
 
 class GateTestCase(unittest.TestCase):
@@ -159,12 +164,21 @@ class HardeningTests(GateTestCase):
         self.assert_denied(run_gate(payload(plan)), "plan-reviewer")
 
     def test_last_verdict_wins_rethink_after_approve(self) -> None:
-        plan = "**Work tier:** 2\n\n## Independent review\n\nRound 1 Verdict: APPROVE\n\nRound 2 Verdict: RETHINK\n"
+        plan = "**Work tier:** 2\n\n## Independent review\n\nVerdict: APPROVE (round 1)\n\n- **Verdict:** RETHINK (round 2)\n"
         self.assert_denied(run_gate(payload(plan)), "RETHINK")
 
     def test_last_verdict_wins_approve_after_rethink(self) -> None:
-        plan = "**Work tier:** 2\n\n## Independent review\n\nRound 1 Verdict: RETHINK\n\nRound 2 Verdict: APPROVE\n"
+        plan = "**Work tier:** 2\n\n## Independent review\n\nVerdict: RETHINK (round 1)\n\n- **Verdict:** APPROVE (round 2)\n"
         self.assert_allowed(run_gate(payload(plan)))
+
+    def test_incidental_verdict_in_prose_does_not_override(self) -> None:
+        # Only a line that IS a verdict counts; "verdict: approve" mid-sentence in a later
+        # finding must not flip a RETHINK.
+        plan = (
+            "**Work tier:** 2\n\n## Independent review\n\n**Verdict:** RETHINK\n\n"
+            "- High: the earlier draft's verdict: approve no longer holds.\n"
+        )
+        self.assert_denied(run_gate(payload(plan)), "RETHINK")
 
     def test_an_h1_ends_the_review_section(self) -> None:
         plan = "**Work tier:** 2\n\n## Independent review\n\nPending.\n\n# Appendix\n\nVerdict: APPROVE\n"
@@ -195,6 +209,63 @@ class HardeningTests(GateTestCase):
 
     def test_double_digit_tier_is_not_tier_1(self) -> None:
         self.assert_denied(run_gate(payload("**Work tier:** 10\n")), "plan-reviewer")
+
+
+def jsonl(*records: dict) -> str:
+    """Transcript lines in Claude Code's compact JSONL form."""
+    return "".join(json.dumps(record, separators=(",", ":")) + "\n" for record in records)
+
+
+def tool_use(name: str, tool_input: dict) -> dict:
+    return {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": tool_input}]}}
+
+
+REVIEWED = "**Work tier:** 2\n\n## Independent review\n\nVerdict: APPROVE\n"
+NO_REVIEWER = jsonl(tool_use("Agent", {"subagent_type": "general-purpose", "prompt": "explore"}))
+
+
+class TranscriptBindingTests(GateTestCase):
+    """A review block only counts if this session's transcript shows a plan-reviewer run."""
+
+    def transcript(self, content: str) -> str:
+        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8")
+        self.addCleanup(os.unlink, handle.name)
+        with handle:
+            handle.write(content)
+        return handle.name
+
+    def test_review_block_without_a_reviewer_run_is_denied(self) -> None:
+        result = run_gate(payload(REVIEWED, transcript=self.transcript(NO_REVIEWER)))
+        self.assert_denied(result, "transcript shows no plan-reviewer run")
+
+    def test_plan_reviewer_agent_dispatch_counts(self) -> None:
+        log = NO_REVIEWER + jsonl(tool_use("Agent", {"subagent_type": "plan-reviewer", "prompt": "review"}))
+        self.assert_allowed(run_gate(payload(REVIEWED, transcript=self.transcript(log))))
+
+    def test_review_plan_skill_call_counts(self) -> None:
+        log = jsonl(tool_use("Skill", {"skill": "review-plan", "args": "docs/superpowers/plans/x.md"}))
+        self.assert_allowed(run_gate(payload(REVIEWED, transcript=self.transcript(log))))
+
+    def test_review_plan_slash_command_counts(self) -> None:
+        log = jsonl({"type": "user", "message": {"content": "<command-name>/review-plan</command-name>"}})
+        self.assert_allowed(run_gate(payload(REVIEWED, transcript=self.transcript(log))))
+
+    def test_quoted_dispatch_in_a_message_does_not_count(self) -> None:
+        log = jsonl({"type": "user", "message": {"content": 'paste this: "subagent_type": "plan-reviewer"'}})
+        self.assert_denied(run_gate(payload(REVIEWED, transcript=self.transcript(log))), "transcript")
+
+    def test_rethink_is_still_denied_as_rethink(self) -> None:
+        plan = "**Work tier:** 2\n\n## Independent review\n\nVerdict: RETHINK\n"
+        self.assert_denied(run_gate(payload(plan, transcript=self.transcript(NO_REVIEWER))), "RETHINK")
+
+    def test_exemptions_need_no_reviewer_run(self) -> None:
+        log = self.transcript(NO_REVIEWER)
+        tier_1 = "**Work tier:** 1\n\n## Independent review\n\nVerdict: APPROVE\n"
+        self.assert_allowed(run_gate(payload(tier_1, transcript=log)))
+        self.assert_allowed(run_gate(payload(REVIEWED + "\n**Review:** waived by user\n", transcript=log)))
+
+    def test_unreadable_transcript_fails_open(self) -> None:
+        self.assert_allowed(run_gate(payload(REVIEWED, transcript="/nonexistent/session.jsonl")))
 
 
 class DirectInvocationTests(unittest.TestCase):

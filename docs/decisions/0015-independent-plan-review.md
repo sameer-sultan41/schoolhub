@@ -29,7 +29,26 @@ section.
 The gate is a deterministic `command` hook that reads the plan text the hook payload carries
 (`tool_input.plan`, confirmed from a captured payload). It allows work tier 0/1, an explicit
 `**Review:** waived by user`, or a review block with an APPROVE or REVISE verdict. It denies an
-unreviewed plan or a RETHINK verdict, and fails open on any error.
+unreviewed plan or a RETHINK verdict, and fails open on any error. A verdict counts only on a
+line of its own (`Verdict: APPROVE`, `- **Verdict:** REVISE`), so a phrase in later prose can't
+override it.
+
+### What the gate cannot prove
+
+The review block is text in the plan, and the agent that wrote the plan can type text. Presence
+of a block is not proof a reviewer produced it. The session gate narrows this: when a plan is
+allowed *only* because of a review block, it reads the session transcript the hook payload
+names (`transcript_path`) and denies unless that transcript shows a `plan-reviewer` Agent
+dispatch, a `review-plan` Skill call, or the user typing `/review-plan`. That is a binding to
+"a review ran in this session", not to "this block is that review's output" — an agent could
+still run the reviewer and then paste a different verdict. If the transcript is missing or
+unreadable the gate fails open, as it does for every other error.
+
+CI's `plan-review-record` job has no transcript, so for spec and plan files it checks presence
+only. What closes the remaining gap is the human step this record already requires: the user
+reads the verdict and findings before approving, and the `change-reviewer` later checks the diff
+against the plan. A cryptographic attestation (a signed reviewer output) was considered and
+rejected: nothing in a local agent session can hold a key the planning agent can't also read.
 
 ## Alternatives considered
 
@@ -48,5 +67,5 @@ unreviewed plan or a RETHINK verdict, and fails open on any error.
 
 Every plan must state its work tier; a plan that states none is treated as work tier 2. Self-declared Tier 0/1 and the waiver are visible in the plan the
 user approves, so they can't be abused silently. The gate can't judge review *quality*, only
-presence; the user still reads the verdict. Plans from the superpowers flow never pass through
+that a reviewer ran; the user still reads the verdict. Plans from the superpowers flow never pass through
 `ExitPlanMode`, so CI checks their files instead, with older files grandfathered by date.

@@ -12,7 +12,9 @@ A plan is allowed through when it contains any of:
   ("Work tier", not "Tier": this repo already uses "Tier 0 — Foundation" etc. for module
   build order, and a build-order heading must never read as a review exemption);
 - `**Review:** waived by user` — the user explicitly waived review (visible in the plan);
-- an `## Independent review` section whose verdict is APPROVE or REVISE (findings folded in).
+- an `## Independent review` section whose verdict is APPROVE or REVISE (findings folded in),
+  and — when the payload's `transcript_path` is readable — a plan-reviewer run in that
+  session's transcript, so the block can't simply be typed in by the planning agent.
 
 Otherwise it is denied with instructions to run the `plan-reviewer` agent. A RETHINK
 verdict is denied too: the reviewer said the approach itself is wrong.
@@ -35,7 +37,19 @@ TIER = re.compile(LINE_START + r"\*\*Work tier:\*\*\s*([0-9])\b", re.MULTILINE |
 WAIVED = re.compile(LINE_START + r"\*\*Review:\*\*\s*waived by user\b", re.MULTILINE | re.IGNORECASE)
 REVIEW_HEADING = re.compile(r"^##\s+Independent review\b", re.MULTILINE | re.IGNORECASE)
 NEXT_SECTION = re.compile(r"^#{1,2}\s", re.MULTILINE)
-VERDICT = re.compile(r"verdict[\s:*_]*\b(approve|revise|rethink)\b", re.IGNORECASE)
+# Anchored like TIER/WAIVED: a verdict is a line of its own ("Verdict: APPROVE",
+# "- **Verdict:** REVISE — …"), so an incidental "verdict: approve" in later prose can't win.
+VERDICT = re.compile(
+    LINE_START + r"(?:\*\*|__)?verdict(?:\*\*|__)?[ \t]*:?(?:\*\*|__)?[ \t]*(approve|revise|rethink)\b",
+    re.MULTILINE | re.IGNORECASE,
+)
+# A plan-reviewer run as the session transcript (JSONL) records it: an Agent dispatch, a Skill
+# tool call, or the user typing /review-plan. Quoted mentions don't match — JSON escapes their
+# quotes (\"subagent_type\"), and the optional slash keeps this pattern's own source text inert.
+REVIEWER_RUN = re.compile(
+    r'"subagent_type"\s*:\s*"plan-reviewer"|"skill"\s*:\s*"review-plan"'
+    r"|<command-name>/?review-plan</command-name>"
+)
 FENCED = re.compile(r"^(```|~~~).*?^\1[^\n]*$", re.MULTILINE | re.DOTALL)
 
 DENY_UNREVIEWED = (
@@ -54,6 +68,13 @@ DENY_RETHINK = (
 )
 
 
+def exempt(plan: str) -> bool:
+    """Work tier 0/1, or review explicitly waived by the user. Fenced code blocks don't count."""
+    plan = FENCED.sub("", plan)
+    tier = TIER.search(plan)
+    return bool(tier and tier.group(1) in {"0", "1"}) or bool(WAIVED.search(plan))
+
+
 def decide(plan: str) -> str | None:
     """Return a denial reason, or None to allow.
 
@@ -62,12 +83,9 @@ def decide(plan: str) -> str | None:
     next H1/H2; verdicts are read from EVERY such section in document order and the last one
     wins — so a re-review appended as a new block supersedes the earlier round.
     """
+    if exempt(plan):
+        return None
     plan = FENCED.sub("", plan)
-    tier = TIER.search(plan)
-    if tier and tier.group(1) in {"0", "1"}:
-        return None
-    if WAIVED.search(plan):
-        return None
     verdicts: list[str] = []
     for heading in REVIEW_HEADING.finditer(plan):
         rest = plan[heading.end() :]
@@ -76,6 +94,31 @@ def decide(plan: str) -> str | None:
     if verdicts:
         return DENY_RETHINK if verdicts[-1].lower() == "rethink" else None
     return DENY_UNREVIEWED
+
+
+def reviewer_ran(payload: dict) -> bool | None:
+    """Whether the session transcript shows a plan-reviewer run: True, False, or None if unknown.
+
+    Binds the review block to an actual review: without this, an agent could write the
+    `## Independent review` heading and a verdict itself. None (no or unreadable transcript)
+    fails open, like every other error in this gate.
+    """
+    path = payload.get("transcript_path")
+    if not isinstance(path, str) or not path:
+        return None
+    try:
+        with open(path, encoding="utf-8", errors="replace") as transcript:
+            return any(REVIEWER_RUN.search(line) for line in transcript)
+    except OSError:
+        return None
+
+
+DENY_UNATTESTED = (
+    "The plan carries an `## Independent review` block, but this session's transcript shows no "
+    "plan-reviewer run. The block must come from the reviewer: dispatch the `plan-reviewer` agent "
+    "(or run /review-plan), fold in its findings, paste its block, then call ExitPlanMode again. "
+    "If the review happened in another session, re-run it here, or ask the user to waive it."
+)
 
 
 def plan_text(payload: dict) -> str:
@@ -94,7 +137,13 @@ def main() -> int:
         payload = json.loads(sys.stdin.read())
         if payload.get("tool_name") not in (None, "ExitPlanMode"):
             return 0
-        reason = decide(plan_text(payload))
+        plan = plan_text(payload)
+        reason = decide(plan)
+        # Allowed on the strength of a review block alone: make sure a real plan-reviewer run
+        # produced it. CI's check_review_records.py has no transcript, so this binding exists
+        # only in the session gate (ADR-0015, "What the gate cannot prove").
+        if reason is None and not exempt(plan) and reviewer_ran(payload) is False:
+            reason = DENY_UNATTESTED
         if reason:
             print(
                 json.dumps(
