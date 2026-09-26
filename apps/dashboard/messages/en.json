@@ -499,6 +499,18 @@
       "nationalId": "National ID",
       "publicBio": "Public bio"
     },
+    "detail": {
+      "title": "{name} — staff details",
+      "titleFallback": "Staff details",
+      "close": "Close",
+      "contact": "Contact",
+      "employment": "Employment",
+      "personal": "Personal",
+      "bio": "Bio",
+      "loadError": "Couldn't load full details. Try again.",
+      "lastUpdated": "Last updated {when}",
+      "exit": "Exit"
+    },
     "form": {
       "createTitle": "New staff member",
       "editTitle": "Edit staff member",

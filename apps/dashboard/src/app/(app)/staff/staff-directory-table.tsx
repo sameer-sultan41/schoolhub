@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EllipsisVertical, Filter, Search, Settings2, Users, X } from "lucide-react";
+import { ArrowUpDown, Filter, Pencil, Search, Trash2, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { m } from "motion/react";
@@ -14,7 +14,6 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
-import { toast } from "sonner";
 
 import { ApiError } from "@schoolhub/api-client";
 import {
@@ -32,6 +31,7 @@ import {
   CardTitle,
   CardToolbar,
   Checkbox,
+  DATA_GRID_CARD_CLASSNAME,
   DataGrid,
   DataGridColumnHeader,
   DataGridColumnVisibility,
@@ -39,11 +39,6 @@ import {
   DataGridTable,
   DataGridTableRowSelect,
   DataGridTableRowSelectAll,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
   EmptyState,
   Input,
   Label,
@@ -57,11 +52,11 @@ import {
 } from "@schoolhub/ui";
 
 import { Services } from "@/services";
-import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { stableSignedUrl } from "@/lib/stable-signed-url";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
 import { ExitStaffDialog } from "@/app/(app)/staff/exit-staff-dialog";
+import { StaffDetailSheet } from "@/app/(app)/staff/staff-detail-sheet";
 
 /**
  * The `/staff` route's own directory — every staff member, server-paginated/sorted/
@@ -77,7 +72,7 @@ import { ExitStaffDialog } from "@/app/(app)/staff/exit-staff-dialog";
  * This preview has no i18n wiring yet (see the plan's Global Constraints), so — same as
  * `teams.tsx` — this is the one place with hardcoded English strings.
  */
-interface StaffRow {
+export interface StaffRow {
   id: string;
   name: string;
   designation: string;
@@ -108,55 +103,46 @@ const SORT_FIELD: Record<string, string> = {
 const DEFAULT_SORTING: SortingState = [{ id: "name", desc: false }];
 const JOINING_DATE_SORT_ID = "joiningDate";
 
-type StatusVariant = "success" | "warning" | "destructive" | "secondary";
+type StatusVariant = "success" | "warning" | "destructive" | "secondary" | "info" | "rose";
 
-/**
- * `employment_status` -> badge color/label. Values and their exact display labels
- * mirror `EmploymentStatus` (apps/api/apps/staff_management/models.py) one for one —
- * `resigned`/`retired` both read as "no longer here but not a compliance action", so
- * both map to the neutral `secondary` color rather than inventing a fifth badge color.
- */
+/** employment_status -> badge; mirrors EmploymentStatus in staff_management/models.py. */
 const STATUS_META: Record<string, { variant: StatusVariant; label: string }> = {
   active: { variant: "success", label: "Active" },
   on_leave: { variant: "warning", label: "On leave" },
   suspended: { variant: "destructive", label: "Suspended" },
-  resigned: { variant: "secondary", label: "Resigned" },
-  retired: { variant: "secondary", label: "Retired" },
+  resigned: { variant: "rose", label: "Resigned" },
+  retired: { variant: "info", label: "Retired" },
   terminated: { variant: "destructive", label: "Terminated" },
 };
 
-/** Defensive fallback for a status value not in `STATUS_META` — humanizes rather than
- * showing the raw snake_case string, e.g. "on_leave" -> "On leave". */
-function humanizeStatus(value: string): string {
+/** Humanizes an unlabelled snake_case value, e.g. "on_leave" -> "On leave". */
+export function humanizeSnakeCase(value: string): string {
   const spaced = value.replace(/_/g, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-function statusMeta(status: string): { variant: StatusVariant; label: string } {
-  return STATUS_META[status] ?? { variant: "secondary", label: humanizeStatus(status) };
+export function statusMeta(status: string): { variant: StatusVariant; label: string } {
+  return STATUS_META[status] ?? { variant: "secondary", label: humanizeSnakeCase(status) };
 }
 
 /** Same convention as `shell/partials/topbar/user-dropdown-menu.tsx`'s own `initialsOf`
  * (non-null-assertion-free array destructure) — duplicated rather than imported since
  * that one is private to its own module. Also what shows while a photo loads, and
  * whenever it fails to (an expired link, a deleted object). */
-function initialsOf(name: string): string {
+export function initialsOf(name: string): string {
   const [first, ...rest] = name.trim().split(/\s+/).filter(Boolean);
   if (!first) return "?";
   const last = rest.at(-1);
   return last ? `${first[0]}${last[0]}`.toUpperCase() : first.slice(0, 2).toUpperCase();
 }
 
-function formatLastUpdated(value: string): string {
+export function formatLastUpdated(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return formatDistanceToNow(parsed, { addSuffix: true });
 }
 
-/** The ⋮ actions menu — `Edit` opens `StaffFormDialog` in edit mode and `Delete` opens
- * `ExitStaffDialog` for this single row, both driven by callbacks owned by
- * `StaffDirectoryTable` above; `Copy ID` is fully wired: it copies the real row id via
- * the shared `useCopyToClipboard` hook and confirms with a toast. */
+/** A row's direct Edit and Delete icon buttons. */
 function ActionsCell({
   row,
   onEdit,
@@ -166,56 +152,35 @@ function ActionsCell({
   onEdit: (id: string) => void;
   onDelete: (id: string, name: string) => void;
 }) {
-  const { copyToClipboard } = useCopyToClipboard();
-
-  function handleCopyId() {
-    // `copyToClipboard` now resolves to whether the write genuinely succeeded (see
-    // use-copy-to-clipboard.ts) — the toast reflects that instead of firing
-    // unconditionally, which would otherwise claim success even when the Clipboard
-    // API is unavailable (no secure context) or the write itself rejects.
-    // `copyToClipboard` never rejects (a failed write resolves `false`), so there is no
-    // rejection for this chain to handle.
-    void copyToClipboard(row.original.id).then((success) => {
-      if (success) {
-        toast.success("Staff ID copied");
-      } else {
-        toast.error("Couldn't copy staff ID");
-      }
-    });
-  }
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          className="size-7"
-          mode="icon"
-          variant="ghost"
-          aria-label={`Actions for ${row.original.name}`}
-        >
-          <EllipsisVertical />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="end">
-        <DropdownMenuItem
-          onClick={() => {
-            onEdit(row.original.id);
-          }}
-        >
-          Edit
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleCopyId}>Copy ID</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onClick={() => {
-            onDelete(row.original.id, row.original.name);
-          }}
-        >
-          Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="flex items-center gap-1">
+      <Button
+        variant="primary"
+        appearance="light"
+        mode="icon"
+        shape="circle"
+        size="sm"
+        aria-label={`Edit ${row.original.name}`}
+        onClick={() => {
+          onEdit(row.original.id);
+        }}
+      >
+        <Pencil />
+      </Button>
+      <Button
+        variant="destructive"
+        appearance="light"
+        mode="icon"
+        shape="circle"
+        size="sm"
+        aria-label={`Delete ${row.original.name}`}
+        onClick={() => {
+          onDelete(row.original.id, row.original.name);
+        }}
+      >
+        <Trash2 />
+      </Button>
+    </div>
   );
 }
 
@@ -236,6 +201,8 @@ export function StaffDirectoryTable() {
     staffIds: string[];
     staffNames: string[];
   } | null>(null);
+  // The row whose detail sheet is open.
+  const [detailRow, setDetailRow] = useState<StaffRow | null>(null);
 
   // Clears a bulk selection once its "Exit selected" dialog closes (success, cancel, or
   // a partial-failure close) — a selected row that just got exited shouldn't stay
@@ -381,7 +348,7 @@ export function StaffDirectoryTable() {
         // option: no fabricated email, no redundant designation repeat.
         cell: ({ row }) => (
           <div className="flex items-center gap-4">
-            <Avatar className="size-9 shrink-0">
+            <Avatar className="size-9 shrink-0 transition-transform duration-200 hover:scale-110">
               {row.original.photoUrl ? <AvatarImage src={row.original.photoUrl} alt="" /> : null}
               <AvatarFallback>{initialsOf(row.original.name)}</AvatarFallback>
             </Avatar>
@@ -470,7 +437,8 @@ export function StaffDirectoryTable() {
         ),
         enableSorting: false,
         enableHiding: false,
-        size: 60,
+        // 60 fit the old single ⋮ trigger; two side-by-side icon buttons need more room.
+        size: 88,
       },
     ],
     [],
@@ -526,6 +494,7 @@ export function StaffDirectoryTable() {
       table={table}
       recordCount={recordCount}
       isLoading={isPending}
+      onRowClick={setDetailRow}
       caption="Staff directory"
       tableLayout={{
         columnsPinnable: true,
@@ -538,183 +507,190 @@ export function StaffDirectoryTable() {
         <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
     >
-      <Card>
-        <CardHeader>
-          <CardHeading>
-            <div className="flex items-center gap-2.5">
-              <div className="relative">
-                <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search staff..."
-                  aria-label="Search staff"
-                  value={searchInput}
-                  onChange={(e) => {
-                    setSearchInput(e.target.value);
-                  }}
-                  className="w-52 ps-9"
-                />
-                {searchInput.length > 0 && (
-                  <Button
-                    mode="icon"
-                    variant="ghost"
-                    aria-label="Clear search"
-                    className="absolute end-1.5 top-1/2 h-6 w-6 -translate-y-1/2"
-                    onClick={() => {
-                      setSearchInput("");
+      {/* Fade in once on mount; no key, so filters and paging don't replay it. */}
+      <m.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+      >
+        <Card className={DATA_GRID_CARD_CLASSNAME}>
+          <CardHeader>
+            <CardHeading>
+              <div className="flex items-center gap-2.5">
+                <div className="relative">
+                  <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-primary" />
+                  <Input
+                    placeholder="Search staff..."
+                    aria-label="Search staff"
+                    value={searchInput}
+                    onChange={(e) => {
+                      setSearchInput(e.target.value);
                     }}
-                  >
-                    <X />
-                  </Button>
-                )}
-              </div>
-              {/* Single-select, not the vendor's multi-checkbox: `/staff`'s real
+                    className="w-52 ps-9"
+                  />
+                  {searchInput.length > 0 && (
+                    <Button
+                      mode="icon"
+                      variant="ghost"
+                      aria-label="Clear search"
+                      className="absolute end-1.5 top-1/2 h-6 w-6 -translate-y-1/2"
+                      onClick={() => {
+                        setSearchInput("");
+                      }}
+                    >
+                      <X />
+                    </Button>
+                  )}
+                </div>
+                {/* Single-select, not the vendor's multi-checkbox: `/staff`'s real
                   `StaffFilterSet.employment_status` is a plain exact-match filter, one
                   value at a time — matching that instead of the vendor's fake
                   in-memory multi-select. Selecting the already-active status clears it. */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline">
-                    <Filter />
-                    Status
-                    {statusFilter && (
-                      <Badge size="sm" variant="outline">
-                        {statusMeta(statusFilter).label}
-                      </Badge>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-44 p-3" align="start" label="Filter by status">
-                  <div className="space-y-3">
-                    <div className="text-xs font-medium text-muted-foreground">Filters</div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant={statusFilter ? "outline-primary" : "outline"}>
+                      <Filter className="text-primary" />
+                      Status
+                      {statusFilter && (
+                        <Badge size="sm" variant={statusMeta(statusFilter).variant}>
+                          {statusMeta(statusFilter).label}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-44 p-3" align="start" label="Filter by status">
                     <div className="space-y-3">
-                      {Object.entries(STATUS_META).map(([value, meta]) => (
-                        <div key={value} className="flex items-center gap-2.5">
-                          <Checkbox
-                            id={`status-${value}`}
-                            checked={statusFilter === value}
-                            onCheckedChange={(checked) => {
-                              handleStatusToggle(checked === true, value);
-                            }}
-                          />
-                          <Label htmlFor={`status-${value}`} className="grow font-normal">
-                            {meta.label}
-                          </Label>
-                        </div>
-                      ))}
+                      <div className="text-xs font-medium text-muted-foreground">Filters</div>
+                      <div className="space-y-3">
+                        {Object.entries(STATUS_META).map(([value, meta]) => (
+                          <div key={value} className="flex items-center gap-2.5">
+                            <Checkbox
+                              id={`status-${value}`}
+                              checked={statusFilter === value}
+                              onCheckedChange={(checked) => {
+                                handleStatusToggle(checked === true, value);
+                              }}
+                            />
+                            <Label htmlFor={`status-${value}`} className="grow font-normal">
+                              {meta.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-              {/* Vendor's "latest/older/oldest" sorts by `new Date(row.id)` on string
+                  </PopoverContent>
+                </Popover>
+                {/* Vendor's "latest/older/oldest" sorts by `new Date(row.id)` on string
                   ids like "1" — Invalid Date, a no-op even in the real vendor demo.
                   Real equivalent: sort by `joining_date`, a confirmed `ordering_fields`
                   entry. See `handleSortOrderToggle` above for how this coexists with
                   column-header sorting. */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline">
-                    <Filter />
-                    Sort Order
-                    {activeSortOrder && (
-                      <Badge size="sm" variant="outline">
-                        {activeSortOrder === "newest" ? "Newest joiners" : "Oldest joiners"}
-                      </Badge>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-3" align="start" label="Sort order options">
-                  <div className="space-y-3">
-                    <div className="text-xs font-medium text-muted-foreground">Sort By</div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant={activeSortOrder ? "outline-primary" : "outline"}>
+                      <ArrowUpDown className="text-primary" />
+                      Sort Order
+                      {activeSortOrder && (
+                        <Badge size="sm" variant="primary">
+                          {activeSortOrder === "newest" ? "Newest joiners" : "Oldest joiners"}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-3" align="start" label="Sort order options">
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2.5">
-                        <Checkbox
-                          id="sort-newest-joiners"
-                          checked={activeSortOrder === "newest"}
-                          onCheckedChange={(checked) => {
-                            handleSortOrderToggle(checked === true, true);
-                          }}
-                        />
-                        <Label htmlFor="sort-newest-joiners" className="grow font-normal">
-                          Newest joiners
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <Checkbox
-                          id="sort-oldest-joiners"
-                          checked={activeSortOrder === "oldest"}
-                          onCheckedChange={(checked) => {
-                            handleSortOrderToggle(checked === true, false);
-                          }}
-                        />
-                        <Label htmlFor="sort-oldest-joiners" className="grow font-normal">
-                          Oldest joiners
-                        </Label>
+                      <div className="text-xs font-medium text-muted-foreground">Sort By</div>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2.5">
+                          <Checkbox
+                            id="sort-newest-joiners"
+                            checked={activeSortOrder === "newest"}
+                            onCheckedChange={(checked) => {
+                              handleSortOrderToggle(checked === true, true);
+                            }}
+                          />
+                          <Label htmlFor="sort-newest-joiners" className="grow font-normal">
+                            Newest joiners
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <Checkbox
+                            id="sort-oldest-joiners"
+                            checked={activeSortOrder === "oldest"}
+                            onCheckedChange={(checked) => {
+                              handleSortOrderToggle(checked === true, false);
+                            }}
+                          />
+                          <Label htmlFor="sort-oldest-joiners" className="grow font-normal">
+                            Oldest joiners
+                          </Label>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-          </CardHeading>
-          <CardToolbar>
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* From the vendor's sibling "Team Members" reference (account/members/
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </CardHeading>
+            <CardToolbar>
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* From the vendor's sibling "Team Members" reference (account/members/
                   team-members), not "Team Crew" — same underlying `statusFilter` state
                   as the Status popover above, not a second, competing filter: this is
                   just the common-case shortcut for "employment_status=active", on by
                   default. Turning it off clears the filter (shows every status); the
                   popover still works independently for any other single status. */}
-              <Label htmlFor="active-users-toggle" className="text-sm">
-                Active Users
-              </Label>
-              <Switch
-                id="active-users-toggle"
-                size="sm"
-                checked={statusFilter === "active"}
-                onCheckedChange={(checked) => {
-                  setStatusFilter(checked ? "active" : undefined);
-                }}
-              />
-            </div>
-            {/* Decorative in the vendor source too — no `onClick`, nothing reacts to it
-                anywhere in `components/users.tsx`. Kept inert here for pixel fidelity:
-                matching the vendor's own inert button IS "same UI, no changes." */}
-            <Button>
-              <Settings2 />
-              Filters
-            </Button>
-            {selectedIds.length > 0 && (
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setExitDialog({ staffIds: selectedIds, staffNames: selectedNames });
-                }}
-              >
-                Exit selected ({selectedIds.length})
-              </Button>
-            )}
-            <DataGridColumnVisibility />
-          </CardToolbar>
-        </CardHeader>
-        <CardTable>
-          {/* keepPreviousData means a filter/sort/search/page change keeps showing the
+                <Label htmlFor="active-users-toggle" className="text-sm">
+                  Active Users
+                </Label>
+                <Switch
+                  id="active-users-toggle"
+                  size="sm"
+                  checked={statusFilter === "active"}
+                  onCheckedChange={(checked) => {
+                    setStatusFilter(checked ? "active" : undefined);
+                  }}
+                />
+              </div>
+              {selectedIds.length > 0 && (
+                <m.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      setExitDialog({ staffIds: selectedIds, staffNames: selectedNames });
+                    }}
+                  >
+                    Exit selected ({selectedIds.length})
+                  </Button>
+                </m.div>
+              )}
+              <DataGridColumnVisibility />
+            </CardToolbar>
+          </CardHeader>
+          <CardTable>
+            {/* keepPreviousData means a filter/sort/search/page change keeps showing the
               OLD rows while the new page loads (no blank-table flash) — but with zero
               visual feedback, the swap from old rows to new ones is otherwise instant
               and easy to miss. A brief dip in opacity while `isFetching` (not the
               cold-load-only `isPending` the skeleton rows below key off) makes that real
               state change legible without a spinner or a layout shift. Duration matches
               the ~200ms voice popover.tsx/dropdown-menu.tsx already established. */}
-          <m.div animate={{ opacity: isFetching ? 0.5 : 1 }} transition={{ duration: 0.15 }}>
-            <ScrollArea>
-              <DataGridTable />
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
-          </m.div>
-        </CardTable>
-        <CardFooter>
-          <DataGridPagination />
-        </CardFooter>
-      </Card>
+            <m.div animate={{ opacity: isFetching ? 0.5 : 1 }} transition={{ duration: 0.15 }}>
+              <ScrollArea>
+                <DataGridTable />
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            </m.div>
+          </CardTable>
+          {/* DataGridPagination already draws the top border. */}
+          <CardFooter className="border-t-0">
+            <DataGridPagination />
+          </CardFooter>
+        </Card>
+      </m.div>
       <StaffFormDialog
         open={formDialog !== null}
         onOpenChange={(open) => {
@@ -730,6 +706,20 @@ export function StaffDirectoryTable() {
         }}
         staffIds={exitDialog?.staffIds ?? []}
         staffNames={exitDialog?.staffNames}
+      />
+      <StaffDetailSheet
+        row={detailRow}
+        onOpenChange={(open) => {
+          if (!open) setDetailRow(null);
+        }}
+        onEdit={(id) => {
+          setDetailRow(null);
+          setFormDialog({ mode: "edit", staffId: id });
+        }}
+        onDelete={(id, name) => {
+          setDetailRow(null);
+          setExitDialog({ staffIds: [id], staffNames: [name] });
+        }}
       />
     </DataGrid>
   );

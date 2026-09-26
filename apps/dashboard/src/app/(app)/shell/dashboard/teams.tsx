@@ -24,6 +24,7 @@ import {
   CardTable,
   CardTitle,
   CardToolbar,
+  DATA_GRID_CARD_CLASSNAME,
   DataGrid,
   DataGridColumnHeader,
   DataGridPagination,
@@ -187,7 +188,7 @@ export function Teams() {
         <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
     >
-      <Card>
+      <Card className={DATA_GRID_CARD_CLASSNAME}>
         <CardHeader className="py-3.5">
           <CardTitle>Staff</CardTitle>
           <CardToolbar className="flex items-center gap-3">
@@ -225,7 +226,8 @@ export function Teams() {
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </CardTable>
-        <CardFooter>
+        {/* DataGridPagination already draws the top border. */}
+        <CardFooter className="border-t-0">
           <DataGridPagination />
         </CardFooter>
       </Card>

@@ -181,7 +181,7 @@
       "count": 1
     },
     "react/jsx-no-literals": {
-      "count": 13
+      "count": 9
     }
   },
   "src/app/(app)/staff/staff-form-dialog.tsx": {
@@ -189,7 +189,7 @@
       "count": 1
     },
     "no-restricted-syntax": {
-      "count": 7
+      "count": 6
     },
     "react/jsx-no-literals": {
       "count": 31
@@ -200,7 +200,7 @@
       "count": 2
     },
     "react/jsx-no-literals": {
-      "count": 4
+      "count": 2
     }
   },
   "src/app/(app)/students/page.tsx": {

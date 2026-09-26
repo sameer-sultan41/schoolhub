@@ -36,6 +36,8 @@ const buttonVariants = cva(
          */
         "outline-danger":
           "border border-destructive/40 bg-transparent text-destructive hover:bg-destructive/10",
+        // Like outline-danger, but primary-tinted for an "engaged" state; tint shows at rest, not just on hover.
+        "outline-primary": "border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
         /**
          * The two frame variants, also not part of Metronic's own variant set — for
          * controls that sit in the header or the sidebar rail rather than on the page.
@@ -52,6 +54,8 @@ const buttonVariants = cva(
       appearance: {
         default: "",
         ghost: "",
+        // Badge's own "light" treatment, on Button: tint visible at rest, unlike ghost (hover-only).
+        light: "",
       },
       underline: {
         solid: "",
@@ -326,6 +330,33 @@ const buttonVariants = cva(
         variant: "ghost",
         mode: "icon",
         className: "text-muted-foreground",
+      },
+
+      // Light appearance's per-variant tint + hover/pressed shades.
+      {
+        variant: "primary",
+        appearance: "light",
+        className:
+          "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary data-[state=open]:bg-primary/15",
+      },
+      {
+        variant: "destructive",
+        appearance: "light",
+        className:
+          "bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive data-[state=open]:bg-destructive/15",
+      },
+      {
+        // secondary's "light" dims its own muted tone rather than picking a new hue.
+        variant: "secondary",
+        appearance: "light",
+        className:
+          "bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 data-[state=open]:bg-secondary/60",
+      },
+      // Icon-only light buttons get a small hover/press scale too (matches sidebar-menu.tsx's icons).
+      {
+        appearance: "light",
+        mode: "icon",
+        className: "transition-transform duration-200 hover:scale-110 active:scale-95",
       },
 
       // Size

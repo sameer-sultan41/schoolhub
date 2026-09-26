@@ -56,8 +56,8 @@ describe("StaffToolbar", () => {
 
     renderWithProviders(<StaffToolbar />);
 
-    expect(screen.getByText("All Members:")).toBeInTheDocument();
-    expect(screen.getByText("Teaching Staff:")).toBeInTheDocument();
+    expect(screen.getByText("All Members")).toBeInTheDocument();
+    expect(screen.getByText("Teaching Staff")).toBeInTheDocument();
     expect(screen.getAllByText("—")).toHaveLength(2);
   });
 

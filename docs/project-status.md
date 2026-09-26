@@ -134,7 +134,13 @@ with its reasoning. Read the entry for the area you are about to touch before re
    `core.tenancy.features` (`module.staff` flag), `core.tenancy.sequences.
    allocate_number` (`employee_number`), `core.jobs`/`core.tenancy.tasks.
    TenantAwareTask`/`core.files.create_ready_file()` (import/export jobs).
-   **Phase 2 Tier 1 ("People") is now done.**
+   **Phase 2 Tier 1 ("People") is now done.** A follow-up UI-only PR
+   (`feat/staff-ui-polish`) added a row-click staff detail sheet on
+   `/staff` (reusing the edit form's `fetchStaffById` query), replaced the
+   directory table's ⋮ actions menu with direct Edit/Delete icon buttons,
+   fixed the sidebar's selected-nav-item contrast, and added `Button`'s
+   `appearance="light"` variant plus `Badge`'s `rose` variant (for a
+   "resigned" employment status) to `packages/ui` — no backend changes.
 7. **PR 0 (platform hardening) is done** — three fixes and two new pieces of
    platform infrastructure, all listed above: the upload-purpose registry, the
    guardian record scope, the api-client refresh split, the Celery beat

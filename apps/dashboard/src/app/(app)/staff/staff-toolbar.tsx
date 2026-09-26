@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GraduationCap, UserPlus, Users, type IdCard } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { m } from "motion/react";
 
@@ -46,10 +47,29 @@ function AnimatedStat({ value }: { value: string }) {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
-      className="inline-block text-base font-medium text-foreground"
+      className="inline-block text-sm leading-none font-semibold text-foreground tabular-nums"
     >
       {value}
     </m.span>
+  );
+}
+
+/** One stat chip: icon, animated count, label. */
+function StatChip({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: typeof IdCard;
+  value: string;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Icon className="size-3.5 text-primary" aria-hidden="true" />
+      <AnimatedStat value={value} />
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
   );
 }
 
@@ -77,16 +97,16 @@ export function StaffToolbar() {
   return (
     <Toolbar>
       <ToolbarHeading
+        inline
         description={
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-1.5 font-medium">
-              <span className="text-base text-secondary-foreground">All Members:</span>
-              <span className="me-2">
-                <AnimatedStat value={formatCount(allMembers)} />
-              </span>
-              <span className="text-base text-secondary-foreground">Teaching Staff:</span>
-              <AnimatedStat value={formatCount(teachingStaff)} />
-            </div>
+          <div className="flex w-fit shrink-0 flex-nowrap items-center gap-3 rounded-lg border border-border bg-muted/40 px-2.5 py-1">
+            <StatChip icon={Users} value={formatCount(allMembers)} label="All Members" />
+            <div className="h-4 w-px bg-border" aria-hidden="true" />
+            <StatChip
+              icon={GraduationCap}
+              value={formatCount(teachingStaff)}
+              label="Teaching Staff"
+            />
           </div>
         }
       />
@@ -108,10 +128,13 @@ export function StaffToolbar() {
         </span>
         <Button
           variant="primary"
+          className="transition-transform duration-200 hover:scale-[1.03] active:scale-[0.97]"
           onClick={() => {
             setAddDialogOpen(true);
           }}
         >
+          {/* Button's own base class already includes `group` — no need to add it here. */}
+          <UserPlus className="transition-transform duration-200 group-hover:scale-125" />
           Add Member
         </Button>
       </ToolbarActions>

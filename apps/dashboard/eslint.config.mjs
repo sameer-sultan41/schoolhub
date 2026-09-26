@@ -40,10 +40,16 @@ const eslintConfig = warningsAsErrors(
       //    ("../foo"), which is the established convention (see AGENTS.md); "@/" would
       //    also work here, but the shorter sibling form reads better for a test file.
       //    Tests may also import @schoolhub/api-client to build fixtures and mocks.
-      //  - src/i18n/{request.ts,messages.types-check.ts} reach `messages/*.json`, which
-      //    lives at the app root, outside src/ — "@/*" only maps to "./src/*", so there is
-      //    no alias that reaches it.
-      files: ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "src/i18n/**"],
+      //  - src/i18n/{request.ts,messages.types-check.ts} and src/test-utils.tsx reach
+      //    `messages/*.json`, which lives at the app root, outside src/ — "@/*" only maps
+      //    to "./src/*", so there is no alias that reaches it.
+      files: [
+        "**/__tests__/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "src/i18n/**",
+        "src/test-utils.tsx",
+      ],
       rules: { "no-restricted-imports": "off" },
     },
     restrictedSyntax(

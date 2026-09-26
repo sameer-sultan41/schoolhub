@@ -31,6 +31,8 @@ const badgeVariants = cva(
         info: "bg-[var(--color-info-accent,var(--color-violet-500))] text-[var(--color-info-foreground,var(--color-white))]",
         outline: "bg-transparent border border-border text-secondary-foreground",
         destructive: "bg-destructive text-destructive-foreground",
+        /** Own hue for states neither positive nor negative (e.g. resigned); see theme.css. */
+        rose: "bg-rose text-rose-foreground",
       },
       appearance: {
         default: "",
@@ -89,6 +91,12 @@ const badgeVariants = cva(
         className:
           "text-[var(--color-destructive-accent,var(--color-red-700))] bg-[var(--color-destructive-soft,var(--color-red-50))] dark:bg-[var(--color-destructive-soft,var(--color-red-950))] dark:text-[var(--color-destructive-soft,var(--color-red-600))]",
       },
+      {
+        // The rose tokens flip for dark mode themselves, so no dark: variant.
+        variant: "rose",
+        appearance: "light",
+        className: "text-rose-soft-foreground bg-rose-soft",
+      },
       /* Outline */
       {
         variant: "primary",
@@ -120,6 +128,11 @@ const badgeVariants = cva(
         className:
           "text-[var(--color-destructive-accent,var(--color-red-700))] border-[var(--color-destructive-soft,var(--color-red-100))] bg-[var(--color-destructive-soft,var(--color-red-50))] dark:bg-[var(--color-destructive-soft,var(--color-red-950))] dark:border-[var(--color-destructive-soft,var(--color-red-900))] dark:text-[var(--color-destructive-soft,var(--color-red-600))]",
       },
+      {
+        variant: "rose",
+        appearance: "outline",
+        className: "text-rose-soft-foreground border-rose-soft-border bg-rose-soft",
+      },
       /* Ghost */
       {
         variant: "primary",
@@ -150,6 +163,11 @@ const badgeVariants = cva(
         variant: "destructive",
         appearance: "ghost",
         className: "text-destructive",
+      },
+      {
+        variant: "rose",
+        appearance: "ghost",
+        className: "text-rose",
       },
 
       { size: "lg", appearance: "ghost", className: "px-0" },

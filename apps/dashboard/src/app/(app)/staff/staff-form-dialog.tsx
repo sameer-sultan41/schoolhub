@@ -35,6 +35,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { ApiError, Services } from "@/services";
+import { queryKeys } from "@/lib/query-client";
 import { stableSignedUrl } from "@/lib/stable-signed-url";
 import type {
   CreateStaffInput,
@@ -324,7 +325,7 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
   });
 
   const staffDetailQuery = useQuery({
-    queryKey: ["staff", "detail", staffId],
+    queryKey: queryKeys.detail("staff", "staff", staffId ?? ""),
     queryFn: () => Services.dashboard.fetchStaffById(staffId as string),
     enabled: mode === "edit" && open && Boolean(staffId),
   });

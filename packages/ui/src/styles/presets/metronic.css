@@ -26,10 +26,8 @@
  * Deliberately NOT overridden, so they stay identical to the platform default:
  *   - success / warning / danger / info. A status colour is not a matter of taste, and
  *     Metronic's own template does not ship a fixed opinion on all four either.
- *   - --sh-color-ring. Metronic's own file sets `--ring: zinc-400` — already a neutral
- *     mid-tone, not primary-tinted — which is exactly what this platform's own
- *     `--sh-color-ring: var(--sh-color-muted-foreground)` already gives every preset, so
- *     there is nothing to override here to match Metronic's actual intent.
+ *   - --sh-color-ring. The platform default already follows this preset's primary;
+ *     Metronic's neutral zinc-400 ring is deliberately not matched.
  *   - the elevation scale, the platform tier, the type stack, and chart slots 2-6 (Aurora's
  *     own CVD-validated ramp — see theme.css's own header for why only slot 1 ever moves).
  *

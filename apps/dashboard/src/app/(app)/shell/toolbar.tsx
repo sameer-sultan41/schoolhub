@@ -13,6 +13,8 @@ import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
 export interface ToolbarHeadingProps {
   title?: string | ReactNode;
   description?: string | ReactNode;
+  /** Title and description on one row, for a compact stat-pill description like /staff's. */
+  inline?: boolean;
 }
 
 export function Toolbar({ children }: { children?: ReactNode }) {
@@ -23,18 +25,43 @@ export function ToolbarActions({ children }: { children?: ReactNode }) {
   return <div className="flex items-center gap-2.5">{children}</div>;
 }
 
-export function ToolbarHeading({ title = "", description }: ToolbarHeadingProps) {
+export function ToolbarHeading({ title = "", description, inline = false }: ToolbarHeadingProps) {
   const pathname = usePathname();
   const { getCurrentItem } = useMenu(pathname);
   const item = getCurrentItem(MENU_SIDEBAR);
+  // Only inline headings get the menu icon, so other title-less routes don't grow one.
+  const Icon = inline && !title ? item?.icon : undefined;
 
   return (
-    <div className="flex flex-col justify-center gap-2">
-      <h1 className="text-mono text-xl leading-none font-medium">
+    <div
+      className={
+        inline ? "flex flex-wrap items-center gap-4" : "flex flex-col justify-center gap-2"
+      }
+    >
+      {/* Inline: bigger title next to the stat pill; h-8.5 matches Button md so the row aligns. */}
+      <h1
+        className={
+          inline
+            ? "text-mono flex h-8.5 items-center gap-2 text-2xl leading-none font-semibold"
+            : "text-mono flex items-center gap-2 text-xl leading-none font-medium"
+        }
+      >
+        {Icon && (
+          <Icon
+            className={inline ? "size-6 text-primary" : "size-5 text-primary"}
+            aria-hidden="true"
+          />
+        )}
         {title || item?.title || "Untitled"}
       </h1>
       {description && (
-        <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
+        <div
+          className={
+            inline
+              ? "flex h-8.5 items-center gap-2 text-sm font-normal text-muted-foreground"
+              : "flex items-center gap-2 text-sm font-normal text-muted-foreground"
+          }
+        >
           {description}
         </div>
       )}

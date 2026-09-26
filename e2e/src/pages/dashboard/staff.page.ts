@@ -35,10 +35,9 @@ export class StaffPage extends BasePage {
     return this.page.getByRole("button", { name: "Add Member", exact: true });
   }
 
-  /** Opens a row's ⋮ menu and picks `action` ("Edit", "Copy ID" or "Delete"). */
-  async rowAction(name: string, action: "Edit" | "Copy ID" | "Delete"): Promise<void> {
-    await this.page.getByRole("button", { name: `Actions for ${name}` }).click();
-    await this.page.getByRole("menuitem", { name: action }).click();
+  /** Clicks a row's direct Edit or Delete button. */
+  async rowAction(name: string, action: "Edit" | "Delete"): Promise<void> {
+    await this.page.getByRole("button", { name: `${action} ${name}` }).click();
   }
 
   // ---- Add/Edit dialog ----

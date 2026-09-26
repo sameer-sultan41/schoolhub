@@ -131,6 +131,9 @@ export interface DataGridTableLayout {
   rowsDraggable?: boolean;
 }
 
+// Strips Card's own border/radius so it doesn't double up with DataGrid's outer frame — apply to any Card wrapping a DataGridTable.
+export const DATA_GRID_CARD_CLASSNAME = "rounded-none border-0 shadow-none";
+
 export interface DataGridProps<TData extends object> {
   className?: string;
   table: Table<TData>;

@@ -49,10 +49,12 @@ export function SidebarMenu() {
     group: "gap-px",
     label: "uppercase text-xs font-medium text-muted-foreground/70 pt-2.25 pb-px",
     separator: "",
-    item: "h-8 hover:bg-transparent text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-muted data-[selected=true]:font-medium",
+    // Primary-tinted pill for the selected row: bg-muted was invisible on the Metronic sidebar.
+    // "group" drives the icon's group-hover:scale-110 below.
+    item: "group h-8 rounded-xl transition-all duration-200 ease-out hover:bg-primary/5 active:scale-[0.98] text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-primary/10 data-[selected=true]:font-semibold",
     sub: "",
     subTrigger:
-      "h-8 hover:bg-transparent text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-muted data-[selected=true]:font-medium",
+      "group h-8 rounded-xl transition-all duration-200 ease-out hover:bg-primary/5 active:scale-[0.98] text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-primary/10 data-[selected=true]:font-semibold",
     subContent: "py-0",
     indicator: "",
   };
@@ -69,7 +71,12 @@ export function SidebarMenu() {
       return (
         <AccordionMenuSub key={index} value={item.path || `root-${index}`}>
           <AccordionMenuSubTrigger className="text-sm font-medium">
-            {item.icon && <item.icon data-slot="accordion-menu-icon" />}
+            {item.icon && (
+              <item.icon
+                data-slot="accordion-menu-icon"
+                className="transition-transform duration-200 group-hover:scale-110"
+              />
+            )}
             <span data-slot="accordion-menu-title">{item.title}</span>
           </AccordionMenuSubTrigger>
           <AccordionMenuSubContent
@@ -94,7 +101,12 @@ export function SidebarMenu() {
             unexercised markup — "Staff" (a real root-level icon item with no children)
             is the first item anywhere to ever render through it. */}
         <Link href={item.path || "#"} className="flex grow items-center gap-2">
-          {item.icon && <item.icon data-slot="accordion-menu-icon" />}
+          {item.icon && (
+            <item.icon
+              data-slot="accordion-menu-icon"
+              className="transition-transform duration-200 group-hover:scale-110"
+            />
+          )}
           <span data-slot="accordion-menu-title">{item.title}</span>
         </Link>
       </AccordionMenuItem>
