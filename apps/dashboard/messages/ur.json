@@ -499,6 +499,18 @@
       "nationalId": "قومی شناختی کارڈ",
       "publicBio": "عوامی تعارف"
     },
+    "detail": {
+      "title": "{name} — عملے کی تفصیلات",
+      "titleFallback": "عملے کی تفصیلات",
+      "close": "بند کریں",
+      "contact": "رابطہ",
+      "employment": "ملازمت",
+      "personal": "ذاتی",
+      "bio": "تعارف",
+      "loadError": "مکمل تفصیلات لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کریں۔",
+      "lastUpdated": "آخری تبدیلی {when}",
+      "exit": "اخراج"
+    },
     "form": {
       "createTitle": "نیا رکن عملہ",
       "editTitle": "رکن عملہ میں ترمیم",

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import {
   Avatar,
@@ -30,6 +31,7 @@ import {
   Skeleton,
 } from "@schoolhub/ui";
 
+import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import {
   formatLastUpdated,
@@ -88,13 +90,15 @@ function FieldSection({ title, children }: { title: string; children: ReactNode 
 }
 
 export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffDetailSheetProps) {
+  const t = useTranslations("staff");
+  const tCommon = useTranslations("common");
   // Same query key as the edit form, so clicking Edit reuses this fetch.
   const {
     data: detail,
     isPending,
     isError,
   } = useQuery({
-    queryKey: ["staff", "detail", row?.id],
+    queryKey: queryKeys.detail("staff", "staff", row?.id ?? ""),
     queryFn: () => Services.dashboard.fetchStaffById(row?.id as string),
     enabled: row !== null,
   });
@@ -107,12 +111,12 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
       }}
     >
       <SheetContent
-        closeLabel="Close"
+        closeLabel={t("detail.close")}
         className="gap-0 p-0 sm:w-[440px] sm:max-w-none [&_[data-slot=sheet-close]]:end-5 [&_[data-slot=sheet-close]]:top-5"
       >
         {/* Hidden: the hero band shows the name, but Radix needs a Title for aria-labelledby. */}
         <SheetTitle className="sr-only">
-          {row ? `${row.name} — staff details` : "Staff details"}
+          {row ? t("detail.title", { name: row.name }) : t("detail.titleFallback")}
         </SheetTitle>
         {row && (
           <>
@@ -145,27 +149,37 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
 
             {/* flex-1 pins the footer to the bottom; overflow-y-auto scrolls long content. */}
             <SheetBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
-              <FieldSection title="Contact">
-                <FieldRow icon={Mail} label="Email" value={detail?.email} loading={isPending} />
-                <FieldRow icon={Phone} label="Phone" value={detail?.phone} loading={isPending} />
+              <FieldSection title={t("detail.contact")}>
+                <FieldRow
+                  icon={Mail}
+                  label={t("fields.email")}
+                  value={detail?.email}
+                  loading={isPending}
+                />
+                <FieldRow
+                  icon={Phone}
+                  label={t("fields.phone")}
+                  value={detail?.phone}
+                  loading={isPending}
+                />
               </FieldSection>
 
-              <FieldSection title="Employment">
+              <FieldSection title={t("detail.employment")}>
                 <FieldRow
                   icon={Briefcase}
-                  label="Employee number"
+                  label={t("fields.employeeNumber")}
                   value={detail?.employee_number}
                   loading={isPending}
                 />
                 <FieldRow
                   icon={Calendar}
-                  label="Joining date"
+                  label={t("fields.joiningDate")}
                   value={detail?.joining_date ? formatDate(detail.joining_date) : undefined}
                   loading={isPending}
                 />
                 <FieldRow
                   icon={Briefcase}
-                  label="Employment type"
+                  label={t("fields.employmentType")}
                   value={
                     detail?.employment_type ? humanizeSnakeCase(detail.employment_type) : undefined
                   }
@@ -173,22 +187,22 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                 />
                 <FieldRow
                   icon={Fingerprint}
-                  label="National ID"
+                  label={t("fields.nationalId")}
                   value={detail?.national_id}
                   loading={isPending}
                 />
               </FieldSection>
 
-              <FieldSection title="Personal">
+              <FieldSection title={t("detail.personal")}>
                 <FieldRow
                   icon={UserRound}
-                  label="Gender"
+                  label={t("fields.gender")}
                   value={detail?.gender ? humanizeSnakeCase(detail.gender) : undefined}
                   loading={isPending}
                 />
                 <FieldRow
                   icon={Calendar}
-                  label="Date of birth"
+                  label={t("fields.dateOfBirth")}
                   value={detail?.date_of_birth ? formatDate(detail.date_of_birth) : undefined}
                   loading={isPending}
                 />
@@ -196,19 +210,19 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
 
               {detail?.public_bio && (
                 <div className="flex flex-col gap-1.5 rounded-lg bg-muted/40 p-4">
-                  <span className="text-xs font-medium text-muted-foreground">Bio</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("detail.bio")}
+                  </span>
                   <p className="text-sm text-foreground">{detail.public_bio}</p>
                 </div>
               )}
 
               {isError && (
-                <p className="text-sm text-destructive">
-                  {"Couldn't load full details. Try again."}
-                </p>
+                <p className="text-sm text-destructive">{t("detail.loadError")}</p>
               )}
 
               <span className="text-xs text-muted-foreground">
-                Last updated {formatLastUpdated(row.updatedAt)}
+                {t("detail.lastUpdated", { when: formatLastUpdated(row.updatedAt) })}
               </span>
             </SheetBody>
 
@@ -221,7 +235,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                   onEdit(row.id);
                 }}
               >
-                <Pencil /> Edit
+                <Pencil /> {tCommon("edit")}
               </Button>
               <Button
                 variant="destructive"
@@ -229,7 +243,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                   onDelete(row.id, row.name);
                 }}
               >
-                <LogOut /> Exit
+                <LogOut /> {t("detail.exit")}
               </Button>
             </SheetFooter>
           </>
