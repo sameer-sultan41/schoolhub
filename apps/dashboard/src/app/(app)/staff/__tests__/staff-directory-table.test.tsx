@@ -13,9 +13,7 @@ import { StaffDirectoryTable } from "../staff-directory-table";
 // `useQuery` calls — never invoked until a dialog actually opens, but the mock object
 // itself needs these present (resolved to empty arrays) or a test crashes with "not a
 // function" the moment a dialog opens. `exitStaff` backs the Delete/"Exit selected" flow.
-// `fetchStaffById` backs both `StaffFormDialog`'s edit-mode pre-fill AND
-// `StaffDetailSheet` (opened by a row click) — same reason, resolved to a minimal but
-// complete `StaffDetailRecord` shape.
+// `fetchStaffById` backs the edit pre-fill and the row-click detail sheet.
 jest.mock("@/services", () => ({
   Services: {
     dashboard: {
@@ -52,13 +50,8 @@ jest.mock("@/services", () => ({
   },
 }));
 
-// `StaffFormDialog` (Edit) and `ExitStaffDialog` (Delete / bulk Exit selected), both
-// rendered from this table, call `toast.success`/`toast.error` on their own save/exit
-// flows. `ExitStaffDialog`'s own `onSuccess` (rendered here via the bulk "Exit selected"
-// flow) additionally calls `toast.warning(...)` on a mixed-outcome partial-failure batch
-// — without a `warning` stub that call is `undefined(...)`, which throws synchronously
-// inside the mutation's success handler and resets `mutation.data` before the failure
-// list ever renders, silently breaking the partial-failure test below.
+// Both dialogs toast on save/exit. `warning` must be stubbed: ExitStaffDialog calls it on a
+// partial failure, and an undefined call there would hide the failure list under test.
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
@@ -525,8 +518,7 @@ describe("StaffDirectoryTable", () => {
     const user = userEvent.setup();
     await user.click(screen.getByText("Ayesha Khan"));
 
-    // The sheet's own (visually hidden) title carries the row's name — distinct from
-    // the row's own "Ayesha Khan" text, so this proves the sheet actually opened.
+    // The sheet's hidden title, distinct from the row text, proves it opened.
     expect(await screen.findByText("Ayesha Khan — staff details")).toBeInTheDocument();
   });
 

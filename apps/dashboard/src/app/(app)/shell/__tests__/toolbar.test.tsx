@@ -3,9 +3,7 @@ import { usePathname } from "next/navigation";
 
 import { ToolbarHeading } from "../toolbar";
 
-// A jest.fn() (not a plain arrow function) so individual tests can point it at a real
-// mapped route to prove the menu-derived icon stays scoped to `inline` — see the two
-// tests at the bottom.
+// jest.fn() so a test can point it at a mapped route.
 jest.mock("next/navigation", () => ({
   usePathname: jest.fn(),
 }));
@@ -14,8 +12,7 @@ const mockUsePathname = usePathname as jest.MockedFunction<typeof usePathname>;
 
 describe("ToolbarHeading", () => {
   beforeEach(() => {
-    // An unmapped route by default: `getCurrentItem` resolves nothing, so with no
-    // explicit `title` prop either, the fallback has to carry the heading.
+    // Unmapped by default, so with no title prop the fallback names the heading.
     mockUsePathname.mockReturnValue("/some/unmapped/route");
   });
 
@@ -32,8 +29,7 @@ describe("ToolbarHeading", () => {
   });
 
   it("shows no menu icon on a route the menu DOES map, when inline is false", () => {
-    // "/students" is a real MENU_SIDEBAR entry (GraduationCap) — proves the icon isn't
-    // just absent because nothing matched.
+    // A real menu entry, so a missing icon means gating, not "nothing matched".
     mockUsePathname.mockReturnValue("/students");
 
     const { container } = render(<ToolbarHeading />);

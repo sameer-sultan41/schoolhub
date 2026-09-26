@@ -188,8 +188,6 @@ export function Teams() {
         <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
     >
-      {/* See DATA_GRID_CARD_CLASSNAME's own doc comment (data-grid.tsx) for why a Card
-          nested directly inside a DataGrid needs this. */}
       <Card className={DATA_GRID_CARD_CLASSNAME}>
         <CardHeader className="py-3.5">
           <CardTitle>Staff</CardTitle>
@@ -228,8 +226,7 @@ export function Teams() {
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </CardTable>
-        {/* border-t-0: DataGridPagination draws its own top border already — CardFooter's
-            default variant would otherwise draw a second one on the same seam. */}
+        {/* DataGridPagination already draws the top border. */}
         <CardFooter className="border-t-0">
           <DataGridPagination />
         </CardFooter>

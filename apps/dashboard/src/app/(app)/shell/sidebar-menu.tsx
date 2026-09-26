@@ -49,20 +49,8 @@ export function SidebarMenu() {
     group: "gap-px",
     label: "uppercase text-xs font-medium text-muted-foreground/70 pt-2.25 pb-px",
     separator: "",
-    // bg-muted, this component's original background for a selected item, is barely
-    // distinguishable from the sidebar's own bg-background under the Metronic preset
-    // (oklch L .967 vs 1 — a 0.033 gap, effectively invisible) — bg-primary/10 gives the
-    // selected row a real, visible highlight, and matches the primary-tinted "this is
-    // active" language already used elsewhere on this page (filter buttons, badges).
-    // rounded-xl (overriding itemVariants' own rounded-lg) + font-semibold (overriding
-    // its plain text-sm) is what makes the highlight read as a soft, bold "pill" rather
-    // than a faint tinted rectangle. hover:bg-primary/5 replaces the vendor's flat
-    // hover:bg-transparent with a real (if subtle) hover state of its own, and
-    // transition-all + active:scale gives both the hover tint and the selected
-    // highlight a soft animated feel instead of snapping in instantly.
-    // "group" marks the row as the hover source for the icon's own group-hover:scale-110
-    // below — the icon is a descendant (directly, or one level down through the leaf
-    // item's <Link>), so it still picks up the row's :hover regardless of nesting depth.
+    // Primary-tinted pill for the selected row: bg-muted was invisible on the Metronic sidebar.
+    // "group" drives the icon's group-hover:scale-110 below.
     item: "group h-8 rounded-xl transition-all duration-200 ease-out hover:bg-primary/5 active:scale-[0.98] text-accent-foreground hover:text-primary data-[selected=true]:text-primary data-[selected=true]:bg-primary/10 data-[selected=true]:font-semibold",
     sub: "",
     subTrigger:

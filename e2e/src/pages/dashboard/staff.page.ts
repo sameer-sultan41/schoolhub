@@ -35,8 +35,7 @@ export class StaffPage extends BasePage {
     return this.page.getByRole("button", { name: "Add Member", exact: true });
   }
 
-  /** Clicks a row's direct "Edit" or "Delete" icon button (no ⋮ menu — each action is
-   * its own button now). */
+  /** Clicks a row's direct Edit or Delete button. */
   async rowAction(name: string, action: "Edit" | "Delete"): Promise<void> {
     await this.page.getByRole("button", { name: `${action} ${name}` }).click();
   }

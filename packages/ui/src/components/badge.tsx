@@ -31,15 +31,7 @@ const badgeVariants = cva(
         info: "bg-[var(--color-info-accent,var(--color-violet-500))] text-[var(--color-info-foreground,var(--color-white))]",
         outline: "bg-transparent border border-border text-secondary-foreground",
         destructive: "bg-destructive text-destructive-foreground",
-        /**
-         * `--sh-color-rose`/`--sh-color-rose-foreground` (theme.css) — a real theme token
-         * now, not an inline literal: for a status that isn't positive, negative, or a
-         * warning (e.g. a "resigned" employment status). 342° was picked as the one real
-         * gap in this palette's hue wheel (see theme.css's own comment on the token for
-         * the math) — reads as clearly its own colour rather than a shade of red or
-         * violet, and (like success/warning/danger/info) brightens with a flipped
-         * foreground in dark mode rather than staying a fixed literal.
-         */
+        /** Own hue for states neither positive nor negative (e.g. resigned); see theme.css. */
         rose: "bg-rose text-rose-foreground",
       },
       appearance: {
@@ -100,10 +92,7 @@ const badgeVariants = cva(
           "text-[var(--color-destructive-accent,var(--color-red-700))] bg-[var(--color-destructive-soft,var(--color-red-50))] dark:bg-[var(--color-destructive-soft,var(--color-red-950))] dark:text-[var(--color-destructive-soft,var(--color-red-600))]",
       },
       {
-        // `--sh-color-rose-soft`/`-foreground` (theme.css) already flip value between
-        // light/dark mode on their own — no `dark:` variant needed here, unlike every
-        // other colour above (whose `--color-x-accent`/`-soft` vars are dead, so they
-        // fall through to hardcoded per-mode literals instead).
+        // The rose tokens flip for dark mode themselves, so no dark: variant.
         variant: "rose",
         appearance: "light",
         className: "text-rose-soft-foreground bg-rose-soft",

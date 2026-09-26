@@ -54,9 +54,7 @@ function AnimatedStat({ value }: { value: string }) {
   );
 }
 
-/** One stat chip: icon, the animated count, then its label — the same icon+count+label
- * shape `channel-stats.tsx`'s dashboard-home widgets already use, scaled down for a
- * toolbar sub-line rather than a full stat card. */
+/** One stat chip: icon, animated count, label. */
 function StatChip({
   icon: Icon,
   value,

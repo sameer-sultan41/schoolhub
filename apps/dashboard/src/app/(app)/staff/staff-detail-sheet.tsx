@@ -39,18 +39,7 @@ import {
   type StaffRow,
 } from "@/app/(app)/staff/staff-directory-table";
 
-/**
- * The row-click counterpart to `ActionsCell`'s ⋮ menu — same `onEdit`/`onDelete`
- * callbacks `StaffDirectoryTable` already passes there, just reached by clicking
- * anywhere in the row instead of opening the menu. `row` (not just a `staffId`) is what
- * drives `open`: the summary fields the table already has in memory (name, avatar,
- * status, designation, campus, last updated) render immediately in the hero band, with
- * only the fields below it waiting on `fetchStaffById`.
- *
- * Grouped field sections with a leading icon per row (Contact / Employment / Personal)
- * replace an earlier flat two-column `<dl>` — a person's record reads as a person first,
- * then a scannable set of facts about them, not one undifferentiated grid.
- */
+/** Row-click detail view: row summary fields render at once, the rest after fetchStaffById. */
 export interface StaffDetailSheetProps {
   row: StaffRow | null;
   onOpenChange: (open: boolean) => void;
@@ -99,8 +88,7 @@ function FieldSection({ title, children }: { title: string; children: ReactNode 
 }
 
 export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffDetailSheetProps) {
-  // Same query key `staff-form-dialog.tsx`'s edit form uses for the same endpoint — opening
-  // the sheet then clicking Edit reuses this fetch instead of firing a second one.
+  // Same query key as the edit form, so clicking Edit reuses this fetch.
   const {
     data: detail,
     isPending,
@@ -122,9 +110,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
         closeLabel="Close"
         className="gap-0 p-0 sm:w-[440px] sm:max-w-none [&_[data-slot=sheet-close]]:end-5 [&_[data-slot=sheet-close]]:top-5"
       >
-        {/* Visually hidden — the hero band below carries the person's name as the
-            visible heading; Radix's Dialog still needs a real Title for its
-            aria-labelledby. */}
+        {/* Hidden: the hero band shows the name, but Radix needs a Title for aria-labelledby. */}
         <SheetTitle className="sr-only">
           {row ? `${row.name} — staff details` : "Staff details"}
         </SheetTitle>
@@ -157,11 +143,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
               </div>
             </div>
 
-            {/* flex-1: `SheetContent` is a fixed h-full flex column — without this, the
-                footer just trails the body's own (usually much shorter) content height,
-                leaving a large dead gap below it instead of sitting at the panel's
-                bottom edge. overflow-y-auto lets long content scroll within its own
-                area instead of pushing the footer off-screen. */}
+            {/* flex-1 pins the footer to the bottom; overflow-y-auto scrolls long content. */}
             <SheetBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
               <FieldSection title="Contact">
                 <FieldRow icon={Mail} label="Email" value={detail?.email} loading={isPending} />
@@ -230,15 +212,9 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
               </span>
             </SheetBody>
 
-            {/* Gated on `row` along with the rest above (not rendered unconditionally
-                after this block, the way it was before) — Radix keeps the panel mounted
-                and sliding out for the whole close-transition duration after `row` goes
-                null, and an ungated footer would stay visible and clickable floating
-                over that now-blank body for the length of the animation. */}
+            {/* Gated on row so the footer can't stay clickable during Radix's close animation. */}
             <SheetFooter className="border-t border-border px-6 py-4">
-              {/* outline-primary (border-primary/40 bg-primary/5) instead of plain
-                  outline — a filled tint reads as a real action next to the solid
-                  destructive "Exit" button, not just a flat bordered box. */}
+              {/* Tinted outline so Edit reads as an action beside the destructive Exit. */}
               <Button
                 variant="outline-primary"
                 onClick={() => {

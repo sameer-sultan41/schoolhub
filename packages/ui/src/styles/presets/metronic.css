@@ -26,12 +26,8 @@
  * Deliberately NOT overridden, so they stay identical to the platform default:
  *   - success / warning / danger / info. A status colour is not a matter of taste, and
  *     Metronic's own template does not ship a fixed opinion on all four either.
- *   - --sh-color-ring. The platform default is `var(--sh-color-primary)`, so this
- *     preset's own focus ring already picks up ITS OWN primary (259.815°) through
- *     that reference with no override needed — Metronic's own vendor file actually
- *     ships a neutral `--ring: zinc-400` here, so this is the one token where this
- *     preset deliberately does NOT match Metronic's original vendor intent, in favour
- *     of the platform's own on-brand-ring decision applying everywhere.
+ *   - --sh-color-ring. The platform default already follows this preset's primary;
+ *     Metronic's neutral zinc-400 ring is deliberately not matched.
  *   - the elevation scale, the platform tier, the type stack, and chart slots 2-6 (Aurora's
  *     own CVD-validated ramp — see theme.css's own header for why only slot 1 ever moves).
  *

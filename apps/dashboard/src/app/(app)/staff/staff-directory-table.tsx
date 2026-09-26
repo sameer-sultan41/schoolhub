@@ -105,15 +105,7 @@ const JOINING_DATE_SORT_ID = "joiningDate";
 
 type StatusVariant = "success" | "warning" | "destructive" | "secondary" | "info" | "rose";
 
-/**
- * `employment_status` -> badge color/label. Values and their exact display labels
- * mirror `EmploymentStatus` (apps/api/apps/staff_management/models.py) one for one.
- * `resigned` gets its own `rose` (a hand-picked hue, not a semantic theme token —
- * see badge.tsx's own comment on it) rather than sharing `secondary` with anything;
- * `retired` similarly gets its own `info` (violet) — two different, non-negative
- * departure reasons, each visually distinct. `terminated` stays grouped with
- * `suspended` under `destructive`: both are compliance-relevant.
- */
+/** employment_status -> badge; mirrors EmploymentStatus in staff_management/models.py. */
 const STATUS_META: Record<string, { variant: StatusVariant; label: string }> = {
   active: { variant: "success", label: "Active" },
   on_leave: { variant: "warning", label: "On leave" },
@@ -123,10 +115,7 @@ const STATUS_META: Record<string, { variant: StatusVariant; label: string }> = {
   terminated: { variant: "destructive", label: "Terminated" },
 };
 
-/** Defensive fallback for a snake_case value with no display label of its own (an
- * unrecognized status, or a detail-sheet field like `gender`/`employment_type`) —
- * humanizes rather than showing the raw string, e.g. "on_leave" -> "On leave". Exported
- * for `staff-detail-sheet.tsx`, which needs the same treatment for its own fields. */
+/** Humanizes an unlabelled snake_case value, e.g. "on_leave" -> "On leave". */
 export function humanizeSnakeCase(value: string): string {
   const spaced = value.replace(/_/g, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
@@ -153,12 +142,7 @@ export function formatLastUpdated(value: string): string {
   return formatDistanceToNow(parsed, { addSuffix: true });
 }
 
-/** Direct Edit/Delete icon buttons — replaced the earlier single ⋮ dropdown trigger
- * (Edit/Copy ID/Delete menu items) with the two actions visible at a glance, since two
- * icons read faster than one trigger that has to be opened first to see what's inside.
- * `Copy ID` had no third icon to live in and was dropped rather than kept as a menu
- * with only one real reason left to open it — its own `useCopyToClipboard` hook is
- * gone too, with this its only remaining caller. */
+/** A row's direct Edit and Delete icon buttons. */
 function ActionsCell({
   row,
   onEdit,
@@ -170,9 +154,6 @@ function ActionsCell({
 }) {
   return (
     <div className="flex items-center gap-1">
-      {/* `appearance="light"` (button.tsx) is the shared "colour on its own soft pill"
-          treatment — Badge's own light appearance, now a real Button variant, so this is
-          `variant`/`appearance`/`shape`/`size` props, not a hand-copied className. */}
       <Button
         variant="primary"
         appearance="light"
@@ -220,8 +201,7 @@ export function StaffDirectoryTable() {
     staffIds: string[];
     staffNames: string[];
   } | null>(null);
-  // The row a click (anywhere except the select checkbox or the ⋮ actions menu — see
-  // `DataGrid`'s own `onRowClick` guard) opened the detail sheet for.
+  // The row whose detail sheet is open.
   const [detailRow, setDetailRow] = useState<StaffRow | null>(null);
 
   // Clears a bulk selection once its "Exit selected" dialog closes (success, cancel, or
@@ -527,16 +507,12 @@ export function StaffDirectoryTable() {
         <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
     >
-      {/* A one-time fade/slide-up on mount only (no `key`, so a filter/sort/page change
-          never replays it) — the same "make a real state change legible" idea as the
-          isFetching opacity dip below, just for the table's very first appearance. */}
+      {/* Fade in once on mount; no key, so filters and paging don't replay it. */}
       <m.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
       >
-        {/* See DATA_GRID_CARD_CLASSNAME's own doc comment (data-grid.tsx) for why a Card
-            nested directly inside a DataGrid needs this. */}
         <Card className={DATA_GRID_CARD_CLASSNAME}>
           <CardHeader>
             <CardHeading>
@@ -709,8 +685,7 @@ export function StaffDirectoryTable() {
               </ScrollArea>
             </m.div>
           </CardTable>
-          {/* border-t-0: DataGridPagination draws its own top border already — CardFooter's
-            default variant would otherwise draw a second one on the same seam. */}
+          {/* DataGridPagination already draws the top border. */}
           <CardFooter className="border-t-0">
             <DataGridPagination />
           </CardFooter>

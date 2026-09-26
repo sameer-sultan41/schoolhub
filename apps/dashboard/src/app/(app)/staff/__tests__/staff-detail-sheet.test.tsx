@@ -32,9 +32,7 @@ function staffRow(overrides: Partial<StaffRow> = {}): StaffRow {
   };
 }
 
-// `Awaited<ReturnType<...>>` rather than importing `StaffDetailRecord` directly —
-// dashboard-service.ts doesn't export it as a standalone named type import target here,
-// and this keeps the fixture pinned to whatever `fetchStaffById` actually resolves.
+// Typed from fetchStaffById so the fixture tracks what it actually returns.
 function staffDetail(
   overrides: Partial<Awaited<ReturnType<typeof Services.dashboard.fetchStaffById>>> = {},
 ) {
@@ -83,8 +81,7 @@ describe("StaffDetailSheet", () => {
   });
 
   it("shows the row's own summary fields immediately, with skeletons for the fetched ones", () => {
-    // Never resolves — the fetched fields stay behind their skeletons for the life of
-    // this test, which is exactly the state under assertion.
+    // Never resolves, so the fetched fields stay as skeletons.
     mockFetchStaffById.mockReturnValue(new Promise(() => {}));
 
     renderWithProviders(

@@ -13,9 +13,7 @@ import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
 export interface ToolbarHeadingProps {
   title?: string | ReactNode;
   description?: string | ReactNode;
-  /** Puts the title and description on the same row instead of stacked — for a page
-   * like `/staff` whose "description" is a compact stat pill, not a line of prose that
-   * needs its own row (e.g. the dashboard's "Central Hub for Personal Customization"). */
+  /** Title and description on one row, for a compact stat-pill description like /staff's. */
   inline?: boolean;
 }
 
@@ -31,11 +29,7 @@ export function ToolbarHeading({ title = "", description, inline = false }: Tool
   const pathname = usePathname();
   const { getCurrentItem } = useMenu(pathname);
   const item = getCurrentItem(MENU_SIDEBAR);
-  // Gated on `inline` (not just "no explicit title") so this stays scoped to the pages
-  // that opted into the enhanced heading treatment — every OTHER route already renders
-  // `<ToolbarHeading />` with no explicit title (e.g. `/students`'s bare placeholder
-  // page), and un-gated this would silently grow an icon there too, a route this PR
-  // never touches, mentions, or tests.
+  // Only inline headings get the menu icon, so other title-less routes don't grow one.
   const Icon = inline && !title ? item?.icon : undefined;
 
   return (
@@ -44,14 +38,7 @@ export function ToolbarHeading({ title = "", description, inline = false }: Tool
         inline ? "flex flex-wrap items-center gap-4" : "flex flex-col justify-center gap-2"
       }
     >
-      {/* `inline` mode sits the title beside a stat pill whose own numbers are
-          text-lg/font-semibold — text-xl/font-medium reads smaller next to that, even
-          though it's technically the larger font size, so `inline` bumps to
-          text-2xl/font-semibold to actually look like the dominant element it is.
-          `h-8.5` on both the title and the description wrapper (matching Button's own
-          "md" height) gives every piece of this row the SAME box height, so items-center
-          lines them up on one shared vertical center instead of centering two
-          differently-sized boxes against each other and against the toolbar's buttons. */}
+      {/* Inline: bigger title next to the stat pill; h-8.5 matches Button md so the row aligns. */}
       <h1
         className={
           inline
