@@ -39,9 +39,10 @@ REVIEW_HEADING = re.compile(r"^##\s+Independent review\b", re.MULTILINE | re.IGN
 NEXT_SECTION = re.compile(r"^#{1,2}\s", re.MULTILINE)
 # Anchored like TIER/WAIVED: a verdict starts its own line ("Verdict: APPROVE",
 # "- **Verdict:** **REVISE** — …", "### Verdict: RETHINK"), so an incidental "verdict: approve"
-# later in a finding's prose can't win. Markdown emphasis around either word is allowed.
+# later in a finding's prose can't win. Markdown emphasis around either word is allowed; the
+# end is a lookahead, not \b, because `_` is a word character (`__REVISE__`).
 VERDICT = re.compile(
-    LINE_START + r"(?:#{1,6}[ \t]+)?[*_]*verdict[*_: \t]*(approve|revise|rethink)\b",
+    LINE_START + r"(?:#{1,6}[ \t]+)?[*_]*verdict[*_: \t]*(approve|revise|rethink)(?![a-z0-9])",
     re.MULTILINE | re.IGNORECASE,
 )
 # The user's `/review-plan` as the transcript records it: a user record whose text starts with
@@ -141,7 +142,8 @@ def is_reviewer_run(record: object) -> bool:
         tool_input = item.get("input")
         if not isinstance(tool_input, dict):
             continue
-        if tool_input.get("subagent_type") == "plan-reviewer":
+        # "Task" is the Agent tool's name in older Claude Code transcripts.
+        if item.get("name") in {"Agent", "Task"} and tool_input.get("subagent_type") == "plan-reviewer":
             return True
         if item.get("name") == "Skill" and tool_input.get("skill") == "review-plan":
             return True
