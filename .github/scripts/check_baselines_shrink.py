@@ -128,9 +128,11 @@ def rule_selects(rule: str, code: str) -> bool:
     `B` selects `B001` (flake8-bugbear) but not `BLE001` (flake8-blind-except); `TID` selects
     `TID251`; `TID251` selects only itself.
     """
+    if rule == "ALL":  # letters-only, so it must be handled before the letter comparison
+        return True
     rule_match, code_match = re.fullmatch(r"([A-Z]+)(\d*)", rule), re.fullmatch(r"([A-Z]+)(\d+)", code)
     if not rule_match or not code_match:
-        return rule == "ALL"
+        return False
     return rule_match[1] == code_match[1] and code_match[2].startswith(rule_match[2])
 
 
