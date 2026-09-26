@@ -29,17 +29,21 @@ section.
 The gate is a deterministic `command` hook that reads the plan text the hook payload carries
 (`tool_input.plan`, confirmed from a captured payload). It allows work tier 0/1, an explicit
 `**Review:** waived by user`, or a review block with an APPROVE or REVISE verdict. It denies an
-unreviewed plan or a RETHINK verdict, and fails open on any error. A verdict counts only on a
-line of its own (`Verdict: APPROVE`, `- **Verdict:** REVISE`), so a phrase in later prose can't
-override it.
+unreviewed plan or a RETHINK verdict, and fails open on any error. A verdict counts only at the
+start of a line (`Verdict: APPROVE`, `- **Verdict:** **REVISE**`, `### Verdict: RETHINK`), so a
+phrase in a later finding's prose can't override it.
 
 ### What the gate cannot prove
 
 The review block is text in the plan, and the agent that wrote the plan can type text. Presence
 of a block is not proof a reviewer produced it. The session gate narrows this: when a plan is
 allowed *only* because of a review block, it reads the session transcript the hook payload
-names (`transcript_path`) and denies unless that transcript shows a `plan-reviewer` Agent
-dispatch, a `review-plan` Skill call, or the user typing `/review-plan`. That is a binding to
+names (`transcript_path`) and denies unless that transcript records a `plan-reviewer` Agent
+dispatch, a `review-plan` Skill call, or the user typing `/review-plan`. Records are judged by
+their structure (an assistant `tool_use`, a user command record), not by searching the text, so
+the same words quoted in prose, a tool result or a file the session read don't count. A review
+run in another session, before `/clear`, or by a subagent isn't in this transcript either; the
+denial says to re-run it here or ask the user to waive. That is a binding to
 "a review ran in this session", not to "this block is that review's output" — an agent could
 still run the reviewer and then paste a different verdict. If the transcript is missing or
 unreadable the gate fails open, as it does for every other error.
@@ -67,5 +71,6 @@ rejected: nothing in a local agent session can hold a key the planning agent can
 
 Every plan must state its work tier; a plan that states none is treated as work tier 2. Self-declared Tier 0/1 and the waiver are visible in the plan the
 user approves, so they can't be abused silently. The gate can't judge review *quality*, only
-that a reviewer ran; the user still reads the verdict. Plans from the superpowers flow never pass through
+presence in CI, plus a reviewer run in the session when its transcript is readable; the user
+still reads the verdict. Plans from the superpowers flow never pass through
 `ExitPlanMode`, so CI checks their files instead, with older files grandfathered by date.

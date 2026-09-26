@@ -37,18 +37,17 @@ TIER = re.compile(LINE_START + r"\*\*Work tier:\*\*\s*([0-9])\b", re.MULTILINE |
 WAIVED = re.compile(LINE_START + r"\*\*Review:\*\*\s*waived by user\b", re.MULTILINE | re.IGNORECASE)
 REVIEW_HEADING = re.compile(r"^##\s+Independent review\b", re.MULTILINE | re.IGNORECASE)
 NEXT_SECTION = re.compile(r"^#{1,2}\s", re.MULTILINE)
-# Anchored like TIER/WAIVED: a verdict is a line of its own ("Verdict: APPROVE",
-# "- **Verdict:** REVISE — …"), so an incidental "verdict: approve" in later prose can't win.
+# Anchored like TIER/WAIVED: a verdict starts its own line ("Verdict: APPROVE",
+# "- **Verdict:** **REVISE** — …", "### Verdict: RETHINK"), so an incidental "verdict: approve"
+# later in a finding's prose can't win. Markdown emphasis around either word is allowed.
 VERDICT = re.compile(
-    LINE_START + r"(?:\*\*|__)?verdict(?:\*\*|__)?[ \t]*:?(?:\*\*|__)?[ \t]*(approve|revise|rethink)\b",
+    LINE_START + r"(?:#{1,6}[ \t]+)?[*_]*verdict[*_: \t]*(approve|revise|rethink)\b",
     re.MULTILINE | re.IGNORECASE,
 )
-# A plan-reviewer run as the session transcript (JSONL) records it: an Agent dispatch, a Skill
-# tool call, or the user typing /review-plan. Quoted mentions don't match — JSON escapes their
-# quotes (\"subagent_type\"), and the optional slash keeps this pattern's own source text inert.
-REVIEWER_RUN = re.compile(
-    r'"subagent_type"\s*:\s*"plan-reviewer"|"skill"\s*:\s*"review-plan"'
-    r"|<command-name>/?review-plan</command-name>"
+# The user's `/review-plan` as the transcript records it: a user record whose text starts with
+# the command tags (typed commands only — a quoted tag sits inside other text).
+SLASH_REVIEW = re.compile(
+    r"\s*<command-message>review-plan</command-message>\s*<command-name>/review-plan</command-name>"
 )
 FENCED = re.compile(r"^(```|~~~).*?^\1[^\n]*$", re.MULTILINE | re.DOTALL)
 
@@ -108,9 +107,45 @@ def reviewer_ran(payload: dict) -> bool | None:
         return None
     try:
         with open(path, encoding="utf-8", errors="replace") as transcript:
-            return any(REVIEWER_RUN.search(line) for line in transcript)
+            for line in transcript:
+                if "plan-reviewer" not in line and "review-plan" not in line:
+                    continue  # cheap pre-filter: nearly every line is neither
+                try:
+                    if is_reviewer_run(json.loads(line)):
+                        return True
+                except json.JSONDecodeError:
+                    continue
+        return False
     except OSError:
         return None
+
+
+def is_reviewer_run(record: object) -> bool:
+    """Whether one transcript record IS a plan-reviewer run, judged by its structure.
+
+    An assistant tool call dispatching the `plan-reviewer` agent or the `review-plan` skill, or
+    the user's `/review-plan` command record. Structure, not text: the same words quoted in
+    prose, in a tool result or in a file the session read don't count.
+    """
+    if not isinstance(record, dict):
+        return False
+    message = record.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    if record.get("type") == "user" and isinstance(content, str):
+        return bool(SLASH_REVIEW.match(content))
+    if record.get("type") != "assistant" or not isinstance(content, list):
+        return False
+    for item in content:
+        if not isinstance(item, dict) or item.get("type") != "tool_use":
+            continue
+        tool_input = item.get("input")
+        if not isinstance(tool_input, dict):
+            continue
+        if tool_input.get("subagent_type") == "plan-reviewer":
+            return True
+        if item.get("name") == "Skill" and tool_input.get("skill") == "review-plan":
+            return True
+    return False
 
 
 DENY_UNATTESTED = (
