@@ -7,7 +7,8 @@
 ## Context
 
 `.git-blame-ignore-revs` lists purely mechanical commits, such as the first repo-wide
-Prettier pass, so `git blame` skips them. The root `AGENTS.md` records the constraint: "a
+Prettier pass, so `git blame` skips them. The root `AGENTS.md` recorded the constraint (now in
+[`docs/07-quality/tooling.md`](../07-quality/tooling.md)): "a
 squash merge produces a brand-new SHA on `main` that was never listed in that file, so any
 entry there silently stops doing anything (git does not warn on an unknown SHA)." Every PR
 so far has merged this way (about 68 "Merge pull request" commits on `main`).

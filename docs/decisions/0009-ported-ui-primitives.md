@@ -1,6 +1,6 @@
 # 0009. UI primitives are ported vendor source, adapted for RTL and i18n
 
-- **Status:** Accepted — licence question open, see Consequences (supersedes the root `AGENTS.md` §0c "prefer shadcn/ui" rule and §0d's "never vendor the source wholesale", both of which predate the Metronic migration)
+- **Status:** Accepted — licence question open, see Consequences (supersedes the old root `AGENTS.md` §0c "prefer shadcn/ui" rule, which predates the Metronic migration; §0d's "never vendor the source wholesale" stays in force, now in `packages/ui/AGENTS.md`, until the licence question below is decided)
 - **Date:** 2026-09-26 (recording a decision already in effect)
 - **Enforced by:** TypeScript — label and fallback-text props are *required* (`Dialog.closeLabel`, `Sheet.closeLabel`, `Button.loadingLabel`, `DataTable`'s empty-state and pagination labels). The RTL rule is review only (planned: an ESLint physical-direction ban).
 
@@ -38,6 +38,7 @@ Each port's file header records every departure from the vendor source and why.
 ## Consequences
 
 **Open licence question, not resolved by this ADR.** Metronic is a purchased, licensed asset,
-and the root `AGENTS.md` says it must not be redistributed. The repository is now **public**,
+and this repo's rules (now [`packages/ui/AGENTS.md`](../../packages/ui/AGENTS.md)) say it must not
+be committed or redistributed wholesale. The repository is now **public**,
 which makes both the vendored `styles/metronic/**` CSS and the ported components publicly
 visible. The repository owner needs to decide on this; it's recorded here so it is not lost.

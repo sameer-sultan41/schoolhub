@@ -1,4 +1,21 @@
 {
+  "permissions": {
+    "deny": [
+      "Agent(lu-planner)",
+      "Agent(lu-quality-reviewer)",
+      "Agent(lu-security-reviewer)",
+      "Agent(lu-implementer)",
+      "Agent(lu-qa)"
+    ]
+  },
+  "skillOverrides": {
+    "g-flow": "off",
+    "g-python-skill": "off",
+    "g-typescript-skill": "off",
+    "g-django-testing-skill": "off",
+    "g-nextjs-testing-skill": "off",
+    "g-dashboard-testing-skill": "off"
+  },
   "hooks": {
     "PreToolUse": [
       {

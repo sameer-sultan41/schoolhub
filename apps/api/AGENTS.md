@@ -74,6 +74,15 @@ Python 3.14 · Django 6.1 · DRF 3.18 · PostgreSQL 18 · Redis 8 · Celery 5.6.
 When adding a dependency, check the registry for the current release rather than
 assuming a version from memory.
 
+The backend is managed by [uv](https://docs.astral.sh/uv/) — its own `pyproject.toml` plus the
+committed `uv.lock`; use `uv sync` / `uv run`, not pip or an activated venv. uv itself is pinned
+to `0.11.x` in three places that must move together: `pyproject.toml`'s `[tool.uv]
+required-version`, `Dockerfile`'s `ghcr.io/astral-sh/uv:0.11.9` base, and
+`.github/actions/setup-api-env`'s `version:` input. `required-version` is a hard bound — every
+`uv` invocation refuses to run against a mismatched local install, including the hint printed by
+`pre-commit` — so a version bump is deliberately a single PR touching all three, not a rolling
+one.
+
 ## Conventions Quick Reference
 
 - Tables: plural `snake_case`. Every tenant-owned table has `id` (UUID PK), `tenant_id`,

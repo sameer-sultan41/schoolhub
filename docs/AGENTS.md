@@ -22,7 +22,7 @@ SchoolHub is an **AI-powered, multi-tenant School Management SaaS**: one platfor
 | `04-ai/` | AI feature catalog (the `AI-XXX-NN` registry) + AI governance policy |
 | `05-database/` | ERD overview + `entities/` column-level table specs per domain |
 | `06-security/` | numbered security requirements (SEC-01…) |
-| `07-quality/` | non-functional requirements, testing strategy |
+| `07-quality/` | non-functional requirements, testing strategy, repo tooling (hooks, Prettier, cspell) |
 | `08-future/` | mobile apps, extensibility roadmap |
 | `context/` | the context map (task type → the docs to load), plus obsolete per-area AGENTS.md templates due for removal |
 
@@ -36,13 +36,12 @@ SchoolHub is an **AI-powered, multi-tenant School Management SaaS**: one platfor
 - **AI feature IDs** — `AI-<MODULE PREFIX>-NN`, registered in [`04-ai/ai-features.md`](04-ai/ai-features.md).
 - **Terms** — Tenant, Campus, Academic Session, Term, Section, Fee Head, etc. per [`00-overview/glossary.md`](00-overview/glossary.md).
 
-## Non-Negotiable Invariants (every change is checked against these)
+## Non-Negotiable Invariants
 
-1. **Tenant isolation** — cross-tenant access is impossible by construction (RLS + scoped managers + 404-not-403). See `02-architecture/multi-tenancy.md`.
-2. **Money is append-only** — ledger entries are never updated or deleted; corrections are new entries.
-3. **AI drafts, humans publish** — no AI output reaches students, parents, or the public without a permission-gated human approval. See `04-ai/ai-governance.md`.
-4. **RBAC is server-side** — UI hiding is UX, never enforcement.
-5. **Mobile-readiness** — no web-only shortcut (cookie-bound auth, HTML-only flows) may be introduced; the same API must serve future mobile apps.
+The single list lives in the root [`../AGENTS.md`](../AGENTS.md#invariants) — tenant isolation
+by RLS, 404-not-403, a permission key on every endpoint with RBAC server-side, append-only money,
+AI drafts / humans publish, the generated API contract, and mobile-readiness. Every change is
+checked against it; this doc set is where each is specified in detail.
 
 ## How to Use These Docs When Coding
 

@@ -39,6 +39,17 @@ Node 24 or newer, pnpm 9.15, and Docker. `.nvmrc` and `packageManager` record th
 frontend versions; `apps/api/.python-version` and `apps/api/pyproject.toml` record the
 backend's.
 
+**0. One-time setup per clone.** Turn on the repo's git hooks (lint, format, spelling and
+typecheck gates that catch what CI would reject, plus the block on pushing straight to `main`)
+and make `git blame` skip mechanical commits:
+
+```bash
+git config core.hooksPath .githooks
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+Details and rationale: [`docs/07-quality/tooling.md`](docs/07-quality/tooling.md).
+
 **1. Start the backing services first.** Migrations need a database, so this comes
 before anything else.
 
@@ -95,10 +106,10 @@ pnpm --filter @schoolhub/api-client generate         # refresh the typed schema
 
 CI fails if either is stale, so both regenerate in the same commit as the change.
 
-**Documentation lookups.** `.mcp.json` registers [Context7](https://context7.com) so
-assistants read version-matched library docs instead of working from recall. Export
-`CONTEXT7_API_KEY` in your shell; it is interpolated at load time and never
-committed.
+**Documentation lookups.** Assistants read version-matched library docs through
+[Context7](https://context7.com), via Anthropic's official `context7` Claude Code plugin
+(`claude plugin enable context7@claude-plugins-official`). It works anonymously; export
+`CONTEXT7_API_KEY` in your shell for higher rate limits.
 
 ## Stack
 
