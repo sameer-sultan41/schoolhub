@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-26 (recording a decision already in effect)
-- **Enforced by:** review only (planned: `.github/rulesets/main.json` corrected to allow merge commits and drop `required_linear_history`)
+- **Enforced by:** review only. `main`'s classic branch protection keeps linear history **off**, so merge commits are permitted, but nothing forces them; the unapplied `.github/rulesets/main.json` contradicts this record and is due to be corrected.
 
 ## Context
 
@@ -32,6 +32,6 @@ permanent once merged, so diagnose on a draft PR that is closed without merging.
 
 Two recorded facts were wrong when this ADR was written. `docs/project-status.md` said merge
 commits were disabled, but GitHub's own setting shows them allowed. And the committed ruleset
-requires linear history, which contradicts this decision. The repository is now **public**,
-so the ruleset — previously blocked because private repos need GitHub Pro — can actually be
-applied once corrected.
+requires linear history, which contradicts this decision. The repository is now **public**, and
+`main` has classic branch protection with linear history off — compatible with this decision.
+The ruleset is not applied and must be corrected before it ever is.

@@ -12,7 +12,7 @@ import base from "@schoolhub/config/eslint";
  *
  * Previously this workspace had neither plugin at all despite shipping 5 `.tsx`
  * components — no rules-of-hooks enforcement, no accessibility linting, despite the
- * repo's own WCAG 2.1 AA requirement (root AGENTS.md).
+ * repo's own WCAG 2.1 AA requirement (docs/07-quality/non-functional.md).
  */
 export default defineConfig([
   reactHooks.configs.flat.recommended,

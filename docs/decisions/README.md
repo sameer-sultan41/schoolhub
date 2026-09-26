@@ -38,7 +38,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0007](0007-ci-source-of-truth.md) | CI is the source of truth; local hooks split by cost | Accepted | `.githooks/*`, CI workflows |
 | [0008](0008-jest-not-vitest.md) | Jest + React Testing Library, not Vitest | Accepted | `apps/*/jest.config.ts` |
 | [0009](0009-ported-ui-primitives.md) | UI primitives are ported vendor source, adapted for RTL and i18n | Accepted | TypeScript required props (planned: RTL lint rule) |
-| [0010](0010-backend-module-layout.md) | Backend apps use one package per resource | Accepted | review only |
+| [0010](0010-backend-module-layout.md) | Backend apps use one package per resource | Accepted | review only (`schoolhub-backend-module` skill) |
 | [0011](0011-dashboard-services-layer.md) | Dashboard API calls go only through `src/services/` | Accepted | review only (planned: ESLint import ban) |
 | [0012](0012-tests-in-dunder-tests.md) | Frontend tests live in sibling `__tests__/` folders | Accepted | review only (planned: CI placement check) |
 | [0013](0013-cross-app-dependencies.md) | Cross-app dependency rules for the backend | Accepted | review only (planned: import-linter) |

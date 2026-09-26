@@ -21,12 +21,12 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 `DOCS = <repo root>/docs`
 
 1. `DOCS/AGENTS.md` — project summary, locked vocabulary, invariants. Always.
-2. `DOCS/docs/02-architecture/website-builder.md` — the rendering architecture: Host-header
+2. `DOCS/02-architecture/website-builder.md` — the rendering architecture: Host-header
    tenant resolution, theme system, ISR + publish invalidation, SEO, security boundary. This is
    your primary spec.
-3. `DOCS/docs/03-modules/website-cms.md` — the functional spec of pages, sections, navigation,
+3. `DOCS/03-modules/website-cms.md` — the functional spec of pages, sections, navigation,
    news/events/gallery, forms.
-4. `DOCS/docs/05-database/entities/website-cms.md` — the content schema you read.
+4. `DOCS/05-database/entities/website-cms.md` — the content schema you read.
 
 ## Hard Rules
 

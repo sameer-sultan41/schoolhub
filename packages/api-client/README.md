@@ -8,7 +8,8 @@ The backend (`schoolhub-api`) publishes **OpenAPI 3.1** (drf-spectacular) as a C
 environment. Frontend CI regenerates the **resource/operation layer** of this package — and the
 request/response types in `@schoolhub/types` — from that spec. A contract change that breaks the
 dashboard fails frontend CI *before* deploy: the spec is the inter-repo interface and is reviewed
-like code (see `DOCS/docs/02-architecture/repo-structure.md` §6.1).
+like code (see `docs/02-architecture/repo-structure.md` §6.1 and
+[ADR-0005](../../docs/decisions/0005-generated-api-contract.md)).
 
 Until the generator is wired up, this package ships the **hand-written transport core only**.
 The split is deliberate and must be preserved:

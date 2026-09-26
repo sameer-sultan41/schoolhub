@@ -16,7 +16,10 @@ drf-spectacular emits `apps/api/openapi.yaml` (`apps/api/scripts/generate-openap
 with `--validate --fail-on-warn`). openapi-typescript turns that into
 `packages/api-client/src/schema.d.ts` (`pnpm --filter @schoolhub/api-client generate`). Both
 files are committed and **change in the same commit as the serializer, view or URL change
-that caused them**. Nobody hand-edits `schema.d.ts`; Prettier ignores it.
+that caused them**. Nobody hand-edits `schema.d.ts`; Prettier ignores it. Editing a
+serializer, view, viewset or URL file loads
+[`.claude/rules/api-contract.md`](../../.claude/rules/api-contract.md), which tells the agent
+to regenerate both.
 
 ## Alternatives considered
 
@@ -29,6 +32,5 @@ that caused them**. Nobody hand-edits `schema.d.ts`; Prettier ignores it.
 ## Consequences
 
 `openapi.yaml` and `schema.d.ts` are among the most-churned files in the repo, which is
-expected. Changing a serializer means running two generators before committing (see
-`.claude/rules/api-contract.md` once added). Breaking API changes need a new version path
+expected. Changing a serializer means running two generators before committing. Breaking API changes need a new version path
 per `api-architecture.md` §2.1.

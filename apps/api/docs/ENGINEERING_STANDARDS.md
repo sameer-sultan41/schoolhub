@@ -71,10 +71,10 @@ Detailed requirements: `docs/06-security/security.md`.
 Full strategy: `docs/07-quality/testing-strategy.md`.
 
 - Django's test runner with `TestCase`/`APITestCase` — **PostgreSQL only**, never SQLite, because RLS cannot be exercised on another backend.
-- Every new endpoint gets a **cross-tenant access test**; the shared harness auto-enrolls new routes so a missing test fails the build.
+- Every new endpoint gets a **cross-tenant access test** in its module's `tests/test_cross_tenant.py`. These are hand-written — nothing auto-enrols new routes, so a missing test fails nothing ([ADR-0004](../../../docs/decisions/0004-cross-tenant-404.md)); the reviewer must check for it. What *does* auto-enrol: `tests/test_rls_coverage.py` (every tenant table has an RLS policy), `tests/test_append_only_coverage.py` (append-only tables are protected by grant) and `tests/test_endpoint_contracts.py` (every endpoint declares a registered permission key).
 - RBAC matrix tests assert each permission key grants exactly what it should.
 - Money tests assert ledger balance invariants.
-- Coverage floor 80% overall (`fail_under` in `pyproject.toml`), ratcheted upward.
+- Coverage floor 85% overall (`fail_under` in `pyproject.toml`), ratcheted upward.
 
 **Tests are not run locally.** Push and let CI report — CI is the source of truth for pass/fail.
 
@@ -84,9 +84,11 @@ Each module in `apps/` mirrors one module doc in the specification repo.
 
 1. Read `docs/03-modules/<module>.md` (behavior) and the matching
    `docs/05-database/entities/<domain>.md` (schema).
-2. `apps/<module>/` with `models.py`, `serializers.py`, `services.py`, `views.py`,
-   `urls.py`, `permissions.py`, `filters.py`, `tests/`.
-3. Models inherit `TenantOwnedModel`; the first migration calls
+2. `apps/<module>/` with `models.py` and `permissions.py` at the app root and one package
+   per resource (`<resource>/{serializers,viewset,urls,filters,services}.py` + `tests/`) —
+   the layout in [ADR-0010](../../../docs/decisions/0010-backend-module-layout.md); the
+   `schoolhub-backend-module` skill walks through it.
+3. Models inherit `TenantOwnedModel`; the same or the next migration calls
    `core.tenancy.rls.rls_operations("<table>", ...)` to attach the RLS policy.
 4. `permissions.py` registers the module's keys from the doc's §4 table.
 5. Register the app in `MODULE_APPS` and its routes in `config/api_v1.py`.
