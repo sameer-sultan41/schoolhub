@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-26
-- **Enforced by:** review only (planned: the PR template's "ADR added if a real choice was made" item, and the `plan-reviewer` / `change-reviewer` agents)
+- **Enforced by:** review only — the PR template's "ADR added or superseded if a real choice was made" item, and the `plan-reviewer` (check 11) and `change-reviewer` agents
 
 ## Context
 

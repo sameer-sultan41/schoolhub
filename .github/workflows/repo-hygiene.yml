@@ -174,3 +174,33 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The ExitPlanMode gate (.claude/hooks/plan_review_gate.py, ADR-0015) is code that runs in
+  # every agent session; a broken path or quote would either trap sessions in plan mode or
+  # silently stop gating. Its tests run the exact command registered in .claude/settings.json.
+  plan-review-gate:
+    name: Plan-review gate tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run the gate's unit tests
+        run: python3 -m unittest discover -s .claude/hooks/tests -v
+
+  # Superpowers specs and plans are Tier 2 designs; ADR-0015 requires an independent review
+  # before approval, recorded in the file as an `## Independent review` block with a Verdict
+  # line. Files dated before the rule (2026-09-26) are grandfathered by their filename date.
+  plan-review-record:
+    name: Specs and plans carry an independent review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: New or changed specs/plans dated 2026-09-26+ pass the review rule
+        # Same rule as the ExitPlanMode gate: the script imports its decide().
+        run: |
+          git fetch origin "$GITHUB_BASE_REF" --depth=1
+          python3 .claude/hooks/check_review_records.py "origin/$GITHUB_BASE_REF"
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}

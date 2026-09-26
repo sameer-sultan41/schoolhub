@@ -54,7 +54,7 @@ vendor has an opinion on), then the vendor skills below, then generic guidance.
 3. **Per-area rules load themselves.** Each of `apps/api`, `apps/dashboard`, `apps/website`,
    `packages/ui`, `e2e`, `infra` and `docs` has a `CLAUDE.md` importing its own `AGENTS.md`,
    which loads when you open files there. Follow it.
-4. **Library docs come from Context7** (the `context7` plugin): resolve the library, read its
+4. **Library docs come from Context7** (the `context7` MCP server or plugin): resolve the library, read its
    version-matched docs, and follow them — never write setup, config or non-trivial API usage
    from recall. If Context7 is unavailable, say so, then use the vendor's official docs.
 5. **Load the matching skill first:**
@@ -95,6 +95,29 @@ Every change is checked against these. This is the single list; other docs link 
 7. **Mobile-readiness.** No web-only shortcut (cookie-bound auth, HTML-only flows); the same API
    must serve future mobile apps.
 
+## Working Method
+
+State a work tier near the top of every plan as a `**Work tier:** n` line
+([ADR-0015](docs/decisions/0015-independent-plan-review.md)). ("Work tier", because "Tier 0 —
+Foundation" etc. already name module build order.)
+
+| Work tier | When | Flow |
+| --------- | ---- | ---- |
+| 0 | Question, lookup, typo, one-line change | Just do it |
+| 1 | Bounded change, cause proven, a few files | Design in chat → user approves → implement → `change-reviewer` → PR |
+| 2 | Multi-file; new endpoint, screen or migration; unproven bug; touches an invariant | Plan with "Alternatives considered (why not)" → `plan-reviewer` → user approves → implement → `change-reviewer` with the plan → PR |
+
+The reviewers live in `.claude/agents/`. A hook denies `ExitPlanMode` for a work-tier-2 plan — or
+one stating no tier — until it carries the reviewer's `## Independent review` block with an
+APPROVE or REVISE verdict (RETHINK is denied). Spec and plan files: `/review-plan <path>`; CI
+checks them. `**Review:** waived by user` only when the user explicitly says so.
+
+**Stop rules:** (1) a second failed fix for the same symptom → stop, `superpowers:systematic-debugging`,
+re-plan, re-review; (2) no symptom suppressors (timeout/retry bumps, coverage excludes,
+`noqa`/`eslint-disable`/`@ts-expect-error`, skipped tests) without an ADR or the user's OK;
+(3) deviating from the approved plan → amend it and re-review, don't improvise; (4) diagnose on a
+throwaway draft PR, never merged — the fix PR carries only the root-caused fix.
+
 ## Working Here
 
 - **`main` only moves through a reviewed, CI-green pull request.** Branch (`feat/…`, `fix/…`,
@@ -116,7 +139,7 @@ Every change is checked against these. This is the single list; other docs link 
   belongs in the E2E `live` lane or backend tests — a stubbed API proves nothing.
 - **CI workflows** (`.github/workflows/`): `api`, `frontend`, `infra-compose` and
   `infra-terraform` are path-filtered to their area; `repo-hygiene` (links, spelling, formatting,
-  secrets, doc-sync) has no path filter and runs on PRs to `main` and the branch prefixes above;
+  secrets, doc-sync, plan-review checks) has no path filter and runs on PRs to `main` and the branch prefixes above;
   `e2e-live` runs nightly and on manual dispatch, not on PRs.
 - **A repeated multi-step task becomes a skill**, not muscle memory: a scoped
   `.claude/skills/<name>/SKILL.md` with the exact commands, paths and gotchas (see `CLAUDE.md`).

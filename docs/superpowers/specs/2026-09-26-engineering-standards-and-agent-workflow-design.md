@@ -1,6 +1,6 @@
 # SchoolHub engineering standards, agent context and cross-agent review
 
-**Tier:** 2 · **Status:** Approved 2026-09-26 · Executed as PRs 1a, 1b, 1c, 2, 3, 4, 5 (stacked).
+**Work tier:** 2 · **Status:** Approved 2026-09-26 · Executed as PRs 1a, 1b, 1c, 2, 3, 4, 5 (stacked).
 
 ## Context
 
@@ -219,6 +219,26 @@ ADR-0009 must record what actually happened: Metronic source ported, `packages/u
 - Link `docs/superpowers/`.
 
 ## Phase 2: Cross-agent verification (PR 2)
+
+> **Amendments made during PR 2** (recorded per stop rule 3; the marker rename was approved by the
+> user, the rest came out of two independent review rounds):
+>
+> - **Marker:** `**Work tier:** n`, not `**Tier:** n`, everywhere in this document (including the
+>   Verification section) — this repo already uses "Tier 0 — Foundation" etc. for module build
+>   order, and a plan headed that way would otherwise have skipped review. A bullet or blockquote
+>   prefix (`- **Work tier:** 1`) is accepted.
+> - **Verdicts:** RETHINK is denied, not allowed. Fenced code blocks are ignored; each
+>   `## Independent review` section ends at the next H1/H2; verdicts are read from every review
+>   section and the last one wins.
+> - **Hook command:** `cd "$CLAUDE_PROJECT_DIR" && python3 .claude/hooks/plan_review_gate.py || true`
+>   — run from the repo root (dodges `apps/api`'s pyenv pin), and `|| true` makes a missing script
+>   fail open instead of exiting 2 ("block").
+> - **CI record check:** a Python script (`.claude/hooks/check_review_records.py`) that imports the
+>   gate's `decide()`, so plans and spec files follow one rule. Only files dated before 2026-09-26
+>   are grandfathered; undated files need review. Both CI jobs stay advisory until added to
+>   `main`'s required checks.
+> - **Skill location:** `.claude/skills/review-plan/` (the directory name sets the command,
+>   `/review-plan`), run in the foreground (`background: false`).
 
 ### Agents (`.claude/agents/`, committed, schoolhub-specific)
 
