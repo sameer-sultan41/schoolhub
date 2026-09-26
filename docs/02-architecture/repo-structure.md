@@ -85,7 +85,7 @@ schoolhub/
 | `core/` imports no app | review only (planned: import-linter) — [ADR-0013](../decisions/0013-cross-app-dependencies.md) |
 | `@schoolhub/api-client` is imported only in `apps/dashboard/src/services/**` and `src/lib/auth.ts` | review only (planned: ESLint) — [ADR-0011](../decisions/0011-dashboard-services-layer.md) |
 | No `../` parent-relative imports; use the `@/` alias | ESLint `no-restricted-imports` in `apps/dashboard` (`packages/config/eslint.no-relative-parent-imports.mjs`); planned for the other workspaces |
-| Apps never import each other; packages never import apps | Workspace boundaries (neither is a dependency of the other); the `../` ban catches relative reach-arounds in `apps/dashboard` only — review only elsewhere (planned: extend the ban) |
+| Apps never import each other; packages never import apps | Workspace boundaries (neither is a dependency of the other); the `../` ban catches relative-path imports across that boundary in `apps/dashboard` only — review only elsewhere (planned: extend the ban) |
 | Route files stay thin; feature code lives in `src/features/<module>/` | review only |
 
 ## 4. Configuration & Environment Management
