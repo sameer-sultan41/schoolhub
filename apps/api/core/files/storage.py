@@ -10,11 +10,14 @@ settings so the test suite and CI never need a real object store — see
 from __future__ import annotations
 
 import datetime
+import functools
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
 from django.conf import settings
+from django.core.signals import setting_changed
+from django.dispatch import receiver
 
 _UPLOAD_EXPIRY_SECONDS = 900
 _DOWNLOAD_EXPIRY_SECONDS = 300
@@ -30,7 +33,13 @@ class PresignedUpload:
 
 class Presigner(Protocol):
     def presign_upload(self, *, storage_key: str, mime_type: str) -> PresignedUpload: ...
-    def presign_download(self, *, storage_key: str) -> str: ...
+    def presign_download(
+        self,
+        *,
+        storage_key: str,
+        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        cache_control: str | None = None,
+    ) -> str: ...
     def head(self, *, storage_key: str) -> dict | None:
         """Return {"size_bytes": int} if the object exists, else None."""
         ...
@@ -66,7 +75,13 @@ class NullPresigner:
             expires_at=now + datetime.timedelta(seconds=_UPLOAD_EXPIRY_SECONDS),
         )
 
-    def presign_download(self, *, storage_key: str) -> str:
+    def presign_download(
+        self,
+        *,
+        storage_key: str,
+        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        cache_control: str | None = None,
+    ) -> str:
         return f"https://null-presigner.invalid/{storage_key}"
 
     def head(self, *, storage_key: str) -> dict | None:
@@ -83,20 +98,35 @@ class S3Presigner:
     """boto3-backed. Same behaviour against real S3 or a MinIO-compatible endpoint."""
 
     def __init__(self) -> None:
-        import boto3
-
-        self._client = boto3.client(
-            "s3",
-            endpoint_url=settings.S3_ENDPOINT_URL,
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.S3_REGION_NAME,
+        self._client = self._build_client(settings.S3_ENDPOINT_URL)
+        # Presigning is offline, so a client for the public host opens no connection. SigV4
+        # signs the host, so rewriting the URL's host afterwards would break the signature.
+        public_endpoint = settings.S3_PUBLIC_ENDPOINT_URL or settings.S3_ENDPOINT_URL
+        self._signing_client = (
+            self._client
+            if public_endpoint == settings.S3_ENDPOINT_URL
+            else self._build_client(public_endpoint)
         )
         self._bucket = settings.S3_BUCKET_NAME
 
+    @staticmethod
+    def _build_client(endpoint_url: str):
+        import boto3
+        from botocore.config import Config
+
+        return boto3.client(
+            "s3",
+            endpoint_url=endpoint_url,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.S3_REGION_NAME,
+            # AWS S3 buckets created since 2020 accept only SigV4; MinIO accepts both.
+            config=Config(signature_version="s3v4"),
+        )
+
     def presign_upload(self, *, storage_key: str, mime_type: str) -> PresignedUpload:
         now = datetime.datetime.now(datetime.UTC)
-        url = self._client.generate_presigned_url(
+        url = self._signing_client.generate_presigned_url(
             "put_object",
             Params={"Bucket": self._bucket, "Key": storage_key, "ContentType": mime_type},
             ExpiresIn=_UPLOAD_EXPIRY_SECONDS,
@@ -108,11 +138,19 @@ class S3Presigner:
             expires_at=now + datetime.timedelta(seconds=_UPLOAD_EXPIRY_SECONDS),
         )
 
-    def presign_download(self, *, storage_key: str) -> str:
-        return self._client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": self._bucket, "Key": storage_key},
-            ExpiresIn=_DOWNLOAD_EXPIRY_SECONDS,
+    def presign_download(
+        self,
+        *,
+        storage_key: str,
+        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        cache_control: str | None = None,
+    ) -> str:
+        params = {"Bucket": self._bucket, "Key": storage_key}
+        if cache_control:
+            # Storage echoes this back as the response's Cache-Control header.
+            params["ResponseCacheControl"] = cache_control
+        return self._signing_client.generate_presigned_url(
+            "get_object", Params=params, ExpiresIn=expires_in
         )
 
     def head(self, *, storage_key: str) -> dict | None:
@@ -132,7 +170,28 @@ class S3Presigner:
         )
 
 
+_STORAGE_SETTINGS = frozenset(
+    {
+        "S3_ENDPOINT_URL",
+        "S3_PUBLIC_ENDPOINT_URL",
+        "S3_BUCKET_NAME",
+        "S3_REGION_NAME",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+    }
+)
+
+
+@functools.cache
 def get_presigner() -> Presigner:
+    """One per process: building boto3 clients costs far more than signing, and a built
+    client is safe to share across threads."""
     if settings.S3_ENDPOINT_URL:
         return S3Presigner()
     return NullPresigner()
+
+
+@receiver(setting_changed)
+def _reset_presigner(*, setting: str, **kwargs: object) -> None:
+    if setting in _STORAGE_SETTINGS:
+        get_presigner.cache_clear()

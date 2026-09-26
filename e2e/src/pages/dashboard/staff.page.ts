@@ -2,12 +2,13 @@ import type { Locator } from "@playwright/test";
 import { BasePage } from "../base.page";
 
 /**
- * `/staff` list, `/staff/new` create form, and `/staff/:id` detail — see
- * `apps/dashboard/src/features/staff/`.
+ * `/staff` — the directory table plus its two dialogs: Add/Edit (`StaffFormDialog`) and
+ * Exit (`ExitStaffDialog`, behind each row's "Delete" action). See
+ * `apps/dashboard/src/app/(app)/staff/`.
  *
- * Locators go through accessible names, sourced from
- * `apps/dashboard/messages/en.json`'s `staff` namespace — same convention as
- * `LoginPage`.
+ * This route's strings are hardcoded English on this branch (no `staff` messages
+ * namespace yet — see apps/dashboard/AGENTS.md), so the accessible names below come from
+ * those components directly.
  */
 export class StaffPage extends BasePage {
   readonly path = "/staff";
@@ -20,99 +21,87 @@ export class StaffPage extends BasePage {
     return this.table.getByRole("row").filter({ hasText: name });
   }
 
-  get createLink(): Locator {
-    return this.page.getByRole("link", { name: "New staff member" });
+  /** A row's avatar photo. Decorative (`alt=""`, the name sits beside it), so it has no
+   * accessible name to locate by — the element is the only handle. */
+  rowPhoto(name: string): Locator {
+    return this.row(name).locator("img");
   }
 
   get searchInput(): Locator {
-    return this.page.getByLabel("Search");
+    return this.page.getByRole("textbox", { name: "Search staff" });
   }
 
-  // ---- Table controls ----
-  //
-  // These live inside the table's own card now — the filter row, the header and the
-  // pager share one border — but each is still reached by its accessible name, so the
-  // reframing is invisible from here. That is the point of pinning names, not structure.
-
-  /** A column header's sort control. Its name says what pressing it will DO. */
-  sortBy(column: string): Locator {
-    return this.page.getByRole("button", { name: new RegExp(`sort by ${column}`, "i") });
+  get addMemberButton(): Locator {
+    return this.page.getByRole("button", { name: "Add Member", exact: true });
   }
 
-  get columnsMenuTrigger(): Locator {
-    return this.page.getByRole("button", { name: "Columns" });
+  /** Opens a row's ⋮ menu and picks `action` ("Edit", "Copy ID" or "Delete"). */
+  async rowAction(name: string, action: "Edit" | "Copy ID" | "Delete"): Promise<void> {
+    await this.page.getByRole("button", { name: `Actions for ${name}` }).click();
+    await this.page.getByRole("menuitem", { name: action }).click();
   }
 
-  /** One row of the show/hide menu. Ticked means the column is visible. */
-  columnToggle(column: string): Locator {
-    return this.page.getByRole("menuitemcheckbox", { name: column });
+  // ---- Add/Edit dialog ----
+
+  /** Add and Edit are one dialog; only the title differs. */
+  get formDialog(): Locator {
+    return this.page.getByRole("dialog", { name: /^(Add|Edit) staff member$/ });
   }
 
-  get columnHeaders(): Locator {
-    return this.table.getByRole("columnheader");
+  // getByRole, not getByLabel: FormLabel renders the required marker as an aria-hidden
+  // "*" inside the label, which getByLabel's text match includes ("First name*") but
+  // getByRole's accessible-name computation correctly drops.
+  field(label: string): Locator {
+    return this.formDialog.getByRole("textbox", { name: label, exact: true });
   }
 
-  /** A numbered page button — `common.goToPage` names it "Go to page N". */
-  pageButton(page: number): Locator {
-    return this.page.getByRole("button", { name: `Go to page ${String(page)}` });
+  /** Radix Select triggers render as `combobox`, named by their field label. */
+  select(label: string): Locator {
+    return this.formDialog.getByRole("combobox", { name: label, exact: true });
   }
 
-  get nextPage(): Locator {
-    return this.page.getByRole("button", { name: "Next page" });
+  /** Options render in a portal outside the dialog, hence the page-level lookup. Exact,
+   * because a substring match would make "Teaching" also hit "Non-teaching". */
+  async chooseOption(label: string, option: string | RegExp): Promise<void> {
+    await this.select(label).click();
+    await this.page.getByRole("option", { name: option, exact: true }).click();
   }
 
-  get previousPage(): Locator {
-    return this.page.getByRole("button", { name: "Previous page" });
+  get addSubmit(): Locator {
+    return this.formDialog.getByRole("button", { name: "Add member" });
   }
 
-  // ---- Create/edit form ----
-
-  // getByRole, not getByLabel — see LoginPage's identical comment: FormField renders
-  // the required marker as an aria-hidden sibling of the label text, which breaks
-  // getByLabel's text-based match but not getByRole's accessible-name computation.
-  // Confirmed live: getByLabel("First name") times out against the real page even
-  // though the input's own computed accessible name is exactly "First name".
-  get firstName(): Locator {
-    return this.page.getByRole("textbox", { name: "First name", exact: true });
-  }
-
-  get lastName(): Locator {
-    return this.page.getByRole("textbox", { name: "Last name", exact: true });
-  }
-
-  get phone(): Locator {
-    return this.page.getByRole("textbox", { name: "Phone", exact: true });
-  }
-
-  get joiningDate(): Locator {
-    return this.page.getByRole("textbox", { name: "Joining date", exact: true });
-  }
-
-  /** Select triggers render as `combobox` with the field label as their accessible name. */
-  select(fieldLabel: string): Locator {
-    return this.page.getByRole("combobox", { name: fieldLabel });
-  }
-
-  async chooseOption(fieldLabel: string, optionName: string | RegExp): Promise<void> {
-    await this.select(fieldLabel).click();
-    await this.page.getByRole("option", { name: optionName }).click();
-  }
-
-  get submit(): Locator {
-    return this.page.getByRole("button", { name: "New staff member" });
+  get saveChanges(): Locator {
+    return this.formDialog.getByRole("button", { name: "Save changes" });
   }
 
   async fillRequiredFields(values: {
     firstName: string;
     lastName: string;
-    phone: string;
-    joiningDate: string;
+    staffType: string | RegExp;
     campus: string | RegExp;
+    joiningDate: string;
+    phone: string;
   }): Promise<void> {
-    await this.firstName.fill(values.firstName);
-    await this.lastName.fill(values.lastName);
-    await this.phone.fill(values.phone);
-    await this.joiningDate.fill(values.joiningDate);
+    await this.field("First name").fill(values.firstName);
+    await this.field("Last name").fill(values.lastName);
+    await this.chooseOption("Staff type", values.staffType);
     await this.chooseOption("Campus", values.campus);
+    await this.field("Joining date").fill(values.joiningDate);
+    await this.field("Phone").fill(values.phone);
+  }
+
+  // ---- Exit dialog ----
+
+  get exitDialog(): Locator {
+    return this.page.getByRole("alertdialog");
+  }
+
+  exitField(label: "Exit date" | "Exit reason"): Locator {
+    return this.exitDialog.getByRole("textbox", { name: label, exact: true });
+  }
+
+  get confirmExit(): Locator {
+    return this.exitDialog.getByRole("button", { name: /^Exit staff members?$/ });
   }
 }

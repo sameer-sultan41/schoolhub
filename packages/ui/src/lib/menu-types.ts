@@ -15,6 +15,8 @@ export interface MenuItem {
   expandTitle?: string;
   badge?: string;
   separator?: boolean;
+  /** A permission-gated module key (e.g. "staff") — an app filters on this; this package never does. */
+  module?: string;
 }
 
 export type MenuConfig = MenuItem[];

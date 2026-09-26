@@ -1,0 +1,58 @@
+"use client";
+
+import * as React from "react";
+
+export function useCopyToClipboard({
+  timeout = 2000,
+  onCopy,
+}: {
+  timeout?: number;
+  onCopy?: () => void;
+} = {}) {
+  const [isCopied, setIsCopied] = React.useState(false);
+  const resetTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  React.useEffect(() => {
+    return () => {
+      clearTimeout(resetTimeoutRef.current);
+    };
+  }, []);
+
+  // Returns a `Promise<boolean>` (resolves `true` on a genuine write, `false`
+  // otherwise) so a caller can show a success/failure toast honestly, instead of
+  // firing the write-text call without ever learning whether it worked.
+  const copyToClipboard = (value: string): Promise<boolean> => {
+    // `navigator.clipboard` itself is `undefined` outside a secure context (an http
+    // LAN IP, a non-TLS staging host), even though the DOM lib types it as always
+    // present — widening it here keeps the guard honest instead of reading
+    // `.writeText` off `undefined`, which would otherwise throw synchronously.
+    const clipboard =
+      typeof window === "undefined" ? undefined : (navigator.clipboard as Clipboard | undefined);
+    if (!clipboard) return Promise.resolve(false);
+
+    if (!value) return Promise.resolve(false);
+
+    return clipboard.writeText(value).then(
+      () => {
+        setIsCopied(true);
+
+        if (onCopy) {
+          onCopy();
+        }
+
+        clearTimeout(resetTimeoutRef.current);
+        resetTimeoutRef.current = setTimeout(() => {
+          setIsCopied(false);
+        }, timeout);
+
+        return true;
+      },
+      (error: unknown) => {
+        console.error(error);
+        return false;
+      },
+    );
+  };
+
+  return { isCopied, copyToClipboard };
+}

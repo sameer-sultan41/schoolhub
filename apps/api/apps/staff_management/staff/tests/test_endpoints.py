@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import datetime
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
 from apps.school_organization.tests.factories import (
@@ -22,6 +24,8 @@ from apps.staff_management.tests.factories import (
     DesignationFactory,
     StaffFactory,
 )
+from core.files.models import FileStatus
+from core.files.tests.factories import FileFactory
 from core.tenancy.context import tenant_context
 
 
@@ -341,3 +345,97 @@ class OwnScopeTests(StaffManagementAPITestCase):
 
         ids = {row["id"] for row in response.json()["data"]}
         self.assertEqual(ids, {str(own_staff.pk)})
+
+
+class StaffPhotoUrlTests(StaffManagementAPITestCase):
+    def _staff_with_photo(self, **file_overrides):
+        with tenant_context(self.tenant.id):
+            photo = FileFactory(
+                tenant=self.tenant,
+                **{"purpose": "staff.photo", "mime_type": "image/png", **file_overrides},
+            )
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, photo_file=photo)
+        return staff, photo
+
+    def test_list_and_retrieve_carry_a_link_for_a_ready_photo(self) -> None:
+        self.allow("staff.staff.view")
+        staff, photo = self._staff_with_photo()
+
+        listed = self.client.get("/api/v1/staff").json()["data"][0]
+        retrieved = self.client.get(f"/api/v1/staff/{staff.pk}").json()["data"]
+
+        for payload in (listed, retrieved):
+            self.assertEqual(payload["photo_file_id"], str(photo.pk))
+            self.assertIn(photo.storage_key, payload["photo_url"])
+
+    def test_no_photo_or_an_unconfirmed_upload_is_null(self) -> None:
+        self.allow("staff.staff.view")
+        with tenant_context(self.tenant.id):
+            StaffFactory(tenant=self.tenant, campus=self.campus)
+        self._staff_with_photo(status=FileStatus.PENDING)
+
+        rows = self.client.get("/api/v1/staff").json()["data"]
+
+        self.assertEqual([row["photo_url"] for row in rows], [None, None])
+
+    def test_photo_url_is_read_only(self) -> None:
+        self.allow("staff.staff.view", "staff.staff.update")
+        staff, photo = self._staff_with_photo()
+
+        response = self.client.patch(
+            f"/api/v1/staff/{staff.pk}",
+            {"photo_url": "https://attacker.invalid/x.png"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertIn(photo.storage_key, response.json()["data"]["photo_url"])
+
+    def test_patch_rejects_a_file_that_is_not_a_staff_photo(self) -> None:
+        self.allow("staff.staff.view", "staff.staff.update")
+        staff, photo = self._staff_with_photo()
+        with tenant_context(self.tenant.id):
+            document = FileFactory(
+                tenant=self.tenant, purpose="staff.document", mime_type="image/png"
+            )
+
+        response = self.client.patch(
+            f"/api/v1/staff/{staff.pk}", {"photo_file_id": str(document.pk)}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertEqual(staff.photo_file_id, photo.pk)
+
+    def test_patch_still_accepts_the_current_photo_unchanged(self) -> None:
+        # The dashboard re-sends photo_file_id on every edit; a record whose photo predates
+        # the purpose check must stay editable.
+        self.allow("staff.staff.view", "staff.staff.update")
+        staff, legacy = self._staff_with_photo(purpose="staff.document")
+
+        response = self.client.patch(
+            f"/api/v1/staff/{staff.pk}",
+            {"photo_file_id": str(legacy.pk), "first_name": "Renamed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["first_name"], "Renamed")
+
+    def test_listing_photos_costs_no_query_per_row(self) -> None:
+        self.allow("staff.staff.view")
+        self._staff_with_photo()
+        # Warm-up: the first request fills per-process caches (feature flags,
+        # permissions), which would otherwise make the second measurement look cheaper.
+        self.client.get("/api/v1/staff")
+        with CaptureQueriesContext(connection) as one_row:
+            self.client.get("/api/v1/staff")
+
+        for _ in range(4):
+            self._staff_with_photo()
+        with CaptureQueriesContext(connection) as five_rows:
+            response = self.client.get("/api/v1/staff")
+
+        self.assertEqual(len(response.json()["data"]), 5)
+        self.assertEqual(len(five_rows), len(one_row))

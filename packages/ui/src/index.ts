@@ -45,6 +45,18 @@ export {
 } from "./components/alert";
 
 export {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "./components/alert-dialog";
+
+export {
   Avatar,
   AvatarFallback,
   AvatarImage,

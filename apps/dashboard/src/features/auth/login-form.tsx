@@ -58,6 +58,13 @@ export function LoginForm() {
       // Fire-and-forget: the redirect below does not need the cache to have settled first.
       void getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
       const next = searchParams.get("next");
+      // The auth layout's own logo links to /dashboard (unconditionally, next= or not),
+      // so Next's Router Cache may already hold that route resolving to the pre-login
+      // redirect back to /login — prefetched the instant this page mounted, while still
+      // signed out. refresh() drops the Router Cache first, so the replace() below is
+      // forced to re-check the proxy for real instead of serving that stale cached
+      // redirect straight from the client with no new request at all.
+      router.refresh();
       router.replace(next?.startsWith("/") ? next : "/dashboard");
     },
     onError: (error: unknown) => {

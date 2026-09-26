@@ -1,0 +1,33 @@
+import {
+  createStaff,
+  exitStaff,
+  fetchAcademicSessions,
+  fetchCampuses,
+  fetchDashboardOverview,
+  fetchDepartments,
+  fetchDesignations,
+  fetchMyTimetable,
+  fetchStaffById,
+  fetchStaffDirectory,
+  fetchStaffPage,
+  fetchStaffTypeCount,
+  fetchTeacherLoadSummary,
+  updateStaff,
+} from "./dashboard-service";
+
+export const DashboardService = {
+  fetchDashboardOverview,
+  fetchAcademicSessions,
+  fetchTeacherLoadSummary,
+  fetchMyTimetable,
+  fetchStaffDirectory,
+  fetchStaffPage,
+  fetchStaffTypeCount,
+  fetchStaffById,
+  fetchCampuses,
+  fetchDepartments,
+  fetchDesignations,
+  createStaff,
+  updateStaff,
+  exitStaff,
+};

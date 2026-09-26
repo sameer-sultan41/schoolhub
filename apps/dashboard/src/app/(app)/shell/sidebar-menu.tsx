@@ -3,6 +3,7 @@
 import { useCallback, type JSX } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   AccordionMenu,
@@ -20,11 +21,23 @@ import {
 } from "@schoolhub/ui";
 
 import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
+import { canAccessModule } from "@/lib/permissions";
+import { Services } from "@/services";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/sidebar-menu.tsx —
 // real nested Metronic nav, built on this repo's own AccordionMenu port.
 export function SidebarMenu() {
   const pathname = usePathname();
+  // Same query as UserDropdownMenu/EntryCallout (one cache entry, one request). Only a
+  // handful of MENU_SIDEBAR entries carry a `module` key at all — every vendor-demo item
+  // without one renders exactly as before, permission check or not.
+  const { data: user } = useQuery({
+    queryKey: ["dashboard", "current-user"],
+    queryFn: () => Services.auth.fetchCurrentUser(),
+  });
+  const visibleMenu = MENU_SIDEBAR.filter(
+    (item) => !item.module || canAccessModule(user, item.module),
+  );
 
   const matchPath = useCallback(
     (path: string): boolean => path === pathname || (path.length > 1 && pathname.startsWith(path)),
@@ -72,7 +85,15 @@ export function SidebarMenu() {
     }
     return (
       <AccordionMenuItem key={index} value={item.path || ""} className="text-sm font-medium">
-        <Link href={item.path || "#"} className="flex grow items-center justify-between gap-2">
+        {/* Deliberately dropped the vendor's own `justify-between` here (verified
+            verbatim in the real Metronic source) — with only an icon and a title as
+            children, `justify-between` pushes the title to the row's far end instead of
+            immediately after the icon. The vendor's own menu config never actually hits
+            this branch (every root item with an `icon` also has `children`, which takes
+            the `AccordionMenuSubTrigger` path below instead), so this was latent,
+            unexercised markup — "Staff" (a real root-level icon item with no children)
+            is the first item anywhere to ever render through it. */}
+        <Link href={item.path || "#"} className="flex grow items-center gap-2">
           {item.icon && <item.icon data-slot="accordion-menu-icon" />}
           <span data-slot="accordion-menu-title">{item.title}</span>
         </Link>
@@ -167,7 +188,7 @@ export function SidebarMenu() {
         collapsible
         classNames={classNames}
       >
-        {buildMenu(MENU_SIDEBAR)}
+        {buildMenu(visibleMenu)}
       </AccordionMenu>
     </div>
   );

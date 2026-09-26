@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "@schoolhub/ui/toaster";
 import { AppProviders } from "@/components/providers";
 import { directionFor } from "@/lib/env";
 import { preferenceDataAttributes } from "@/lib/preferences/preferences-config";
@@ -33,10 +34,17 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     >
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
+          {/* Toaster reads `useTheme()` (packages/ui/src/components/sonner.tsx) to pass
+              sonner its light/dark styling — it must be a DESCENDANT of ThemeProvider for
+              that to resolve anything. As a sibling, `useTheme()` sees no provider, falls
+              back to sonner's own "system" default, and sonner then reads the OS's colour
+              scheme directly — independent of this app's actual (light-by-default) theme,
+              which is how a toast could render dark chrome under an all-light UI. */}
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
             <PreferencesProvider initialValues={preferences}>
               <AppProviders>{children}</AppProviders>
             </PreferencesProvider>
+            <Toaster />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

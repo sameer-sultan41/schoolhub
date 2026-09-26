@@ -40,9 +40,11 @@ test.describe("sidebar direction", () => {
     // Not dashboardPage.nav: that locator hardcodes the English accessible name, and the
     // nav's name is itself translated under ur (confirmed against the real accessibility
     // tree — the correct Urdu translation of "Primary navigation") — exactly what a real
-    // RTL user gets, and exactly why this asserts by role alone rather than switching to
-    // a second, ur-specific locator.
-    const nav = page.getByRole("navigation");
+    // RTL user gets. Not a bare getByRole("navigation") either: the footer and the header
+    // breadcrumb are both separately-named nav landmarks on this same page, so a
+    // role-only query strict-mode-violates regardless of locale. dashboardPage.desktopSidebar
+    // is the one locale-independent way to reach this specific landmark.
+    const nav = dashboardPage.desktopSidebar;
     await expect(nav).toBeVisible();
     const box = await nav.boundingBox();
     const viewport = page.viewportSize();
@@ -73,7 +75,17 @@ test.describe("keyboard shortcut", () => {
     // at x=0 and narrows it to `--sidebar-width-icon` instead — so the old assertion
     // failed against a sidebar that was collapsing perfectly well. Width is what changes
     // under either mode.
+    //
+    // The pointer matters here: demo1.css gives a collapsed rail a deliberate hover-to-peek
+    // affordance (`.sidebar-collapse .sidebar:hover { width: var(--sidebar-default-width) }`),
+    // and Playwright's virtual pointer defaults to (0,0) — geometrically inside the sidebar,
+    // which sits at the viewport's top-left corner — so without an explicit move away first,
+    // every check below was accidentally "hovering" the collapsed rail back to full width the
+    // entire time (confirmed via a live computed-style dump: --sidebar-width correctly read
+    // 80px on the element itself, yet its rendered width stayed exactly 280px throughout).
+    const awayFromSidebar = { x: 700, y: 400 };
     await page.keyboard.press("Control+b");
+    await page.mouse.move(awayFromSidebar.x, awayFromSidebar.y);
     await expect.poll(async () => (await nav.boundingBox())?.width).toBeLessThan(openWidth / 2);
 
     // The regression this test exists for: SidebarProvider's own toggleSidebar/setOpen
@@ -84,6 +96,7 @@ test.describe("keyboard shortcut", () => {
     // it already held and React silently dropped it: the sidebar collapsed once and
     // then never came back.
     await page.keyboard.press("Control+b");
+    await page.mouse.move(awayFromSidebar.x, awayFromSidebar.y);
     await expect.poll(async () => (await nav.boundingBox())?.width).toBeGreaterThan(openWidth - 10);
   });
 });
@@ -97,22 +110,31 @@ test.describe("mobile navigation drawer", () => {
     await page.setViewportSize({ width: 500, height: 800 });
     await dashboardPage.goto();
 
-    // Below the breakpoint, Sidebar's own isMobile check swaps to the Sheet-based render
-    // entirely — the desktop nav isn't in the tree at all, only the trigger is.
-    await expect(page.getByRole("navigation")).toHaveCount(0);
+    // Below the breakpoint, Shell's own isMobile check drops <Sidebar /> from the tree
+    // entirely (apps/dashboard/.../shell/shell.tsx: `{!isMobile && <Sidebar />}`) — only
+    // the trigger remains. Scoped to the desktop rail specifically, not a bare
+    // getByRole("navigation"): the footer and header breadcrumb are separately-named nav
+    // landmarks that stay mounted on mobile too, so a role-only count is never 0 here.
+    await expect(dashboardPage.desktopSidebar).toHaveCount(0);
 
     await page.getByRole("button", { name: "Primary navigation" }).click();
 
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
     await expect(nav).toBeVisible();
-    const studentsLink = nav.getByRole("link", { name: "Dashboard" });
-    await expect(studentsLink).toBeVisible();
+    // A link to a genuinely different route, not "Light Sidebar" (the current entry for
+    // /dashboard, menu-config.ts's original Metronic demo naming): the close-on-navigate
+    // behaviour below is keyed on the pathname actually changing (header.tsx's
+    // `pathname !== prevPathname` effect), so clicking a same-page link would never
+    // exercise it — that isn't a bug, it's correctly a no-op.
+    const staffLink = nav.getByRole("link", { name: "Staff" });
+    await expect(staffLink).toBeVisible();
 
-    await studentsLink.click();
+    await staffLink.click();
 
-    await expect(page).toHaveURL(/\/dashboard/);
-    // The drawer must not survive a client-side route change — SidebarProvider's mobile
-    // state has no navigation-aware close of its own; this only holds if the app wires it.
+    await expect(page).toHaveURL(/\/staff/);
+    // The drawer must not survive a client-side route change — the header's own
+    // isSidebarSheetOpen state closes on any pathname change; this only holds if that
+    // effect actually fires for a real navigation.
     await expect(nav).toHaveCount(0);
   });
 });

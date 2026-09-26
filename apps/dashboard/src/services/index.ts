@@ -1,4 +1,6 @@
 import { AuthService } from "./modules/auth";
+import { DashboardService } from "./modules/dashboard";
+import { FilesService } from "./modules/files";
 import { TenantService } from "./modules/tenant";
 
 /**
@@ -9,9 +11,12 @@ import { TenantService } from "./modules/tenant";
  * convention).
  *
  * Add a domain here the moment its module lands, following the same
- * `services/modules/<domain>/{<domain>-service.ts,index.ts}` shape as `auth` and `tenant`.
+ * `services/modules/<domain>/{<domain>-service.ts,index.ts}` shape as `auth`, `tenant`,
+ * `dashboard` and `files`.
  */
 export const Services = {
   auth: AuthService,
   tenant: TenantService,
+  dashboard: DashboardService,
+  files: FilesService,
 } as const;

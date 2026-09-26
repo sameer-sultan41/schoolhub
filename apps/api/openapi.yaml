@@ -20379,6 +20379,11 @@ components:
           type: string
           format: uuid
           nullable: true
+        photo_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
         staff_type:
           $ref: '#/components/schemas/StaffTypeEnum'
         campus_id:
@@ -22124,6 +22129,11 @@ components:
           type: string
           format: uuid
           nullable: true
+        photo_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
         staff_type:
           $ref: '#/components/schemas/StaffTypeEnum'
         campus_id:
@@ -22214,6 +22224,7 @@ components:
       - joining_date
       - last_name
       - phone
+      - photo_url
       - staff_type
       - updated_at
     StaffAttendance:

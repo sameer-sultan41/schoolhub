@@ -36,12 +36,13 @@ function AvatarImage({ className, ...props }: React.ComponentProps<typeof Avatar
   // Metronic's own file puts `className` on the wrapper <div>, not the <img> itself —
   // any caller override (a filter, a transform, a border) lands on a div that has no
   // visual effect from most of those properties, silently doing nothing to the image.
-  // `className` belongs on the element it's named after.
+  // `className` belongs on the element it's named after. `object-cover` because uploaded
+  // photos are rarely square: without it a portrait photo is squashed into the circle.
   return (
     <div className="relative overflow-hidden rounded-full">
       <AvatarPrimitive.Image
         data-slot="avatar-image"
-        className={cn("aspect-square h-full w-full", className)}
+        className={cn("aspect-square h-full w-full object-cover", className)}
         {...props}
       />
     </div>

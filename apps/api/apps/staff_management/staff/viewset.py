@@ -105,13 +105,13 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        # select_related keeps the list off a campus/department/designation fetch
+        # select_related keeps the list off a campus/department/designation/photo fetch
         # per row; the annotations are what `?ordering=<...>_name` sorts on, and
         # they reuse those same joins rather than adding their own.
         return (
             super()
             .get_queryset()
-            .select_related("campus", "department", "designation")
+            .select_related("campus", "department", "designation", "photo_file")
             .annotate(
                 campus_name=F("campus__name"),
                 department_name=F("department__name"),

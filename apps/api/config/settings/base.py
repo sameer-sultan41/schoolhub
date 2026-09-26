@@ -27,10 +27,16 @@ PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
 # prod. Empty S3_ENDPOINT_URL selects NullPresigner (core.files.storage.get_presigner),
 # which is what test/CI runs on since neither talks to a real object store.
 S3_ENDPOINT_URL = env("S3_ENDPOINT_URL", default="")
+# Host the *browser* reaches storage on, for presigned URLs. In compose the API talks to
+# `minio:9000`, a name only the Docker network resolves. Empty means same as above.
+S3_PUBLIC_ENDPOINT_URL = env("S3_PUBLIC_ENDPOINT_URL", default="")
 S3_BUCKET_NAME = env("S3_BUCKET_NAME", default="schoolhub-dev")
 S3_REGION_NAME = env("S3_REGION_NAME", default="us-east-1")
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
+# How long an inline display link (e.g. a staff `photo_url`) stays valid. It only reaches
+# someone already allowed to see the record, and must outlive the dashboard's query cache.
+FILE_DISPLAY_URL_TTL_SECONDS = env.int("FILE_DISPLAY_URL_TTL_SECONDS", default=3600)
 
 # The per-purpose type/size whitelist (student-management.md §11: "type/size
 # whitelist, AV scan") lives in core/files/purposes.py, not here — each module

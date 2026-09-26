@@ -1,15 +1,15 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
-import Link from "next/link";
+import { type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { ChevronRight } from "lucide-react";
 
-import { cn, useMenu, type MenuItem } from "@schoolhub/ui";
+import { useMenu } from "@schoolhub/ui";
 
 import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
 
-// Ported verbatim from packages/ui's layouts/demo1/components/toolbar.tsx.
+// Ported verbatim from packages/ui's layouts/demo1/components/toolbar.tsx. Its own
+// `ToolbarBreadcrumbs` was dropped — the header now renders the app's one breadcrumb
+// trail (see header.tsx and breadcrumb.tsx), so a per-page copy here would repeat it.
 export interface ToolbarHeadingProps {
   title?: string | ReactNode;
   description?: string | ReactNode;
@@ -21,46 +21,6 @@ export function Toolbar({ children }: { children?: ReactNode }) {
 
 export function ToolbarActions({ children }: { children?: ReactNode }) {
   return <div className="flex items-center gap-2.5">{children}</div>;
-}
-
-export function ToolbarBreadcrumbs() {
-  const pathname = usePathname();
-  const { getBreadcrumb, isActive } = useMenu(pathname);
-  const items: MenuItem[] = getBreadcrumb(MENU_SIDEBAR);
-
-  if (items.length === 0) return null;
-
-  return (
-    <div className="[.header_&]:below-lg:hidden mb-2.5 flex items-center gap-1.25 text-xs font-medium lg:mb-0 lg:text-sm">
-      <div className="breadcrumb flex items-center gap-1">
-        {items.map((item, index) => {
-          const isLast = index === items.length - 1;
-          const active = item.path ? isActive(item.path) : false;
-
-          return (
-            <Fragment key={index}>
-              {item.path ? (
-                <Link
-                  href={item.path}
-                  className={cn(
-                    "flex items-center gap-1",
-                    active ? "text-mono" : "text-muted-foreground hover:text-primary",
-                  )}
-                >
-                  {item.title}
-                </Link>
-              ) : (
-                <span className={cn(isLast ? "text-mono" : "text-muted-foreground")}>
-                  {item.title}
-                </span>
-              )}
-              {!isLast && <ChevronRight className="muted-foreground size-3.5" />}
-            </Fragment>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 export function ToolbarHeading({ title = "", description }: ToolbarHeadingProps) {

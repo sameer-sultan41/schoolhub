@@ -309,6 +309,14 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
   client upload to wait for. **AV scanning is not implemented** —
   `FileStatus.QUARANTINED` is unreachable; a documented gap against
   `api-architecture.md` §11, not an oversight.
+- **Inline display links for files** (PR #76): `core.files.serializers.SignedFileURLField`
+  turns any `File` foreign key into a read-only signed GET link (`get_display_url()`), valid
+  `FILE_DISPLAY_URL_TTL_SECONDS` (default 1 h) and `null` unless the file is `ready` and not
+  soft-deleted. `StaffSerializer.photo_url` uses it, and the dashboard's staff directory and
+  edit dialog render it over an initials fallback. Students and guardians still expose only
+  `photo_file_id` — one `SignedFileURLField(source="photo_file")` line each, plus
+  `select_related("photo_file")`, when their screens need photos. The signer is now one shared
+  SigV4 instance per process (`get_presigner()`), signing for `S3_PUBLIC_ENDPOINT_URL`.
 - `medical_notes` field-level restriction and the `filter_assigned_to_user`
   fail-closed default (no `staff` table to join against yet) both ship in
   PR 1, ahead of the features that will exercise them. The student<->guardian

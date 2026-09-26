@@ -222,6 +222,7 @@ schummar
 sess
 Sethi
 Shoulds
+Siddiqui
 signups
 simplejwt
 smallint

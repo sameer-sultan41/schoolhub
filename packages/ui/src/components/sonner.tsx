@@ -12,7 +12,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      className="group toaster [&_[data-type=error]_[data-title]]:text-destructive [&_[data-type=error]>[data-icon]]:text-destructive [&_[data-type=info]_[data-title]]:text-info [&_[data-type=success]_[data-title]]:text-success [&_[data-type=success]>[data-icon]]:text-success"
+      // `!` on every one of these: sonner injects its own stylesheet at runtime, after
+      // Tailwind's, and its `[data-title]{color:inherit}` (built in, unconditional —
+      // `--success-text`/etc. only apply under `richColors`, which this app doesn't set)
+      // ties these on specificity — so without `!important` the tiebreak goes to
+      // whichever loaded last, not to this class.
+      className="group toaster [&_[data-type=error]_[data-title]]:text-destructive! [&_[data-type=error]>[data-icon]]:text-destructive! [&_[data-type=info]_[data-title]]:text-info! [&_[data-type=success]_[data-title]]:text-success! [&_[data-type=success]>[data-icon]]:text-success!"
       toastOptions={{
         classNames: {
           toast:

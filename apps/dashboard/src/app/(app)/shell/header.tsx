@@ -96,7 +96,9 @@ export function Header() {
           </div>
         </div>
 
-        <Breadcrumb />
+        <div className="flex min-w-0 flex-1 items-center px-1 lg:px-3">
+          <Breadcrumb />
+        </div>
 
         <div className="flex items-center gap-3">
           {!mobileMode && (
@@ -150,15 +152,7 @@ export function Header() {
             }
           />
           <LayoutControls />
-          <UserDropdownMenu
-            trigger={
-              <img
-                className="size-9 shrink-0 cursor-pointer rounded-full border-2 border-green-500"
-                src={toAbsoluteUrl("/media/avatars/300-2.png")}
-                alt="User Avatar"
-              />
-            }
-          />
+          <UserDropdownMenu />
         </div>
       </Container>
     </header>

@@ -17,8 +17,10 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.school_organization.models import Campus, Department
+from apps.staff_management import uploads
 from apps.staff_management.models import Designation, EmploymentStatus, Staff
 from apps.staff_management.serializers import READ_ONLY_FIELDS, _fk
+from apps.staff_management.services import assert_file_usable
 from apps.staff_management.staff.services.create import (
     assert_department_active,
     assert_designation_active,
@@ -28,6 +30,7 @@ from apps.staff_management.staff.services.create import (
     resolve_tenant_user_id,
 )
 from core.files.models import File
+from core.files.serializers import SignedFileURLField
 
 
 class StaffSerializer(serializers.ModelSerializer):
@@ -36,6 +39,9 @@ class StaffSerializer(serializers.ModelSerializer):
     designation_id = _fk(Designation, source="designation", required=False, allow_null=True)
     reports_to_staff_id = _fk(Staff, source="reports_to", required=False, allow_null=True)
     photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
+    # The photo above as a display link. get_queryset's select_related("photo_file") keeps it
+    # from costing a query per row.
+    photo_url = SignedFileURLField(source="photo_file")
     # Explicitly optional, not read-only: the service always generates it
     # server-side on create (viewset.py's perform_create never reads it out of
     # validated_data) and validate_employee_number rejects a changed value on
@@ -64,6 +70,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "gender",
             "date_of_birth",
             "photo_file_id",
+            "photo_url",
             "staff_type",
             "campus_id",
             "campus_name",
@@ -89,6 +96,14 @@ class StaffSerializer(serializers.ModelSerializer):
         # employment_status/exit_date/exit_reason move only through the :exit
         # colon-action (§4/§7 exit workflow), never a plain PATCH.
         read_only_fields = (*READ_ONLY_FIELDS, "employment_status", "exit_date", "exit_reason")
+
+    def validate_photo_file_id(self, value: File | None) -> File | None:
+        # `_fk()` only proves the file exists in this tenant. Without this, a PATCH could
+        # point the photo at any ready file (a CNIC scan) and photo_url would sign it for
+        # every viewer. The current photo passes unchecked: edits re-send it unchanged.
+        if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
+            assert_file_usable(file=value, purpose=uploads.STAFF_PHOTO.key)
+        return value
 
     def validate_employee_number(self, value: str) -> str:
         if self.instance is not None:
