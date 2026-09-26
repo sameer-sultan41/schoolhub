@@ -220,7 +220,9 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
               )}
 
               {isError && (
-                <p className="text-sm text-destructive">Couldn't load full details. Try again.</p>
+                <p className="text-sm text-destructive">
+                  {"Couldn't load full details. Try again."}
+                </p>
               )}
 
               <span className="text-xs text-muted-foreground">

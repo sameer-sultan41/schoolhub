@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GraduationCap, IdCard, UserPlus, Users } from "lucide-react";
+import { GraduationCap, UserPlus, Users, type IdCard } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { m } from "motion/react";
 
