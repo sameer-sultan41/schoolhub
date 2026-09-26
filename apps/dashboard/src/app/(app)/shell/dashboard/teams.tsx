@@ -24,6 +24,7 @@ import {
   CardTable,
   CardTitle,
   CardToolbar,
+  DATA_GRID_CARD_CLASSNAME,
   DataGrid,
   DataGridColumnHeader,
   DataGridPagination,
@@ -187,12 +188,9 @@ export function Teams() {
         <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
     >
-      {/* rounded-none/border-0/shadow-none: DataGrid's own wrapper already draws the one
-          outer border + rounded corner + clip for this whole grid — see
-          staff-directory-table.tsx's own comment on this same pattern for why nesting
-          Card's full bordered/rounded box directly inside it drew a second, mismatched
-          border at every corner. */}
-      <Card className="rounded-none border-0 shadow-none">
+      {/* See DATA_GRID_CARD_CLASSNAME's own doc comment (data-grid.tsx) for why a Card
+          nested directly inside a DataGrid needs this. */}
+      <Card className={DATA_GRID_CARD_CLASSNAME}>
         <CardHeader className="py-3.5">
           <CardTitle>Staff</CardTitle>
           <CardToolbar className="flex items-center gap-3">

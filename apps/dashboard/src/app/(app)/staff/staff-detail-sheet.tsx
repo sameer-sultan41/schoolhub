@@ -178,7 +178,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                 <FieldRow
                   icon={Calendar}
                   label="Joining date"
-                  value={detail && formatDate(detail.joining_date)}
+                  value={detail?.joining_date ? formatDate(detail.joining_date) : undefined}
                   loading={isPending}
                 />
                 <FieldRow
@@ -229,29 +229,35 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                 Last updated {formatLastUpdated(row.updatedAt)}
               </span>
             </SheetBody>
+
+            {/* Gated on `row` along with the rest above (not rendered unconditionally
+                after this block, the way it was before) — Radix keeps the panel mounted
+                and sliding out for the whole close-transition duration after `row` goes
+                null, and an ungated footer would stay visible and clickable floating
+                over that now-blank body for the length of the animation. */}
+            <SheetFooter className="border-t border-border px-6 py-4">
+              {/* outline-primary (border-primary/40 bg-primary/5) instead of plain
+                  outline — a filled tint reads as a real action next to the solid
+                  destructive "Exit" button, not just a flat bordered box. */}
+              <Button
+                variant="outline-primary"
+                onClick={() => {
+                  onEdit(row.id);
+                }}
+              >
+                <Pencil /> Edit
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  onDelete(row.id, row.name);
+                }}
+              >
+                <LogOut /> Exit
+              </Button>
+            </SheetFooter>
           </>
         )}
-        <SheetFooter className="border-t border-border px-6 py-4">
-          {/* outline-primary (border-primary/40 bg-primary/5) instead of plain outline —
-              a filled tint reads as a real action next to the solid destructive "Exit"
-              button, not just a flat bordered box. */}
-          <Button
-            variant="outline-primary"
-            onClick={() => {
-              if (row) onEdit(row.id);
-            }}
-          >
-            <Pencil /> Edit
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              if (row) onDelete(row.id, row.name);
-            }}
-          >
-            <LogOut /> Exit
-          </Button>
-        </SheetFooter>
       </SheetContent>
     </Sheet>
   );

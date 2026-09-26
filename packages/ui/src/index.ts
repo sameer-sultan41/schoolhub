@@ -122,7 +122,7 @@ export type {
   DataTableSort,
 } from "./components/data-table";
 
-export { DataGrid, useDataGrid } from "./components/data-grid";
+export { DataGrid, DATA_GRID_CARD_CLASSNAME, useDataGrid } from "./components/data-grid";
 export type {
   DataGridContextValue,
   DataGridLabels,

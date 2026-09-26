@@ -31,10 +31,12 @@ export function ToolbarHeading({ title = "", description, inline = false }: Tool
   const pathname = usePathname();
   const { getCurrentItem } = useMenu(pathname);
   const item = getCurrentItem(MENU_SIDEBAR);
-  // Only for the menu-derived title (the same icon menu-config.ts gives this route's
-  // own sidebar entry) — an explicit `title` override has no matching menu item to
-  // borrow an icon from, so it stays icon-less rather than showing a stale/wrong one.
-  const Icon = !title ? item?.icon : undefined;
+  // Gated on `inline` (not just "no explicit title") so this stays scoped to the pages
+  // that opted into the enhanced heading treatment — every OTHER route already renders
+  // `<ToolbarHeading />` with no explicit title (e.g. `/students`'s bare placeholder
+  // page), and un-gated this would silently grow an icon there too, a route this PR
+  // never touches, mentions, or tests.
+  const Icon = inline && !title ? item?.icon : undefined;
 
   return (
     <div

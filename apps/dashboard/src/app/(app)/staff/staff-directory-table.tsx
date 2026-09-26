@@ -31,6 +31,7 @@ import {
   CardTitle,
   CardToolbar,
   Checkbox,
+  DATA_GRID_CARD_CLASSNAME,
   DataGrid,
   DataGridColumnHeader,
   DataGridColumnVisibility,
@@ -155,8 +156,9 @@ export function formatLastUpdated(value: string): string {
 /** Direct Edit/Delete icon buttons — replaced the earlier single ⋮ dropdown trigger
  * (Edit/Copy ID/Delete menu items) with the two actions visible at a glance, since two
  * icons read faster than one trigger that has to be opened first to see what's inside.
- * `Copy ID` (previously wired via `useCopyToClipboard`) had no third icon to live in and
- * was dropped rather than kept as a menu with only one real reason left to open it. */
+ * `Copy ID` had no third icon to live in and was dropped rather than kept as a menu
+ * with only one real reason left to open it — its own `useCopyToClipboard` hook is
+ * gone too, with this its only remaining caller. */
 function ActionsCell({
   row,
   onEdit,
@@ -525,12 +527,6 @@ export function StaffDirectoryTable() {
         <EmptyState icon={Users} title="No staff found" description="Try a different search." />
       }
     >
-      {/* rounded-none/border-0/shadow-none: DataGrid's own wrapper already draws the one
-          outer border + rounded corner + clip for this whole grid — nesting Card's own
-          full bordered/rounded box directly inside it, with zero gap, drew a second,
-          mismatched-radius border at every corner (Card's fixed rounded-xl vs DataGrid's
-          themeable --sh-radius token never agree). Card still owns the internal
-          layout (header/table/footer spacing), just not the outer frame. */}
       {/* A one-time fade/slide-up on mount only (no `key`, so a filter/sort/page change
           never replays it) — the same "make a real state change legible" idea as the
           isFetching opacity dip below, just for the table's very first appearance. */}
@@ -539,7 +535,9 @@ export function StaffDirectoryTable() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
       >
-        <Card className="rounded-none border-0 shadow-none">
+        {/* See DATA_GRID_CARD_CLASSNAME's own doc comment (data-grid.tsx) for why a Card
+            nested directly inside a DataGrid needs this. */}
+        <Card className={DATA_GRID_CARD_CLASSNAME}>
           <CardHeader>
             <CardHeading>
               <div className="flex items-center gap-2.5">
