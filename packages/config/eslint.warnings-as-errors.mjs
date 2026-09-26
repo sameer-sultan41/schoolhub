@@ -11,7 +11,8 @@
  */
 const raise = (value) => {
   if (value === "warn" || value === 1) return "error";
-  if (Array.isArray(value) && (value[0] === "warn" || value[0] === 1)) return ["error", ...value.slice(1)];
+  if (Array.isArray(value) && (value[0] === "warn" || value[0] === 1))
+    return ["error", ...value.slice(1)];
   return value;
 };
 
@@ -20,7 +21,9 @@ export default function warningsAsErrors(configs) {
     config && typeof config === "object" && config.rules
       ? {
           ...config,
-          rules: Object.fromEntries(Object.entries(config.rules).map(([rule, value]) => [rule, raise(value)])),
+          rules: Object.fromEntries(
+            Object.entries(config.rules).map(([rule, value]) => [rule, raise(value)]),
+          ),
         }
       : config,
   );

@@ -17,7 +17,7 @@ export const PARENT_RELATIVE = {
 export const API_CLIENT = {
   group: ["@schoolhub/api-client", "@schoolhub/api-client/*"],
   message:
-    "UI code calls the backend through `Services` and imports `ApiError` from \"@/services\" — only src/services/** and src/lib/** (the transport layer) import @schoolhub/api-client (ADR-0011).",
+    'UI code calls the backend through `Services` and imports `ApiError` from "@/services" — only src/services/** and src/lib/** (the transport layer) import @schoolhub/api-client (ADR-0011).',
 };
 
 export const INTO_APPS = {
@@ -27,7 +27,8 @@ export const INTO_APPS = {
 
 export const PLAYWRIGHT_DIRECT = {
   group: ["@playwright/test"],
-  message: 'Specs import `test`/`expect` from "@/fixtures", which carries the suite\'s fixtures (e2e/AGENTS.md).',
+  message:
+    'Specs import `test`/`expect` from "@/fixtures", which carries the suite\'s fixtures (e2e/AGENTS.md).',
 };
 
 export function restrictedImports(files, patterns, extra = {}) {
@@ -36,14 +37,17 @@ export function restrictedImports(files, patterns, extra = {}) {
 
 export const PROCESS_ENV = {
   // `process.env` and `process["env"]`.
-  selector: "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env'])",
-  message: "Read configuration through the app's typed env module (src/lib/env.ts, env.client.ts), not process.env (ADR-0014).",
+  selector:
+    "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env'])",
+  message:
+    "Read configuration through the app's typed env module (src/lib/env.ts, env.client.ts), not process.env (ADR-0014).",
 };
 
 export const INLINE_QUERY_KEY = {
   // `queryKey: [...]` and `"queryKey": [...]`.
   selector: "Property:matches([key.name='queryKey'], [key.value='queryKey']) > ArrayExpression",
-  message: "Build query keys with the `queryKeys` factory in src/lib/query-client.ts, not inline arrays (ADR-0014).",
+  message:
+    "Build query keys with the `queryKeys` factory in src/lib/query-client.ts, not inline arrays (ADR-0014).",
 };
 
 // Physical-direction Tailwind classes break the Urdu (RTL) layout; use ms-/me-, ps-/pe-,
@@ -87,4 +91,10 @@ export function maxLines(files, extra = {}) {
   };
 }
 
-export const TEST_FILES = ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "**/jest.setup.ts", "**/test-utils.tsx"];
+export const TEST_FILES = [
+  "**/__tests__/**",
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "**/jest.setup.ts",
+  "**/test-utils.tsx",
+];

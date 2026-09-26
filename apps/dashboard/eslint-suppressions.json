@@ -45,9 +45,6 @@
     "no-restricted-syntax": {
       "count": 1
     },
-    "react-hooks/incompatible-library": {
-      "count": 1
-    },
     "react/jsx-no-literals": {
       "count": 3
     }
@@ -183,9 +180,6 @@
     "no-restricted-syntax": {
       "count": 1
     },
-    "react-hooks/incompatible-library": {
-      "count": 1
-    },
     "react/jsx-no-literals": {
       "count": 13
     }
@@ -196,9 +190,6 @@
     },
     "no-restricted-syntax": {
       "count": 7
-    },
-    "react-hooks/incompatible-library": {
-      "count": 1
     },
     "react/jsx-no-literals": {
       "count": 31

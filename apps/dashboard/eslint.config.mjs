@@ -46,9 +46,13 @@ const eslintConfig = warningsAsErrors(
       files: ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "src/i18n/**"],
       rules: { "no-restricted-imports": "off" },
     },
-    restrictedSyntax(["src/**/*.{ts,tsx}"], [PROCESS_ENV, INLINE_QUERY_KEY, ...PHYSICAL_DIRECTION], {
-      ignores: [...TEST_FILES, "src/lib/env.ts"],
-    }),
+    restrictedSyntax(
+      ["src/**/*.{ts,tsx}"],
+      [PROCESS_ENV, INLINE_QUERY_KEY, ...PHYSICAL_DIRECTION],
+      {
+        ignores: [...TEST_FILES, "src/lib/env.ts"],
+      },
+    ),
     {
       // Every user-facing string goes through next-intl (messages/{en,ur}.json) — ADR-0014.
       files: ["src/**/*.tsx"],
@@ -59,7 +63,27 @@ const eslintConfig = warningsAsErrors(
           {
             noStrings: false,
             ignoreProps: true,
-            allowedStrings: ["·", "•", "—", "–", "-", "/", "|", ":", "(", ")", "%", "+", "…", "×", "*", "#", "@", ",", "."],
+            allowedStrings: [
+              "·",
+              "•",
+              "—",
+              "–",
+              "-",
+              "/",
+              "|",
+              ":",
+              "(",
+              ")",
+              "%",
+              "+",
+              "…",
+              "×",
+              "*",
+              "#",
+              "@",
+              ",",
+              ".",
+            ],
           },
         ],
       },
