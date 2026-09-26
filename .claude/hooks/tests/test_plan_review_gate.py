@@ -171,6 +171,15 @@ class HardeningTests(GateTestCase):
         plan = "**Work tier:** 2\n\n## Independent review\n\nVerdict: RETHINK (round 1)\n\n- **Verdict:** APPROVE (round 2)\n"
         self.assert_allowed(run_gate(payload(plan)))
 
+    def test_bolded_verdict_word_counts(self) -> None:
+        for line in ("Verdict: **APPROVE**", "- **Verdict:** **REVISE** — two findings", "### Verdict: APPROVE"):
+            with self.subTest(line=line):
+                self.assert_allowed(run_gate(payload(f"**Work tier:** 2\n\n## Independent review\n\n{line}\n")))
+
+    def test_bolded_rethink_after_approve_is_denied(self) -> None:
+        plan = "**Work tier:** 2\n\n## Independent review\n\nVerdict: APPROVE\n\n- **Verdict:** **RETHINK**\n"
+        self.assert_denied(run_gate(payload(plan)), "RETHINK")
+
     def test_incidental_verdict_in_prose_does_not_override(self) -> None:
         # Only a line that IS a verdict counts; "verdict: approve" mid-sentence in a later
         # finding must not flip a RETHINK.
@@ -247,11 +256,26 @@ class TranscriptBindingTests(GateTestCase):
         self.assert_allowed(run_gate(payload(REVIEWED, transcript=self.transcript(log))))
 
     def test_review_plan_slash_command_counts(self) -> None:
-        log = jsonl({"type": "user", "message": {"content": "<command-name>/review-plan</command-name>"}})
+        command = (
+            "<command-message>review-plan</command-message>\n<command-name>/review-plan</command-name>\n"
+            "<command-args>docs/superpowers/plans/x.md</command-args>"
+        )
+        log = jsonl({"type": "user", "message": {"content": command}})
         self.assert_allowed(run_gate(payload(REVIEWED, transcript=self.transcript(log))))
 
     def test_quoted_dispatch_in_a_message_does_not_count(self) -> None:
         log = jsonl({"type": "user", "message": {"content": 'paste this: "subagent_type": "plan-reviewer"'}})
+        self.assert_denied(run_gate(payload(REVIEWED, transcript=self.transcript(log))), "transcript")
+
+    def test_command_tag_in_assistant_text_does_not_count(self) -> None:
+        # The planning agent printing the tag (or editing this test file) is not the user typing it.
+        text = {"type": "text", "text": "<command-message>review-plan</command-message>\n<command-name>/review-plan</command-name>"}
+        log = jsonl({"type": "assistant", "message": {"content": [text]}})
+        self.assert_denied(run_gate(payload(REVIEWED, transcript=self.transcript(log))), "transcript")
+
+    def test_dispatch_json_inside_a_tool_result_does_not_count(self) -> None:
+        result = {"type": "tool_result", "content": '{"subagent_type":"plan-reviewer","skill":"review-plan"}'}
+        log = jsonl({"type": "user", "message": {"content": [result]}})
         self.assert_denied(run_gate(payload(REVIEWED, transcript=self.transcript(log))), "transcript")
 
     def test_rethink_is_still_denied_as_rethink(self) -> None:
@@ -266,6 +290,29 @@ class TranscriptBindingTests(GateTestCase):
 
     def test_unreadable_transcript_fails_open(self) -> None:
         self.assert_allowed(run_gate(payload(REVIEWED, transcript="/nonexistent/session.jsonl")))
+
+
+class ReviewerRanTests(unittest.TestCase):
+    """reviewer_ran() itself: main()'s blanket fail-open would hide a regression here."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        sys.path.insert(0, str(REPO / ".claude" / "hooks"))
+        from plan_review_gate import reviewer_ran
+
+        cls.reviewer_ran = staticmethod(reviewer_ran)
+
+    def test_unknown_when_there_is_no_readable_transcript(self) -> None:
+        self.assertIsNone(self.reviewer_ran({"transcript_path": "/nonexistent/session.jsonl"}))
+        self.assertIsNone(self.reviewer_ran({}))
+
+    def test_false_and_true_from_a_real_file(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "session.jsonl"
+            path.write_text("not json\n" + NO_REVIEWER, encoding="utf-8")
+            self.assertIs(self.reviewer_ran({"transcript_path": str(path)}), False)
+            path.write_text(NO_REVIEWER + jsonl(tool_use("Agent", {"subagent_type": "plan-reviewer"})), encoding="utf-8")
+            self.assertIs(self.reviewer_ran({"transcript_path": str(path)}), True)
 
 
 class DirectInvocationTests(unittest.TestCase):
