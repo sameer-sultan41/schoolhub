@@ -43,8 +43,7 @@ const buttonVariants = cva(
          * `outline-danger`, the tint shows at rest (`bg-primary/5`), not only on hover:
          * the whole point is to be visible as "engaged" without a hover to reveal it.
          */
-        "outline-primary":
-          "border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
+        "outline-primary": "border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
         /**
          * The two frame variants, also not part of Metronic's own variant set — for
          * controls that sit in the header or the sidebar rail rather than on the page.

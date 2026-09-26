@@ -37,7 +37,11 @@ export function ToolbarHeading({ title = "", description, inline = false }: Tool
   const Icon = !title ? item?.icon : undefined;
 
   return (
-    <div className={inline ? "flex flex-wrap items-center gap-4" : "flex flex-col justify-center gap-2"}>
+    <div
+      className={
+        inline ? "flex flex-wrap items-center gap-4" : "flex flex-col justify-center gap-2"
+      }
+    >
       {/* `inline` mode sits the title beside a stat pill whose own numbers are
           text-lg/font-semibold — text-xl/font-medium reads smaller next to that, even
           though it's technically the larger font size, so `inline` bumps to
@@ -49,11 +53,16 @@ export function ToolbarHeading({ title = "", description, inline = false }: Tool
       <h1
         className={
           inline
-            ? "flex h-8.5 items-center gap-2 text-mono text-2xl leading-none font-semibold"
-            : "flex items-center gap-2 text-mono text-xl leading-none font-medium"
+            ? "text-mono flex h-8.5 items-center gap-2 text-2xl leading-none font-semibold"
+            : "text-mono flex items-center gap-2 text-xl leading-none font-medium"
         }
       >
-        {Icon && <Icon className={inline ? "size-6 text-primary" : "size-5 text-primary"} aria-hidden="true" />}
+        {Icon && (
+          <Icon
+            className={inline ? "size-6 text-primary" : "size-5 text-primary"}
+            aria-hidden="true"
+          />
+        )}
         {title || item?.title || "Untitled"}
       </h1>
       {description && (

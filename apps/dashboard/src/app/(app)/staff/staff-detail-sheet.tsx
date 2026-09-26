@@ -101,7 +101,11 @@ function FieldSection({ title, children }: { title: string; children: ReactNode 
 export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffDetailSheetProps) {
   // Same query key `staff-form-dialog.tsx`'s edit form uses for the same endpoint — opening
   // the sheet then clicking Edit reuses this fetch instead of firing a second one.
-  const { data: detail, isPending, isError } = useQuery({
+  const {
+    data: detail,
+    isPending,
+    isError,
+  } = useQuery({
     queryKey: ["staff", "detail", row?.id],
     queryFn: () => Services.dashboard.fetchStaffById(row?.id as string),
     enabled: row !== null,
@@ -121,7 +125,9 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
         {/* Visually hidden — the hero band below carries the person's name as the
             visible heading; Radix's Dialog still needs a real Title for its
             aria-labelledby. */}
-        <SheetTitle className="sr-only">{row ? `${row.name} — staff details` : "Staff details"}</SheetTitle>
+        <SheetTitle className="sr-only">
+          {row ? `${row.name} — staff details` : "Staff details"}
+        </SheetTitle>
         {row && (
           <>
             <div className="flex flex-col gap-3 border-b border-border bg-primary/5 px-6 py-6">
@@ -178,7 +184,9 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                 <FieldRow
                   icon={Briefcase}
                   label="Employment type"
-                  value={detail?.employment_type ? humanizeSnakeCase(detail.employment_type) : undefined}
+                  value={
+                    detail?.employment_type ? humanizeSnakeCase(detail.employment_type) : undefined
+                  }
                   loading={isPending}
                 />
                 <FieldRow

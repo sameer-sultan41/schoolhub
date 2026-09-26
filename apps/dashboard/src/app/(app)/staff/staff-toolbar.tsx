@@ -47,7 +47,7 @@ function AnimatedStat({ value }: { value: string }) {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
-      className="inline-block text-sm leading-none font-semibold tabular-nums text-foreground"
+      className="inline-block text-sm leading-none font-semibold text-foreground tabular-nums"
     >
       {value}
     </m.span>
