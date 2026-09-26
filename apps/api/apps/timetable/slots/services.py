@@ -72,7 +72,7 @@ def publish_section_timetable(
     it alone" instead. There is no other way to clear a live cell — `:publish`
     will not do it and `DELETE /timetable-slots/{id}` refuses a published row
     (`assert_slot_writable`). Closing that needs a decision about what removal
-    means, not a filter change here; docs/project-status.md records it.
+    means, not a filter change here; docs/deferred-work.md records it.
     """
     assert_session_writable(session)
 

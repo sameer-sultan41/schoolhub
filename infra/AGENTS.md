@@ -1,15 +1,14 @@
-# AGENTS.md — schoolhub-infra
+# AGENTS.md — infra/
 
-Instructions for AI assistants and engineers working in this repository.
+Instructions for AI assistants and engineers working on SchoolHub's infrastructure: the local
+compose stack, PostgreSQL roles, Terraform and runbooks. Read the root
+[`../AGENTS.md`](../AGENTS.md) first — it holds the repo-wide rules.
 
-## The specification is elsewhere
+## The specification
 
-The authoritative specification for SchoolHub is the separate documentation repo:
-
-the specification in [`../docs/`](../docs/)
-
-Locally it is expected at `../docs/`. Nothing in this repo restates the spec; it
-implements it. If this repo and the spec disagree, **the spec is right and this repo is the bug**.
+The authoritative specification is [`../docs/`](../docs/), in this same monorepo. Nothing here
+restates it; this directory implements it. If this directory and the spec disagree, **the spec
+is right and this directory is the bug** — unless the version table below says otherwise.
 
 ### Read before you change anything here
 
@@ -21,18 +20,19 @@ your task needs. For infrastructure work that is almost always:
 | `hosting-deployment.md` | Environments, CI/CD, DNS/TLS, secrets, migrations in deploys, backup/restore, rollback, DR targets |
 | `database-architecture.md` | RLS mechanics, `app.tenant_id` GUC, PgBouncer interplay, backup/PITR |
 | `multi-tenancy.md` | Tenant resolution, wildcard subdomains, custom domains, tenant lifecycle |
-| `repo-structure.md` | The `schoolhub-infra` tree this repo follows, and env/config policy |
-| `tech-stack.md` | Technology choices (Django 5, Next.js 15) — but see the version table below |
+| `repo-structure.md` | The monorepo layout as built, and env/config policy (§4) |
+| `tech-stack.md` | Technology choices — §8 has the pinned versions |
 
 Anything the spec marks "(recommendation)" is not client-confirmed. Implementing it is fine;
 changing it is also fine — but change the spec doc in the same pull request.
 
-### Versions: this repo is ahead of the spec, deliberately
+### Versions: pinned ahead of the original spec, deliberately
 
-The spec docs were written against older runtimes. This repo pins current ones. **Where they
-disagree, this table wins** — and a spec PR should follow to close the gap:
+The spec's original recommendations (`tech-stack.md` §7) predate the pins below; `tech-stack.md`
+§8 is the authority for as-built versions; this table mirrors it for the infrastructure
+components and says where each pin lives. Keep the two in step:
 
-| Component | Spec says | This repo pins | Where |
+| Component | Original spec | Pinned | Where |
 | --- | --- | --- | --- |
 | PostgreSQL | 16 | **18** (`postgres:18-alpine`) | `compose/docker-compose.yml`, `terraform/modules/database` |
 | Redis | 7 | **8** (`redis:8-alpine`) | `compose/docker-compose.yml`, `terraform/modules/cache` |
@@ -45,18 +45,18 @@ The major version is pinned in exactly one place per component and flows outward
 Dev, CI and production must always agree — RLS and planner behavior are what the test suite
 asserts, and a version skew makes those assertions meaningless.
 
-## Sibling repositories
+## Where the consumers live
 
-| Repo | Contents |
+| Path | Contents |
 | --- | --- |
 | `docs/` | The specification (source of truth) |
-| `apps/api` | Django 5 + DRF + Celery backend |
-| `schoolhub-web` | Next.js 15 dashboard + multi-tenant website renderer |
-| `infra` | This repo |
+| `apps/api` | Django 6.1 + DRF + Celery backend |
+| `apps/dashboard`, `apps/website` | Next.js 16 admin dashboard and multi-tenant website renderer |
+| `infra/` | This directory |
 
-The only artifact shared between the API and the frontends is the OpenAPI contract. This repo
-shares nothing with them at runtime — it provisions, and they consume through environment
-variables.
+The only artefact shared between the API and the frontends is the OpenAPI contract
+([ADR-0005](../docs/decisions/0005-generated-api-contract.md)). Infrastructure shares nothing
+with them at runtime — it provisions, and they consume through environment variables.
 
 ## Non-negotiable infrastructure rules
 

@@ -1,101 +1,131 @@
 # Repository & Folder Structure
 
 > **Agent Context**
-> **Summary:** Recommended repository layout (scope §14–§15): `schoolhub-api` (Django modular monolith, one app per doc module + `core/`), `schoolhub-frontend` (Turborepo: dashboard + website apps, shared `ui`/`api-client`/`types` packages), `schoolhub-infra` (IaC + compose), `schoolhub-docs` (this doc set). Covers naming conventions, env/config management, shared-code policy, testing structure, and repo-to-repo integration flows (auth, public content, OpenAPI contract, future mobile).
-> **Co-load with:** [`system-architecture.md`](system-architecture.md) · [`api-architecture.md`](api-architecture.md) · [`hosting-deployment.md`](hosting-deployment.md)
+> **Summary:** The as-built layout of the SchoolHub monorepo and the rules for where new code goes: a "where does this belong?" table, what may import what (and what enforces it), configuration and environment policy, the shared-code rule of three, the API-contract flow between backend and frontends, and naming conventions. The reasons behind each rule live in [`../decisions/`](../decisions/README.md).
+> **Co-load with:** [`system-architecture.md`](system-architecture.md) · [`api-architecture.md`](api-architecture.md) · [`hosting-deployment.md`](hosting-deployment.md) · [`../decisions/README.md`](../decisions/README.md)
 
-All structure in this document is a **recommendation**. Four repositories (one per deployable concern plus docs) balance independent deploy cadence against cross-repo overhead.
+This document describes the repository **as built**. The original specification
+recommended four repositories. That was replaced by one monorepo; see
+[ADR-0002](../decisions/0002-single-monorepo.md).
 
-## 1. `schoolhub-api` — Backend (Django)
-
-```
-schoolhub-api/
-├── config/                  # Django project: settings/ (base, dev, staging, prod), urls, asgi, celery app
-├── core/                    # Cross-cutting platform code (no domain logic)
-│   ├── tenancy/             #   tenant middleware, app.tenant_id GUC, tenant-aware managers
-│   ├── rbac/                #   permission registry, decorators, scope filters
-│   ├── notifications/       #   channel adapters, template engine, trigger catalog
-│   ├── ai/                  #   AI gateway, budgets, prompt templates, audit
-│   ├── api/                 #   envelope renderer, exceptions, pagination, idempotency
-│   └── files/               #   presigned uploads, signed downloads, AV hooks
-├── apps/                    # One Django app per module doc (19)
-│   ├── school_org/  students/  staff/  attendance/  academics/
-│   ├── timetable/  exams/  fees_finance/  hr_leave/  admissions/
-│   ├── parents/  communication/  library/  transport/  inventory/
-│   ├── certificates/  website_cms/  reporting_analytics/  platform_admin/
-│   └── <module>/            # models.py · serializers.py · views.py · services.py
-│                            # permissions.py · tasks.py · events.py · urls.py · tests/
-├── requirements/ or pyproject.toml
-├── scripts/                 # manage-wrappers: seed, export-openapi, restore-drill
-└── Dockerfile · .env.example · Makefile
-```
-
-| Folder | Purpose |
-| ------ | ------- |
-| `config/` | Settings split per environment; only env vars differ between deploys |
-| `core/` | Tenancy, RBAC, notifications, AI gateway — imported by apps, imports no app |
-| `apps/<module>/` | Mirrors the 19 module docs in [`../03-modules/`](../03-modules/) one-to-one |
-| `apps/<module>/services.py` | The only module-to-module surface; views never call another app's models. **Exceptions:** five modules outgrew one shared `views.py`/`services.py` covering several unrelated resources and restructured into one package per resource, each with its own `services/<action>.py` where the resource has real per-action logic to split — the rule holds per-package rather than per-app. `communication` (`notices/`, `announcements/`, `template_overrides/`, `preferences/`, `delivery/`) and `academics` (`curriculum/`, `teacher_allocations/`, `promotions/`) split cleanly, with nothing left at the app root beyond a couple of genuinely shared constants; see [`communication.md`](../03-modules/communication.md)'s §20 and [`academics.md`](../03-modules/academics.md)'s §20. `school_organization` (`campuses/`, `departments/`, `academic_sessions/`, `terms/`, `classes/`, `sections/`, `subjects/`, `houses/`, `school_settings/`, `holiday_calendar/`), `staff_management` (`staff/`, `designations/`, `staff_qualifications/`, `staff_documents/`), and `timetable` (`rooms/`, `periods/`, `slots/`, `substitutions/`) additionally keep `services.py`/`views.py` (school_organization also `calendar.py`) at the app root as a deliberate shared surface, because other apps or sibling packages import specific functions from them directly; see [`school-organization.md`](../03-modules/school-organization.md)'s §20, [`staff-management.md`](../03-modules/staff-management.md)'s §20, and [`timetable.md`](../03-modules/timetable.md)'s §20 |
-| `apps/<module>/tests/` | `test_models.py`, `test_services.py`, `test_api.py`, `test_cross_tenant.py` (mandatory cross-tenant tests — every built module uses this name; this doc previously called the same file `test_tenancy.py`, a name that was never actually used) |
-
-**Conventions:** `snake_case` Python modules; app names plural where the domain is (`students`), singular for concepts (`timetable`); permission keys and event names declared in `permissions.py`/`events.py` so they are grep-able and seed-able.
-
-## 2. `schoolhub-frontend` — Turborepo Monorepo
+## 1. Layout
 
 ```
-schoolhub-frontend/
+schoolhub/
+├── AGENTS.md  CLAUDE.md          # agent instructions
+├── docs/                         # the specification — the requirement, not commentary
+│   ├── 00-overview … 08-future/  #   see docs/AGENTS.md for the map
+│   ├── decisions/                #   architecture decision records (why)
+│   ├── context/context-map.md    #   task type → the 3–6 docs to load
+│   ├── project-status.md         #   what exists / start here next session
+│   └── deferred-work.md          #   what is deliberately not done yet, and why
 ├── apps/
-│   ├── dashboard/           # Next.js 15 admin app (app/ per module: students/, fees/, …)
-│   └── website/             # Next.js 15 multi-tenant public renderer (themes/default/…)
+│   ├── api/                      # Django 6.1 + DRF, uv-managed (not a pnpm package)
+│   │   ├── config/               #   settings/{base,dev,prod,test}.py · api_v1.py · urls · celery · asgi/wsgi
+│   │   ├── core/                 #   cross-cutting platform code — imports no app
+│   │   │   ├── tenancy/ rbac/ audit/ api/     # RLS binding, permissions, audit log, envelope/pagination/exceptions
+│   │   │   ├── files/ documents/ exports/     # signed uploads/downloads, generated documents, tabular exports
+│   │   │   ├── jobs/ idempotency/ money/      # 202 + job resources, Idempotency-Key, money primitives
+│   │   │   └── notifications/ common/         # notify() + delivery, shared helpers
+│   │   ├── apps/<module>/        #   one Django app per module doc (layout: ADR-0010)
+│   │   ├── tests/                #   repo-wide contract tests (RLS coverage, endpoint contracts, API contract)
+│   │   ├── scripts/              #   generate-openapi.sh, …
+│   │   └── openapi.yaml          #   GENERATED, committed (ADR-0005)
+│   ├── dashboard/                # Next.js 16 admin app
+│   │   ├── messages/{en,ur}.json #   every user-facing string
+│   │   └── src/
+│   │       ├── app/              #   routes only: (auth)/… unauthenticated, (app)/… authenticated
+│   │       │   └── (app)/shell/  #   the app shell (header, sidebar, nav), ported from Metronic Demo1
+│   │       ├── features/<module>/#   components + hooks per module
+│   │       ├── services/         #   endpoints.ts · modules/<domain>/ · index.ts (Services) — ADR-0011
+│   │       ├── lib/              #   auth, env, permissions, query-client (queryKeys), constants, host
+│   │       ├── components/ hooks/ i18n/
+│   │       └── proxy.ts          #   Next 16's rename of middleware: auth guard (routing only)
+│   └── website/                  # Next.js 16 multi-tenant public renderer (read-only)
+│       └── src/{app,components,lib,themes/<theme>/{chrome,sections}}/ proxy.ts
 ├── packages/
-│   ├── ui/                  # shadcn-based shared components, theme tokens
-│   ├── api-client/          # GENERATED from OpenAPI — never hand-edited
-│   ├── types/               # Shared TS types & Zod schemas (mirrors API contracts)
-│   └── config/              # eslint, tsconfig, tailwind presets
-├── turbo.json · package.json (workspaces) · .env.example
+│   ├── ui/                       # shared primitives (ADR-0009), theme tokens, styles/metronic (vendored CSS)
+│   ├── api-client/               # transport core (hand-written) + schema.d.ts (GENERATED)
+│   ├── types/                    # shared envelope, pagination, auth, tenant, website types
+│   └── config/                   # shared ESLint flat configs
+├── e2e/                          # Playwright: dashboard, website (mocked) and live lanes
+├── infra/                        # compose stack, postgres roles, terraform, runbooks
+├── .github/workflows/            # api, frontend, repo-hygiene, e2e-live, infra-compose, infra-terraform
+├── .githooks/                    # pre-commit, pre-push (ADR-0007)
+└── .claude/                      # agent settings, hooks, skills
 ```
 
-| Folder | Purpose |
-| ------ | ------- |
-| `apps/dashboard/app/(modules)/` | One route group per module, mirroring the module docs |
-| `apps/dashboard/features/<module>/` | Components, hooks, TanStack Query definitions per module |
-| `apps/website/themes/<theme>/` | Section components + token contract per theme ([`website-builder.md`](website-builder.md)) |
-| `packages/api-client/` | Regenerated in CI from the API's published OpenAPI spec |
-| `packages/ui/` | Only components used by ≥ 2 apps graduate here (shared-code policy) |
+## 2. Where does new code go?
 
-**Conventions:** `kebab-case` file names, `PascalCase` components, `use*` hooks; tests co-located as `*.test.tsx` (Jest + React Testing Library via `next/jest`).
+| You are adding | It goes in | Rule / record |
+| -------------- | ---------- | ------------- |
+| A backend resource (model + endpoints) | `apps/api/apps/<module>/` — model in `models.py`, the rest in `<resource>/{serializers,viewset,urls,filters,services}.py` + `tests/` | [ADR-0010](../decisions/0010-backend-module-layout.md) |
+| Logic shared by two or more backend apps | `apps/api/core/<area>/` (never in one app for another to import) | [ADR-0013](../decisions/0013-cross-app-dependencies.md), §5 |
+| A permission key | The module's `permissions.py` registration, from the module doc's §4 | [`auth-and-rbac.md`](auth-and-rbac.md) |
+| A new tenant-owned table | `TenantOwnedModel` + `rls_operations(...)` in its first migration | [ADR-0003](../decisions/0003-tenant-isolation-rls.md) |
+| A dashboard screen | A thin `src/app/(app)/<module>/page.tsx` rendering components from `src/features/<module>/` | this doc |
+| A dashboard API call | `src/services/endpoints.ts` + `src/services/modules/<module>/<module>-service.ts`, registered in `Services` | [ADR-0011](../decisions/0011-dashboard-services-layer.md) |
+| A query key | The `queryKeys` factory in `apps/dashboard/src/lib/query-client.ts` | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
+| User-facing dashboard text | `apps/dashboard/messages/en.json` **and** `ur.json` | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
+| A UI primitive | `packages/ui/src/components/`, ported from vendor source | [ADR-0009](../decisions/0009-ported-ui-primitives.md) |
+| A component used by only one app | That app (`src/features/…` or `src/components/`) until a second app needs it | §5 |
+| A shared TypeScript type | `packages/types/src/` | §5 |
+| An environment variable | The runtime's typed env module, the matching `.env.example`, and `turbo.json`'s env list if it's needed at build time | §4 |
+| A named constant (timeout, page size, limit) | `apps/dashboard/src/lib/constants.ts`, `core/api/pagination.py`, or a module-level `UPPER_SNAKE` name | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
+| A frontend test | A sibling `__tests__/` folder next to the source | [ADR-0012](../decisions/0012-tests-in-dunder-tests.md) |
+| A backend test | `apps/<module>/tests/` or `<resource>/tests/`; repo-wide contracts in `apps/api/tests/` | [`testing-strategy.md`](../07-quality/testing-strategy.md) |
+| A browser journey | `e2e/tests/` — the `live` lane if it needs a real database | [`e2e/AGENTS.md`](../../e2e/AGENTS.md) |
+| A decision between real alternatives | `docs/decisions/NNNN-*.md` | [ADR-0001](../decisions/0001-record-decisions.md) |
 
-## 3. `schoolhub-infra` and `schoolhub-docs`
+## 3. Dependency rules
 
-```
-schoolhub-infra/
-├── compose/                 # docker-compose.dev.yml (postgres, redis, mailpit, minio)
-├── terraform/ (or platform IaC)  # envs/{staging,prod}/ · modules/{db,cache,storage,dns}/
-├── github-actions/          # Reusable workflow templates
-└── runbooks/                # Deploy, restore, incident procedures
-```
-
-`schoolhub-docs/` is this documentation set (`docs/00-overview` … `08-future`), plus ADRs in `docs/adr/`.
+| Rule | Enforced by |
+| ---- | ----------- |
+| Backend apps may import other apps' `models`; writes and business rules go through the owning app's `services`; no app imports another's `views`/`viewset`/`urls`/`reports`/`tasks` | review only (planned: import-linter) — [ADR-0013](../decisions/0013-cross-app-dependencies.md) |
+| `core/` imports no app | review only (planned: import-linter) — [ADR-0013](../decisions/0013-cross-app-dependencies.md) |
+| `@schoolhub/api-client` is imported only in `apps/dashboard/src/services/**` and `src/lib/auth.ts` | review only (planned: ESLint) — [ADR-0011](../decisions/0011-dashboard-services-layer.md) |
+| No `../` parent-relative imports; use the `@/` alias | ESLint `no-restricted-imports` in `apps/dashboard` (`packages/config/eslint.no-relative-parent-imports.mjs`); planned for the other workspaces |
+| Apps never import each other; packages never import apps | Workspace boundaries (neither is a dependency of the other); the `../` ban catches relative reach-arounds in `apps/dashboard` only — review only elsewhere (planned: extend the ban) |
+| Route files stay thin; feature code lives in `src/features/<module>/` | review only |
 
 ## 4. Configuration & Environment Management
 
-- **12-factor:** all config via environment variables; code contains no environment conditionals beyond the settings module selector.
-- Each repo ships a committed `.env.example` (every variable, dummy values, one-line comment); real `.env` files are git-ignored and **secrets are never committed** — enforced by gitleaks pre-commit + CI scan.
-- Runtime secrets come from the platform secret store (see [`hosting-deployment.md`](hosting-deployment.md) §Secrets); local dev uses `.env` + compose defaults.
-- Frontend build-time variables are limited to public values (`NEXT_PUBLIC_*`); anything sensitive stays server-side.
+- **12-factor:** all configuration comes from environment variables. Code has no environment
+  conditionals beyond the Django settings-module selector (`config/settings/{dev,prod,test}.py`).
+- **One typed owner per runtime** ([ADR-0014](../decisions/0014-no-hardcoded-values.md)):
+  `apps/dashboard/src/lib/env.ts` and `apps/website/src/lib/env.ts` (zod-validated, fail at
+  load), `e2e/src/env.ts`, and django-environ in `apps/api/config/settings/base.py`. Nothing
+  else may read `process.env` or `os.environ`; the known bypasses are listed in ADR-0014 and
+  scheduled for removal.
+- **Public vs server:** build-time public values are `NEXT_PUBLIC_*` only. Secrets
+  (`WEBSITE_MACHINE_TOKEN`, `REVALIDATE_WEBHOOK_SECRET`) stay server-side and must never be
+  imported by a client component.
+- Every variable is listed with a dummy value in a committed `.env.example`: the root one
+  covers both frontends, and `apps/api`, `e2e` and `infra/compose` have their own. Real `.env`
+  files are git-ignored. Secrets are never committed; gitleaks scans in CI
+  (`repo-hygiene.yml`, `infra-compose.yml`).
+- Runtime secrets in deployed environments come from the platform secret store
+  ([`hosting-deployment.md`](hosting-deployment.md)).
 
 ## 5. Shared-Code Policy
 
-- **Across repos, the only shared artifact is the API contract** (OpenAPI → generated client). No shared runtime libraries between backend and frontend — prevents lockstep deploys.
-- Within the frontend monorepo, sharing goes through `packages/*` with semver-free workspace versions; within the backend, through `core/` only. Copy-paste twice before extracting a third use (rule of three).
+- **Between backend and frontend, the only shared artefact is the API contract** (§6.1). No
+  runtime code is shared.
+- **Frontend sharing goes through `packages/*`**, with workspace versions. A component
+  graduates to `packages/ui` only when a second app uses it.
+- **Backend sharing goes through `core/`.**
+- **Rule of three:** tolerate a second copy, and extract on the third. Beyond three copies
+  is debt to record in [`../deferred-work.md`](../deferred-work.md), not a pattern to follow. The known cases
+  today are `_fk` serializer helpers in six apps and the staff and student import/document
+  pipelines.
 
-## 6. Repository-to-Repository Integration
+## 6. Integration Between the Apps
 
 ```mermaid
 sequenceDiagram
     participant B as Browser (Dashboard)
     participant D as apps/dashboard (Next.js)
-    participant A as schoolhub-api (Django)
+    participant A as apps/api (Django)
     participant P as PostgreSQL (RLS)
     participant W as apps/website (Renderer)
 
@@ -111,26 +141,52 @@ sequenceDiagram
 
     Note over W,P: Public website content flow
     B->>W: GET https://cityschool.example (Host header)
-    W->>W: middleware resolves Host → tenant
+    W->>W: proxy resolves Host → tenant
     W->>A: GET /api/v1/public/pages/home (machine token, read-only)
     A->>P: RLS-scoped, published content only
     A-->>W: page + sections JSON
     W-->>B: SSR/ISR HTML (cached until publish invalidation)
 ```
 
-### 6.1 Contract Artifacts
-- The API publishes **OpenAPI 3.1** (generated by drf-spectacular) as a CI artifact per environment.
-- Frontend CI regenerates `packages/api-client` + `packages/types` from that spec; a contract change that breaks the dashboard fails frontend CI **before** deploy — the spec is the inter-repo interface, reviewed like code.
-- Versioning: additive API changes regenerate silently; breaking changes require a `v2` path per [`api-architecture.md`](api-architecture.md) §2.1.
+### 6.1 Contract Artefacts
+
+- `apps/api/scripts/generate-openapi.sh` emits **OpenAPI 3.1** from drf-spectacular into
+  `apps/api/openapi.yaml`.
+- `pnpm --filter @schoolhub/api-client generate` turns it into
+  `packages/api-client/src/schema.d.ts`.
+- Both are committed and change **in the same commit** as the backend change that caused
+  them. CI regenerates each and fails on any diff (`api.yml`, `frontend.yml`); see
+  [ADR-0005](../decisions/0005-generated-api-contract.md).
+- **Versioning:** additive changes regenerate silently. Breaking changes need a `v2` path
+  per [`api-architecture.md`](api-architecture.md) §2.1.
 
 ### 6.2 Other Integration Points
+
 | Link | Mechanism |
 | ---- | --------- |
-| API → AI provider | Server-side only, via `core/ai` gateway ([`ai-architecture.md`](ai-architecture.md)) |
+| API → AI provider | Server-side only, through a `core/ai` gateway (planned; [`ai-architecture.md`](ai-architecture.md)) |
 | API → notification providers | `core/notifications` adapters + Celery lanes ([`notifications.md`](notifications.md)) |
 | API ↔ payment gateway | Redirect/intent + signed webhooks, idempotency-keyed |
-| Renderer ← publish events | API webhook → on-demand ISR revalidation ([`website-builder.md`](website-builder.md) §3) |
-| Infra → all | IaC provisions DBs, DNS, secrets; app repos consume via env vars |
+| Renderer ← publish events | HMAC-signed webhook → on-demand ISR revalidation (`apps/website/src/app/api/revalidate/`) |
+| Infra → all | Compose/Terraform provision databases, DNS and secrets; the apps consume them through env vars |
 
 ### 6.3 Future Mobile Applications
-Mobile apps (Flutter, future phase — scope §20) plug into the **same** REST API and auth endpoints: identical JWT flow with refresh tokens in secure storage instead of cookies, the same OpenAPI spec generating a Dart client, and FCM push tokens registered through the existing notification device endpoints. No backend rework is required — this is why the API is versioned, cookie-optional, and documented contract-first.
+
+Mobile apps (Flutter, a future phase) plug into the **same** REST API and auth endpoints. They
+use the same JWT flow, with refresh tokens in secure storage instead of cookies, a Dart client
+generated from the same OpenAPI spec, and FCM push tokens registered through the existing
+notification device endpoints. No backend rework is required; this is why the API is
+versioned, cookie-optional and contract-first.
+
+## 7. Naming Conventions
+
+| Area | Convention |
+| ---- | ---------- |
+| Python | `snake_case` modules and functions, `PascalCase` classes, `UPPER_SNAKE` constants, `_leading_underscore` module-private. App names are plural where the domain is (`students`) and singular for concepts (`timetable`) |
+| TypeScript files | `kebab-case.ts(x)`; `PascalCase` components; `use*` hooks |
+| Permission keys | `module.resource.action`, declared in `permissions.py` |
+| Notification template codes | `module.event-name`, declared in the emitting app's `notifications.py` |
+| Tables | Plural `snake_case`, specified column by column in `docs/05-database/entities/` |
+| API | `/api/v1/…`, plural kebab-case resources, colon-actions (`:publish`) |
+| Branches | `feat/…`, `fix/…`, `chore/…`, `refactor/…` |
+| Commits | Conventional Commits: `type(scope): subject` |

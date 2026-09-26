@@ -134,6 +134,9 @@ jobs:
       # apps/**, packages/**, e2e/** and infra/** when the doc was consolidated to
       # cover the backend too — a backend-only PR is exactly the kind of change most
       # likely to invalidate the per-module implementation matrix.
+      # docs/deferred-work.md also satisfies the gate: it was split out of the status doc
+      # (its old 'Deliberately NOT done' section) to keep that doc short, and recording a
+      # deferral is exactly the kind of status change this gate exists to force.
       - name: Backend- or frontend-surface PRs must update the status doc
         run: |
           git fetch origin "$GITHUB_BASE_REF" --depth=1
@@ -147,8 +150,8 @@ jobs:
           fi
 
           if echo "$CHANGED" | grep -qE '^(apps/|packages/|e2e/|infra/)'; then
-            if ! echo "$CHANGED" | grep -qxF 'docs/project-status.md'; then
-              echo "::error file=docs/project-status.md::This PR changes apps/, packages/, e2e/, or infra/ but does not update docs/project-status.md. Update the 'Done' table, the per-module implementation matrix, and if applicable the 'Deliberately NOT done' / 'Start here next session' sections. If this change genuinely doesn't shift project status (a dependency patch, a typo fix), add [skip-status-doc] to the PR title."
+            if ! echo "$CHANGED" | grep -qxE 'docs/(project-status|deferred-work)\.md'; then
+              echo "::error file=docs/project-status.md::This PR changes apps/, packages/, e2e/, or infra/ but updates neither docs/project-status.md nor docs/deferred-work.md. Update project-status.md's 'Done' table, the per-module implementation matrix and 'Start here next session', and/or record deferred items in deferred-work.md. If this change genuinely doesn't shift project status (a dependency patch, a typo fix), add [skip-status-doc] to the PR title."
               exit 1
             fi
           fi
