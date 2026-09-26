@@ -8,6 +8,7 @@ import {
   INTO_APPS,
   PHYSICAL_DIRECTION,
   PROCESS_ENV,
+  REACT_COMPILER_ONLY_RULES_OFF,
   TEST_FILES,
   maxLines,
   restrictedImports,
@@ -27,6 +28,7 @@ import {
 // Existing violations are frozen in ./eslint-suppressions.json, which may only shrink (ADR-0014).
 export default warningsAsErrors(defineConfig([
   reactHooks.configs.flat.recommended,
+  REACT_COMPILER_ONLY_RULES_OFF,
   jsxA11y.flatConfigs.recommended,
   ...base,
   // This package's tsconfig include is scoped to src/**/*.ts(x) only (see tsconfig.json).

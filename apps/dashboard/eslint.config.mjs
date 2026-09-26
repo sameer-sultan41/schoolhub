@@ -9,14 +9,15 @@ import {
   PARENT_RELATIVE,
   PHYSICAL_DIRECTION,
   PROCESS_ENV,
+  REACT_COMPILER_ONLY_RULES_OFF,
   TEST_FILES,
   maxLines,
   restrictedImports,
   restrictedSyntax,
 } from "@schoolhub/config/eslint-boundaries";
 
-/** UI layers call the backend only through `@/services` (ADR-0011). */
-const UI_LAYERS = ["src/app/**", "src/features/**", "src/components/**", "src/hooks/**"];
+/** The transport layer — the only code that may import @schoolhub/api-client (ADR-0011). */
+const TRANSPORT = ["src/services/**", "src/lib/**"];
 
 // Existing violations of every rule below are frozen in ./eslint-suppressions.json (ADR-0014):
 // that file may only shrink. Fix a violation and ESLint reports the suppression as unused
@@ -26,10 +27,12 @@ const eslintConfig = warningsAsErrors(
     ...nextVitals,
     ...nextTs,
     ...schoolhub,
+    REACT_COMPILER_ONLY_RULES_OFF,
     // One complete no-restricted-imports entry per file group — flat config replaces a rule's
-    // options per file rather than merging them (see eslint.boundaries.mjs).
-    restrictedImports(["src/**"], [PARENT_RELATIVE]),
-    restrictedImports(UI_LAYERS, [PARENT_RELATIVE, API_CLIENT]),
+    // options per file rather than merging them (see eslint.boundaries.mjs). Deny by default:
+    // everything under src/ except the transport layer is barred from the API client.
+    restrictedImports(["src/**"], [PARENT_RELATIVE, API_CLIENT], { ignores: TRANSPORT }),
+    restrictedImports(TRANSPORT, [PARENT_RELATIVE]),
     {
       // Two legitimate exceptions to the import rules — everything else in src/ has a "@/"
       // alias to redirect to, but these don't:

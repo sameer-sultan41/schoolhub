@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -64,19 +66,36 @@ class EndToEnd(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data), encoding="utf-8")
 
+    def run_main(self, ref: str) -> int:
+        # Capture stdout: the script prints `::error::` lines that Actions would annotate.
+        with contextlib.redirect_stdout(io.StringIO()):
+            return shrink.main(["check_baselines_shrink.py", ref])
+
     def test_shrinking_passes(self) -> None:
         self._write({"src/a.tsx": {"no-console": {"count": 1}}})
-        self.assertEqual(shrink.main(["x", "HEAD"]), 0)
+        self.assertEqual(self.run_main("HEAD"), 0)
 
     def test_growing_fails(self) -> None:
         self._write({"src/a.tsx": {"no-console": {"count": 3}}})
-        self.assertEqual(shrink.main(["x", "HEAD"]), 1)
+        self.assertEqual(self.run_main("HEAD"), 1)
+
+    def test_an_empty_base_baseline_is_still_checked(self) -> None:
+        # Four workspaces start with `{}`: a new entry there must fail, not pass as "new".
+        self._write({})
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "empty baseline")
+        self._write({"src/a.tsx": {"no-restricted-syntax": {"count": 1}}})
+        self.assertEqual(self.run_main("HEAD"), 1)
+
+    def test_keys_for_deleted_files_fail(self) -> None:
+        Path("apps/web/src/a.tsx").unlink()
+        self.assertEqual(self.run_main("HEAD"), 1)
 
     def test_moving_a_file_keeps_its_suppressions(self) -> None:
         Path("apps/web/src/__tests__").mkdir(parents=True, exist_ok=True)
         self._git("mv", "apps/web/src/a.tsx", "apps/web/src/__tests__/a.tsx")
         self._write({"src/__tests__/a.tsx": {"no-console": {"count": 2}}})
-        self.assertEqual(shrink.main(["x", "HEAD"]), 0)
+        self.assertEqual(self.run_main("HEAD"), 0)
 
 
 if __name__ == "__main__":

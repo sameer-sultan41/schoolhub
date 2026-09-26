@@ -57,6 +57,9 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Theme registry + token contract | `src/themes/index.ts`, `src/themes/default/` |
 | Publish invalidation webhook (HMAC) | `src/app/api/revalidate/route.ts` |
 | Unknown host landing | `src/app/platform-landing/page.tsx` (the proxy rewrites here) |
+| Configuration | `src/lib/env.ts` (server: secrets, platform domain — never import from a client component) · `src/lib/env.client.ts` (public `NEXT_PUBLIC_*` only, all optional) |
+| Public form submission (the one write path) | `src/lib/public-api.ts` — browser → public API, endpoint registry; never through `api.ts` |
+| Imports and lint baseline | `@/…` alias only (ESLint bans `../` outside tests); `eslint-suppressions.json` may only shrink (ADR-0014) |
 
 ### The rules those files encode
 

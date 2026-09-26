@@ -65,8 +65,10 @@ suppressions, [ADR-0014](../decisions/0014-no-hardcoded-values.md)):
   any file/rule count goes up (a renamed file carries its entries).
 
 Baselines are generated in CI, never locally (ADR-0007): add the `generate-baselines` label to
-the PR (or run the `generate-baselines` workflow once it is on `main`), then
-`gh run download <run-id> -n eslint-baselines` and `git apply eslint-baselines.patch`.
+the PR (remove and re-add it to run again), or run the `generate-baselines` workflow once it is on
+`main`. It prunes stale suppressions, re-suppresses what remains and runs Prettier, then uploads
+one patch: `gh run download <run-id> -n ci-generated` and `git apply ci-generated.patch`. The
+baselines are excluded from Prettier and cspell — ESLint owns their format.
 
 ## Spelling — cspell
 

@@ -7,6 +7,7 @@ import {
   PARENT_RELATIVE,
   PHYSICAL_DIRECTION,
   PROCESS_ENV,
+  REACT_COMPILER_ONLY_RULES_OFF,
   TEST_FILES,
   maxLines,
   restrictedImports,
@@ -21,6 +22,7 @@ const eslintConfig = warningsAsErrors(
     ...nextVitals,
     ...nextTs,
     ...schoolhub,
+    REACT_COMPILER_ONLY_RULES_OFF,
     restrictedImports(["src/**"], [PARENT_RELATIVE]),
     {
       // Tests import their own module one level up ("../foo") — the established convention.

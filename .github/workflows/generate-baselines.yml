@@ -1,10 +1,10 @@
 name: generate-baselines
 
-# Regenerates the ESLint suppression baselines (ADR-0014) in CI and uploads them as a patch.
-# Agents never run linters locally (ADR-0007), so a baseline is produced here, downloaded
-# (`gh run download <run-id> -n eslint-baselines`), applied with `git apply`, reviewed and
-# committed like any other change. The shrink check in repo-hygiene.yml then guarantees the
-# committed baseline only ever goes down.
+# Produces, in CI, the files agents must never generate locally (ADR-0007): the ESLint suppression
+# baselines (ADR-0014) — pruned, then re-suppressed — and Prettier formatting. Everything lands in
+# one patch: `gh run download <run-id> -n ci-generated`, `git apply ci-generated.patch`, review,
+# commit. The shrink check in repo-hygiene.yml then guarantees a committed baseline only goes down,
+# so this workflow can't be used to hide a new violation.
 #
 # Triggers: add the `generate-baselines` label to a PR (runs against that PR's head), or run it
 # by hand from the Actions tab once this file is on main.
@@ -22,8 +22,8 @@ env:
   PNPM_VERSION: "9.15.0"
 
 jobs:
-  eslint-suppressions:
-    name: ESLint suppression baselines
+  generate:
+    name: Baselines and formatting
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'generate-baselines'
     runs-on: ubuntu-latest
     steps:
@@ -44,20 +44,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Suppress every current violation, per workspace
-        # --force: never replay a cached lint result — the point is to run ESLint now.
-        # Each workspace's `lint` script is `eslint --max-warnings 0`; the extra args land after it.
+      # --force on both: never replay a cached lint result — the point is to run ESLint now.
+      # Each workspace's `lint` script is `eslint --max-warnings 0`; the extra args land after it.
+      - name: Prune suppressions that no longer match anything
+        # Exits non-zero while unsuppressed violations remain; the next step settles those.
+        run: pnpm turbo run lint --force --continue -- --prune-suppressions || true
+
+      - name: Suppress every remaining violation, per workspace
         run: pnpm turbo run lint --force --continue -- --suppress-all
 
-      - name: Package the baseline files as a patch
+      - name: Format with Prettier
+        run: pnpm format
+
+      - name: Package every change as one patch
         run: |
           git ls-files --others --exclude-standard -- '*eslint-suppressions.json' | xargs -r git add -N
-          git diff -- '*eslint-suppressions.json' > eslint-baselines.patch
-          echo "baseline files changed:"
-          git diff --stat -- '*eslint-suppressions.json'
+          git diff > ci-generated.patch
+          echo "files changed:"
+          git diff --stat
 
       - uses: actions/upload-artifact@v4
         with:
-          name: eslint-baselines
-          path: eslint-baselines.patch
+          name: ci-generated
+          path: ci-generated.patch
           if-no-files-found: error

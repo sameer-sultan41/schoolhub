@@ -1,16 +1,16 @@
 import { z } from "zod";
 
 /**
- * Public renderer configuration — `NEXT_PUBLIC_*` values only, safe to import from client
- * components and the proxy (ADR-0014). Server secrets live in `./env.ts`, which must never be
- * imported from a client component.
+ * Public renderer configuration for client components (ADR-0014) — `NEXT_PUBLIC_*` values only.
+ * Server code (route handlers, the proxy, server components) reads `./env.ts` instead, which also
+ * holds the secrets and must never be imported from a client component.
  *
- * Each value is referenced as a literal `process.env.NEXT_PUBLIC_…` expression: that is the
- * form Next.js inlines into the client bundle at build time.
+ * Each value is a literal `process.env.NEXT_PUBLIC_…` expression, the form Next.js inlines into
+ * the client bundle — and inlines at `next build`. So nothing here may be *required*: an image
+ * built without build-time values (apps/website/Dockerfile sets none) would otherwise crash
+ * every client component that imports this module on hydration.
  */
 const publicEnvSchema = z.object({
-  /** Apex domain for tenant wildcard subdomains: `<slug>.<platform-domain>`. */
-  NEXT_PUBLIC_PLATFORM_DOMAIN: z.string().min(1),
   /**
    * Origin the browser posts public forms to. Empty means same-origin (a reverse proxy in
    * front of both the renderer and the API).
@@ -19,7 +19,6 @@ const publicEnvSchema = z.object({
 });
 
 const parsed = publicEnvSchema.safeParse({
-  NEXT_PUBLIC_PLATFORM_DOMAIN: process.env.NEXT_PUBLIC_PLATFORM_DOMAIN,
   NEXT_PUBLIC_API_ORIGIN: process.env.NEXT_PUBLIC_API_ORIGIN,
 });
 

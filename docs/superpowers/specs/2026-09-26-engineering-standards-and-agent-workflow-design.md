@@ -403,6 +403,20 @@ Every plan states `**Tier:** n` near the top.
 >   import ban shipped without it.
 > - **Warnings:** one shared `warningsAsErrors()` wrapper raises every `warn` to `error` instead of
 >   listing rules one by one.
+> - **After review:** the API-client ban is deny-by-default (everything under `src/` except the
+>   transport layer, `src/services/**` and `src/lib/**`). `react-hooks/incompatible-library` and
+>   `unsupported-syntax` are off, because they only apply to the React Compiler, which isn't
+>   enabled. The proxy reads the platform domain from server `env.ts` (as planned), and
+>   `env.client.ts` holds only optional values so a Docker build without build-time env can't
+>   crash client components.
+> - **Left unchanged:** `staff-directory-table.tsx` keeps its `ApiError` import (baselined), because
+>   the file had the owner's uncommitted work in progress.
+> - **Shrink check** is `.github/scripts/check_baselines_shrink.py` (not an `.mjs`), with unit
+>   tests. It also fails on keys for deleted files, and treats an empty `{}` base as a real baseline.
+> - **CI-generated patch:** `generate-baselines.yml` prunes, re-suppresses and runs Prettier, and
+>   uploads one `ci-generated` patch, so formatting is never run locally either.
+> - **`max-lines`** exempts every `*.d.ts` in `packages/api-client` and `packages/types`, not just
+>   `schema.d.ts`.
 
 Load `turborepo`/`next-best-practices` first, and use Context7 for ESLint 9.39 suppressions and eslint-config-next 16.3 docs.
 

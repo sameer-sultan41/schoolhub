@@ -9,9 +9,10 @@ fails if any file/rule pair appears that the base didn't have, or any count goes
 renamed in the same diff carries its entries across (git rename detection), so moving a file
 doesn't look like a new violation.
 
-ESLint itself fails on suppressions that no longer match anything (exit code 2), so stale
-entries can't linger either: the baseline is forced down as violations are fixed, and this
-check stops it creeping back up.
+ESLint itself fails on suppressions that no longer match anything in a linted file (exit code
+2), but it never looks at keys for files that no longer exist — so this check also fails on those
+("run eslint --prune-suppressions"), otherwise a file later created at that path would silently
+inherit the old suppressions.
 """
 
 from __future__ import annotations
@@ -34,9 +35,15 @@ def baseline_files() -> list[str]:
     return sorted({p for p in tracked + untracked if PurePosixPath(p).name == BASELINE})
 
 
-def at_ref(ref: str, path: str) -> dict:
+def at_ref(ref: str, path: str) -> dict | None:
+    """The baseline at ref, or None if the file didn't exist there (an empty `{}` is not None)."""
     result = _git("show", f"{ref}:{path}", check=False)
-    return json.loads(result.stdout) if result.returncode == 0 else {}
+    return json.loads(result.stdout) if result.returncode == 0 else None
+
+
+def stale_keys(after: dict, workspace: Path) -> list[str]:
+    """Suppression keys naming files that no longer exist in the workspace."""
+    return sorted(key for key in after if not (workspace / key).is_file())
 
 
 def renames(ref: str) -> dict[str, str]:
@@ -81,14 +88,18 @@ def main(argv: list[str]) -> int:
         }
         before = at_ref(ref, path)
         after = json.loads(Path(path).read_text(encoding="utf-8"))
-        if not before:
-            print(f"new baseline: {path} (allowed once, when a rule is introduced)")
+        stale = stale_keys(after, Path(workspace))
+        for key in stale:
+            print(f"::error file={path}::suppressions for {key}, which no longer exists — run `eslint --prune-suppressions` in {workspace}.")
+        if before is None:
+            print(f"new baseline: {path} (allowed once, when a workspace first gets one)")
+            failed = failed or bool(stale)
             continue
         grew = growth(before, after, moved)
         for item in grew:
             print(f"::error file={path}::baseline grew — {item}. Fix the new violation instead of suppressing it.")
-        failed = failed or bool(grew)
-        if not grew:
+        failed = failed or bool(grew) or bool(stale)
+        if not grew and not stale:
             print(f"ok: {path}")
     return 1 if failed else 0
 

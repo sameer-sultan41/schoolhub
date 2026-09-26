@@ -35,12 +35,14 @@ export function restrictedImports(files, patterns, extra = {}) {
 }
 
 export const PROCESS_ENV = {
-  selector: "MemberExpression[object.name='process'][property.name='env']",
+  // `process.env` and `process["env"]`.
+  selector: "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env'])",
   message: "Read configuration through the app's typed env module (src/lib/env.ts, env.client.ts), not process.env (ADR-0014).",
 };
 
 export const INLINE_QUERY_KEY = {
-  selector: "Property[key.name='queryKey'] > ArrayExpression",
+  // `queryKey: [...]` and `"queryKey": [...]`.
+  selector: "Property:matches([key.name='queryKey'], [key.value='queryKey']) > ArrayExpression",
   message: "Build query keys with the `queryKeys` factory in src/lib/query-client.ts, not inline arrays (ADR-0014).",
 };
 
@@ -52,11 +54,25 @@ const PHYSICAL =
   "/(^|[\\s:!])(-?m[lr]-|-?p[lr]-|border-[lr](-|\\s|$)|rounded-[lr](-|\\s|$)|text-(left|right)(\\s|$)|-?(left|right)-(?!\\[50%\\]|1.2))/";
 const PHYSICAL_MESSAGE =
   "Physical left/right Tailwind class — use the logical equivalent (ms-/me-, ps-/pe-, start-/end-, border-s/-e, rounded-s/-e, text-start/-end) so RTL works (ADR-0009).";
+// One selector, so a string inside `className={cn("…")}` is reported once, not twice.
 export const PHYSICAL_DIRECTION = [
-  `JSXAttribute[name.name='className'] Literal[value=${PHYSICAL}]`,
-  `JSXAttribute[name.name='className'] TemplateElement[value.raw=${PHYSICAL}]`,
-  `CallExpression[callee.name=/^(cn|cva|clsx|twMerge)$/] Literal[value=${PHYSICAL}]`,
-].map((selector) => ({ selector, message: PHYSICAL_MESSAGE }));
+  {
+    selector:
+      `:matches(JSXAttribute[name.name='className'], CallExpression[callee.name=/^(cn|cva|clsx|twMerge)$/]) ` +
+      `:matches(Literal[value=${PHYSICAL}], TemplateElement[value.raw=${PHYSICAL}])`,
+    message: PHYSICAL_MESSAGE,
+  },
+];
+
+/**
+ * react-hooks 7 ships two React-Compiler-only rules as warnings. Neither app enables the React
+ * Compiler, so they fire on ordinary library calls (`useReactTable`, react-hook-form's `watch()`)
+ * with no fix available in the source — escalated to errors by warningsAsErrors() they would
+ * block every data-grid screen. Turn them back on alongside `reactCompiler` in next.config.
+ */
+export const REACT_COMPILER_ONLY_RULES_OFF = {
+  rules: { "react-hooks/incompatible-library": "off", "react-hooks/unsupported-syntax": "off" },
+};
 
 export function restrictedSyntax(files, selectors, extra = {}) {
   return { files, ...extra, rules: { "no-restricted-syntax": ["error", ...selectors] } };
