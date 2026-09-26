@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_SLUG_HEADER, parseHost } from "@/lib/host";
 
 /**
@@ -14,8 +15,7 @@ import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_SLUG_HEADER, parseHost }
  * that, a client could hand us a header and read another school's site.
  */
 export function proxy(request: NextRequest): NextResponse {
-  const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ?? "";
-  const resolved = parseHost(request.headers.get("host"), platformDomain);
+  const resolved = parseHost(request.headers.get("host"), env.NEXT_PUBLIC_PLATFORM_DOMAIN);
 
   const headers = new Headers(request.headers);
   headers.delete(TENANT_HOST_HEADER);

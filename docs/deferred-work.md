@@ -601,3 +601,24 @@ either this file or `project-status.md`.
   Deliberately absent, all communication scope: preferences, quiet hours,
   suppression lists, SMS quotas, provider status webhooks, the SSE badge stream,
   and §6's full five-stage retry schedule.
+
+- **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
+  deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and
+  turns the hooks on mid-PR, so pre-commit would reject the rule commit before its baseline
+  existed. The `@playwright/test` import ban in `e2e/tests/**` shipped without it. Add the plugin
+  in its own PR (`pnpm --filter @schoolhub/e2e add -D eslint-plugin-playwright`, then its
+  `flat/recommended` config for `tests/**`, then regenerate the e2e baseline).
+
+- **Build-time `NEXT_PUBLIC_*` exposure in `apps/dashboard`.** Next.js inlines `NEXT_PUBLIC_*` at
+  `next build`, and `apps/dashboard/src/lib/env.ts` *requires* several of them, but
+  `apps/dashboard/Dockerfile` sets none at build time. An image built from it would throw when the
+  env module loads in the browser. (The website's public env was made all-optional for this
+  reason.) Fix by passing the values as Docker build args, or make the client-side ones optional.
+- **`import "server-only"`** in `apps/website/src/lib/env.ts` and `src/lib/api.ts` (and the
+  dashboard's server-only modules) would make an accidental client import a build error instead of
+  a leaked secret. Suggested by the PR 4 review; not a regression.
+- **Lint selector gaps accepted in PR 4:** `react/jsx-no-literals` (with `noStrings: false`) flags
+  bare JSX text only — `{"Untranslated"}` and user-facing props (`aria-label`, `placeholder`) pass.
+  The `process.env` ban misses `const { env } = process` and `globalThis.process.env`. Tighten
+  these once the existing JSX-text baseline has burned down.
+

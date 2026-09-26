@@ -2,7 +2,6 @@
 
 import { useEffect, type MouseEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ApiError } from "@schoolhub/api-client";
 import {
   Alert,
   AlertDescription,
@@ -33,7 +32,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { Services } from "@/services";
+import { ApiError, Services } from "@/services";
 import type { ExitStaffInput } from "@/services/modules/dashboard/dashboard-service";
 
 export interface ExitStaffDialogProps {

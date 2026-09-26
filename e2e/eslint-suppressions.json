@@ -1,0 +1,7 @@
+{
+  "tests/live/students-admission-enrollment.spec.ts": {
+    "no-restricted-imports": {
+      "count": 1
+    }
+  }
+}

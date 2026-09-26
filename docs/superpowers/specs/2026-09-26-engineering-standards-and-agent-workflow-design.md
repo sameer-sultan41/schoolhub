@@ -389,6 +389,35 @@ Every plan states `**Tier:** n` near the top.
 
 ### PR 4: Frontend lint ratchet
 
+> **Amendments made during PR 4** (stop rule 3):
+>
+> - **API-client ban scope:** UI layers (`src/app`, `src/features`, `src/components`, `src/hooks`)
+>   only. `src/lib/**` is transport infrastructure below `src/services`, so it keeps importing
+>   the client; making it import `@/services` would invert the layers.
+> - **`packages/*`** get an `INTO_APPS` ban instead of the `../` ban — they have no `@/` alias
+>   and legitimately use `../` inside themselves.
+> - **Baseline generation:** a `generate-baselines.yml` workflow triggered by the
+>   `generate-baselines` PR label (a `workflow_dispatch` workflow can only be run once it is on
+>   `main`, which the unmerged stack isn't).
+> - **`eslint-plugin-playwright` deferred** (see `docs/deferred-work.md`); the `@playwright/test`
+>   import ban shipped without it.
+> - **Warnings:** one shared `warningsAsErrors()` wrapper raises every `warn` to `error` instead of
+>   listing rules one by one.
+> - **After review:** the API-client ban is deny-by-default (everything under `src/` except the
+>   transport layer, `src/services/**` and `src/lib/**`). `react-hooks/incompatible-library` and
+>   `unsupported-syntax` are off, because they only apply to the React Compiler, which isn't
+>   enabled. The proxy reads the platform domain from server `env.ts` (as planned), and
+>   `env.client.ts` holds only optional values so a Docker build without build-time env can't
+>   crash client components.
+> - **Left unchanged:** `staff-directory-table.tsx` keeps its `ApiError` import (baselined), because
+>   the file had the owner's uncommitted work in progress.
+> - **Shrink check** is `.github/scripts/check_baselines_shrink.py` (not an `.mjs`), with unit
+>   tests. It also fails on keys for deleted files, and treats an empty `{}` base as a real baseline.
+> - **CI-generated patch:** `generate-baselines.yml` prunes, re-suppresses and runs Prettier, and
+>   uploads one `ci-generated` patch, so formatting is never run locally either.
+> - **`max-lines`** exempts every `*.d.ts` in `packages/api-client` and `packages/types`, not just
+>   `schema.d.ts`.
+
 Load `turborepo`/`next-best-practices` first, and use Context7 for ESLint 9.39 suppressions and eslint-config-next 16.3 docs.
 
 **Order inside the PR:**

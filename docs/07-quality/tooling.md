@@ -52,6 +52,24 @@ the `main`-push block** — that check runs before `SKIP_HOOKS` is even read, de
 it enforces the PR-only workflow, not code quality. `git push --no-verify` is the only way past
 it. Both escape hatches are for humans in an emergency; agents never use them.
 
+## Lint baselines — `eslint-suppressions.json`
+
+Every workspace lints with `--max-warnings 0`, and every rule a config sets to `warn` is raised
+to `error` (`packages/config/eslint.warnings-as-errors.mjs`). Violations that existed when a rule
+was introduced are frozen in the workspace's `eslint-suppressions.json` (ESLint's bulk
+suppressions, [ADR-0014](../decisions/0014-no-hardcoded-values.md)):
+
+- **New code can't add a violation** — anything not in the baseline fails `pnpm lint`.
+- **Fixed violations must be pruned** — ESLint exits 2 when a suppression no longer matches.
+- **The baseline can only shrink** — the `lint-baselines` job in `repo-hygiene.yml` fails if
+  any file/rule count goes up (a renamed file carries its entries).
+
+Baselines are generated in CI, never locally (ADR-0007): add the `generate-baselines` label to
+the PR (remove and re-add it to run again), or run the `generate-baselines` workflow once it is on
+`main`. It prunes stale suppressions, re-suppresses what remains and runs Prettier, then uploads
+one patch: `gh run download <run-id> -n ci-generated` and `git apply ci-generated.patch`. The
+baselines are excluded from Prettier and cspell — ESLint owns their format.
+
 ## Spelling — cspell
 
 Configured in `cspell.json`; run with root `pnpm spell`; enforced in CI by `repo-hygiene.yml`.

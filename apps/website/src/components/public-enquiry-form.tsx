@@ -2,14 +2,15 @@
 
 import { Alert, AlertDescription, Button, Input, Label, Textarea } from "@schoolhub/ui";
 import { useEffect, useRef, useState } from "react";
+import { type PublicFormKind, submitPublicForm } from "@/lib/public-api";
 
 /**
  * Public form submission.
  *
- * Posts **from the browser** straight to the public API endpoint, so the renderer's
- * read-only machine token is never involved (website-builder.md §6). The endpoints are
- * tenant-resolved and re-validated server-side, rate-limited per IP and per tenant, and
- * idempotency-protected — none of which we can or should reimplement here.
+ * Posts **from the browser** through `@/lib/public-api`, so the renderer's read-only machine
+ * token is never involved (website-builder.md §6). The endpoints are tenant-resolved and
+ * re-validated server-side, rate-limited per IP and per tenant, and idempotency-protected —
+ * none of which we can or should reimplement here.
  *
  * Uncontrolled + native HTML5 validation (required/type=email/maxLength) rather than
  * react-hook-form's Form/FormField set: three fields with no interdependent validation
@@ -17,18 +18,13 @@ import { useEffect, useRef, useState } from "react";
  * this would be solving a problem this form doesn't have. Only the styling layer moves
  * onto the shared components (Label/Input/Textarea/Button/Alert).
  */
-const ENDPOINTS = {
-  contact: "/api/v1/public/contact-messages",
-  admission_enquiry: "/api/v1/public/admission-enquiries",
-} as const;
-
 type Status = "idle" | "submitting" | "sent" | "error";
 
 export function PublicEnquiryForm({
   kind,
   tenantSlug,
 }: {
-  kind: keyof typeof ENDPOINTS;
+  kind: PublicFormKind;
   tenantSlug: string;
 }) {
   const [status, setStatus] = useState<Status>("idle");
@@ -48,20 +44,8 @@ export function PublicEnquiryForm({
     const form = new FormData(event.currentTarget);
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_ORIGIN ?? ""}${ENDPOINTS[kind]}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            // Re-validated server-side against the request's host; never trusted as-is.
-            "X-Tenant-Slug": tenantSlug,
-            "Idempotency-Key": crypto.randomUUID(),
-          },
-          body: JSON.stringify(Object.fromEntries(form.entries())),
-        },
-      );
-      setStatus(response.ok ? "sent" : "error");
+      const accepted = await submitPublicForm(kind, tenantSlug, Object.fromEntries(form.entries()));
+      setStatus(accepted ? "sent" : "error");
     } catch {
       setStatus("error");
     }

@@ -11,7 +11,7 @@
     "e2e:report": "playwright show-report",
     "e2e:install": "playwright install --with-deps chromium",
     "e2e:codegen": "playwright codegen http://localhost:3000",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "lint:fix": "eslint --fix",
     "typecheck": "tsc --noEmit",
     "test": "echo \"@schoolhub/e2e holds no unit tests — run 'pnpm e2e' for the browser suite\"",

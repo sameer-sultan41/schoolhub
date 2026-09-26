@@ -21,6 +21,8 @@ jest.mock("next/navigation", () => ({
 // but the mock object itself needs these four functions present (resolved to empty
 // arrays) or the test crashes with "not a function" the moment the dialog opens.
 jest.mock("@/services", () => ({
+  // The real class: components `instanceof`-check it, and tests build `new ApiError(...)`.
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     dashboard: {
       fetchStaffPage: jest.fn(),

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { RenderPage, renderPageMetadata } from "../render-page";
+import { RenderPage, renderPageMetadata } from "@/app/render-page";
 
 interface RouteParams {
   params: Promise<{ slug: string[] }>;

@@ -46,6 +46,8 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/services", () => ({
+  // The real class: components `instanceof`-check it, and tests build `new ApiError(...)`.
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: { auth: { login: jest.fn() } },
 }));
 

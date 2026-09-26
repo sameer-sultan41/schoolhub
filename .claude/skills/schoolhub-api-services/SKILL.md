@@ -1,6 +1,6 @@
 ---
 name: schoolhub-api-services
-description: Use when wiring a new backend API call into apps/dashboard — phrases like "call the students API", "add an endpoint for X", "wire up this module's API calls", "how do I fetch/create/update a <resource>", or any new file under `apps/dashboard/src/services/`. Also use when reviewing a dashboard PR that calls `apiClient` directly, imports `@schoolhub/api-client` outside `src/services/` or `src/lib/auth.ts`, or hardcodes an API path string in a component. SKIP for apps/website (read-only, no API-calling layer) or apps/api (backend).
+description: Use when wiring a new backend API call into apps/dashboard — phrases like "call the students API", "add an endpoint for X", "wire up this module's API calls", "how do I fetch/create/update a <resource>", or any new file under `apps/dashboard/src/services/`. Also use when reviewing a dashboard PR that calls `apiClient` directly, imports `@schoolhub/api-client` outside `src/services/` or `src/lib/`, or hardcodes an API path string in a component. SKIP for apps/website (read-only, no API-calling layer) or apps/api (backend).
 ---
 
 # SchoolHub Dashboard API Services Skill
@@ -141,9 +141,11 @@ const query = useQuery({
 });
 ```
 
-Never `import { apiClient } from "@/lib/auth"` from a component. Never
-`import { ApiError } from "@schoolhub/api-client"` for anything other than `instanceof`
-narrowing on an error you already have (that import is fine — it's not a call).
+Never `import { apiClient } from "@/lib/auth"` from a component. For `instanceof` narrowing
+on an error you already have, import `ApiError` from the services facade —
+`import { ApiError, Services } from "@/services"` — never from `@schoolhub/api-client`. ESLint
+enforces this for `src/app`, `src/features`, `src/components` and `src/hooks`; only
+`src/services/**` and `src/lib/**` (the transport layer) import the client package (ADR-0011).
 
 ## Testing
 
