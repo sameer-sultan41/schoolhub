@@ -5,8 +5,10 @@
 
 Three baselines, one rule — none may grow against <base-ref>:
 - every `eslint-suppressions.json` (frontend, below);
-- the backend's `# noqa` comments: the count per rule code, and of blanket `# noqa` (no codes,
-  which silences every rule on the line), in apps/api's non-test, non-migration Python. Every
+- the backend's suppression comments — every form ruff honours: `# noqa[: …]`, file-level
+  `# ruff: noqa[: …]` / `# flake8: noqa`, and `# ruff: ignore|file-ignore|disable[…]` — counted
+  per rule code, and code-less noqa (which silences every rule) as blanket, in apps/api's
+  non-test, non-migration Python. Every
   code whose rule the base already selects is ratcheted — derived from pyproject.toml, not a
   hand-kept list, so a rule selected later is covered without anyone remembering to add it.
   RUF100 removes dead noqas, ruff's PGH004 rejects blanket ones, and this stops new ones.
@@ -39,8 +41,17 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 
 BASELINE = "eslint-suppressions.json"
-# `# noqa`, `#noqa:E501`, `# NOQA: F401, E501  reason` — ruff's forms. No codes means blanket.
-NOQA = re.compile(r"#\s*(?i:noqa)(?::\s*(?P<codes>[A-Z]+[0-9]+(?:[\s,]+[A-Z]+[0-9]+)*))?")
+# Every suppression-comment form ruff honours (docs.astral.sh/ruff/linter, "Error suppression").
+# A code is uppercase letters then digits; a list is separated by commas or spaces, never by a
+# newline, and each code must end there (so "E2E_TENANT" on the next line is not code "E2").
+CODE = r"[A-Z]+[0-9]+(?![A-Za-z0-9_])"
+# `# noqa`, `#NOQA : E501, F401  reason`, and the file-level `# ruff: noqa[: …]` /
+# `# flake8: noqa[: …]` ("#ruff:"/"#flake8:" are case-sensitive, "noqa" is not). No codes = blanket.
+NOQA = re.compile(
+    rf"#[ \t]*(?:(?:ruff|flake8)[ \t]*:[ \t]*)?(?i:noqa)(?:[ \t]*:[ \t]*(?P<codes>{CODE}(?:[ \t,]+{CODE})*))?"
+)
+# `# ruff: ignore[E501]` (one line), `# ruff: file-ignore[…]`, `# ruff: disable[…]` (a block).
+BRACKETED = re.compile(r"#[ \t]*ruff[ \t]*:[ \t]*(?:ignore|file-ignore|disable)\[(?P<codes>[^\]]*)\]")
 BLANKET = "blanket"
 # Where noqa comments are ratcheted: apps/api's own Python, minus tests and generated migrations.
 NOQA_SCOPE = (
@@ -48,6 +59,7 @@ NOQA_SCOPE = (
     ":(glob,exclude)apps/api/**/migrations/**",
     ":(glob,exclude)apps/api/**/tests/**",
     ":(glob,exclude)apps/api/**/test_*.py",
+    ":(glob,exclude)apps/api/**/tests.py",
 )
 BOUNDARIES_TEST = "apps/api/tests/test_import_boundaries.py"
 
@@ -98,18 +110,22 @@ def growth(before: dict, after: dict, moved: dict[str, str]) -> list[str]:
 
 
 def count_noqa(text: str) -> Counter[str]:
-    """Occurrences of each noqa code in text, blanket `# noqa` counted under BLANKET."""
+    """Occurrences of each suppressed code in text, line by line; code-less noqa is BLANKET."""
     counts: Counter[str] = Counter()
-    for match in NOQA.finditer(text):
-        codes = match["codes"]
-        counts.update(re.split(r"[\s,]+", codes) if codes else [BLANKET])
+    for line in text.splitlines():
+        for match in NOQA.finditer(line):
+            codes = match["codes"]
+            counts.update(re.findall(CODE, codes) if codes else [BLANKET])
+        for match in BRACKETED.finditer(line):
+            counts.update(re.findall(CODE, match["codes"]))
     return counts
 
 
 def noqa_counts(ref: str | None) -> Counter[str]:
     """count_noqa over NOQA_SCOPE: the working tree (ref=None, untracked files included, like
     baseline_files) or the tree at ref (`git grep <ref>`)."""
-    source = ["-E", "#[[:space:]]*noqa", ref] if ref else ["--untracked", "-E", "#[[:space:]]*noqa"]
+    pattern = ["-E", "noqa|ruff[[:space:]]*:"]  # a cheap superset; count_noqa does the parsing
+    source = [*pattern, ref] if ref else ["--untracked", *pattern]
     result = _git("grep", "-h", "-I", "-i", *source, "--", *NOQA_SCOPE, check=False)
     if result.returncode > 1:  # 1 is "no match"; anything above is git failing
         raise RuntimeError(f"git grep failed: {result.stderr.strip()}")
@@ -132,13 +148,15 @@ def known_violations(source: str, origin: str = BOUNDARIES_TEST) -> set[tuple[st
             continue
         if not any(isinstance(target, ast.Name) and target.id == "KNOWN_VIOLATIONS" for target in targets):
             continue
-        if (  # frozenset({...}) / set({...}): the one call literal_eval can't take
+        if (  # frozenset({...}) / set({...}) / frozenset(): the calls literal_eval can't take
             isinstance(value, ast.Call)
             and isinstance(value.func, ast.Name)
             and value.func.id in {"frozenset", "set"}
-            and len(value.args) == 1
+            and len(value.args) <= 1
             and not value.keywords
         ):
+            if not value.args:  # the PR that fixes the last violation empties the baseline
+                return set()
             value = value.args[0]
         try:
             entries = ast.literal_eval(value)

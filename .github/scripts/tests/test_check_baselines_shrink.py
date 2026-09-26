@@ -129,6 +129,9 @@ class KnownViolationsParsing(unittest.TestCase):
         source = "KNOWN_VIOLATIONS = {('apps.a.x', 'apps.b.views'), ('core.seed', 'apps.c')}\n"
         self.assertEqual(shrink.known_violations(source), self.PAIRS)
 
+    def test_empty_frozenset_is_an_empty_baseline(self) -> None:
+        self.assertEqual(shrink.known_violations("KNOWN_VIOLATIONS = frozenset()\n"), set())
+
     def test_missing_assignment_raises(self) -> None:
         with self.assertRaises(ValueError):
             shrink.known_violations("VIOLATIONS = frozenset()\n")
@@ -151,6 +154,21 @@ class NoqaCounting(unittest.TestCase):
     def test_blanket_noqa_is_counted(self) -> None:
         # The bug this pins: a code-less `# noqa` silences every rule but was invisible.
         self.assertEqual(shrink.count_noqa("a  # noqa\nb  # noqa -- legacy\n"), {shrink.BLANKET: 2})
+
+    def test_whitespace_before_the_colon_still_names_codes(self) -> None:
+        self.assertEqual(shrink.count_noqa("a  # noqa : BLE001\n"), {"BLE001": 1})
+
+    def test_file_level_forms_are_counted(self) -> None:
+        text = "# ruff: noqa: BLE001\n#ruff:noqa\n# flake8: noqa\n# flake8: NOQA: E501\n"
+        self.assertEqual(shrink.count_noqa(text), {"BLE001": 1, shrink.BLANKET: 2, "E501": 1})
+
+    def test_bracketed_ruff_suppressions_are_counted(self) -> None:
+        text = "# ruff: ignore[E501, F401]\n# ruff: file-ignore[BLE001]\n# ruff: disable[E501]\n# ruff: enable[E501]\n"
+        self.assertEqual(shrink.count_noqa(text), {"E501": 2, "F401": 1, "BLE001": 1})
+
+    def test_a_code_list_never_continues_onto_the_next_line(self) -> None:
+        # "E2E_..." on the following line once read as a phantom code "E2".
+        self.assertEqual(shrink.count_noqa("a  # noqa: BLE001\nE2E_TENANT = 1\n"), {"BLE001": 1})
 
 
 class BackendBaselines(unittest.TestCase):

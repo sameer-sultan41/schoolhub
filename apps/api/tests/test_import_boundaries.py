@@ -107,7 +107,8 @@ class ImportBoundaryTests(SimpleTestCase):
             new,
             [],
             "ADR-0013: core imports no app, and apps never import another app's "
-            "views/viewset/urls/reports/tasks — go through that app's services instead:\n"
+            "views/viewsets/viewset/view/urls/reports/tasks — go through that app's services "
+            "instead:\n"
             + "\n".join(f"  {source} -> {target}" for source, target in new),
         )
 

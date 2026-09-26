@@ -117,6 +117,7 @@ class WritePermissionContractTests(TestCase):
 
     def test_no_write_route_falls_back_to_a_read_key(self):
         offenders: list[str] = []
+        checked = {"viewset": 0, "apiview": 0}
         for route, view, actions in _api_routes():
             guarded = HasPermissionKey in getattr(view, "permission_classes", [])
             if _is_exempt(route) or not guarded:
@@ -129,10 +130,12 @@ class WritePermissionContractTests(TestCase):
                 writes = [(method, name) for method, name in actions.items() if method in allowed]
             mapping = getattr(view, "required_permission_map", None) or {}
             fallback = getattr(view, "required_permission", None)
+            checked["apiview" if actions is None else "viewset"] += len(writes)
             for method, action in writes:
                 if mapping.get(action):
                     continue
-                if fallback is None or fallback.rpartition(".")[2] == "view":
+                # `not fallback`, as in _required_key: an empty string also rejects everyone.
+                if not fallback or fallback.rpartition(".")[2] == "view":
                     offenders.append(
                         f"{method.upper()} {route} ({view.__name__}.{action}) -> {fallback!r}"
                     )
@@ -143,6 +146,10 @@ class WritePermissionContractTests(TestCase):
             "required_permission — a read key or none. Map each action to its write key "
             "(schoolhub-backend-module skill, step 4):\n" + "\n".join(offenders),
         )
+        # A detector that finds nothing passes vacuously: if reading the routes' action maps ever
+        # broke, every ViewSet would look write-free.
+        self.assertGreater(checked["viewset"], 0, f"no ViewSet write routes found: {checked}")
+        self.assertGreater(checked["apiview"], 0, f"no APIView write routes found: {checked}")
 
 
 def _inline_permission_keys() -> list[tuple[str, int, str]]:
