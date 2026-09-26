@@ -71,7 +71,12 @@ describe("StaffDetailSheet", () => {
 
   it("renders nothing when no row is selected", () => {
     renderWithProviders(
-      <StaffDetailSheet row={null} onOpenChange={jest.fn()} onEdit={jest.fn()} onDelete={jest.fn()} />,
+      <StaffDetailSheet
+        row={null}
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+      />,
     );
 
     expect(screen.queryByText("Ayesha Khan")).not.toBeInTheDocument();
