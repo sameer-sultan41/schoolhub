@@ -41,8 +41,8 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0010](0010-backend-module-layout.md) | Backend apps use one package per resource | Accepted | review only (`schoolhub-backend-module` skill) |
 | [0011](0011-dashboard-services-layer.md) | Dashboard API calls go only through `src/services/` | Accepted | ESLint `no-restricted-imports` (UI layers) |
 | [0012](0012-tests-in-dunder-tests.md) | Frontend tests live in sibling `__tests__/` folders | Accepted | `test-placement` CI job |
-| [0013](0013-cross-app-dependencies.md) | Cross-app dependency rules for the backend | Accepted | review only (planned: import-linter) |
-| [0014](0014-no-hardcoded-values.md) | Every value has one owner — no hardcoding | Accepted | ESLint rules + shrink-only baselines (frontend); `messages.types-check.ts`, `test_endpoint_contracts.py` (planned: ruff) |
+| [0013](0013-cross-app-dependencies.md) | Cross-app dependency rules for the backend | Accepted | `apps/api/tests/test_import_boundaries.py` |
+| [0014](0014-no-hardcoded-values.md) | Every value has one owner — no hardcoding | Accepted | ESLint rules + shrink-only baselines (frontend); ruff `TID251`, `test_env_example.py`, `test_endpoint_contracts.py` (backend) |
 | [0015](0015-independent-plan-review.md) | Non-trivial plans pass an independent reviewer before approval | Accepted | `.claude/hooks/plan_review_gate.py` (tested in `repo-hygiene.yml`), `plan-review-record` CI job |
 | [0016](0016-commit-message-rules.md) | Commit messages: conventional subjects, no AI attribution, fixes name their root cause | Accepted | `.githooks/commit-msg`, `commit-messages` CI job |
 

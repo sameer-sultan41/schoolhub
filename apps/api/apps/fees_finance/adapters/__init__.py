@@ -18,7 +18,7 @@ anything.
 # way `permissions.py` and `features.py` populate their registries. Without
 # this line `adapter_for` raises for every provider — the registry would be
 # empty and nothing would say why, since the module exists and looks correct.
-from apps.fees_finance.adapters import generic_csv  # noqa: E402,F401  (side effect)
+from apps.fees_finance.adapters import generic_csv  # noqa: F401  (side effect)
 from apps.fees_finance.adapters.base import (
     ParseResult,
     SettlementAdapter,

@@ -4,7 +4,7 @@ Tests run against PostgreSQL — never SQLite — because Row-Level Security is 
 core isolation mechanism and cannot be exercised on another backend.
 """
 
-from config.settings.base import *  # noqa: F403
+from config.settings.base import *
 
 DEBUG = False
 

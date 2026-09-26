@@ -50,13 +50,25 @@ line-length = 100
 extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "DJ", "S", "C4", "RET", "SIM"]
+# RUF100: no dead `noqa` comments. BLE: no blind `except Exception`. TID251: the banned APIs
+# below. Existing violations carry a `# noqa: <code>` generated in CI (ADR-0014's ratchet: fix
+# one, and RUF100 flags its now-unused noqa, so the list only shrinks).
+select = ["E", "F", "I", "UP", "B", "DJ", "S", "C4", "RET", "SIM", "RUF100", "BLE", "TID251"]
 ignore = ["S101"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"os.environ".msg = "Read configuration through django-environ in config/settings/, not os.environ (ADR-0014)."
+"os.getenv".msg = "Read configuration through django-environ in config/settings/, not os.getenv (ADR-0014)."
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106"]
 "*/tests/*" = ["S105", "S106"]
-"config/settings/*" = ["F403", "F405"]
+# The settings modules own configuration; the entry points only select the settings module.
+"config/settings/*" = ["F403", "F405", "TID251"]
+"manage.py" = ["TID251"]
+"config/wsgi.py" = ["TID251"]
+"config/asgi.py" = ["TID251"]
+"config/celery.py" = ["TID251"]
 
 [tool.coverage.run]
 source = ["core", "apps"]
@@ -79,6 +91,13 @@ exclude = ["migrations"]
 # produces noise that trains people to ignore the checker.
 module = ["*.tests.*", "tests.*"]
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+# Every function must be typed (ENGINEERING_STANDARDS.md §2). A per-package ratchet: these are the
+# core packages that already pass (CI report, 2026-09-26); add a package the moment it does, never
+# remove one. generate-baselines.yml's Python job reports which packages are clean.
+module = ["core.common.*", "core.documents.*", "core.money.*"]
+disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
 # django-stubs cannot follow Manager.from_queryset(), which builds a class at

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (replaces the "apps talk only via `services.py`" rule in the original `repo-structure.md`, which was never followed)
 - **Date:** 2026-09-26
-- **Enforced by:** review only (planned: import-linter `forbidden` contracts in `apps/api/pyproject.toml`, run in `api.yml`)
+- **Enforced by:** `apps/api/tests/test_import_boundaries.py`, which reads every non-test module under `apps/` and `core/` and fails on a new violation or on a stale entry in its `KNOWN_VIOLATIONS` baseline (run by `api.yml`'s test job)
 
 ## Context
 
@@ -25,7 +25,7 @@ foreign keys.
   fields.
 - **Writes and business rules** that belong to another app go through that app's `services`.
   Don't re-implement its invariants or mutate its rows directly.
-- An app **never** imports another app's `views`, `viewset`, `urls`, `reports` or `tasks`.
+- An app **never** imports another app's `views`, `view`, `viewset`, `urls`, `reports` or `tasks`.
   Anything shared there belongs in the owning app's `services`, or in `core/`.
 - `core/` **never** imports `apps/`. Hooks from apps into core self-register from
   `AppConfig.ready()`, as `communication` does with `core/notifications`.
@@ -37,11 +37,16 @@ foreign keys.
   layer nobody has asked for.
 - **No rule** — why not: the view and report imports above are exactly the coupling that turns
   a refactor of one app into a break in another.
+- **import-linter `forbidden` contracts** (the plan's first choice) — why not: a contract can't
+  express "another app's views, but not your own" without one contract per app, and forbidding
+  indirect imports trips on ordinary service → task chains. A contract test in the repo's
+  existing style (`test_rls_coverage.py`, `test_endpoint_contracts.py`) states the rule exactly
+  and needs no new dependency.
 
 ## Consequences
 
 The seed commands (`core/rbac/management/commands/seed_e2e_data.py`, `seed_all_roles.py`) and
-the two cross-app view/report imports are the known violations. They will be baselined when
-import-linter lands and removed by moving the seeds into a dedicated package. Test code is out
+the two cross-app view/report imports are the known violations, baselined in the test's
+`KNOWN_VIOLATIONS`; the seed commands leave it when they move into a dedicated package. Test code is out
 of scope for these contracts: about a dozen `core/` test modules import apps' test factories,
 which is legitimate, so the contracts must exclude `tests` packages.

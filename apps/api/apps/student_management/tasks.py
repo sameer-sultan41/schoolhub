@@ -58,7 +58,7 @@ def import_students_task(self, *, tenant_id: str, job_id: str, actor_id: str) ->
                 "errors": errors,
             },
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         # Deliberately not re-raised: each of import_student_row/update_progress/
         # mark_*'s writes above already committed independently in its own
         # tenant_atomic (core.tenancy.tasks.TenantAwareTask's docstring explains
@@ -89,7 +89,7 @@ def export_students_task(self, *, tenant_id: str, job_id: str, actor_id: str) ->
             actor_id=uuid.UUID(actor_id),
         )
         mark_succeeded(job=job, result={"result_file_id": str(file.pk)})
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         # See import_students_task's matching comment above.
         mark_failed(job=job, error=str(exc))
 
@@ -116,6 +116,6 @@ def generate_id_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str) 
             actor_id=uuid.UUID(actor_id),
         )
         mark_succeeded(job=job, result={"result_file_id": str(file.pk), "count": rendered_count})
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         # See import_students_task's matching comment above.
         mark_failed(job=job, error=str(exc))

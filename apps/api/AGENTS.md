@@ -36,7 +36,9 @@ apps/<module>/     one app per module doc. Layout: models.py + permissions.py at
                    ADR-0010 (docs/decisions/0010-backend-module-layout.md). attendance,
                    examinations and fees_finance are still flat; student_management is
                    half-migrated. Cross-app rules: ADR-0013.
-tests/             cross-cutting suites (RLS coverage, endpoint contracts, API contract)
+tests/             cross-cutting contract suites: RLS coverage, append-only grants, endpoint and
+                   inline permission keys, API contract, cross-app import boundaries (ADR-0013),
+                   .env.example drift
 ```
 
 ## Skills To Load First
@@ -74,6 +76,9 @@ AGENTS.md:
 8. **Do not run tests, linters, or typechecks locally.** Commit, push, and let CI report —
    CI is the source of truth. Fix against CI, never `--no-verify`.
 9. **Never add a `Co-Authored-By` trailer or any AI attribution** to a commit or PR.
+10. **Never grow a baseline to get green.** No new `# noqa: BLE001` / `# noqa: TID251`, no new
+    `KNOWN_VIOLATIONS` entry, no lowered coverage floor — fix the code. The `lint-baselines` CI job
+    fails on any of these (ADR-0014). Configuration is read only in `config/settings/` (ruff TID251).
 
 ## Versions
 

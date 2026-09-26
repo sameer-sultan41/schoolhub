@@ -200,8 +200,8 @@ class ResolveTests(SimpleTestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self._saved_templates = registry._templates.copy()  # noqa: SLF001
-        self._saved_resolver = templates_module._override_resolver  # noqa: SLF001
+        self._saved_templates = registry._templates.copy()
+        self._saved_resolver = templates_module._override_resolver
         templates_module.set_override_resolver(None)
         registry.register(
             self.CODE,
@@ -212,7 +212,7 @@ class ResolveTests(SimpleTestCase):
         )
 
     def tearDown(self) -> None:
-        registry._templates = self._saved_templates  # noqa: SLF001
+        registry._templates = self._saved_templates
         templates_module.set_override_resolver(self._saved_resolver)
         super().tearDown()
 

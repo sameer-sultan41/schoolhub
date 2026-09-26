@@ -3,7 +3,7 @@
 Everything here is a hardening decision; see docs/06-security/security.md.
 """
 
-from config.settings.base import *  # noqa: F403
+from config.settings.base import *
 from config.settings.base import env
 
 DEBUG = False
@@ -29,4 +29,4 @@ CORS_ALLOW_CREDENTIALS = True
 X_FRAME_OPTIONS = "DENY"
 
 # Connection reuse; PgBouncer fronts the database in transaction pooling mode.
-DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=0)  # noqa: F405
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=0)

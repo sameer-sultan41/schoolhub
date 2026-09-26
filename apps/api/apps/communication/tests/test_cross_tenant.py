@@ -27,7 +27,7 @@ CODE = "communication-cross-tenant-test.event"
 class CommunicationCrossTenantTests(CommunicationAPITestCase):
     def setUp(self) -> None:
         super().setUp()
-        self._saved_templates = platform_templates._templates.copy()  # noqa: SLF001
+        self._saved_templates = platform_templates._templates.copy()
         platform_templates.register(
             CODE, channel=NotificationChannel.IN_APP, subject="Hi", body="Body", variables=set()
         )
@@ -53,7 +53,7 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
             self.other_notice = NoticeFactory(tenant=self.other_tenant)
 
     def tearDown(self) -> None:
-        platform_templates._templates = self._saved_templates  # noqa: SLF001
+        platform_templates._templates = self._saved_templates
         super().tearDown()
 
     def test_reading_another_tenants_template_override_is_404(self) -> None:
