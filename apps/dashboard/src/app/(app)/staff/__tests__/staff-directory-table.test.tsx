@@ -13,6 +13,9 @@ import { StaffDirectoryTable } from "../staff-directory-table";
 // `useQuery` calls — never invoked until a dialog actually opens, but the mock object
 // itself needs these present (resolved to empty arrays) or a test crashes with "not a
 // function" the moment a dialog opens. `exitStaff` backs the Delete/"Exit selected" flow.
+// `fetchStaffById` backs both `StaffFormDialog`'s edit-mode pre-fill AND
+// `StaffDetailSheet` (opened by a row click) — same reason, resolved to a minimal but
+// complete `StaffDetailRecord` shape.
 jest.mock("@/services", () => ({
   Services: {
     dashboard: {
@@ -22,6 +25,29 @@ jest.mock("@/services", () => ({
       fetchDesignations: jest.fn().mockResolvedValue([]),
       fetchStaffDirectory: jest.fn().mockResolvedValue([]),
       exitStaff: jest.fn(),
+      fetchStaffById: jest.fn().mockResolvedValue({
+        id: "st-1",
+        employee_number: "EMP-0231",
+        first_name: "Ayesha",
+        last_name: "Khan",
+        gender: null,
+        date_of_birth: null,
+        photo_file_id: null,
+        photo_url: null,
+        staff_type: "teaching",
+        campus_id: "c-1",
+        department_id: null,
+        designation_id: null,
+        reports_to_staff_id: null,
+        employment_type: null,
+        employment_status: "active",
+        joining_date: "2022-01-01",
+        email: null,
+        phone: "000",
+        national_id: null,
+        public_bio: null,
+        address: null,
+      }),
     },
   },
 }));
@@ -136,6 +162,19 @@ describe("StaffDirectoryTable", () => {
 
     expect(within(row as HTMLElement).queryByRole("img")).not.toBeInTheDocument();
     expect(within(row as HTMLElement).getByText("AK")).toBeInTheDocument();
+  });
+
+  it("humanizes an employment_status not in STATUS_META instead of showing it raw", async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [{ ...staffRecord(), employment_status: "on_notice" }],
+      pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
+    });
+
+    renderWithProviders(<StaffDirectoryTable />);
+
+    const row = (await screen.findByText("Ayesha Khan")).closest("tr");
+    expect(within(row as HTMLElement).getByText("On notice")).toBeInTheDocument();
+    expect(within(row as HTMLElement).queryByText("on_notice")).not.toBeInTheDocument();
   });
 
   it("shows the staff photo when the record has one", async () => {
@@ -472,6 +511,61 @@ describe("StaffDirectoryTable", () => {
     await user.click(screen.getByRole("button", { name: "Delete Ayesha Khan" }));
 
     expect(await screen.findByRole("heading", { name: "Exit staff member" })).toBeInTheDocument();
+  });
+
+  it("clicking a row (not its checkbox or actions) opens the staff detail sheet", async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [staffRecord()],
+      pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
+    });
+
+    renderWithProviders(<StaffDirectoryTable />);
+    await screen.findByText("Ayesha Khan");
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText("Ayesha Khan"));
+
+    // The sheet's own (visually hidden) title carries the row's name — distinct from
+    // the row's own "Ayesha Khan" text, so this proves the sheet actually opened.
+    expect(await screen.findByText("Ayesha Khan — staff details")).toBeInTheDocument();
+  });
+
+  it("Edit inside the detail sheet closes it and opens the staff form dialog", async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [staffRecord()],
+      pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
+    });
+
+    renderWithProviders(<StaffDirectoryTable />);
+    await screen.findByText("Ayesha Khan");
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText("Ayesha Khan"));
+    await screen.findByText("Ayesha Khan — staff details");
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(await screen.findByRole("heading", { name: "Edit staff member" })).toBeInTheDocument();
+    expect(screen.queryByText("Ayesha Khan — staff details")).not.toBeInTheDocument();
+  });
+
+  it("Exit inside the detail sheet closes it and opens the exit staff dialog", async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [staffRecord()],
+      pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
+    });
+
+    renderWithProviders(<StaffDirectoryTable />);
+    await screen.findByText("Ayesha Khan");
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText("Ayesha Khan"));
+    await screen.findByText("Ayesha Khan — staff details");
+
+    await user.click(screen.getByRole("button", { name: "Exit" }));
+
+    expect(await screen.findByRole("heading", { name: "Exit staff member" })).toBeInTheDocument();
+    expect(screen.queryByText("Ayesha Khan — staff details")).not.toBeInTheDocument();
   });
 
   it('the bulk "Exit selected" button is absent with no selection, and appears with the right count once a row is checked', async () => {
