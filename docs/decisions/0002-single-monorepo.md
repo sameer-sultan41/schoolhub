@@ -9,7 +9,7 @@
 The original specification recommended four repositories: `schoolhub-api`,
 `schoolhub-frontend`, `schoolhub-infra` and `schoolhub-docs`. In practice the contract between
 backend and frontend drifted silently while they lived apart. The root
-[`AGENTS.md`](../../AGENTS.md) records it: "A change that spans them is one pull request —
+[`AGENTS.md`](../../AGENTS.md) recorded it: "A change that spans them is one pull request —
 which is the point, because the contract between backend and frontend had already drifted
 silently while they lived apart."
 

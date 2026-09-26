@@ -42,8 +42,8 @@ const sheetVariants = cva(
   "flex flex-col items-stretch fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-400",
   {
     variants: {
-      // Logical (`start`/`end`), never physical (`left`/`right`) — AGENTS.md §0c names
-      // this file specifically: "this repo's own Sheet already made this call, and Urdu
+      // Logical (`start`/`end`), never physical (`left`/`right`) — packages/ui/AGENTS.md
+      // (formerly the root AGENTS.md §0c) names this file specifically: "this repo's own Sheet already made this call, and Urdu
       // RTL depends on every component agreeing with it." Metronic's own file used
       // `left`/`right` as the variant KEY names even though the class values underneath
       // were already logical (`start-0`/`border-e`, `end-0`/`border-s`, with `rtl:`
