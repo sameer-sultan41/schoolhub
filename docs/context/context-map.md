@@ -36,8 +36,12 @@ Paths are relative to the repo root. **Always** also load `AGENTS.md`.
 
 | Task type | Load these files |
 | --------- | ---------------- |
-| **Pick up in-flight work / check what exists** | `docs/project-status.md` — the per-module implementation matrix and "Start here next session" |
-| **Implement/change a module's backend API** | `M(x)` · `E(x)` · `docs/02-architecture/api-architecture.md` · `docs/02-architecture/auth-and-rbac.md` |
+| **Pick up in-flight work / check what exists** | `docs/project-status.md` — the per-module implementation matrix and "Start here next session"; `docs/deferred-work.md` for what was deliberately left out and why |
+| **"Why is it built like this?" / before changing a convention** | `docs/decisions/README.md` → the relevant ADR · `docs/02-architecture/repo-structure.md` (where new code goes) |
+| **Shared UI primitives / design system** | `packages/ui/AGENTS.md` · `DESIGN.md` · `docs/decisions/0009-ported-ui-primitives.md` (skill: `schoolhub-ui-port`) |
+| **Hooks, formatting, spelling, CI plumbing** | `docs/07-quality/tooling.md` · `docs/decisions/0007-ci-source-of-truth.md` |
+| **A feature's design and plan (superpowers flow)** | `docs/superpowers/specs/` (approved designs) · `docs/superpowers/plans/` (task-by-task plans) |
+| **Implement/change a module's backend API** | `M(x)` · `E(x)` · `docs/02-architecture/api-architecture.md` · `docs/02-architecture/auth-and-rbac.md` (skill: `schoolhub-backend-module`) |
 | **Build dashboard UI for a module** | `M(x)` · `docs/02-architecture/api-architecture.md` · `docs/02-architecture/tech-stack.md` §3 · `docs/00-overview/users-and-roles.md` |
 | **Design or migrate DB schema** | `E(x)` · `docs/02-architecture/database-architecture.md` · `docs/05-database/erd-overview.md` |
 | **Add/modify an AI feature** | `docs/04-ai/ai-features.md` (find the `AI-XXX-NN` entry) · `docs/02-architecture/ai-architecture.md` · `docs/04-ai/ai-governance.md` · `M(owning module)` |

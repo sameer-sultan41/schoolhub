@@ -24,7 +24,7 @@ SchoolHub is an **AI-powered, multi-tenant School Management SaaS**: one platfor
 | `06-security/` | numbered security requirements (SEC-01…) |
 | `07-quality/` | non-functional requirements, testing strategy, repo tooling (hooks, Prettier, cspell) |
 | `08-future/` | mobile apps, extensibility roadmap |
-| `context/` | the context map (task type → the docs to load), plus obsolete per-area AGENTS.md templates due for removal |
+| `context/` | the context map (task type → the docs to load) |
 
 ## Locked Vocabulary (do not invent alternatives)
 

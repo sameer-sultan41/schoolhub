@@ -14,9 +14,13 @@ control so it is reviewable and reproducible rather than clicked into a settings
 
 ## Applying it
 
-**Not currently active.** Branch protection and rulesets are gated behind GitHub Pro (or an
-organisation plan) for **private** repositories; both the
-`branches/main/protection` and `rulesets` APIs return:
+**Not applied — and superseded in practice.** The repository is now public, and `main` is
+protected by **classic branch protection** instead (PR required, the six `repo-hygiene` checks
+required and strict, admins included, no force-push or deletion, linear history off — see
+`docs/project-status.md` "Repository settings"). This ruleset still requires linear history and
+squash/rebase only, which contradicts [ADR-0006](../../docs/decisions/0006-merge-commits.md)
+(merge commits); it must be corrected before anyone applies it. While the repository was private,
+both the `branches/main/protection` and `rulesets` APIs returned:
 
 ```
 403 Upgrade to GitHub Pro or make this repository public to enable this feature.

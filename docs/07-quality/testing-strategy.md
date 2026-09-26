@@ -39,7 +39,7 @@ The test mandate from [`../02-architecture/multi-tenancy.md`](../02-architecture
 - Fixtures create **two fully-populated tenants** (A and B) with parallel data.
 - For **every endpoint class of every module**, authenticated as tenant-A users, the suite attempts against tenant-B resources: detail read, list leakage (B rows must never appear), create-with-foreign-reference (e.g. invoice for a B student), update, delete, file access, export, and search.
 - Expected result: `404` for direct references (never `403` — no existence leaks), zero B rows in lists/exports/search.
-- Implemented as a parameterized harness driven by the endpoint registry, so **a new endpoint is automatically enrolled**; opting an endpoint out requires an explicit, reviewed allowlist entry (platform-admin paths only).
+- Intended as a parameterized harness driven by the endpoint registry, so that a new endpoint is automatically enrolled; opting an endpoint out would require an explicit, reviewed allowlist entry (platform-admin paths only). **Not built yet** — today every module hand-writes `tests/test_cross_tenant.py`, and a missing entry fails nothing ([ADR-0004](../decisions/0004-cross-tenant-404.md)).
 - A module PR without cross-tenant coverage for its new endpoints fails review by definition (phase-plan.md §4.2).
 
 ## 4. RBAC Permission-Matrix Tests

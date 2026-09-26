@@ -22,31 +22,31 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 1. `DOCS/AGENTS.md` — project summary, locked vocabulary, invariants. Always.
 2. `DOCS/context/context-map.md` — row "Build dashboard UI for a module".
-3. The module doc `DOCS/docs/03-modules/<module>.md` for the screen you are building: §5–§8 define
+3. The module doc `DOCS/03-modules/<module>.md` for the screen you are building: §5–§8 define
    the features/workflows/journeys, §11 the validations to mirror client-side, §13 the reports,
    §16 the endpoints you consume.
 
-## Stack Rules (see `DOCS/docs/02-architecture/tech-stack.md` §3)
+## Stack Rules (see `DOCS/02-architecture/tech-stack.md` §3)
 
 - Server state via TanStack Query against the generated API client (`packages/api-client`,
   regenerated from OpenAPI — never hand-write fetch types). Minimal client state via Zustand.
 - Forms: React Hook Form + Zod; Zod schemas mirror the module doc §11 validations.
-- UI: Tailwind + shadcn/ui components from `packages/ui`; tenant branding comes from tenant
-  settings — no hardcoded colors.
+- UI: Tailwind + the ported primitives in `packages/ui` ([ADR-0009](../../docs/decisions/0009-ported-ui-primitives.md));
+  tenant branding comes from tenant settings — no hardcoded colors.
 - i18n via `next-intl`; every user-facing string goes through messages, RTL-safe layout.
 
 ## Hard Rules
 
 1. **Permission-aware UI:** hide/disable by the user's permission keys (module doc §4), but never
    treat that as security — the API enforces.
-2. **Roles:** only slugs from `DOCS/docs/00-overview/users-and-roles.md`.
+2. **Roles:** only slugs from `DOCS/00-overview/users-and-roles.md`.
 3. **Async jobs:** long operations return `202` + job resource — build polling/progress UI, don't
    block.
 4. **Errors:** render the API error envelope (`error.code`, field `details`) — don't invent
    messages for known codes.
-5. **Accessibility:** WCAG 2.1 AA per `DOCS/docs/07-quality/non-functional.md`.
-6. Component tests per `DOCS/docs/07-quality/testing-strategy.md` — **Jest + React Testing
-   Library** in this repo (the doc says Vitest; the team chose Jest). Browser-level flows go
+5. **Accessibility:** WCAG 2.1 AA per `DOCS/07-quality/non-functional.md`.
+6. Component tests per `DOCS/07-quality/testing-strategy.md` — **Jest + React Testing
+   Library** ([ADR-0008](../../docs/decisions/0008-jest-not-vitest.md)). Browser-level flows go
    in `e2e/` (Playwright): this app fetches client-side, so its API can be stubbed per test
    from the browser — see `e2e/README.md`. Anything needing a real database goes in the
    E2E `live` lane, not here and not in Jest.
@@ -58,32 +58,16 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Auth guard (routing only, cookie presence) | `src/proxy.ts` (Next 16's rename of `middleware`) |
 | Access token in memory + refresh-on-401 | `src/lib/auth.ts` → `@schoolhub/api-client` |
 | Feature API calls (one file per domain, no hardcoded paths) | `src/services/endpoints.ts` + `src/services/modules/<domain>/`, aggregated as `Services` in `src/services/index.ts` |
-| Permission helpers (`hasPermission`, `<Can>`) | `src/lib/permissions.ts`, `src/components/can.tsx` |
+| Permission helpers | `src/lib/permissions.ts` → `canAccessModule(user, module)` (used by the sidebar). A per-action `<Can>` gate does not exist yet — add it to `src/components/` when the first screen needs action-level gating |
 | TanStack Query client + key factory | `src/lib/query-client.ts` |
 | Validated public env | `src/lib/env.ts` |
-| Tenant branding → CSS variables | `src/components/tenant-theme.tsx` |
+| Tenant branding → CSS variables | Not rebuilt since the shell reset: `Services.tenant` fetches branding, nothing applies it yet (`docs/metronic-dashboard-shell.md` backlog) |
 | Locale resolution (no locale routing) | `src/i18n/request.ts`, `messages/*.json` |
 | Route groups | `src/app/(auth)/…` unauthenticated · `src/app/(app)/…` authenticated |
+| Imports | `@/…` alias only — ESLint bans `../` parent-relative imports (`packages/config/eslint.no-relative-parent-imports.mjs`) |
 
 **Never** put the access token in `localStorage` or a readable cookie, and never add a
 `tenant_id` request parameter — the tenant always comes from the authenticated context.
-
-> **On the `refactor/ui-test-layout-v2` branch lineage** (the vendor Metronic demo1
-> shell under `src/app/(app)/shell/`), the only piece of the infrastructure below
-> that is genuinely missing is permission gating: no `src/lib/permissions.ts`/`<Can>`
-> exists yet. `src/features/*` already exists (`src/features/auth/login-form.tsx`
-> backs the login page), and `queryKeys.list(module, resource, params)` already
-> exists and is tested (`src/lib/query-client.ts`) — this shell's own new modules
-> simply don't reach for either of those yet. Likewise, `next-intl` and its
-> `messages/en.json`/`messages/ur.json` are wired app-wide; it's only this shell's
-> own content (the header, the dashboard widgets, `/staff`) that isn't hooked up to
-> it. Modules added there (e.g. `/staff`) follow the lighter pattern the demo1
-> dashboard route itself already uses instead: a route folder rendering a
-> `"use client"` content component, calls routed through `Services.dashboard.*`
-> (`src/services/`), plain literal-array TanStack Query keys, no permission gate,
-> hardcoded English strings. Follow the full convention below — real translations
-> and `queryKeys.list` included — once this branch's own modules adopt `main`'s
-> permission system and pick up the i18n wiring that already exists.
 
 ## Adding a Module Screen
 
@@ -98,7 +82,9 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
    `useQuery`/`useMutation` calls `Services.<module>.<action>(...)` as its
    `queryFn`/`mutationFn` — never `apiClient` directly, never a hardcoded path.
 4. Query keys via `queryKeys.list("<module>", "<resource>", params)`.
-5. Gate every action with `<Can permission="module.resource.action">`.
+5. Gate every action by its `module.resource.action` key. The `<Can permission="…">` component
+   this implies is not built yet (see the wiring table) — the first screen that needs
+   action-level gating adds it to `src/components/`, backed by `src/lib/permissions.ts`.
 6. Strings into `messages/en.json` **and** `messages/ur.json`.
 7. Co-locate tests in a sibling `__tests__/` folder (`__tests__/*.test.tsx`), not
    `*.test.tsx` flat beside the source.

@@ -75,13 +75,19 @@ genuinely doesn't shift the status below (a dependency patch bump, a typo fix).
 
 ## Repository settings
 
-- Merge commits **disabled** (squash/rebase only), head branches auto-deleted on merge.
-- **Branch protection is NOT active yet.** Both the branch-protection and rulesets APIs are
-  Pro-gated for private repos on this account (`403 Upgrade to GitHub Pro…`). The intended
-  ruleset — PR required, the five CI checks required and strict, linear history, no force-push
-  or deletion — is committed at [`.github/rulesets/main.json`](../.github/rulesets/main.json)
-  and applies in one command once the plan allows. Until then, "green before merge" is
-  discipline, not enforcement.
+- Merge, squash and rebase merges are all **allowed** by GitHub's settings; PRs land as merge
+  commits by convention ([ADR-0006](decisions/0006-merge-commits.md)). Head branches are **not**
+  auto-deleted on merge.
+- **Classic branch protection is active on `main`** (verified with
+  `gh api repos/{owner}/{repo}/branches/main/protection`): a pull request is required
+  (0 approvals), six checks are required and strict — every `repo-hygiene` job (Prettier, Markdown
+  links, Secret scan, cspell, Workflow YAML, project-status sync) — admins are included, and
+  force-push and deletion are blocked. Linear history is **off**, so merge commits land
+  ([ADR-0006](decisions/0006-merge-commits.md)). The `api` and `frontend` jobs are **not**
+  required checks (they are path-filtered, so requiring them would block PRs that never trigger
+  them) — "green before merge" for backend and frontend is still discipline.
+- [`.github/rulesets/main.json`](../.github/rulesets/main.json) is **not applied** (no rulesets
+  exist). It still requires linear history and squash/rebase only, contradicting ADR-0006.
 
 ## Deliberately NOT done
 
