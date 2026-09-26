@@ -2,7 +2,8 @@
 """CI check for ADR-0015: new or changed superpowers specs/plans carry a passing review.
 
 Run by the `plan-review-record` job in .github/workflows/repo-hygiene.yml as
-`python3 .claude/hooks/check_review_records.py origin/<base-branch>`. It applies exactly the
+`python3 .claude/hooks/check_review_records.py HEAD^1` (the base tip of the PR's synthetic
+merge commit, so no base branch needs fetching). It applies exactly the
 same rule as the ExitPlanMode gate by importing its `decide()` — one rule, two entry points —
 so a RETHINK verdict, a verdict outside the review section, or a quoted template fails here
 just as it would be denied there. Files dated before the rule was adopted are grandfathered by

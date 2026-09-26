@@ -198,9 +198,6 @@ jobs:
         with:
           fetch-depth: 0
       - name: New or changed specs/plans dated 2026-09-26+ pass the review rule
-        # Same rule as the ExitPlanMode gate: the script imports its decide().
-        run: |
-          git fetch origin "$GITHUB_BASE_REF" --depth=1
-          python3 .claude/hooks/check_review_records.py "origin/$GITHUB_BASE_REF"
-        env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
+        # Same rule as the ExitPlanMode gate: the script imports its decide(). HEAD^1 is the
+        # base tip of the synthetic merge commit, so no base ref needs fetching.
+        run: python3 .claude/hooks/check_review_records.py "HEAD^1"
