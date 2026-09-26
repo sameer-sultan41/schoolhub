@@ -5,8 +5,10 @@ import { TenantService } from "./modules/tenant";
 
 /**
  * `ApiError` is re-exported so feature code can `instanceof`-check API failures without
- * importing `@schoolhub/api-client` — `@/services` is the only API surface outside this
- * directory and `src/lib/auth.ts` (ADR-0011), and ESLint enforces that.
+ * importing `@schoolhub/api-client`. Only the transport layer — this directory and
+ * `src/lib/` (the session wiring in `auth.ts`, the query client) — imports the client
+ * package; everything else goes through `@/services` (ADR-0011). ESLint enforces that
+ * boundary via `TRANSPORT` in `apps/dashboard/eslint.config.mjs`.
  */
 export { ApiError } from "@schoolhub/api-client";
 

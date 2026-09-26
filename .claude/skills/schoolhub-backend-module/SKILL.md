@@ -88,10 +88,28 @@ apps/api/apps/<module>/
        http_method_names = ["get", "post", "patch", "delete", "head", "options"]
        pagination_class = PageNumberPagination    # bounded admin lists page by number (api-architecture.md §2.4)
    ```
-   **Every write action must be in `required_permission_map`.** `HasPermissionKey` falls back to
-   `required_permission` for any action missing from the map (`core/rbac/permissions.py`), so a
-   forgotten `update` lets `PUT` through on the *view* key. Restrict `http_method_names` to what
-   the module doc's §16 actually exposes. The default paginator is a cursor paginator; bounded
+   **Every write action must be in `required_permission_map` — CRUD and colon-actions alike.**
+   `HasPermissionKey` resolves the key from `view.action` and falls back to `required_permission`
+   for any action missing from the map (`core/rbac/permissions.py`). So a forgotten `update` lets
+   `PUT` through on the *view* key, and so does a forgotten colon-action. This repo routes those
+   explicitly, e.g. `path("<uuid:pk>:approve", PromotionViewSet.as_view({"post": "approve"}))`
+   (see `apps/academics/promotions/urls.py`), so the action name is `approve` and needs its own
+   entry, as does any `@action`-decorated method:
+   ```python
+   # apps/academics/promotions/viewset.py — every colon-action is mapped; the fallback is a view key
+   required_permission = "academics.promotion.view"
+   required_permission_map = {
+       "create_batch": "academics.promotion.create",
+       "submit": "academics.promotion.update",
+       "approve": "academics.promotion.approve",   # POST …/student-promotions/<id>:approve
+       "reject": "academics.promotion.approve",
+       "execute": "academics.promotion.execute",
+       "revert": "academics.promotion.update",
+   }
+   ```
+   The one safe fallback is a single-purpose viewset whose `required_permission` is itself the
+   write key (the import/export viewsets). Restrict `http_method_names` to what the module doc's
+   §16 actually exposes. The default paginator is a cursor paginator; bounded
    admin lists use `core.api.pagination.PageNumberPagination`.
    Business rules go in `services.py`, not the viewset or serializer (fat services, thin views).
    Another module's data is changed only through *its* services (ADR-0013). Any query inside a
