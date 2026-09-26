@@ -19,7 +19,7 @@ flowchart TB
     end
 
     subgraph Backend["Backend (schoolhub-api)"]
-        API["Django 5 + DRF<br/>REST API v1 (OpenAPI 3.1)"]
+        API["Django 6.1 + DRF<br/>REST API v1 (OpenAPI 3.1)"]
         AIGW["AI Gateway<br/>(provider-agnostic)"]
         NOTIF["Notification Service<br/>(provider adapters)"]
         WORKERS["Celery Workers<br/>(priority queues)"]
@@ -63,13 +63,13 @@ Trust boundaries: browsers and tenant websites are untrusted; the API is the sol
 ## 2. Architecture Concerns
 
 ### 2.1 Application Architecture
-A modular monolith (recommendation): one Django project with one app per functional module (students, fees, exams, …) plus a `core` layer for tenancy, RBAC, notifications, and the AI gateway. Layering is strict — views → services → ORM — so modules interact through service functions, not each other's models, keeping a later service extraction possible without a day-one microservice tax. See [`repo-structure.md`](repo-structure.md).
+A modular monolith (recommendation): one Django project with one app per functional module (students, fees, exams, …) plus a `core` layer for tenancy, RBAC, notifications, and the AI gateway. Layering is strict — views → services → ORM. Modules may reference each other's models (foreign keys, querysets) but change another module's data only through its service functions, and never import its views, URLs, reports or tasks — see [ADR-0013](../decisions/0013-cross-app-dependencies.md). That keeps a later service extraction possible without a day-one microservice tax. See [`repo-structure.md`](repo-structure.md).
 
 ### 2.2 Frontend Architecture
-Two Next.js 15 apps in one Turborepo monorepo: `dashboard` (authenticated SPA-style admin, TanStack Query over the generated API client) and `website` (multi-tenant public renderer, SSR/ISR). Shared `ui`, `types`, and `api-client` packages prevent drift. See [`repo-structure.md`](repo-structure.md) and [`website-builder.md`](website-builder.md).
+Two Next.js 16 apps in one Turborepo monorepo: `dashboard` (authenticated SPA-style admin, TanStack Query over the generated API client) and `website` (multi-tenant public renderer, SSR/ISR). Shared `ui`, `types`, and `api-client` packages prevent drift. See [`repo-structure.md`](repo-structure.md) and [`website-builder.md`](website-builder.md).
 
 ### 2.3 Backend Architecture
-Django 5 + DRF exposing versioned REST (`/api/v1`), documented via OpenAPI 3.1 (drf-spectacular). Conventions — envelope, errors, pagination, idempotency, webhooks, uploads — are locked in [`api-architecture.md`](api-architecture.md). Celery + Redis handle everything long-running.
+Django 6.1 + DRF exposing versioned REST (`/api/v1`), documented via OpenAPI 3.1 (drf-spectacular). Conventions — envelope, errors, pagination, idempotency, webhooks, uploads — are locked in [`api-architecture.md`](api-architecture.md). Celery + Redis handle everything long-running.
 
 ### 2.4 Authentication & Authorization Architecture
 JWT access (15 min) + rotating refresh tokens, MFA-ready login state machine, and a permission-key RBAC model (`module.resource.action`) with module-, feature-, and record-level checks — all beneath RLS tenant isolation. See [`auth-and-rbac.md`](auth-and-rbac.md).

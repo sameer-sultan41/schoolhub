@@ -75,6 +75,12 @@ Every candidate is scored against: (a) long-term maintainability, (b) scalabilit
 
 ## 7. Decision Summary
 
+> **Original recommendation, kept for its reasoning.** The versions in this table are the
+> ones the specification was written against. What the implementation actually pins —
+> Django 6.1, Next.js 16, PostgreSQL 18, Redis 8, Jest instead of Vitest — is in §8 below,
+> and §8 wins wherever they differ. Decisions made since live in
+> [`../decisions/`](../decisions/README.md).
+
 | Layer | Choice |
 | ----- | ------ |
 | Backend | Python 3.12 · Django 5 · DRF · Celery · Redis |
