@@ -7,21 +7,26 @@
 CI is the authority on pass/fail. Everything here exists to catch, sooner and more
 cheaply, what CI would reject anyway.
 
-## One-time setup per clone
+## Setup per clone — automatic
+
+`pnpm install` runs the root `package.json` `prepare` script, which does both of these (and is a
+no-op where there is no `.git`, such as the Docker builds):
 
 ```bash
 git config core.hooksPath .githooks
 git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
-Until the first line runs, none of the hooks below execute — the cheap errors they catch then
-cost a CI round trip each instead.
+Until `core.hooksPath` is set, none of the hooks below execute — the cheap errors they catch
+then cost a CI round trip each instead. Check with `git config core.hooksPath` (expect
+`.githooks`).
 
 ## Git hooks
 
 | Hook | Runs | Checks |
 | ---- | ---- | ------ |
-| `pre-commit` | staged files only, fast | ESLint · Prettier (`--check`) · ruff (`check` + `format --check`) · cspell |
+| `pre-commit` | staged files only, fast | ESLint · Prettier (`--check`) · ruff (`check` + `format --check`) · cspell · gitleaks |
+| `commit-msg` | the message | Conventional Commit subject · no AI attribution · `Root cause:` on `fix` commits ([ADR-0016](../decisions/0016-commit-message-rules.md)) |
 | `pre-push` | project-wide, slower | `main`-push block · `tsc` typecheck · mypy · graphify index refresh |
 
 Split by cost: `tsc` and mypy need the whole project graph and are too slow to run on every
@@ -41,7 +46,8 @@ this only ever keeps the current machine's copy current, never a teammate's clon
 checkout; each of those needs its own `/graphify` run. ~2s on this repo's current size
 (AST-only, no LLM/API cost).
 
-`SKIP_HOOKS=1` skips the lint/typecheck checks for one commit or push. **It does not bypass
+`SKIP_HOOKS=1` skips the lint, typecheck, secret-scan and commit-message checks for one commit
+or push. **It does not bypass
 the `main`-push block** — that check runs before `SKIP_HOOKS` is even read, deliberately, since
 it enforces the PR-only workflow, not code quality. `git push --no-verify` is the only way past
 it. Both escape hatches are for humans in an emergency; agents never use them.

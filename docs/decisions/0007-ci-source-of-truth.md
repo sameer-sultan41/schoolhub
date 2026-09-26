@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-26 (recording a decision already in effect)
-- **Enforced by:** `.github/workflows/{api,frontend,repo-hygiene,e2e-live,infra-compose,infra-terraform}.yml`; `.githooks/pre-commit` and `.githooks/pre-push` (opt-in until the planned `prepare` script installs them)
+- **Enforced by:** `.github/workflows/{api,frontend,repo-hygiene,e2e-live,infra-compose,infra-terraform}.yml`; `.githooks/pre-commit`, `.githooks/commit-msg` and `.githooks/pre-push`, installed automatically by the root `package.json` `prepare` script on `pnpm install`
 
 ## Context
 

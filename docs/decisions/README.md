@@ -34,8 +34,8 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0003](0003-tenant-isolation-rls.md) | Tenant isolation in PostgreSQL Row-Level Security | Accepted | `apps/api/tests/test_rls_coverage.py`, `test_rls_enforcement.py`, `infra-compose.yml` |
 | [0004](0004-cross-tenant-404.md) | Cross-tenant access returns 404, never 403 | Accepted | per-app `tests/test_cross_tenant.py` |
 | [0005](0005-generated-api-contract.md) | The API contract is generated and committed | Accepted | `api.yml` openapi job, `frontend.yml` staleness check |
-| [0006](0006-merge-commits.md) | Pull requests land as merge commits | Accepted | review only (planned: ruleset) |
-| [0007](0007-ci-source-of-truth.md) | CI is the source of truth; local hooks split by cost | Accepted | `.githooks/*`, CI workflows |
+| [0006](0006-merge-commits.md) | Pull requests land as merge commits | Accepted | review only (the corrected ruleset would enforce it; not applied) |
+| [0007](0007-ci-source-of-truth.md) | CI is the source of truth; local hooks split by cost | Accepted | `.githooks/*` (auto-installed by `prepare`), CI workflows |
 | [0008](0008-jest-not-vitest.md) | Jest + React Testing Library, not Vitest | Accepted | `apps/*/jest.config.ts` |
 | [0009](0009-ported-ui-primitives.md) | UI primitives are ported vendor source, adapted for RTL and i18n | Accepted | TypeScript required props (planned: RTL lint rule) |
 | [0010](0010-backend-module-layout.md) | Backend apps use one package per resource | Accepted | review only (`schoolhub-backend-module` skill) |
@@ -44,6 +44,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0013](0013-cross-app-dependencies.md) | Cross-app dependency rules for the backend | Accepted | review only (planned: import-linter) |
 | [0014](0014-no-hardcoded-values.md) | Every value has one owner — no hardcoding | Accepted | partly: `messages.types-check.ts`, `test_endpoint_contracts.py` (planned: ESLint + ruff rules) |
 | [0015](0015-independent-plan-review.md) | Non-trivial plans pass an independent reviewer before approval | Accepted | `.claude/hooks/plan_review_gate.py` (tested in `repo-hygiene.yml`), `plan-review-record` CI job |
+| [0016](0016-commit-message-rules.md) | Commit messages: conventional subjects, no AI attribution, fixes name their root cause | Accepted | `.githooks/commit-msg`, `commit-messages` CI job |
 
 "Planned" items land in the stacked PRs described in
 [`../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md`](../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md);

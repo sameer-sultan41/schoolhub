@@ -72,7 +72,7 @@ with them at runtime — it provisions, and they consume through environment var
    run the same major version, because RLS and planner behavior are what we test. The same rule
    applies to Redis 8, Python 3.14 and Node 24 — see the version table above.
 4. **No secrets in git.** Only `*.example` files with dummy values and a comment saying where the
-   real value comes from. gitleaks runs pre-commit and in CI. If a secret is ever committed,
+   real value comes from. gitleaks runs pre-commit (when installed locally) and in CI. If a secret is ever committed,
    rotate it — deleting the commit is not remediation.
 5. **Immutable images, external config.** One image per service per commit, tagged with the git
    SHA; the same image is promoted staging → production. Never rebuild between environments.

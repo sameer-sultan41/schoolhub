@@ -116,7 +116,8 @@ checks them. `**Review:** waived by user` only when the user explicitly says so.
 re-plan, re-review; (2) no symptom suppressors (timeout/retry bumps, coverage excludes,
 `noqa`/`eslint-disable`/`@ts-expect-error`, skipped tests) without an ADR or the user's OK;
 (3) deviating from the approved plan → amend it and re-review, don't improvise; (4) diagnose on a
-throwaway draft PR, never merged — the fix PR carries only the root-caused fix.
+throwaway draft PR, never merged — the fix PR carries only the root-caused fix, and every `fix`
+commit has a `Root cause:` line (the commit-msg hook and CI check it — ADR-0016).
 
 ## Working Here
 
@@ -129,7 +130,8 @@ throwaway draft PR, never merged — the fix PR carries only the root-caused fix
   `gh pr checks <n> --watch` / `gh run view <id> --log-failed`. Git hooks run automatically as
   gates — fix what they reject; never `--no-verify` or `SKIP_HOOKS=1`. Hook details, Prettier,
   cspell and blame setup: [`docs/07-quality/tooling.md`](docs/07-quality/tooling.md).
-- **Never add a `Co-Authored-By` trailer or any AI attribution** to a commit or PR.
+- **Never add a `Co-Authored-By` trailer or any AI attribution** to a commit or PR; subjects are
+  Conventional Commits (`type(scope): summary`). The commit-msg hook and CI check both.
 - **Docs change in the same PR as the behaviour.** A changed flow updates its module doc; a new
   module, endpoint or user-facing flow gets its own doc or section in the PR that ships it, not
   a follow-up; project state updates `docs/project-status.md`; anything deferred goes in

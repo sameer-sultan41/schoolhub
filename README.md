@@ -39,9 +39,10 @@ Node 24 or newer, pnpm 9.15, and Docker. `.nvmrc` and `packageManager` record th
 frontend versions; `apps/api/.python-version` and `apps/api/pyproject.toml` record the
 backend's.
 
-**0. One-time setup per clone.** Turn on the repo's git hooks (lint, format, spelling and
-typecheck gates that catch what CI would reject, plus the block on pushing straight to `main`)
-and make `git blame` skip mechanical commits:
+**0. Git hooks install themselves.** `pnpm install` (step 3) runs the root `prepare` script,
+which turns on the repo's git hooks — lint, format, spelling, secret-scan and typecheck gates
+that catch what CI would reject, the commit-message check, and the block on pushing straight to
+`main` — and makes `git blame` skip mechanical commits. To do it by hand:
 
 ```bash
 git config core.hooksPath .githooks

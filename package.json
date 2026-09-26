@@ -23,7 +23,8 @@
     "e2e:ui": "pnpm --filter @schoolhub/e2e e2e:ui",
     "e2e:live": "pnpm --filter @schoolhub/e2e e2e:live",
     "e2e:install": "pnpm --filter @schoolhub/e2e e2e:install",
-    "spell": "cspell lint --no-progress ."
+    "spell": "cspell lint --no-progress .",
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && [ -z \"$(git rev-parse --show-prefix)\" ] && git config core.hooksPath .githooks && git config blame.ignoreRevsFile .git-blame-ignore-revs || true"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

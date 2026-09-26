@@ -139,7 +139,8 @@ jobs:
       # deferral is exactly the kind of status change this gate exists to force.
       - name: Backend- or frontend-surface PRs must update the status doc
         run: |
-          git fetch origin "$GITHUB_BASE_REF" --depth=1
+          # No re-fetch: the fetch-depth: 0 checkout already has origin/<base>, and a
+          # `git fetch --depth=1` would mark the base tip shallow.
           CHANGED=$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")
           echo "Changed files:"
           echo "$CHANGED"
@@ -198,9 +199,26 @@ jobs:
         with:
           fetch-depth: 0
       - name: New or changed specs/plans dated 2026-09-26+ pass the review rule
-        # Same rule as the ExitPlanMode gate: the script imports its decide().
-        run: |
-          git fetch origin "$GITHUB_BASE_REF" --depth=1
-          python3 .claude/hooks/check_review_records.py "origin/$GITHUB_BASE_REF"
-        env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
+        # Same rule as the ExitPlanMode gate: the script imports its decide(). HEAD^1 is the
+        # base tip of the synthetic merge commit, so no base ref needs fetching.
+        run: python3 .claude/hooks/check_review_records.py "HEAD^1"
+
+  # ADR-0016: Conventional Commit subjects, no AI attribution, and a `Root cause:` line on
+  # every `fix` commit. The local commit-msg hook runs the same script; this is the authority,
+  # since a hook can be skipped or not installed. Merge commits are skipped (--no-merges).
+  commit-messages:
+    name: Commit messages follow the convention
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Run the checker's unit tests
+        run: python3 -m unittest discover -s .githooks/tests -v
+      - name: Check every commit in this PR
+        # A pull_request checkout's HEAD is GitHub's synthetic merge commit: HEAD^1 is the base
+        # tip and HEAD^2 the PR head, so HEAD^1..HEAD^2 is exactly this PR's commits — no base
+        # ref to fetch. (A `git fetch --depth=1` here would mark the base tip shallow and widen
+        # the range to all history; the script refuses shallow clones for that reason.)
+        run: python3 .githooks/lib/check_commit_msg.py --range "HEAD^1..HEAD^2"
