@@ -38,3 +38,7 @@ infra/
 # preset (packages/ui/src/styles/presets/metronic.css derives its values from it) — not
 # this repo's own source, and explicitly not to be reformatted to match its style.
 packages/ui/src/styles/metronic/
+
+# Generated and owned by ESLint's bulk suppressions (ADR-0014): `eslint --suppress-all` /
+# `--prune-suppressions` rewrite these in ESLint's own format, which Prettier must not fight.
+**/eslint-suppressions.json

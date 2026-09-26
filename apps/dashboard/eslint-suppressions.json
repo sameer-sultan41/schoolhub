@@ -1,0 +1,225 @@
+{
+  "src/app/(app)/shell/dashboard/channel-stats.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/shell/dashboard/dashboard-page-content.tsx": {
+    "react/jsx-no-literals": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/shell/dashboard/earnings-chart.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    },
+    "react/jsx-no-literals": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/shell/dashboard/entry-callout.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/shell/dashboard/highlights.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 4
+    }
+  },
+  "src/app/(app)/shell/dashboard/team-meeting.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 4
+    }
+  },
+  "src/app/(app)/shell/dashboard/teams.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react-hooks/incompatible-library": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/shell/footer.tsx": {
+    "react/jsx-no-literals": {
+      "count": 7
+    }
+  },
+  "src/app/(app)/shell/header.tsx": {
+    "@next/next/no-img-element": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/apps-dropdown-menu.tsx": {
+    "@next/next/no-img-element": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/chat-sheet.tsx": {
+    "@next/next/no-img-element": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 18
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/notification-item.tsx": {
+    "react/jsx-no-literals": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/notifications-sheet.tsx": {
+    "react/jsx-no-literals": {
+      "count": 13
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/search-dialog.tsx": {
+    "react/jsx-no-literals": {
+      "count": 7
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/search/search-docs.tsx": {
+    "@next/next/no-img-element": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/search/search-empty.tsx": {
+    "@next/next/no-img-element": {
+      "count": 2
+    },
+    "react/jsx-no-literals": {
+      "count": 4
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/search/search-integrations.tsx": {
+    "@next/next/no-img-element": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/search/search-mixed.tsx": {
+    "react/jsx-no-literals": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/search/search-no-results.tsx": {
+    "@next/next/no-img-element": {
+      "count": 2
+    },
+    "react/jsx-no-literals": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/search/search-users.tsx": {
+    "@next/next/no-img-element": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/shell/partials/topbar/user-dropdown-menu.tsx": {
+    "@next/next/no-img-element": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 12
+    }
+  },
+  "src/app/(app)/shell/sidebar-header.tsx": {
+    "@next/next/no-img-element": {
+      "count": 4
+    }
+  },
+  "src/app/(app)/shell/sidebar-menu.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/staff/exit-staff-dialog.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    },
+    "react/jsx-no-literals": {
+      "count": 4
+    }
+  },
+  "src/app/(app)/staff/staff-directory-table.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "no-restricted-imports": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    },
+    "react-hooks/incompatible-library": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 13
+    }
+  },
+  "src/app/(app)/staff/staff-form-dialog.tsx": {
+    "max-lines": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 7
+    },
+    "react-hooks/incompatible-library": {
+      "count": 1
+    },
+    "react/jsx-no-literals": {
+      "count": 31
+    }
+  },
+  "src/app/(app)/staff/staff-toolbar.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    },
+    "react/jsx-no-literals": {
+      "count": 4
+    }
+  },
+  "src/app/(app)/students/page.tsx": {
+    "react/jsx-no-literals": {
+      "count": 1
+    }
+  },
+  "src/app/(auth)/layout.tsx": {
+    "@next/next/no-img-element": {
+      "count": 1
+    }
+  }
+}
