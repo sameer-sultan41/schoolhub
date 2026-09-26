@@ -132,7 +132,10 @@ fi
 # ------------------------------------------------------------------ ruff (Python)
 # The repo uses ruff, not flake8 — ruff is its drop-in successor and is what
 # .github/workflows/api.yml actually runs (ruff check . && ruff format --check .).
-py_files="$(filter '\.py$')"
+# Scoped to apps/api/, exactly what CI lints: the only ruff config is apps/api/pyproject.toml,
+# and elsewhere (.githooks/, .claude/hooks/) ruff would fall back to its defaults (line length
+# 88) and block commits on rules nothing in CI checks.
+py_files="$(filter '^apps/api/.*\.py$')"
 if [ -n "$py_files" ]; then
   ruff_bin="$(python_tool ruff)"
   if [ -n "$ruff_bin" ]; then
@@ -165,6 +168,37 @@ if ensure_node; then
     note "a real typo? fix it. a real term? add it to .cspell/project-words.txt"
     status=1
   fi
+fi
+
+# ------------------------------------------------------------------ gitleaks (secrets)
+# Scans only what is staged. CI's `Secret scan` job (repo-hygiene.yml) is the authority;
+# this catches a committed secret before it ever reaches a remote, where deleting the commit
+# is no longer remediation (infra/AGENTS.md rule 4). v8.19+ spells the staged scan
+# `gitleaks git --pre-commit --staged`; older installs only know `gitleaks protect --staged`.
+if command -v gitleaks >/dev/null 2>&1; then
+  if gitleaks git --help >/dev/null 2>&1; then
+    gitleaks_cmd="gitleaks git --pre-commit --staged --redact --no-banner --exit-code 3 ."
+  else
+    gitleaks_cmd="gitleaks protect --staged --redact --no-banner --exit-code 3"
+  fi
+  # --exit-code 3 separates "found a leak" (3) from "gitleaks itself failed" (1, or 126 for an
+  # unknown flag) — the two need different responses.
+  gitleaks_out="$($gitleaks_cmd 2>&1)"
+  gitleaks_rc=$?
+  if [ $gitleaks_rc -eq 0 ]; then
+    ok "gitleaks"
+  elif [ $gitleaks_rc -eq 3 ]; then
+    fail "gitleaks found a possible secret in the staged changes"
+    note "see it: $gitleaks_cmd --verbose"
+    note "a real secret? unstage it and rotate it. a false positive? add it to .gitleaksignore"
+    status=1
+  else
+    warn "gitleaks errored (exit $gitleaks_rc) — secret scan skipped (CI still runs it):"
+    printf '%s\n' "$gitleaks_out" | tail -5 >&2
+  fi
+else
+  warn "gitleaks not installed — skipping the staged secret scan (CI still runs it)"
+  note "install: brew install gitleaks"
 fi
 
 if [ $status -ne 0 ]; then

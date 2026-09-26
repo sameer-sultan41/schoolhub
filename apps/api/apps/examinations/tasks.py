@@ -137,7 +137,7 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
             job=job,
             result={"rendered": rendered, "failed": failed, "cards": len(cards)},
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         mark_failed(job=job, error=str(exc))
 
 
@@ -368,7 +368,7 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
             job=job,
             result={"rows": len(rows), "succeeded": succeeded, "errors": errors},
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         # The job row is the only place a caller polling GET /jobs/{id} can
         # learn this failed, so the failure is recorded rather than raised into
         # a retry.
@@ -511,7 +511,7 @@ def process_results_task(self, *, tenant_id: str, job_id: str, actor_id: str) ->
             tenant_id=tenant_id, exam_id=str(job.payload["exam_id"])
         )
         mark_succeeded(job=job, result=outcome)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         mark_failed(job=job, error=str(exc))
 
 
@@ -788,7 +788,7 @@ def generate_report_cards_task(self, *, tenant_id: str, job_id: str, actor_id: s
         mark_succeeded(
             job=job, result={"rendered": rendered, "failed": failed, "cards": len(cards)}
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         mark_failed(job=job, error=str(exc))
 
 
@@ -968,7 +968,7 @@ def assemble_paper_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> 
                 "total_marks": str(total_marks),
             },
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         mark_failed(job=job, error=str(exc))
 
 
@@ -1021,5 +1021,5 @@ def export_exam_report_task(self, *, tenant_id: str, job_id: str, actor_id: str)
             job=job,
             result={"result_file_id": str(file.pk), "rows": len(rows), "format": fmt},
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         mark_failed(job=job, error=str(exc))

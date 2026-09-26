@@ -15,6 +15,8 @@ import { StaffDirectoryTable } from "../staff-directory-table";
 // function" the moment a dialog opens. `exitStaff` backs the Delete/"Exit selected" flow.
 // `fetchStaffById` backs the edit pre-fill and the row-click detail sheet.
 jest.mock("@/services", () => ({
+  // The real class: components `instanceof`-check it, and tests build `new ApiError(...)`.
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     dashboard: {
       fetchStaffPage: jest.fn(),

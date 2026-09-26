@@ -60,7 +60,7 @@ Runs as a pipeline per persona journey, ordered by the Phase 2 build sequence so
 
 - UX flow diagrams, wireframes, and hi-fi screens for all Must-have modules; clickable prototype.
 - Design system: token set, themed component library, accessibility annotations.
-- Finalized architecture document set (`../02-architecture/`), threat model, ADR log started.
+- Finalized architecture document set (`../02-architecture/`), threat model, ADR log started ([`../decisions/`](../decisions/README.md)).
 - Frozen core-module ERD + drafted RLS policies (`../05-database/`).
 - OpenAPI 3.1 contract skeletons + generated TS types for core modules.
 - Signed-off review records for gates G1–G4.

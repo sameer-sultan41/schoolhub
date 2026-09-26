@@ -16,7 +16,7 @@ because the website renders on the server and browser interception cannot see it
 
 ## Conventions
 
-- Specs import from `@/fixtures` only. Add a capability as a fixture, not as a helper
+- Specs import from `@/fixtures` only (ESLint bans `@playwright/test` in `tests/**`). Add a capability as a fixture, not as a helper
   call repeated in each spec.
 - Page objects hold locators and navigation. **No `expect` inside `src/pages/`** — a
   failure must name the behaviour, not a helper.

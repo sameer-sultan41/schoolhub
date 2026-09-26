@@ -39,7 +39,7 @@ The test mandate from [`../02-architecture/multi-tenancy.md`](../02-architecture
 - Fixtures create **two fully-populated tenants** (A and B) with parallel data.
 - For **every endpoint class of every module**, authenticated as tenant-A users, the suite attempts against tenant-B resources: detail read, list leakage (B rows must never appear), create-with-foreign-reference (e.g. invoice for a B student), update, delete, file access, export, and search.
 - Expected result: `404` for direct references (never `403` — no existence leaks), zero B rows in lists/exports/search.
-- Implemented as a parameterized harness driven by the endpoint registry, so **a new endpoint is automatically enrolled**; opting an endpoint out requires an explicit, reviewed allowlist entry (platform-admin paths only).
+- Intended as a parameterized harness driven by the endpoint registry, so that a new endpoint is automatically enrolled; opting an endpoint out would require an explicit, reviewed allowlist entry (platform-admin paths only). **Not built yet** — today every module hand-writes `tests/test_cross_tenant.py`, and a missing entry fails nothing ([ADR-0004](../decisions/0004-cross-tenant-404.md)).
 - A module PR without cross-tenant coverage for its new endpoints fails review by definition (phase-plan.md §4.2).
 
 ## 4. RBAC Permission-Matrix Tests
@@ -91,7 +91,7 @@ Tooling: k6 or Locust (recommendation) against staging with production-scale see
 3. Money-invariant suite on any PR touching fees-finance/payroll paths (path-triggered, plus nightly full run).
 4. Migration forward/backward check (§6) when migrations present; RLS coverage assertion always.
 5. OpenAPI contract diff — breaking `v1` change fails.
-6. **Coverage floor (recommendation): 85% overall backend, 90% on `fees`, `auth`, `tenancy` packages; 85% global (statements/branches/functions/lines) on each of `apps/dashboard` and `apps/website`; coverage may never decrease** (ratchet). The frontend floor runs as its own CI check, isolated from lint/typecheck/build/E2E per §2 — a coverage-gate failure never withholds build or E2E signal from an unrelated change.
+6. **Coverage floor: 85% overall backend; the 90% target for `fees`, `auth` and `tenancy` is enforced per package in `api.yml`, starting from each package's measured level on 2026-09-26 (tenancy 90, fees_finance 85, rbac 80) and ratcheting up; 85% global (statements/branches/functions/lines) on each of `apps/dashboard` and `apps/website`; coverage may never decrease** (ratchet). The frontend floor runs as its own CI check, isolated from lint/typecheck/build/E2E per §2 — a coverage-gate failure never withholds build or E2E signal from an unrelated change.
 7. E2E smoke subset (login, one CRUD flow, one payment flow) on PRs labeled for it; full E2E nightly and pre-release.
 
 ## 10. Release Regression Checklist

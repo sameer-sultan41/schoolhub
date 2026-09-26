@@ -2,16 +2,16 @@
 
 import re
 
-from config.settings.base import *  # noqa: F403
+from config.settings.base import *
 from config.settings.base import PLATFORM_DOMAIN, env
 
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
-INSTALLED_APPS += ["drf_spectacular_sidecar"]  # noqa: F405
+INSTALLED_APPS += ["drf_spectacular_sidecar"]
 
 # Serve Swagger UI assets from the sidecar package rather than a CDN.
-SPECTACULAR_SETTINGS |= {  # noqa: F405
+SPECTACULAR_SETTINGS |= {
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
     "REDOC_DIST": "SIDECAR",

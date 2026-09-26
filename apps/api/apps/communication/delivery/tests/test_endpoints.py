@@ -24,7 +24,7 @@ class DeliveryLogEndpointTests(CommunicationAPITestCase):
 class DeliverySummaryEndpointTests(PlatformTemplateFixtureMixin, CommunicationAPITestCase):
     def setUp(self) -> None:
         super().setUp()
-        self._saved_catalog = catalog._triggers.copy()  # noqa: SLF001
+        self._saved_catalog = catalog._triggers.copy()
         catalog.register(
             CODE,
             template_code=CODE,
@@ -41,7 +41,7 @@ class DeliverySummaryEndpointTests(PlatformTemplateFixtureMixin, CommunicationAP
         )
 
     def tearDown(self) -> None:
-        catalog._triggers = self._saved_catalog  # noqa: SLF001
+        catalog._triggers = self._saved_catalog
         super().tearDown()
 
     def test_summary_groups_by_channel_by_default(self) -> None:

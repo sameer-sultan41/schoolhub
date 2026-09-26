@@ -5,12 +5,15 @@ endpoint is enrolled automatically. That is the point: the protection cannot be
 forgotten by whoever adds the next module.
 """
 
-from django.test import TestCase
+import ast
+
+from django.test import SimpleTestCase, TestCase
 from django.urls import get_resolver
 from rest_framework.permissions import AllowAny
 
 from core.rbac.permissions import HasPermissionKey
 from core.rbac.registry import registry
+from tests.source_tree import source_modules
 
 # Endpoints that are legitimately unauthenticated or permission-free.
 EXEMPT_PATTERNS = (
@@ -24,9 +27,18 @@ EXEMPT_PATTERNS = (
 )
 
 
-def _api_views() -> list[tuple[str, type]]:
-    """Every DRF view registered under /api/v1/, as (route, view class)."""
-    views: list[tuple[str, type]] = []
+# DRF's SAFE_METHODS, lower-cased the way `http_method_names` and ViewSet action maps spell them.
+SAFE_METHODS = frozenset({"get", "head", "options"})
+
+
+def _api_routes() -> list[tuple[str, type, dict[str, str] | None]]:
+    """Every DRF route under /api/v1/, as (route, view class, method -> action map or None).
+
+    A ViewSet route carries the map it was built with (`{"post": "approve"}`, by a router or by
+    an explicit `as_view({...})`); an APIView route has none, and its permission lookup uses
+    the HTTP method itself.
+    """
+    routes: list[tuple[str, type, dict[str, str] | None]] = []
 
     def walk(resolver, prefix=""):
         for pattern in resolver.url_patterns:
@@ -37,10 +49,15 @@ def _api_views() -> list[tuple[str, type]]:
             callback = getattr(pattern, "callback", None)
             view_class = getattr(callback, "cls", None) or getattr(callback, "view_class", None)
             if view_class is not None:
-                views.append((route, view_class))
+                routes.append((route, view_class, getattr(callback, "actions", None)))
 
     walk(get_resolver())
-    return [(route, view) for route, view in views if route.startswith("api/v1/")]
+    return [route for route in routes if route[0].startswith("api/v1/")]
+
+
+def _api_views() -> list[tuple[str, type]]:
+    """Every DRF view registered under /api/v1/, as (route, view class)."""
+    return [(route, view) for route, view, _ in _api_routes()]
 
 
 def _is_exempt(route: str) -> bool:
@@ -85,6 +102,103 @@ class EndpointContractTests(TestCase):
             and AllowAny not in getattr(view, "permission_classes", [])
         ]
         self.assertEqual(offenders, [], f"Endpoints not enforcing HasPermissionKey: {offenders}")
+
+
+class WritePermissionContractTests(TestCase):
+    """A write is never authorised by a read key.
+
+    `HasPermissionKey._required_key` looks the action up in `required_permission_map` and falls
+    back to `required_permission` when it is missing. When that fallback is the resource's
+    `.view` key, a PATCH or colon-action left out of the map is open to everyone who may *read*
+    the resource; when there is no fallback, the route rejects every request. Neither shows up
+    in a happy-path test, so this resolves the key for every write route the way the
+    permission class does.
+    """
+
+    def test_no_write_route_falls_back_to_a_read_key(self):
+        offenders: list[str] = []
+        checked = {"viewset": 0, "api_view": 0}
+        for route, view, actions in _api_routes():
+            guarded = HasPermissionKey in getattr(view, "permission_classes", [])
+            if _is_exempt(route) or not guarded:
+                continue
+            # A method outside http_method_names is answered 405 whatever the permission says.
+            allowed = set(getattr(view, "http_method_names", ())) - SAFE_METHODS
+            if actions is None:
+                writes = [(method, method) for method in sorted(allowed) if hasattr(view, method)]
+            else:
+                writes = [(method, name) for method, name in actions.items() if method in allowed]
+            mapping = getattr(view, "required_permission_map", None) or {}
+            fallback = getattr(view, "required_permission", None)
+            checked["api_view" if actions is None else "viewset"] += len(writes)
+            for method, action in writes:
+                if mapping.get(action):
+                    continue
+                # `not fallback`, as in _required_key: an empty string also rejects everyone.
+                if not fallback or fallback.rpartition(".")[2] == "view":
+                    offenders.append(
+                        f"{method.upper()} {route} ({view.__name__}.{action}) -> {fallback!r}"
+                    )
+        self.assertEqual(
+            offenders,
+            [],
+            "These write routes are missing from required_permission_map, so they fall back to "
+            "required_permission — a read key or none. Map each action to its write key "
+            "(schoolhub-backend-module skill, step 4):\n" + "\n".join(offenders),
+        )
+        # A detector that finds nothing passes vacuously: if reading the routes' action maps ever
+        # broke, every ViewSet would look write-free.
+        self.assertGreater(checked["viewset"], 0, f"no ViewSet write routes found: {checked}")
+        self.assertGreater(checked["api_view"], 0, f"no APIView write routes found: {checked}")
+
+
+def _inline_permission_keys() -> list[tuple[str, int, str]]:
+    """Every permission-key string literal checked inline in app code.
+
+    `required_permission` / `required_permission_map` are validated through the URLconf above;
+    keys checked inside a method body, serializer or task never reach it, so they are found by
+    reading the source. Two forms: `has_permission_key(user, "<key>")` (or `key="<key>"`) and
+    `"<key>" in effective_permission_keys(user)`.
+    """
+    found: list[tuple[str, int, str]] = []
+
+    def called(node: ast.AST, name: str) -> bool:
+        if not isinstance(node, ast.Call):
+            return False
+        func = node.func
+        return (func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)) == name
+
+    def literal(node: ast.AST | None) -> str | None:
+        is_str = isinstance(node, ast.Constant) and isinstance(node.value, str)
+        return node.value if is_str else None
+
+    for module in source_modules():
+        for node in ast.walk(module.tree):
+            key = None
+            if called(node, "has_permission_key"):
+                positional = node.args[1] if len(node.args) > 1 else None
+                keyword = next((kw.value for kw in node.keywords if kw.arg == "key"), None)
+                key = literal(positional or keyword)
+            elif (
+                isinstance(node, ast.Compare)
+                and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops)
+                and any(called(c, "effective_permission_keys") for c in node.comparators)
+            ):
+                key = literal(node.left)
+            if key is not None:
+                found.append((module.relative, node.lineno, key))
+    return found
+
+
+class InlinePermissionKeyTests(SimpleTestCase):
+    def test_inline_permission_key_literals_exist_in_the_registry(self):
+        """A mistyped inline key silently denies (or notifies nobody) — it must be registered."""
+        keys = _inline_permission_keys()
+        self.assertTrue(keys, "expected at least one inline permission check to verify")
+        unregistered = [f"{path}:{line} {key!r}" for path, line, key in keys if key not in registry]
+        self.assertEqual(
+            unregistered, [], "Unregistered inline permission keys:\n" + "\n".join(unregistered)
+        )
 
 
 class PermissionRegistryTests(TestCase):

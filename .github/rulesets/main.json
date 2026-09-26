@@ -11,7 +11,6 @@
   "rules": [
     { "type": "deletion" },
     { "type": "non_fast_forward" },
-    { "type": "required_linear_history" },
     {
       "type": "pull_request",
       "parameters": {
@@ -21,7 +20,7 @@
         "require_last_push_approval": false,
         "required_review_thread_resolution": true,
         "automatic_copilot_code_review_enabled": false,
-        "allowed_merge_methods": ["squash", "rebase"]
+        "allowed_merge_methods": ["merge"]
       }
     },
     {
@@ -30,11 +29,15 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
-          { "context": "Lint · Typecheck" },
-          { "context": "Test (coverage)" },
-          { "context": "Build (dashboard)" },
-          { "context": "Build (website)" },
-          { "context": "Secret scan" }
+          { "context": "Workflow YAML is valid" },
+          { "context": "Markdown links resolve" },
+          { "context": "Spelling (cspell)" },
+          { "context": "Formatting (Prettier)" },
+          { "context": "project-status.md stays in sync" },
+          { "context": "Secret scan" },
+          { "context": "Plan-review gate tests" },
+          { "context": "Specs and plans carry an independent review" },
+          { "context": "Commit messages follow the convention" }
         ]
       }
     }

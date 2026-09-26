@@ -10,8 +10,8 @@ import { Select as SelectPrimitive } from "radix-ui";
 // Create a Context for `indicatorPosition` and `indicator` control.
 // Logical (`start`/`end`), never physical (`left`/`right`) — Metronic's own file used
 // "left"/"right" here even though the actual CSS is already logical (`ps-`/`pe-`,
-// `start-2`/`end-2`); renamed to match what the values actually mean, per AGENTS.md
-// §0c's rule that any side/direction prop must be logical.
+// `start-2`/`end-2`); renamed to match what the values actually mean, per
+// packages/ui/AGENTS.md's rule that any side/direction prop must be logical.
 const SelectContext = React.createContext<{
   indicatorPosition: "start" | "end";
   indicatorVisibility: boolean;

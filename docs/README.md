@@ -19,22 +19,23 @@ Professional engineering specification for an **AI-powered, multi-tenant School 
 ## Structure
 
 ```
-AGENTS.md                  AI-agent entry point: vocabulary, invariants, the "load only what you need" rule
+AGENTS.md                  AI-agent entry point: vocabulary, the "load only what you need" rule
 project-status.md          Living hand-off note: what's built, what's in progress, where to start
+deferred-work.md           What is deliberately not done yet, and why
 context/
   context-map.md           task type → exact files to load (the routing table)
-  agents-template-*.md     ready-to-copy AGENTS.md for the api / dashboard / website repos
-docs/
-  00-overview/             vision · requirements + feature matrix · users & roles · glossary
-  01-phases/               master phase plan + phases 0–7 (discovery → operate)
-  02-architecture/         system · multi-tenancy · API · database · auth/RBAC · AI ·
-                           notifications · website builder · tech stack · repos · hosting
-  03-modules/              19 module specs, one file each, fixed 19-section template
-  04-ai/                   AI feature registry (AI-XXX-NN) + governance policy
-  05-database/             ERD overview + column-level entity specs by domain
-  06-security/             numbered security requirements (SEC-01…)
-  07-quality/              non-functional requirements · testing strategy
-  08-future/               mobile apps · extensibility roadmap
+decisions/                 architecture decision records: why, what was rejected, what enforces it
+00-overview/               vision · requirements + feature matrix · users & roles · glossary
+01-phases/                 master phase plan + phases 0–7 (discovery → operate)
+02-architecture/           system · multi-tenancy · API · database · auth/RBAC · AI ·
+                           notifications · website builder · tech stack · repo structure · hosting
+03-modules/                19 module specs, one file each, fixed 19-section template
+04-ai/                     AI feature registry (AI-XXX-NN) + governance policy
+05-database/               ERD overview + column-level entity specs by domain
+06-security/               numbered security requirements (SEC-01…)
+07-quality/                non-functional requirements · testing strategy · repo tooling
+08-future/                 mobile apps · extensibility roadmap
+superpowers/               approved feature designs (specs/) and task-by-task plans (plans/)
 ```
 
 ## The 19 Modules
