@@ -93,6 +93,13 @@ module = ["*.tests.*", "tests.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
+# Every function must be typed (ENGINEERING_STANDARDS.md §2). A per-package ratchet: these are the
+# core packages that already pass (CI report, 2026-09-26); add a package the moment it does, never
+# remove one. generate-baselines.yml's Python job reports which packages are clean.
+module = ["core.common.*", "core.documents.*", "core.money.*"]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
 # django-stubs cannot follow Manager.from_queryset(), which builds a class at
 # runtime. The pattern is idiomatic Django and the resulting managers are covered
 # by tests.

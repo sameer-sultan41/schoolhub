@@ -86,10 +86,13 @@ jobs:
 
       - uses: ./.github/actions/setup-api-env
 
-      - name: Add a noqa for every existing violation, then drop dead ones
+      - name: Drop dead noqa codes, then baseline what remains
+        # Order matters: RUF100's fix removes codes that suppress nothing (with BLE/TID251 now
+        # selected, their noqas count as used). Running --add-noqa first would instead suppress
+        # RUF100 itself on those lines, freezing the dead comments.
         run: |
-          uv run ruff check --add-noqa .
           uv run ruff check --fix . || true
+          uv run ruff check --add-noqa .
           uv run ruff format .
 
       - name: Report which core packages pass disallow_untyped_defs
@@ -120,4 +123,3 @@ jobs:
             api-generated.patch
             apps/api/mypy-untyped-report.txt
           if-no-files-found: error
-

@@ -458,6 +458,21 @@ Load `turborepo`/`next-best-practices` first, and use Context7 for ESLint 9.39 s
 
 ### PR 5: Backend lint ratchet
 
+> **Amendments made during PR 5** (stop rule 3):
+>
+> - **Import boundaries:** a contract test (`apps/api/tests/test_import_boundaries.py`) instead of
+>   import-linter. A forbidden contract can't express "another app's views, but not your own"
+>   without one contract per app. The contract test follows the repo's existing architectural
+>   tests and needs no dependency. Its `KNOWN_VIOLATIONS` baseline fails on stale entries too.
+> - **Ruff baseline:** CI-generated inline `# noqa` comments (`ruff check --add-noqa`) rather than a
+>   per-file-ignores list — per-line, and RUF100 forces their removal once fixed.
+> - **Coverage floors:** measured on 2026-09-26 — `core/tenancy` 92.3% → floor 90; `apps/fees_finance`
+>   85.6% → floor 85; `core/rbac` without seed commands 75.1% → floor 75.
+> - **`.env.example`:** fixed with the owner's approval, including three stale `S3_*` names.
+> - **mypy:** `disallow_untyped_defs` starts with the three `core` packages the CI report shows
+>   clean (`core.common`, `core.documents`, `core.money`); the other nine are listed as dirty in
+>   that report and join the override as they are typed.
+
 **`apps/api/pyproject.toml`:**
 - **Ruff:**
   - add `RUF100`; the 21 dead `noqa`s are removed via a `generate-baselines.yml` patch

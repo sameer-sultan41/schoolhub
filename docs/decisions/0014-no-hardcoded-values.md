@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-26
-- **Enforced by:** partly — `apps/dashboard/src/i18n/messages.types-check.ts` (every `en` key present in `ur`), `apps/api/tests/test_endpoint_contracts.py` (declared permission keys are registered), the zod env modules (a missing variable fails at load). Frontend, via ESLint (shared pieces in `packages/config/eslint.boundaries.mjs`): `react/jsx-no-literals` (dashboard), a `process.env` ban outside the env modules, an inline-`queryKey` ban (dashboard), a physical-direction class ban, and `max-lines` 400 — with existing violations frozen per workspace in `eslint-suppressions.json`, which the `lint-baselines` job in `repo-hygiene.yml` allows only to shrink. Backend: planned (ruff `TID251` for `os.environ`).
+- **Enforced by:** partly — `apps/dashboard/src/i18n/messages.types-check.ts` (every `en` key present in `ur`), `apps/api/tests/test_endpoint_contracts.py` (declared permission keys are registered), the zod env modules (a missing variable fails at load). Frontend, via ESLint (shared pieces in `packages/config/eslint.boundaries.mjs`): `react/jsx-no-literals` (dashboard), a `process.env` ban outside the env modules, an inline-`queryKey` ban (dashboard), a physical-direction class ban, and `max-lines` 400 — with existing violations frozen per workspace in `eslint-suppressions.json`, which the `lint-baselines` job in `repo-hygiene.yml` allows only to shrink. Backend: ruff `TID251` bans `os.environ`/`os.getenv` outside `config/settings/*` and the entry points, and `apps/api/tests/test_env_example.py` keeps `.env.example` in step with what the settings read.
 
 ## Context
 
