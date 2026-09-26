@@ -217,9 +217,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                 </div>
               )}
 
-              {isError && (
-                <p className="text-sm text-destructive">{t("detail.loadError")}</p>
-              )}
+              {isError && <p className="text-sm text-destructive">{t("detail.loadError")}</p>}
 
               <span className="text-xs text-muted-foreground">
                 {t("detail.lastUpdated", { when: formatLastUpdated(row.updatedAt) })}
