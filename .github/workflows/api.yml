@@ -156,11 +156,12 @@ jobs:
       - name: Per-package coverage floors
         # docs/07-quality/testing-strategy.md asks 90% for the high-stakes packages. Each floor
         # is set at its measured level on 2026-09-26 and is a ratchet: raise it as coverage
-        # rises, never lower it (ADR-0007). core/rbac excludes its seed management commands.
+        # rises, never lower it (ADR-0007). core/rbac excludes the two seed commands that only
+        # build local demo data (seed_e2e_data is exercised by the live lane and stays in).
         run: |
           uv run coverage report --include='core/tenancy/*' --fail-under=90
           uv run coverage report --include='apps/fees_finance/*' --fail-under=85
-          uv run coverage report --include='core/rbac/*' --omit='core/rbac/management/*,*/tests/*,*/migrations/*' --fail-under=75
+          uv run coverage report --include='core/rbac/*' --omit='core/rbac/management/commands/seed_all_roles.py,core/rbac/management/commands/seed_dev_data.py,*/tests/*,*/migrations/*' --fail-under=80
 
       - name: Upload coverage
         if: always()

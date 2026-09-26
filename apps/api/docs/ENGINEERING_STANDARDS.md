@@ -74,7 +74,7 @@ Full strategy: `docs/07-quality/testing-strategy.md`.
 - Every new endpoint gets a **cross-tenant access test** in its module's `tests/test_cross_tenant.py`. These are hand-written — nothing auto-enrols new routes, so a missing test fails nothing ([ADR-0004](../../../docs/decisions/0004-cross-tenant-404.md)); the reviewer must check for it. What *does* auto-enrol: `tests/test_rls_coverage.py` (every tenant table has an RLS policy), `tests/test_append_only_coverage.py` (append-only tables are protected by grant) and `tests/test_endpoint_contracts.py` (every endpoint declares a registered permission key).
 - RBAC matrix tests assert each permission key grants exactly what it should.
 - Money tests assert ledger balance invariants.
-- Coverage floor 85% overall (`fail_under` in `pyproject.toml`), plus per-package floors in `api.yml` set at their measured levels on 2026-09-26 — `core/tenancy` 90%, `apps/fees_finance` 85%, `core/rbac` 75% (seed commands excluded). All are ratchets: raise them as coverage rises, never lower them.
+- Coverage floor 85% overall (`fail_under` in `pyproject.toml`), plus per-package floors in `api.yml` set at their measured levels on 2026-09-26 — `core/tenancy` 90%, `apps/fees_finance` 85%, `core/rbac` 80% (the two local seed commands excluded). All are ratchets: raise them as coverage rises, never lower them.
 - Architectural contract tests in `tests/` walk the code, so they can't be forgotten: RLS coverage, append-only grants, endpoint permission keys (including inline `has_permission_key()` literals), cross-app import boundaries (ADR-0013), and `.env.example` drift.
 
 **Tests are not run locally.** Push and let CI report — CI is the source of truth for pass/fail.

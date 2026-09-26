@@ -34,8 +34,28 @@ KNOWN_VIOLATIONS = frozenset(
         # Attendance summary for report cards; belongs in attendance's services.
         ("apps.examinations.services", "apps.attendance.reports"),
         # Seed commands build cross-module fixtures; they move to a top-level seeding package.
-        ("core.rbac.management.commands.seed_all_roles", "apps"),
-        ("core.rbac.management.commands.seed_e2e_data", "apps"),
+        # One entry per app, so a seed command reaching into a NEW app still fails.
+        *(
+            ("core.rbac.management.commands.seed_all_roles", f"apps.{app}")
+            for app in (
+                "academics",
+                "school_organization",
+                "staff_management",
+                "student_management",
+                "timetable",
+            )
+        ),
+        *(
+            ("core.rbac.management.commands.seed_e2e_data", f"apps.{app}")
+            for app in (
+                "academics",
+                "attendance",
+                "school_organization",
+                "staff_management",
+                "student_management",
+                "timetable",
+            )
+        ),
     }
 )
 
@@ -45,15 +65,24 @@ def _module_name(path: Path) -> str:
     return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
 
 
-def _imported_modules(tree: ast.AST) -> set[str]:
-    """Absolute imports, including `from x import y` as both `x` and `x.y` (y may be a module)."""
+def _imported_modules(tree: ast.AST, package: str = "") -> set[str]:
+    """Every import as an absolute module path, `from x import y` counted as both `x` and `x.y`
+    (y may be a module). Relative imports are resolved against `package`, the importing
+    module's package — `from ..school_organization import views` inside `apps.academics` is
+    `apps.school_organization.views`. Lazy imports inside functions count too."""
     found: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            found.add(node.module)
-            found.update(f"{node.module}.{alias.name}" for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                anchor = package.split(".")[: len(package.split(".")) - (node.level - 1)]
+                base = ".".join([*anchor, node.module] if node.module else anchor)
+            else:
+                base = node.module or ""
+            if base:
+                found.add(base)
+                found.update(f"{base}.{alias.name}" for alias in node.names)
     return found
 
 
@@ -64,7 +93,7 @@ def _violation(source: str, target: str) -> str | None:
         return None
     source_parts = source.split(".")
     if source_parts[0] == "core":
-        return "apps"
+        return ".".join(target_parts[:2])
     if source_parts[0] == "apps" and target_parts[1] != source_parts[1]:
         for index, part in enumerate(target_parts[2:], start=2):
             if part in INTERNAL_MODULES:
@@ -80,7 +109,9 @@ def find_violations() -> set[tuple[str, str]]:
             if "tests" in relative or "migrations" in relative:
                 continue
             source = _module_name(path)
-            for target in _imported_modules(ast.parse(path.read_text(encoding="utf-8"))):
+            package = source if path.name == "__init__.py" else source.rpartition(".")[0]
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for target in _imported_modules(tree, package):
                 broken = _violation(source, target)
                 if broken:
                     violations.add((source, broken))
@@ -127,8 +158,17 @@ class ViolationRuleTests(SimpleTestCase):
 
     def test_core_may_not_import_any_app(self):
         self.assertEqual(
-            _violation("core.notifications.services", "apps.communication.models"), "apps"
+            _violation("core.notifications.services", "apps.communication.models"),
+            "apps.communication",
         )
+
+    def test_from_import_of_a_module_counts_as_that_module(self):
+        tree = ast.parse("def f():\n    from apps.attendance import reports\n")
+        self.assertIn("apps.attendance.reports", _imported_modules(tree))
+
+    def test_relative_imports_resolve_against_the_package(self):
+        tree = ast.parse("from ..school_organization import views\n")
+        self.assertIn("apps.school_organization.views", _imported_modules(tree, "apps.academics"))
 
     def test_non_app_imports_are_ignored(self):
         self.assertIsNone(_violation("apps.timetable.views", "core.api.pagination"))

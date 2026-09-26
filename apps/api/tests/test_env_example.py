@@ -17,7 +17,9 @@ API_ROOT = Path(__file__).resolve().parents[1]
 
 # Listed in .env.example but deliberately not read through the settings modules.
 NOT_READ_BY_SETTINGS = {
-    # Selects the settings module itself; read by manage.py, wsgi.py, asgi.py and celery.py.
+    # Selects the settings module itself. manage.py, wsgi.py, asgi.py and celery.py only
+    # setdefault() it, so it matters here only when the environment is loaded before Django
+    # starts (e.g. `uv run --env-file .env ...`); settings never read it.
     "DJANGO_SETTINGS_MODULE",
     # For the planned core/ai gateway (apps/api/AGENTS.md rule 6); remove once it reads them.
     "ANTHROPIC_API_KEY",

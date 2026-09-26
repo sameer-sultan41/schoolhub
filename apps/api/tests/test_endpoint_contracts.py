@@ -8,7 +8,7 @@ forgotten by whoever adds the next module.
 import ast
 from pathlib import Path
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import get_resolver
 from rest_framework.permissions import AllowAny
 
@@ -91,42 +91,55 @@ class EndpointContractTests(TestCase):
 
 
 def _inline_permission_keys() -> list[tuple[str, int, str]]:
-    """Every string literal passed as the key to `has_permission_key(user, "<key>")` in app code.
+    """Every permission-key string literal checked inline in app code.
 
     `required_permission` / `required_permission_map` are validated through the URLconf above;
-    keys checked inline in a method body or serializer never reach it, so they are found by
-    reading the source.
+    keys checked inside a method body, serializer or task never reach it, so they are found by
+    reading the source. Two forms: `has_permission_key(user, "<key>")` (or `key="<key>"`) and
+    `"<key>" in effective_permission_keys(user)`.
     """
     root = Path(__file__).resolve().parents[1]
     found: list[tuple[str, int, str]] = []
+
+    def called(node: ast.AST, name: str) -> bool:
+        if not isinstance(node, ast.Call):
+            return False
+        func = node.func
+        return (func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)) == name
+
+    def literal(node: ast.AST | None) -> str | None:
+        is_str = isinstance(node, ast.Constant) and isinstance(node.value, str)
+        return node.value if is_str else None
+
     for package in ("apps", "core"):
         for path in (root / package).rglob("*.py"):
             parts = path.relative_to(root).parts
             if "tests" in parts or "migrations" in parts:
                 continue
+            where = str(path.relative_to(root))
             for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-                if not isinstance(node, ast.Call):
-                    continue
-                func = node.func
-                name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
-                if name != "has_permission_key" or len(node.args) < 2:
-                    continue
-                key = node.args[1]
-                if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                    found.append((str(path.relative_to(root)), node.lineno, key.value))
+                key = None
+                if called(node, "has_permission_key"):
+                    positional = node.args[1] if len(node.args) > 1 else None
+                    keyword = next((kw.value for kw in node.keywords if kw.arg == "key"), None)
+                    key = literal(positional or keyword)
+                elif (
+                    isinstance(node, ast.Compare)
+                    and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops)
+                    and any(called(c, "effective_permission_keys") for c in node.comparators)
+                ):
+                    key = literal(node.left)
+                if key is not None:
+                    found.append((where, node.lineno, key))
     return found
 
 
-class InlinePermissionKeyTests(TestCase):
+class InlinePermissionKeyTests(SimpleTestCase):
     def test_inline_permission_key_literals_exist_in_the_registry(self):
-        """A typo'd inline key silently denies (or grants nothing) — it must be registered."""
+        """A mistyped inline key silently denies (or notifies nobody) — it must be registered."""
         keys = _inline_permission_keys()
-        self.assertTrue(keys, "expected at least one inline has_permission_key() call to check")
-        unregistered = [
-            f"{path}:{line} {key!r}"
-            for path, line, key in keys
-            if key not in registry.keys()  # noqa: SIM118
-        ]
+        self.assertTrue(keys, "expected at least one inline permission check to verify")
+        unregistered = [f"{path}:{line} {key!r}" for path, line, key in keys if key not in registry]
         self.assertEqual(
             unregistered, [], "Unregistered inline permission keys:\n" + "\n".join(unregistered)
         )

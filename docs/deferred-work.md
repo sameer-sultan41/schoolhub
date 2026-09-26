@@ -622,3 +622,13 @@ either this file or `project-status.md`.
   The `process.env` ban misses `const { env } = process` and `globalThis.process.env`. Tighten
   these once the existing JSX-text baseline has burned down.
 
+- **Backend baselines to burn down** (frozen by PR 5, shrink-only — ADR-0014):
+  - 15 `# noqa: BLE001` broad `except Exception` blocks (academics 1, attendance 2, examinations 6,
+    staff_management 2, student_management 3, core/api/views 1) — catch the specific exceptions.
+  - 1 `# noqa: TID251` — the `os.environ` read in `core/rbac/management/commands/seed_e2e_data.py`.
+  - `KNOWN_VIOLATIONS` in `apps/api/tests/test_import_boundaries.py`: the two cross-app imports and
+    the seed commands (moving the seeds into a top-level seeding package clears eleven entries).
+  - mypy `disallow_untyped_defs` covers only `core.common`, `core.documents` and `core.money`; the
+    other nine `core` packages join the override as they are typed (generate-baselines reports which).
+  - Coverage floors to raise toward the 90% target: `apps/fees_finance` 85, `core/rbac` 80.
+

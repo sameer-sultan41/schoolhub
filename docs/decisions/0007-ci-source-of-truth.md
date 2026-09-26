@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-26 (recording a decision already in effect)
-- **Enforced by:** `.github/workflows/{api,frontend,repo-hygiene,e2e-live,infra-compose,infra-terraform}.yml`; `.githooks/pre-commit`, `.githooks/commit-msg` and `.githooks/pre-push`, installed automatically by the root `package.json` `prepare` script on `pnpm install`
+- **Enforced by:** `.github/workflows/{api,frontend,repo-hygiene,e2e-live,infra-compose,infra-terraform}.yml` (including the coverage floors in `api.yml` and the Jest `coverageThreshold`s); `.githooks/pre-commit`, `.githooks/commit-msg` and `.githooks/pre-push`, installed automatically by the root `package.json` `prepare` script on `pnpm install`
 
 ## Context
 
@@ -25,6 +25,11 @@ cost:
 A missing tool warns and skips rather than blocking; CI remains the authority. Work that
 needs a tool run to *produce* files, such as lint suppression baselines, runs in a CI
 `workflow_dispatch` job whose patch is downloaded and committed. It never runs on a laptop.
+
+**Coverage floors are ratchets.** The global backend floor (85%, `pyproject.toml`), the per-app
+Jest thresholds (85%) and the per-package backend floors in `api.yml` (set at their measured
+levels on 2026-09-26: `core/tenancy` 90, `apps/fees_finance` 85, `core/rbac` 80) only ever go
+up. Raise one in the PR that lifts coverage past it; never lower one to make a PR pass.
 
 ## Alternatives considered
 

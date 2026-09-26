@@ -3,6 +3,13 @@
 
     check_baselines_shrink.py <base-ref>
 
+Three baselines, one rule — none may grow against <base-ref>:
+- every `eslint-suppressions.json` (frontend, below);
+- the backend's ratcheted `# noqa` codes (RATCHETED_NOQA under apps/api, migrations excluded) —
+  RUF100 removes dead ones, this stops new ones;
+- `KNOWN_VIOLATIONS` in apps/api/tests/test_import_boundaries.py — the test fails on stale
+  entries, this stops new ones.
+
 Compares every `eslint-suppressions.json` in the working tree with the same file at
 <base-ref> (repo-hygiene passes HEAD^1, the base tip of the PR's merge commit). The change
 fails if any file/rule pair appears that the base didn't have, or any count goes up. A file
@@ -17,12 +24,18 @@ inherit the old suppressions.
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path, PurePosixPath
 
 BASELINE = "eslint-suppressions.json"
+RATCHETED_NOQA = ("BLE001", "TID251")
+NOQA = re.compile(r"#\s*noqa:\s*([A-Z0-9, ]+)")
+BOUNDARIES_TEST = "apps/api/tests/test_import_boundaries.py"
 
 
 def _git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -70,6 +83,62 @@ def growth(before: dict, after: dict, moved: dict[str, str]) -> list[str]:
     return found
 
 
+def noqa_counts(ref: str | None) -> dict[str, int]:
+    """Occurrences of each ratcheted noqa code under apps/api (migrations excluded).
+
+    ref=None reads the working tree; otherwise the tree at ref (via `git grep <ref>`).
+    """
+    args = ["grep", "-h", "-I", "-E", "#[[:space:]]*noqa:"]
+    if ref:
+        args.append(ref)
+    args += ["--", "apps/api", ":(exclude)apps/api/**/migrations/**"]
+    out = _git(*args, check=False).stdout
+    counts = {code: 0 for code in RATCHETED_NOQA}
+    for line in out.splitlines():
+        for match in NOQA.finditer(line):
+            for code in (c.strip() for c in match.group(1).split(",")):
+                if code in counts:
+                    counts[code] += 1
+    return counts
+
+
+def known_violations(source: str) -> set[tuple[str, str]]:
+    """Evaluate the KNOWN_VIOLATIONS literal from the boundaries test's source (no imports run)."""
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "KNOWN_VIOLATIONS" for target in node.targets
+        ):
+            expression = compile(ast.Expression(node.value), BOUNDARIES_TEST, "eval")
+            # Literals, tuples, f-strings and generators only; no builtins are reachable.
+            return set(eval(expression, {"__builtins__": {}, "frozenset": frozenset}))
+    return set()
+
+
+def selected_at(ref: str) -> list[str]:
+    """ruff's `select` list in apps/api/pyproject.toml at ref ([] if unreadable)."""
+    result = _git("show", f"{ref}:apps/api/pyproject.toml", check=False)
+    if result.returncode != 0:
+        return []
+    return tomllib.loads(result.stdout).get("tool", {}).get("ruff", {}).get("lint", {}).get("select", [])
+
+
+def backend_growth(ref: str) -> list[str]:
+    found: list[str] = []
+    before, after = noqa_counts(ref), noqa_counts(None)
+    base_selection = selected_at(ref)
+    for code in RATCHETED_NOQA:
+        # The PR that first selects a rule creates its baseline; it is only a ratchet from then on.
+        if not any(code.startswith(rule) for rule in base_selection):
+            continue
+        if after[code] > before[code]:
+            found.append(f"`# noqa: {code}` count {before[code]} -> {after[code]} under apps/api — fix the code instead")
+    old = _git("show", f"{ref}:{BOUNDARIES_TEST}", check=False)
+    if old.returncode == 0 and Path(BOUNDARIES_TEST).is_file():
+        added = known_violations(Path(BOUNDARIES_TEST).read_text(encoding="utf-8")) - known_violations(old.stdout)
+        found += [f"new KNOWN_VIOLATIONS entry {source} -> {target} — go through that app's services" for source, target in sorted(added)]
+    return found
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print("usage: check_baselines_shrink.py <base-ref>", file=sys.stderr)
@@ -101,7 +170,12 @@ def main(argv: list[str]) -> int:
         failed = failed or bool(grew) or bool(stale)
         if not grew and not stale:
             print(f"ok: {path}")
-    return 1 if failed else 0
+    backend = backend_growth(ref)
+    for item in backend:
+        print(f"::error::backend baseline grew — {item} (ADR-0013/ADR-0014).")
+    if not backend:
+        print("ok: backend noqa and KNOWN_VIOLATIONS baselines")
+    return 1 if failed or backend else 0
 
 
 if __name__ == "__main__":

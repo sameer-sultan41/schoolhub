@@ -98,5 +98,71 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(self.run_main("HEAD"), 0)
 
 
+class KnownViolationsParsing(unittest.TestCase):
+    def test_literal_with_generators_is_evaluated_without_importing(self):
+        source = (
+            "KNOWN_VIOLATIONS = frozenset({\n"
+            "    ('apps.a.x', 'apps.b.views'),\n"
+            "    *(('core.seed', f'apps.{app}') for app in ('c', 'd')),\n"
+            "})\n"
+        )
+        self.assertEqual(
+            shrink.known_violations(source),
+            {("apps.a.x", "apps.b.views"), ("core.seed", "apps.c"), ("core.seed", "apps.d")},
+        )
+
+
+class BackendBaselines(unittest.TestCase):
+    """Ratcheted noqa counts and KNOWN_VIOLATIONS against a throwaway repo."""
+
+    BOUNDARIES = "KNOWN_VIOLATIONS = frozenset({('apps.a.x', 'apps.b.views')})\n"
+
+    def setUp(self) -> None:
+        self._cwd = os.getcwd()
+        self._tmp = tempfile.TemporaryDirectory()
+        os.chdir(self._tmp.name)
+        subprocess.run(["git", "init", "-q"], check=True)
+        Path("apps/api/tests").mkdir(parents=True)
+        Path("apps/api/tasks.py").write_text("try:\n    x()\nexcept Exception:  # noqa: BLE001\n    pass\n")
+        Path("apps/api/tests/test_import_boundaries.py").write_text(self.BOUNDARIES)
+        Path("apps/api/pyproject.toml").write_text('[tool.ruff.lint]\nselect = ["E", "BLE", "TID251"]\n')
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "base"], check=True
+        )
+
+    def tearDown(self) -> None:
+        os.chdir(self._cwd)
+        self._tmp.cleanup()
+
+    def test_unchanged_baselines_pass(self) -> None:
+        self.assertEqual(shrink.backend_growth("HEAD"), [])
+
+    def test_a_new_ratcheted_noqa_fails(self) -> None:
+        with Path("apps/api/tasks.py").open("a") as f:
+            f.write("try:\n    y()\nexcept Exception:  # noqa: BLE001\n    pass\n")
+        self.assertEqual(len(shrink.backend_growth("HEAD")), 1)
+
+    def test_removing_a_noqa_passes(self) -> None:
+        Path("apps/api/tasks.py").write_text("x()\n")
+        self.assertEqual(shrink.backend_growth("HEAD"), [])
+
+    def test_the_pr_that_first_selects_a_rule_may_create_its_baseline(self) -> None:
+        Path("apps/api/pyproject.toml").write_text('[tool.ruff.lint]\nselect = ["E"]\n')
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "unselect"], check=True
+        )
+        with Path("apps/api/tasks.py").open("a") as f:
+            f.write("try:\n    y()\nexcept Exception:  # noqa: BLE001\n    pass\n")
+        self.assertEqual(shrink.backend_growth("HEAD"), [])
+
+    def test_a_new_known_violation_fails(self) -> None:
+        Path("apps/api/tests/test_import_boundaries.py").write_text(
+            "KNOWN_VIOLATIONS = frozenset({('apps.a.x', 'apps.b.views'), ('apps.c.y', 'apps.d.tasks')})\n"
+        )
+        self.assertEqual(len(shrink.backend_growth("HEAD")), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

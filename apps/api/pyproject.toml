@@ -61,8 +61,8 @@ ignore = ["S101"]
 "os.getenv".msg = "Read configuration through django-environ in config/settings/, not os.getenv (ADR-0014)."
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S105", "S106", "TID251"]
-"*/tests/*" = ["S105", "S106", "TID251"]
+"tests/*" = ["S105", "S106"]
+"*/tests/*" = ["S105", "S106"]
 # The settings modules own configuration; the entry points only select the settings module.
 "config/settings/*" = ["F403", "F405", "TID251"]
 "manage.py" = ["TID251"]

@@ -100,7 +100,13 @@ jobs:
 
       - name: Report which core packages pass disallow_untyped_defs
         run: |
-          uv run mypy core --disallow-untyped-defs --no-error-summary > mypy-untyped.txt || true
+          set +e
+          uv run mypy core --disallow-untyped-defs --no-error-summary > mypy-untyped.txt
+          status=$?
+          set -e
+          # 0 = clean, 1 = type errors (expected); anything else means mypy itself failed and the
+          # report would wrongly list every package as clean.
+          if [ "$status" -gt 1 ]; then cat mypy-untyped.txt; exit "$status"; fi
           python3 - <<'PY'
           import pathlib, re
           errors = pathlib.Path("mypy-untyped.txt").read_text().splitlines()

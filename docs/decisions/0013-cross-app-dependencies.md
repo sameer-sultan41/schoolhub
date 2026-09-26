@@ -25,7 +25,7 @@ foreign keys.
   fields.
 - **Writes and business rules** that belong to another app go through that app's `services`.
   Don't re-implement its invariants or mutate its rows directly.
-- An app **never** imports another app's `views`, `viewset`, `urls`, `reports` or `tasks`.
+- An app **never** imports another app's `views`, `view`, `viewset`, `urls`, `reports` or `tasks`.
   Anything shared there belongs in the owning app's `services`, or in `core/`.
 - `core/` **never** imports `apps/`. Hooks from apps into core self-register from
   `AppConfig.ready()`, as `communication` does with `core/notifications`.

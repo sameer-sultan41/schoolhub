@@ -467,8 +467,10 @@ Load `turborepo`/`next-best-practices` first, and use Context7 for ESLint 9.39 s
 > - **Ruff baseline:** CI-generated inline `# noqa` comments (`ruff check --add-noqa`) rather than a
 >   per-file-ignores list — per-line, and RUF100 forces their removal once fixed.
 > - **Coverage floors:** measured on 2026-09-26 — `core/tenancy` 92.3% → floor 90; `apps/fees_finance`
->   85.6% → floor 85; `core/rbac` without seed commands 75.1% → floor 75.
+>   85.6% → floor 85; `core/rbac` without the two local seed commands 80.8% → floor 80.
 > - **`.env.example`:** fixed with the owner's approval, including three stale `S3_*` names.
+> - **Backend shrink check:** `check_baselines_shrink.py` also fails when a ratcheted `# noqa`
+>   (BLE001, TID251) count or the `KNOWN_VIOLATIONS` set grows.
 > - **mypy:** `disallow_untyped_defs` starts with the three `core` packages the CI report shows
 >   clean (`core.common`, `core.documents`, `core.money`); the other nine are listed as dirty in
 >   that report and join the override as they are typed.
