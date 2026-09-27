@@ -604,6 +604,9 @@
       "summarySucceeded": "{count} imported",
       "summaryFailed": "{count} failed",
       "importAnother": "Import another file",
+      "startFailed": "The import could not be started.",
+      "timedOut": "Still running in the background — check back shortly.",
+      "close": "Close",
       "errorTable": {
         "row": "Row",
         "field": "Field",
