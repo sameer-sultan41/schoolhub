@@ -266,12 +266,21 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
             }}
             disabled={trigger.isPending}
           >
-            {/* "Cancel" only before any job exists — once one has been triggered, this
-                dialog has no real cancel action (the import keeps running server-side
-                regardless), so every later state — polling, timed out, errored, or
-                finished — reads "Close" instead of a label that implies it stops
-                anything. */}
-            {jobId === null ? tCommon("cancel") : t("import.close")}
+            {/* Three distinct labels, not two: "Cancel" before any job exists (there is
+                genuinely nothing to cancel yet); "Run in background" while one is
+                active (polling, timed out, or errored but not yet terminal) — this
+                dialog has no real cancel action once a job starts, so the label says
+                what closing actually does, not something that implies it stops the
+                import; "Close" only once truly finished. "Run in background" also
+                keeps this button's accessible name distinct from `DialogContent`'s own
+                built-in X button (`closeLabel={t("import.close")}` — same "Close"
+                text) while a job is active; both saying "Close" only once finished, is
+                a harmless, one-more-choice-later duplication, not a live ambiguity. */}
+            {jobId === null
+              ? tCommon("cancel")
+              : hasFinished
+                ? t("import.close")
+                : t("import.runInBackground")}
           </Button>
           {jobId === null ? (
             <Button onClick={handleImportClick} disabled={!file || trigger.isPending}>

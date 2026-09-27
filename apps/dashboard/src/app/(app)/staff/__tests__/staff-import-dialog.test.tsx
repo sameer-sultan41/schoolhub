@@ -161,10 +161,12 @@ describe("StaffImportDialog", () => {
     });
     // The job's own status is unknown (the poll itself failed, not the job), so this
     // must not look like an idle dialog ready for a fresh file — the "Upload" button
-    // shouldn't even be offered, only "Close".
+    // shouldn't even be offered, and the footer reads "Run in background" (distinct
+    // from the dialog's own built-in X button, also named "Close") since there is
+    // nothing left to cancel.
     expect(screen.getByLabelText("File")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run in background" })).toBeInTheDocument();
   });
 
   it("shows a timeout toast when the job never reaches a terminal status, and keeps the file input locked", async () => {

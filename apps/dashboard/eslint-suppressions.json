@@ -200,7 +200,7 @@
       "count": 2
     },
     "react/jsx-no-literals": {
-      "count": 2
+      "count": 1
     }
   },
   "src/app/(app)/students/page.tsx": {

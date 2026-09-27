@@ -609,6 +609,7 @@
       "startFailed": "The import could not be started.",
       "timedOut": "Still running in the background — check back shortly.",
       "close": "Close",
+      "runInBackground": "Run in background",
       "errorTable": {
         "row": "Row",
         "field": "Field",
