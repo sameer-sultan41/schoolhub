@@ -1,10 +1,14 @@
 import { expect, test } from "@/fixtures";
+import { buildUser, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
 import {
   buildCampus,
   buildDesignation,
   buildStaff,
+  jobsModule,
   schoolOrganizationModule,
   staffModule,
+  STAFF_EXPORT_JOB_ID,
+  STAFF_IMPORT_JOB_ID,
 } from "@/mocks";
 
 /**
@@ -180,5 +184,95 @@ test.describe("staff directory", () => {
 
     await expect(staffPage.rowPhoto("Bilal Ahmed")).toHaveCount(0);
     await expect(staffPage.row("Bilal Ahmed").getByText("BA")).toBeVisible();
+  });
+
+  test.describe("with export/import permission", () => {
+    test.use({
+      authUser: buildUser({
+        permissions: [...SCHOOL_ADMIN_PERMISSIONS, "staff.staff.export", "staff.staff.import"],
+      }),
+    });
+
+  test("Export CSV downloads the staff list once the export job succeeds", async ({
+    page,
+    mockApi,
+    staffPage,
+  }) => {
+    mockApi.use(
+      jobsModule({
+        jobs: {
+          [STAFF_EXPORT_JOB_ID]: [
+            { status: "running", progress: 0 },
+            { status: "succeeded", progress: 100, result: { result_file_id: "file-export-1" } },
+          ],
+        },
+        // An opaque, storage-key-shaped name — deliberately NOT "staff-export.csv":
+        // `ResponseContentDisposition` is deferred (docs/deferred-work.md), so the
+        // real suggested filename is whatever the storage key is, not a friendly
+        // name. This test asserts a download happens, not what it's named.
+        files: [
+          {
+            id: "file-export-1",
+            downloadUrl: "https://storage.e2e.test/objects/8f3c2e10-export.bin",
+          },
+        ],
+      }),
+    );
+    await page.route("https://storage.e2e.test/objects/8f3c2e10-export.bin", (route) =>
+      route.fulfill({ status: 200, contentType: "text/csv", body: "employee_number\n" }),
+    );
+
+    const downloadPromise = page.waitForEvent("download");
+    await staffPage.exportCsvButton.click();
+    const download = await downloadPromise;
+
+    expect(download.url()).toBe("https://storage.e2e.test/objects/8f3c2e10-export.bin");
+  });
+
+  test("Import CSV shows the per-row result once the import job succeeds", async ({
+    mockApi,
+    staffPage,
+  }) => {
+    mockApi.use(
+      jobsModule({
+        jobs: {
+          [STAFF_IMPORT_JOB_ID]: [
+            {
+              status: "succeeded",
+              progress: 100,
+              result: {
+                total: 2,
+                succeeded: 1,
+                failed: 1,
+                errors: [{ row: 2, field: "campus_code", issue: "Unknown campus code 'ZZZ'." }],
+              },
+            },
+          ],
+        },
+      }),
+    );
+
+    await staffPage.importCsvButton.click();
+    await staffPage.importFileInput.setInputFiles({
+      name: "staff.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("first_name,last_name,campus_code\nA,B,ZZZ\nC,D,MAIN"),
+    });
+    await staffPage.importSubmit.click();
+
+    await expect(
+      staffPage.importDialog.getByText("Unknown campus code 'ZZZ'."),
+    ).toBeVisible();
+  });
+  }); // end test.describe("with export/import permission", ...)
+
+  test("a school_admin (RECORD_MANAGERS, not STAFF_IO) sees Export CSV and Import CSV disabled", async ({
+    staffPage,
+  }) => {
+    // Back in the OUTER describe, so `signedIn`'s default `authUser` — `buildUser()`,
+    // `SCHOOL_ADMIN_PERMISSIONS` (`e2e/src/data/factories.ts`) — applies unmodified.
+    // No extra setup needed; this proves the real default, not a contrived one.
+    await expect(staffPage.exportCsvButton).toBeDisabled();
+    await expect(staffPage.importCsvButton).toBeDisabled();
   });
 });

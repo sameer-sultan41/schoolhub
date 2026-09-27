@@ -1,5 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 
 import { Services } from "@/services";
 import { renderWithProviders } from "@/test-utils";
@@ -24,6 +25,7 @@ jest.mock("@/services", () => ({
   // The real class: components `instanceof`-check it, and tests build `new ApiError(...)`.
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
+    auth: { fetchCurrentUser: jest.fn() },
     dashboard: {
       fetchStaffPage: jest.fn(),
       fetchStaffTypeCount: jest.fn(),
@@ -32,7 +34,16 @@ jest.mock("@/services", () => ({
       fetchDesignations: jest.fn().mockResolvedValue([]),
       fetchStaffDirectory: jest.fn().mockResolvedValue([]),
     },
+    staff: { triggerStaffExport: jest.fn() },
+    jobs: { fetchJob: jest.fn(), fetchFileDownloadUrl: jest.fn() },
   },
+}));
+
+// This file has never needed one before — its own "Add Member" flow shows no
+// toasts — but the new export path's failure/timeout/error states surface ONLY as a
+// toast, same reasoning as the import dialog's own tests.
+jest.mock("sonner", () => ({
+  toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
 const mockFetchStaffPage = Services.dashboard.fetchStaffPage as jest.MockedFunction<
@@ -41,11 +52,47 @@ const mockFetchStaffPage = Services.dashboard.fetchStaffPage as jest.MockedFunct
 const mockFetchStaffTypeCount = Services.dashboard.fetchStaffTypeCount as jest.MockedFunction<
   typeof Services.dashboard.fetchStaffTypeCount
 >;
+const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFunction<
+  typeof Services.auth.fetchCurrentUser
+>;
+const mockTriggerStaffExport = Services.staff.triggerStaffExport as jest.MockedFunction<
+  typeof Services.staff.triggerStaffExport
+>;
+const mockFetchJob = Services.jobs.fetchJob as jest.MockedFunction<typeof Services.jobs.fetchJob>;
+const mockFetchFileDownloadUrl = Services.jobs.fetchFileDownloadUrl as jest.MockedFunction<
+  typeof Services.jobs.fetchFileDownloadUrl
+>;
+const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
+
+const PERMITTED_USER = {
+  id: "user-1",
+  email: "hr@example.com",
+  phone: null,
+  full_name: "HR Staff",
+  avatar_url: null,
+  locale: "en",
+  tenant_id: "tenant-1",
+  roles: [],
+  permissions: ["staff.staff.view", "staff.staff.export", "staff.staff.import"],
+};
+
+async function exportButtonEnabled() {
+  const button = await screen.findByRole("button", { name: "Export CSV" });
+  await waitFor(() => {
+    expect(button).toBeEnabled();
+  });
+  return button;
+}
 
 describe("StaffToolbar", () => {
   beforeEach(() => {
     mockFetchStaffPage.mockReset();
     mockFetchStaffTypeCount.mockReset();
+    mockFetchCurrentUser.mockReset().mockResolvedValue(PERMITTED_USER);
+    mockTriggerStaffExport.mockReset();
+    mockFetchJob.mockReset();
+    mockFetchFileDownloadUrl.mockReset();
+    mockToastError.mockReset();
   });
 
   it('shows "—" for both stats while the underlying queries are pending', () => {
@@ -107,5 +154,120 @@ describe("StaffToolbar", () => {
     await user.click(screen.getByRole("button", { name: "Add Member" }));
 
     expect(await screen.findByRole("heading", { name: "Add staff member" })).toBeInTheDocument();
+  });
+
+  it('"Export CSV" downloads the file once the export job succeeds', async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+    mockFetchStaffTypeCount.mockResolvedValue(0);
+    mockTriggerStaffExport.mockResolvedValue({ jobId: "job-export-1" });
+    mockFetchJob.mockResolvedValue({
+      id: "job-export-1",
+      job_type: "export.staff",
+      status: "succeeded",
+      progress: 100,
+      result: { result_file_id: "file-1" },
+      error: null,
+    });
+    mockFetchFileDownloadUrl.mockResolvedValue("https://storage.test/staff-export.csv");
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup();
+    await user.click(await exportButtonEnabled());
+
+    await waitFor(() => {
+      expect(mockFetchFileDownloadUrl).toHaveBeenCalledWith("file-1");
+    });
+    await waitFor(() => {
+      expect(clickSpy).toHaveBeenCalled();
+    });
+
+    clickSpy.mockRestore();
+  });
+
+  it('"Export CSV" shows an error toast and re-enables when the download URL fetch fails', async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+    mockFetchStaffTypeCount.mockResolvedValue(0);
+    mockTriggerStaffExport.mockResolvedValue({ jobId: "job-export-2" });
+    mockFetchJob.mockResolvedValue({
+      id: "job-export-2",
+      job_type: "export.staff",
+      status: "succeeded",
+      progress: 100,
+      result: { result_file_id: "file-2" },
+      error: null,
+    });
+    mockFetchFileDownloadUrl.mockRejectedValue(new Error("storage unavailable"));
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup();
+    await user.click(await exportButtonEnabled());
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("The export file could not be downloaded.");
+    });
+    expect(await screen.findByRole("button", { name: "Export CSV" })).not.toBeDisabled();
+  });
+
+  it('"Export CSV" shows an error toast when the trigger itself fails', async () => {
+    const { ApiError } = jest.requireActual<{ ApiError: new (init: unknown) => Error }>(
+      "@schoolhub/api-client",
+    );
+    mockFetchStaffPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+    mockFetchStaffTypeCount.mockResolvedValue(0);
+    mockTriggerStaffExport.mockRejectedValue(
+      new ApiError({
+        code: "permission_denied",
+        message: "You don't have permission to do that.",
+        status: 403,
+        url: "/staff-exports",
+      }),
+    );
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup();
+    await user.click(await exportButtonEnabled());
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("You do not have permission to do that.");
+    });
+  });
+
+  it("disables both Export CSV and Import CSV for a role without staff.staff.export/.import", async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+    mockFetchStaffTypeCount.mockResolvedValue(0);
+    mockFetchCurrentUser.mockResolvedValue({
+      id: "user-2",
+      email: "admin@example.com",
+      phone: null,
+      full_name: "School Admin",
+      avatar_url: null,
+      locale: "en",
+      tenant_id: "tenant-1",
+      roles: [],
+      // school_admin: RECORD_MANAGERS, not STAFF_IO — sees everything else on this
+      // screen but not these two.
+      permissions: ["staff.staff.view", "staff.staff.create", "staff.staff.update"],
+    });
+
+    renderWithProviders(<StaffToolbar />);
+
+    await waitFor(() => {
+      expect(mockFetchCurrentUser).toHaveBeenCalled();
+    });
+    expect(await screen.findByRole("button", { name: "Export CSV" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Import CSV" })).toBeDisabled();
   });
 });

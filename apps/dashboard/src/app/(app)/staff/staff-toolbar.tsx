@@ -1,15 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GraduationCap, UserPlus, Users, type IdCard } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { m } from "motion/react";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 
 import { Button } from "@schoolhub/ui";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
-import { Services } from "@/services";
+import { StaffImportDialog } from "@/app/(app)/staff/staff-import-dialog";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { useJobPolling } from "@/hooks/use-job-polling";
+import { hasPermission } from "@/lib/permissions";
+import { ApiError, Services } from "@/services";
+import type { ExportJobResult } from "@/services/modules/jobs/jobs-service";
 
 /**
  * The `/staff` toolbar's live stat line and its two action buttons — split out of
@@ -75,6 +82,9 @@ function StatChip({
 
 export function StaffToolbar() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const tErrors = useTranslations("errors");
 
   // `pageSize: 1` mirrors dashboard-service.ts's own fetchTotal/fetchStaffTypeCount
   // pattern: read the server's reported total_count without draining the list. This is
@@ -90,9 +100,103 @@ export function StaffToolbar() {
     queryKey: ["staff", "toolbar", "teaching-staff-count"],
     queryFn: () => Services.dashboard.fetchStaffTypeCount("teaching"),
   });
+  // Same cache entry `sidebar-menu.tsx`'s own permission check already populates
+  // (Task 3's `queryKeys.currentUser()`, not a second inline literal) — this never
+  // issues a second request.
+  const { data: currentUser } = useCurrentUser();
 
   const allMembers = isAllMembersPending ? null : (allStaffPage?.pagination?.total_count ?? null);
   const teachingStaff = isTeachingStaffPending ? null : (teachingStaffCount ?? null);
+
+  const canExport = hasPermission(currentUser, "staff.staff.export");
+  const canImport = hasPermission(currentUser, "staff.staff.import");
+
+  const exportTrigger = useMutation({
+    mutationFn: () => Services.staff.triggerStaffExport(),
+    onSuccess: (result) => {
+      setExportJobId(result.jobId);
+    },
+    onError: (error: unknown) => {
+      const message =
+        error instanceof ApiError
+          ? tErrors.has(error.code)
+            ? tErrors(error.code)
+            : error.message
+          : "The export could not be started.";
+      toast.error(message);
+    },
+  });
+
+  const {
+    job: exportJob,
+    isPolling: isExportPolling,
+    isTimedOut: isExportTimedOut,
+    isError: isExportError,
+  } = useJobPolling("staff", exportJobId);
+
+  // A `useMutation` for the download step itself (not a raw promise chain in the
+  // effect below) so `isDownloadPending` is available to keep the button disabled for
+  // the whole "job succeeded, now fetching the actual URL" gap — without it, the
+  // button re-enables the instant the job reaches "succeeded" (isPolling already
+  // reads false by then), and a double-click there would start a second, redundant
+  // export while the first one's download is still being fetched.
+  //
+  // Destructured (not kept as `downloadTrigger.mutate`) specifically so `mutate` can
+  // be named directly in the effect's own dependency array below: TanStack Query
+  // wraps `mutate` in its own `useCallback` bound to the mutation observer
+  // (`@tanstack/react-query`'s `useMutation.js`), so — unlike the mutation's own
+  // result object, which IS a fresh object every render — this specific function
+  // reference is stable across re-renders of this component instance. That is what
+  // lets the effect list its real dependencies in full and satisfy
+  // `react-hooks/exhaustive-deps` with no disable comment, unlike `exit-staff-
+  // dialog.tsx`'s own (real, but avoidable) precedent for the same rule.
+  const { mutate: downloadExportFile, isPending: isDownloadPending } = useMutation({
+    mutationFn: (fileId: string) => Services.jobs.fetchFileDownloadUrl(fileId),
+    onSuccess: (url) => {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "staff-export.csv";
+      link.click();
+      toast.success("Staff list exported");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof ApiError ? error.message : "The export file could not be downloaded.",
+      );
+    },
+  });
+
+  // `exportJob`'s reference changes on every poll while running, so this re-runs each
+  // tick, but is a no-op until the job actually reaches `succeeded`/`failed`, and a
+  // no-op again after that (the reference stays stable once `refetchInterval` stops),
+  // so `downloadExportFile` fires exactly once per terminal job. No
+  // `setExportJobId(null)` anywhere in this component: a fresh "Export CSV" click
+  // already overwrites it via `onSuccess` above, and `isExportPolling` already reads
+  // `false` once the job hook reports terminal/timed-out/errored — nothing is left to
+  // reset by hand.
+  useEffect(() => {
+    if (exportJob?.status === "succeeded") {
+      const resultFileId = (exportJob.result as ExportJobResult | null)?.result_file_id;
+      if (resultFileId) {
+        downloadExportFile(resultFileId);
+      }
+    }
+    if (exportJob?.status === "failed") {
+      toast.error(exportJob.error ?? "The export failed.");
+    }
+  }, [exportJob, downloadExportFile]);
+
+  useEffect(() => {
+    if (isExportTimedOut) {
+      toast.error("The export is taking longer than expected. Try again in a moment.");
+    }
+  }, [isExportTimedOut]);
+
+  useEffect(() => {
+    if (isExportError) {
+      toast.error("The export failed.");
+    }
+  }, [isExportError]);
 
   return (
     <Toolbar>
@@ -111,18 +215,27 @@ export function StaffToolbar() {
         }
       />
       <ToolbarActions>
-        {/* A real backend endpoint exists (StaffImportViewSet) but the actual upload/
-            job-polling flow is a separate, larger feature, out of scope for this task —
-            genuinely `disabled` (not just styled to look disabled), explaining why via a
-            `title` — but that `title` has to live on a wrapping `<span>`, not the
-            `Button` itself: `buttonVariants`' base class bakes `disabled:
-            pointer-events-none` into every variant, and an element with `pointer-events:
-            none` never receives the hover that would trigger its own `title` tooltip in
-            any major browser. The span is not disabled, so it still receives hover and
-            the tooltip fires. "Add Member" (below) no longer needs this treatment — it's
-            wired up to `StaffFormDialog` (Task 3) now. */}
-        <span title="Staff import is not wired up yet">
-          <Button variant="outline" disabled>
+        <span title={canExport ? undefined : "You don't have permission to export staff."}>
+          <Button
+            variant="outline"
+            disabled={!canExport || exportTrigger.isPending || isExportPolling || isDownloadPending}
+            onClick={() => {
+              exportTrigger.mutate();
+            }}
+          >
+            {exportTrigger.isPending || isExportPolling || isDownloadPending
+              ? "Exporting…"
+              : "Export CSV"}
+          </Button>
+        </span>
+        <span title={canImport ? undefined : "You don't have permission to import staff."}>
+          <Button
+            variant="outline"
+            disabled={!canImport}
+            onClick={() => {
+              setImportDialogOpen(true);
+            }}
+          >
             Import CSV
           </Button>
         </span>
@@ -139,6 +252,7 @@ export function StaffToolbar() {
         </Button>
       </ToolbarActions>
       <StaffFormDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} mode="create" />
+      <StaffImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
     </Toolbar>
   );
 }
