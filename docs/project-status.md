@@ -141,6 +141,13 @@ with its reasoning. Read the entry for the area you are about to touch before re
    fixed the sidebar's selected-nav-item contrast, and added `Button`'s
    `appearance="light"` variant plus `Badge`'s `rose` variant (for a
    "resigned" employment status) to `packages/ui` — no backend changes.
+   A follow-up backend fix switched `build_staff_export_csv`/
+   `build_student_export_csv` from `list(Queryset...)` to `.iterator()`,
+   so a full-tenant CSV export streams rows from the DB cursor instead of
+   materializing the whole result set (and every related Campus) as
+   Django objects in memory at once — found while dogfooding the export
+   feature locally, before it becomes a real problem at a large tenant's
+   actual row count.
 7. **PR 0 (platform hardening) is done** — three fixes and two new pieces of
    platform infrastructure, all listed above: the upload-purpose registry, the
    guardian record scope, the api-client refresh split, the Celery beat
