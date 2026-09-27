@@ -1134,23 +1134,30 @@ def build_student_export_csv(*, tenant_id: uuid.UUID) -> bytes:
             "admission_date",
         ]
     )
+    # `.iterator()`, not `list(...)`: mirrors build_staff_export_csv's identical fix
+    # — a full-tenant export must not hold every Student row (and its related
+    # Campus) in memory as Python objects at once. The loop stays inside
+    # `tenant_atomic` because the cursor is only fetched as it's consumed.
     with tenant_atomic(tenant_id):
-        students = list(
-            Student.objects.alive().select_related("campus").order_by("last_name", "first_name")
+        students = (
+            Student.objects.alive()
+            .select_related("campus")
+            .order_by("last_name", "first_name")
+            .iterator(chunk_size=2000)
         )
-    for student in students:
-        writer.writerow(
-            [
-                student.admission_number,
-                student.first_name,
-                student.last_name,
-                student.date_of_birth.isoformat(),
-                student.gender,
-                student.campus.code,
-                student.status,
-                student.admission_date.isoformat(),
-            ]
-        )
+        for student in students:
+            writer.writerow(
+                [
+                    student.admission_number,
+                    student.first_name,
+                    student.last_name,
+                    student.date_of_birth.isoformat(),
+                    student.gender,
+                    student.campus.code,
+                    student.status,
+                    student.admission_date.isoformat(),
+                ]
+            )
     return buffer.getvalue().encode("utf-8")
 
 

@@ -8,6 +8,7 @@ refresh the job row from the database rather than polling.
 
 from __future__ import annotations
 
+import csv
 import io
 from unittest.mock import patch
 
@@ -150,6 +151,40 @@ class StudentExportTests(StudentManagementJobsAPITestCase):
         response = self.client.post("/api/v1/student-exports")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_csv_rows_are_ordered_by_last_then_first_name_and_carry_every_column(self) -> None:
+        """Pins `build_student_export_csv`'s switch from `list(...)` to
+        `.iterator()` (streaming rows from the DB cursor instead of materializing
+        the whole queryset) — mirrors staff_management's identical test."""
+        with tenant_context(self.tenant.id):
+            StudentFactory(
+                tenant=self.tenant,
+                campus=self.campus,
+                admission_number="TEST-0001",
+                first_name="Zara",
+                last_name="Ahmed",
+            )
+            StudentFactory(
+                tenant=self.tenant,
+                campus=self.campus,
+                admission_number="TEST-0002",
+                first_name="Ayesha",
+                last_name="Khan",
+            )
+
+        csv_bytes = services.build_student_export_csv(tenant_id=self.tenant.id)
+
+        rows = list(csv.reader(io.StringIO(csv_bytes.decode("utf-8"))))
+        self.assertEqual(
+            rows[0],
+            ["admission_number", "first_name", "last_name", "date_of_birth", "gender",
+             "campus_code", "status", "admission_date"],
+        )
+        # "Ahmed" sorts before "Khan" — proves ordering survived the switch to a
+        # streamed cursor, not just that both rows are present somewhere.
+        self.assertEqual(rows[1][:3], ["TEST-0001", "Zara", "Ahmed"])
+        self.assertEqual(rows[2][:3], ["TEST-0002", "Ayesha", "Khan"])
+        self.assertEqual(len(rows), 3)
 
 
 class IdCardGenerateTests(StudentManagementJobsAPITestCase):

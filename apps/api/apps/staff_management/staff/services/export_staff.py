@@ -31,20 +31,29 @@ def build_staff_export_csv(*, tenant_id: uuid.UUID) -> bytes:
             "joining_date",
         ]
     )
+    # `.iterator()`, not `list(...)`: a full-tenant export must not hold every Staff
+    # row (and its related Campus) in memory as Python objects at once — this
+    # streams from the DB cursor in chunks instead. The loop stays inside
+    # `tenant_atomic` because the cursor is only fetched as it's consumed; closing
+    # the tenant context before iterating would leave later chunks reading with no
+    # tenant GUC set.
     with tenant_atomic(tenant_id):
-        staff_rows = list(
-            Staff.objects.alive().select_related("campus").order_by("last_name", "first_name")
+        staff_rows = (
+            Staff.objects.alive()
+            .select_related("campus")
+            .order_by("last_name", "first_name")
+            .iterator(chunk_size=2000)
         )
-    for staff in staff_rows:
-        writer.writerow(
-            [
-                staff.employee_number,
-                staff.first_name,
-                staff.last_name,
-                staff.staff_type,
-                staff.campus.code,
-                staff.employment_status,
-                staff.joining_date.isoformat(),
-            ]
-        )
+        for staff in staff_rows:
+            writer.writerow(
+                [
+                    staff.employee_number,
+                    staff.first_name,
+                    staff.last_name,
+                    staff.staff_type,
+                    staff.campus.code,
+                    staff.employment_status,
+                    staff.joining_date.isoformat(),
+                ]
+            )
     return buffer.getvalue().encode("utf-8")

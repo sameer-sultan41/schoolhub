@@ -9,6 +9,7 @@ student_management/tests/test_import_export_idcards.py's identical pattern.
 
 from __future__ import annotations
 
+import csv
 import io
 
 from rest_framework import status
@@ -21,6 +22,7 @@ from apps.school_organization.tests.factories import (
     authenticate,
     grant,
 )
+from apps.staff_management.staff.services.export_staff import build_staff_export_csv
 from apps.staff_management.tests.factories import StaffFactory, enable_feature
 from core.files.models import File
 from core.jobs.models import BackgroundJob, JobStatus
@@ -122,3 +124,39 @@ class StaffExportTests(StaffManagementJobsAPITestCase):
         response = self.client.post("/api/v1/staff-exports")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_csv_rows_are_ordered_by_last_then_first_name_and_carry_every_column(self) -> None:
+        """Pins `build_staff_export_csv`'s switch from `list(...)` to `.iterator()`
+        (streaming rows from the DB cursor instead of materializing the whole
+        queryset) — real multi-row content, decoded back from the CSV bytes, is
+        the only practical way to prove that change didn't silently drop or
+        misorder a row."""
+        with tenant_context(self.tenant.id):
+            StaffFactory(
+                tenant=self.tenant,
+                campus=self.campus,
+                employee_number="TEST-0001",
+                first_name="Zara",
+                last_name="Ahmed",
+            )
+            StaffFactory(
+                tenant=self.tenant,
+                campus=self.campus,
+                employee_number="TEST-0002",
+                first_name="Ayesha",
+                last_name="Khan",
+            )
+
+        csv_bytes = build_staff_export_csv(tenant_id=self.tenant.id)
+
+        rows = list(csv.reader(io.StringIO(csv_bytes.decode("utf-8"))))
+        self.assertEqual(
+            rows[0],
+            ["employee_number", "first_name", "last_name", "staff_type", "campus_code",
+             "employment_status", "joining_date"],
+        )
+        # "Ahmed" sorts before "Khan" — proves ordering survived the switch to a
+        # streamed cursor, not just that both rows are present somewhere.
+        self.assertEqual(rows[1][:3], ["TEST-0001", "Zara", "Ahmed"])
+        self.assertEqual(rows[2][:3], ["TEST-0002", "Ayesha", "Khan"])
+        self.assertEqual(len(rows), 3)
