@@ -1,6 +1,7 @@
 import { AuthService } from "./modules/auth";
 import { DashboardService } from "./modules/dashboard";
 import { FilesService } from "./modules/files";
+import { JobsService } from "./modules/jobs";
 import { TenantService } from "./modules/tenant";
 
 /**
@@ -28,4 +29,5 @@ export const Services = {
   tenant: TenantService,
   dashboard: DashboardService,
   files: FilesService,
+  jobs: JobsService,
 } as const;

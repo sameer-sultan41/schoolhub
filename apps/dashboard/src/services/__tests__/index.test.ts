@@ -30,7 +30,7 @@ jest.mock("@schoolhub/api-client", () => {
 
 describe("Services", () => {
   it("aggregates every domain, each action a real function", () => {
-    expect(Object.keys(Services).sort()).toEqual(["auth", "dashboard", "files", "tenant"]);
+    expect(Object.keys(Services).sort()).toEqual(["auth", "dashboard", "files", "jobs", "tenant"]);
 
     expect(typeof Services.auth.login).toBe("function");
     expect(typeof Services.auth.logout).toBe("function");
@@ -44,5 +44,8 @@ describe("Services", () => {
     expect(typeof Services.dashboard.createStaff).toBe("function");
 
     expect(typeof Services.files.uploadFile).toBe("function");
+
+    expect(typeof Services.jobs.fetchJob).toBe("function");
+    expect(typeof Services.jobs.fetchFileDownloadUrl).toBe("function");
   });
 });
