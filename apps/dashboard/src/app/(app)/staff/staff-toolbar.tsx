@@ -84,6 +84,7 @@ export function StaffToolbar() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const t = useTranslations("staff");
   const tErrors = useTranslations("errors");
 
   // `pageSize: 1` mirrors dashboard-service.ts's own fetchTotal/fetchStaffTypeCount
@@ -122,7 +123,7 @@ export function StaffToolbar() {
           ? tErrors.has(error.code)
             ? tErrors(error.code)
             : error.message
-          : "The export could not be started.";
+          : t("export.startFailed");
       toast.error(message);
     },
   });
@@ -157,12 +158,16 @@ export function StaffToolbar() {
       link.href = url;
       link.download = "staff-export.csv";
       link.click();
-      toast.success("Staff list exported");
+      toast.success(t("export.success"));
     },
     onError: (error: unknown) => {
-      toast.error(
-        error instanceof ApiError ? error.message : "The export file could not be downloaded.",
-      );
+      const message =
+        error instanceof ApiError
+          ? tErrors.has(error.code)
+            ? tErrors(error.code)
+            : error.message
+          : t("export.downloadFailed");
+      toast.error(message);
     },
   });
 
@@ -182,21 +187,21 @@ export function StaffToolbar() {
       }
     }
     if (exportJob?.status === "failed") {
-      toast.error(exportJob.error ?? "The export failed.");
+      toast.error(exportJob.error ?? t("export.failed"));
     }
-  }, [exportJob, downloadExportFile]);
+  }, [exportJob, downloadExportFile, t]);
 
   useEffect(() => {
     if (isExportTimedOut) {
-      toast.error("The export is taking longer than expected. Try again in a moment.");
+      toast.error(t("export.timedOut"));
     }
-  }, [isExportTimedOut]);
+  }, [isExportTimedOut, t]);
 
   useEffect(() => {
     if (isExportError) {
-      toast.error("The export failed.");
+      toast.error(t("export.failed"));
     }
-  }, [isExportError]);
+  }, [isExportError, t]);
 
   return (
     <Toolbar>
@@ -215,7 +220,11 @@ export function StaffToolbar() {
         }
       />
       <ToolbarActions>
-        <span title={canExport ? undefined : "You don't have permission to export staff."}>
+        {/* The tooltip only appears once `currentUser` has actually resolved AND lacks
+            the permission — not merely while the query is still pending, when
+            `canExport`/`canImport` also read `false` but "you don't have permission"
+            would be a claim we don't yet know is true. */}
+        <span title={!currentUser || canExport ? undefined : t("export.permissionTitle")}>
           <Button
             variant="outline"
             disabled={!canExport || exportTrigger.isPending || isExportPolling || isDownloadPending}
@@ -224,11 +233,11 @@ export function StaffToolbar() {
             }}
           >
             {exportTrigger.isPending || isExportPolling || isDownloadPending
-              ? "Exporting…"
-              : "Export CSV"}
+              ? t("export.exporting")
+              : t("export.button")}
           </Button>
         </span>
-        <span title={canImport ? undefined : "You don't have permission to import staff."}>
+        <span title={!currentUser || canImport ? undefined : t("import.permissionTitle")}>
           <Button
             variant="outline"
             disabled={!canImport}
@@ -236,7 +245,7 @@ export function StaffToolbar() {
               setImportDialogOpen(true);
             }}
           >
-            Import CSV
+            {t("import.button")}
           </Button>
         </span>
         <Button

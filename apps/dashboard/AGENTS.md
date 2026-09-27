@@ -84,9 +84,10 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
    `useQuery`/`useMutation` calls `Services.<module>.<action>(...)` as its
    `queryFn`/`mutationFn` — never `apiClient` directly, never a hardcoded path.
 4. Query keys via `queryKeys.list("<module>", "<resource>", params)`.
-5. Gate every action by its `module.resource.action` key. The `<Can permission="…">` component
-   this implies is not built yet (see the wiring table) — the first screen that needs
-   action-level gating adds it to `src/components/`, backed by `src/lib/permissions.ts`.
+5. Gate every action by its `module.resource.action` key, via `hasPermission(user, key)`
+   (`src/lib/permissions.ts` — see the wiring table). A declarative `<Can>` JSX wrapper
+   does not exist yet; add one to `src/components/`, on top of `hasPermission`, when a
+   screen wants that shape instead of an inline check.
 6. Strings into `messages/en.json` **and** `messages/ur.json` — `react/jsx-no-literals` rejects
    JSX text that isn't translated.
 7. Co-locate tests in a sibling `__tests__/` folder (`__tests__/*.test.tsx`), not

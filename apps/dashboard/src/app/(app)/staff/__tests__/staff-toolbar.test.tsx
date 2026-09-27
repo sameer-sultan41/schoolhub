@@ -1,3 +1,4 @@
+import type { AuthenticatedUser } from "@schoolhub/types";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
@@ -64,7 +65,7 @@ const mockFetchFileDownloadUrl = Services.jobs.fetchFileDownloadUrl as jest.Mock
 >;
 const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
 
-const PERMITTED_USER = {
+const PERMITTED_USER: AuthenticatedUser = {
   id: "user-1",
   email: "hr@example.com",
   phone: null,
@@ -248,7 +249,7 @@ describe("StaffToolbar", () => {
       pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
     });
     mockFetchStaffTypeCount.mockResolvedValue(0);
-    mockFetchCurrentUser.mockResolvedValue({
+    const restrictedUser: AuthenticatedUser = {
       id: "user-2",
       email: "admin@example.com",
       phone: null,
@@ -260,14 +261,111 @@ describe("StaffToolbar", () => {
       // school_admin: RECORD_MANAGERS, not STAFF_IO — sees everything else on this
       // screen but not these two.
       permissions: ["staff.staff.view", "staff.staff.create", "staff.staff.update"],
-    });
+    };
+    mockFetchCurrentUser.mockResolvedValue(restrictedUser);
 
     renderWithProviders(<StaffToolbar />);
 
-    await waitFor(() => {
-      expect(mockFetchCurrentUser).toHaveBeenCalled();
-    });
-    expect(await screen.findByRole("button", { name: "Export CSV" })).toBeDisabled();
+    // Waiting for the "no permission" tooltip — not merely for the query to have been
+    // *called* — is what actually proves `currentUser` resolved and was read: while
+    // still loading, `canExport`/`canImport` are also `false` (an undefined user has
+    // no permissions), so a `toBeDisabled()` assertion taken too early would pass
+    // regardless of whether the permission check is wired to the right keys at all.
+    await screen.findByTitle("You don't have permission to export staff.");
+    expect(screen.getByRole("button", { name: "Export CSV" })).toBeDisabled();
+    expect(screen.getByTitle("You don't have permission to import staff.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import CSV" })).toBeDisabled();
+  });
+
+  it('"Import CSV" opens the real import dialog for a permitted user', async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+    mockFetchStaffTypeCount.mockResolvedValue(0);
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup();
+    const importButton = await screen.findByRole("button", { name: "Import CSV" });
+    await waitFor(() => {
+      expect(importButton).toBeEnabled();
+    });
+    await user.click(importButton);
+
+    expect(await screen.findByRole("dialog", { name: "Import staff" })).toBeInTheDocument();
+  });
+
+  it('"Export CSV" shows a timeout toast when the export job never finishes', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    mockFetchStaffPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+    mockFetchStaffTypeCount.mockResolvedValue(0);
+    mockTriggerStaffExport.mockResolvedValue({ jobId: "job-export-3" });
+    mockFetchJob.mockResolvedValue({
+      id: "job-export-3",
+      job_type: "export.staff",
+      status: "running",
+      progress: 0,
+      result: null,
+      error: null,
+    });
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup({ delay: null });
+    await user.click(await exportButtonEnabled());
+
+    await jest.advanceTimersByTimeAsync(120_000);
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        "The export is taking longer than expected. Try again in a moment.",
+      );
+    });
+    jest.useRealTimers();
+  });
+
+  it('"Export CSV" shows an error toast when the export job itself fails', async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+    mockFetchStaffTypeCount.mockResolvedValue(0);
+    mockTriggerStaffExport.mockResolvedValue({ jobId: "job-export-4" });
+    mockFetchJob.mockResolvedValue({
+      id: "job-export-4",
+      job_type: "export.staff",
+      status: "failed",
+      progress: 0,
+      result: null,
+      error: "Storage backend unavailable.",
+    });
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup();
+    await user.click(await exportButtonEnabled());
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("Storage backend unavailable.");
+    });
+  });
+
+  it('"Export CSV" shows an error toast when the poll request itself fails', async () => {
+    mockFetchStaffPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+    mockFetchStaffTypeCount.mockResolvedValue(0);
+    mockTriggerStaffExport.mockResolvedValue({ jobId: "job-export-5" });
+    mockFetchJob.mockRejectedValue(new Error("network error"));
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup();
+    await user.click(await exportButtonEnabled());
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("The export failed.");
+    });
   });
 });

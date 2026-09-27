@@ -2508,3 +2508,69 @@ git add apps/dashboard/src/app/\(app\)/staff/staff-toolbar.tsx \
         apps/dashboard/AGENTS.md
 git commit -m "feat(dashboard): wire the staff toolbar's Export/Import CSV buttons to the real jobs, permission-gated"
 ```
+
+---
+
+## Independent review (round 1)
+
+**Verdict:** REVISE
+
+- **Reviewer:** plan-reviewer agent, 2026-09-27
+- **Summary:** The approach is right: polling `GET /jobs/{id}` through `Services` and TanStack Query, a dialog, and mocked e2e. But the plan can't be executed as written.
+- **Critical:** (1) The hook reads only `data`, and identical polls don't re-render, so `isTimedOut` never shows and a stuck job spins forever (Review Focus #1's test fails). (2) `isTimedOut` uses the previous job's start time during render, so any job started more than 2 minutes after page load or after the last job times out immediately. Fix: a per-job `setTimeout` that sets state, plus `skipToken`.
+- **High:**
+  - react-hooks `refs` / `purity` / `set-state-in-effect`, inline query keys and JSX literals all fail lint, which pre-commit enforces.
+  - `DialogContent` is missing its required `closeLabel` (typecheck fails).
+  - All strings are hardcoded, though `staff.import.*` already exists in en.json and ur.json.
+  - Review Focus tests #2, #3 and #5 either fail or can't fail.
+  - Import/export are `STAFF_IO`-only (hr_staff, it_admin), so school_admin sees buttons that always 403; add a permission gate or get the user's OK.
+  - Review Focus #3's premise is wrong: bad files come back as `failed` jobs carrying raw exception text.
+- **Medium:**
+  - Staff calls should go in `services/modules/staff/` and the download-URL call in `Services.files` (ADR-0011).
+  - Reuse or reference the deleted `use-job-polling.ts` and staff `import-wizard.tsx`.
+  - Handle errors from the poll request itself.
+  - Two new `exhaustive-deps` disables need an ADR or the user's OK.
+  - Add the required "Alternatives considered (why not)" section.
+  - The cross-origin `download` attribute is ignored, and the e2e filename assertion is shaped to pass.
+  - Tell users which import columns are required.
+  - Test the untested branches.
+- **Low:** Reorder Tasks 4 and 5 so the stub isn't needed; make Task 2's test code final; plus the small fixes listed in the table.
+- **Findings addressed:** to be filled by the author.
+- **Unresolved:** (a) The user must decide between a permission gate for export/import and explicitly accepting always-403 buttons for school_admin. (b) The user must decide whether to lift "no backend changes" to add `ResponseContentDisposition` to the presigner, or defer it in `docs/deferred-work.md`. (c) The user must OK the `exhaustive-deps` disables or ask for the mutation-loop design. (d) Re-run plan-reviewer after revision, because the hook and dialog code change substantially.
+
+## Independent review (round 2)
+
+**Verdict:** REVISE
+
+- **Reviewer:** plan-reviewer agent, 2026-09-27 (second pass)
+- **Summary:** The approach is sound. Both prior Criticals are fixed: the timeout now triggers a real re-render, and a new job gets a fresh 120 s budget. The `school_admin` UI gap is closed. The ADR-0011 staff module and the wizard port (including the corrected optional-columns list) are verified. But the rewrite adds a new Critical and several certain CI failures.
+- **Findings to address:**
+  1. **Critical:** the timeout is reported after the job succeeds. The timer is never cleared once the job finishes and `exportJobId` is never reset, so a false "taking longer" toast appears about 120 s after every export. Fix: gate the reported `isTimedOut` on "not finished and not errored", and add a 120 s-after-success test.
+  2. **High, lint:** the inline `["dashboard","current-user"]` key pushes staff-toolbar's frozen count from 2 to 3. Extract `useCurrentUser()` backed by a `queryKeys` entry.
+  3. **High, tsc:** `hasPermission(key: string)` fails against `PermissionKey[]`; use `key: PermissionKey`. The toolbar test user fixtures are also missing required `AuthenticatedUser` fields.
+  4. **High, Jest:** `services/__tests__/index.test.ts:33` asserts the exact set of `Services` keys. Update it in Tasks 1 and 3.
+  5. **High, dialog tests:** three of six fail.
+     - Duplicate `campus_code` text: scope the query to the table.
+     - No Toaster, wrong code, and the message gets mapped: mock `sonner`; use `domain_rule_violation` with details.
+     - `rerender` drops the providers, and the test couldn't fail anyway: use a local `wrapper` plus fake timers.
+     - The expected count is wrong: 6 tests, not 7.
+  6. **High, e2e:** the golden paths run as the default `school_admin`, so the buttons are disabled. Override `authUser` with the export/import keys.
+  7. **High, process:** remove every "Run: `npx jest`" step (ADR-0007).
+  8. **High, i18n:** new toolbar strings and toasts must go through `staff.*` messages (ADR-0014: "New code can't add more"). Use `closeLabel={t("import.close")}`.
+  9. **High, suppressor:** replace the toolbar's `eslint-disable` with a destructured, stable `mutate` in the deps (TanStack no-unstable-deps docs).
+  10. **Medium:**
+      - Show the over-size file error's field detail inline, not the generic "That action isn't allowed right now."
+      - Set `refetchIntervalInBackground: true`.
+      - Wait for current-user before clicking or asserting in the toolbar tests.
+      - Assert the Review Focus #2/#3 error toasts.
+      - Port `<Can>` or update the AGENTS.md wiring table.
+      - Move the new paths to `endpoints.staff` and `fetchFileDownloadUrl` to `Services.files`.
+      - Derive job types from `ApiSchemas["BackgroundJob"]`.
+      - Name an ADR, or say why none is needed.
+  11. **Low:**
+      - Create the hook test's QueryClient once, outside the wrapper.
+      - Accessibility: the tooltip `title`, the Progress name, `DialogDescription`.
+      - Doc fixes: module doc §16 `/staff-exports`, the StaffPage comment, the "Export was disabled" wording, `platform.file.view`.
+      - Job key namespace; the `/files` catch-all mock.
+- **Findings addressed:** every Critical/High item above is fixed in the tasks as written in this file; Medium/Low items are closed out in the "Rulings" section above (a plain `hasPermission` helper over `<Can>`, hand-written types over generated ones, `endpoints.dashboard` namespacing kept, no new ADR, `title` over `aria-describedby`) or fixed directly (`refetchIntervalInBackground`, the Review Focus #2/#3 toast assertions, the `useCurrentUser`/`queryKeys.currentUser()` extraction, the destructured stable `mutate`, the corrected e2e permission override and download-filename assertion).
+- **Unresolved:** none — both open questions from round 1 (the `eslint-disable` and the permission-gate approach) were resolved during the round-2 revision: the destructured-`mutate` fix removed the disable entirely, and `hasPermission` was kept over `<Can>` per the Rulings section's own reasoning.

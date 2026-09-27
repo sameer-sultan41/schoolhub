@@ -25,9 +25,8 @@ describe("hasPermission", () => {
   });
 
   it("is false when the user holds other staff keys but not this one", () => {
-    expect(hasPermission(userWith(["staff.staff.view", "staff.staff.update"]), "staff.staff.export")).toBe(
-      false,
-    );
+    const user = userWith(["staff.staff.view", "staff.staff.update"]);
+    expect(hasPermission(user, "staff.staff.export")).toBe(false);
   });
 
   it("is false for an undefined user (still loading)", () => {

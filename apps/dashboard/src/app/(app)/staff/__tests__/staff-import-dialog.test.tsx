@@ -147,7 +147,7 @@ describe("StaffImportDialog", () => {
     expect(await screen.findByText("Unsupported xlsx format.")).toBeInTheDocument();
   });
 
-  it("shows an error toast when the poll request itself fails", async () => {
+  it("shows an error toast when the poll request itself fails, and keeps the file input locked so a re-upload can't create duplicates", async () => {
     mockTriggerStaffImport.mockResolvedValue({ jobId: "job-import-4" });
     mockFetchJob.mockRejectedValue(new Error("network error"));
 
@@ -159,9 +159,15 @@ describe("StaffImportDialog", () => {
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("The import failed.");
     });
+    // The job's own status is unknown (the poll itself failed, not the job), so this
+    // must not look like an idle dialog ready for a fresh file — the "Upload" button
+    // shouldn't even be offered, only "Close".
+    expect(screen.getByLabelText("File")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
 
-  it("shows a timeout toast when the job never reaches a terminal status", async () => {
+  it("shows a timeout toast when the job never reaches a terminal status, and keeps the file input locked", async () => {
     jest.useFakeTimers({ advanceTimers: true });
     mockTriggerStaffImport.mockResolvedValue({ jobId: "job-import-5" });
     mockFetchJob.mockResolvedValue({
@@ -180,10 +186,46 @@ describe("StaffImportDialog", () => {
 
     await jest.advanceTimersByTimeAsync(120_000);
 
+    const timedOutMessage = "Still running in the background — check back shortly.";
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith("Still running in the background — check back shortly.");
+      expect(mockToastError).toHaveBeenCalledWith(timedOutMessage);
     });
+    // The import may well still be running server-side — re-enabling the file picker
+    // here would invite a second, duplicate import of the same rows.
+    expect(screen.getByLabelText("File")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
+    expect(screen.getByText(timedOutMessage)).toBeInTheDocument();
     jest.useRealTimers();
+  });
+
+  it("invalidates the staff and dashboard queries once the import succeeds with at least one imported row", async () => {
+    mockTriggerStaffImport.mockResolvedValue({ jobId: "job-import-6" });
+    mockFetchJob.mockResolvedValue({
+      id: "job-import-6",
+      job_type: "import.staff",
+      status: "succeeded",
+      progress: 100,
+      result: { total: 1, succeeded: 1, failed: 0, errors: [] },
+      error: null,
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = jest.spyOn(queryClient, "invalidateQueries");
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        </NextIntlClientProvider>
+      );
+    }
+
+    render(<StaffImportDialog open onOpenChange={jest.fn()} />, { wrapper: Wrapper });
+    const user = userEvent.setup();
+    await user.upload(screen.getByLabelText("File"), csvFile());
+    await user.click(screen.getByRole("button", { name: "Upload" }));
+
+    await screen.findByText("1 imported");
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["staff"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["dashboard"] });
   });
 
   it("stops polling once the dialog is closed mid-import", async () => {

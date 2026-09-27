@@ -99,6 +99,14 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
   const { job, isPolling, isTimedOut, isError } = useJobPolling("staff", open ? jobId : null);
   const result = job?.status === "succeeded" ? (job.result as ImportJobResult | null) : null;
   const hasFinished = job?.status === "succeeded" || job?.status === "failed";
+  // True from the moment a job is triggered until it reaches a REAL terminal state —
+  // deliberately broader than `isPolling`, which already reads `false` once
+  // `isTimedOut`/`isError` flips. Without this, the file input and Upload button
+  // re-enable the instant a poll times out or errors, even though the import is still
+  // running server-side (or its status is simply unknown) — a re-click there would
+  // start a second, redundant import of the same rows rather than actually retrying
+  // anything.
+  const hasActiveJob = jobId !== null && !hasFinished;
 
   // Depends only on `job` (plus the stable `queryClient`/`t`) — never on a value
   // derived from `job` inside the body — so `react-hooks/exhaustive-deps` is
@@ -147,7 +155,7 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
     onOpenChange(next);
   }
 
-  const isBusy = trigger.isPending || isPolling;
+  const isBusy = trigger.isPending || hasActiveJob;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -235,6 +243,20 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
               <AlertDescription>{job.error ?? t("import.failed")}</AlertDescription>
             </Alert>
           ) : null}
+
+          {/* Persistent, not just the one-shot toast the effects above already fired —
+              a timeout/poll-error state stays true until the user closes the dialog, so
+              the reason the file input is still locked needs to stay visible too. */}
+          {hasActiveJob && isError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{t("import.failed")}</AlertDescription>
+            </Alert>
+          ) : null}
+          {hasActiveJob && isTimedOut ? (
+            <Alert variant="warning">
+              <AlertDescription>{t("import.timedOut")}</AlertDescription>
+            </Alert>
+          ) : null}
         </DialogBody>
         <DialogFooter>
           <Button
@@ -244,10 +266,15 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
             }}
             disabled={trigger.isPending}
           >
-            {hasFinished ? t("import.close") : tCommon("cancel")}
+            {/* "Cancel" only before any job exists — once one has been triggered, this
+                dialog has no real cancel action (the import keeps running server-side
+                regardless), so every later state — polling, timed out, errored, or
+                finished — reads "Close" instead of a label that implies it stops
+                anything. */}
+            {jobId === null ? tCommon("cancel") : t("import.close")}
           </Button>
-          {!hasFinished ? (
-            <Button onClick={handleImportClick} disabled={!file || isBusy}>
+          {jobId === null ? (
+            <Button onClick={handleImportClick} disabled={!file || trigger.isPending}>
               {t("import.upload")}
             </Button>
           ) : null}
