@@ -58,6 +58,7 @@ export function getQueryClient(): QueryClient {
 export const queryKeys = {
   session: () => ["session"] as const,
   tenant: () => ["tenant"] as const,
+  currentUser: () => ["dashboard", "current-user"] as const,
   module: (module: string) => [module] as const,
   list: (module: string, resource: string, params?: Record<string, unknown>) =>
     [module, resource, "list", params ?? {}] as const,
