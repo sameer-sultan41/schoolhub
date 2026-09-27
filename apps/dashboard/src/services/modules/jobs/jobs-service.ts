@@ -61,8 +61,6 @@ export async function fetchJob(id: string): Promise<BackgroundJobRecord> {
  * URL directly, the same object-storage-URL pattern `files-service.ts`'s upload flow
  * already uses for `upload_url`. */
 export async function fetchFileDownloadUrl(fileId: string): Promise<string> {
-  const { data } = await apiClient.post<{ download_url: string }>(
-    endpoints.files.download(fileId),
-  );
+  const { data } = await apiClient.post<{ download_url: string }>(endpoints.files.download(fileId));
   return data.download_url;
 }
