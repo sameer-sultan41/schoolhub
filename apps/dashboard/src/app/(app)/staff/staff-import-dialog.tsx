@@ -26,7 +26,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobPolling } from "@/hooks/use-job-polling";
+import { useSessionStorageState } from "@/hooks/use-session-storage-state";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import type { ImportJobResult } from "@/services/modules/jobs/jobs-service";
@@ -37,6 +39,9 @@ export interface StaffImportDialogProps {
 }
 
 const ACCEPTED_EXTENSIONS = ".csv,.xlsx";
+/** Per user as well as per tab: a different sign-in in the same tab never reconnects
+ * to someone else's import. */
+const ACTIVE_JOB_STORAGE_PREFIX = "schoolhub:staff-import-job:";
 /** Mirrors `REQUIRED_IMPORT_COLUMNS`/`IMPORT_COLUMNS`
  * (`apps/api/apps/staff_management/staff/services/import_staff.py`) verbatim — shown
  * so the person picking a file knows the header row's exact contract before they
@@ -69,12 +74,31 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
   const queryClient = useQueryClient();
 
   const [file, setFile] = useState<File | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  // This mount's own job, plus a sessionStorage copy of it: "Run in background" must
+  // survive closing the dialog, navigating away and back, or a reload, so reopening
+  // reconnects to the job instead of a blank slate. The state stays primary — where
+  // storage is unavailable the dialog still works within one mount.
+  const { data: currentUser } = useCurrentUser();
+  const [mountJobId, setMountJobId] = useState<string | null>(null);
+  const [storedJobId, setStoredJobId] = useSessionStorageState(
+    currentUser ? `${ACTIVE_JOB_STORAGE_PREFIX}${currentUser.id}` : null,
+  );
+  const jobId = mountJobId ?? storedJobId;
+  function setJobId(next: string | null) {
+    setMountJobId(next);
+    setStoredJobId(next);
+  }
 
   const trigger = useMutation({
     mutationFn: (selected: File) => Services.staff.triggerStaffImport(selected),
+    // Also fires if this component unmounted mid-upload (a `useMutation`-level
+    // callback, not a `mutate()` one) — the server created the job either way, so it
+    // is persisted for the next mount to reconnect to rather than silently lost.
     onSuccess: (result) => {
       setJobId(result.jobId);
+      // Uploaded and never read again — don't hold a file of up to 5 MB for the job's
+      // whole lifetime.
+      setFile(null);
     },
     onError: (error: unknown) => {
       // A field-level detail (e.g. the size-cap check's `{"file": "Import file
@@ -95,8 +119,14 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
 
   // `open ? jobId : null` is what actually stops polling on close — `useJobPolling`
   // skips its query the instant this collapses to null, regardless of what `jobId`
-  // state still holds.
-  const { job, isPolling, isTimedOut, isError } = useJobPolling("staff", open ? jobId : null);
+  // still holds — and reopening on the same `jobId` starts a fresh watch of it.
+  const {
+    job,
+    isPolling,
+    isTimedOut,
+    isError,
+    error: pollError,
+  } = useJobPolling("staff", open ? jobId : null);
   const result = job?.status === "succeeded" ? (job.result as ImportJobResult | null) : null;
   const hasFinished = job?.status === "succeeded" || job?.status === "failed";
   // True from the moment a job is triggered until it reaches a REAL terminal state —
@@ -107,6 +137,11 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
   // start a second, redundant import of the same rows rather than actually retrying
   // anything.
   const hasActiveJob = jobId !== null && !hasFinished;
+  // Worth reconnecting to after a close — unless the server definitively refused the
+  // poll (a 404/403, not a network blip or 5xx that outlasted the retries): then there
+  // is nothing left to reconnect to, and keeping it would lock this tab's imports.
+  const isPollRefused = isError && !(pollError instanceof ApiError && pollError.isTransient);
+  const canReconnect = hasActiveJob && !isPollRefused;
 
   // Depends only on `job` (plus the stable `queryClient`/`t`) — never on a value
   // derived from `job` inside the body — so `react-hooks/exhaustive-deps` is
@@ -148,9 +183,16 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
 
   function handleOpenChange(next: boolean) {
     if (!next) {
+      // The upload can't be abandoned: aborting the request wouldn't stop a job the
+      // server may already have created, so every close path waits it out — the
+      // footer's disabled button, the hidden X, and this early return for
+      // Escape/overlay clicks.
+      if (trigger.isPending) return;
       setFile(null);
-      setJobId(null);
       trigger.reset();
+      // "Run in background" keeps the job (in state and in sessionStorage) so
+      // reopening reconnects to it; anything else closes to a fresh dialog.
+      if (!canReconnect) setJobId(null);
     }
     onOpenChange(next);
   }
@@ -159,7 +201,7 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent closeLabel={t("import.close")}>
+      <DialogContent closeLabel={t("import.close")} showCloseButton={!trigger.isPending}>
         <DialogHeader>
           <DialogTitle>{t("import.title")}</DialogTitle>
         </DialogHeader>
@@ -268,19 +310,20 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
           >
             {/* Three distinct labels, not two: "Cancel" before any job exists (there is
                 genuinely nothing to cancel yet); "Run in background" while one is
-                active (polling, timed out, or errored but not yet terminal) — this
-                dialog has no real cancel action once a job starts, so the label says
-                what closing actually does, not something that implies it stops the
-                import; "Close" only once truly finished. "Run in background" also
-                keeps this button's accessible name distinct from `DialogContent`'s own
-                built-in X button (`closeLabel={t("import.close")}` — same "Close"
-                text) while a job is active; both saying "Close" only once finished, is
-                a harmless, one-more-choice-later duplication, not a live ambiguity. */}
+                worth reconnecting to (polling, timed out, or a transient poll error) —
+                this dialog has no real cancel action once a job starts, so the label
+                says what closing actually does: the job keeps running and reopening
+                picks it back up; "Close" once finished or refused, when closing really
+                does drop it. "Run in background" also keeps this button's accessible
+                name distinct from `DialogContent`'s own built-in X button
+                (`closeLabel={t("import.close")}` — same "Close" text) while a job is
+                active; both saying "Close" only once it's over is a harmless,
+                one-more-choice-later duplication, not a live ambiguity. */}
             {jobId === null
               ? tCommon("cancel")
-              : hasFinished
-                ? t("import.close")
-                : t("import.runInBackground")}
+              : canReconnect
+                ? t("import.runInBackground")
+                : t("import.close")}
           </Button>
           {jobId === null ? (
             <Button onClick={handleImportClick} disabled={!file || trigger.isPending}>

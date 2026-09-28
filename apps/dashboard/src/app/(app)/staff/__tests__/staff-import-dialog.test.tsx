@@ -1,3 +1,5 @@
+import { ApiError } from "@schoolhub/api-client";
+import type { AuthenticatedUser } from "@schoolhub/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -6,6 +8,7 @@ import { toast } from "sonner";
 import type { ReactNode } from "react";
 
 import { Services } from "@/services";
+import type { BackgroundJobRecord } from "@/services/modules/jobs/jobs-service";
 import { renderWithProviders } from "@/test-utils";
 import messages from "../../../../../messages/en.json";
 
@@ -14,6 +17,7 @@ import { StaffImportDialog } from "../staff-import-dialog";
 jest.mock("@/services", () => ({
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
+    auth: { fetchCurrentUser: jest.fn() },
     staff: { triggerStaffImport: jest.fn() },
     jobs: { fetchJob: jest.fn() },
   },
@@ -31,17 +35,67 @@ const mockTriggerStaffImport = Services.staff.triggerStaffImport as jest.MockedF
   typeof Services.staff.triggerStaffImport
 >;
 const mockFetchJob = Services.jobs.fetchJob as jest.MockedFunction<typeof Services.jobs.fetchJob>;
+const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFunction<
+  typeof Services.auth.fetchCurrentUser
+>;
 const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
+
+const HR_USER: AuthenticatedUser = {
+  id: "user-1",
+  email: "hr@example.com",
+  phone: null,
+  full_name: "HR Staff",
+  avatar_url: null,
+  locale: "en",
+  tenant_id: "tenant-1",
+  roles: [],
+  permissions: ["staff.staff.view", "staff.staff.import"],
+};
 
 function csvFile() {
   return new File(["first_name,last_name"], "staff.csv", { type: "text/csv" });
+}
+
+function importJob(
+  id: string,
+  status: "running" | "succeeded",
+  progress = 40,
+): BackgroundJobRecord {
+  return {
+    id,
+    job_type: "import.staff",
+    status,
+    progress: status === "succeeded" ? 100 : progress,
+    result: status === "succeeded" ? { total: 1, succeeded: 1, failed: 0, errors: [] } : null,
+    error: null,
+  };
+}
+
+/** One QueryClient for the whole test, re-applied on every `rerender` — see the note in
+ * "stops polling once the dialog is closed mid-import" below. */
+function stableProviders() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return function Providers({ children }: { children: ReactNode }) {
+    return (
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </NextIntlClientProvider>
+    );
+  };
+}
+
+async function uploadCsv(user: ReturnType<typeof userEvent.setup>) {
+  await user.upload(screen.getByLabelText("File"), csvFile());
+  await user.click(screen.getByRole("button", { name: "Upload" }));
 }
 
 describe("StaffImportDialog", () => {
   beforeEach(() => {
     mockTriggerStaffImport.mockReset();
     mockFetchJob.mockReset();
+    mockFetchCurrentUser.mockReset().mockResolvedValue(HR_USER);
     mockToastError.mockReset();
+    window.sessionStorage.clear();
   });
 
   it("renders nothing (no dialog role) when closed", () => {
@@ -149,7 +203,16 @@ describe("StaffImportDialog", () => {
 
   it("shows an error toast when the poll request itself fails, and keeps the file input locked so a re-upload can't create duplicates", async () => {
     mockTriggerStaffImport.mockResolvedValue({ jobId: "job-import-4" });
-    mockFetchJob.mockRejectedValue(new Error("network error"));
+    // Status 0 is what the api-client makes of a network failure — transient, so the
+    // job is still one worth reconnecting to (unlike a refused 404, tested below).
+    mockFetchJob.mockRejectedValue(
+      new ApiError({
+        code: "network_error",
+        message: "Network request failed.",
+        status: 0,
+        url: "/jobs/job-import-4",
+      }),
+    );
 
     renderWithProviders(<StaffImportDialog open onOpenChange={jest.fn()} />);
     const user = userEvent.setup();
@@ -283,5 +346,133 @@ describe("StaffImportDialog", () => {
     await jest.advanceTimersByTimeAsync(10_000);
     expect(mockFetchJob.mock.calls.length).toBe(callsAtClose);
     jest.useRealTimers();
+  });
+
+  it("can't be closed while the upload is still in flight — Escape does nothing and the X is hidden", async () => {
+    let resolveUpload: (value: { jobId: string }) => void = () => {};
+    mockTriggerStaffImport.mockReturnValue(
+      new Promise<{ jobId: string }>((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+    mockFetchJob.mockResolvedValue(importJob("job-import-7", "running"));
+    const onOpenChange = jest.fn();
+
+    renderWithProviders(<StaffImportDialog open onOpenChange={onOpenChange} />);
+    const user = userEvent.setup();
+    await uploadCsv(user);
+
+    // Aborting the request couldn't stop a job the server may already have created, so
+    // no close path is offered until it answers.
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    // The job the server created shows up in the dialog the user never left.
+    resolveUpload({ jobId: "job-import-7" });
+    expect(await screen.findByText("Importing — 40%")).toBeInTheDocument();
+    expect(mockFetchJob).toHaveBeenCalledWith("job-import-7");
+  });
+
+  it('"Run in background" keeps the job: reopening the dialog reconnects to it instead of a blank slate', async () => {
+    mockTriggerStaffImport.mockResolvedValue({ jobId: "job-import-8" });
+    mockFetchJob.mockResolvedValue(importJob("job-import-8", "running"));
+    const onOpenChange = jest.fn();
+
+    const { rerender } = render(<StaffImportDialog open onOpenChange={onOpenChange} />, {
+      wrapper: stableProviders(),
+    });
+    const user = userEvent.setup();
+    await uploadCsv(user);
+    await screen.findByText("Importing — 40%");
+
+    await user.click(screen.getByRole("button", { name: "Run in background" }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    rerender(<StaffImportDialog open={false} onOpenChange={onOpenChange} />);
+    const callsWhileClosed = mockFetchJob.mock.calls.length;
+
+    mockFetchJob.mockResolvedValue(importJob("job-import-8", "running", 70));
+    rerender(<StaffImportDialog open onOpenChange={onOpenChange} />);
+
+    expect(await screen.findByText("Importing — 70%")).toBeInTheDocument();
+    expect(mockFetchJob.mock.calls.length).toBeGreaterThan(callsWhileClosed);
+    expect(screen.getByLabelText("File")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
+  });
+
+  it("reconnects to a background import after the dialog remounts, e.g. navigating away and back", async () => {
+    mockTriggerStaffImport.mockResolvedValue({ jobId: "job-import-9" });
+    mockFetchJob.mockResolvedValue(importJob("job-import-9", "running"));
+
+    const first = renderWithProviders(<StaffImportDialog open onOpenChange={jest.fn()} />);
+    const user = userEvent.setup();
+    await uploadCsv(user);
+    await screen.findByText("Importing — 40%");
+    await user.click(screen.getByRole("button", { name: "Run in background" }));
+    first.unmount();
+
+    // It finished while the user was elsewhere.
+    mockFetchJob.mockResolvedValue(importJob("job-import-9", "succeeded"));
+    renderWithProviders(<StaffImportDialog open onOpenChange={jest.fn()} />);
+
+    expect(await screen.findByText("1 imported")).toBeInTheDocument();
+    expect(mockFetchJob).toHaveBeenLastCalledWith("job-import-9");
+  });
+
+  it("closing a finished import clears it, so reopening starts from a blank dialog", async () => {
+    mockTriggerStaffImport.mockResolvedValue({ jobId: "job-import-10" });
+    mockFetchJob.mockResolvedValue(importJob("job-import-10", "succeeded"));
+    const onOpenChange = jest.fn();
+
+    const { rerender } = render(<StaffImportDialog open onOpenChange={onOpenChange} />, {
+      wrapper: stableProviders(),
+    });
+    const user = userEvent.setup();
+    await uploadCsv(user);
+    await screen.findByText("1 imported");
+
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    rerender(<StaffImportDialog open={false} onOpenChange={onOpenChange} />);
+    rerender(<StaffImportDialog open onOpenChange={onOpenChange} />);
+
+    expect(await screen.findByRole("button", { name: "Upload" })).toBeInTheDocument();
+    expect(screen.queryByText("1 imported")).not.toBeInTheDocument();
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("drops a job whose poll the server refused (a 404) on close, rather than locking this tab's imports", async () => {
+    mockTriggerStaffImport.mockResolvedValue({ jobId: "job-import-11" });
+    mockFetchJob.mockRejectedValue(
+      new ApiError({
+        code: "not_found",
+        message: "Not found.",
+        status: 404,
+        url: "/jobs/job-import-11",
+      }),
+    );
+    const onOpenChange = jest.fn();
+
+    const { rerender } = render(<StaffImportDialog open onOpenChange={onOpenChange} />, {
+      wrapper: stableProviders(),
+    });
+    const user = userEvent.setup();
+    await uploadCsv(user);
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("The import failed.");
+    });
+
+    // Nothing to run in the background — the footer says what closing really does.
+    expect(screen.queryByRole("button", { name: "Run in background" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(2);
+
+    await user.keyboard("{Escape}");
+    rerender(<StaffImportDialog open={false} onOpenChange={onOpenChange} />);
+    rerender(<StaffImportDialog open onOpenChange={onOpenChange} />);
+
+    expect(await screen.findByRole("button", { name: "Upload" })).toBeInTheDocument();
+    expect(screen.getByLabelText("File")).toBeEnabled();
+    expect(window.sessionStorage.length).toBe(0);
   });
 });
