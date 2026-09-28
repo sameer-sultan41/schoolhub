@@ -22,9 +22,23 @@ import { Drawer as DrawerPrimitive } from "vaul";
  * 2. `DrawerHeader`'s `sm:text-left` is `sm:text-start` — a physical-direction class
  *    would stay left-aligned under `dir="rtl"` instead of following the reading
  *    direction (packages/ui/AGENTS.md's logical-direction rule).
+ * 3. `shouldScaleBackground` defaults to `false`, not the vendor's `true` — vaul only
+ *    applies that scale effect when the page has a `[data-vaul-drawer-wrapper]`
+ *    element, which this app doesn't render; defaulting `true` here would be a no-op
+ *    today but a surprising "the whole page just tinted black" the day someone adds one.
+ * 4. `DrawerOverlay`'s `bg-black/80` is `bg-black/30` plus a blur, matching `Dialog`'s
+ *    and `Sheet`'s identical overlay treatment (a design-consistency choice, not a fix).
+ * 5. `DrawerContent`/`DrawerOverlay` take `overlay`/`close` props (default `true`),
+ *    mirroring `Dialog`'s and `Sheet`'s identical toggles, and `DrawerContent` caps its
+ *    own height (`max-h-[85vh]`) — the vendor version has no height limit at all.
+ * 6. New `DrawerBody`, matching `Dialog`'s/`Sheet`'s `*Body` slot for scrollable content
+ *    between the header and footer — the vendor file has no equivalent.
+ * 7. `DrawerTitle`'s type scale (`text-base font-semibold text-foreground`) matches
+ *    `Dialog`'s/`Sheet`'s own title styling instead of the vendor's larger
+ *    `text-lg leading-none tracking-tight` — visual consistency across all three.
  */
 function Drawer({
-  shouldScaleBackground = true,
+  shouldScaleBackground = false,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
   return (

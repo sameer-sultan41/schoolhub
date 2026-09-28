@@ -111,11 +111,14 @@ function DetailFooter({
   if (isDrawer) {
     return (
       <ResponsiveSheetFooter className="flex-row justify-end gap-2.5 border-t border-border px-4 py-3">
+        {/* Full "<action> <name>" labels, not just "Edit"/"Exit": this sits right next
+            to the drawer's own "Close" X, and "Exit" alone reads as leaving the panel,
+            not leaving employment — the words this action actually performs. */}
         <Button
           variant="outline-primary"
           mode="icon"
           shape="circle"
-          aria-label={tCommon("edit")}
+          aria-label={`${tCommon("edit")} ${row.name}`}
           onClick={() => {
             onEdit(row.id);
           }}
@@ -126,7 +129,7 @@ function DetailFooter({
           variant="destructive"
           mode="icon"
           shape="circle"
-          aria-label={t("detail.exit")}
+          aria-label={`${t("detail.exit")} ${row.name}`}
           onClick={() => {
             onDelete(row.id, row.name);
           }}

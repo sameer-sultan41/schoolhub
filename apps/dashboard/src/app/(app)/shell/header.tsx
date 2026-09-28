@@ -102,6 +102,12 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* `lg:block` (1024px), not the `768px` it was — this now agrees with the rest
+              of the header's `lg:hidden` mobile-nav wrapper above (both keyed to the
+              same desktop breakpoint the shell's sidebar CSS uses), which narrows the
+              width range with a search trigger: 768–1023px now gets the mobile header
+              chrome but no search entry point of its own. Flagged, not fixed — no
+              mobile search entry point exists yet to move this to. */}
           <div className="hidden lg:block">
             <SearchDialog
               trigger={

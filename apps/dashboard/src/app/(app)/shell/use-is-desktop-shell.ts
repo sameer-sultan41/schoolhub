@@ -12,13 +12,12 @@ import { useSyncExternalStore } from "react";
  * yet — the sidebar rendered in normal flow, full height, shoving the page's real
  * content down behind it.
  *
- * The safe default matters as much as the threshold: `useSyncExternalStore`'s
- * `getServerSnapshot` (`() => false`) is also the value React keeps showing until it
- * gets around to re-checking `getSnapshot` after hydration, which in practice can be
- * long enough for a still-mounted phone or tablet browser to never visibly correct.
- * Framed as `isDesktopShell` rather than `isMobile`, that same "false" default means
- * "not desktop yet" — safe for the phone/tablet widths this bug actually hit — instead
- * of "not mobile yet", which was silently wrong for exactly those widths.
+ * The safe default matters too, independent of the breakpoint fix above:
+ * `useSyncExternalStore`'s `getServerSnapshot` (`() => false`) is also what renders
+ * before the first client measurement. Framed as `isDesktopShell` rather than
+ * `isMobile`, that "false" default means "not desktop yet" — safe for the narrower
+ * widths this bug actually hit — instead of "not mobile yet" (`useIsMobile`'s framing),
+ * which defaults toward assuming desktop on exactly the widths that were broken.
  */
 const DESKTOP_SHELL_BREAKPOINT_PX = 1024;
 

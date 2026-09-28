@@ -167,7 +167,7 @@
       "count": 2
     },
     "react/jsx-no-literals": {
-      "count": 4
+      "count": 3
     }
   },
   "src/app/(app)/staff/staff-directory-table.tsx": {

@@ -29,9 +29,11 @@ import {
  * subcomponents via context, rather than each subcomponent re-deciding independently.
  *
  * `useIsMobile()` (768px) is safe here in a way it wasn't for the app shell
- * (`use-is-desktop-shell.ts`): a dialog only mounts after a user opens it, well after
- * hydration has settled, so there's no first-paint window for its default-`false` value
- * to be visibly wrong in.
+ * (`use-is-desktop-shell.ts`): every caller renders this with `open` starting `false` —
+ * none opens on initial load from a URL param or similar — so `useIsMobile()`'s value
+ * has no visible effect until a user actually opens one, by which point React has long
+ * since settled on the real value. A future caller that can start open would need to
+ * re-check this reasoning, the same way `use-is-desktop-shell.ts` had to for the shell.
  */
 const ResponsiveDialogContext = createContext<boolean | null>(null);
 
@@ -47,12 +49,31 @@ export function useIsDrawer(): boolean {
   return isMobile;
 }
 
-export function ResponsiveDialog({ children, ...props }: React.ComponentProps<typeof Dialog>) {
+interface ResponsiveRootProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}
+
+export function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveRootProps) {
   const isMobile = useIsMobile();
-  const Root = isMobile ? Drawer : Dialog;
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
-      <Root {...props}>{children}</Root>
+      {isMobile ? (
+        // handleOnly: this family's one caller (Add Member) is a form — without it, a
+        // user scrolled to the top who swipes down to see the top edge closes the
+        // drawer and wipes every field (vaul's own drag-anywhere default only checks
+        // the scroll container's scrollTop, not "is this a form with unsaved input").
+        // Hardcoded here rather than a prop: revisit if a non-form caller needs the
+        // full-content swipe-to-dismiss back.
+        <Drawer open={open} onOpenChange={onOpenChange} handleOnly>
+          {children}
+        </Drawer>
+      ) : (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          {children}
+        </Dialog>
+      )}
     </ResponsiveDialogContext.Provider>
   );
 }
@@ -112,12 +133,19 @@ export function ResponsiveDialogFooter({ children }: { children: ReactNode }) {
  * row click rather than a toolbar button and stays a side panel on desktop, unlike the
  * two dialogs `ResponsiveDialog` covers.
  */
-export function ResponsiveSheet({ children, ...props }: React.ComponentProps<typeof Sheet>) {
+export function ResponsiveSheet({ open, onOpenChange, children }: ResponsiveRootProps) {
   const isMobile = useIsMobile();
-  const Root = isMobile ? Drawer : Sheet;
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
-      <Root {...props}>{children}</Root>
+      {isMobile ? (
+        <Drawer open={open} onOpenChange={onOpenChange}>
+          {children}
+        </Drawer>
+      ) : (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+          {children}
+        </Sheet>
+      )}
     </ResponsiveDialogContext.Provider>
   );
 }

@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  useIsMobile,
 } from "@schoolhub/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -277,6 +278,11 @@ function initialsOf(name: string): string {
 }
 
 export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffFormDialogProps) {
+  // Same primitive `ResponsiveDialog` itself calls, not `useIsDrawer()` — this
+  // component is `ResponsiveDialog`'s *parent* (it renders the JSX that includes
+  // `<ResponsiveDialog>`), so no provider exists yet at this point in the tree for
+  // `useIsDrawer()` to read.
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
@@ -522,7 +528,18 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
               }}
               noValidate
             >
-              <ResponsiveDialogBody className="max-h-[65vh] space-y-5 overflow-y-auto pe-1">
+              {/* max-h-[65vh]/pe-1 (scrollbar clearance) are desktop-dialog-only: the
+                  Drawer already caps its own height (DrawerContent's max-h-[85vh]) and
+                  has no separate scrollbar to clear, so stacking a second max-height and
+                  an asymmetric end-padding on top there would just look wrong, not fix
+                  anything. */}
+              <ResponsiveDialogBody
+                className={
+                  isMobile
+                    ? "space-y-5 overflow-y-auto"
+                    : "max-h-[65vh] space-y-5 overflow-y-auto pe-1"
+                }
+              >
                 {formError ? (
                   <Alert variant="destructive">
                     <AlertDescription>{formError}</AlertDescription>

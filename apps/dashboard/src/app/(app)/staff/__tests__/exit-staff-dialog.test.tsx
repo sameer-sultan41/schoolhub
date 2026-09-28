@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { Services } from "@/services";
 import type { StaffDirectoryRecord } from "@/services/modules/dashboard/dashboard-service";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { ExitStaffDialog } from "../exit-staff-dialog";
 
@@ -199,6 +199,81 @@ describe("ExitStaffDialog", () => {
     });
     expect(mockExitStaff).not.toHaveBeenCalled();
     expect(mockToastSuccess).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+});
+
+describe("ExitStaffDialog — mobile drawer", () => {
+  beforeEach(() => {
+    setMatchesMobile(true);
+    mockExitStaff.mockReset();
+    mockToastSuccess.mockReset();
+    mockToastError.mockReset();
+    mockToastWarning.mockReset();
+  });
+
+  afterEach(() => {
+    setMatchesMobile(false);
+  });
+
+  it("renders as a Drawer, not the desktop AlertDialog", () => {
+    const { container } = renderWithProviders(
+      <ExitStaffDialog open staffIds={["st-1"]} onOpenChange={jest.fn()} />,
+    );
+
+    expect(container.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-slot="alert-dialog-content"]')).not.toBeInTheDocument();
+  });
+
+  it("single id: submits through the drawer's plain button, toasts success, closes", async () => {
+    mockExitStaff.mockResolvedValue(makeRecord());
+    const onOpenChange = jest.fn();
+    const user = userEvent.setup();
+
+    renderWithProviders(<ExitStaffDialog open staffIds={["st-1"]} onOpenChange={onOpenChange} />);
+
+    await fillRequiredFields(user, "Resigned voluntarily");
+    await user.click(screen.getByRole("button", { name: /^exit staff member$/i }));
+
+    await waitFor(() => {
+      expect(mockExitStaff).toHaveBeenCalledWith("st-1", {
+        exitDate: "2026-09-10",
+        exitReason: "Resigned voluntarily",
+      });
+    });
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("Staff member exited");
+  });
+
+  it("bulk, partial failure: stays open and shows the real backend message", async () => {
+    mockExitStaff.mockImplementation((id: string) =>
+      id === "st-1"
+        ? Promise.resolve(makeRecord({ id: "st-1" }))
+        : Promise.reject(
+            new ApiError({
+              code: "domain_rule_violation",
+              message: "This staff member has already exited",
+              status: 409,
+              url: "/staff/st-2:exit",
+            }),
+          ),
+    );
+    const onOpenChange = jest.fn();
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <ExitStaffDialog open staffIds={["st-1", "st-2"]} onOpenChange={onOpenChange} />,
+    );
+
+    await fillRequiredFields(user, "Bulk exit attempt");
+    await user.click(screen.getByRole("button", { name: /^exit staff members$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/This staff member has already exited/i)).toBeInTheDocument();
+    });
+    expect(mockToastWarning).toHaveBeenCalledWith("1 of 2 exited; 1 failed");
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });
