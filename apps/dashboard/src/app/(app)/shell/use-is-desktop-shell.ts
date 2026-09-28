@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useMediaQuery } from "@schoolhub/ui";
 
 /**
  * True at and above the shell's docked-sidebar breakpoint — `demo1.css`'s
@@ -12,27 +12,21 @@ import { useSyncExternalStore } from "react";
  * yet — the sidebar rendered in normal flow, full height, shoving the page's real
  * content down behind it.
  *
- * The safe default matters too, independent of the breakpoint fix above:
- * `useSyncExternalStore`'s `getServerSnapshot` (`() => false`) is also what renders
- * before the first client measurement. Framed as `isDesktopShell` rather than
- * `isMobile`, that "false" default means "not desktop yet" — safe for the narrower
- * widths this bug actually hit — instead of "not mobile yet" (`useIsMobile`'s framing),
- * which defaults toward assuming desktop on exactly the widths that were broken.
+ * The safe default matters too, independent of the breakpoint fix above: `false` is
+ * also what renders before the first client measurement. Framed as `isDesktopShell`
+ * rather than `isMobile`, that "false" default means "not desktop yet" — safe for the
+ * narrower widths this bug actually hit — instead of "not mobile yet" (`useIsMobile`'s
+ * framing), which defaults toward assuming desktop on exactly the widths that were
+ * broken.
+ *
+ * This is also the breakpoint `apps/dashboard/src/components/responsive-dialog.tsx`
+ * uses to decide Dialog/Sheet vs. Drawer, for the same reason: at 768–1023px the shell
+ * already renders mobile-style chrome (this hook says so), so a dialog choosing its
+ * primitive off `useIsMobile()` (768px) instead would show a centered desktop Dialog
+ * inside what the user is otherwise looking at as a mobile layout.
  */
 const DESKTOP_SHELL_BREAKPOINT_PX = 1024;
 
-function subscribe(onChange: () => void): () => void {
-  const mql = window.matchMedia(`(min-width: ${DESKTOP_SHELL_BREAKPOINT_PX}px)`);
-  mql.addEventListener("change", onChange);
-  return () => {
-    mql.removeEventListener("change", onChange);
-  };
-}
-
-function getSnapshot(): boolean {
-  return window.matchMedia(`(min-width: ${DESKTOP_SHELL_BREAKPOINT_PX}px)`).matches;
-}
-
 export function useIsDesktopShell(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+  return useMediaQuery(`(min-width: ${DESKTOP_SHELL_BREAKPOINT_PX}px)`, false);
 }

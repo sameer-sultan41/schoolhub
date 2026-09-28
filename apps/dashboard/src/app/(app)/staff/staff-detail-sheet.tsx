@@ -24,7 +24,6 @@ import {
   BadgeDot,
   Button,
   Skeleton,
-  useIsMobile,
 } from "@schoolhub/ui";
 
 import {
@@ -35,6 +34,7 @@ import {
   ResponsiveSheetTitle,
   useIsDrawer,
 } from "@/components/responsive-dialog";
+import { useIsDesktopShell } from "@/app/(app)/shell/use-is-desktop-shell";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import {
@@ -166,9 +166,11 @@ function DetailFooter({
 
 export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffDetailSheetProps) {
   const t = useTranslations("staff");
-  // Same primitive ResponsiveSheet itself calls, not useIsDrawer() — this component
-  // is ResponsiveSheet's parent, so no provider exists yet at this point in the tree.
-  const isMobile = useIsMobile();
+  // Same breakpoint hook ResponsiveSheet itself calls, not useIsDrawer() — this
+  // component is ResponsiveSheet's parent, so no provider exists yet at this point in
+  // the tree. useIsDesktopShell(), not @schoolhub/ui's useIsMobile() — see
+  // responsive-dialog.tsx's own comment on why the two must agree.
+  const isMobile = !useIsDesktopShell();
   // Same query key as the edit form, so clicking Edit reuses this fetch.
   const {
     data: detail,

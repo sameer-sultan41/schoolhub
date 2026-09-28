@@ -363,6 +363,7 @@ export { brandingToCssText, brandingToCssVariables, sanitizeCssValue } from "./l
 export { cn } from "./lib/cn";
 
 export { useIsMobile } from "./hooks/use-mobile";
+export { useMediaQuery } from "./hooks/use-media-query";
 export { useMenu } from "./hooks/use-menu";
 export { useScrollPosition } from "./hooks/use-scroll-position";
 

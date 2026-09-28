@@ -23,7 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
-  useIsMobile,
 } from "@schoolhub/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -38,6 +37,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
+import { useIsDesktopShell } from "@/app/(app)/shell/use-is-desktop-shell";
 import { ApiError, Services } from "@/services";
 import { queryKeys } from "@/lib/query-client";
 import { stableSignedUrl } from "@/lib/stable-signed-url";
@@ -279,11 +279,12 @@ function initialsOf(name: string): string {
 }
 
 export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffFormDialogProps) {
-  // Same primitive `ResponsiveDialog` itself calls, not `useIsDrawer()` — this
+  // Same breakpoint hook `ResponsiveDialog` itself calls, not `useIsDrawer()` — this
   // component is `ResponsiveDialog`'s *parent* (it renders the JSX that includes
   // `<ResponsiveDialog>`), so no provider exists yet at this point in the tree for
-  // `useIsDrawer()` to read.
-  const isMobile = useIsMobile();
+  // `useIsDrawer()` to read. `useIsDesktopShell()`, not `@schoolhub/ui`'s `useIsMobile()`
+  // — see `responsive-dialog.tsx`'s own comment on why the two must agree.
+  const isMobile = !useIsDesktopShell();
   const queryClient = useQueryClient();
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
