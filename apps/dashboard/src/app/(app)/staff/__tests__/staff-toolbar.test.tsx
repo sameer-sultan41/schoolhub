@@ -301,6 +301,47 @@ describe("StaffToolbar", () => {
     expect(screen.getByRole("button", { name: "Import CSV" })).toBeDisabled();
   });
 
+  it("explains the disabled Export/Import buttons while the current user is still loading", () => {
+    mockFetchStaffPage.mockReturnValue(new Promise(() => {}));
+    mockFetchStaffTypeCount.mockReturnValue(new Promise(() => {}));
+    mockFetchCurrentUser.mockReturnValue(new Promise(() => {}));
+
+    renderWithProviders(<StaffToolbar />);
+
+    // Not "you don't have permission" — nothing is known yet to back that claim.
+    expect(screen.getAllByTitle("Checking your permissions…")).toHaveLength(2);
+    expect(screen.queryByTitle("You don't have permission to export staff.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Export CSV" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Import CSV" })).toBeDisabled();
+  });
+
+  it("still explains the disabled buttons when the current-user lookup fails for good", async () => {
+    resolveStatCounts();
+    // PERMITTED_USER's own permissions never arrive — exactly the case where a missing
+    // title used to leave even a permitted user with a dead, unexplained button.
+    mockFetchCurrentUser.mockRejectedValue(new Error("network error"));
+
+    renderWithProviders(<StaffToolbar />);
+
+    const failedTitle = "Your permissions couldn't be loaded. Reload the page to try again.";
+    await waitFor(() => {
+      expect(screen.getAllByTitle(failedTitle)).toHaveLength(2);
+    });
+    expect(screen.getByRole("button", { name: "Export CSV" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Import CSV" })).toBeDisabled();
+  });
+
+  it("shows no permission title at all once a permitted user has loaded", async () => {
+    resolveStatCounts();
+
+    renderWithProviders(<StaffToolbar />);
+
+    await exportButtonEnabled();
+    expect(screen.queryByTitle("Checking your permissions…")).toBeNull();
+    expect(screen.queryByTitle("You don't have permission to export staff.")).toBeNull();
+    expect(screen.queryByTitle("You don't have permission to import staff.")).toBeNull();
+  });
+
   it('"Import CSV" opens the real import dialog for a permitted user', async () => {
     mockFetchStaffPage.mockResolvedValue({
       items: [],

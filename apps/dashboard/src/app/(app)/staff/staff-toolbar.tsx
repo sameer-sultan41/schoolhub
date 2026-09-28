@@ -85,6 +85,7 @@ export function StaffToolbar() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const t = useTranslations("staff");
+  const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
 
   // `pageSize: 1` mirrors dashboard-service.ts's own fetchTotal/fetchStaffTypeCount
@@ -104,13 +105,27 @@ export function StaffToolbar() {
   // Same cache entry `sidebar-menu.tsx`'s own permission check already populates
   // (Task 3's `queryKeys.currentUser()`, not a second inline literal) — this never
   // issues a second request.
-  const { data: currentUser } = useCurrentUser();
+  const { data: currentUser, isError: isCurrentUserError } = useCurrentUser();
 
   const allMembers = isAllMembersPending ? null : (allStaffPage?.pagination?.total_count ?? null);
   const teachingStaff = isTeachingStaffPending ? null : (teachingStaffCount ?? null);
 
+  // Fail closed, as the sidebar's own module gate does: both buttons stay disabled until
+  // the user's permissions are actually known (the API enforces regardless). Every
+  // disabled state still says why — "you don't have permission" only once a loaded user
+  // backs that claim, and a lookup that failed for good says so rather than leaving a
+  // dead button with no explanation.
   const canExport = hasPermission(currentUser, "staff.staff.export");
   const canImport = hasPermission(currentUser, "staff.staff.import");
+  const permissionsUnknownTitle = currentUser
+    ? undefined
+    : isCurrentUserError
+      ? tCommon("permissionsLoadFailed")
+      : tCommon("permissionsLoading");
+  const exportTitle =
+    permissionsUnknownTitle ?? (canExport ? undefined : t("export.permissionTitle"));
+  const importTitle =
+    permissionsUnknownTitle ?? (canImport ? undefined : t("import.permissionTitle"));
 
   const exportTrigger = useMutation({
     mutationFn: () => Services.staff.triggerStaffExport(),
@@ -229,11 +244,10 @@ export function StaffToolbar() {
         }
       />
       <ToolbarActions>
-        {/* The tooltip only appears once `currentUser` has actually resolved AND lacks
-            the permission — not merely while the query is still pending, when
-            `canExport`/`canImport` also read `false` but "you don't have permission"
-            would be a claim we don't yet know is true. */}
-        <span title={!currentUser || canExport ? undefined : t("export.permissionTitle")}>
+        {/* On a wrapping `<span>`, not the `Button`: `buttonVariants` bakes
+            `disabled:pointer-events-none` into every variant, and a disabled button
+            would never receive the hover that shows its own `title`. */}
+        <span title={exportTitle}>
           <Button
             variant="outline"
             disabled={!canExport || isExporting}
@@ -252,7 +266,7 @@ export function StaffToolbar() {
                 : t("export.button")}
           </Button>
         </span>
-        <span title={!currentUser || canImport ? undefined : t("import.permissionTitle")}>
+        <span title={importTitle}>
           <Button
             variant="outline"
             disabled={!canImport}

@@ -1086,6 +1086,8 @@
   "common": {
     "loading": "Loading",
     "retry": "Try again",
+    "permissionsLoading": "Checking your permissions…",
+    "permissionsLoadFailed": "Your permissions couldn't be loaded. Reload the page to try again.",
     "cancel": "Cancel",
     "save": "Save",
     "next": "Next",
