@@ -313,6 +313,61 @@ describe("useJobPolling", () => {
     expect(result.current.isPolling).toBe(true);
   });
 
+  it("calls onTimedOut exactly once when a watch times out, however often it re-renders", async () => {
+    mockFetchJob.mockResolvedValue(jobRecord("job-12", "running"));
+    const onTimedOut = jest.fn();
+    const onError = jest.fn();
+
+    const { result, rerender } = renderHook(
+      // Fresh inline callbacks on every render, as a component passes them.
+      () =>
+        useJobPolling("staff", "job-12", {
+          onTimedOut: () => {
+            onTimedOut();
+          },
+          onError,
+        }),
+      { wrapper: stableWrapper() },
+    );
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(120_000);
+    });
+    await waitFor(() => {
+      expect(result.current.isTimedOut).toBe(true);
+    });
+    rerender();
+    rerender();
+
+    expect(onTimedOut).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("calls onError exactly once when the poll request fails", async () => {
+    mockFetchJob.mockRejectedValue(new Error("network error"));
+    const onTimedOut = jest.fn();
+    const onError = jest.fn();
+
+    const { result, rerender } = renderHook(
+      () =>
+        useJobPolling("staff", "job-13", {
+          onTimedOut,
+          onError: () => {
+            onError();
+          },
+        }),
+      { wrapper: stableWrapper() },
+    );
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    rerender();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onTimedOut).not.toHaveBeenCalled();
+  });
+
   describe("under the app's own retry policy (makeQueryClient's shouldRetry)", () => {
     function apiError(status: number) {
       return new ApiError({

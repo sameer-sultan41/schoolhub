@@ -14,8 +14,9 @@ import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
 import { StaffImportDialog } from "@/app/(app)/staff/staff-import-dialog";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobPolling } from "@/hooks/use-job-polling";
+import { resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
-import { ApiError, Services } from "@/services";
+import { Services } from "@/services";
 import type { ExportJobResult } from "@/services/modules/jobs/jobs-service";
 
 /**
@@ -102,9 +103,8 @@ export function StaffToolbar() {
     queryKey: ["staff", "toolbar", "teaching-staff-count"],
     queryFn: () => Services.dashboard.fetchStaffTypeCount("teaching"),
   });
-  // Same cache entry `sidebar-menu.tsx`'s own permission check already populates
-  // (Task 3's `queryKeys.currentUser()`, not a second inline literal) — this never
-  // issues a second request.
+  // The same shared query `sidebar-menu.tsx`'s own permission check already populates —
+  // this never issues a second request.
   const { data: currentUser, isError: isCurrentUserError } = useCurrentUser();
 
   const allMembers = isAllMembersPending ? null : (allStaffPage?.pagination?.total_count ?? null);
@@ -133,13 +133,7 @@ export function StaffToolbar() {
       setExportJobId(result.jobId);
     },
     onError: (error: unknown) => {
-      const message =
-        error instanceof ApiError
-          ? tErrors.has(error.code)
-            ? tErrors(error.code)
-            : error.message
-          : t("export.startFailed");
-      toast.error(message);
+      toast.error(resolveErrorMessage(error, tErrors, t("export.startFailed")));
     },
   });
 
@@ -148,7 +142,14 @@ export function StaffToolbar() {
     isTimedOut: isExportTimedOut,
     isError: isExportError,
     resume: resumeExportPolling,
-  } = useJobPolling("staff", exportJobId);
+  } = useJobPolling("staff", exportJobId, {
+    onTimedOut: () => {
+      toast.error(t("export.timedOut"));
+    },
+    onError: () => {
+      toast.error(t("export.failed"));
+    },
+  });
   // Mirrors the import dialog's `hasActiveJob`: true until the job reaches a REAL
   // terminal state — broader than polling, which already stops on a timeout or a failed
   // poll while the export itself may still be running server-side.
@@ -184,13 +185,7 @@ export function StaffToolbar() {
       toast.success(t("export.success"));
     },
     onError: (error: unknown) => {
-      const message =
-        error instanceof ApiError
-          ? tErrors.has(error.code)
-            ? tErrors(error.code)
-            : error.message
-          : t("export.downloadFailed");
-      toast.error(message);
+      toast.error(resolveErrorMessage(error, tErrors, t("export.downloadFailed")));
     },
   });
 
@@ -211,18 +206,6 @@ export function StaffToolbar() {
       toast.error(exportJob.error ?? t("export.failed"));
     }
   }, [exportJob, downloadExportFile, t]);
-
-  useEffect(() => {
-    if (isExportTimedOut) {
-      toast.error(t("export.timedOut"));
-    }
-  }, [isExportTimedOut, t]);
-
-  useEffect(() => {
-    if (isExportError) {
-      toast.error(t("export.failed"));
-    }
-  }, [isExportError, t]);
 
   const isExporting =
     exportTrigger.isPending || isDownloadPending || (hasActiveExportJob && !isExportStalled);

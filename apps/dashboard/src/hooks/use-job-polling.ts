@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useState } from "react";
 import { skipToken, useQuery } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query-client";
@@ -31,6 +31,13 @@ export interface JobPollingResult {
   resume: () => void;
 }
 
+export interface JobPollingCallbacks {
+  /** Called once each time a watch times out — e.g. a "still running" toast. */
+  onTimedOut?: () => void;
+  /** Called once each time a poll request fails for good (after the app's retries). */
+  onError?: () => void;
+}
+
 /**
  * Polls `GET /jobs/{id}` (via `Services.jobs.fetchJob`) at `POLL_INTERVAL_MS` until the
  * job reaches `succeeded`/`failed`, the poll request itself errors, or
@@ -47,7 +54,11 @@ export interface JobPollingResult {
  * response leaves `data` referentially the same, so nothing would re-render on its own
  * once polling stopped producing new data; the state update is what reaches the UI.
  */
-export function useJobPolling(module: string, jobId: string | null): JobPollingResult {
+export function useJobPolling(
+  module: string,
+  jobId: string | null,
+  callbacks: JobPollingCallbacks = {},
+): JobPollingResult {
   const [watch, setWatch] = useState(0);
   // React's "store the previous value in state" pattern — resets per `jobId` change
   // during render, not in an effect, so no render ever sees the old watch's state.
@@ -100,6 +111,21 @@ export function useJobPolling(module: string, jobId: string | null): JobPollingR
   // Gated anyway: the timer and a final terminal poll can land in the same tick, and a
   // job that finished must never read as "still running".
   const isTimedOut = rawTimedOut && !isSettled;
+
+  // Effect Events, so a caller's inline callbacks (fresh every render) fire once per
+  // transition to true, not on every render while it stays true.
+  const notifyTimedOut = useEffectEvent(() => {
+    callbacks.onTimedOut?.();
+  });
+  const notifyError = useEffectEvent(() => {
+    callbacks.onError?.();
+  });
+  useEffect(() => {
+    if (isTimedOut) notifyTimedOut();
+  }, [isTimedOut]);
+  useEffect(() => {
+    if (query.isError) notifyError();
+  }, [query.isError]);
 
   return {
     job,

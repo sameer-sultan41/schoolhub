@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobPolling } from "@/hooks/use-job-polling";
 import { useSessionStorageState } from "@/hooks/use-session-storage-state";
+import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import type { ImportJobResult } from "@/services/modules/jobs/jobs-service";
@@ -108,12 +109,7 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
       // generic because that one code covers many unrelated business rules. Prefer
       // the field detail, then the code mapping, then the raw message — never invent
       // one (Hard Rule 4).
-      const message =
-        error instanceof ApiError
-          ? (error.fieldErrors().file ??
-            (tErrors.has(error.code) ? tErrors(error.code) : error.message))
-          : t("import.startFailed");
-      toast.error(message);
+      toast.error(resolveErrorMessage(error, tErrors, t("import.startFailed"), "file"));
     },
   });
 
@@ -126,7 +122,14 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
     isTimedOut,
     isError,
     error: pollError,
-  } = useJobPolling("staff", open ? jobId : null);
+  } = useJobPolling("staff", open ? jobId : null, {
+    onTimedOut: () => {
+      toast.error(t("import.timedOut"));
+    },
+    onError: () => {
+      toast.error(t("import.failed"));
+    },
+  });
   const result = job?.status === "succeeded" ? (job.result as ImportJobResult | null) : null;
   const hasFinished = job?.status === "succeeded" || job?.status === "failed";
   // True from the moment a job is triggered until it reaches a REAL terminal state —
@@ -160,18 +163,6 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
       toast.error(job.error ?? t("import.failed"));
     }
   }, [job, queryClient, t]);
-
-  useEffect(() => {
-    if (isTimedOut) {
-      toast.error(t("import.timedOut"));
-    }
-  }, [isTimedOut, t]);
-
-  useEffect(() => {
-    if (isError) {
-      toast.error(t("import.failed"));
-    }
-  }, [isError, t]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     setFile(event.target.files?.[0] ?? null);
