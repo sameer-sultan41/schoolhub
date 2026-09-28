@@ -622,6 +622,27 @@ either this file or `project-status.md`.
   The `process.env` ban misses `const { env } = process` and `globalThis.process.env`. Tighten
   these once the existing JSX-text baseline has burned down.
 
+- **True streaming upload for `build_staff_export_csv`/`build_student_export_csv`.** The
+  `fix/stream-bulk-exports` change made the DB read side stream via `.iterator()`, but the CSV is
+  still assembled entirely in memory (`io.StringIO` → `.getvalue()` → `.encode()`) before
+  `core.files.create_ready_file()`/`S3Presigner.put()` hands it to `put_object(Body=...)` as one
+  `bytes` payload — up to three full in-memory copies exist at once. True streaming needs
+  `core.files`' upload path to accept a file-like object (e.g. a `SpooledTemporaryFile`, uploaded
+  via boto3's `upload_fileobj`) instead of `bytes`, which is a `core/files` change affecting every
+  caller of `create_ready_file()`, not just these two exports — out of scope for that fix.
+
+- **CSV formula injection in the staff/student full-tenant exports.** `build_staff_export_csv`/
+  `build_student_export_csv` write `first_name`/`last_name` straight into `csv.writer` rows with no
+  escaping. `core.exports.tabular` already has a `_spreadsheet_safe` helper for exactly this (a
+  leading `=`/`+`/`-`/`@` in a cell opens it as a formula in Excel/Sheets), but these two builders
+  don't route through it. A staff/student record writable by one role (e.g. `school_admin` creating
+  a student) and exported by another (`hr_staff`/`it_admin`) lets a crafted name become a live
+  formula — e.g. a `HYPERLINK(...)` that exfiltrates neighboring rows' data — the moment the
+  exported file is opened. Fix: make `_spreadsheet_safe` (or an equivalent per-cell escape) public
+  and apply it to every written cell in both builders' loops, without routing through
+  `tabular.render` (which takes `list[dict]` and would re-materialize the whole export in memory).
+  Flagged by `fix/stream-bulk-exports`'s review as a pre-existing gap, not a regression it introduced.
+
 - **Backend baselines to burn down** (frozen by PR 5, shrink-only — ADR-0014):
   - 15 `# noqa: BLE001` broad `except Exception` blocks (academics 1, attendance 2, examinations 6,
     staff_management 2, student_management 3, core/api/views 1) — catch the specific exceptions.

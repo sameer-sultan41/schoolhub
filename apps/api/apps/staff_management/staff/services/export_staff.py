@@ -33,16 +33,19 @@ def build_staff_export_csv(*, tenant_id: uuid.UUID) -> bytes:
     )
     # `.iterator()`, not `list(...)`: a full-tenant export must not hold every Staff
     # row (and its related Campus) in memory as Python objects at once — this
-    # streams from the DB cursor in chunks instead. The loop stays inside
-    # `tenant_atomic` because the cursor is only fetched as it's consumed; closing
-    # the tenant context before iterating would leave later chunks reading with no
-    # tenant GUC set.
+    # streams from the DB cursor instead (chunk_size defaults to 2000). The whole
+    # call, not just "later chunks", has to run inside `tenant_atomic`: `.iterator()`
+    # runs no query until the first row is consumed, and by then the RLS policy
+    # needs `app.tenant_id` set — and in prod, PgBouncer's transaction-pooling mode
+    # (`server_reset_query_always`) tears down a server-side cursor the instant its
+    # opening transaction ends, so the cursor itself would not survive past the
+    # `with` block either way.
     with tenant_atomic(tenant_id):
         staff_rows = (
             Staff.objects.alive()
             .select_related("campus")
             .order_by("last_name", "first_name")
-            .iterator(chunk_size=2000)
+            .iterator()
         )
         for staff in staff_rows:
             writer.writerow(
