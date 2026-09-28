@@ -15,7 +15,6 @@ import {
   SheetHeader,
   SheetTrigger,
   toAbsoluteUrl,
-  useIsMobile,
   useScrollPosition,
 } from "@schoolhub/ui";
 
@@ -41,7 +40,6 @@ export function Header() {
   const [isSidebarSheetOpen, setIsSidebarSheetOpen] = useState(false);
 
   const pathname = usePathname();
-  const mobileMode = useIsMobile();
 
   const scrollPosition = useScrollPosition();
   const headerSticky: boolean = scrollPosition > 0;
@@ -69,30 +67,33 @@ export function Header() {
             />
           </Link>
           <div className="flex items-center">
-            {mobileMode && (
-              <Sheet open={isSidebarSheetOpen} onOpenChange={setIsSidebarSheetOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" mode="icon" aria-label={t("primary")}>
-                    <Menu className="text-muted-foreground/70" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent
-                  className="w-[275px] gap-0 p-0"
-                  side="start"
-                  close={false}
-                  closeLabel="Close"
+            {/* No JS gate here: the parent's `lg:hidden` already shows this only
+                below the shell's desktop breakpoint, instantly and without
+                depending on a client-side viewport check settling in — see
+                `use-is-desktop-shell.ts` for why that check used to leave this
+                unrendered on a real phone/tablet's first paint. */}
+            <Sheet open={isSidebarSheetOpen} onOpenChange={setIsSidebarSheetOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" mode="icon" aria-label={t("primary")}>
+                  <Menu className="text-muted-foreground/70" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent
+                className="w-[275px] gap-0 p-0"
+                side="start"
+                close={false}
+                closeLabel="Close"
+              >
+                <SheetHeader className="space-y-0 p-0" />
+                <SheetBody
+                  className="overflow-y-auto p-0"
+                  role="navigation"
+                  aria-label={t("primary")}
                 >
-                  <SheetHeader className="space-y-0 p-0" />
-                  <SheetBody
-                    className="overflow-y-auto p-0"
-                    role="navigation"
-                    aria-label={t("primary")}
-                  >
-                    <SidebarMenu />
-                  </SheetBody>
-                </SheetContent>
-              </Sheet>
-            )}
+                  <SidebarMenu />
+                </SheetBody>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
 
@@ -101,7 +102,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-3">
-          {!mobileMode && (
+          <div className="hidden lg:block">
             <SearchDialog
               trigger={
                 <Button
@@ -114,7 +115,7 @@ export function Header() {
                 </Button>
               }
             />
-          )}
+          </div>
           <NotificationsSheet
             trigger={
               <Button

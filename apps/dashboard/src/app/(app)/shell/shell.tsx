@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { useIsMobile } from "@schoolhub/ui";
 
 import { Footer } from "@/app/(app)/shell/footer";
 import { Header } from "@/app/(app)/shell/header";
 import { useSettings } from "@/app/(app)/shell/settings-provider";
 import { Sidebar } from "@/app/(app)/shell/sidebar";
+import { useIsDesktopShell } from "@/app/(app)/shell/use-is-desktop-shell";
 
 // Ported from packages/ui's vendored layouts/demo1/layout.tsx (Metronic's own Demo1
 // shell). `data-theme-preset="metronic"` is set on <html> by the root layout now, not
 // here — it needs to apply app-wide (auth pages included), not just while this Shell is
 // mounted.
 export function Shell({ children }: { children: ReactNode }) {
-  const isMobile = useIsMobile();
+  const isDesktopShell = useIsDesktopShell();
   const { settings, setOption, storeOption } = useSettings();
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {!isMobile && <Sidebar />}
+      {isDesktopShell && <Sidebar />}
       <div className="wrapper flex grow flex-col">
         <Header />
         <main className="grow pt-5" role="content">
