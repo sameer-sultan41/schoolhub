@@ -58,6 +58,25 @@ The only artefact shared between the API and the frontends is the OpenAPI contra
 ([ADR-0005](../docs/decisions/0005-generated-api-contract.md)). Infrastructure shares nothing
 with them at runtime — it provisions, and they consume through environment variables.
 
+## Local dev ports: never the framework defaults
+
+Don't run schoolhub's local dev services on their frameworks' own default ports — 3000/3001
+(Next.js dev servers) or 8000/9000 (Django's dev port, MinIO) — even though `docker-compose.yml`
+still falls back to those defaults for anyone who hasn't overridden them. A developer's machine
+commonly runs other, unrelated projects that also default to these exact ports, and a silent
+collision is worse than an explicit one: a tool like Playwright's `reuseExistingServer` will
+quietly reuse whatever's already listening instead of erroring, serving the wrong app's content
+with no obvious failure.
+
+`API_PORT`, `MINIO_PORT` and `MINIO_CONSOLE_PORT` in `infra/compose/.env` (gitignored, per
+developer) control the backend's host-exposed ports; `x-api-env`'s `CORS_ALLOWED_ORIGINS` /
+`CSRF_TRUSTED_ORIGINS` in `docker-compose.yml` must be overridden in that same `.env` to match
+whatever port the dashboard's dev server actually runs on (its own `NEXT_PUBLIC_APP_URL` in
+`apps/dashboard/.env`, plus `NEXT_PUBLIC_API_BASE_URL`/`API_BASE_URL`/`NEXT_PUBLIC_API_ORIGIN` in
+both `apps/dashboard/.env` and `apps/website/.env`, need to agree with whatever port the API
+actually runs on). Containers' own internal ports (`http://api:8000`, `http://minio:9000` on the
+docker network) stay as-is — only host-exposed ports and host-facing URLs need to move.
+
 ## Non-negotiable infrastructure rules
 
 1. **The application database role must never have `BYPASSRLS` and must never own the tables.**
