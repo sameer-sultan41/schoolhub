@@ -27,7 +27,10 @@ export interface BackgroundJobRecord {
  * import task returns the identical shape (`apps/api/apps/student_management/
  * tasks.py`), so this is shared, not staff-specific. */
 export interface ImportRowError {
-  row: number;
+  /** The file's own row number, as a string — both importers return
+   * `str(row_number)` (`dict[str, str]`), never a JSON number. Display it; don't do
+   * arithmetic on it. */
+  row: string;
   field: string;
   issue: string;
 }

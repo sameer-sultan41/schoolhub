@@ -120,7 +120,8 @@ describe("StaffImportDialog", () => {
         total: 2,
         succeeded: 1,
         failed: 1,
-        errors: [{ row: 3, field: "campus_code", issue: "Unknown campus code 'ZZZ'." }],
+        // A string, as the backend really sends it (`str(row_number)`).
+        errors: [{ row: "3", field: "campus_code", issue: "Unknown campus code 'ZZZ'." }],
       },
       error: null,
     });

@@ -244,7 +244,7 @@ test.describe("staff directory", () => {
                   total: 2,
                   succeeded: 1,
                   failed: 1,
-                  errors: [{ row: 2, field: "campus_code", issue: "Unknown campus code 'ZZZ'." }],
+                  errors: [{ row: "2", field: "campus_code", issue: "Unknown campus code 'ZZZ'." }],
                 },
               },
             ],
