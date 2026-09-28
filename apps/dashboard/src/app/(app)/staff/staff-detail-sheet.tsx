@@ -24,6 +24,7 @@ import {
   BadgeDot,
   Button,
   Skeleton,
+  useIsMobile,
 } from "@schoolhub/ui";
 
 import {
@@ -85,9 +86,9 @@ function FieldRow({
 
 function FieldSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2 md:gap-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-4">{children}</div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-3 md:gap-x-4 md:gap-y-4">{children}</div>
     </section>
   );
 }
@@ -165,6 +166,9 @@ function DetailFooter({
 
 export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffDetailSheetProps) {
   const t = useTranslations("staff");
+  // Same primitive ResponsiveSheet itself calls, not useIsDrawer() — this component
+  // is ResponsiveSheet's parent, so no provider exists yet at this point in the tree.
+  const isMobile = useIsMobile();
   // Same query key as the edit form, so clicking Edit reuses this fetch.
   const {
     data: detail,
@@ -193,35 +197,60 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
         </ResponsiveSheetTitle>
         {row && (
           <>
-            <div className="flex flex-col gap-3 border-b border-border bg-primary/5 px-6 py-6">
-              <Avatar className="size-16 shrink-0 ring-4 ring-background">
+            {/* Row on mobile (avatar beside the name/role/badge column), stacked on
+                desktop: a bottom drawer's height is the scarce dimension, so trading
+                a stacked hero band for a wider, shorter one buys back vertical space
+                the field sections below need. */}
+            <div className="flex flex-row items-center gap-3 border-b border-border bg-primary/5 px-4 py-4 md:flex-col md:items-stretch md:gap-3 md:px-6 md:py-6">
+              <Avatar className="size-12 shrink-0 ring-2 ring-background md:size-16 md:ring-4">
                 {row.photoUrl ? <AvatarImage src={row.photoUrl} alt="" /> : null}
-                <AvatarFallback className="text-lg font-semibold">
+                <AvatarFallback className="text-sm font-semibold md:text-lg">
                   {initialsOf(row.name)}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-mono text-lg leading-none font-semibold text-foreground">
-                  {row.name}
-                </span>
-                <span className="text-sm text-muted-foreground">
+              <div className="flex min-w-0 flex-col gap-1 md:gap-1.5">
+                {/* Badge beside the name on mobile — the row layout above leaves
+                    real horizontal room next to it, unlike the desktop stack below,
+                    which keeps its own line for the badge. */}
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="text-mono min-w-0 truncate text-base leading-none font-semibold text-foreground md:text-lg">
+                    {row.name}
+                  </span>
+                  {isMobile && (
+                    <Badge
+                      size="sm"
+                      variant={statusMeta(row.status).variant}
+                      appearance="light"
+                      shape="circle"
+                      className="w-fit shrink-0"
+                    >
+                      <BadgeDot />
+                      {statusMeta(row.status).label}
+                    </Badge>
+                  )}
+                </div>
+                <span className="truncate text-sm text-muted-foreground">
                   {row.designation} · {row.campus}
                 </span>
-                <Badge
-                  size="sm"
-                  variant={statusMeta(row.status).variant}
-                  appearance="light"
-                  shape="circle"
-                  className="mt-1 w-fit"
-                >
-                  <BadgeDot />
-                  {statusMeta(row.status).label}
-                </Badge>
+                {!isMobile && (
+                  <Badge
+                    size="sm"
+                    variant={statusMeta(row.status).variant}
+                    appearance="light"
+                    shape="circle"
+                    className="mt-1 w-fit"
+                  >
+                    <BadgeDot />
+                    {statusMeta(row.status).label}
+                  </Badge>
+                )}
               </div>
             </div>
 
-            {/* flex-1 pins the footer to the bottom; overflow-y-auto scrolls long content. */}
-            <ResponsiveSheetBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+            {/* flex-1 pins the footer to the bottom; overflow-y-auto scrolls long content.
+                Tighter gap/padding below md: the same field density reads as generously
+                spaced on a desktop side panel but wastes a mobile drawer's scarcer height. */}
+            <ResponsiveSheetBody className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-3 md:gap-6 md:px-6 md:py-5">
               <FieldSection title={t("detail.contact")}>
                 <FieldRow
                   icon={Mail}
