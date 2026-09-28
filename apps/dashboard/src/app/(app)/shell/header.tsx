@@ -107,13 +107,14 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* `lg:block` (1024px), not the `768px` it was — this now agrees with the rest
-              of the header's `lg:hidden` mobile-nav wrapper above (both keyed to the
-              same desktop breakpoint the shell's sidebar CSS uses), which narrows the
-              width range with a search trigger: 768–1023px now gets the mobile header
-              chrome but no search entry point of its own. Flagged, not fixed — no
-              mobile search entry point exists yet to move this to. */}
-          <div className="hidden lg:block">
+          {/* md:block (768px) — the mobile-nav wrapper above (logo + hamburger) is
+              `lg:hidden` (1024px) for an unrelated reason (it's the docked-sidebar's
+              own stand-in, so it only needs to disappear once the sidebar docks), not
+              because anything else in this row needs to share its breakpoint. Search
+              stays reachable at every width from 768px up, same as before this
+              breakpoint was briefly (and wrongly) narrowed to 1024px, which left
+              768–1023px with no search entry point at all. */}
+          <div className="hidden md:block">
             <SearchDialog
               trigger={
                 <Button
