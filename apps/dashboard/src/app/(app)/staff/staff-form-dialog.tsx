@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Check, X } from "lucide-react";
 import {
   Alert,
   AlertDescription,
@@ -512,6 +513,15 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
         ) : (
           <Form {...form}>
             <form
+              // flex min-h-0 grow flex-col (mobile only): a plain <form> has no flex
+              // properties of its own, so without this it breaks the flex chain
+              // DrawerContent (flex-col) needs to hand "grow, then shrink-and-scroll"
+              // down to ResponsiveDialogBody — the form just grows to its full content
+              // height instead, pushing the footer (and everything past the drawer's own
+              // max-h-[85vh]) off-screen with nothing to scroll. Desktop doesn't need
+              // this: DialogBody's own explicit max-h-[65vh] bounds it independently of
+              // whatever the surrounding flex chain does.
+              className={isMobile ? "flex min-h-0 grow flex-col" : undefined}
               // See login-form.tsx's own comment on this exact pattern: handleSubmit's
               // wrapper is promise-returning where the DOM expects void, and a genuinely
               // unexpected throw inside the resolver (not a validation failure, which
@@ -987,26 +997,59 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
                 />
               </ResponsiveDialogBody>
 
-              <ResponsiveDialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    onOpenChange(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  isLoading={mutation.isPending}
-                  loadingLabel={mode === "create" ? "Adding…" : "Saving…"}
-                  disabled={uploadStatus === "uploading"}
-                >
-                  {mode === "create" ? "Add member" : "Save changes"}
-                </Button>
-              </ResponsiveDialogFooter>
+              {/* Icon-only on the mobile drawer, matching StaffDetailSheet's own
+                  footer — a labeled button pair reads as two desktop-width buttons
+                  stacked in a space this drawer's bottom-of-screen footer doesn't
+                  have to spare. */}
+              {isMobile ? (
+                <ResponsiveDialogFooter className="flex-row justify-end gap-2.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    mode="icon"
+                    shape="circle"
+                    aria-label="Cancel"
+                    onClick={() => {
+                      onOpenChange(false);
+                    }}
+                  >
+                    <X />
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    mode="icon"
+                    shape="circle"
+                    aria-label={mode === "create" ? "Add member" : "Save changes"}
+                    isLoading={mutation.isPending}
+                    loadingLabel={mode === "create" ? "Adding…" : "Saving…"}
+                    disabled={uploadStatus === "uploading"}
+                  >
+                    {!mutation.isPending && <Check />}
+                  </Button>
+                </ResponsiveDialogFooter>
+              ) : (
+                <ResponsiveDialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      onOpenChange(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    isLoading={mutation.isPending}
+                    loadingLabel={mode === "create" ? "Adding…" : "Saving…"}
+                    disabled={uploadStatus === "uploading"}
+                  >
+                    {mode === "create" ? "Add member" : "Save changes"}
+                  </Button>
+                </ResponsiveDialogFooter>
+              )}
             </form>
           </Form>
         )}

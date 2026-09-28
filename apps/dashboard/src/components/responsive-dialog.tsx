@@ -122,9 +122,15 @@ export function ResponsiveDialogBody({
   return <Body className={className}>{children}</Body>;
 }
 
-export function ResponsiveDialogFooter({ children }: { children: ReactNode }) {
+export function ResponsiveDialogFooter({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
   const Footer = useIsDrawer() ? DrawerFooter : DialogFooter;
-  return <Footer>{children}</Footer>;
+  return <Footer className={className}>{children}</Footer>;
 }
 
 /**
