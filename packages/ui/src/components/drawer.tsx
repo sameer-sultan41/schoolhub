@@ -51,6 +51,12 @@ import { Button } from "./button";
  *    `onOpenChange` in a small context, and `DrawerContent` calls that directly,
  *    bypassing vaul's `dismissible` gate the same way vaul's own docs recommend
  *    ("controlled close via application state").
+ * 9. The visible drag-handle bar is `DrawerPrimitive.Handle`, not a plain
+ *    `aria-hidden` div — a consumer that sets `handleOnly` (dragging only starts
+ *    from the handle) needs an element vaul actually registers as the drag
+ *    surface; a lookalike div renders the same pill but is inert under
+ *    `handleOnly`, so the drawer becomes entirely impossible to drag behind an
+ *    affordance that still visually promises otherwise.
  */
 const DrawerCloseHandlerContext = createContext<(() => void) | null>(null);
 
@@ -127,10 +133,7 @@ function DrawerContent({
         )}
         {...props}
       >
-        <div
-          aria-hidden="true"
-          className="mx-auto mt-4 h-2 w-[100px] shrink-0 rounded-full bg-muted"
-        />
+        <DrawerPrimitive.Handle className="mx-auto mt-4 h-2 w-[100px] shrink-0 rounded-full bg-muted" />
         {children}
         {close && (
           <Button
