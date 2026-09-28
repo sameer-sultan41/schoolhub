@@ -39,6 +39,10 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 1. **Permission-aware UI:** hide/disable by the user's permission keys (module doc §4), but never
    treat that as security — the API enforces.
+1a. **No raw native interactive elements.** `<button>`, `<input>`, and the like are always
+    `packages/ui`'s themed primitives (`Button`, `Input`, …), never hand-rolled — see
+    `packages/ui/AGENTS.md`'s "Never drop to a raw native element" for why, including when
+    working around a vendor library's own quirk.
 2. **Roles:** only slugs from `DOCS/00-overview/users-and-roles.md`.
 3. **Async jobs:** long operations return `202` + job resource — build polling/progress UI, don't
    block.

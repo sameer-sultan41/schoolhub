@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { createContext, useContext } from "react";
 import { cn } from "../lib/cn";
 import { X } from "lucide-react";
 import { Drawer as DrawerPrimitive } from "vaul";
+import { Button } from "./button";
 
 /**
  * A bottom-anchored sheet for narrow screens — the mobile counterpart this package's
@@ -19,9 +21,12 @@ import { Drawer as DrawerPrimitive } from "vaul";
  *    button — the vendor file has neither; this package has no i18n of its own, so a
  *    hardcoded "Close" fallback would always ship untranslated. Matches `Dialog`'s and
  *    `Sheet`'s identical `closeLabel` prop.
- * 2. `DrawerHeader`'s `sm:text-left` is `sm:text-start` — a physical-direction class
- *    would stay left-aligned under `dir="rtl"` instead of following the reading
- *    direction (packages/ui/AGENTS.md's logical-direction rule).
+ * 2. `DrawerHeader` is always `text-start` (logical, not the vendor's physical
+ *    `text-left`/`packages/ui/AGENTS.md`'s rule) and never centered — the vendor's
+ *    `text-center sm:text-left` assumes a Dialog-like consumer that's sometimes
+ *    still narrow above `sm` (640px); a Drawer only ever renders below this app's
+ *    768px mobile breakpoint, so "centered below sm" was, in practice, "always
+ *    centered" — reading worse, not better, on the one width this ever renders at.
  * 3. `shouldScaleBackground` defaults to `false`, not the vendor's `true` — vaul only
  *    applies that scale effect when the page has a `[data-vaul-drawer-wrapper]`
  *    element, which this app doesn't render; defaulting `true` here would be a no-op
@@ -32,21 +37,37 @@ import { Drawer as DrawerPrimitive } from "vaul";
  *    mirroring `Dialog`'s and `Sheet`'s identical toggles, and `DrawerContent` caps its
  *    own height (`max-h-[85vh]`) — the vendor version has no height limit at all.
  * 6. New `DrawerBody`, matching `Dialog`'s/`Sheet`'s `*Body` slot for scrollable content
- *    between the header and footer — the vendor file has no equivalent.
+ *    between the header and footer — the vendor file has no equivalent. It also
+ *    carries `min-h-0`, which neither `Dialog`'s nor `Sheet`'s own `*Body` needs
+ *    (they don't cap their own container's height the way `DrawerContent` does).
  * 7. `DrawerTitle`'s type scale (`text-base font-semibold text-foreground`) matches
  *    `Dialog`'s/`Sheet`'s own title styling instead of the vendor's larger
  *    `text-lg leading-none tracking-tight` — visual consistency across all three.
+ * 8. `DrawerContent`'s built-in close button no longer uses `Drawer.Close` — vaul
+ *    ignores every `Drawer.Close`-driven close (confirmed against vaul's own source)
+ *    whenever a consumer sets `dismissible={false}` (e.g. a destructive confirmation
+ *    that shouldn't be swiped away by accident), which would otherwise make this
+ *    built-in button silently do nothing. `Drawer` now captures the caller's own
+ *    `onOpenChange` in a small context, and `DrawerContent` calls that directly,
+ *    bypassing vaul's `dismissible` gate the same way vaul's own docs recommend
+ *    ("controlled close via application state").
  */
+const DrawerCloseHandlerContext = createContext<(() => void) | null>(null);
+
 function Drawer({
   shouldScaleBackground = false,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
   return (
-    <DrawerPrimitive.Root
-      data-slot="drawer"
-      shouldScaleBackground={shouldScaleBackground}
-      {...props}
-    />
+    <DrawerCloseHandlerContext.Provider value={() => onOpenChange?.(false)}>
+      <DrawerPrimitive.Root
+        data-slot="drawer"
+        shouldScaleBackground={shouldScaleBackground}
+        onOpenChange={onOpenChange}
+        {...props}
+      />
+    </DrawerCloseHandlerContext.Provider>
   );
 }
 
@@ -94,6 +115,7 @@ function DrawerContent({
   closeLabel,
   ...props
 }: DrawerContentProps) {
+  const closeHandler = useContext(DrawerCloseHandlerContext);
   return (
     <DrawerPortal>
       {overlay && <DrawerOverlay />}
@@ -111,12 +133,19 @@ function DrawerContent({
         />
         {children}
         {close && (
-          <DrawerClose
-            className="absolute end-5 top-4 cursor-pointer rounded-sm opacity-60 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
+          <Button
+            type="button"
+            variant="ghost"
+            mode="icon"
+            data-slot="drawer-close"
+            className="absolute end-5 top-4 size-auto rounded-sm p-0.5 opacity-60 hover:bg-transparent hover:opacity-100"
             aria-label={closeLabel}
+            onClick={() => {
+              closeHandler?.();
+            }}
           >
             <X className="size-4" />
-          </DrawerClose>
+          </Button>
         )}
       </DrawerPrimitive.Content>
     </DrawerPortal>
@@ -127,17 +156,23 @@ function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="drawer-header"
-      className={cn("grid gap-1.5 p-4 text-center sm:text-start", className)}
+      className={cn("grid gap-1 p-4 text-start", className)}
       {...props}
     />
   );
 }
 
 function DrawerBody({ className, ...props }: React.ComponentProps<"div">) {
+  // min-h-0: without it, a flex child's default `min-height: auto` lets it grow past
+  // the space DrawerContent's flex-col actually has for it instead of shrinking to
+  // fit and scrolling internally — the same class of bug min-w-0 fixes on the
+  // horizontal axis (see CardTable in packages/ui/src/components/card.tsx). The
+  // visible symptom was content past the fold simply being clipped by
+  // DrawerContent's own max-h-[85vh], with nothing to scroll.
   return (
     <div
       data-slot="drawer-body"
-      className={cn("grow overflow-y-auto px-4 py-2.5", className)}
+      className={cn("min-h-0 grow overflow-y-auto px-4 py-2.5", className)}
       {...props}
     />
   );
