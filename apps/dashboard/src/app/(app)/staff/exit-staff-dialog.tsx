@@ -2,6 +2,7 @@
 
 import { useEffect, type MouseEvent, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { LogOut, X } from "lucide-react";
 import {
   Alert,
   AlertDescription,
@@ -16,7 +17,6 @@ import {
   Button,
   Drawer,
   DrawerBody,
-  DrawerClose,
   DrawerContent,
   DrawerDescription,
   DrawerFooter,
@@ -403,6 +403,10 @@ export function ExitStaffDialog({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange} dismissible={false}>
+        {/* Both this built-in close button and the footer's Cancel bypass Drawer.Close
+            (see drawer.tsx's own departure-log comment #8) — vaul otherwise ignores
+            every Drawer.Close-driven close whenever dismissible is false, which this
+            confirmation deliberately sets so it can't be swiped away by accident. */}
         <DrawerContent closeLabel="Close" role="alertdialog">
           <DrawerHeader>
             <DrawerTitle>
@@ -419,22 +423,38 @@ export function ExitStaffDialog({
               staffIds={staffIds}
               staffNames={staffNames}
               footer={
-                <DrawerFooter>
-                  {/* Cancel first, matching staff-form-dialog.tsx's own (desktop-and-
-                      mobile-shared) footer order — the two drawers in this app agree
-                      on button order even though this one, unlike that file, has to
-                      build its mobile footer separately. */}
-                  <DrawerClose asChild>
-                    <Button type="button" variant="outline" disabled={mutation.isPending}>
-                      {cancelLabel}
-                    </Button>
-                  </DrawerClose>
+                <DrawerFooter className="flex-row justify-end gap-2.5">
+                  {/* Icon-only, matching StaffDetailSheet's own mobile footer — Cancel
+                      first, same order as staff-form-dialog.tsx's shared footer.
+                      onClick calls onOpenChange directly rather than wrapping in
+                      DrawerClose — see the dismissible comment on DrawerContent
+                      above for why DrawerClose wouldn't work here. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    mode="icon"
+                    shape="circle"
+                    aria-label={cancelLabel}
+                    disabled={mutation.isPending}
+                    onClick={() => {
+                      onOpenChange(false);
+                    }}
+                  >
+                    <X />
+                  </Button>
                   {/* A plain submit button, unlike AlertDialogAction below: vaul's
                       Drawer has no Radix-style "close on click before the handler
                       runs" default to fight, so the form's own onSubmit (in
                       ExitStaffFormBody) already runs the validated submit as-is. */}
-                  <Button type="submit" variant="destructive" disabled={mutation.isPending}>
-                    {actionLabel}
+                  <Button
+                    type="submit"
+                    variant="destructive"
+                    mode="icon"
+                    shape="circle"
+                    aria-label={actionLabel}
+                    disabled={mutation.isPending}
+                  >
+                    <LogOut />
                   </Button>
                 </DrawerFooter>
               }
