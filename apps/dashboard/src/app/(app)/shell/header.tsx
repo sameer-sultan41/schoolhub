@@ -53,7 +53,12 @@ export function Header() {
   return (
     <header
       className={cn(
-        "header fixed start-0 end-0 top-0 z-10 flex shrink-0 items-stretch border-b border-transparent bg-background pe-[var(--removed-body-scroll-bar-size,0px)]",
+        // lg:fixed, not the shell's normal `fixed`: below 1024px the header takes a
+        // proportionally much bigger bite out of a small viewport, and Shell.tsx's
+        // own `header-fixed` body class (which drives demo1.css's compensating
+        // wrapper padding-top) is only added at the same breakpoint — the two stay
+        // in sync on purpose, see that effect's own comment.
+        "header start-0 end-0 top-0 z-10 flex shrink-0 items-stretch border-b border-transparent bg-background pe-[var(--removed-body-scroll-bar-size,0px)] lg:fixed",
         headerSticky && "border-b border-border",
       )}
     >

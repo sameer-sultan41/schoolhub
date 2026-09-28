@@ -44,21 +44,32 @@ export function Shell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const bodyClass = document.body.classList;
-    bodyClass.add("demo1", "sidebar-fixed", "header-fixed");
+    bodyClass.add("demo1", "sidebar-fixed");
     const timer = setTimeout(() => {
       bodyClass.add("layout-initialized");
     }, 1000);
     return () => {
-      bodyClass.remove(
-        "demo1",
-        "sidebar-fixed",
-        "sidebar-collapse",
-        "header-fixed",
-        "layout-initialized",
-      );
+      bodyClass.remove("demo1", "sidebar-fixed", "sidebar-collapse", "layout-initialized");
       clearTimeout(timer);
     };
   }, []);
+
+  // Separate from the effect above (and keyed on isDesktopShell, not mount-once):
+  // a fixed header permanently spends part of an already-small mobile viewport on
+  // chrome. `.header-fixed` also drives demo1.css's `.wrapper` padding-top
+  // compensation for the fixed header's own height — pairing them in one effect
+  // means the reserved space and the header's actual position never disagree.
+  useEffect(() => {
+    const bodyClass = document.body.classList;
+    if (isDesktopShell) {
+      bodyClass.add("header-fixed");
+    } else {
+      bodyClass.remove("header-fixed");
+    }
+    return () => {
+      bodyClass.remove("header-fixed");
+    };
+  }, [isDesktopShell]);
 
   return (
     <>
