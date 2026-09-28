@@ -130,10 +130,18 @@ export function StaffToolbar() {
 
   const {
     job: exportJob,
-    isPolling: isExportPolling,
     isTimedOut: isExportTimedOut,
     isError: isExportError,
+    resume: resumeExportPolling,
   } = useJobPolling("staff", exportJobId);
+  // Mirrors the import dialog's `hasActiveJob`: true until the job reaches a REAL
+  // terminal state — broader than polling, which already stops on a timeout or a failed
+  // poll while the export itself may still be running server-side.
+  const hasActiveExportJob =
+    exportJobId !== null && exportJob?.status !== "succeeded" && exportJob?.status !== "failed";
+  // Still unfinished, but no longer being watched. Clicking now resumes watching this
+  // same job — a fresh trigger would overwrite `exportJobId` and orphan it.
+  const isExportStalled = hasActiveExportJob && (isExportTimedOut || isExportError);
 
   // A `useMutation` for the download step itself (not a raw promise chain in the
   // effect below) so `isDownloadPending` is available to keep the button disabled for
@@ -175,10 +183,8 @@ export function StaffToolbar() {
   // tick, but is a no-op until the job actually reaches `succeeded`/`failed`, and a
   // no-op again after that (the reference stays stable once `refetchInterval` stops),
   // so `downloadExportFile` fires exactly once per terminal job. No
-  // `setExportJobId(null)` anywhere in this component: a fresh "Export CSV" click
-  // already overwrites it via `onSuccess` above, and `isExportPolling` already reads
-  // `false` once the job hook reports terminal/timed-out/errored — nothing is left to
-  // reset by hand.
+  // `setExportJobId(null)` anywhere in this component: a fresh "Export CSV" click —
+  // only offered once the previous job is terminal — overwrites it via `onSuccess`.
   useEffect(() => {
     if (exportJob?.status === "succeeded") {
       const resultFileId = (exportJob.result as ExportJobResult | null)?.result_file_id;
@@ -202,6 +208,9 @@ export function StaffToolbar() {
       toast.error(t("export.failed"));
     }
   }, [isExportError, t]);
+
+  const isExporting =
+    exportTrigger.isPending || isDownloadPending || (hasActiveExportJob && !isExportStalled);
 
   return (
     <Toolbar>
@@ -227,14 +236,20 @@ export function StaffToolbar() {
         <span title={!currentUser || canExport ? undefined : t("export.permissionTitle")}>
           <Button
             variant="outline"
-            disabled={!canExport || exportTrigger.isPending || isExportPolling || isDownloadPending}
+            disabled={!canExport || isExporting}
             onClick={() => {
-              exportTrigger.mutate();
+              if (isExportStalled) {
+                resumeExportPolling();
+              } else {
+                exportTrigger.mutate();
+              }
             }}
           >
-            {exportTrigger.isPending || isExportPolling || isDownloadPending
+            {isExporting
               ? t("export.exporting")
-              : t("export.button")}
+              : isExportStalled
+                ? t("export.checkStatus")
+                : t("export.button")}
           </Button>
         </span>
         <span title={!currentUser || canImport ? undefined : t("import.permissionTitle")}>

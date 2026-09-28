@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
 import { Services } from "@/services";
+import type { BackgroundJobRecord } from "@/services/modules/jobs/jobs-service";
 import { renderWithProviders } from "@/test-utils";
 
 import { StaffToolbar } from "../staff-toolbar";
@@ -76,6 +77,29 @@ const PERMITTED_USER: AuthenticatedUser = {
   roles: [],
   permissions: ["staff.staff.view", "staff.staff.export", "staff.staff.import"],
 };
+
+function resolveStatCounts() {
+  mockFetchStaffPage.mockResolvedValue({
+    items: [],
+    pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+  });
+  mockFetchStaffTypeCount.mockResolvedValue(0);
+}
+
+function exportJob(
+  id: string,
+  status: "running" | "succeeded",
+  resultFileId?: string,
+): BackgroundJobRecord {
+  return {
+    id,
+    job_type: "export.staff",
+    status,
+    progress: status === "succeeded" ? 100 : 0,
+    result: resultFileId ? { result_file_id: resultFileId } : null,
+    error: null,
+  };
+}
 
 async function exportButtonEnabled() {
   const button = await screen.findByRole("button", { name: "Export CSV" });
@@ -349,6 +373,65 @@ describe("StaffToolbar", () => {
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("Storage backend unavailable.");
     });
+  });
+
+  it("after a poll timeout, a second click resumes watching the same export job — never a second export that would orphan the first", async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    resolveStatCounts();
+    mockTriggerStaffExport.mockResolvedValue({ jobId: "job-export-6" });
+    mockFetchJob.mockResolvedValue(exportJob("job-export-6", "running"));
+    mockFetchFileDownloadUrl.mockResolvedValue("https://storage.test/staff-export.csv");
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup({ delay: null });
+    await user.click(await exportButtonEnabled());
+
+    await jest.advanceTimersByTimeAsync(120_000);
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        "The export is taking longer than expected. Try again in a moment.",
+      );
+    });
+
+    // The job finishes server-side moments after the UI stopped watching it.
+    mockFetchJob.mockResolvedValue(exportJob("job-export-6", "succeeded", "file-6"));
+    await user.click(await screen.findByRole("button", { name: "Check export status" }));
+
+    await waitFor(() => {
+      expect(mockFetchFileDownloadUrl).toHaveBeenCalledWith("file-6");
+    });
+    expect(mockTriggerStaffExport).toHaveBeenCalledTimes(1);
+    expect(mockFetchJob).toHaveBeenLastCalledWith("job-export-6");
+
+    clickSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
+  it("after a failed poll, a second click re-checks the same export job instead of starting another", async () => {
+    resolveStatCounts();
+    mockTriggerStaffExport.mockResolvedValue({ jobId: "job-export-7" });
+    mockFetchJob
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValue(exportJob("job-export-7", "succeeded", "file-7"));
+    mockFetchFileDownloadUrl.mockResolvedValue("https://storage.test/staff-export.csv");
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    renderWithProviders(<StaffToolbar />);
+    const user = userEvent.setup();
+    await user.click(await exportButtonEnabled());
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("The export failed.");
+    });
+    await user.click(await screen.findByRole("button", { name: "Check export status" }));
+
+    await waitFor(() => {
+      expect(mockFetchFileDownloadUrl).toHaveBeenCalledWith("file-7");
+    });
+    expect(mockTriggerStaffExport).toHaveBeenCalledTimes(1);
+
+    clickSpy.mockRestore();
   });
 
   it('"Export CSV" shows an error toast when the poll request itself fails', async () => {

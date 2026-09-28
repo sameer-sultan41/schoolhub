@@ -619,6 +619,7 @@
     "export": {
       "button": "Export CSV",
       "exporting": "Exporting…",
+      "checkStatus": "Check export status",
       "permissionTitle": "You don't have permission to export staff.",
       "success": "Staff list exported",
       "startFailed": "The export could not be started.",
