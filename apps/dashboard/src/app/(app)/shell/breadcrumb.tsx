@@ -47,8 +47,13 @@ export function Breadcrumb() {
                 {item.path && !isLast ? (
                   <Link
                     href={item.path}
+                    // block, not the default inline: text-overflow:ellipsis (what
+                    // `truncate` needs to actually clip) has no effect on an inline
+                    // element in most browsers, so without this the text overflowed
+                    // its flex-shrunk <li> instead of truncating, visually colliding
+                    // with the chevron/next crumb that follows it.
                     className={cn(
-                      "truncate text-muted-foreground transition-colors hover:text-primary",
+                      "block min-w-0 truncate text-muted-foreground transition-colors hover:text-primary",
                       active && "text-foreground",
                     )}
                   >
@@ -57,7 +62,7 @@ export function Breadcrumb() {
                 ) : (
                   <span
                     className={cn(
-                      "truncate",
+                      "block min-w-0 truncate",
                       isLast ? "font-semibold text-foreground" : "text-muted-foreground",
                     )}
                     aria-current={isLast ? "page" : undefined}
