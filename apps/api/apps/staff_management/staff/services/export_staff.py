@@ -40,6 +40,8 @@ def build_staff_export_csv(*, tenant_id: uuid.UUID) -> bytes:
     # (`server_reset_query_always`) tears down a server-side cursor the instant its
     # opening transaction ends, so the cursor itself would not survive past the
     # `with` block either way.
+    # Known trade-off: this pins one pooled DB connection for the whole export —
+    # see docs/deferred-work.md ("exports hold a pooled DB connection").
     with tenant_atomic(tenant_id):
         staff_rows = (
             Staff.objects.alive()
