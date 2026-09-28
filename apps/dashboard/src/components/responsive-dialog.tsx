@@ -19,8 +19,9 @@ import {
   SheetContent,
   SheetFooter,
   SheetTitle,
-  useIsMobile,
 } from "@schoolhub/ui";
+
+import { useIsDesktopShell } from "@/app/(app)/shell/use-is-desktop-shell";
 
 /**
  * A `Dialog` on desktop, a bottom `Drawer` on mobile — the two are different Radix/vaul
@@ -28,12 +29,19 @@ import {
  * between them), so this picks one per render and shares that choice with its own
  * subcomponents via context, rather than each subcomponent re-deciding independently.
  *
- * `useIsMobile()` (768px) is safe here in a way it wasn't for the app shell
- * (`use-is-desktop-shell.ts`): every caller renders this with `open` starting `false` —
- * none opens on initial load from a URL param or similar — so `useIsMobile()`'s value
- * has no visible effect until a user actually opens one, by which point React has long
- * since settled on the real value. A future caller that can start open would need to
- * re-check this reasoning, the same way `use-is-desktop-shell.ts` had to for the shell.
+ * Drawer-vs-Dialog/Sheet is decided by `useIsDesktopShell()` (1024px), not
+ * `@schoolhub/ui`'s own `useIsMobile()` (768px) — the shell itself (`Shell`/`Header`)
+ * already switches to mobile-style chrome (hamburger menu, no docked sidebar) at 1024px
+ * (`use-is-desktop-shell.ts`'s own comment on why), so a dialog choosing its primitive
+ * off the narrower 768px breakpoint would render a centered desktop Dialog at a width
+ * where everything else on screen is already presenting as mobile.
+ *
+ * Reading a live breakpoint value here (rather than deciding once at mount) is safe in a
+ * way it wasn't for the app shell: every caller renders this with `open` starting
+ * `false` — none opens on initial load from a URL param or similar — so the value has no
+ * visible effect until a user actually opens one, by which point React has long since
+ * settled on the real value. A future caller that can start open would need to re-check
+ * this reasoning, the same way `use-is-desktop-shell.ts` had to for the shell.
  */
 const ResponsiveDialogContext = createContext<boolean | null>(null);
 
@@ -56,7 +64,7 @@ interface ResponsiveRootProps {
 }
 
 export function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveRootProps) {
-  const isMobile = useIsMobile();
+  const isMobile = !useIsDesktopShell();
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
       {isMobile ? (
@@ -64,9 +72,12 @@ export function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveRoo
         // user scrolled to the top who swipes down to see the top edge closes the
         // drawer and wipes every field (vaul's own drag-anywhere default only checks
         // the scroll container's scrollTop, not "is this a form with unsaved input").
-        // Hardcoded here rather than a prop: revisit if a non-form caller needs the
-        // full-content swipe-to-dismiss back.
-        <Drawer open={open} onOpenChange={onOpenChange} handleOnly>
+        // dismissible={false}: handleOnly only blocks a content-area drag from
+        // starting the close gesture — vaul's default dismissible={true} still lets
+        // a backdrop tap or Escape close instantly, the exact same data loss through
+        // a different door. Hardcoded here rather than a prop: revisit if a non-form
+        // caller needs the full dismiss-anywhere behavior back.
+        <Drawer open={open} onOpenChange={onOpenChange} handleOnly dismissible={false}>
           {children}
         </Drawer>
       ) : (
@@ -140,7 +151,7 @@ export function ResponsiveDialogFooter({
  * two dialogs `ResponsiveDialog` covers.
  */
 export function ResponsiveSheet({ open, onOpenChange, children }: ResponsiveRootProps) {
-  const isMobile = useIsMobile();
+  const isMobile = !useIsDesktopShell();
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
       {isMobile ? (
