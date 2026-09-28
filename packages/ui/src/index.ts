@@ -175,6 +175,20 @@ export {
 } from "./components/dialog";
 
 export {
+  Drawer,
+  DrawerBody,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
+  DrawerPortal,
+  DrawerTitle,
+  DrawerTrigger,
+} from "./components/drawer";
+
+export {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
