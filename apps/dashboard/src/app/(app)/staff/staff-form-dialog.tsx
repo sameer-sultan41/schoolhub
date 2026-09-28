@@ -9,12 +9,6 @@ import {
   AvatarFallback,
   AvatarImage,
   Button,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Form,
   FormControl,
   FormField,
@@ -34,6 +28,14 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import {
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/responsive-dialog";
 import { ApiError, Services } from "@/services";
 import { queryKeys } from "@/lib/query-client";
 import { stableSignedUrl } from "@/lib/stable-signed-url";
@@ -489,16 +491,18 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl" closeLabel="Close">
-        <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Add staff member" : "Edit staff member"}</DialogTitle>
-        </DialogHeader>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="max-w-2xl" closeLabel="Close">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
+            {mode === "create" ? "Add staff member" : "Edit staff member"}
+          </ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
 
         {isDetailLoading ? (
-          <DialogBody>
+          <ResponsiveDialogBody>
             <p className="text-sm text-muted-foreground">Loading staff details…</p>
-          </DialogBody>
+          </ResponsiveDialogBody>
         ) : (
           <Form {...form}>
             <form
@@ -518,7 +522,7 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
               }}
               noValidate
             >
-              <DialogBody className="max-h-[65vh] space-y-5 overflow-y-auto pe-1">
+              <ResponsiveDialogBody className="max-h-[65vh] space-y-5 overflow-y-auto pe-1">
                 {formError ? (
                   <Alert variant="destructive">
                     <AlertDescription>{formError}</AlertDescription>
@@ -964,9 +968,9 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
                     </FormItem>
                   )}
                 />
-              </DialogBody>
+              </ResponsiveDialogBody>
 
-              <DialogFooter>
+              <ResponsiveDialogFooter>
                 <Button
                   type="button"
                   variant="outline"
@@ -985,11 +989,11 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
                 >
                   {mode === "create" ? "Add member" : "Save changes"}
                 </Button>
-              </DialogFooter>
+              </ResponsiveDialogFooter>
             </form>
           </Form>
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

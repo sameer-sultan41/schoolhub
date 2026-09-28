@@ -23,14 +23,17 @@ import {
   Badge,
   BadgeDot,
   Button,
-  Sheet,
-  SheetBody,
-  SheetContent,
-  SheetFooter,
-  SheetTitle,
   Skeleton,
 } from "@schoolhub/ui";
 
+import {
+  ResponsiveSheet,
+  ResponsiveSheetBody,
+  ResponsiveSheetContent,
+  ResponsiveSheetFooter,
+  ResponsiveSheetTitle,
+  useIsDrawer,
+} from "@/components/responsive-dialog";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import {
@@ -89,9 +92,76 @@ function FieldSection({ title, children }: { title: string; children: ReactNode 
   );
 }
 
-export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffDetailSheetProps) {
+/** Icon-only on the mobile drawer — a labeled button pair reads as two desktop-width
+ * buttons stacked in a space this drawer's bottom-of-screen footer doesn't have to
+ * spare; the side panel keeps the labels, where there's a full row's width for them. */
+function DetailFooter({
+  row,
+  onEdit,
+  onDelete,
+}: {
+  row: StaffRow;
+  onEdit: (id: string) => void;
+  onDelete: (id: string, name: string) => void;
+}) {
   const t = useTranslations("staff");
   const tCommon = useTranslations("common");
+  const isDrawer = useIsDrawer();
+
+  if (isDrawer) {
+    return (
+      <ResponsiveSheetFooter className="flex-row justify-end gap-2.5 border-t border-border px-4 py-3">
+        <Button
+          variant="outline-primary"
+          mode="icon"
+          shape="circle"
+          aria-label={tCommon("edit")}
+          onClick={() => {
+            onEdit(row.id);
+          }}
+        >
+          <Pencil />
+        </Button>
+        <Button
+          variant="destructive"
+          mode="icon"
+          shape="circle"
+          aria-label={t("detail.exit")}
+          onClick={() => {
+            onDelete(row.id, row.name);
+          }}
+        >
+          <LogOut />
+        </Button>
+      </ResponsiveSheetFooter>
+    );
+  }
+
+  return (
+    <ResponsiveSheetFooter className="border-t border-border px-6 py-4">
+      {/* Tinted outline so Edit reads as an action beside the destructive Exit. */}
+      <Button
+        variant="outline-primary"
+        onClick={() => {
+          onEdit(row.id);
+        }}
+      >
+        <Pencil /> {tCommon("edit")}
+      </Button>
+      <Button
+        variant="destructive"
+        onClick={() => {
+          onDelete(row.id, row.name);
+        }}
+      >
+        <LogOut /> {t("detail.exit")}
+      </Button>
+    </ResponsiveSheetFooter>
+  );
+}
+
+export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffDetailSheetProps) {
+  const t = useTranslations("staff");
   // Same query key as the edit form, so clicking Edit reuses this fetch.
   const {
     data: detail,
@@ -104,20 +174,20 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
   });
 
   return (
-    <Sheet
+    <ResponsiveSheet
       open={row !== null}
       onOpenChange={(open) => {
         if (!open) onOpenChange(false);
       }}
     >
-      <SheetContent
+      <ResponsiveSheetContent
         closeLabel={t("detail.close")}
         className="gap-0 p-0 sm:w-[440px] sm:max-w-none [&_[data-slot=sheet-close]]:end-5 [&_[data-slot=sheet-close]]:top-5"
       >
         {/* Hidden: the hero band shows the name, but Radix needs a Title for aria-labelledby. */}
-        <SheetTitle className="sr-only">
+        <ResponsiveSheetTitle className="sr-only">
           {row ? t("detail.title", { name: row.name }) : t("detail.titleFallback")}
-        </SheetTitle>
+        </ResponsiveSheetTitle>
         {row && (
           <>
             <div className="flex flex-col gap-3 border-b border-border bg-primary/5 px-6 py-6">
@@ -148,7 +218,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
             </div>
 
             {/* flex-1 pins the footer to the bottom; overflow-y-auto scrolls long content. */}
-            <SheetBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+            <ResponsiveSheetBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
               <FieldSection title={t("detail.contact")}>
                 <FieldRow
                   icon={Mail}
@@ -222,31 +292,13 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
               <span className="text-xs text-muted-foreground">
                 {t("detail.lastUpdated", { when: formatLastUpdated(row.updatedAt) })}
               </span>
-            </SheetBody>
+            </ResponsiveSheetBody>
 
             {/* Gated on row so the footer can't stay clickable during Radix's close animation. */}
-            <SheetFooter className="border-t border-border px-6 py-4">
-              {/* Tinted outline so Edit reads as an action beside the destructive Exit. */}
-              <Button
-                variant="outline-primary"
-                onClick={() => {
-                  onEdit(row.id);
-                }}
-              >
-                <Pencil /> {tCommon("edit")}
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  onDelete(row.id, row.name);
-                }}
-              >
-                <LogOut /> {t("detail.exit")}
-              </Button>
-            </SheetFooter>
+            <DetailFooter row={row} onEdit={onEdit} onDelete={onDelete} />
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </ResponsiveSheetContent>
+    </ResponsiveSheet>
   );
 }

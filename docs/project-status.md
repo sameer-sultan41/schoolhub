@@ -141,6 +141,19 @@ with its reasoning. Read the entry for the area you are about to touch before re
    fixed the sidebar's selected-nav-item contrast, and added `Button`'s
    `appearance="light"` variant plus `Badge`'s `rose` variant (for a
    "resigned" employment status) to `packages/ui` — no backend changes.
+
+   A further follow-up made `/staff` mobile-responsive: fixed a shell-wide
+   layout bug where the desktop sidebar rendered unfixed (in normal document
+   flow) between 768–1023px because the JS breakpoint deciding whether to
+   mount it (768px) didn't match the CSS breakpoint that docks it
+   (1024px) — see `use-is-desktop-shell.ts`; fixed the staff directory
+   table overflowing instead of scrolling (a missing `min-w-0` on
+   `CardTable`, a shared `packages/ui` primitive); and ported a `Drawer`
+   primitive (shadcn/vaul, via Metronic's own vendor copy) so the Add
+   Member, Exit, and Staff Detail panels render as a bottom sheet on mobile
+   instead of a centered dialog/side panel. The Staff Detail panel's footer
+   also goes icon-only on the mobile drawer. Import CSV isn't included — it
+   only exists on the still-open `feat/staff-bulk-export-import` PR.
 7. **PR 0 (platform hardening) is done** — three fixes and two new pieces of
    platform infrastructure, all listed above: the upload-purpose registry, the
    guardian record scope, the api-client refresh split, the Celery beat
