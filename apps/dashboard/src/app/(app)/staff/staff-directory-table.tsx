@@ -516,7 +516,7 @@ export function StaffDirectoryTable() {
         <Card className={DATA_GRID_CARD_CLASSNAME}>
           <CardHeader>
             <CardHeading>
-              <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <div className="relative">
                   <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-primary" />
                   <Input
@@ -678,7 +678,11 @@ export function StaffDirectoryTable() {
               cold-load-only `isPending` the skeleton rows below key off) makes that real
               state change legible without a spinner or a layout shift. Duration matches
               the ~200ms voice popover.tsx/dropdown-menu.tsx already established. */}
-            <m.div animate={{ opacity: isFetching ? 0.5 : 1 }} transition={{ duration: 0.15 }}>
+            <m.div
+              className="min-w-0"
+              animate={{ opacity: isFetching ? 0.5 : 1 }}
+              transition={{ duration: 0.15 }}
+            >
               <ScrollArea>
                 <DataGridTable />
                 <ScrollBar orientation="horizontal" />

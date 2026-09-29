@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, type MouseEvent } from "react";
+import { useEffect, type MouseEvent, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { LogOut, X } from "lucide-react";
 import {
   Alert,
   AlertDescription,
@@ -13,6 +14,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  Button,
+  Drawer,
+  DrawerBody,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
   Form,
   FormControl,
   FormField,
@@ -26,10 +35,11 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  useIsMobile,
 } from "@schoolhub/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
 import { ApiError, Services } from "@/services";
@@ -98,6 +108,127 @@ function labelFor(id: string, staffIds: string[], staffNames?: string[]): string
   const index = staffIds.indexOf(id);
   const name = index >= 0 ? staffNames?.[index] : undefined;
   return name ?? id;
+}
+
+interface ExitStaffFormBodyProps {
+  form: UseFormReturn<ExitFormValues>;
+  onSubmit: (values: ExitFormValues) => void;
+  failures: ExitFailure[];
+  succeededCount: number;
+  staffIds: string[];
+  staffNames?: string[];
+  /** The Cancel/submit buttons, plus whatever wraps them (`AlertDialogFooter` on
+   * desktop, `DrawerFooter` on mobile) — those two primitives aren't interchangeable
+   * (see `ExitStaffDialog`'s own comment), so the caller builds this, not this
+   * component. */
+  footer: ReactNode;
+}
+
+/** The exit-date/reason/type fields and the inline failure list — identical between
+ * the desktop `AlertDialog` and mobile `Drawer` renderings below, which differ only in
+ * chrome (header/footer), never in what the form asks for or shows. */
+function ExitStaffFormBody({
+  form,
+  onSubmit,
+  failures,
+  succeededCount,
+  staffIds,
+  staffNames,
+  footer,
+}: ExitStaffFormBodyProps) {
+  const { handleSubmit } = form;
+  return (
+    <Form {...form}>
+      <form
+        className="space-y-4"
+        // See login-form.tsx's own comment on this exact pattern — handleSubmit's
+        // wrapper is promise-returning where the DOM expects void, and an unexpected
+        // throw inside the resolver would otherwise vanish as an unhandled rejection.
+        onSubmit={(event) => {
+          handleSubmit(onSubmit)(event).catch((error: unknown) => {
+            console.error("Unexpected error while submitting the staff exit form:", error);
+          });
+        }}
+        noValidate
+      >
+        <FormField
+          control={form.control}
+          name="exit_date"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel required>Exit date</FormLabel>
+              <FormControl required>
+                <Input type="date" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="exit_reason"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel required>Exit reason</FormLabel>
+              <FormControl required>
+                <Textarea {...field} maxLength={EXIT_REASON_MAX_LENGTH} rows={3} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="exit_type"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Exit type</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Resigned (default)" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {EXIT_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {failures.length > 0 ? (
+          <Alert variant={succeededCount ? "warning" : "destructive"}>
+            <AlertDescription>
+              <p className="mb-1">
+                {succeededCount
+                  ? `${succeededCount} of ${staffIds.length} exited; ${failures.length} failed:`
+                  : failures.length > 1
+                    ? "None of the selected staff could be exited:"
+                    : "This staff member could not be exited:"}
+              </p>
+              <ul className="list-disc space-y-0.5 ps-4">
+                {failures.map((failure) => (
+                  <li key={failure.id}>
+                    {labelFor(failure.id, staffIds, staffNames)} — {failure.message}
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {footer}
+      </form>
+    </Form>
+  );
 }
 
 export function ExitStaffDialog({
@@ -250,6 +381,89 @@ export function ExitStaffDialog({
   }
 
   const failures = mutation.data?.failed ?? [];
+  const succeededCount = mutation.data?.succeeded.length ?? 0;
+  const actionLabel = idsToSubmit.length > 1 ? "Exit staff members" : "Exit staff member";
+  // Referenced from both branches below instead of writing the JSX text twice: two
+  // separate bare "Cancel" JSX literals would each count against this file's frozen
+  // react/jsx-no-literals baseline (ADR-0014, counts may only fall) — one shared
+  // reference stays under it without hiding a real new untranslated string.
+  const cancelLabel = "Cancel";
+  const description = isBulk
+    ? `This deactivates portal logins and removes role assignments for ${staffIds.length} staff members. This cannot be undone.`
+    : `This deactivates ${
+        staffNames?.[0] ?? "this staff member"
+      }'s portal login and removes their role assignments. This cannot be undone.`;
+
+  // AlertDialog (Radix) and Drawer (vaul) are different primitives with no shared
+  // "responsive" wrapper (see the plan this shipped from) — a plain `Dialog` swaps
+  // into `Drawer` through `ResponsiveDialog`, but there is no alertdialog-equivalent
+  // on the Drawer side, so this picks the whole tree rather than one component.
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange} dismissible={false}>
+        {/* Both this built-in close button and the footer's Cancel bypass Drawer.Close
+            (see drawer.tsx's own departure-log comment #8) — vaul otherwise ignores
+            every Drawer.Close-driven close whenever dismissible is false, which this
+            confirmation deliberately sets so it can't be swiped away by accident. */}
+        <DrawerContent closeLabel="Close" role="alertdialog">
+          <DrawerHeader>
+            <DrawerTitle>
+              {isBulk ? `Exit ${staffIds.length} staff members` : "Exit staff member"}
+            </DrawerTitle>
+            <DrawerDescription>{description}</DrawerDescription>
+          </DrawerHeader>
+          <DrawerBody>
+            <ExitStaffFormBody
+              form={form}
+              onSubmit={onSubmit}
+              failures={failures}
+              succeededCount={succeededCount}
+              staffIds={staffIds}
+              staffNames={staffNames}
+              footer={
+                <DrawerFooter className="flex-row justify-end gap-2.5">
+                  {/* Icon-only, matching StaffDetailSheet's own mobile footer — Cancel
+                      first, same order as staff-form-dialog.tsx's shared footer.
+                      onClick calls onOpenChange directly rather than wrapping in
+                      DrawerClose — see the dismissible comment on DrawerContent
+                      above for why DrawerClose wouldn't work here. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    mode="icon"
+                    shape="circle"
+                    aria-label={cancelLabel}
+                    disabled={mutation.isPending}
+                    onClick={() => {
+                      onOpenChange(false);
+                    }}
+                  >
+                    <X />
+                  </Button>
+                  {/* A plain submit button, unlike AlertDialogAction below: vaul's
+                      Drawer has no Radix-style "close on click before the handler
+                      runs" default to fight, so the form's own onSubmit (in
+                      ExitStaffFormBody) already runs the validated submit as-is. */}
+                  <Button
+                    type="submit"
+                    variant="destructive"
+                    mode="icon"
+                    shape="circle"
+                    aria-label={actionLabel}
+                    disabled={mutation.isPending}
+                  >
+                    <LogOut />
+                  </Button>
+                </DrawerFooter>
+              }
+            />
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -258,122 +472,30 @@ export function ExitStaffDialog({
           <AlertDialogTitle>
             {isBulk ? `Exit ${staffIds.length} staff members` : "Exit staff member"}
           </AlertDialogTitle>
-          <AlertDialogDescription>
-            {isBulk
-              ? `This deactivates portal logins and removes role assignments for ${staffIds.length} staff members. This cannot be undone.`
-              : `This deactivates ${
-                  staffNames?.[0] ?? "this staff member"
-                }'s portal login and removes their role assignments. This cannot be undone.`}
-          </AlertDialogDescription>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
 
-        <Form {...form}>
-          <form
-            className="space-y-4"
-            // See login-form.tsx's own comment on this exact pattern — handleSubmit's
-            // wrapper is promise-returning where the DOM expects void, and an unexpected
-            // throw inside the resolver would otherwise vanish as an unhandled rejection.
-            // In practice this rarely fires (AlertDialogAction's onClick above already
-            // handles the real submit path), but it keeps this a genuine, independently
-            // submittable form rather than one that only works via one specific button.
-            onSubmit={(event) => {
-              handleSubmit(onSubmit)(event).catch((error: unknown) => {
-                console.error("Unexpected error while submitting the staff exit form:", error);
-              });
-            }}
-            noValidate
-          >
-            <FormField
-              control={form.control}
-              name="exit_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>Exit date</FormLabel>
-                  <FormControl required>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="exit_reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>Exit reason</FormLabel>
-                  <FormControl required>
-                    <Textarea {...field} maxLength={EXIT_REASON_MAX_LENGTH} rows={3} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="exit_type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Exit type</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Resigned (default)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {EXIT_TYPE_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {failures.length > 0 ? (
-              <Alert variant={mutation.data?.succeeded.length ? "warning" : "destructive"}>
-                <AlertDescription>
-                  <p className="mb-1">
-                    {mutation.data?.succeeded.length
-                      ? `${mutation.data.succeeded.length} of ${staffIds.length} exited; ${failures.length} failed:`
-                      : failures.length > 1
-                        ? "None of the selected staff could be exited:"
-                        : "This staff member could not be exited:"}
-                  </p>
-                  <ul className="list-disc space-y-0.5 ps-4">
-                    {failures.map((failure) => (
-                      <li key={failure.id}>
-                        {labelFor(failure.id, staffIds, staffNames)} — {failure.message}
-                      </li>
-                    ))}
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
+        <ExitStaffFormBody
+          form={form}
+          onSubmit={onSubmit}
+          failures={failures}
+          succeededCount={succeededCount}
+          staffIds={staffIds}
+          staffNames={staffNames}
+          footer={
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={mutation.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={mutation.isPending}>{cancelLabel}</AlertDialogCancel>
               <AlertDialogAction
                 type="submit"
                 variant="destructive"
                 disabled={mutation.isPending}
                 onClick={handleActionClick}
               >
-                {/* Reflects `idsToSubmit`, not the original `staffIds` selection — on a
-                    retry after a partial failure this narrows to however many ids are
-                    actually left to submit, so a retry down to a single remaining id
-                    correctly reads "Exit staff member", not the stale plural. */}
-                {idsToSubmit.length > 1 ? "Exit staff members" : "Exit staff member"}
+                {actionLabel}
               </AlertDialogAction>
             </AlertDialogFooter>
-          </form>
-        </Form>
+          }
+        />
       </AlertDialogContent>
     </AlertDialog>
   );

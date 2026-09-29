@@ -155,6 +155,19 @@ with its reasoning. Read the entry for the area you are about to touch before re
    object instead of a full `bytes` payload — tracked in
    `docs/deferred-work.md`.
 
+   A further follow-up made `/staff` mobile-responsive: fixed a shell-wide
+   layout bug where the desktop sidebar rendered unfixed (in normal document
+   flow) between 768–1023px because the JS breakpoint deciding whether to
+   mount it (768px) didn't match the CSS breakpoint that docks it
+   (1024px) — see `use-is-desktop-shell.ts`; fixed the staff directory
+   table overflowing instead of scrolling (a missing `min-w-0` on
+   `CardTable`, a shared `packages/ui` primitive); and ported a `Drawer`
+   primitive (shadcn/vaul, via Metronic's own vendor copy) so the Add
+   Member, Exit, and Staff Detail panels render as a bottom sheet on mobile
+   instead of a centered dialog/side panel. The Staff Detail panel's footer
+   also goes icon-only on the mobile drawer. Import CSV isn't included — see the
+   next entry, `feat/staff-bulk-export-import`, which wires it up.
+
    A second follow-up UI-only PR (`feat/staff-bulk-export-import`) wired
    `/staff`'s "Export CSV" and "Import CSV" toolbar buttons to the real
    `POST /staff-exports`/`POST /staff-imports` background jobs (job-polling

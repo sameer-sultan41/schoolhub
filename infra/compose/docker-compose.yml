@@ -34,7 +34,7 @@ x-api-env: &api-env
   EMAIL_USE_TLS: "false"
   DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@schoolhub.localhost}
   S3_ENDPOINT_URL: http://minio:9000
-  S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+  S3_PUBLIC_ENDPOINT_URL: http://localhost:${MINIO_PORT:-9000}
   S3_BUCKET_NAME: ${S3_BUCKET_NAME:-schoolhub-dev}
   S3_REGION_NAME: ${S3_REGION_NAME:-us-east-1}
   AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-schoolhub}
@@ -42,6 +42,11 @@ x-api-env: &api-env
   PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   SENTRY_DSN: ${SENTRY_DSN:-}
+  # Overridable per-developer (infra/compose/.env, gitignored) for whoever runs the
+  # dashboard/website dev servers on a non-default port to avoid clashing with other
+  # local projects — dev.py's own hardcoded default matches these same values.
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:3000}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 
 services:

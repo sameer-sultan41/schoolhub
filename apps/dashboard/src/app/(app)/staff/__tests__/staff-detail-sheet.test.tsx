@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { StaffDetailSheet } from "../staff-detail-sheet";
 import type { StaffRow } from "../staff-directory-table";
@@ -254,5 +254,45 @@ describe("StaffDetailSheet", () => {
     await user.click(screen.getByRole("button", { name: "Close" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("StaffDetailSheet — mobile drawer", () => {
+  beforeEach(() => {
+    setMatchesMobile(true);
+    mockFetchStaffById.mockReset();
+  });
+
+  afterEach(() => {
+    setMatchesMobile(false);
+  });
+
+  it("renders as a Drawer, icon-only Edit/Exit buttons found by accessible name", async () => {
+    mockFetchStaffById.mockResolvedValue(staffDetail());
+    const onEdit = jest.fn();
+    const onDelete = jest.fn();
+
+    // baseElement, not container: the Drawer/Sheet portals its content to
+    // document.body, which lands as a sibling of container (the render wrapper div),
+    // never a descendant of it — container.querySelector can't reach portalled content.
+    const { baseElement } = renderWithProviders(
+      <StaffDetailSheet
+        row={staffRow()}
+        onOpenChange={jest.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />,
+    );
+    await screen.findByText("EMP-0231");
+
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+    // Full "<action> <name>" accessible names, not the desktop panel's bare "Edit"/
+    // "Exit" text — see staff-detail-sheet.tsx's own comment on why.
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Edit Ayesha Khan" }));
+    expect(onEdit).toHaveBeenCalledWith("st-1");
+
+    await user.click(screen.getByRole("button", { name: "Exit Ayesha Khan" }));
+    expect(onDelete).toHaveBeenCalledWith("st-1", "Ayesha Khan");
   });
 });

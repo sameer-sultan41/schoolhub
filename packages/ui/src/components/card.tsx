@@ -78,7 +78,12 @@ const cardContentVariants = cva("grow p-5", {
   },
 });
 
-const cardTableVariants = cva("grid grow", {
+// `min-w-0`: without it, a grid/flex item defaults to `min-width: auto`, sizing itself
+// to its widest descendant's intrinsic width (here, a `<table>` wider than the
+// viewport) instead of the track's actual width — so the table's own ScrollArea never
+// gets narrow enough to need internal scrolling, and the whole card (and the page)
+// grows to fit it instead.
+const cardTableVariants = cva("grid min-w-0 grow", {
   variants: {
     variant: {
       default: "",

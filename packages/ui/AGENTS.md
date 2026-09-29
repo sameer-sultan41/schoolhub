@@ -25,6 +25,24 @@ vendored CSS under `src/styles/metronic/` and the ported components on public vi
 question recorded in ADR-0009 for the owner. Don't vendor further Metronic source wholesale
 while that stands.
 
+## Never drop to a raw native element — compose from existing primitives
+
+Even inside `packages/ui` itself, a component's markup is built from this package's own
+primitives (`Button`, `Input`, `Checkbox`, …), never a bare `<button>`, `<input>`, or other
+raw interactive HTML tag with hand-rolled styling. This held even when working around a
+vendor library's own behavior: `drawer.tsx`'s built-in close button needed to bypass vaul's
+`Drawer.Close` (which silently no-ops when a consumer sets `dismissible={false}` — confirmed
+against vaul's own source), and the first fix reached for a plain `<button>` instead of
+`Button` — wrong call, fixed to `<Button variant="ghost" mode="icon" onClick={...}>`. Working
+around one library's limitation is never a reason to skip another (this package's own theme
+system) — style and behavior (focus rings, hover/opacity states, disabled handling) live in
+`Button`/`Input`/etc. exactly once; a hand-rolled raw tag reintroduces all of that per call site
+and drifts from the theme the moment either changes.
+
+This applies to `apps/dashboard`/`apps/website` feature code too, not just this package: reach
+for the themed primitive (`Button`, `Input`, `Select`, …) over a raw native element there as
+well.
+
 ## Two adaptations on every port — not optional polish
 
 1. **Logical direction.** Any `side`/direction prop is `start`/`end`, never physical
