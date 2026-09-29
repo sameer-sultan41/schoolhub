@@ -36,6 +36,11 @@ export const endpoints = {
      */
     staffDetail: (id: string) => `/staff/${id}`,
     staffExit: (id: string) => `/staff/${id}:exit`,
+    /** `POST /staff-exports`/`POST /staff-imports` -> `202` + job
+     * (`apps/api/apps/staff_management/staff/urls.py`) — each queues a `core.jobs`
+     * background job; poll it via `jobs.detail` below. */
+    staffExports: "/staff-exports",
+    staffImports: "/staff-imports",
     classes: "/classes",
     sections: "/sections",
     subjects: "/subjects",
@@ -55,5 +60,18 @@ export const endpoints = {
   files: {
     create: "/files",
     confirm: (id: string) => `/files/${id}:confirm`,
+    /** Colon-action, not a nested path — the real registered route is
+     * `/files/{id}:download` (`apps/api/core/files/urls.py`). Returns
+     * `{download_url}`, a signed, time-limited URL the browser can navigate to
+     * directly — never proxied through this API. */
+    download: (id: string) => `/files/${id}:download`,
+  },
+  /**
+   * `core.jobs` — the generic `202 + job` polling contract any long-running endpoint
+   * hands back a `job_id` for (staff import/export today; more later). Not
+   * module-specific, same reasoning as `files` above.
+   */
+  jobs: {
+    detail: (id: string) => `/jobs/${id}`,
   },
 } as const;

@@ -42,6 +42,8 @@
     "**/openapi.yaml",
     "COMMENT: messages/*.json holds next-intl translation catalogues, including ur.json (Urdu). An English dictionary cannot validate them, and listing every non-English word as a project term would be meaningless.",
     "**/messages/*.json",
+    "COMMENT: this plan quotes ur.json's own Urdu additions verbatim inside fenced code blocks, for the same reason messages/*.json is exempt above — not this repo's own English prose.",
+    "docs/superpowers/plans/2026-09-27-staff-bulk-export-import.md",
     ".git/**",
     ".cspell/project-words.txt",
     "COMMENT: Metronic's own CSS, vendored verbatim as a reference source for the metronic colour preset — not this repo's own prose, and not to be edited to satisfy the spellchecker.",

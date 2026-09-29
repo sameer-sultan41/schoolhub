@@ -152,8 +152,19 @@ with its reasoning. Read the entry for the area you are about to touch before re
    primitive (shadcn/vaul, via Metronic's own vendor copy) so the Add
    Member, Exit, and Staff Detail panels render as a bottom sheet on mobile
    instead of a centered dialog/side panel. The Staff Detail panel's footer
-   also goes icon-only on the mobile drawer. Import CSV isn't included — it
-   only exists on the still-open `feat/staff-bulk-export-import` PR.
+   also goes icon-only on the mobile drawer. Import CSV isn't included — see the
+   next entry, `feat/staff-bulk-export-import`, which wires it up.
+
+   A second follow-up UI-only PR (`feat/staff-bulk-export-import`) wired
+   `/staff`'s "Export CSV" and "Import CSV" toolbar buttons to the real
+   `POST /staff-exports`/`POST /staff-imports` background jobs (job-polling
+   via a new shared `useJobPolling` hook, a new `Services.staff` module, and
+   a new per-action `hasPermission` gate; no backend changes — all three
+   endpoints already existed). Closing the import dialog mid-job ("Run in
+   background") keeps the job in a per-user `sessionStorage` entry, so
+   reopening it — even after navigating away or reloading — reconnects to
+   the running import; a timed-out or poll-failed export resumes watching
+   the same job rather than starting a second one.
 7. **PR 0 (platform hardening) is done** — three fixes and two new pieces of
    platform infrastructure, all listed above: the upload-purpose registry, the
    guardian record scope, the api-client refresh split, the Celery beat

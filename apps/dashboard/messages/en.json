@@ -591,6 +591,8 @@
       }
     },
     "import": {
+      "button": "Import CSV",
+      "permissionTitle": "You don't have permission to import staff.",
       "title": "Import staff",
       "description": "Bulk-create staff from a CSV or .xlsx file.",
       "templateTitle": "Required columns",
@@ -604,11 +606,26 @@
       "summarySucceeded": "{count} imported",
       "summaryFailed": "{count} failed",
       "importAnother": "Import another file",
+      "startFailed": "The import could not be started.",
+      "timedOut": "Still running in the background — check back shortly.",
+      "close": "Close",
+      "runInBackground": "Run in background",
       "errorTable": {
         "row": "Row",
         "field": "Field",
         "issue": "Issue"
       }
+    },
+    "export": {
+      "button": "Export CSV",
+      "exporting": "Exporting…",
+      "checkStatus": "Check export status",
+      "permissionTitle": "You don't have permission to export staff.",
+      "success": "Staff list exported",
+      "startFailed": "The export could not be started.",
+      "downloadFailed": "The export file could not be downloaded.",
+      "timedOut": "The export is taking longer than expected. Try again in a moment.",
+      "failed": "The export failed."
     }
   },
   "academics": {
@@ -1069,6 +1086,8 @@
   "common": {
     "loading": "Loading",
     "retry": "Try again",
+    "permissionsLoading": "Checking your permissions…",
+    "permissionsLoadFailed": "Your permissions couldn't be loaded. Reload the page to try again.",
     "cancel": "Cancel",
     "save": "Save",
     "next": "Next",

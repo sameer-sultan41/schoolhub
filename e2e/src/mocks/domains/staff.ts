@@ -99,6 +99,9 @@ export interface StaffOptions {
   designations?: Designation[];
 }
 
+export const STAFF_EXPORT_JOB_ID = "job-staff-export";
+export const STAFF_IMPORT_JOB_ID = "job-staff-import";
+
 /**
  * `/staff` (list, detail, create, partial update, `:exit`) and `/designations` — see
  * docs/03-modules/staff-management.md §16.
@@ -183,6 +186,13 @@ export function staffModule(options: StaffOptions = {}): MockModule {
       });
       return ok(match);
     });
+
+    api.post("/staff-exports", () =>
+      ok({ job_id: STAFF_EXPORT_JOB_ID, status: "queued" }, { status: 202 }),
+    );
+    api.post("/staff-imports", () =>
+      ok({ job_id: STAFF_IMPORT_JOB_ID, status: "queued" }, { status: 202 }),
+    );
 
     api.get("/designations", () => pagedList(designations));
   };

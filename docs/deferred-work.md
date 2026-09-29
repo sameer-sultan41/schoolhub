@@ -10,6 +10,16 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **Staff (and student) CSV export downloads have no `Content-Disposition` override.**
+  `POST /files/{id}:download` (`core.files`) returns a bare presigned object-storage
+  URL with no `ResponseContentDisposition`, so the browser names the downloaded file
+  after its storage key rather than something like `staff-export.csv`, and some
+  browsers may preview a CSV inline instead of downloading it. Fix: add
+  `ResponseContentDisposition` to `core/files/storage.py`'s presigner (next to its
+  existing `ResponseCacheControl`), scoped to export-purpose files — a backend change
+  to shared platform infra, deliberately kept out of the frontend-only PR that wired up
+  `/staff`'s Export/Import buttons.
+
 - **`apps/dashboard/src/components/app-shell.tsx` and its four `features/dashboard/*`
   panels (capacity-chart, pending-work-panel, school-shape-panel, teacher-load-chart,
   use-school-day) — recovered from a stale local branch that predates the shell reset —
