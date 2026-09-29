@@ -35,6 +35,26 @@ export class StaffPage extends BasePage {
     return this.page.getByRole("button", { name: "Add Member", exact: true });
   }
 
+  get exportCsvButton(): Locator {
+    return this.page.getByRole("button", { name: "Export CSV" });
+  }
+
+  get importCsvButton(): Locator {
+    return this.page.getByRole("button", { name: "Import CSV" });
+  }
+
+  get importDialog(): Locator {
+    return this.page.getByRole("dialog", { name: "Import staff" });
+  }
+
+  get importFileInput(): Locator {
+    return this.importDialog.getByLabel("File");
+  }
+
+  get importSubmit(): Locator {
+    return this.importDialog.getByRole("button", { name: "Upload" });
+  }
+
   /** Clicks a row's direct Edit or Delete button. */
   async rowAction(name: string, action: "Edit" | "Delete"): Promise<void> {
     await this.page.getByRole("button", { name: `${action} ${name}` }).click();

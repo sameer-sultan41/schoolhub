@@ -3,7 +3,6 @@
 import { useCallback, type JSX } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 
 import {
   AccordionMenu,
@@ -21,8 +20,8 @@ import {
 } from "@schoolhub/ui";
 
 import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { canAccessModule } from "@/lib/permissions";
-import { Services } from "@/services";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/sidebar-menu.tsx —
 // real nested Metronic nav, built on this repo's own AccordionMenu port.
@@ -31,10 +30,7 @@ export function SidebarMenu() {
   // Same query as UserDropdownMenu/EntryCallout (one cache entry, one request). Only a
   // handful of MENU_SIDEBAR entries carry a `module` key at all — every vendor-demo item
   // without one renders exactly as before, permission check or not.
-  const { data: user } = useQuery({
-    queryKey: ["dashboard", "current-user"],
-    queryFn: () => Services.auth.fetchCurrentUser(),
-  });
+  const { data: user } = useCurrentUser();
   const visibleMenu = MENU_SIDEBAR.filter(
     (item) => !item.module || canAccessModule(user, item.module),
   );

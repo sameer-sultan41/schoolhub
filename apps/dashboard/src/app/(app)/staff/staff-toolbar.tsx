@@ -1,15 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GraduationCap, UserPlus, Users, type IdCard } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { m } from "motion/react";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 
 import { Button } from "@schoolhub/ui";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
+import { StaffImportDialog } from "@/app/(app)/staff/staff-import-dialog";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { useJobPolling } from "@/hooks/use-job-polling";
+import { resolveErrorMessage } from "@/lib/error-message";
+import { hasPermission } from "@/lib/permissions";
 import { Services } from "@/services";
+import type { ExportJobResult } from "@/services/modules/jobs/jobs-service";
 
 /**
  * The `/staff` toolbar's live stat line and its two action buttons — split out of
@@ -75,6 +83,11 @@ function StatChip({
 
 export function StaffToolbar() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const t = useTranslations("staff");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
 
   // `pageSize: 1` mirrors dashboard-service.ts's own fetchTotal/fetchStaffTypeCount
   // pattern: read the server's reported total_count without draining the list. This is
@@ -90,9 +103,112 @@ export function StaffToolbar() {
     queryKey: ["staff", "toolbar", "teaching-staff-count"],
     queryFn: () => Services.dashboard.fetchStaffTypeCount("teaching"),
   });
+  // The same shared query `sidebar-menu.tsx`'s own permission check already populates —
+  // this never issues a second request.
+  const { data: currentUser, isError: isCurrentUserError } = useCurrentUser();
 
   const allMembers = isAllMembersPending ? null : (allStaffPage?.pagination?.total_count ?? null);
   const teachingStaff = isTeachingStaffPending ? null : (teachingStaffCount ?? null);
+
+  // Fail closed, as the sidebar's own module gate does: both buttons stay disabled until
+  // the user's permissions are actually known (the API enforces regardless). Every
+  // disabled state still says why — "you don't have permission" only once a loaded user
+  // backs that claim, and a lookup that failed for good says so rather than leaving a
+  // dead button with no explanation.
+  const canExport = hasPermission(currentUser, "staff.staff.export");
+  const canImport = hasPermission(currentUser, "staff.staff.import");
+  const permissionsUnknownTitle = currentUser
+    ? undefined
+    : isCurrentUserError
+      ? tCommon("permissionsLoadFailed")
+      : tCommon("permissionsLoading");
+  const exportTitle =
+    permissionsUnknownTitle ?? (canExport ? undefined : t("export.permissionTitle"));
+  const importTitle =
+    permissionsUnknownTitle ?? (canImport ? undefined : t("import.permissionTitle"));
+
+  const exportTrigger = useMutation({
+    mutationFn: () => Services.staff.triggerStaffExport(),
+    onSuccess: (result) => {
+      setExportJobId(result.jobId);
+    },
+    onError: (error: unknown) => {
+      toast.error(resolveErrorMessage(error, tErrors, t("export.startFailed")));
+    },
+  });
+
+  const {
+    job: exportJob,
+    isTimedOut: isExportTimedOut,
+    isError: isExportError,
+    resume: resumeExportPolling,
+  } = useJobPolling("staff", exportJobId, {
+    onTimedOut: () => {
+      toast.error(t("export.timedOut"));
+    },
+    onError: () => {
+      toast.error(t("export.failed"));
+    },
+  });
+  // Mirrors the import dialog's `hasActiveJob`: true until the job reaches a REAL
+  // terminal state — broader than polling, which already stops on a timeout or a failed
+  // poll while the export itself may still be running server-side.
+  const hasActiveExportJob =
+    exportJobId !== null && exportJob?.status !== "succeeded" && exportJob?.status !== "failed";
+  // Still unfinished, but no longer being watched. Clicking now resumes watching this
+  // same job — a fresh trigger would overwrite `exportJobId` and orphan it.
+  const isExportStalled = hasActiveExportJob && (isExportTimedOut || isExportError);
+
+  // A `useMutation` for the download step itself (not a raw promise chain in the
+  // effect below) so `isDownloadPending` is available to keep the button disabled for
+  // the whole "job succeeded, now fetching the actual URL" gap — without it, the
+  // button re-enables the instant the job reaches "succeeded" (isPolling already
+  // reads false by then), and a double-click there would start a second, redundant
+  // export while the first one's download is still being fetched.
+  //
+  // Destructured (not kept as `downloadTrigger.mutate`) specifically so `mutate` can
+  // be named directly in the effect's own dependency array below: TanStack Query
+  // wraps `mutate` in its own `useCallback` bound to the mutation observer
+  // (`@tanstack/react-query`'s `useMutation.js`), so — unlike the mutation's own
+  // result object, which IS a fresh object every render — this specific function
+  // reference is stable across re-renders of this component instance. That is what
+  // lets the effect list its real dependencies in full and satisfy
+  // `react-hooks/exhaustive-deps` with no disable comment, unlike `exit-staff-
+  // dialog.tsx`'s own (real, but avoidable) precedent for the same rule.
+  const { mutate: downloadExportFile, isPending: isDownloadPending } = useMutation({
+    mutationFn: (fileId: string) => Services.jobs.fetchFileDownloadUrl(fileId),
+    onSuccess: (url) => {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "staff-export.csv";
+      link.click();
+      toast.success(t("export.success"));
+    },
+    onError: (error: unknown) => {
+      toast.error(resolveErrorMessage(error, tErrors, t("export.downloadFailed")));
+    },
+  });
+
+  // `exportJob`'s reference changes on every poll while running, so this re-runs each
+  // tick, but is a no-op until the job actually reaches `succeeded`/`failed`, and a
+  // no-op again after that (the reference stays stable once `refetchInterval` stops),
+  // so `downloadExportFile` fires exactly once per terminal job. No
+  // `setExportJobId(null)` anywhere in this component: a fresh "Export CSV" click —
+  // only offered once the previous job is terminal — overwrites it via `onSuccess`.
+  useEffect(() => {
+    if (exportJob?.status === "succeeded") {
+      const resultFileId = (exportJob.result as ExportJobResult | null)?.result_file_id;
+      if (resultFileId) {
+        downloadExportFile(resultFileId);
+      }
+    }
+    if (exportJob?.status === "failed") {
+      toast.error(exportJob.error ?? t("export.failed"));
+    }
+  }, [exportJob, downloadExportFile, t]);
+
+  const isExporting =
+    exportTrigger.isPending || isDownloadPending || (hasActiveExportJob && !isExportStalled);
 
   return (
     <Toolbar>
@@ -111,19 +227,37 @@ export function StaffToolbar() {
         }
       />
       <ToolbarActions>
-        {/* A real backend endpoint exists (StaffImportViewSet) but the actual upload/
-            job-polling flow is a separate, larger feature, out of scope for this task —
-            genuinely `disabled` (not just styled to look disabled), explaining why via a
-            `title` — but that `title` has to live on a wrapping `<span>`, not the
-            `Button` itself: `buttonVariants`' base class bakes `disabled:
-            pointer-events-none` into every variant, and an element with `pointer-events:
-            none` never receives the hover that would trigger its own `title` tooltip in
-            any major browser. The span is not disabled, so it still receives hover and
-            the tooltip fires. "Add Member" (below) no longer needs this treatment — it's
-            wired up to `StaffFormDialog` (Task 3) now. */}
-        <span title="Staff import is not wired up yet">
-          <Button variant="outline" disabled>
-            Import CSV
+        {/* On a wrapping `<span>`, not the `Button`: `buttonVariants` bakes
+            `disabled:pointer-events-none` into every variant, and a disabled button
+            would never receive the hover that shows its own `title`. */}
+        <span title={exportTitle}>
+          <Button
+            variant="outline"
+            disabled={!canExport || isExporting}
+            onClick={() => {
+              if (isExportStalled) {
+                resumeExportPolling();
+              } else {
+                exportTrigger.mutate();
+              }
+            }}
+          >
+            {isExporting
+              ? t("export.exporting")
+              : isExportStalled
+                ? t("export.checkStatus")
+                : t("export.button")}
+          </Button>
+        </span>
+        <span title={importTitle}>
+          <Button
+            variant="outline"
+            disabled={!canImport}
+            onClick={() => {
+              setImportDialogOpen(true);
+            }}
+          >
+            {t("import.button")}
           </Button>
         </span>
         <Button
@@ -139,6 +273,7 @@ export function StaffToolbar() {
         </Button>
       </ToolbarActions>
       <StaffFormDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} mode="create" />
+      <StaffImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
     </Toolbar>
   );
 }

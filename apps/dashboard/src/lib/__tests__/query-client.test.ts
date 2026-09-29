@@ -88,4 +88,17 @@ describe("queryKeys", () => {
       "inv-1",
     ]);
   });
+
+  it("keys each job watch separately, under the module's own prefix", () => {
+    expect(queryKeys.jobWatch("staff", "job-1", 2)).toEqual([
+      "staff",
+      "jobs",
+      "detail",
+      "job-1",
+      2,
+    ]);
+    expect(queryKeys.jobWatch("staff", "job-1", 2)).not.toEqual(
+      queryKeys.jobWatch("staff", "job-1", 3),
+    );
+  });
 });

@@ -1,10 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-
 import { Card, CardContent, Skeleton, cn } from "@schoolhub/ui";
 
-import { Services } from "@/services";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 /**
  * Repurposed from the vendor Metronic template's entry-callout.tsx (originally a
@@ -13,14 +11,7 @@ import { Services } from "@/services";
  * branch has no other route to send it to yet.
  */
 export function EntryCallout({ className }: { className?: string }) {
-  const {
-    data: user,
-    isPending,
-    isError,
-  } = useQuery({
-    queryKey: ["dashboard", "current-user"],
-    queryFn: () => Services.auth.fetchCurrentUser(),
-  });
+  const { data: user, isPending, isError } = useCurrentUser();
 
   return (
     <Card className={cn("h-full", className)}>
