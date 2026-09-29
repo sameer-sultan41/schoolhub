@@ -17,7 +17,6 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 
 import {
   Avatar,
@@ -38,6 +37,7 @@ import {
   Switch,
 } from "@schoolhub/ui";
 
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
 import { stableSignedUrl } from "@/lib/stable-signed-url";
@@ -46,8 +46,8 @@ import { Services } from "@/services";
 /**
  * Ported from packages/ui's partials/topbar/user-dropdown-menu.tsx. The vendor
  * version reads a real next-auth session; this now reads the real signed-in user via
- * `Services.auth.fetchCurrentUser()` (the same query `EntryCallout` uses — one cache
- * entry, one request). The trigger avatar moved in here from `header.tsx` so both it
+ * `useCurrentUser()` (the same query `EntryCallout` uses — one cache entry, one
+ * request). The trigger avatar moved in here from `header.tsx` so both it
  * and the panel's own avatar/name/email come from one fetch instead of two.
  *
  * No seeded account has an uploaded photo (`avatar_url` is null for all of them), so
@@ -76,14 +76,7 @@ export function UserDropdownMenu() {
   const locale = useLocale();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
-  const {
-    data: user,
-    isPending,
-    isError,
-  } = useQuery({
-    queryKey: ["dashboard", "current-user"],
-    queryFn: () => Services.auth.fetchCurrentUser(),
-  });
+  const { data: user, isPending, isError } = useCurrentUser();
 
   // Distinct from "still loading": an error (e.g. the API unreachable) must not sit on
   // the loading label forever, which reads as a hang rather than a real failure.

@@ -58,9 +58,14 @@ export function getQueryClient(): QueryClient {
 export const queryKeys = {
   session: () => ["session"] as const,
   tenant: () => ["tenant"] as const,
+  currentUser: () => ["dashboard", "current-user"] as const,
   module: (module: string) => [module] as const,
   list: (module: string, resource: string, params?: Record<string, unknown>) =>
     [module, resource, "list", params ?? {}] as const,
   detail: (module: string, resource: string, id: string) =>
     [module, resource, "detail", id] as const,
+  /** One watch of a background job (`use-job-polling.ts`) — its own entry per watch, so
+   * a resumed or re-opened watch never reads a previous watch's cached poll error. */
+  jobWatch: (module: string, jobId: string, watch: number) =>
+    [module, "jobs", "detail", jobId, watch] as const,
 };

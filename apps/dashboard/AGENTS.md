@@ -58,7 +58,8 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Auth guard (routing only, cookie presence) | `src/proxy.ts` (Next 16's rename of `middleware`) |
 | Access token in memory + refresh-on-401 | `src/lib/auth.ts` → `@schoolhub/api-client` |
 | Feature API calls (one file per domain, no hardcoded paths) | `src/services/endpoints.ts` + `src/services/modules/<domain>/`, aggregated as `Services` in `src/services/index.ts` |
-| Permission helpers | `src/lib/permissions.ts` → `canAccessModule(user, module)` (used by the sidebar). A per-action `<Can>` gate does not exist yet — add it to `src/components/` when the first screen needs action-level gating |
+| Permission helpers | `src/lib/permissions.ts` → `canAccessModule(user, module)` (whole-module, used by the sidebar) and `hasPermission(user, key)` (per-action — `/staff`'s Export/Import buttons are its first user). A declarative `<Can>` JSX wrapper still does not exist; add one to `src/components/` on top of `hasPermission` when a screen wants that shape |
+| Background-job polling (`202 + job`, e.g. bulk import/export) | `src/hooks/use-job-polling.ts` |
 | TanStack Query client + key factory | `src/lib/query-client.ts` |
 | Validated public env | `src/lib/env.ts` |
 | Tenant branding → CSS variables | Not rebuilt since the shell reset: `Services.tenant` fetches branding, nothing applies it yet (`docs/metronic-dashboard-shell.md` backlog) |
@@ -83,9 +84,10 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
    `useQuery`/`useMutation` calls `Services.<module>.<action>(...)` as its
    `queryFn`/`mutationFn` — never `apiClient` directly, never a hardcoded path.
 4. Query keys via `queryKeys.list("<module>", "<resource>", params)`.
-5. Gate every action by its `module.resource.action` key. The `<Can permission="…">` component
-   this implies is not built yet (see the wiring table) — the first screen that needs
-   action-level gating adds it to `src/components/`, backed by `src/lib/permissions.ts`.
+5. Gate every action by its `module.resource.action` key, via `hasPermission(user, key)`
+   (`src/lib/permissions.ts` — see the wiring table). A declarative `<Can>` JSX wrapper
+   does not exist yet; add one to `src/components/`, on top of `hasPermission`, when a
+   screen wants that shape instead of an inline check.
 6. Strings into `messages/en.json` **and** `messages/ur.json` — `react/jsx-no-literals` rejects
    JSX text that isn't translated.
 7. Co-locate tests in a sibling `__tests__/` folder (`__tests__/*.test.tsx`), not

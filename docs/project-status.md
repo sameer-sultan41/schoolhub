@@ -141,6 +141,16 @@ with its reasoning. Read the entry for the area you are about to touch before re
    fixed the sidebar's selected-nav-item contrast, and added `Button`'s
    `appearance="light"` variant plus `Badge`'s `rose` variant (for a
    "resigned" employment status) to `packages/ui` — no backend changes.
+   A second follow-up UI-only PR (`feat/staff-bulk-export-import`) wired
+   `/staff`'s "Export CSV" and "Import CSV" toolbar buttons to the real
+   `POST /staff-exports`/`POST /staff-imports` background jobs (job-polling
+   via a new shared `useJobPolling` hook, a new `Services.staff` module, and
+   a new per-action `hasPermission` gate; no backend changes — all three
+   endpoints already existed). Closing the import dialog mid-job ("Run in
+   background") keeps the job in a per-user `sessionStorage` entry, so
+   reopening it — even after navigating away or reloading — reconnects to
+   the running import; a timed-out or poll-failed export resumes watching
+   the same job rather than starting a second one.
 7. **PR 0 (platform hardening) is done** — three fixes and two new pieces of
    platform infrastructure, all listed above: the upload-purpose registry, the
    guardian record scope, the api-client refresh split, the Celery beat
