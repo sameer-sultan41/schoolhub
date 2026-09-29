@@ -21,7 +21,7 @@ import {
   SheetTitle,
 } from "@schoolhub/ui";
 
-import { useIsDesktopShell } from "@/app/(app)/shell/use-is-desktop-shell";
+import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 
 /**
  * A `Dialog` on desktop, a bottom `Drawer` on mobile — the two are different Radix/vaul

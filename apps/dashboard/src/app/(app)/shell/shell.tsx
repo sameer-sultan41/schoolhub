@@ -6,7 +6,7 @@ import { Footer } from "@/app/(app)/shell/footer";
 import { Header } from "@/app/(app)/shell/header";
 import { useSettings } from "@/app/(app)/shell/settings-provider";
 import { Sidebar } from "@/app/(app)/shell/sidebar";
-import { useIsDesktopShell } from "@/app/(app)/shell/use-is-desktop-shell";
+import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 
 // Ported from packages/ui's vendored layouts/demo1/layout.tsx (Metronic's own Demo1
 // shell). `data-theme-preset="metronic"` is set on <html> by the root layout now, not

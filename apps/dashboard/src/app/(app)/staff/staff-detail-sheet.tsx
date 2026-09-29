@@ -34,7 +34,7 @@ import {
   ResponsiveSheetTitle,
   useIsDrawer,
 } from "@/components/responsive-dialog";
-import { useIsDesktopShell } from "@/app/(app)/shell/use-is-desktop-shell";
+import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import {

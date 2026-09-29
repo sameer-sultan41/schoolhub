@@ -77,23 +77,29 @@ if (typeof window !== "undefined") {
     } as DOMRect;
   };
 
-  // jsdom's getComputedStyle() leaves `transform` (and its vendor-prefixed aliases)
-  // `undefined` for an element with no transform rule applied, where a real browser
-  // always returns at least the string "none". vaul's own getTranslate() (its
-  // Drawer.Handle release-drag bookkeeping — see drawer.tsx's own comment on why
-  // DrawerContent renders the real Handle, not a lookalike div) unconditionally calls
-  // `.match()` on that value, so any pointerup inside a Drawer with a visible handle
-  // throws "Cannot read properties of undefined (reading 'match')" without this.
+  // jsdom's getComputedStyle() leaves `transform` `undefined` for an element with no
+  // transform rule applied, where a real browser always returns at least the string
+  // "none". vaul's own getTranslate() (its Drawer.Handle release-drag bookkeeping —
+  // see drawer.tsx's own comment on why DrawerContent renders the real Handle, not a
+  // lookalike div) unconditionally calls `.match()` on that value, so any pointerup
+  // inside a Drawer with a visible handle throws "Cannot read properties of undefined
+  // (reading 'match')" without this. Patches the one own property on the real
+  // returned CSSStyleDeclaration instead of wrapping it in a Proxy — a Proxy's
+  // `receiver` breaks any method on the object that relies on an internal slot
+  // matching the real instance (e.g. `getPropertyValue`), which a blanket wrap would
+  // silently break for every OTHER caller of getComputedStyle in every other test.
   const nativeGetComputedStyle = window.getComputedStyle.bind(window);
   window.getComputedStyle = ((elt: Element, pseudoElt?: string | null) => {
     const style = nativeGetComputedStyle(elt, pseudoElt);
-    return new Proxy(style, {
-      get(target, prop, receiver) {
-        if (prop === "transform" || prop === "webkitTransform" || prop === "mozTransform") {
-          return Reflect.get(target, prop, receiver) || "none";
-        }
-        return Reflect.get(target, prop, receiver);
-      },
-    });
+    if (!style.transform) {
+      try {
+        Object.defineProperty(style, "transform", { value: "none", configurable: true });
+      } catch {
+        // Some CSSStyleDeclaration implementations don't allow redefining an
+        // accessor-only own property — leave it be if so; worst case is the
+        // original (already-reproduced) jsdom gap, not a new failure.
+      }
+    }
+    return style;
   }) as typeof window.getComputedStyle;
 }

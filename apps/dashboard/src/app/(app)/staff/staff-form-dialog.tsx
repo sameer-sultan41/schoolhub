@@ -37,7 +37,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
-import { useIsDesktopShell } from "@/app/(app)/shell/use-is-desktop-shell";
+import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { ApiError, Services } from "@/services";
 import { queryKeys } from "@/lib/query-client";
 import { stableSignedUrl } from "@/lib/stable-signed-url";
