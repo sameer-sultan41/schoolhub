@@ -1134,23 +1134,37 @@ def build_student_export_csv(*, tenant_id: uuid.UUID) -> bytes:
             "admission_date",
         ]
     )
+    # `.iterator()`, not `list(...)`: mirrors build_staff_export_csv's identical fix
+    # — a full-tenant export must not hold every Student row (and its related
+    # Campus) in memory as Python objects at once (chunk_size defaults to 2000).
+    # The whole call, not just "later chunks", has to run inside `tenant_atomic`:
+    # `.iterator()` runs no query until the first row is consumed, and by then the
+    # RLS policy needs `app.tenant_id` set — and in prod, PgBouncer's
+    # transaction-pooling mode (`server_reset_query_always`) tears down a
+    # server-side cursor the instant its opening transaction ends, so the cursor
+    # itself would not survive past the `with` block either way.
+    # Known trade-off: this pins one pooled DB connection for the whole export —
+    # see docs/deferred-work.md ("exports hold a pooled DB connection").
     with tenant_atomic(tenant_id):
-        students = list(
-            Student.objects.alive().select_related("campus").order_by("last_name", "first_name")
+        students = (
+            Student.objects.alive()
+            .select_related("campus")
+            .order_by("last_name", "first_name")
+            .iterator()
         )
-    for student in students:
-        writer.writerow(
-            [
-                student.admission_number,
-                student.first_name,
-                student.last_name,
-                student.date_of_birth.isoformat(),
-                student.gender,
-                student.campus.code,
-                student.status,
-                student.admission_date.isoformat(),
-            ]
-        )
+        for student in students:
+            writer.writerow(
+                [
+                    student.admission_number,
+                    student.first_name,
+                    student.last_name,
+                    student.date_of_birth.isoformat(),
+                    student.gender,
+                    student.campus.code,
+                    student.status,
+                    student.admission_date.isoformat(),
+                ]
+            )
     return buffer.getvalue().encode("utf-8")
 
 
