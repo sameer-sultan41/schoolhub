@@ -272,7 +272,10 @@ describe("StaffDetailSheet — mobile drawer", () => {
     const onEdit = jest.fn();
     const onDelete = jest.fn();
 
-    const { container } = renderWithProviders(
+    // baseElement, not container: the Drawer/Sheet portals its content to
+    // document.body, which lands as a sibling of container (the render wrapper div),
+    // never a descendant of it — container.querySelector can't reach portalled content.
+    const { baseElement } = renderWithProviders(
       <StaffDetailSheet
         row={staffRow()}
         onOpenChange={jest.fn()}
@@ -282,7 +285,7 @@ describe("StaffDetailSheet — mobile drawer", () => {
     );
     await screen.findByText("EMP-0231");
 
-    expect(container.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
     // Full "<action> <name>" accessible names, not the desktop panel's bare "Edit"/
     // "Exit" text — see staff-detail-sheet.tsx's own comment on why.
     const user = userEvent.setup();

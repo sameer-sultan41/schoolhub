@@ -217,12 +217,15 @@ describe("ExitStaffDialog — mobile drawer", () => {
   });
 
   it("renders as a Drawer, not the desktop AlertDialog", () => {
-    const { container } = renderWithProviders(
+    // baseElement, not container: Drawer/AlertDialog both portal their content to
+    // document.body, which lands as a sibling of container (the render wrapper div),
+    // never a descendant of it — container.querySelector can't reach portalled content.
+    const { baseElement } = renderWithProviders(
       <ExitStaffDialog open staffIds={["st-1"]} onOpenChange={jest.fn()} />,
     );
 
-    expect(container.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
-    expect(container.querySelector('[data-slot="alert-dialog-content"]')).not.toBeInTheDocument();
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+    expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).not.toBeInTheDocument();
   });
 
   it("single id: submits through the drawer's plain button, toasts success, closes", async () => {

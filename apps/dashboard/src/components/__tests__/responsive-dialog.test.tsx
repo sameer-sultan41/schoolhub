@@ -13,27 +13,30 @@ describe("ResponsiveDialog", () => {
   });
 
   it("renders a Dialog by default (desktop)", () => {
-    const { container } = render(
+    // baseElement, not container: Dialog/Drawer both portal their content to
+    // document.body, which lands as a sibling of container (the render wrapper div),
+    // never a descendant of it — container.querySelector can't reach portalled content.
+    const { baseElement } = render(
       <ResponsiveDialog open onOpenChange={jest.fn()}>
         <ResponsiveDialogContent closeLabel="Close">Hello</ResponsiveDialogContent>
       </ResponsiveDialog>,
     );
 
-    expect(container.querySelector('[data-slot="dialog-content"]')).toBeInTheDocument();
-    expect(container.querySelector('[data-slot="drawer-content"]')).not.toBeInTheDocument();
+    expect(baseElement.querySelector('[data-slot="dialog-content"]')).toBeInTheDocument();
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).not.toBeInTheDocument();
   });
 
   it("renders a Drawer instead, once matchMedia reports the mobile breakpoint", () => {
     setMatchesMobile(true);
 
-    const { container } = render(
+    const { baseElement } = render(
       <ResponsiveDialog open onOpenChange={jest.fn()}>
         <ResponsiveDialogContent closeLabel="Close">Hello</ResponsiveDialogContent>
       </ResponsiveDialog>,
     );
 
-    expect(container.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
-    expect(container.querySelector('[data-slot="dialog-content"]')).not.toBeInTheDocument();
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+    expect(baseElement.querySelector('[data-slot="dialog-content"]')).not.toBeInTheDocument();
   });
 
   it("applies a caller's className to the desktop Dialog but not the mobile Drawer", () => {
@@ -45,7 +48,7 @@ describe("ResponsiveDialog", () => {
         </ResponsiveDialogContent>
       </ResponsiveDialog>,
     );
-    expect(desktop.container.querySelector('[data-slot="dialog-content"]')).toHaveClass(
+    expect(desktop.baseElement.querySelector('[data-slot="dialog-content"]')).toHaveClass(
       "max-w-2xl",
     );
     desktop.unmount();
@@ -58,7 +61,7 @@ describe("ResponsiveDialog", () => {
         </ResponsiveDialogContent>
       </ResponsiveDialog>,
     );
-    expect(mobile.container.querySelector('[data-slot="drawer-content"]')).not.toHaveClass(
+    expect(mobile.baseElement.querySelector('[data-slot="drawer-content"]')).not.toHaveClass(
       "max-w-2xl",
     );
   });
