@@ -632,6 +632,53 @@ either this file or `project-status.md`.
   The `process.env` ban misses `const { env } = process` and `globalThis.process.env`. Tighten
   these once the existing JSX-text baseline has burned down.
 
+- **True streaming upload for `build_staff_export_csv`/`build_student_export_csv`.** The
+  `fix/stream-bulk-exports` change made the DB read side stream via `.iterator()`, but the CSV is
+  still assembled entirely in memory (`io.StringIO` → `.getvalue()` → `.encode()`) before
+  `core.files.create_ready_file()`/`S3Presigner.put()` hands it to `put_object(Body=...)` as one
+  `bytes` payload — up to three full in-memory copies exist at once. True streaming needs
+  `core.files`' upload path to accept a file-like object (e.g. a `SpooledTemporaryFile`, uploaded
+  via boto3's `upload_fileobj`) instead of `bytes`, which is a `core/files` change affecting every
+  caller of `create_ready_file()`, not just these two exports — out of scope for that fix.
+
+- **CSV formula injection in the staff/student full-tenant exports.** `build_staff_export_csv`/
+  `build_student_export_csv` write `first_name`/`last_name` straight into `csv.writer` rows with no
+  escaping. `core.exports.tabular` already has a `_spreadsheet_safe` helper for exactly this (a
+  leading `=`/`+`/`-`/`@` in a cell opens it as a formula in Excel/Sheets), but these two builders
+  don't route through it. A staff/student record writable by one role (e.g. `school_admin` creating
+  a student) and exported by another (`hr_staff`/`it_admin`) lets a crafted name become a live
+  formula — e.g. a `HYPERLINK(...)` that exfiltrates neighboring rows' data — the moment the
+  exported file is opened. Fix: make `_spreadsheet_safe` (or an equivalent per-cell escape) public
+  and apply it to every written cell in both builders' loops, without routing through
+  `tabular.render` (which takes `list[dict]` and would re-materialize the whole export in memory).
+  Flagged by `fix/stream-bulk-exports`'s review as a pre-existing gap, not a regression it introduced.
+
+- **Staff/student exports hold a pooled DB connection for the whole export.**
+  `build_staff_export_csv`/`build_student_export_csv` keep one `tenant_atomic` transaction open
+  across both the `.iterator()` read and the per-row `csv.writer` loop, so each running export
+  pins one of PgBouncer's `default_pool_size = 25` server connections for its full duration — a
+  pool the API and every Celery worker share (one app role, one `DATABASE_URL`). A few concurrent
+  very-large-tenant exports can leave unrelated requests, in every tenant, queuing for a connection
+  until `query_wait_timeout = 30` fails them; and the server-side cursor pins one snapshot for the
+  whole iteration, holding Postgres's vacuum horizon back database-wide while it runs. The
+  connection hold is partly pre-existing (the old `list(...)` already spanned the full fetch), but
+  `fix/stream-bulk-exports` widens it to cover serialization and moves the snapshot from one
+  statement to the whole export. It can't simply close the transaction sooner: the lazy
+  `.iterator()` needs `SET LOCAL app.tenant_id` live when its first query runs, and a server-side
+  cursor does not survive its transaction under transaction pooling. `DISABLE_SERVER_SIDE_CURSORS`
+  would fall back to a client-side cursor that buffers the whole result set — the memory problem
+  that fix removed. Today's only cap is the `bulk` Celery lane's concurrency (`export_staff_task`/
+  `export_students_task` route there; compose runs one worker at `--concurrency 2`, shared with
+  every lane). Fix: keyset pagination, one short `tenant_atomic` per chunk — `WHERE (last_name,
+  first_name, id) > (<previous chunk's last row>) ORDER BY last_name, first_name, id LIMIT 2000` —
+  which releases the connection and the snapshot between chunks, at the price of the export no
+  longer being one point-in-time snapshot (a row renamed mid-export can be skipped or repeated;
+  likely tolerable for an admin CSV, but a call for that change's own review). Routing both tasks to
+  a dedicated `exports` queue with a fixed low worker concurrency is a cheaper interim cap, but it
+  bounds how many connections exports pin, not for how long; a direct non-PgBouncer connection only
+  moves the pressure onto Postgres's `max_connections`. Neither helps the vacuum horizon. Flagged by
+  `fix/stream-bulk-exports`'s review as a trade-off the fix widens, not a bug it introduces.
+
 - **Backend baselines to burn down** (frozen by PR 5, shrink-only — ADR-0014):
   - 15 `# noqa: BLE001` broad `except Exception` blocks (academics 1, attendance 2, examinations 6,
     staff_management 2, student_management 3, core/api/views 1) — catch the specific exceptions.

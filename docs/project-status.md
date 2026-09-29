@@ -142,6 +142,19 @@ with its reasoning. Read the entry for the area you are about to touch before re
    `appearance="light"` variant plus `Badge`'s `rose` variant (for a
    "resigned" employment status) to `packages/ui` — no backend changes.
 
+   A separate follow-up backend fix switched `build_staff_export_csv`/
+   `build_student_export_csv` from `list(Queryset...)` to `.iterator()`,
+   raised by a question about what a full-tenant export does at a very
+   large row count. The DB read now streams from the cursor instead of
+   materializing every row (and every related Campus) as Django objects
+   in memory at once — a real reduction, but only on the read side: the
+   CSV itself is still assembled as one in-memory `str`/`bytes` before
+   upload, so peak memory still grows with the export's total size, just
+   by roughly an order of magnitude less than before. True end-to-end
+   streaming would need `core.files`' upload path to accept a file
+   object instead of a full `bytes` payload — tracked in
+   `docs/deferred-work.md`.
+
    A further follow-up made `/staff` mobile-responsive: fixed a shell-wide
    layout bug where the desktop sidebar rendered unfixed (in normal document
    flow) between 768–1023px because the JS breakpoint deciding whether to
