@@ -1,6 +1,6 @@
 "use client";
 
-import { generalSettings } from "@/app/(app)/shell/general-config";
+import { generalSettings } from "@/config/general-config";
 import { Container } from "@/app/(app)/shell/partials/common/container";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/footer.tsx.

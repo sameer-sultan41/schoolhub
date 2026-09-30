@@ -52,7 +52,8 @@ import {
 } from "@schoolhub/ui";
 
 import { Services } from "@/services";
-import { stableSignedUrl } from "@/lib/stable-signed-url";
+import { getInitials, stableSignedUrl } from "@/lib/helpers";
+import { Regex } from "@/lib/regex";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
 import { ExitStaffDialog } from "@/app/(app)/staff/exit-staff-dialog";
@@ -117,23 +118,12 @@ const STATUS_META: Record<string, { variant: StatusVariant; label: string }> = {
 
 /** Humanizes an unlabelled snake_case value, e.g. "on_leave" -> "On leave". */
 export function humanizeSnakeCase(value: string): string {
-  const spaced = value.replace(/_/g, " ");
+  const spaced = value.replace(Regex.UNDERSCORE, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 export function statusMeta(status: string): { variant: StatusVariant; label: string } {
   return STATUS_META[status] ?? { variant: "secondary", label: humanizeSnakeCase(status) };
-}
-
-/** Same convention as `shell/partials/topbar/user-dropdown-menu.tsx`'s own `initialsOf`
- * (non-null-assertion-free array destructure) — duplicated rather than imported since
- * that one is private to its own module. Also what shows while a photo loads, and
- * whenever it fails to (an expired link, a deleted object). */
-export function initialsOf(name: string): string {
-  const [first, ...rest] = name.trim().split(/\s+/).filter(Boolean);
-  if (!first) return "?";
-  const last = rest.at(-1);
-  return last ? `${first[0]}${last[0]}`.toUpperCase() : first.slice(0, 2).toUpperCase();
 }
 
 export function formatLastUpdated(value: string): string {
@@ -350,7 +340,7 @@ export function StaffDirectoryTable() {
           <div className="flex items-center gap-4">
             <Avatar className="size-9 shrink-0 transition-transform duration-200 hover:scale-110">
               {row.original.photoUrl ? <AvatarImage src={row.original.photoUrl} alt="" /> : null}
-              <AvatarFallback>{initialsOf(row.original.name)}</AvatarFallback>
+              <AvatarFallback>{getInitials(row.original.name)}</AvatarFallback>
             </Avatar>
             <span className="text-mono text-sm font-medium">{row.original.name}</span>
           </div>

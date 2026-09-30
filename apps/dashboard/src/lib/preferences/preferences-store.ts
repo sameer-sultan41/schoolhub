@@ -5,7 +5,7 @@ import {
   PREFERENCE_REGISTRY,
   type PreferenceKey,
   type PreferenceValues,
-} from "./preferences-config";
+} from "@/config/preferences-config";
 import { writePreferenceCookie } from "./preferences-cookies.client";
 
 export interface PreferencesState {

@@ -39,8 +39,8 @@ import {
 } from "@/components/responsive-dialog";
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { ApiError, Services } from "@/services";
+import { getInitials, stableSignedUrl } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
-import { stableSignedUrl } from "@/lib/stable-signed-url";
 import type {
   CreateStaffInput,
   StaffDetailRecord,
@@ -267,15 +267,6 @@ function buildStaffInput(values: StaffFormValues): CreateStaffInput {
     publicBio: optional(values.public_bio ?? ""),
     address: buildAddress(values.address),
   };
-}
-
-/** Same convention as `staff-directory-table.tsx`'s own `initialsOf` — duplicated
- * rather than imported, since that one is private to its own module. */
-function initialsOf(name: string): string {
-  const [first, ...rest] = name.trim().split(/\s+/).filter(Boolean);
-  if (!first) return "?";
-  const last = rest.at(-1);
-  return last ? `${first[0]}${last[0]}`.toUpperCase() : first.slice(0, 2).toUpperCase();
 }
 
 export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffFormDialogProps) {
@@ -634,7 +625,7 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
                     <div className="flex items-center gap-3">
                       <Avatar className="size-12 shrink-0">
                         {previewUrl ? <AvatarImage src={previewUrl} alt="" /> : null}
-                        <AvatarFallback>{initialsOf(`${firstName} ${lastName}`)}</AvatarFallback>
+                        <AvatarFallback>{getInitials(`${firstName} ${lastName}`)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 space-y-1">
                         <Input

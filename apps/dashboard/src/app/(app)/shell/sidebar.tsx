@@ -7,7 +7,7 @@ import { cn } from "@schoolhub/ui";
 
 import { SidebarHeader } from "@/app/(app)/shell/sidebar-header";
 import { SidebarMenu } from "@/app/(app)/shell/sidebar-menu";
-import { useSettings } from "@/app/(app)/shell/settings-provider";
+import { useSettings } from "@/providers/settings-provider";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/sidebar.tsx.
 export function Sidebar() {

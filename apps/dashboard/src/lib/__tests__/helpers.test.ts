@@ -1,4 +1,4 @@
-import { stableSignedUrl } from "../stable-signed-url";
+import { stableSignedUrl } from "../helpers";
 
 /** A SigV4-shaped link for `path`, signed at `signedAt` (UTC) and valid for `ttlSeconds`. */
 function signedLink(path: string, signedAt: string, ttlSeconds = 3600) {

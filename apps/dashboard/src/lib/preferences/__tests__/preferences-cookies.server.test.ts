@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { PREFERENCE_DEFAULTS } from "../preferences-config";
+import { PREFERENCE_DEFAULTS } from "@/config/preferences-config";
 import { readPreferencesFromCookies } from "../preferences-cookies.server";
 
 jest.mock("next/headers", () => ({ cookies: jest.fn() }));

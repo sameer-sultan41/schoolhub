@@ -18,6 +18,8 @@ import {
   useScrollPosition,
 } from "@schoolhub/ui";
 
+import { Paths } from "@/config/paths";
+
 import { LayoutControls } from "@/components/layout-controls";
 
 import { Container } from "@/app/(app)/shell/partials/common/container";
@@ -64,7 +66,7 @@ export function Header() {
     >
       <Container className="flex items-stretch justify-between lg:gap-4">
         <div className="flex items-center gap-1 gap-2.5 lg:hidden">
-          <Link href="/dashboard" className="shrink-0">
+          <Link href={Paths.DASHBOARD} className="shrink-0">
             <img
               src={toAbsoluteUrl("/media/app/mini-logo.svg")}
               className="h-[25px] w-full"

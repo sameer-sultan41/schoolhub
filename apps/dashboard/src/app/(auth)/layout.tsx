@@ -3,6 +3,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Card, CardContent, toAbsoluteUrl } from "@schoolhub/ui";
 
+import { Paths } from "@/config/paths";
+
 /**
  * Ported from the vendor Metronic Next.js template's app/(auth)/layouts/branded.tsx —
  * the real split-screen chrome its own /signin route renders inside, not the old
@@ -34,7 +36,7 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
 
         <div className="branded-bg xxl:bg-center order-1 bg-top bg-no-repeat lg:order-2 lg:m-5 lg:rounded-xl lg:border lg:border-border xl:bg-cover">
           <div className="flex flex-col gap-4 p-8 lg:p-16">
-            <Link href="/dashboard">
+            <Link href={Paths.DASHBOARD}>
               <img
                 src={toAbsoluteUrl("/media/app/mini-logo.svg")}
                 className="h-[28px] max-w-none"

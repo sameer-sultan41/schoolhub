@@ -5,7 +5,8 @@ import { ChevronFirst } from "lucide-react";
 
 import { Button, cn, toAbsoluteUrl } from "@schoolhub/ui";
 
-import { useSettings } from "@/app/(app)/shell/settings-provider";
+import { Paths } from "@/config/paths";
+import { useSettings } from "@/providers/settings-provider";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/sidebar-header.tsx.
 export function SidebarHeader() {
@@ -17,7 +18,7 @@ export function SidebarHeader() {
 
   return (
     <div className="sidebar-header relative hidden shrink-0 items-center justify-between px-3 lg:flex lg:px-6">
-      <Link href="/dashboard">
+      <Link href={Paths.DASHBOARD}>
         <div className="dark:hidden">
           <img
             src={toAbsoluteUrl("/media/app/default-logo.svg")}

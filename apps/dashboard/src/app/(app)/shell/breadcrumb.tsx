@@ -7,7 +7,8 @@ import { ChevronRight } from "lucide-react";
 
 import { cn, useMenu, type MenuItem } from "@schoolhub/ui";
 
-import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
+import { Paths } from "@/config/paths";
+import { MENU_SIDEBAR } from "@/config/menu-config";
 
 /**
  * The header's one breadcrumb trail — on every route, every breakpoint. It used to be
@@ -21,7 +22,7 @@ import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
  * it's prepended here rather than derived from the menu tree — every page in this app's
  * own vendor reference gets a hardcoded Home crumb ahead of its real chain.
  */
-const HOME_CRUMB: MenuItem = { title: "Home", path: "/dashboard" };
+const HOME_CRUMB: MenuItem = { title: "Home", path: Paths.DASHBOARD };
 
 export function Breadcrumb() {
   const pathname = usePathname();
@@ -41,7 +42,7 @@ export function Breadcrumb() {
 
           return (
             // Position, not `item.path`: HOME_CRUMB and the active leaf can share a path
-            // (both "/dashboard" on the dashboard route itself), which collided as a key.
+            // (both Paths.DASHBOARD on the dashboard route itself), which collided as a key.
             <Fragment key={index}>
               <li className={cn("min-w-0", isLast && "truncate")}>
                 {item.path && !isLast ? (

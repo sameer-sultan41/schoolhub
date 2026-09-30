@@ -35,12 +35,12 @@ import {
   useIsDrawer,
 } from "@/components/responsive-dialog";
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
+import { getInitials } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import {
   formatLastUpdated,
   humanizeSnakeCase,
-  initialsOf,
   statusMeta,
   type StaffRow,
 } from "@/app/(app)/staff/staff-directory-table";
@@ -207,7 +207,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
               <Avatar className="size-12 shrink-0 ring-2 ring-background md:size-16 md:ring-4">
                 {row.photoUrl ? <AvatarImage src={row.photoUrl} alt="" /> : null}
                 <AvatarFallback className="text-sm font-semibold md:text-lg">
-                  {initialsOf(row.name)}
+                  {getInitials(row.name)}
                 </AvatarFallback>
               </Avatar>
               <div className="flex min-w-0 flex-col gap-1 md:gap-1.5">

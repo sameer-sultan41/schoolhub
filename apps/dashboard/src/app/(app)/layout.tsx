@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Shell } from "@/app/(app)/shell/shell";
-import { SettingsProvider } from "@/app/(app)/shell/settings-provider";
+import { SettingsProvider } from "@/providers/settings-provider";
 
 import "@schoolhub/ui/styles/metronic-shell.css";
 

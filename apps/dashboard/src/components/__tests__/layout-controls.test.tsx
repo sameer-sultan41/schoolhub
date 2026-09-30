@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
 import messages from "../../../messages/en.json";
-import { PREFERENCE_DEFAULTS } from "@/lib/preferences/preferences-config";
-import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
+import { PREFERENCE_DEFAULTS } from "@/config/preferences-config";
+import { PreferencesProvider } from "@/providers/preferences-provider";
 import { LayoutControls } from "../layout-controls";
 
 jest.mock("@/lib/preferences/preferences-cookies.client", () => ({

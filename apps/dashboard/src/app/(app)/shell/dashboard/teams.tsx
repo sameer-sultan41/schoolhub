@@ -39,6 +39,7 @@ import {
 } from "@schoolhub/ui";
 
 import { Services } from "@/services";
+import { Paths } from "@/config/paths";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
@@ -192,7 +193,7 @@ export function Teams() {
         <CardHeader className="py-3.5">
           <CardTitle>Staff</CardTitle>
           <CardToolbar className="flex items-center gap-3">
-            <Link href="/staff" className="text-sm font-medium text-primary hover:underline">
+            <Link href={Paths.STAFF} className="text-sm font-medium text-primary hover:underline">
               View all
             </Link>
             <div className="relative">

@@ -1,3 +1,30 @@
+import { Regex } from "./regex";
+
+/**
+ * Small, generic helpers shared across modules — the one intentional exception to this
+ * `lib/` directory's usual one-file-per-concern convention (`host.ts`, `stable-signed-url.ts`,
+ * `query-client.ts`, …). A helper earns a place here only once it's generic (not tied to
+ * one module's domain, e.g. staff) and used in more than one place; a module-specific one
+ * belongs next to that module instead.
+ */
+
+/**
+ * First + last initial from a full name, e.g. "Jane Doe" -> "JD". Falls back to the
+ * first two letters of a single-word name, or "?" for an empty/whitespace-only one.
+ *
+ * Generic, not staff-specific: renders the initials fallback for whichever user is
+ * signed in (`shell/partials/topbar/user-dropdown-menu.tsx`) as much as for a staff
+ * record's own avatar (`staff/staff-directory-table.tsx`, `staff-detail-sheet.tsx`,
+ * `staff-form-dialog.tsx`) — what shows while a photo loads, and whenever it fails to
+ * (an expired link, a deleted object).
+ */
+export function getInitials(name: string): string {
+  const [first, ...rest] = name.trim().split(Regex.WHITESPACE).filter(Boolean);
+  if (!first) return "?";
+  const last = rest.at(-1);
+  return last ? `${first[0]}${last[0]}`.toUpperCase() : first.slice(0, 2).toUpperCase();
+}
+
 /**
  * Keeps one signed storage link per object while it is still comfortably valid.
  *
@@ -6,6 +33,10 @@
  * the new URL loads — a blink to initials — and the browser cache, keyed by the full URL,
  * misses and downloads the photo again. Returning the link already in use for the same
  * object avoids both until it nears expiry.
+ *
+ * Generic, not staff-specific: called for the signed-in user's own avatar
+ * (`shell/partials/topbar/user-dropdown-menu.tsx`) as much as for a staff record's
+ * (`staff/staff-directory-table.tsx`, `staff-form-dialog.tsx`).
  */
 
 /** Adopt a fresh link once the one in use has less than this left. */
@@ -18,7 +49,7 @@ const inUse = new Map<string, string>();
 function expiresAt(url: URL): number | null {
   const signedAt = url.searchParams.get("X-Amz-Date"); // e.g. 20260924T180939Z
   const ttlSeconds = Number(url.searchParams.get("X-Amz-Expires"));
-  const parts = signedAt?.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  const parts = signedAt?.match(Regex.SIGNED_AT_TIMESTAMP);
   if (!parts || !Number.isFinite(ttlSeconds)) return null;
   // The regex guarantees all six groups; the defaults only satisfy noUncheckedIndexedAccess.
   const [year = 0, month = 1, day = 1, hour = 0, minute = 0, second = 0] = parts

@@ -37,10 +37,12 @@ import {
   Switch,
 } from "@schoolhub/ui";
 
+import { Paths } from "@/config/paths";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { LOCALE_COOKIE_MAX_AGE_SECONDS, LOCALE_COOKIE_NAME, LOGIN_PATH } from "@/lib/constants";
+import { LOCALE_COOKIE_MAX_AGE_SECONDS } from "@/lib/constants";
+import { Cookies } from "@/lib/cookies";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
-import { stableSignedUrl } from "@/lib/stable-signed-url";
+import { getInitials, stableSignedUrl } from "@/lib/helpers";
 import { Services } from "@/services";
 
 /**
@@ -58,12 +60,6 @@ import { Services } from "@/services";
  * nullable (phone-only accounts exist) — falls back to phone, then to nothing shown.
  * The vendor's "Pro" billing badge is replaced with the user's real role.
  */
-function initialsOf(name: string): string {
-  const [first, ...rest] = name.trim().split(/\s+/).filter(Boolean);
-  if (!first) return "?";
-  const last = rest.at(-1);
-  return last ? `${first[0]}${last[0]}`.toUpperCase() : first.slice(0, 2).toUpperCase();
-}
 
 /** Metronic's own demo covered 5 unrelated languages with flags; this app ships 2. */
 const LOCALE_FLAGS: Record<SupportedLocale, string> = {
@@ -82,9 +78,9 @@ export function UserDropdownMenu() {
   // the loading label forever, which reads as a hang rather than a real failure.
   const displayName = isPending ? "Loading…" : isError ? "Unable to load profile" : user.full_name;
   const contact = user?.email ?? user?.phone ?? null;
-  const initials = user ? initialsOf(user.full_name) : "?";
+  const initials = user ? getInitials(user.full_name) : "?";
   const roleLabel = user?.roles.length ? user.roles.map((role) => role.name).join(", ") : null;
-  // Same re-signed-on-every-fetch link as staff photos (see stable-signed-url.ts) —
+  // Same re-signed-on-every-fetch link as staff photos (see lib/helpers.ts) —
   // without this, every current-user refetch (e.g. after selectLocale's router.refresh())
   // blinks this avatar to initials and re-downloads the same image.
   const avatarUrl = stableSignedUrl(user?.avatar_url ?? null);
@@ -94,7 +90,7 @@ export function UserDropdownMenu() {
   // lang>/<dir>, so nothing changes until the server re-renders — hence router.refresh().
   function selectLocale(next: string) {
     if (next === locale) return;
-    document.cookie = `${LOCALE_COOKIE_NAME}=${next}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+    document.cookie = `${Cookies.LOCALE}=${next}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
     router.refresh();
   }
   const handleThemeToggle = (checked: boolean) => {
@@ -273,7 +269,7 @@ export function UserDropdownMenu() {
                   console.error("Sign-out request failed unexpectedly:", error);
                 })
                 .finally(() => {
-                  router.replace(LOGIN_PATH);
+                  router.replace(Paths.LOGIN);
                 });
             }}
           >

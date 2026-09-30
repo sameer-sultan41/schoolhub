@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE_NAME } from "@/lib/auth";
-import { LOGIN_PATH } from "@/lib/constants";
+import { Paths } from "@/config/paths";
+import { Cookies } from "@/lib/cookies";
 
 /**
  * Auth guard. (Next 16 renamed the `middleware` convention to `proxy`.)
@@ -11,7 +11,7 @@ import { LOGIN_PATH } from "@/lib/constants";
  * read a user, roles, or permissions out of it. Every API call is authorized server-side.
  */
 
-const PUBLIC_PATHS = [LOGIN_PATH, "/forgot-password", "/reset-password"];
+const PUBLIC_PATHS = [Paths.LOGIN, Paths.FORGOT_PASSWORD, Paths.RESET_PASSWORD];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -19,12 +19,12 @@ function isPublicPath(pathname: string): boolean {
 
 export function proxy(request: NextRequest): NextResponse {
   const { pathname, search } = request.nextUrl;
-  const hasSession = request.cookies.has(SESSION_COOKIE_NAME);
+  const hasSession = request.cookies.has(Cookies.SESSION);
 
   // Signed in and heading for the sign-in page: send them where they meant to go.
   if (hasSession && isPublicPath(pathname)) {
     const nextParam = request.nextUrl.searchParams.get("next");
-    const target = nextParam?.startsWith("/") ? nextParam : "/dashboard";
+    const target = nextParam?.startsWith("/") ? nextParam : Paths.DASHBOARD;
     return NextResponse.redirect(new URL(target, request.url));
   }
 
@@ -32,7 +32,7 @@ export function proxy(request: NextRequest): NextResponse {
     return NextResponse.next();
   }
 
-  const loginUrl = new URL(LOGIN_PATH, request.url);
+  const loginUrl = new URL(Paths.LOGIN, request.url);
   // Only ever round-trip a same-origin path, so this cannot become an open redirect.
   if (pathname !== "/") loginUrl.searchParams.set("next", `${pathname}${search}`);
   return NextResponse.redirect(loginUrl);

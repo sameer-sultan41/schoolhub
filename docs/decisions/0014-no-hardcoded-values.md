@@ -33,6 +33,9 @@ Each kind of value has exactly one owner:
 | Colours | Theme tokens (`--sh-*`); tenant branding flows through tenant settings |
 | Layout direction | RTL-logical classes only |
 | Permission keys | Literal `module.resource.action` strings next to where they're used, validated against the registry by contract test |
+| Dashboard page paths (`<Link>`/redirect targets) | The `Paths` object in `apps/dashboard/src/config/paths.ts` |
+| Regex patterns | The `Regex` object in `apps/dashboard/src/lib/regex.ts` |
+| Cookie names | The `Cookies` object in `apps/dashboard/src/lib/cookies.ts` |
 
 ## Alternatives considered
 

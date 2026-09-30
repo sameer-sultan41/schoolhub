@@ -1,5 +1,9 @@
 import { cookies } from "next/headers";
-import { PREFERENCE_KEYS, type PreferenceValues, parsePreference } from "./preferences-config";
+import {
+  PREFERENCE_KEYS,
+  type PreferenceValues,
+  parsePreference,
+} from "@/config/preferences-config";
 
 /**
  * Server-side half of the preference cookies.
