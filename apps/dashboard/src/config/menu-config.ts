@@ -26,6 +26,12 @@ import { Paths } from "./paths";
 // sidebars, help menu, root menu) were dropped for the same reason: nothing
 // here renders them. MenuItem/MenuConfig themselves live in @schoolhub/ui —
 // a generic tree-menu shape, not specific to this app's own nav data below.
+//
+// Only entries with a real backing page use `Paths` (dashboard/students/staff/
+// reset-password) — everything else below is inert vendor demo content with no
+// route behind it (no app/(app)/signin, app/(app)/public-profile, etc. exist),
+// so centralizing those literals would just be a second, unused copy of a
+// path that isn't real. They stay hardcoded until, if ever, one gets a real page.
 
 export const MENU_SIDEBAR: MenuConfig = [
   {

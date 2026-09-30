@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { PREFERENCE_DEFAULTS } from "@/config/preferences-config";
 import { PreferencesProvider, usePreference, usePreferenceActions } from "../preferences-provider";
 
-jest.mock("../preferences-cookies.client", () => ({ writePreferenceCookie: jest.fn() }));
+jest.mock("@/lib/preferences/preferences-cookies.client", () => ({
+  writePreferenceCookie: jest.fn(),
+}));
 
 function Consumer() {
   const sidebarVariant = usePreference("sidebar_variant");

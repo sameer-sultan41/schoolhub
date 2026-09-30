@@ -27,8 +27,10 @@ const config: Config = {
     // to real data stays measured — shell/dashboard/*, the user menu, menu-config,
     // toolbar, data-grid-labels. `**` rather than `(app)`: the glob engine reads bare
     // parentheses as a regex group, so a literal `(app)` segment would never match.
-    "!src/app/**/shell/{breadcrumb,content,footer,header,settings-provider,shell,sidebar,sidebar-header,sidebar-menu}.tsx",
-    "!src/app/**/shell/{general-config,settings}.ts",
+    "!src/app/**/shell/{breadcrumb,content,footer,header,shell,sidebar,sidebar-header,sidebar-menu}.tsx",
+    "!src/app/**/shell/settings.ts",
+    "!src/providers/settings-provider.tsx",
+    "!src/config/general-config.ts",
     "!src/app/**/shell/partials/common/**",
     "!src/app/**/shell/partials/topbar/{apps-dropdown-menu,chat-sheet,notification-item,notifications-sheet,search-dialog}.tsx",
     "!src/app/**/shell/partials/topbar/search/**",
