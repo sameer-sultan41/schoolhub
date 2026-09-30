@@ -15,6 +15,8 @@ import {
 
 import type { MenuConfig } from "@schoolhub/ui";
 
+import { Paths } from "./paths";
+
 // Ported from Metronic's own config/menu.config.tsx + config/types.ts (the full
 // original Next.js template) — trimmed to just MENU_SIDEBAR, the one export
 // Demo1's sidebar renders. The mega-menu (MENU_MEGA/MENU_MEGA_MOBILE) was
@@ -30,13 +32,13 @@ export const MENU_SIDEBAR: MenuConfig = [
     title: "Dashboards",
     icon: LayoutGrid,
     children: [
-      { title: "Light Sidebar", path: "/dashboard" },
+      { title: "Light Sidebar", path: Paths.DASHBOARD },
       { title: "Dark Sidebar", path: "/dev/metronic-demo1/dark-sidebar" },
     ],
   },
   { heading: "School" },
-  { title: "Students", icon: GraduationCap, path: "/students", module: "students" },
-  { title: "Staff", icon: IdCard, path: "/staff", module: "staff" },
+  { title: "Students", icon: GraduationCap, path: Paths.STUDENTS, module: "students" },
+  { title: "Staff", icon: IdCard, path: Paths.STAFF, module: "staff" },
   { heading: "User" },
   {
     title: "Public Profile",
@@ -194,7 +196,7 @@ export const MENU_SIDEBAR: MenuConfig = [
     children: [
       { title: "Sign In", path: "/signin" },
       { title: "Check Email", path: "/signup" },
-      { title: "Reset Password", path: "/reset-password" },
+      { title: "Reset Password", path: Paths.RESET_PASSWORD },
       { title: "2FA", path: "/2fa" },
       { title: "Welcome Message", path: "/auth/welcome-message" },
       { title: "Account Deactivated", path: "/auth/account-deactivated" },

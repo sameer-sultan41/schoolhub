@@ -3,11 +3,11 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@schoolhub/ui/toaster";
-import { AppProviders } from "@/components/providers";
+import { AppProviders } from "@/providers/providers";
 import { directionFor } from "@/lib/env";
-import { preferenceDataAttributes } from "@/lib/preferences/preferences-config";
+import { preferenceDataAttributes } from "@/config/preferences-config";
 import { readPreferencesFromCookies } from "@/lib/preferences/preferences-cookies.server";
-import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
+import { PreferencesProvider } from "@/providers/preferences-provider";
 
 import "./globals.css";
 

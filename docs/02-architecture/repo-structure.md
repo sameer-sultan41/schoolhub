@@ -39,6 +39,9 @@ schoolhub/
 │   │       ├── features/<module>/#   components + hooks per module
 │   │       ├── services/         #   endpoints.ts · modules/<domain>/ · index.ts (Services) — ADR-0011
 │   │       ├── lib/              #   auth, env, permissions, query-client (queryKeys), constants, host
+│   │       ├── providers/        #   app-wide React context providers (query client, preferences, shell settings)
+│   │       ├── store/            #   global Zustand stores, one file per concern — this app's client-state tool
+│   │       ├── config/           #   static config data (menu, preferences registry, footer links)
 │   │       ├── components/ hooks/ i18n/
 │   │       └── proxy.ts          #   Next 16's rename of middleware: auth guard (routing only)
 │   └── website/                  # Next.js 16 multi-tenant public renderer (read-only)
@@ -66,6 +69,12 @@ schoolhub/
 | A dashboard screen | A thin `src/app/(app)/<module>/page.tsx` rendering components from `src/features/<module>/` | this doc |
 | A dashboard API call | `src/services/endpoints.ts` + `src/services/modules/<module>/<module>-service.ts`, registered in `Services` | [ADR-0011](../decisions/0011-dashboard-services-layer.md) |
 | A query key | The `queryKeys` factory in `apps/dashboard/src/lib/query-client.ts` | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
+| A React context provider (app-wide) | `apps/dashboard/src/providers/` | this doc |
+| Global client state | A Zustand store in `apps/dashboard/src/store/` | `apps/dashboard/AGENTS.md` (§ Stack Rules) |
+| Static config data (menu, registries, links) | `apps/dashboard/src/config/` | this doc |
+| A dashboard page path (`<Link>`/redirect target) | The `Paths` object in `apps/dashboard/src/config/paths.ts` — never a repeated string literal | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
+| A regex pattern | The `Regex` object in `apps/dashboard/src/lib/regex.ts` — never an inline literal | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
+| A cookie name | The `Cookies` object in `apps/dashboard/src/lib/cookies.ts` — never an inline literal | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
 | User-facing dashboard text | `apps/dashboard/messages/en.json` **and** `ur.json` | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
 | A UI primitive | `packages/ui/src/components/`, ported from vendor source | [ADR-0009](../decisions/0009-ported-ui-primitives.md) |
 | A component used by only one app | That app (`src/features/…` or `src/components/`) until a second app needs it | §5 |

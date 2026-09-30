@@ -1,4 +1,4 @@
-import type { PreferenceKey, PreferenceValues } from "./preferences-config";
+import type { PreferenceKey, PreferenceValues } from "@/config/preferences-config";
 
 /** A year: a layout choice is not something a viewer expects to re-make every week. */
 const PREFERENCE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;

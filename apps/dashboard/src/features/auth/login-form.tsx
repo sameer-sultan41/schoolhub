@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Paths } from "@/config/paths";
 import { env } from "@/lib/env";
 import { parseTenantSlug } from "@/lib/host";
 import { getQueryClient, queryKeys } from "@/lib/query-client";
@@ -64,7 +65,7 @@ export function LoginForm() {
       // forced to re-check the proxy for real instead of serving that stale cached
       // redirect straight from the client with no new request at all.
       router.refresh();
-      router.replace(next?.startsWith("/") ? next : "/dashboard");
+      router.replace(next?.startsWith("/") ? next : Paths.DASHBOARD);
     },
     onError: (error: unknown) => {
       if (!(error instanceof ApiError)) return;
@@ -148,7 +149,7 @@ export function LoginForm() {
                 <div className="flex items-baseline justify-between gap-2">
                   <FormLabel required>{t("password")}</FormLabel>
                   <Link
-                    href="/forgot-password"
+                    href={Paths.FORGOT_PASSWORD}
                     className="text-xs text-primary underline-offset-4 hover:underline"
                   >
                     {t("forgotPassword")}

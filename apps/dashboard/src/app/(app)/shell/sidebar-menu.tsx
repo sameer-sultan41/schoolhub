@@ -19,7 +19,7 @@ import {
   type MenuItem,
 } from "@schoolhub/ui";
 
-import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
+import { MENU_SIDEBAR } from "@/config/menu-config";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { canAccessModule } from "@/lib/permissions";
 

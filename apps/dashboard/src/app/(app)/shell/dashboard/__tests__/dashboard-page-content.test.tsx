@@ -1,8 +1,8 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Services } from "@/services";
-import { PREFERENCE_DEFAULTS } from "@/lib/preferences/preferences-config";
-import { PreferencesProvider } from "@/lib/preferences/preferences-provider";
+import { PREFERENCE_DEFAULTS } from "@/config/preferences-config";
+import { PreferencesProvider } from "@/providers/preferences-provider";
 import { renderWithProviders } from "@/test-utils";
 import { DashboardPageContent } from "../dashboard-page-content";
 

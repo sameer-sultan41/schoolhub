@@ -2,12 +2,12 @@
 
 import { createContext, type ReactNode, useContext, useState } from "react";
 import { useStore } from "zustand";
-import type { PreferenceKey, PreferenceValues } from "./preferences-config";
+import type { PreferenceKey, PreferenceValues } from "@/config/preferences-config";
 import {
   createPreferencesStore,
   type PreferencesState,
   type PreferencesStore,
-} from "./preferences-store";
+} from "@/lib/preferences/preferences-store";
 
 const PreferencesContext = createContext<PreferencesStore | null>(null);
 

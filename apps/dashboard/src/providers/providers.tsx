@@ -5,7 +5,7 @@ import { domAnimation, LazyMotion, MotionConfig } from "motion/react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { setUnauthorizedHandler } from "@/lib/auth";
-import { LOGIN_PATH } from "@/lib/constants";
+import { Paths } from "@/config/paths";
 import { getQueryClient } from "@/lib/query-client";
 
 /**
@@ -33,7 +33,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     // Fired when a refresh attempt could not rescue a 401 — the session is genuinely over.
     setUnauthorizedHandler(() => {
       queryClient.clear();
-      router.replace(LOGIN_PATH);
+      router.replace(Paths.LOGIN);
     });
   }, [queryClient, router]);
 

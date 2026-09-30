@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { useMenu } from "@schoolhub/ui";
 
-import { MENU_SIDEBAR } from "@/app/(app)/shell/menu-config";
+import { MENU_SIDEBAR } from "@/config/menu-config";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/toolbar.tsx. Its own
 // `ToolbarBreadcrumbs` was dropped — the header now renders the app's one breadcrumb

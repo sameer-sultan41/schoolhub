@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { Footer } from "@/app/(app)/shell/footer";
 import { Header } from "@/app/(app)/shell/header";
-import { useSettings } from "@/app/(app)/shell/settings-provider";
+import { useSettings } from "@/providers/settings-provider";
 import { Sidebar } from "@/app/(app)/shell/sidebar";
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 

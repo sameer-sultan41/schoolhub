@@ -6,6 +6,7 @@ import {
   refreshAccessToken,
 } from "@schoolhub/api-client";
 import { endpoints } from "@/services/endpoints";
+import { Cookies } from "./cookies";
 import { env } from "./env";
 
 /**
@@ -32,9 +33,6 @@ import { env } from "./env";
  * `src/services/endpoints.ts` for why that split exists.
  */
 
-/** Presence-only hint the proxy reads; the API remains the authority. */
-export const SESSION_COOKIE_NAME = "sh_session";
-
 /** Mirrors the API's refresh-token lifetime (SIMPLE_JWT.REFRESH_TOKEN_LIFETIME). */
 const SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
@@ -48,11 +46,11 @@ const SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
  * whichever host the browser is on sidesteps that entirely, in every environment.
  */
 export function setSessionCookie(): void {
-  document.cookie = `${SESSION_COOKIE_NAME}=1; path=/; max-age=${SESSION_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+  document.cookie = `${Cookies.SESSION}=1; path=/; max-age=${SESSION_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
 }
 
 export function clearSessionCookie(): void {
-  document.cookie = `${SESSION_COOKIE_NAME}=; path=/; max-age=0; samesite=lax`;
+  document.cookie = `${Cookies.SESSION}=; path=/; max-age=0; samesite=lax`;
 }
 
 export const accessTokenStore = createAccessTokenStore();

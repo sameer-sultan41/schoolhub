@@ -1,4 +1,4 @@
-import { PREFERENCE_DEFAULTS, PREFERENCE_REGISTRY } from "../preferences-config";
+import { PREFERENCE_DEFAULTS, PREFERENCE_REGISTRY } from "@/config/preferences-config";
 import { writePreferenceCookie } from "../preferences-cookies.client";
 import { createPreferencesStore } from "../preferences-store";
 
