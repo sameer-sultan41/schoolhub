@@ -545,6 +545,22 @@ class StudentPhotoUrlTests(StudentManagementAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertEqual(response.json()["data"]["first_name"], "Renamed")
+        # The legacy photo_file is accepted (re-sent unchanged), but its purpose still
+        # isn't student.photo — photo_url must not sign a link for it.
+        self.assertIsNone(response.json()["data"]["photo_url"])
+
+    def test_a_photo_file_whose_purpose_is_not_student_photo_signs_no_url(self) -> None:
+        # Distinct scenario from the "unchanged legacy photo" PATCH test above: this
+        # covers a plain GET against a row whose photo_file purpose doesn't match, with
+        # no PATCH involved at all — proving get_photo_url's own gate, not just
+        # validate_photo_file_id's narrower "don't accept a NEW mismatch" guard.
+        self.allow("students.student.view")
+        student, mismatched = self._student_with_photo(purpose="student.document")
+
+        retrieved = self.client.get(f"/api/v1/students/{student.pk}").json()["data"]
+
+        self.assertEqual(retrieved["photo_file_id"], str(mismatched.pk))
+        self.assertIsNone(retrieved["photo_url"])
 
     def test_listing_photos_costs_no_query_per_row(self) -> None:
         self.allow("students.student.view")

@@ -20557,8 +20557,8 @@ components:
         photo_url:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
         campus_id:
           type: string
           format: uuid
@@ -22547,8 +22547,8 @@ components:
         photo_url:
           type: string
           format: uri
-          readOnly: true
           nullable: true
+          readOnly: true
         campus_id:
           type: string
           format: uuid

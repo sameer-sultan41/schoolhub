@@ -256,6 +256,17 @@ either this file or `project-status.md`.
   only `photo_file_id`** — the same one-line addition, when a guardian-facing screen needs
   photos. The signer is now one shared SigV4 instance per process (`get_presigner()`), signing
   for `S3_PUBLIC_ENDPOINT_URL`.
+  - **`photo_url`'s purpose gate is student-only.** `StudentSerializer.photo_url` was
+    converted from `SignedFileURLField` to a `SerializerMethodField` that refuses to sign a
+    link unless `photo_file.purpose == "student.photo"` (`students-dashboard-phase1` fix
+    wave) — `validate_photo_file_id`'s ownership guard only stops a *new* mismatched file
+    from being attached by PATCH; it does nothing for a `photo_file` that reached the column
+    some other way (a row seeded before the guard existed, a future bulk-import path that
+    bypasses the serializer). `StaffSerializer.photo_url` still uses the plain
+    `SignedFileURLField` with no equivalent purpose check — same latent gap, not yet fixed
+    there. Fixing it needs the identical `SerializerMethodField` conversion in
+    `staff/serializers.py`, its own purpose constant, and a migration note for any existing
+    `staff.photo_file` rows whose purpose predates the check.
 - `medical_notes` field-level restriction and the `filter_assigned_to_user`
   fail-closed default (no `staff` table to join against yet) both ship in
   PR 1, ahead of the features that will exercise them. The student<->guardian
