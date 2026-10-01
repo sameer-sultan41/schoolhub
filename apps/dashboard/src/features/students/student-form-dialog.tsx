@@ -162,6 +162,11 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
     },
     onError: (error) => {
       setFormError(null);
+      // A field error from a PREVIOUS failed submit must not survive into this one — a
+      // resubmit that now fails on a different field (or with a non-field error) would
+      // otherwise still show the stale field's old message alongside/instead of the
+      // real one.
+      form.clearErrors();
       if (error instanceof ApiError) {
         let matchedAField = false;
         for (const [field, issue] of Object.entries(error.fieldErrors())) {
@@ -374,6 +379,7 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={mutation.isPending}
                   onClick={() => {
                     onOpenChange(false);
                   }}

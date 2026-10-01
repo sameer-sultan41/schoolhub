@@ -261,6 +261,7 @@ export function WithdrawStudentDialog({
           <DrawerFooter>
             <Button
               variant="outline"
+              disabled={mutation.isPending}
               onClick={() => {
                 onOpenChange(false);
               }}
@@ -290,7 +291,7 @@ export function WithdrawStudentDialog({
         </AlertDialogHeader>
         {body}
         <AlertDialogFooter>
-          <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+          <AlertDialogCancel disabled={mutation.isPending}>{tCommon("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             disabled={mutation.isPending}

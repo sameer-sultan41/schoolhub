@@ -128,7 +128,12 @@ export function buildStudentInput(values: StudentFormValues, mode: "create" | "e
           ? null
           : undefined
         : values.house_id,
-    photoFileId: clearable(values.photo_file_id ?? "") || undefined,
+    // No trailing `|| undefined` here, unlike an earlier draft — `clearable` already
+    // sends edit mode's explicit `null` the same way every sibling field does; collapsing
+    // that `null` back to `undefined` made `updateStudent`'s own `!== undefined` check
+    // drop the field entirely, so clearing a student's photo in the edit form silently
+    // sent nothing and never actually cleared it server-side.
+    photoFileId: clearable(values.photo_file_id ?? ""),
     bloodGroup: clearable(values.blood_group ?? ""),
     nationality: clearable(values.nationality ?? ""),
     religion: clearable(values.religion ?? ""),

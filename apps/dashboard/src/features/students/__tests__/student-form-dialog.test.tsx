@@ -489,7 +489,7 @@ describe("StudentFormDialog", () => {
           // why this isn't dirty-tracked.
           preferredName: null,
           houseId: null,
-          photoFileId: undefined,
+          photoFileId: null,
           bloodGroup: null,
           nationality: null,
           religion: null,

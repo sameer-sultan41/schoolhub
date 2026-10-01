@@ -24,18 +24,9 @@ describe("buildStudentInput", () => {
     expect(result.religion).toBeNull();
     expect(result.previousSchool).toBeNull();
     expect(result.medicalNotes).toBeNull();
+    expect(result.photoFileId).toBeNull();
     expect(result.houseId).toBeNull();
     expect(result.address).toBeNull();
-  });
-
-  it("edit mode: a blank photo_file_id still comes out undefined, not null", () => {
-    // Distinct from every other clearable field: `photoFileId` passes `clearable(...)`
-    // through one more `|| undefined`, so edit mode's `null` collapses to `undefined`
-    // here specifically — this field is never explicitly nulled out through the form,
-    // only replaced by a new upload.
-    const result = buildStudentInput(EMPTY_DEFAULTS, "edit");
-
-    expect(result.photoFileId).toBeUndefined();
   });
 
   it("passes a filled house_id through unchanged in both modes", () => {
