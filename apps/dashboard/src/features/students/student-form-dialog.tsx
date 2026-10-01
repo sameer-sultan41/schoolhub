@@ -16,7 +16,6 @@ import {
   FormLabel,
   FormMessage,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -48,6 +47,7 @@ import {
   type StudentFormValues,
 } from "./student-form-schema";
 import { StudentAddressFields } from "./student-address-fields";
+import { StudentPhotoField } from "./student-photo-field";
 import { StudentProfileTextFields } from "./student-profile-text-fields";
 
 export interface StudentFormDialogProps {
@@ -67,12 +67,12 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
 
   // An "open session" counter, not a boolean: a boolean can't distinguish "still this
   // same open session" from "closed and reopened before the upload settled" — Review
-  // Focus #5. Every open (including a reopen) bumps this; the upload handler captures
-  // its own session number *and* studentId as closures and compares both at resolve
-  // time. Both refs are written only inside this effect, never during render — writing
-  // a ref during render trips the `react-hooks/refs` lint rule (round-3 review finding:
-  // an earlier draft wrote `studentIdRef.current = studentId` directly in the function
-  // body).
+  // Focus #5. Every open (including a reopen) bumps this; `captureUploadSession` (below)
+  // snapshots the session number *and* studentId as an upload starts, and its returned
+  // check compares both when that upload settles. Both refs are written only inside this
+  // effect, never during render — writing a ref during render trips the `react-hooks/refs`
+  // lint rule (round-3 review finding: an earlier draft wrote `studentIdRef.current =
+  // studentId` directly in the function body).
   const sessionRef = useRef(0);
   const openSessionRef = useRef(0);
   const studentIdRef = useRef(studentId);
@@ -88,6 +88,7 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
 
   const [formError, setFormError] = useState<string | null>(null);
   const [populatedStudentId, setPopulatedStudentId] = useState<string | null>(null);
+  const [isPhotoUploading, setIsPhotoUploading] = useState(false);
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
@@ -171,13 +172,13 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
     },
   });
 
-  async function handlePhotoUpload(file: File) {
+  // `StudentPhotoField` calls this as an upload starts, and applies the returned check to
+  // that upload's result — success and failure alike.
+  function captureUploadSession() {
     const uploadSession = openSessionRef.current;
     const uploadedStudentId = studentIdRef.current;
-    const fileId = await Services.files.uploadFile(file, "student.photo");
-    if (openSessionRef.current !== uploadSession || studentIdRef.current !== uploadedStudentId)
-      return;
-    form.setValue("photo_file_id", fileId);
+    return () =>
+      openSessionRef.current === uploadSession && studentIdRef.current === uploadedStudentId;
   }
 
   return (
@@ -351,22 +352,12 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
                     </FormItem>
                   )}
                 />
-                <div className="space-y-1">
-                  <Label>{t("fields.photo")}</Label>
-                  <Input
-                    type="file"
-                    accept="image/jpeg,image/png"
-                    aria-label={t("fields.photo")}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        handlePhotoUpload(file).catch(() => {
-                          setFormError(t("form.submitFailed"));
-                        });
-                      }
-                    }}
-                  />
-                </div>
+                <StudentPhotoField
+                  form={form}
+                  savedRecord={mode === "edit" ? detailQuery.data : undefined}
+                  onUploadStart={captureUploadSession}
+                  onUploadingChange={setIsPhotoUploading}
+                />
                 <StudentProfileTextFields
                   form={form}
                   showMedicalNotes={hasPermission(currentUser, "students.student.update")}
@@ -387,6 +378,7 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
                   type="submit"
                   isLoading={mutation.isPending}
                   loadingLabel={t("form.submitting")}
+                  disabled={isPhotoUploading}
                 >
                   {mode === "create" ? t("actions.create") : tCommon("save")}
                 </Button>

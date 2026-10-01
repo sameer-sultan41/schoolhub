@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { FormControl, FormField, FormItem, FormLabel, Input } from "@schoolhub/ui";
+import { FormControl, FormField, FormItem, FormLabel, FormMessage, Input } from "@schoolhub/ui";
 import type { UseFormReturn } from "react-hook-form"; // a direct dependency (apps/dashboard/package.json) — not re-exported by @schoolhub/ui
 import type { StudentFormValues } from "./student-form-schema";
 
@@ -28,6 +28,7 @@ export function StudentAddressFields({ form }: { form: UseFormReturn<StudentForm
               <FormControl>
                 <Input {...field} />
               </FormControl>
+              <FormMessage />
             </FormItem>
           )}
         />

@@ -244,7 +244,9 @@
       "previousSchool": "سابقہ سکول",
       "medicalNotes": "طبی نوٹس",
       "medicalNotesRestricted": "محدود رسائی",
-      "photo": "تصویر"
+      "photo": "تصویر",
+      "photoUploading": "تصویر اپ لوڈ ہو رہی ہے…",
+      "photoOnFile": "تصویر محفوظ ہے"
     },
     "address": {
       "line1": "پتہ لائن 1",
@@ -260,6 +262,7 @@
       "submitting": "محفوظ ہو رہا ہے",
       "admissionNumberHint": "خود بخود تیار کیا گیا ہے اور اسے تبدیل نہیں کیا جا سکتا۔",
       "submitFailed": "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔",
+      "photoUploadFailed": "تصویر اپ لوڈ نہیں ہو سکی۔",
       "createdToast": "طالب علم شامل کر دیا گیا۔",
       "updatedToast": "طالب علم اپ ڈیٹ کر دیا گیا۔"
     },

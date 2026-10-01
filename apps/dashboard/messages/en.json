@@ -244,7 +244,9 @@
       "previousSchool": "Previous school",
       "medicalNotes": "Medical notes",
       "medicalNotesRestricted": "Restricted",
-      "photo": "Photo"
+      "photo": "Photo",
+      "photoUploading": "Uploading photo…",
+      "photoOnFile": "Photo on file"
     },
     "address": {
       "line1": "Address line 1",
@@ -260,6 +262,7 @@
       "submitting": "Saving",
       "admissionNumberHint": "Generated automatically and cannot be changed.",
       "submitFailed": "Something went wrong. Please try again.",
+      "photoUploadFailed": "The photo could not be uploaded.",
       "createdToast": "Student added.",
       "updatedToast": "Student updated."
     },

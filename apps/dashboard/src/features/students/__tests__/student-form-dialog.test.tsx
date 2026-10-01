@@ -138,6 +138,34 @@ function setDate(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value } });
 }
 
+/** jsdom has no object URLs; the photo field creates one for a picked file's local
+ * preview — same helper as staff-form-dialog.test.tsx's own `stubObjectUrls`. Descriptors,
+ * not method references, so restoring trips no unbound-method lint. */
+function stubObjectUrls(url: string) {
+  const saved = ["createObjectURL", "revokeObjectURL"].map(
+    (name) => [name, Object.getOwnPropertyDescriptor(URL, name)] as const,
+  );
+  Object.defineProperty(URL, "createObjectURL", { value: jest.fn(() => url), configurable: true });
+  Object.defineProperty(URL, "revokeObjectURL", { value: jest.fn(), configurable: true });
+  return () => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(URL, name, descriptor);
+      else Reflect.deleteProperty(URL, name);
+    }
+  };
+}
+
+/** jsdom never loads images, so Radix's `AvatarImage` would wait forever — reports every
+ * image as already loaded, same as staff-form-dialog.test.tsx's `stubImageLoading`. */
+function stubImageLoading() {
+  const complete = jest.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
+  const width = jest.spyOn(HTMLImageElement.prototype, "naturalWidth", "get").mockReturnValue(1);
+  return () => {
+    complete.mockRestore();
+    width.mockRestore();
+  };
+}
+
 /** Fills every field `studentFormSchema` requires for create — `gender` is not among
  * them: `EMPTY_DEFAULTS.gender` is `"unspecified"`, itself a valid enum member, so the
  * Select never needs to be touched to pass validation. */
@@ -270,28 +298,162 @@ describe("StudentFormDialog", () => {
           </NextIntlClientProvider>
         );
       }
-      const { rerender } = render(
-        <StudentFormDialog open mode="create" onOpenChange={onOpenChange} />,
-        { wrapper: Wrapper },
+      const restoreObjectUrls = stubObjectUrls("blob:stale-photo");
+      // Unmounted before the stubs are restored: the photo field revokes its object URL on unmount.
+      let unmount: (() => void) | undefined;
+      try {
+        const { rerender, unmount: unmountDialog } = render(
+          <StudentFormDialog open mode="create" onOpenChange={onOpenChange} />,
+          { wrapper: Wrapper },
+        );
+        unmount = unmountDialog;
+        await userEvent
+          .setup()
+          .upload(
+            screen.getByLabelText(/^photo$/i),
+            new File(["x"], "photo.jpg", { type: "image/jpeg" }),
+          );
+        rerender(<StudentFormDialog open={false} mode="create" onOpenChange={onOpenChange} />);
+        rerender(<StudentFormDialog open mode="create" onOpenChange={onOpenChange} />); // reopened before the upload resolved
+        resolveUpload("file-123");
+        await waitFor(() => {}); // flush the upload's now-stale continuation before proceeding
+        await fillRequiredCreateFields(userEvent.setup());
+        // The closed session's upload must not hold Save disabled in the reopened one.
+        await userEvent.setup().click(screen.getByRole("button", { name: /new student/i }));
+        await waitFor(() => {
+          expect(mockCreateStudent).toHaveBeenCalled();
+        });
+        expect(mockCreateStudent).toHaveBeenCalledWith(
+          expect.not.objectContaining({ photoFileId: expect.anything() }),
+        );
+      } finally {
+        unmount?.();
+        restoreObjectUrls();
+      }
+    });
+
+    it("sends a preferred name typed into its own field", async () => {
+      mockReferenceData();
+      mockCreateStudent.mockResolvedValue(studentDetail({ id: "s-new" }));
+      const user = userEvent.setup();
+
+      renderWithProviders(<StudentFormDialog open mode="create" onOpenChange={onOpenChange} />);
+      await screen.findByRole("combobox", { name: /^campus$/i });
+
+      await fillRequiredCreateFields(user);
+      await user.type(screen.getByLabelText(/^preferred name$/i), "Ali K");
+      await user.click(screen.getByRole("button", { name: /new student/i }));
+
+      await waitFor(() => {
+        expect(mockCreateStudent).toHaveBeenCalledWith(
+          expect.objectContaining({ preferredName: "Ali K" }),
+        );
+      });
+    });
+  });
+
+  describe("photo upload", () => {
+    it("disables Save while a photo is uploading, then submits the uploaded file id", async () => {
+      mockReferenceData();
+      mockCreateStudent.mockResolvedValue(studentDetail({ id: "s-new" }));
+      let resolveUpload: (fileId: string) => void = () => {};
+      mockUploadFile.mockReturnValue(
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+        }),
       );
-      await userEvent
-        .setup()
-        .upload(
-          screen.getByLabelText(/photo/i),
+      const user = userEvent.setup();
+      const restoreObjectUrls = stubObjectUrls("blob:new-photo");
+      // Unmounted before the stubs are restored: the photo field revokes its object URL on unmount.
+      let unmount: (() => void) | undefined;
+      try {
+        ({ unmount } = renderWithProviders(
+          <StudentFormDialog open mode="create" onOpenChange={onOpenChange} />,
+        ));
+        await screen.findByRole("combobox", { name: /^campus$/i });
+        await fillRequiredCreateFields(user);
+        await user.upload(
+          screen.getByLabelText(/^photo$/i),
           new File(["x"], "photo.jpg", { type: "image/jpeg" }),
         );
-      rerender(<StudentFormDialog open={false} mode="create" onOpenChange={onOpenChange} />);
-      rerender(<StudentFormDialog open mode="create" onOpenChange={onOpenChange} />); // reopened before the upload resolved
-      resolveUpload("file-123");
-      await waitFor(() => {}); // flush the upload's now-stale .then continuation before proceeding
-      await fillRequiredCreateFields(userEvent.setup());
-      await userEvent.setup().click(screen.getByRole("button", { name: /new student/i }));
-      await waitFor(() => {
-        expect(mockCreateStudent).toHaveBeenCalled();
-      });
-      expect(mockCreateStudent).toHaveBeenCalledWith(
-        expect.not.objectContaining({ photoFileId: expect.anything() }),
+
+        // Saving now would report success and silently drop the photo.
+        const save = screen.getByRole("button", { name: /new student/i });
+        expect(save).toBeDisabled();
+        expect(screen.getByText("Uploading photo…")).toBeInTheDocument();
+
+        resolveUpload("file-123");
+        await waitFor(() => {
+          expect(save).toBeEnabled();
+        });
+        await user.click(save);
+
+        await waitFor(() => {
+          expect(mockCreateStudent).toHaveBeenCalledWith(
+            expect.objectContaining({ photoFileId: "file-123" }),
+          );
+        });
+      } finally {
+        unmount?.();
+        restoreObjectUrls();
+      }
+    });
+
+    it("shows the upload's own failure message, not the generic fallback, and re-enables Save", async () => {
+      mockReferenceData();
+      // `uploadFile` rejects with a `FileUploadError` (an `Error`) carrying the backend's
+      // own validation text — the field must show that text, not a generic retry message.
+      mockUploadFile.mockRejectedValue(
+        new Error("'image/png' is not allowed for 'student.photo' uploads."),
       );
+      const user = userEvent.setup();
+      const restoreObjectUrls = stubObjectUrls("blob:rejected-photo");
+      let unmount: (() => void) | undefined;
+      try {
+        ({ unmount } = renderWithProviders(
+          <StudentFormDialog open mode="create" onOpenChange={onOpenChange} />,
+        ));
+        await screen.findByRole("combobox", { name: /^campus$/i });
+        await user.upload(
+          screen.getByLabelText(/^photo$/i),
+          new File(["x"], "photo.png", { type: "image/png" }),
+        );
+
+        expect(
+          await screen.findByText("'image/png' is not allowed for 'student.photo' uploads."),
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByText("Something went wrong. Please try again."),
+        ).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /new student/i })).toBeEnabled();
+      } finally {
+        unmount?.();
+        restoreObjectUrls();
+      }
+    });
+
+    it("previews the saved photo in edit mode", async () => {
+      const restoreImages = stubImageLoading();
+      try {
+        mockReferenceData();
+        mockFetchStudentById.mockResolvedValue(
+          studentDetail({ photo_file_id: "file-1", photo_url: "https://storage.test/ali.png" }),
+        );
+
+        renderWithProviders(
+          <StudentFormDialog open mode="edit" studentId="s1" onOpenChange={onOpenChange} />,
+        );
+
+        const dialog = await screen.findByRole("dialog", { name: "Edit student" });
+        await waitFor(() => {
+          expect(dialog.querySelector("img")).toHaveAttribute(
+            "src",
+            "https://storage.test/ali.png",
+          );
+        });
+      } finally {
+        restoreImages();
+      }
     });
   });
 
@@ -404,6 +566,38 @@ describe("StudentFormDialog", () => {
       expect(screen.queryByText("Invalid")).not.toBeInTheDocument();
       expect(onOpenChange).not.toHaveBeenCalledWith(false);
       expect(mockToastSuccess).not.toHaveBeenCalled();
+    });
+
+    it("shows a server error on a profile text field as visible text under that field", async () => {
+      // `blood_group` lives in `StudentProfileTextFields`: the dialog maps the error onto it
+      // and suppresses its top-level alert, so the field's own FormMessage is the only place
+      // this text can appear.
+      mockReferenceData();
+      mockCreateStudent.mockRejectedValue(
+        new ApiError({
+          code: "validation_error",
+          message: "Invalid",
+          status: 422,
+          url: "/students",
+          details: [
+            { field: "blood_group", issue: "Ensure this field has no more than 8 characters." },
+          ],
+        }),
+      );
+      const user = userEvent.setup();
+
+      renderWithProviders(<StudentFormDialog open mode="create" onOpenChange={onOpenChange} />);
+      await screen.findByRole("combobox", { name: /^campus$/i });
+
+      await fillRequiredCreateFields(user);
+      await user.type(screen.getByLabelText(/^blood group$/i), "O positive");
+      await user.click(screen.getByRole("button", { name: /new student/i }));
+
+      expect(
+        await screen.findByText("Ensure this field has no more than 8 characters."),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText(/^blood group$/i)).toHaveAttribute("aria-invalid", "true");
+      expect(screen.queryByText("Invalid")).not.toBeInTheDocument();
     });
 
     it("shows a generic fallback alert for an error this form has no field to display", async () => {
