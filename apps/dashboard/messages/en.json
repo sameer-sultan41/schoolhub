@@ -185,11 +185,18 @@
   "students": {
     "title": "Students",
     "summary": "Student profiles, guardians, and enrollment.",
+    "stats": {
+      "total": "Total students",
+      "active": "Active",
+      "unavailable": "—"
+    },
     "list": {
       "caption": "Students",
       "searchPlaceholder": "Search by name or admission number",
       "emptyTitle": "No students yet",
-      "emptyDescription": "Add your first student, or import a class list."
+      "emptyDescription": "Add your first student, or import a class list.",
+      "forbidden": "You don't have permission to view students.",
+      "noMatches": "No students match these filters."
     },
     "columns": {
       "admissionNumber": "Admission #",
@@ -200,7 +207,9 @@
     "filters": {
       "search": "Search",
       "status": "Status",
-      "all": "All"
+      "all": "All",
+      "campus": "Campus",
+      "house": "House"
     },
     "status": {
       "active": "Active",
@@ -222,9 +231,11 @@
       "preferredName": "Preferred name",
       "dateOfBirth": "Date of birth",
       "gender": "Gender",
+      "selectGender": "Select gender",
       "campus": "Campus",
       "selectCampus": "Select a campus",
       "house": "House",
+      "selectHouse": "Select a house",
       "none": "None",
       "admissionDate": "Admission date",
       "bloodGroup": "Blood group",
@@ -232,17 +243,30 @@
       "religion": "Religion",
       "previousSchool": "Previous school",
       "medicalNotes": "Medical notes",
-      "medicalNotesRestricted": "Restricted"
+      "medicalNotesRestricted": "Restricted",
+      "photo": "Photo"
+    },
+    "address": {
+      "line1": "Address line 1",
+      "line2": "Address line 2",
+      "city": "City",
+      "state": "State/Province",
+      "postalCode": "Postal code",
+      "country": "Country"
     },
     "form": {
       "createTitle": "New student",
       "editTitle": "Edit student",
       "submitting": "Saving",
-      "admissionNumberHint": "Generated automatically and cannot be changed."
+      "admissionNumberHint": "Generated automatically and cannot be changed.",
+      "submitFailed": "Something went wrong. Please try again.",
+      "createdToast": "Student added.",
+      "updatedToast": "Student updated."
     },
     "actions": {
       "create": "New student",
-      "import": "Import"
+      "import": "Import",
+      "withdraw": "Withdraw"
     },
     "tabs": {
       "profile": "Profile",
@@ -250,6 +274,15 @@
       "emergencyContacts": "Emergency contacts",
       "documents": "Documents",
       "history": "History"
+    },
+    "detail": {
+      "title": "{name} — student details",
+      "titleFallback": "Student details",
+      "personal": "Personal",
+      "academic": "Academic",
+      "medical": "Medical",
+      "loadError": "Couldn't load this student's details.",
+      "lastUpdated": "Last updated {when}"
     },
     "guardians": {
       "title": "Guardians",
@@ -361,6 +394,21 @@
         "reason": "Reason",
         "effectiveDate": "Effective date"
       }
+    },
+    "withdraw": {
+      "title": "Withdraw {name}",
+      "titleBulk": "Withdraw {count} students",
+      "confirm": "Withdraw",
+      "description": "Ends the student's current enrollment and marks them withdrawn. This cannot be undone from here.",
+      "fields": {
+        "reason": "Reason",
+        "effectiveDate": "Effective date"
+      },
+      "confirmBulk": "Withdraw {count}",
+      "submitting": "Withdrawing",
+      "submitFailed": "Withdrawal failed.",
+      "partialFailureTitle": "{succeeded} withdrawn, {failed} failed",
+      "retry": "Retry failed"
     },
     "transfers": {
       "title": "Transfers",
@@ -1090,6 +1138,7 @@
     "permissionsLoadFailed": "Your permissions couldn't be loaded. Reload the page to try again.",
     "cancel": "Cancel",
     "save": "Save",
+    "close": "Close",
     "next": "Next",
     "previous": "Previous",
     "noResults": "No records found.",
