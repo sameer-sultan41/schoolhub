@@ -51,6 +51,16 @@ describe("students-service", () => {
     );
   });
 
+  it("fetchStudentById requests the single-student endpoint and returns its data", async () => {
+    const { fetchStudentById } = await import("../students-service");
+    mockGet.mockResolvedValue({ data: { id: "s1", first_name: "Ali" } });
+
+    const result = await fetchStudentById("s1");
+
+    expect(mockGet).toHaveBeenCalledWith("/students/s1");
+    expect(result).toEqual({ id: "s1", first_name: "Ali" });
+  });
+
   it("createStudent maps camelCase input to the snake_case request body", async () => {
     const { createStudent } = await import("../students-service");
     mockPost.mockResolvedValue({ data: { id: "s1" } });

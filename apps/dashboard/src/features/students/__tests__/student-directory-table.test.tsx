@@ -41,6 +41,9 @@ const mockFetchCampuses = Services.dashboard.fetchCampuses as jest.MockedFunctio
 const mockFetchStudentById = Services.students.fetchStudentById as jest.MockedFunction<
   typeof Services.students.fetchStudentById
 >;
+const mockFetchHouses = Services.schoolOrganization.fetchHouses as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchHouses
+>;
 
 // Every permission this table reads, granted — individual tests only care about row
 // data/filters/errors, not permission gating, so a full grant is the sane default; the
@@ -113,6 +116,25 @@ describe("StudentDirectoryTable", () => {
     await waitFor(() => {
       expect(mockFetchStudentsPage).toHaveBeenCalledWith(
         expect.objectContaining({ campusId: "c1", page: 1 }),
+      );
+    });
+  });
+
+  it("filters by house", async () => {
+    mockFetchStudentsPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 10, total_count: 0, total_pages: 0 },
+    });
+    mockFetchHouses.mockResolvedValue([{ id: "h1", name: "Griffin" }]);
+
+    renderWithProviders(<StudentDirectoryTable />);
+
+    await userEvent.setup().click(await screen.findByRole("combobox", { name: /house/i }));
+    await userEvent.setup().click(await screen.findByRole("option", { name: "Griffin" }));
+
+    await waitFor(() => {
+      expect(mockFetchStudentsPage).toHaveBeenCalledWith(
+        expect.objectContaining({ houseId: "h1", page: 1 }),
       );
     });
   });

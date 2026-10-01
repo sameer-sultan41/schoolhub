@@ -1,8 +1,9 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import type { StudentRecord } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { StudentDetailSheet } from "../student-detail-sheet";
 import type { StudentRow } from "../student-row";
@@ -244,5 +245,85 @@ describe("StudentDetailSheet", () => {
 
     await screen.findByText(studentRow().admissionNumber);
     expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+  });
+
+  it("calls onEdit with the row's id when the footer's Edit button is clicked", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail());
+    const onEdit = jest.fn();
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow({ id: "stu-9" })}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={onEdit}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: /^edit$/i }));
+
+    expect(onEdit).toHaveBeenCalledWith("stu-9");
+  });
+
+  it("calls onWithdraw with the row's id and name when the footer's Withdraw button is clicked", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail({ status: "active" }));
+    const onWithdraw = jest.fn();
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow({ id: "stu-9", name: "Ayesha Khan", status: "active" })}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={onWithdraw}
+      />,
+    );
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: /^withdraw$/i }));
+
+    expect(onWithdraw).toHaveBeenCalledWith("stu-9", "Ayesha Khan");
+  });
+});
+
+describe("StudentDetailSheet — mobile drawer", () => {
+  beforeEach(() => {
+    setMatchesMobile(true);
+    mockFetchStudentById.mockReset();
+  });
+
+  afterEach(() => {
+    setMatchesMobile(false);
+  });
+
+  it("renders as a Drawer with icon-only actions, found by their full accessible name", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail({ status: "active" }));
+    const onEdit = jest.fn();
+    const onWithdraw = jest.fn();
+
+    // `baseElement`, not `container`: the Drawer portals its content to `document.body`,
+    // a sibling of `container` — `container.querySelector` can't reach it.
+    const { baseElement } = renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow({ id: "stu-9", name: "Ayesha Khan", status: "active" })}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={onEdit}
+        onWithdraw={onWithdraw}
+      />,
+    );
+    await screen.findByText(studentRow().admissionNumber);
+
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(onEdit).toHaveBeenCalledWith("stu-9");
+
+    await user.click(screen.getByRole("button", { name: "Withdraw Ayesha Khan" }));
+    expect(onWithdraw).toHaveBeenCalledWith("stu-9", "Ayesha Khan");
   });
 });

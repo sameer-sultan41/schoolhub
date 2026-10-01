@@ -1,3 +1,4 @@
+import type { AuthenticatedUser } from "@schoolhub/types";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -23,20 +24,35 @@ jest.mock("@/services", () => ({
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
 }));
 
+interface MockCurrentUserResult {
+  data: AuthenticatedUser | undefined;
+  isError: boolean;
+}
+const mockUseCurrentUser = jest.fn<MockCurrentUserResult, []>();
 jest.mock("@/hooks/use-current-user", () => ({
-  useCurrentUser: () => ({
-    data: { id: "u1", permissions: ["students.student.view", "students.student.create"] },
-    isError: false,
-  }),
+  useCurrentUser: () => mockUseCurrentUser(),
 }));
 
 const mockFetchStudentsPage = Services.students.fetchStudentsPage as jest.MockedFunction<
   typeof Services.students.fetchStudentsPage
 >;
 
+const PERMITTED_USER: AuthenticatedUser = {
+  id: "u1",
+  email: "records@example.com",
+  phone: null,
+  full_name: "Records Manager",
+  avatar_url: null,
+  locale: "en",
+  tenant_id: "tenant-1",
+  roles: [],
+  permissions: ["students.student.view", "students.student.create"],
+};
+
 describe("StudentToolbar", () => {
   beforeEach(() => {
     mockFetchStudentsPage.mockReset();
+    mockUseCurrentUser.mockReset().mockReturnValue({ data: PERMITTED_USER, isError: false });
   });
 
   it("shows the total and active counts as two distinct figures", async () => {
@@ -71,5 +87,27 @@ describe("StudentToolbar", () => {
     await userEvent.setup().click(await screen.findByRole("button", { name: /new student/i }));
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("shows unavailable, not a stale figure, when a stat query fails", async () => {
+    mockFetchStudentsPage.mockRejectedValue(new Error("network down"));
+
+    renderWithProviders(<StudentToolbar />);
+
+    expect(await screen.findAllByText("—")).toHaveLength(2);
+  });
+
+  it("explains via the New-student button's title why it's disabled when permissions failed to load", async () => {
+    mockUseCurrentUser.mockReturnValue({ data: undefined, isError: true });
+    mockFetchStudentsPage.mockResolvedValue({
+      items: [],
+      pagination: { page: 1, page_size: 1, total_count: 0, total_pages: 0 },
+    });
+
+    renderWithProviders(<StudentToolbar />);
+
+    const button = await screen.findByRole("button", { name: /new student/i });
+    expect(button).toBeDisabled();
+    expect(button.closest("span")).toHaveAttribute("title", expect.stringMatching(/permission/i));
   });
 });
