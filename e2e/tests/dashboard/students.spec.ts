@@ -84,8 +84,9 @@ test.describe("students directory", () => {
     // exactly as a resigned staff member drops out of /staff's own default filter.
     await expect(studentsPage.row("Ayesha Khan")).toHaveCount(0);
     // Switch the status filter to see it withdrawn, and confirm the action is gone there too.
-    await page.getByRole("combobox", { name: /status/i }).click();
-    await page.getByRole("option", { name: /^all$/i }).click();
+    // Popover + checkbox, matching /staff's own Status filter — not a <select>.
+    await page.getByRole("button", { name: /status/i }).click();
+    await page.getByRole("checkbox", { name: /^all$/i }).click();
     await expect(studentsPage.row("Ayesha Khan").getByText(/withdrawn/i)).toBeVisible();
     await expect(studentsPage.rowAction("Ayesha Khan", "Withdraw")).toHaveCount(0);
   });

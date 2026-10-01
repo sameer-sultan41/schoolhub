@@ -98,6 +98,7 @@ export function useStudentColumns(
           </div>
         ),
         meta: {
+          headerTitle: t("columns.name"),
           skeleton: (
             <div className="flex items-center gap-2.5">
               <Skeleton className="size-8 rounded-full" />
@@ -112,7 +113,7 @@ export function useStudentColumns(
       {
         accessorKey: "campus",
         header: ({ column }) => <DataGridColumnHeader column={column} title={t("fields.campus")} />,
-        meta: { skeleton: <Skeleton className="h-4 w-24" /> },
+        meta: { headerTitle: t("fields.campus"), skeleton: <Skeleton className="h-4 w-24" /> },
       },
       {
         accessorKey: "status",
@@ -130,19 +131,26 @@ export function useStudentColumns(
             {t(`status.${row.original.status}`)}
           </Badge>
         ),
-        meta: { skeleton: <Skeleton className="h-6 w-20 rounded-full" /> },
+        meta: {
+          headerTitle: t("columns.status"),
+          skeleton: <Skeleton className="h-6 w-20 rounded-full" />,
+        },
       },
       {
         accessorKey: "admissionDate",
         header: ({ column }) => (
           <DataGridColumnHeader column={column} title={t("columns.admissionDate")} />
         ),
-        meta: { skeleton: <Skeleton className="h-4 w-20" /> },
+        meta: {
+          headerTitle: t("columns.admissionDate"),
+          skeleton: <Skeleton className="h-4 w-20" />,
+        },
       },
       {
         id: "actions",
         header: "",
         enableSorting: false,
+        enableHiding: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
             {canUpdate && (

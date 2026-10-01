@@ -15,6 +15,7 @@ import {
   CardToolbar,
   DATA_GRID_CARD_CLASSNAME,
   DataGrid,
+  DataGridColumnVisibility,
   DataGridPagination,
   DataGridTable,
   EmptyState,
@@ -198,7 +199,7 @@ export function StudentDirectoryTable() {
         isLoading={query.isPending}
         onRowClick={setDetailRow}
         caption={t("list.caption")}
-        tableLayout={{ cellBorder: true }}
+        tableLayout={{ cellBorder: true, columnsVisibility: true }}
         labels={DASHBOARD_DATA_GRID_LABELS}
         emptyState={
           <EmptyState
@@ -218,19 +219,24 @@ export function StudentDirectoryTable() {
           <Card className={DATA_GRID_CARD_CLASSNAME}>
             <CardHeader className="flex flex-wrap items-center gap-2.5 py-3.5">
               <CardHeading>
-                <StudentDirectoryFilters
-                  searchInput={searchInput}
-                  onSearchInputChange={setSearchInput}
-                  statusFilter={statusFilter}
-                  onStatusFilterChange={setStatusFilter}
-                  campusId={campusId}
-                  onCampusIdChange={setCampusId}
-                  houseId={houseId}
-                  onHouseIdChange={setHouseId}
-                />
+                {/* `CardHeading` itself only applies vertical spacing (`space-y-1`) for a
+                    stacked title+subtitle; the filter row needs its own horizontal flex,
+                    matching staff's identical inner wrapper. */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <StudentDirectoryFilters
+                    searchInput={searchInput}
+                    onSearchInputChange={setSearchInput}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
+                    campusId={campusId}
+                    onCampusIdChange={setCampusId}
+                    houseId={houseId}
+                    onHouseIdChange={setHouseId}
+                  />
+                </div>
               </CardHeading>
-              {selectedWithdrawable.length > 0 && canWithdraw && (
-                <CardToolbar>
+              <CardToolbar>
+                {selectedWithdrawable.length > 0 && canWithdraw && (
                   <m.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
                     <Button
                       variant="destructive"
@@ -244,8 +250,9 @@ export function StudentDirectoryTable() {
                       {t("withdraw.confirmBulk", { count: selectedWithdrawable.length })}
                     </Button>
                   </m.div>
-                </CardToolbar>
-              )}
+                )}
+                <DataGridColumnVisibility />
+              </CardToolbar>
             </CardHeader>
             <m.div
               className="min-w-0"
