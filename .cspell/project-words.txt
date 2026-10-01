@@ -335,5 +335,3 @@ fileobj
 dedup
 regen
 uncleareable
-Tariq
-Farooq
