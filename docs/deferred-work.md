@@ -689,3 +689,19 @@ either this file or `project-status.md`.
     other nine `core` packages join the override as they are typed (generate-baselines reports which).
   - Coverage floors to raise toward the 90% target: `apps/fees_finance` 85, `core/rbac` 80.
 
+- **`e2e/tests/live/students-admission-enrollment.spec.ts` needs a rewrite, not just
+  unblocking, once a later phase builds the screens it assumes.** `students-dashboard-phase1`
+  (Task 9) replaced the `/students` placeholder with the real directory — a table plus
+  in-page dialogs (`StudentFormDialog`, `WithdrawStudentDialog`) and a sheet
+  (`StudentDetailSheet`), driven by the new `StudentsPage` page object and
+  `tests/dashboard/students.spec.ts` (mocked). This live spec predates that reset and still
+  drives the earlier, standalone `/students/new` and `/students/{id}` routes via
+  `studentFormPage`/`studentDetailPage` — routes this phase never builds, so the spec stays
+  red for that reason alone, unrelated to Task 9's changes. Left as-is deliberately: those two
+  fixtures and page objects (`StudentFormPage`, `StudentDetailPage`) are untouched so this
+  spec's import surface keeps compiling, but the journey itself (create student → link
+  guardian → add emergency contact → enroll, plus the duplicate-admission rejection) needs
+  re-driving through the new dialogs/sheet once Phase 2 lands guardians/emergency
+  contacts/enrollment in the real UI — a rewrite against the new page objects, not a
+  route-path fix.
+

@@ -1,17 +1,21 @@
 import { Container } from "@/app/(app)/shell/partials/common/container";
-import { Toolbar, ToolbarHeading } from "@/app/(app)/shell/toolbar";
+import { StudentDirectoryTable } from "@/features/students/student-directory-table";
+import { StudentToolbar } from "@/features/students/student-toolbar";
 
-// Placeholder: the Students module's real screens (directory, add/edit) aren't built
-// yet — this route exists so menu-config.ts's "Students" entry is a genuine link a
-// permission-holding user can follow, not a dead href. Same thin shell as every other
-// route here: the title resolves from menu-config.ts, same as staff/page.tsx.
+// No page-level authorization check of its own — same as every route in this app (see
+// staff/page.tsx's identical comment). This stays a plain server component:
+// `StudentToolbar` and `StudentDirectoryTable` are the client-side pieces (live stats,
+// the table's own queries); the title resolves automatically from menu-config.ts's
+// "Students" entry, same as every other route's `ToolbarHeading`.
 export default function StudentsPage() {
   return (
-    <Container>
-      <Toolbar>
-        <ToolbarHeading />
-      </Toolbar>
-      <p className="text-sm text-muted-foreground">Coming soon.</p>
-    </Container>
+    <>
+      <Container>
+        <StudentToolbar />
+      </Container>
+      <Container>
+        <StudentDirectoryTable />
+      </Container>
+    </>
   );
 }

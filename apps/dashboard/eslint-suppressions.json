@@ -194,11 +194,6 @@
       "count": 1
     }
   },
-  "src/app/(app)/students/page.tsx": {
-    "react/jsx-no-literals": {
-      "count": 1
-    }
-  },
   "src/app/(auth)/layout.tsx": {
     "@next/next/no-img-element": {
       "count": 1

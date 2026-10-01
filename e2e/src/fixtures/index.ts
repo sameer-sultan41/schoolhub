@@ -15,6 +15,7 @@ import {
   StaffPage,
   StudentDetailPage,
   StudentFormPage,
+  StudentsPage,
   WeekGridPage,
 } from "@/pages";
 
@@ -59,6 +60,7 @@ export interface E2EFixtures {
   dashboardPage: DashboardPage;
   staffPage: StaffPage;
   publicSitePage: PublicSitePage;
+  studentsPage: StudentsPage;
   studentFormPage: StudentFormPage;
   studentDetailPage: StudentDetailPage;
   promotionBatchPage: PromotionBatchPage;
@@ -167,6 +169,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   publicSitePage: async ({ page }, use) => {
     await use(new PublicSitePage(page));
+  },
+
+  studentsPage: async ({ page }, use) => {
+    await use(new StudentsPage(page));
   },
 
   studentFormPage: async ({ page }, use) => {
