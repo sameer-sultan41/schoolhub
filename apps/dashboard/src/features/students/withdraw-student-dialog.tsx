@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { useRef, useState, type SyntheticEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -64,6 +64,23 @@ interface PerStudentFailure extends WithdrawTarget {
   message: string;
 }
 
+/**
+ * Mounting contract: the caller must mount this conditionally — a fresh instance per open
+ * (`{withdrawDialog && <WithdrawStudentDialog open ... />}`), or a remount via a `key` tied
+ * to the selection — never keep one instance mounted and toggle its `open` prop.
+ *
+ * Why: everything this dialog remembers about a withdrawal attempt — the targets still to
+ * submit (`idsToSubmit`, seeded from props only on mount), the last partial-failure
+ * `result`, and the cached per-student idempotency keys — is per-instance state with no
+ * reset-on-reopen logic, and it needs none under this contract. A persistent, open-toggled
+ * instance would reopen showing the previous attempt's stale failure list, submit the
+ * previous selection instead of the new one, and resend a past attempt's idempotency key
+ * on a logically distinct withdrawal (which the server would replay, not perform). Don't
+ * switch a caller to the persistent style without first adding that reset here.
+ *
+ * Reference usage: `student-directory-table.tsx`, which renders it only while its own
+ * `withdrawDialog` state is non-null and clears that state on close.
+ */
 export function WithdrawStudentDialog({
   open,
   onOpenChange,
@@ -85,36 +102,17 @@ export function WithdrawStudentDialog({
   } | null>(null);
 
   // One idempotency key per student, generated once and cached for this dialog
-  // session — reused, never regenerated, when that same student is retried after a
+  // instance — reused, never regenerated, when that same student is retried after a
   // partial bulk failure. A response lost in transit for a withdraw that actually
   // succeeded server-side must replay as the SAME request on retry, not a fresh one,
   // or the retry risks reporting a false failure for a student the server already
-  // withdrew. Cleared on close (below) so a later, logically distinct withdrawal
-  // attempt on the same student id never resends a stale key from a past session.
+  // withdrew. Never carried into a later, logically distinct attempt: that is a new
+  // open, so a new instance with an empty map (see the mounting contract above).
   const keysRef = useRef(new Map<string, string>());
   function keyFor(id: string): string {
     if (!keysRef.current.has(id)) keysRef.current.set(id, crypto.randomUUID());
     return keysRef.current.get(id) as string;
   }
-
-  // Resets only on `!open` (close), never on a mere prop change while this component
-  // stays mounted — correct here because the real caller (student-directory-table.tsx,
-  // Task 8) conditionally RENDERS this dialog (`{withdrawDialog && <WithdrawStudentDialog
-  // .../>}`) rather than keeping it mounted with `open` merely toggling: every open is a
-  // fresh mount, so `idsToSubmit`/`result`/the cached idempotency keys never need to
-  // survive past this close-time reset. (A caller that instead kept this component
-  // permanently mounted and only toggled `open` would need this effect to also react to
-  // `studentIds`/`studentNames` changing while still open — it does not, so that mounting
-  // style is not safe with this component as written.) Mirrors student-form-dialog.tsx's
-  // identical reset-on-close effect.
-  useEffect(() => {
-    if (!open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIdsToSubmit(studentIds.map((id, index) => ({ id, name: studentNames[index] ?? "" })));
-      setResult(null);
-      keysRef.current.clear();
-    }
-  }, [open, studentIds, studentNames]);
 
   const form = useForm<WithdrawFormValues>({
     resolver: zodResolver(withdrawFormSchema),

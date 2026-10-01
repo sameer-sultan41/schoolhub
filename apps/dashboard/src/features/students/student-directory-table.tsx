@@ -42,10 +42,10 @@ import { toStudentRow, type StudentRow } from "./student-row";
  *
  * `formDialog`/`withdrawDialog` are conditionally RENDERED (`{formDialog && <... />}`),
  * not kept mounted with `open` merely toggling — deliberately, so each dialog gets a
- * fresh mount per open. `WithdrawStudentDialog` only resets its own `idsToSubmit`/
- * `result` state on `!open` (close), not on a prop change while it stays mounted for a
- * new selection, so an always-mounted version here would show a previous withdrawal's
- * stale state the instant it reopened for a different student or selection.
+ * fresh mount per open. For `WithdrawStudentDialog` this is a hard requirement, not a
+ * preference: it has no reset-on-reopen logic at all (see its own mounting-contract
+ * comment), so an always-mounted version here would reopen showing a previous
+ * withdrawal's stale failures, targets and idempotency keys for a different selection.
  */
 export function StudentDirectoryTable() {
   const t = useTranslations("students");
