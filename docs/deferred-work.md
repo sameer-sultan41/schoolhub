@@ -754,3 +754,18 @@ either this file or `project-status.md`.
   (`line1`/`line2`/`city`/`state`/`postal_code`/`country`), labelled with the existing
   `students.address.*` keys.
 
+- **`seed_dev_data` enables every `module.*` flag for the demo tenant but seeds no
+  school-organization/student sample data (no campus, no houses, no students).** A first
+  attempt added that seeding directly in `core.rbac.management.commands.seed_dev_data`, which
+  `test_no_new_cross_app_import_violations` (ADR-0013) correctly rejected — `core` imports no
+  app, full stop, and `KNOWN_VIOLATIONS` is shrink-only (`check_baselines_shrink.py`), so a new
+  entry isn't an option either. The real fix is the one `test_import_boundaries.py`'s own
+  comment names: move the seed commands (`seed_dev_data`, `seed_e2e_data`, `seed_all_roles`,
+  all currently under `core.rbac.management.commands` on inherited, grandfathered violations)
+  into a dedicated, non-`core` app — app-to-app model imports are fine, so
+  `apps.<new-app>.management.commands.seed_dev_data` importing `Campus`/`House`/`Student` would
+  need no baseline entry at all. That relocation touches three existing commands' location and
+  whatever references it, so it's its own change, not a one-line add. Until then, a developer
+  who wants demo students has to add them by hand (or re-run the one-off shell snippet this
+  session used) after `seed-dev.sh`.
+
