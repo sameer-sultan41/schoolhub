@@ -247,7 +247,13 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
                 ) : null}
               </div>
               {result.errors.length > 0 ? (
-                <div className="overflow-x-auto">
+                // `max-h-[40vh] overflow-y-auto` alongside the existing horizontal scroll:
+                // a long error list (one row per bad import row) previously just grew the
+                // dialog's own height unbounded, with nothing to cap it — DialogContent now
+                // has a max-h-[90vh]/overflow-hidden safety net (PR #96 review), which would
+                // otherwise silently clip the tail of a long list instead of letting it grow.
+                // Bounding this table's own region keeps it scrollable regardless.
+                <div className="max-h-[40vh] overflow-x-auto overflow-y-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>

@@ -151,6 +151,51 @@ export function StudentDetailSheet({
   const hasMedicalNotesField = data !== undefined && "medical_notes" in data;
   const isPending = detailQuery.isPending;
 
+  // Data-driven instead of one <FieldRow> per field: every row shares the same
+  // icon/label/value/isPending shape, so the only thing that varies is which icon and
+  // which piece of `data` (or derived string) feeds it. Grouped by section since
+  // that's how the sheet renders its three headings.
+  const sections: {
+    title: string;
+    fields: { icon: LucideIcon; label: string; value: string | null | undefined }[];
+  }[] = [
+    {
+      title: t("detail.personal"),
+      fields: [
+        { icon: Hash, label: t("fields.admissionNumber"), value: data?.admission_number },
+        { icon: UserRound, label: t("fields.preferredName"), value: data?.preferred_name },
+        { icon: Calendar, label: t("fields.dateOfBirth"), value: data?.date_of_birth },
+        {
+          icon: UserRound,
+          label: t("fields.gender"),
+          value: data ? t(`gender.${data.gender}`) : undefined,
+        },
+        { icon: Building2, label: t("fields.nationality"), value: data?.nationality },
+        { icon: BookOpen, label: t("fields.religion"), value: data?.religion },
+      ],
+    },
+    {
+      title: t("detail.academic"),
+      fields: [
+        { icon: Building2, label: t("fields.campus"), value: data?.campus_name },
+        { icon: Home, label: t("fields.house"), value: data?.house_name },
+        { icon: Calendar, label: t("fields.admissionDate"), value: data?.admission_date },
+        { icon: School, label: t("fields.previousSchool"), value: data?.previous_school },
+      ],
+    },
+    {
+      title: t("detail.medical"),
+      fields: [
+        { icon: Droplet, label: t("fields.bloodGroup"), value: data?.blood_group },
+        {
+          icon: FileText,
+          label: t("fields.medicalNotes"),
+          value: hasMedicalNotesField ? data.medical_notes : t("fields.medicalNotesRestricted"),
+        },
+      ],
+    },
+  ];
+
   return (
     <ResponsiveSheet open={row !== null} onOpenChange={onOpenChange}>
       <ResponsiveSheetContent
@@ -201,90 +246,19 @@ export function StudentDetailSheet({
                 <p className="text-sm text-muted-foreground">{t("detail.loadError")}</p>
               ) : (
                 <>
-                  <FieldSection title={t("detail.personal")}>
-                    <FieldRow
-                      icon={Hash}
-                      label={t("fields.admissionNumber")}
-                      value={data?.admission_number}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={UserRound}
-                      label={t("fields.preferredName")}
-                      value={data?.preferred_name}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={Calendar}
-                      label={t("fields.dateOfBirth")}
-                      value={data?.date_of_birth}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={UserRound}
-                      label={t("fields.gender")}
-                      value={data ? t(`gender.${data.gender}`) : undefined}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={Building2}
-                      label={t("fields.nationality")}
-                      value={data?.nationality}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={BookOpen}
-                      label={t("fields.religion")}
-                      value={data?.religion}
-                      isPending={isPending}
-                    />
-                  </FieldSection>
-
-                  <FieldSection title={t("detail.academic")}>
-                    <FieldRow
-                      icon={Building2}
-                      label={t("fields.campus")}
-                      value={data?.campus_name}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={Home}
-                      label={t("fields.house")}
-                      value={data?.house_name}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={Calendar}
-                      label={t("fields.admissionDate")}
-                      value={data?.admission_date}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={School}
-                      label={t("fields.previousSchool")}
-                      value={data?.previous_school}
-                      isPending={isPending}
-                    />
-                  </FieldSection>
-
-                  <FieldSection title={t("detail.medical")}>
-                    <FieldRow
-                      icon={Droplet}
-                      label={t("fields.bloodGroup")}
-                      value={data?.blood_group}
-                      isPending={isPending}
-                    />
-                    <FieldRow
-                      icon={FileText}
-                      label={t("fields.medicalNotes")}
-                      value={
-                        hasMedicalNotesField
-                          ? data.medical_notes
-                          : t("fields.medicalNotesRestricted")
-                      }
-                      isPending={isPending}
-                    />
-                  </FieldSection>
+                  {sections.map((section) => (
+                    <FieldSection key={section.title} title={section.title}>
+                      {section.fields.map((field) => (
+                        <FieldRow
+                          key={field.label}
+                          icon={field.icon}
+                          label={field.label}
+                          value={field.value}
+                          isPending={isPending}
+                        />
+                      ))}
+                    </FieldSection>
+                  ))}
 
                   {/* Same loading gate as every FieldRow above: a skeleton until the detail
                       arrives, never "Last updated " with nothing after it. */}

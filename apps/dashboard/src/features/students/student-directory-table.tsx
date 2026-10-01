@@ -32,6 +32,7 @@ import { queryKeys } from "@/lib/query-client";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { StudentFormDialog } from "./student-form-dialog";
 import { StudentDetailSheet } from "./student-detail-sheet";
 import { WithdrawStudentDialog } from "./withdraw-student-dialog";
@@ -56,7 +57,7 @@ export function StudentDirectoryTable() {
   const tErrors = useTranslations("errors");
 
   const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
   const [statusFilter, setStatusFilter] = useState("active");
   const [campusId, setCampusId] = useState("");
   const [houseId, setHouseId] = useState("");
@@ -70,15 +71,6 @@ export function StudentDirectoryTable() {
     null,
   );
   const [detailRow, setDetailRow] = useState<StudentRow | null>(null);
-
-  useEffect(() => {
-    const handle = setTimeout(() => {
-      setSearch(searchInput);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(handle);
-    };
-  }, [searchInput]);
 
   // Default: status filter starts at "active", not "all" — so the defaults themselves
   // never count as "the viewer applied a filter" (see `hasActiveFilter` below).

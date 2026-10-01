@@ -64,6 +64,7 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Feature API calls (one file per domain, no hardcoded paths) | `src/services/endpoints.ts` + `src/services/modules/<domain>/`, aggregated as `Services` in `src/services/index.ts` |
 | Permission helpers | `src/lib/permissions.ts` → `canAccessModule(user, module)` (whole-module, used by the sidebar) and `hasPermission(user, key)` (per-action — `/staff`'s Export/Import buttons are its first user). A declarative `<Can>` JSX wrapper still does not exist; add one to `src/components/` on top of `hasPermission` when a screen wants that shape |
 | Background-job polling (`202 + job`, e.g. bulk import/export) | `src/hooks/use-job-polling.ts` |
+| Debouncing a value (e.g. a search input) before it drives a query | `src/hooks/use-debounced-value.ts` — check `src/hooks/` for an existing hook before inlining a new `useState`+`useEffect`/`setTimeout` pair for a cross-cutting UI concern like this one |
 | TanStack Query client + key factory | `src/lib/query-client.ts` |
 | Validated public env | `src/lib/env.ts` |
 | Tenant branding → CSS variables | Not rebuilt since the shell reset: `Services.tenant` fetches branding, nothing applies it yet (`docs/metronic-dashboard-shell.md` backlog) |
