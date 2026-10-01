@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { getCoreRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
@@ -133,16 +133,19 @@ export function StudentDirectoryTable() {
   const canUpdate = hasPermission(currentUser, "students.student.update");
   const canWithdraw = hasPermission(currentUser, "students.student.withdraw");
 
-  const columns = useStudentColumns(
-    canUpdate,
-    canWithdraw,
-    (id) => {
-      setFormDialog({ mode: "edit", studentId: id });
-    },
-    (id, name) => {
-      setWithdrawDialog({ ids: [id], names: [name] });
-    },
-  );
+  // Referentially stable across renders (empty deps) so `useStudentColumns`'s own
+  // `useMemo` actually skips recomputation on a parent re-render that doesn't touch
+  // these — a search-input keystroke before the debounce fires, for instance. Safe:
+  // both bodies only call `useState` setters, which React guarantees are themselves
+  // stable, so there is nothing from an outer scope these need to close over freshly.
+  const handleEdit = useCallback((id: string) => {
+    setFormDialog({ mode: "edit", studentId: id });
+  }, []);
+  const handleWithdraw = useCallback((id: string, name: string) => {
+    setWithdrawDialog({ ids: [id], names: [name] });
+  }, []);
+
+  const columns = useStudentColumns(canUpdate, canWithdraw, handleEdit, handleWithdraw);
 
   const table = useReactTable({
     data: rows,

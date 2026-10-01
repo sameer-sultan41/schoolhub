@@ -97,13 +97,16 @@ export function WithdrawStudentDialog({
     return keysRef.current.get(id) as string;
   }
 
-  // This dialog (per Task 8's wiring, matching exit-staff-dialog.tsx's own precedent)
-  // stays mounted with `open` toggling rather than being conditionally unmounted — so
-  // its state does not reset itself for free between opens. Without this, reopening
-  // for a different student (or selection) would show the previous session's stale
-  // `idsToSubmit`/failure `Alert`, and a cached idempotency key would outlive a single
-  // open, risking the server treating a later, legitimate retry as a replay of an
-  // earlier one. Mirrors student-form-dialog.tsx's identical reset-on-close effect.
+  // Resets only on `!open` (close), never on a mere prop change while this component
+  // stays mounted — correct here because the real caller (student-directory-table.tsx,
+  // Task 8) conditionally RENDERS this dialog (`{withdrawDialog && <WithdrawStudentDialog
+  // .../>}`) rather than keeping it mounted with `open` merely toggling: every open is a
+  // fresh mount, so `idsToSubmit`/`result`/the cached idempotency keys never need to
+  // survive past this close-time reset. (A caller that instead kept this component
+  // permanently mounted and only toggled `open` would need this effect to also react to
+  // `studentIds`/`studentNames` changing while still open — it does not, so that mounting
+  // style is not safe with this component as written.) Mirrors student-form-dialog.tsx's
+  // identical reset-on-close effect.
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
