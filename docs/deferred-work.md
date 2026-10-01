@@ -733,3 +733,13 @@ either this file or `project-status.md`.
   lifecycle/transfers) unblocks `class_id`/`section_id`/`academic_session_id` on the directory
   once it lands.
 
+- **`/students`' detail sheet shows no address.** `StudentFormDialog` captures and edits all
+  six address sub-fields (`student-address-fields.tsx`), but `StudentDetailSheet`
+  (`students-dashboard-phase1` Task 6) renders only its Personal, Academic and Medical
+  sections, so a stored address is visible only by opening Edit. The branch's final review
+  caught the module doc and `project-status.md` claiming the sheet showed address fields;
+  the docs were corrected to match what shipped rather than growing the sheet in that last
+  fix pass. Follow-up: an Address section in the sheet reading `StudentRecord.address`
+  (`line1`/`line2`/`city`/`state`/`postal_code`/`country`), labelled with the existing
+  `students.address.*` keys.
+

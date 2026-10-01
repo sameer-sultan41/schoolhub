@@ -226,8 +226,9 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 ## 20. Implementation notes
 
 **Dashboard, Phase 1 (as shipped).** `/students` ships a directory (`DataGrid`, search +
-status/campus/house filters), create/edit (`StudentFormDialog`), a flat profile detail view
-(`StudentDetailSheet`, including address fields and the read-only admission number), and
+status/campus/house filters), create/edit (`StudentFormDialog`, including the address
+fields), a flat read-only profile detail view (`StudentDetailSheet`: Personal, Academic and
+Medical sections, the read-only admission number, and no address section yet), and
 withdrawal (`WithdrawStudentDialog`, single or bulk, offered only for `active` students and
 honoring `Idempotency-Key`). `photo_url` was added to `StudentSerializer`, mirroring
 `staff_management/staff/serializers.py`. `waive_clearance` is not exposed — `clearance_blockers()`
