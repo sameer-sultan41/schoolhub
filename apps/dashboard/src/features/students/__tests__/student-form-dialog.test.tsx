@@ -502,6 +502,45 @@ describe("StudentFormDialog", () => {
       expect(mockToastSuccess).toHaveBeenCalledWith("Student updated.");
     });
 
+    it("keeps an in-progress edit when a background refetch returns a new object for the same student", async () => {
+      // `detailQuery.data` can change REFERENCE on a background refetch (e.g. the
+      // photo's presigned URL rotating) with no actual edit in flight and the same
+      // student still open. Before this fix, the prefill effect keyed only off
+      // `detailQuery.data` itself, so any such refetch re-ran `form.reset()` and
+      // silently discarded whatever the user was mid-typing.
+      mockReferenceData();
+      mockFetchStudentById.mockResolvedValueOnce(studentDetail());
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      function Wrapper({ children }: { children: ReactNode }) {
+        return (
+          <NextIntlClientProvider locale="en" messages={enMessages}>
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+          </NextIntlClientProvider>
+        );
+      }
+
+      render(<StudentFormDialog open mode="edit" studentId="s1" onOpenChange={onOpenChange} />, {
+        wrapper: Wrapper,
+      });
+      expect(await screen.findByDisplayValue("Ali")).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.clear(screen.getByLabelText(/first name/i));
+      await user.type(screen.getByLabelText(/first name/i), "Aliyah");
+
+      // A new object, same id and same field values, standing in for a background
+      // refetch's fresh reference.
+      mockFetchStudentById.mockResolvedValueOnce(studentDetail());
+      await waitFor(() => {
+        void queryClient.refetchQueries({ queryKey: ["students", "students", "detail", "s1"] });
+      });
+
+      await waitFor(() => {
+        expect(mockFetchStudentById).toHaveBeenCalledTimes(2);
+      });
+      expect(screen.getByDisplayValue("Aliyah")).toBeInTheDocument();
+    });
+
     it("clears a house on edit by sending null, not omitting the field", async () => {
       mockReferenceData();
       mockFetchStudentById.mockResolvedValue(

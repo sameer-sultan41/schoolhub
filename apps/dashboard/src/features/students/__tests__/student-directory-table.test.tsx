@@ -201,4 +201,19 @@ describe("StudentDirectoryTable", () => {
     expect(await screen.findByText(/we could not reach the server/i)).toBeInTheDocument();
     expect(screen.queryByText(/don't have permission/i)).not.toBeInTheDocument();
   });
+
+  it("shows the generic load-error message, not the permission one, for a thrown error that isn't an ApiError at all", async () => {
+    // Distinct from the test above: that one throws an ApiError whose code just isn't
+    // "permission_denied" — this one throws something that isn't an ApiError instance at
+    // all (e.g. a raw TypeError from a bug elsewhere in the fetch chain), which
+    // `resolveErrorMessage` can only handle via its `fallback` argument. Before this fix
+    // that fallback was `t("list.forbidden")` for every non-ApiError failure, incorrectly
+    // claiming a permission problem for any unrelated crash.
+    mockFetchStudentsPage.mockRejectedValue(new TypeError("Cannot read properties of undefined"));
+
+    renderWithProviders(<StudentDirectoryTable />);
+
+    expect(await screen.findByText(/couldn't load the students list/i)).toBeInTheDocument();
+    expect(screen.queryByText(/don't have permission/i)).not.toBeInTheDocument();
+  });
 });

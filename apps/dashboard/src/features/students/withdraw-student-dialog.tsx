@@ -168,6 +168,11 @@ export function WithdrawStudentDialog({
   });
 
   function handleSubmit(event: SyntheticEvent) {
+    // Guards against a double submit from pressing Enter in the Textarea/Input while
+    // the mutation is already in flight — the Drawer's confirm button has no `disabled`
+    // of its own (only `isLoading`), and an Enter keypress bypasses a disabled button
+    // anyway since it submits the form directly, not through a click.
+    if (mutation.isPending) return;
     form
       .handleSubmit((values) => {
         mutation.mutate(values);

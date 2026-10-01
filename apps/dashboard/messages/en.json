@@ -196,6 +196,7 @@
       "emptyTitle": "No students yet",
       "emptyDescription": "Add your first student, or import a class list.",
       "forbidden": "You don't have permission to view students.",
+      "loadError": "Couldn't load the students list. Please try again.",
       "noMatches": "No students match these filters."
     },
     "columns": {

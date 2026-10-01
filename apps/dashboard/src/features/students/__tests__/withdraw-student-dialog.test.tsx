@@ -114,4 +114,35 @@ describe("WithdrawStudentDialog", () => {
     expect(mockWithdrawStudent).toHaveBeenCalledTimes(1);
     expect(mockWithdrawStudent).toHaveBeenCalledWith("s2", expect.anything(), s2Key);
   });
+
+  it("does not double-submit when the form is submitted again while the mutation is still pending", async () => {
+    // Reproduces an Enter keypress in the Textarea/Input submitting the form directly —
+    // that bypasses the confirm button's own `disabled`/`isLoading` state entirely, since
+    // it never goes through a click. Before this fix, a second submit event in flight
+    // issued a second, independent withdrawal request for the same student.
+    let resolveWithdraw: (value: StudentRecord) => void = () => {};
+    mockWithdrawStudent.mockReturnValue(
+      new Promise((resolve) => {
+        resolveWithdraw = resolve;
+      }),
+    );
+
+    const { container } = renderWithProviders(
+      <WithdrawStudentDialog
+        open
+        onOpenChange={jest.fn()}
+        studentIds={["s1"]}
+        studentNames={["Ali"]}
+      />,
+    );
+
+    await fillReason(userEvent.setup());
+    const form = container.querySelector("form");
+    if (!form) throw new Error("form not found");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(mockWithdrawStudent).toHaveBeenCalledTimes(1);
+    resolveWithdraw(studentRecord({ id: "s1", status: "withdrawn" }));
+  });
 });

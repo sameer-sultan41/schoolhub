@@ -173,12 +173,15 @@ export function StudentDirectoryTable() {
 
   if (query.isError) {
     const isPermissionDenied = query.error instanceof ApiError && query.error.isPermissionDenied;
+    // A non-ApiError (network failure, etc.) must not read as "forbidden" — that's a
+    // distinct failure with no permission implication, so it gets its own fallback
+    // rather than reusing `list.forbidden` as a catch-all.
     return (
       <Card>
         <p className="p-6 text-sm text-muted-foreground">
           {isPermissionDenied
             ? t("list.forbidden")
-            : resolveErrorMessage(query.error, tErrors, t("list.forbidden"))}
+            : resolveErrorMessage(query.error, tErrors, t("list.loadError"))}
         </p>
       </Card>
     );

@@ -121,7 +121,13 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
     (detailQuery.isPending || (detailQuery.data !== undefined && populatedStudentId !== studentId));
 
   useEffect(() => {
-    if (open && mode === "edit" && detailQuery.data) {
+    // The `populatedStudentId !== detailQuery.data.id` guard matters beyond the
+    // obvious "don't redo work" case: TanStack Query can hand back a NEW `data`
+    // object reference for the SAME student on a background refetch (e.g. the
+    // photo's presigned URL rotating) with no edit in flight. Without this guard,
+    // that refetch would silently `form.reset()` over whatever the user is
+    // currently typing, discarding unsaved edits.
+    if (open && mode === "edit" && detailQuery.data && populatedStudentId !== detailQuery.data.id) {
       form.reset(detailToFormValues(detailQuery.data));
       // Syncs "which record's data has actually been applied" from the query result —
       // `isDetailLoading` depends on it to keep every `Select` unmounted until this has
@@ -129,7 +135,7 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPopulatedStudentId(detailQuery.data.id);
     }
-  }, [open, mode, detailQuery.data, form]);
+  }, [open, mode, detailQuery.data, populatedStudentId, form]);
 
   useEffect(() => {
     if (!open) {
