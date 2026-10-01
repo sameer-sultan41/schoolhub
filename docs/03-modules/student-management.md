@@ -222,3 +222,19 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - *(recommendation)* Make duplicate-detection thresholds tenant-tunable with conservative defaults, and retain withdrawn/transferred student records read-only for the tenant's configured retention period rather than deleting.
 - **Open:** whether siblings should be auto-linked into a family entity for fee discounts — currently modeled implicitly via shared guardians; fees-finance consumes that.
 - **Open:** legal custody edge cases (blocked guardian access) — proposed per-link `access_revoked` handling via `student_guardians` flags, pending client confirmation.
+
+## 20. Implementation notes
+
+**Dashboard, Phase 1 (as shipped).** `/students` ships a directory (`DataGrid`, search +
+status/campus/house filters), create/edit (`StudentFormDialog`), a flat profile detail view
+(`StudentDetailSheet`, including address fields and the read-only admission number), and
+withdrawal (`WithdrawStudentDialog`, single or bulk, offered only for `active` students and
+honoring `Idempotency-Key`). `photo_url` was added to `StudentSerializer`, mirroring
+`staff_management/staff/serializers.py`. `waive_clearance` is not exposed — `clearance_blockers()`
+always returns `[]` until a fees/library/transport module ships (`deferred-work.md`). Wire types
+are the generated `ApiSchemas["Student"]`, not a hand-maintained duplicate (ADR-0017). Guardians,
+emergency contacts, documents, enrollment/transfers, and bulk import/export/ID-cards are
+sequenced as later phases — see `docs/project-status.md`.
+
+The backend's own `emergency_contacts/`, `guardians/`, `student_guardians/` and `transfers/`
+packages exist but are not wired into `urls.py` — a separate, backend-only follow-up.

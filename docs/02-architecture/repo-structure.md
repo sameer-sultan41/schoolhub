@@ -78,7 +78,7 @@ schoolhub/
 | User-facing dashboard text | `apps/dashboard/messages/en.json` **and** `ur.json` | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
 | A UI primitive | `packages/ui/src/components/`, ported from vendor source | [ADR-0009](../decisions/0009-ported-ui-primitives.md) |
 | A component used by only one app | That app (`src/features/…` or `src/components/`) until a second app needs it | §5 |
-| A shared TypeScript type | `packages/types/src/` | §5 |
+| A shared TypeScript type (a new domain's own wire type: see [ADR-0017](../decisions/0017-generated-wire-types-for-new-domains.md) instead) | `packages/types/src/` | §5 |
 | An environment variable | The runtime's typed env module, the matching `.env.example`, and `turbo.json`'s env list if it's needed at build time | §4 |
 | A named constant (timeout, page size, limit) | `apps/dashboard/src/lib/constants.ts`, `core/api/pagination.py`, or a module-level `UPPER_SNAKE` name | [ADR-0014](../decisions/0014-no-hardcoded-values.md) |
 | A frontend test | A sibling `__tests__/` folder next to the source | [ADR-0012](../decisions/0012-tests-in-dunder-tests.md) |

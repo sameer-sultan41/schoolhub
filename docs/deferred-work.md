@@ -249,10 +249,13 @@ either this file or `project-status.md`.
   turns any `File` foreign key into a read-only signed GET link (`get_display_url()`), valid
   `FILE_DISPLAY_URL_TTL_SECONDS` (default 1 h) and `null` unless the file is `ready` and not
   soft-deleted. `StaffSerializer.photo_url` uses it, and the dashboard's staff directory and
-  edit dialog render it over an initials fallback. Students and guardians still expose only
-  `photo_file_id` — one `SignedFileURLField(source="photo_file")` line each, plus
-  `select_related("photo_file")`, when their screens need photos. The signer is now one shared
-  SigV4 instance per process (`get_presigner()`), signing for `S3_PUBLIC_ENDPOINT_URL`.
+  edit dialog render it over an initials fallback. `StudentSerializer.photo_url` now uses it
+  too (`students-dashboard-phase1` Task 1), with the same `select_related("photo_file")` and
+  an ownership guard on `photo_file_id` mirroring `staff/serializers.py`; the student
+  directory/form/detail sheet render it over an initials fallback. **Guardians still expose
+  only `photo_file_id`** — the same one-line addition, when a guardian-facing screen needs
+  photos. The signer is now one shared SigV4 instance per process (`get_presigner()`), signing
+  for `S3_PUBLIC_ENDPOINT_URL`.
 - `medical_notes` field-level restriction and the `filter_assigned_to_user`
   fail-closed default (no `staff` table to join against yet) both ship in
   PR 1, ahead of the features that will exercise them. The student<->guardian
@@ -704,4 +707,29 @@ either this file or `project-status.md`.
   re-driving through the new dialogs/sheet once Phase 2 lands guardians/emergency
   contacts/enrollment in the real UI — a rewrite against the new page objects, not a
   route-path fix.
+
+- **A 422 duplicate-admission create response has no field for the override reason its own
+  message promises.** `student_management`'s duplicate-admission check (same name + DOB)
+  returns a `non_field` message ending "Pass an override reason to create anyway" — but no
+  `override_reason`/equivalent field exists on `POST /students` for a caller to actually supply
+  one, so no control on the client could actually act on it. `/students`' create dialog
+  (`StudentFormDialog`, `students-dashboard-phase1` Task 5) deliberately shows the server's
+  message plainly rather than adding a button that can't do anything. Not scheduled in
+  `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`'s Phases 2-4 Roadmap — its
+  own small follow-up (a backend field plus a client "create anyway" affordance).
+
+- **`waive_clearance` has no UI control on `/students`' withdraw dialog.**
+  `clearance_blockers()` (`student_management`'s withdraw path) is hard-coded to return `[]`
+  until a fees/library/transport module exists, so a checkbox would always be a no-op today;
+  `withdrawStudent` (`students-dashboard-phase1` Task 3) always sends `waiveClearance: false`.
+  Not one of `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`'s Phases 2-4 —
+  genuinely blocked on `fees-finance`/`library`/`transport` (Tier 3/5+) shipping real blockers
+  first, not on anything in this plan's own Roadmap.
+
+- **`/students`' directory filters stop at search/status/campus/house.** Class, section and
+  academic-session filters were left out this phase — with no enrollment UI yet, they would be
+  dead controls (`students-dashboard-phase1`'s Global Constraints). Phase 3 of
+  `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`'s Roadmap (enrollment
+  lifecycle/transfers) unblocks `class_id`/`section_id`/`academic_session_id` on the directory
+  once it lands.
 

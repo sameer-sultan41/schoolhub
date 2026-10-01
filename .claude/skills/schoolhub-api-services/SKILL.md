@@ -99,10 +99,13 @@ Rules for this file:
   return `data`. Let a thrown `ApiError` propagate; don't catch-and-swallow unless the
   function has a real reason to (see `auth-service.ts`'s `logout()` for the one
   legitimate case: a failed logout must never trap the user in the app).
-- **Types come from `packages/types`**, not a per-module `type.ts` file. If the
-  domain's request/response shape doesn't exist there yet, add it there — that package
-  is the one place domain types live in this repo, shared with anything else that
-  might need them.
+- **A domain's own wire shape is the generated `ApiSchemas["<Model>"]` type**
+  (`@schoolhub/api-client`), type-aliased and re-exported from this file's `index.ts` —
+  not hand-written in `packages/types`
+  ([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)).
+  `packages/types` is for cross-cutting types with no generated source (the envelope/
+  pagination primitives, auth/RBAC, tenant/website) and small runtime value-arrays an
+  enum-backed `<Select>`/`z.enum(...)` needs.
 
 ### 3. Re-export as `<Domain>Service` in `src/services/modules/<domain>/index.ts`
 
@@ -170,7 +173,10 @@ convention, not a flat `*.test.ts` beside the source.
 
 1. `endpoints.ts` gets the domain's real paths (nothing speculative).
 2. `services/modules/<domain>/<domain>-service.ts` — one function per API call, typed
-   against `packages/types`, every path from `endpoints.<domain>.*`.
+   against the domain's own generated `ApiSchemas["<Model>"]` alias
+   ([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)),
+   falling back to `packages/types` only for cross-cutting/no-generated-source cases;
+   every path from `endpoints.<domain>.*`.
 3. `services/modules/<domain>/index.ts` re-exports as `<Domain>Service`.
 4. `services/index.ts` registers it under `Services.<domain>`.
 5. `services/modules/<domain>/__tests__/<domain>-service.test.ts` covers each function.
@@ -191,13 +197,14 @@ convention, not a flat `*.test.ts` beside the source.
 
 Two things the reference pattern this was adapted from does, on purpose left out:
 
-- **No per-module `type.ts`/`dal.ts`/`actions.ts` split.** This repo already keeps
-  domain types in `packages/types` (shared across the whole monorepo, not just the
-  dashboard) — duplicating that into a per-module `type.ts` would be two sources of
-  truth for the same shape. `actions.ts`'s only reason to exist in the reference
-  project was a Next.js `'use server'` directive boundary; nothing here needs that
-  split yet — if a mutation genuinely needs to be a Server Action, that's a reason to
-  revisit this, not a reason to pre-build it now.
+- **No per-module `type.ts`/`dal.ts`/`actions.ts` split.** A domain's wire shape is
+  the generated `ApiSchemas["<Model>"]`, re-exported from its own `<domain>-service.ts`
+  ([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)) —
+  a separate per-module `type.ts` duplicating that would be a second source of truth
+  for the same shape. `actions.ts`'s only reason to exist in the reference project was
+  a Next.js `'use server'` directive boundary; nothing here needs that split yet — if a
+  mutation genuinely needs to be a Server Action, that's a reason to revisit this, not
+  a reason to pre-build it now.
 - **No `[error, data]` tuple return.** This repo already throws `ApiError` and lets
   TanStack Query's own error channel (`isError`, `error`, `onError`) handle it — see
   `login-form.tsx`'s `mutation.error instanceof ApiError` pattern. A tuple return would

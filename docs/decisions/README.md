@@ -45,6 +45,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0014](0014-no-hardcoded-values.md) | Every value has one owner — no hardcoding | Accepted | ESLint rules + shrink-only baselines (frontend); ruff `TID251`, `test_env_example.py`, `test_endpoint_contracts.py` (backend) |
 | [0015](0015-independent-plan-review.md) | Non-trivial plans pass an independent reviewer before approval | Accepted | `.claude/hooks/plan_review_gate.py` (tested in `repo-hygiene.yml`), `plan-review-record` CI job |
 | [0016](0016-commit-message-rules.md) | Commit messages: conventional subjects, no AI attribution, fixes name their root cause | Accepted | `.githooks/commit-msg`, `commit-messages` CI job |
+| [0017](0017-generated-wire-types-for-new-domains.md) | A new domain's wire types come from the generated API contract, not a hand-written packages/types copy | Accepted | review only |
 
 "Planned" items land in the stacked PRs described in
 [`../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md`](../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md);
