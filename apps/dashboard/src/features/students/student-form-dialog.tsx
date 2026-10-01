@@ -57,6 +57,16 @@ export interface StudentFormDialogProps {
   studentId?: string;
 }
 
+// The two required name fields are adjacent, identically-shaped plain text inputs — looped
+// the same way `StudentAddressFields`/`StudentProfileTextFields` loop their own field lists.
+// `date_of_birth` and `admission_date` are the same shape too, but sit apart in the form
+// (separated by gender/campus/house) — merging them into one loop would mean rendering them
+// next to each other, reordering the form, so they stay as their own individual `FormField`s.
+const NAME_FIELDS = [
+  ["first_name", "firstName"],
+  ["last_name", "lastName"],
+] as const;
+
 export function StudentFormDialog({ open, onOpenChange, mode, studentId }: StudentFormDialogProps) {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
@@ -228,32 +238,22 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
                 }
               >
                 {formError && <Alert variant="destructive">{formError}</Alert>}
-                <FormField
-                  control={form.control}
-                  name="first_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.firstName")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="last_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.lastName")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {NAME_FIELDS.map(([name, labelKey]) => (
+                  <FormField
+                    key={name}
+                    control={form.control}
+                    name={name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t(`fields.${labelKey}`)}</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
                 <FormField
                   control={form.control}
                   name="date_of_birth"

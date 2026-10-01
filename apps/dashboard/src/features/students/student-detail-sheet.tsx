@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -82,6 +83,46 @@ export function StudentDetailSheet({
   // would conflate both as "Restricted".
   const hasMedicalNotesField = data !== undefined && "medical_notes" in data;
 
+  // Data-driven instead of one <FieldRow> per field: every row shares the same
+  // label/value/isPending shape, so the only thing that varies is which piece of `data`
+  // (or derived string) feeds it. Grouped by section since that's how the sheet renders
+  // its three headings.
+  const sections: {
+    title: string;
+    fields: { label: string; value: string | null | undefined }[];
+  }[] = [
+    {
+      title: t("detail.personal"),
+      fields: [
+        { label: t("fields.admissionNumber"), value: data?.admission_number },
+        { label: t("fields.preferredName"), value: data?.preferred_name },
+        { label: t("fields.dateOfBirth"), value: data?.date_of_birth },
+        { label: t("fields.gender"), value: data ? t(`gender.${data.gender}`) : undefined },
+        { label: t("fields.nationality"), value: data?.nationality },
+        { label: t("fields.religion"), value: data?.religion },
+      ],
+    },
+    {
+      title: t("detail.academic"),
+      fields: [
+        { label: t("fields.campus"), value: data?.campus_name },
+        { label: t("fields.house"), value: data?.house_name },
+        { label: t("fields.admissionDate"), value: data?.admission_date },
+        { label: t("fields.previousSchool"), value: data?.previous_school },
+      ],
+    },
+    {
+      title: t("detail.medical"),
+      fields: [
+        { label: t("fields.bloodGroup"), value: data?.blood_group },
+        {
+          label: t("fields.medicalNotes"),
+          value: hasMedicalNotesField ? data.medical_notes : t("fields.medicalNotesRestricted"),
+        },
+      ],
+    },
+  ];
+
   return (
     <ResponsiveSheet open={row !== null} onOpenChange={onOpenChange}>
       <ResponsiveSheetContent closeLabel={tCommon("close")}>
@@ -106,71 +147,19 @@ export function StudentDetailSheet({
                 <p className="text-sm text-muted-foreground">{t("detail.loadError")}</p>
               ) : (
                 <div className="space-y-1">
-                  <h3 className="text-sm font-medium">{t("detail.personal")}</h3>
-                  <FieldRow
-                    label={t("fields.admissionNumber")}
-                    value={data?.admission_number}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.preferredName")}
-                    value={data?.preferred_name}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.dateOfBirth")}
-                    value={data?.date_of_birth}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.gender")}
-                    value={data ? t(`gender.${data.gender}`) : undefined}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.nationality")}
-                    value={data?.nationality}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.religion")}
-                    value={data?.religion}
-                    isPending={detailQuery.isPending}
-                  />
-                  <h3 className="text-sm font-medium">{t("detail.academic")}</h3>
-                  <FieldRow
-                    label={t("fields.campus")}
-                    value={data?.campus_name}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.house")}
-                    value={data?.house_name}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.admissionDate")}
-                    value={data?.admission_date}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.previousSchool")}
-                    value={data?.previous_school}
-                    isPending={detailQuery.isPending}
-                  />
-                  <h3 className="text-sm font-medium">{t("detail.medical")}</h3>
-                  <FieldRow
-                    label={t("fields.bloodGroup")}
-                    value={data?.blood_group}
-                    isPending={detailQuery.isPending}
-                  />
-                  <FieldRow
-                    label={t("fields.medicalNotes")}
-                    value={
-                      hasMedicalNotesField ? data.medical_notes : t("fields.medicalNotesRestricted")
-                    }
-                    isPending={detailQuery.isPending}
-                  />
+                  {sections.map((section) => (
+                    <Fragment key={section.title}>
+                      <h3 className="text-sm font-medium">{section.title}</h3>
+                      {section.fields.map((field) => (
+                        <FieldRow
+                          key={field.label}
+                          label={field.label}
+                          value={field.value}
+                          isPending={detailQuery.isPending}
+                        />
+                      ))}
+                    </Fragment>
+                  ))}
                   {/* Same loading gate as every FieldRow above: a skeleton until the detail
                       arrives, never "Last updated " with nothing after it. */}
                   {data ? (
