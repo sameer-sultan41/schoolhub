@@ -191,6 +191,7 @@ export function StudentDirectoryTable() {
         recordCount={totalCount}
         isLoading={query.isPending}
         onRowClick={setDetailRow}
+        caption={t("list.caption")}
         labels={DASHBOARD_DATA_GRID_LABELS}
         emptyState={
           <EmptyState

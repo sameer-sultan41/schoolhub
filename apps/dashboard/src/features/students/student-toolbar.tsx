@@ -52,13 +52,13 @@ export function StudentToolbar() {
         <ToolbarActions>
           <StatCard
             label={t("stats.total")}
-            value={totalQuery.data?.pagination?.total_count?.toString() ?? ""}
+            value={totalQuery.data?.pagination?.total_count?.toLocaleString() ?? ""}
             state={totalQuery.isPending ? "loading" : totalQuery.isError ? "unavailable" : "ready"}
             unavailableLabel={t("stats.unavailable")}
           />
           <StatCard
             label={t("stats.active")}
-            value={activeQuery.data?.pagination?.total_count?.toString() ?? ""}
+            value={activeQuery.data?.pagination?.total_count?.toLocaleString() ?? ""}
             state={
               activeQuery.isPending ? "loading" : activeQuery.isError ? "unavailable" : "ready"
             }
