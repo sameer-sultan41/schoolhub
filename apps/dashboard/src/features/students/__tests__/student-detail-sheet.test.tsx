@@ -117,6 +117,36 @@ describe("StudentDetailSheet", () => {
     expect(await screen.findByText("2026-0099")).toBeInTheDocument();
   });
 
+  it("shows last-updated as relative time, not a raw timestamp, and no half-label while loading", async () => {
+    let resolveDetail: (record: StudentRecord) => void = () => {};
+    mockFetchStudentById.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDetail = resolve;
+      }),
+    );
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    // Still loading: a skeleton, never "Last updated " with nothing after it.
+    expect(screen.queryByText(/last updated/i)).not.toBeInTheDocument();
+
+    resolveDetail(studentDetail({ updated_at: "2026-09-20T00:00:00Z" }));
+
+    // `formatDistanceToNow` with `addSuffix` — "… ago", or "in …" on a runner whose clock
+    // reads earlier than the fixture date.
+    expect(await screen.findByText(/^Last updated (in .+|.+ ago)$/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-09-20T00:00:00Z/)).not.toBeInTheDocument();
+  });
+
   it("shows a real medical_notes value as itself, not as Restricted, when the key is present but falsy-looking", async () => {
     mockFetchStudentById.mockResolvedValue(studentDetail({ medical_notes: "No known allergies." }));
 

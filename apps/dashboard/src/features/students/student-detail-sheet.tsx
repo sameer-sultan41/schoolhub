@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Pencil, UserMinus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Skeleton } from "@schoolhub/ui";
@@ -25,6 +26,15 @@ export interface StudentDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   onEdit: (id: string) => void;
   onWithdraw: (id: string, name: string) => void;
+}
+
+/** "3 days ago" rather than a raw ISO timestamp — the same `formatDistanceToNow` rendering
+ * as `/staff`'s `formatLastUpdated` (`staff-directory-table.tsx`), replicated rather than
+ * imported so this feature doesn't depend on another route's table module. */
+function formatLastUpdated(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return formatDistanceToNow(parsed, { addSuffix: true });
 }
 
 function FieldRow({
@@ -161,9 +171,15 @@ export function StudentDetailSheet({
                     }
                     isPending={detailQuery.isPending}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    {t("detail.lastUpdated", { when: data?.updated_at ?? "" })}
-                  </p>
+                  {/* Same loading gate as every FieldRow above: a skeleton until the detail
+                      arrives, never "Last updated " with nothing after it. */}
+                  {data ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t("detail.lastUpdated", { when: formatLastUpdated(data.updated_at) })}
+                    </p>
+                  ) : (
+                    <Skeleton className="h-3 w-32" />
+                  )}
                 </div>
               )}
             </ResponsiveSheetBody>
