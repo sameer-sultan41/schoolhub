@@ -81,11 +81,14 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 2. API calls: add a `<module>` entry to `src/services/endpoints.ts` (paths, or
    param-taking functions for anything with an id); create
    `src/services/modules/<module>/<module>-service.ts` with the actual `apiClient` calls,
-   typed against the generated `ApiSchemas["<Model>"]` (`@schoolhub/api-client`), not a
-   hand-written `packages/types` duplicate — see
-   [ADR-0017](../../docs/decisions/0017-generated-wire-types-for-new-domains.md);
-   `packages/types` stays for cross-cutting/no-generated-source types and the feature's
-   own local types; register it in `src/services/index.ts` as `Services.<module>`. See
+   typed against the generated `ApiSchemas["<Model>"]` (`@schoolhub/api-client`),
+   type-aliased in that same service module —
+   `export type StudentRecord = ApiSchemas["Student"]`, or a `Pick<>` of one for a
+   narrower reference-data shape — never hand-written there or in `packages/types` (see
+   [ADR-0017](../../docs/decisions/0017-generated-wire-types-for-new-domains.md));
+   `packages/types` keeps only cross-cutting types with no generated source
+   (envelope/pagination, auth/RBAC, tenant/website, and enum value-arrays such as
+   `GENDER_VALUES`); register it in `src/services/index.ts` as `Services.<module>`. See
    `src/services/modules/auth/` for the reference shape, or `src/services/modules/tenant/`
    for the smallest one.
 3. Feature code: `src/features/<module>/` — components and hooks. A screen's

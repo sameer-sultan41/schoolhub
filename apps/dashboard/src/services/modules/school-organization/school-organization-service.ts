@@ -1,4 +1,4 @@
-import { fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
+import { fetchPage, MAX_PAGE_SIZE, type ApiSchemas } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 
@@ -8,10 +8,9 @@ import { endpoints } from "@/services/endpoints";
  * file directly and never by importing `@schoolhub/api-client` directly.
  */
 
-export interface SchoolOrganizationOption {
-  id: string;
-  name: string;
-}
+/** The slice of the generated `House` schema a reference-data select/filter reads — derived
+ * from the contract, not hand-written, per ADR-0017. */
+export type SchoolOrganizationOption = Pick<ApiSchemas["House"], "id" | "name">;
 
 /** `GET /houses` — every house, for a reference-data select/filter. */
 export async function fetchHouses(): Promise<SchoolOrganizationOption[]> {
