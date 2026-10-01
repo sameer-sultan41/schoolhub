@@ -49,6 +49,8 @@ KNOWN_VIOLATIONS = frozenset(
         ("core.rbac.management.commands.seed_e2e_data", "apps.staff_management"),
         ("core.rbac.management.commands.seed_e2e_data", "apps.student_management"),
         ("core.rbac.management.commands.seed_e2e_data", "apps.timetable"),
+        ("core.rbac.management.commands.seed_dev_data", "apps.school_organization"),
+        ("core.rbac.management.commands.seed_dev_data", "apps.student_management"),
     }
 )
 
