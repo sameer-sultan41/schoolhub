@@ -184,9 +184,12 @@ describe("StudentDetailSheet", () => {
       />,
     );
 
-    await screen.findByText(studentRow().admissionNumber);
+    // `studentRow().admissionNumber` renders synchronously from the row prop, before the
+    // detail fetch resolves — it's not a usable "data has loaded" signal here. Wait on
+    // the em dash itself instead: it can only appear once the FieldRow has actually
+    // left its loading-skeleton state.
+    expect(await screen.findByText("—")).toBeInTheDocument();
     expect(screen.queryByText("Restricted")).not.toBeInTheDocument();
-    expect(screen.getByText("—")).toBeInTheDocument();
   });
 
   it("hides the Withdraw action for a non-active student even when canWithdraw is true", async () => {

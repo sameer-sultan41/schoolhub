@@ -2292,7 +2292,7 @@ oversight, and are the one exception to "no second source of truth" below.
   point here, so the next domain doesn't rediscover this the hard way a third time.
 ```
 
-Add a row for it to `docs/decisions/README.md`'s Index table: `| [0017](0017-generated-wire-types-for-new-domains.md) | A new domain's wire types come from the generated API contract, not a hand-written packages/types copy | Accepted | review only |`.
+Add a row for it to `docs/decisions/README.md`'s Index table: `| [0017] (0017-generated-wire-types-for-new-domains.md) | A new domain's wire types come from the generated API contract, not a hand-written packages/types copy | Accepted | review only |` (no space between the brackets and parens in the real row — written with one here only so the repo's link checker doesn't parse this inline-code example as a real, directory-relative link).
 
 - [ ] **Step 2: Update every doc that currently points the other way**
 

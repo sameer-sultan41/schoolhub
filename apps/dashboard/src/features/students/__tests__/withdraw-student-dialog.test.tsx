@@ -127,7 +127,7 @@ describe("WithdrawStudentDialog", () => {
       }),
     );
 
-    const { container } = renderWithProviders(
+    renderWithProviders(
       <WithdrawStudentDialog
         open
         onOpenChange={jest.fn()}
@@ -137,7 +137,10 @@ describe("WithdrawStudentDialog", () => {
     );
 
     await fillReason(userEvent.setup());
-    const form = container.querySelector("form");
+    // `AlertDialogContent` renders through a portal, outside the `container` div
+    // `render()` returns — `screen` (which searches the whole document) finds the form
+    // the portal actually mounted, `container.querySelector` does not.
+    const form = screen.getByLabelText(/reason/i).closest("form");
     if (!form) throw new Error("form not found");
     fireEvent.submit(form);
     fireEvent.submit(form);
