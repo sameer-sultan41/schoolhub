@@ -33,6 +33,7 @@ import {
   Input,
   Textarea,
 } from "@schoolhub/ui";
+import { LogOut, X } from "lucide-react";
 
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { resolveErrorMessage } from "@/lib/error-message";
@@ -169,9 +170,9 @@ export function WithdrawStudentDialog({
 
   function handleSubmit(event: SyntheticEvent) {
     // Guards against a double submit from pressing Enter in the Textarea/Input while
-    // the mutation is already in flight — the Drawer's confirm button has no `disabled`
-    // of its own (only `isLoading`), and an Enter keypress bypasses a disabled button
-    // anyway since it submits the form directly, not through a click.
+    // the mutation is already in flight — an Enter keypress bypasses the confirm
+    // button's own `disabled` entirely, since it submits the form directly, not
+    // through a click.
     if (mutation.isPending) return;
     form
       .handleSubmit((values) => {
@@ -258,23 +259,28 @@ export function WithdrawStudentDialog({
             <DrawerDescription>{t("withdraw.description")}</DrawerDescription>
           </DrawerHeader>
           {body}
-          <DrawerFooter>
+          <DrawerFooter className="flex-row justify-end gap-2.5">
             <Button
               variant="outline"
+              mode="icon"
+              shape="circle"
+              aria-label={tCommon("cancel")}
               disabled={mutation.isPending}
               onClick={() => {
                 onOpenChange(false);
               }}
             >
-              {tCommon("cancel")}
+              <X aria-hidden="true" />
             </Button>
             <Button
               variant="destructive"
-              isLoading={mutation.isPending}
-              loadingLabel={t("withdraw.submitting")}
+              mode="icon"
+              shape="circle"
+              aria-label={mutation.isPending ? t("withdraw.submitting") : submitLabel}
+              disabled={mutation.isPending}
               onClick={handleSubmit}
             >
-              {submitLabel}
+              <LogOut aria-hidden="true" />
             </Button>
           </DrawerFooter>
         </DrawerContent>

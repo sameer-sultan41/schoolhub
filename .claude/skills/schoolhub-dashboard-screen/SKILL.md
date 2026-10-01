@@ -39,7 +39,7 @@ apps/dashboard/src/features/<module>/
   <module>-columns.tsx             # useColumns() hook, DataGrid ColumnDef[]
   <module>-directory-filters.tsx   # search input + Select filters
   <module>-directory-table.tsx     # the screen: owns all state, wires the above together
-  <module>-toolbar.tsx             # stat cards + "New <X>" action
+  <module>-toolbar.tsx             # stat chips + "New <X>" action
   <lifecycle-action>-dialog.tsx    # e.g. withdraw-student-dialog.tsx — the destructive action
   __tests__/
     *.test.tsx
@@ -134,7 +134,7 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   (`packages/ui/src/components/data-grid-column-header.tsx`) for every sortable column
   header and `createSelectColumn<TRow>({ selectAll, selectRow })`
   (`packages/ui/src/components/data-grid-table.tsx`) for the bulk-selection column —
-  `student-columns.tsx:46-49`.
+  `student-columns.tsx:81-84`.
 - **Give the grid a translated `caption`** (`caption={t("list.caption")}`,
   `student-directory-table.tsx:194`) — a screen-reader-only `<caption>` naming what the
   table lists, same as `/staff`'s.
@@ -162,7 +162,7 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   ```
 - **Gate a row action on the record's own state, not just the viewer's permission.** The
   per-row Withdraw button and the bulk-withdraw button both check `canWithdraw &&
-  row.status === "active"` (`student-columns.tsx:101`, `student-directory-table.tsx:216`)
+  row.status === "active"` (`student-columns.tsx:163`, `student-directory-table.tsx:216`)
   — a permission check alone would offer withdraw on an already-withdrawn row the backend
   itself refuses (confirmed against the mock backend's own domain-rule rejection,
   `e2e/src/mocks/domains/students.ts:137-141`).
@@ -182,10 +182,12 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   }, []);
   ```
   `useStudentColumns`'s own `useMemo` deps list includes both callbacks
-  (`student-columns.tsx:117`) — a stable callback is what makes that memo actually skip
+  (`student-columns.tsx:183`) — a stable callback is what makes that memo actually skip
   recomputation.
-- **Stat-card counts go through `.toLocaleString()`**, not `.toString()`
-  (`student-toolbar.tsx:55,61`), matching `/staff`'s toolbar and the dashboard home.
+- **Stat-chip counts go through `.toLocaleString()`**, not `.toString()`
+  (`student-toolbar.tsx:93`), matching `/staff`'s own `StatChip`/`AnimatedStat` toolbar
+  pattern (a skeleton while pending, a translated "unavailable" string on error — never a
+  fabricated number).
 
 ## 4. `ResponsiveDialog`/`ResponsiveSheet`
 
@@ -195,7 +197,7 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   sheet/footer that needs to render icon-only buttons on mobile vs. labeled ones on
   desktop — see `student-detail-sheet.tsx`'s `DetailFooter`, which renders icon buttons
   (`Pencil`, `UserMinus`) in the drawer branch and labeled `Button`s otherwise
-  (`student-detail-sheet.tsx:219-271`).
+  (`student-detail-sheet.tsx:279-357`).
 - **The mobile `<form>` needs `flex min-h-0 grow flex-col` inside a `Drawer`**, and the
   body must not get a second competing `max-h`:
   ```tsx
@@ -272,7 +274,7 @@ Real example: `student-form-dialog.tsx`, `student-form-schema.ts`, `student-phot
   - an `idle | uploading | error` status, the file input disabled while uploading, and
     **Save disabled while uploading** — the field reports `onUploadingChange` to the dialog,
     which passes `disabled={isPhotoUploading}` to its submit button
-    (`student-form-dialog.tsx:355-360, 381`);
+    (`student-form-dialog.tsx:378, 404`);
   - a preview — the freshly picked file via `URL.createObjectURL` (revoked when replaced and
     on unmount), else the saved photo via `stableSignedUrl(record.photo_url)` while
     `photo_file_id` still matches the record's;
@@ -499,7 +501,8 @@ Real example: `e2e/tests/dashboard/students.spec.ts`, `e2e/src/mocks/domains/stu
 10. `<module>-detail-sheet.tsx`: `ResponsiveSheet`, `useIsDrawer()` for its footer, a
     `"field" in data` check for any field with a visibility-vs-empty distinction, a
     loading gate on every data-derived line, and timestamps as relative time.
-11. `<module>-toolbar.tsx`: stat-card `useQuery`s with `pageSize: 1`, counts through
+11. `<module>-toolbar.tsx`: stat-chip `useQuery`s with `pageSize: 1` per `StatChip`
+    (icon + `AnimatedStat` + label, matching `/staff`'s own), counts through
     `.toLocaleString()`, fail-closed on an unresolved permission (disabled + a `title`
     explaining why).
 12. Route `page.tsx`: thin server component, `<Toolbar/>` + `<DirectoryTable/>`.

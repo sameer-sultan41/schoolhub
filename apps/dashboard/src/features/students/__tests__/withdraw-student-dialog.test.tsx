@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import type { StudentRecord } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { WithdrawStudentDialog } from "../withdraw-student-dialog";
 
@@ -163,5 +163,93 @@ describe("WithdrawStudentDialog", () => {
     });
 
     resolveWithdraw(studentRecord({ id: "s1", status: "withdrawn" }));
+  });
+});
+
+describe("WithdrawStudentDialog — mobile drawer", () => {
+  beforeEach(() => {
+    mockWithdrawStudent.mockReset();
+    setMatchesMobile(true);
+  });
+
+  afterEach(() => {
+    setMatchesMobile(false);
+  });
+
+  it("renders icon-only Cancel/Confirm, found by their full accessible name, and submits on Confirm", async () => {
+    mockWithdrawStudent.mockResolvedValue(studentRecord({ id: "s1", status: "withdrawn" }));
+    const onOpenChange = jest.fn();
+
+    // `baseElement`, not `container`: the Drawer portals its content to `document.body`,
+    // a sibling of `container` — `container.querySelector` can't reach it.
+    const { baseElement } = renderWithProviders(
+      <WithdrawStudentDialog
+        open
+        onOpenChange={onOpenChange}
+        studentIds={["s1"]}
+        studentNames={["Ali"]}
+      />,
+    );
+
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await fillReason(user);
+    await user.click(screen.getByRole("button", { name: /^withdraw$/i }));
+
+    await waitFor(() => {
+      expect(mockWithdrawStudent).toHaveBeenCalledWith("s1", expect.anything(), expect.any(String));
+    });
+  });
+
+  it("names the Confirm button by what it's about to do, including while the withdrawal is in flight", async () => {
+    let resolveWithdraw: (value: StudentRecord) => void = () => {};
+    mockWithdrawStudent.mockReturnValue(
+      new Promise((resolve) => {
+        resolveWithdraw = resolve;
+      }),
+    );
+
+    const { baseElement } = renderWithProviders(
+      <WithdrawStudentDialog
+        open
+        onOpenChange={jest.fn()}
+        studentIds={["s1", "s2"]}
+        studentNames={["Ali", "Sara"]}
+      />,
+    );
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await fillReason(user);
+    const confirm = screen.getByRole("button", { name: /^withdraw 2$/i });
+    // Icon-only: no visible "Withdraw 2" text node, only the accessible name above.
+    expect(confirm).not.toHaveTextContent(/withdraw/i);
+    await user.click(confirm);
+
+    const pending = await screen.findByRole("button", { name: /withdrawing/i });
+    expect(pending).toBeDisabled();
+    expect(pending).not.toHaveTextContent(/withdrawing/i);
+
+    resolveWithdraw(studentRecord({ id: "s1", status: "withdrawn" }));
+  });
+
+  it("lets Cancel be found and clicked by its icon-only accessible name", async () => {
+    const onOpenChange = jest.fn();
+    const { baseElement } = renderWithProviders(
+      <WithdrawStudentDialog
+        open
+        onOpenChange={onOpenChange}
+        studentIds={["s1"]}
+        studentNames={["Ali"]}
+      />,
+    );
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+
+    const cancel = screen.getByRole("button", { name: /^cancel$/i });
+    expect(cancel).not.toHaveTextContent(/cancel/i);
+    await userEvent.setup().click(cancel);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

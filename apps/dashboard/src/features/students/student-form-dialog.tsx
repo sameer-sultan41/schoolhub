@@ -228,152 +228,163 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
                 }
               >
                 {formError && <Alert variant="destructive">{formError}</Alert>}
-                <FormField
-                  control={form.control}
-                  name="first_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.firstName")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="last_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.lastName")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="date_of_birth"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.dateOfBirth")}</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="gender"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.gender")}</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="first_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("fields.firstName")}</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t("fields.selectGender")} />
-                          </SelectTrigger>
+                          <Input {...field} />
                         </FormControl>
-                        <SelectContent>
-                          {GENDER_VALUES.map((g) => (
-                            <SelectItem key={g} value={g}>
-                              {t(`gender.${g}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="campus_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.campus")}</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="last_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("fields.lastName")}</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue
-                              placeholder={
-                                campusesQuery.isPending
-                                  ? tCommon("loading")
-                                  : t("fields.selectCampus")
-                              }
-                            />
-                          </SelectTrigger>
+                          <Input {...field} />
                         </FormControl>
-                        <SelectContent>
-                          {(campusesQuery.data ?? []).map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="house_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.house")}</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="date_of_birth"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("fields.dateOfBirth")}</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue
-                              placeholder={
-                                housesQuery.isPending ? tCommon("loading") : t("fields.selectHouse")
-                              }
-                            />
-                          </SelectTrigger>
+                          <Input type="date" {...field} />
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value={UNSET_VALUE}>{t("fields.none")}</SelectItem>
-                          {(housesQuery.data ?? []).map((h) => (
-                            <SelectItem key={h.id} value={h.id}>
-                              {h.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="admission_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("fields.admissionDate")}</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <StudentPhotoField
-                  form={form}
-                  savedRecord={mode === "edit" ? detailQuery.data : undefined}
-                  onUploadStart={captureUploadSession}
-                  onUploadingChange={setIsPhotoUploading}
-                />
-                <StudentProfileTextFields
-                  form={form}
-                  showMedicalNotes={hasPermission(currentUser, "students.student.update")}
-                />
-                <StudentAddressFields form={form} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="gender"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("fields.gender")}</FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={t("fields.selectGender")} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {GENDER_VALUES.map((g) => (
+                              <SelectItem key={g} value={g}>
+                                {t(`gender.${g}`)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="campus_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("fields.campus")}</FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={
+                                  campusesQuery.isPending
+                                    ? tCommon("loading")
+                                    : t("fields.selectCampus")
+                                }
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {(campusesQuery.data ?? []).map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="house_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("fields.house")}</FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={
+                                  housesQuery.isPending
+                                    ? tCommon("loading")
+                                    : t("fields.selectHouse")
+                                }
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value={UNSET_VALUE}>{t("fields.none")}</SelectItem>
+                            {(housesQuery.data ?? []).map((h) => (
+                              <SelectItem key={h.id} value={h.id}>
+                                {h.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="admission_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("fields.admissionDate")}</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <StudentProfileTextFields
+                    form={form}
+                    showMedicalNotes={hasPermission(currentUser, "students.student.update")}
+                  />
+                  <div className="sm:col-span-2">
+                    <StudentPhotoField
+                      form={form}
+                      savedRecord={mode === "edit" ? detailQuery.data : undefined}
+                      onUploadStart={captureUploadSession}
+                      onUploadingChange={setIsPhotoUploading}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <p className="text-sm font-medium text-foreground">{t("address.title")}</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <StudentAddressFields form={form} />
+                    </div>
+                  </div>
+                </div>
               </ResponsiveDialogBody>
               <ResponsiveDialogFooter>
                 <Button

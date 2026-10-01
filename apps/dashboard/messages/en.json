@@ -210,7 +210,8 @@
       "status": "Status",
       "all": "All",
       "campus": "Campus",
-      "house": "House"
+      "house": "House",
+      "clearSearch": "Clear search"
     },
     "status": {
       "active": "Active",
@@ -255,7 +256,8 @@
       "city": "City",
       "state": "State/Province",
       "postalCode": "Postal code",
-      "country": "Country"
+      "country": "Country",
+      "title": "Address"
     },
     "form": {
       "createTitle": "New student",

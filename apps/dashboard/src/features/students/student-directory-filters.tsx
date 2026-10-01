@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import {
+  Button,
   Input,
   Select,
   SelectContent,
@@ -9,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@schoolhub/ui";
+import { Search, X } from "lucide-react";
 import { STUDENT_STATUS_VALUES } from "@schoolhub/types";
 import { useQuery } from "@tanstack/react-query";
 
@@ -60,15 +62,34 @@ export function StudentDirectoryFilters({
 
   return (
     <>
-      <Input
-        aria-label={t("filters.search")}
-        placeholder={t("list.searchPlaceholder")}
-        value={searchInput}
-        onChange={(e) => {
-          onSearchInputChange(e.target.value);
-        }}
-        className="max-w-64"
-      />
+      <div className="relative">
+        <Search
+          className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-primary"
+          aria-hidden="true"
+        />
+        <Input
+          aria-label={t("filters.search")}
+          placeholder={t("list.searchPlaceholder")}
+          value={searchInput}
+          onChange={(e) => {
+            onSearchInputChange(e.target.value);
+          }}
+          className="max-w-64 ps-9"
+        />
+        {searchInput.length > 0 && (
+          <Button
+            mode="icon"
+            variant="ghost"
+            aria-label={t("filters.clearSearch")}
+            className="absolute end-1.5 top-1/2 h-6 w-6 -translate-y-1/2"
+            onClick={() => {
+              onSearchInputChange("");
+            }}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        )}
+      </div>
       <Select value={statusFilter} onValueChange={onStatusFilterChange}>
         <SelectTrigger className="w-40" aria-label={t("filters.status")}>
           <SelectValue placeholder={t("filters.status")} />
