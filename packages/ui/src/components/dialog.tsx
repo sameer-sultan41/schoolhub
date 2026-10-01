@@ -11,7 +11,17 @@ const dialogContentVariants = cva(
   {
     variants: {
       variant: {
-        default: "left-[50%] top-[50%] max-w-lg translate-x-[-50%] translate-y-[-50%] w-full",
+        // `max-h-[90vh] overflow-y-auto`: a safety net for a caller whose own content
+        // (header + body + footer) runs taller than the viewport at a short browser
+        // window — without it, `top-[50%] translate-y-[-50%]` centers on the dialog's
+        // full natural height and pushes the top (title, close button) above y=0 with
+        // no way to reach it, since the page behind a modal doesn't scroll. A caller
+        // can still bound its own body independently (e.g. `max-h-[65vh]` on just the
+        // scrollable region) for a tighter, single-region scroll — this is the outer
+        // fallback that guarantees nothing is ever unreachable even if that inner cap
+        // and the real viewport don't add up.
+        default:
+          "left-[50%] top-[50%] max-w-lg max-h-[90vh] translate-x-[-50%] translate-y-[-50%] w-full overflow-y-auto",
         fullscreen: "inset-5",
       },
     },
