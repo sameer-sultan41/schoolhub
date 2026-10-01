@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type SyntheticEvent } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -85,16 +85,33 @@ export function WithdrawStudentDialog({
   } | null>(null);
 
   // One idempotency key per student, generated once and cached for this dialog
-  // instance's lifetime — reused, never regenerated, when that same student is
-  // retried after a partial bulk failure. A response lost in transit for a withdraw
-  // that actually succeeded server-side must replay as the SAME request on retry, not
-  // a fresh one, or the retry risks reporting a false failure for a student the server
-  // already withdrew.
+  // session — reused, never regenerated, when that same student is retried after a
+  // partial bulk failure. A response lost in transit for a withdraw that actually
+  // succeeded server-side must replay as the SAME request on retry, not a fresh one,
+  // or the retry risks reporting a false failure for a student the server already
+  // withdrew. Cleared on close (below) so a later, logically distinct withdrawal
+  // attempt on the same student id never resends a stale key from a past session.
   const keysRef = useRef(new Map<string, string>());
   function keyFor(id: string): string {
     if (!keysRef.current.has(id)) keysRef.current.set(id, crypto.randomUUID());
     return keysRef.current.get(id) as string;
   }
+
+  // This dialog (per Task 8's wiring, matching exit-staff-dialog.tsx's own precedent)
+  // stays mounted with `open` toggling rather than being conditionally unmounted — so
+  // its state does not reset itself for free between opens. Without this, reopening
+  // for a different student (or selection) would show the previous session's stale
+  // `idsToSubmit`/failure `Alert`, and a cached idempotency key would outlive a single
+  // open, risking the server treating a later, legitimate retry as a replay of an
+  // earlier one. Mirrors student-form-dialog.tsx's identical reset-on-close effect.
+  useEffect(() => {
+    if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIdsToSubmit(studentIds.map((id, index) => ({ id, name: studentNames[index] ?? "" })));
+      setResult(null);
+      keysRef.current.clear();
+    }
+  }, [open, studentIds, studentNames]);
 
   const form = useForm<WithdrawFormValues>({
     resolver: zodResolver(withdrawFormSchema),
