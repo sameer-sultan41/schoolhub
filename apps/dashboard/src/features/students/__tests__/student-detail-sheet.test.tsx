@@ -1,0 +1,215 @@
+import { screen } from "@testing-library/react";
+
+import { Services } from "@/services";
+import type { StudentRecord } from "@/services";
+import { renderWithProviders } from "@/test-utils";
+
+import { StudentDetailSheet } from "../student-detail-sheet";
+import type { StudentRow } from "../student-row";
+
+jest.mock("@/services", () => ({
+  Services: {
+    students: {
+      fetchStudentById: jest.fn(),
+    },
+  },
+}));
+
+const mockFetchStudentById = Services.students.fetchStudentById as jest.MockedFunction<
+  typeof Services.students.fetchStudentById
+>;
+
+function studentRow(overrides: Partial<StudentRow> = {}): StudentRow {
+  return {
+    id: "stu-1",
+    // Deliberately different from `studentDetail()`'s own `admission_number` default
+    // below — this field renders twice (the row's own header, and the fetched detail's
+    // field row), and a shared default would make `findByText` on this value ambiguous
+    // ("found multiple elements") in every test that merely uses it as a load signal,
+    // not just the one test that is actually about the row-vs-fetched distinction.
+    admissionNumber: "2026-0001",
+    name: "Aisha Khan",
+    status: "active",
+    campus: "Main Campus",
+    house: "Blue House",
+    admissionDate: "2026-01-10",
+    updatedAt: "2026-09-20T00:00:00Z",
+    signedPhotoUrl: undefined,
+    ...overrides,
+  };
+}
+
+// Typed from fetchStudentById so the fixture tracks what it actually returns. Every
+// nullable field defaults to a real, non-null value — deliberately, so a test that
+// overrides exactly one field to `null` (the em-dash test below) can assert `getByText`
+// (singular) against "—" without a sibling field's own default null also rendering one.
+function studentDetail(overrides: Partial<StudentRecord> = {}): StudentRecord {
+  return {
+    id: "stu-1",
+    admission_number: "2026-0050",
+    first_name: "Aisha",
+    last_name: "Khan",
+    preferred_name: "Ash",
+    date_of_birth: "2015-03-12",
+    gender: "female",
+    photo_file_id: null,
+    photo_url: null,
+    campus_id: "campus-1",
+    campus_name: "Main Campus",
+    house_id: "house-1",
+    house_name: "Blue House",
+    status: "active",
+    admission_date: "2026-01-10",
+    blood_group: "O+",
+    nationality: "Pakistani",
+    religion: "Islam",
+    previous_school: "City Grammar School",
+    medical_notes: "No known allergies.",
+    address: null,
+    custom_fields: null,
+    created_at: "2026-01-10T00:00:00Z",
+    updated_at: "2026-09-20T00:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("StudentDetailSheet", () => {
+  beforeEach(() => {
+    mockFetchStudentById.mockReset();
+  });
+
+  it("shows Restricted only when medical_notes is genuinely absent from the response", async () => {
+    const { medical_notes: _omit, ...withoutMedicalNotes } = studentDetail();
+    mockFetchStudentById.mockResolvedValue(withoutMedicalNotes);
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("Restricted")).toBeInTheDocument();
+  });
+
+  it("shows the fetched admission number from the detail response, not just the row's own", async () => {
+    // Distinct values for the row (what opened the sheet) and the detail response (what
+    // it fetches) — if this test used the same number for both, it would pass whether or
+    // not the field row actually renders `data`, which is the one thing it's meant to
+    // prove (round-3 review finding).
+    mockFetchStudentById.mockResolvedValue(studentDetail({ admission_number: "2026-0099" }));
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow({ admissionNumber: "2026-0001" })}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("2026-0099")).toBeInTheDocument();
+  });
+
+  it("shows a real medical_notes value as itself, not as Restricted, when the key is present but falsy-looking", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail({ medical_notes: "No known allergies." }));
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("No known allergies.")).toBeInTheDocument();
+    expect(screen.queryByText("Restricted")).not.toBeInTheDocument();
+  });
+
+  it("shows an em dash, not Restricted, when medical_notes is present and genuinely null (a viewer who CAN see it, but there's simply nothing on file)", async () => {
+    // Distinct from the "genuinely absent" test above: `null` means the key survived
+    // `to_representation` (the viewer has visibility) but the student has no notes,
+    // which must read differently from "you can't see this" — an implementation that
+    // uses `??`/truthiness instead of the `"medical_notes" in data` check would show
+    // "Restricted" here too, incorrectly (round-4 review finding).
+    mockFetchStudentById.mockResolvedValue(studentDetail({ medical_notes: null }));
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(studentRow().admissionNumber);
+    expect(screen.queryByText("Restricted")).not.toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("hides the Withdraw action for a non-active student even when canWithdraw is true", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail({ status: "graduated" }));
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow({ status: "graduated" })}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(/graduated/i);
+    expect(screen.queryByRole("button", { name: /withdraw/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the Withdraw action for an active student when canWithdraw is true (positive control)", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail({ status: "active" }));
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow({ status: "active" })}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(/active/i);
+    expect(screen.getByRole("button", { name: /withdraw/i })).toBeInTheDocument();
+  });
+
+  it("hides Edit when canUpdate is false", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail());
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate={false}
+        canWithdraw={false}
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(studentRow().admissionNumber);
+    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+  });
+});
