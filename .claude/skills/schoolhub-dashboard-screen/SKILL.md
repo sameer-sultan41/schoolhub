@@ -134,19 +134,19 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   (`packages/ui/src/components/data-grid-column-header.tsx`) for every sortable column
   header and `createSelectColumn<TRow>({ selectAll, selectRow })`
   (`packages/ui/src/components/data-grid-table.tsx`) for the bulk-selection column —
-  `student-columns.tsx:81-84`.
-- **Give the grid a translated `caption`** (`caption={t("list.caption")}`,
-  `student-directory-table.tsx:194`) — a screen-reader-only `<caption>` naming what the
+  `useStudentColumns` (`student-columns.tsx`).
+- **Give the grid a translated `caption`** (`caption={t("list.caption")}`, the
+  `<DataGrid>` call in `student-directory-table.tsx`) — a screen-reader-only `<caption>` naming what the
   table lists, same as `/staff`'s.
 - **Local debounced search**, not a query-level debounce: a local `searchInput` state
   updates immediately for the input's own value, a separate `search` state (what the query
-  actually uses) updates after `SEARCH_DEBOUNCE_MS` (`apps/dashboard/src/lib/constants.ts:28`,
-  currently 300ms) via a `setTimeout` effect — `student-directory-table.tsx:54-77`.
+  actually uses) updates after `SEARCH_DEBOUNCE_MS` (`apps/dashboard/src/lib/constants.ts`,
+  currently 300ms) via a `setTimeout` effect in `StudentDirectoryTable` (`student-directory-table.tsx`).
 - **Narrow pagination with `isOffsetPagination`/`isCursorPagination`** before touching
   `total_pages`/`total_count` — `Page<T>.pagination` is itself optional, and those fields
   exist only on the offset arm of the `Pagination` union:
   ```ts
-  // student-directory-table.tsx:120-122
+  // student-directory-table.tsx, StudentDirectoryTable
   const pageMeta = query.data?.pagination;
   const pageCount = pageMeta && isOffsetPagination(pageMeta) ? pageMeta.total_pages : 1;
   const totalCount = pageMeta && isOffsetPagination(pageMeta) ? pageMeta.total_count : 0;
@@ -156,13 +156,14 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   only acts on the selected rows that are still `active`, regardless of whether the viewer
   *can* withdraw — a non-active row has nothing to withdraw from:
   ```ts
-  // student-directory-table.tsx:165-168
+  // student-directory-table.tsx, StudentDirectoryTable
   const selected = table.getSelectedRowModel().rows.map((r) => r.original);
   const selectedWithdrawable = selected.filter((s) => s.status === "active");
   ```
 - **Gate a row action on the record's own state, not just the viewer's permission.** The
   per-row Withdraw button and the bulk-withdraw button both check `canWithdraw &&
-  row.status === "active"` (`student-columns.tsx:163`, `student-directory-table.tsx:216`)
+  row.status === "active"` (the row-action `cell` in `student-columns.tsx`,
+  `selectedWithdrawable` in `student-directory-table.tsx`)
   — a permission check alone would offer withdraw on an already-withdrawn row the backend
   itself refuses (confirmed against the mock backend's own domain-rule rejection,
   `e2e/src/mocks/domains/students.ts:137-141`).
@@ -173,7 +174,7 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   re-render (a search keystroke, a page change). `/staff` never hit this — its columns are
   built in the table component's own `useMemo`, not a separate hook:
   ```ts
-  // student-directory-table.tsx:141-146
+  // student-directory-table.tsx, StudentDirectoryTable
   const handleEdit = useCallback((id: string) => {
     setFormDialog({ mode: "edit", studentId: id });
   }, []);
@@ -181,13 +182,16 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
     setWithdrawDialog({ ids: [id], names: [name] });
   }, []);
   ```
-  `useStudentColumns`'s own `useMemo` deps list includes both callbacks
-  (`student-columns.tsx:183`) — a stable callback is what makes that memo actually skip
+  `useStudentColumns`'s own `useMemo` deps list includes both callbacks — a stable
+  callback is what makes that memo actually skip
   recomputation.
 - **Stat-chip counts go through `.toLocaleString()`**, not `.toString()`
-  (`student-toolbar.tsx:93`), matching `/staff`'s own `StatChip`/`AnimatedStat` toolbar
-  pattern (a skeleton while pending, a translated "unavailable" string on error — never a
-  fabricated number).
+  (`statChipState`'s `.toLocaleString()` call, `student-toolbar.tsx`), matching the
+  shared `StatChip`/`AnimatedStat` (`@/components/stat-chip`, used by both `/staff` and
+  `/students`) — a skeleton while pending, a translated "unavailable" string on error,
+  never a fabricated number. Exact line numbers in this section are deliberately
+  omitted: they rotted twice already as this screen kept changing after being written
+  up — cite the function/symbol name instead and let the reader search for it.
 
 ## 4. `ResponsiveDialog`/`ResponsiveSheet`
 
@@ -197,7 +201,7 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   sheet/footer that needs to render icon-only buttons on mobile vs. labeled ones on
   desktop — see `student-detail-sheet.tsx`'s `DetailFooter`, which renders icon buttons
   (`Pencil`, `UserMinus`) in the drawer branch and labeled `Button`s otherwise
-  (`student-detail-sheet.tsx:279-357`).
+  (the `DetailFooter` function, `student-detail-sheet.tsx`).
 - **The mobile `<form>` needs `flex min-h-0 grow flex-col` inside a `Drawer`**, and the
   body must not get a second competing `max-h`:
   ```tsx
@@ -315,7 +319,7 @@ Real example: `withdraw-student-dialog.tsx`.
   per-instance state with **no reset-on-reopen logic at all**, and it needs none, because
   its only caller renders it only while a selection exists:
   ```tsx
-  // student-directory-table.tsx:251-260
+  // student-directory-table.tsx, StudentDirectoryTable
   {withdrawDialog && (
     <WithdrawStudentDialog
       open
@@ -327,7 +331,8 @@ Real example: `withdraw-student-dialog.tsx`.
     />
   )}
   ```
-  The contract is written on the component itself (`withdraw-student-dialog.tsx:67-83`). A
+  The contract is written on the component itself (its own header comment in
+  `withdraw-student-dialog.tsx`). A
   persistent, `open`-toggled instance would reopen showing the previous attempt's failure
   list, submit the previous selection, and resend a past attempt's idempotency key — which
   the server replays (`apps/api/core/idempotency/services.py`) rather than performing the new
@@ -337,7 +342,7 @@ Real example: `withdraw-student-dialog.tsx`.
   `react-hooks/set-state-in-effect` suppression in favour of the documented contract.
 - **The general rule: a dialog's own reset logic must cover every way it is actually
   mounted — no more, no less.** `StudentFormDialog` is mounted *both* ways — persistently
-  by `student-toolbar.tsx:80` (`open={addDialogOpen}`) and conditionally by the directory
+  by `StudentToolbar`'s `open={addDialogOpen}` (`student-toolbar.tsx`) and conditionally by the directory
   table — so it carries its own reset-on-close effect and session counter (§5).
   `WithdrawStudentDialog` is only ever mounted conditionally, so it carries neither, and
   says so on the component. Adding a caller that mounts a dialog persistently means adding
@@ -370,7 +375,7 @@ Real example: `student-detail-sheet.tsx`.
   distinguish "the backend omitted this key because you lack visibility" from "the field
   exists and is simply empty for this record":
   ```ts
-  // student-detail-sheet.tsx:78-83
+  // student-detail-sheet.tsx, StudentDetailSheet
   const hasMedicalNotesField = data !== undefined && "medical_notes" in data;
   ```
   A falsy check (`data?.medical_notes`) would show "Restricted" for both a field the

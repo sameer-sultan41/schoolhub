@@ -81,7 +81,9 @@ export function StudentDirectoryFilters({
           onChange={(e) => {
             onSearchInputChange(e.target.value);
           }}
-          className="w-full ps-9 sm:max-w-64"
+          // `pe-8` clears the trailing clear button (`end-1.5` + `w-6`) — without it,
+          // typed text long enough to approach the box's end edge renders underneath it.
+          className="w-full ps-9 pe-8 sm:max-w-64"
         />
         {searchInput.length > 0 && (
           <Button

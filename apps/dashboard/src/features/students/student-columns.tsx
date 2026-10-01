@@ -15,6 +15,7 @@ import {
   Skeleton,
 } from "@schoolhub/ui";
 import { Pencil, UserMinus } from "lucide-react";
+import type { StudentStatus } from "@schoolhub/types";
 
 import { getInitials } from "@/lib/helpers";
 import type { StudentRow } from "./student-row";
@@ -49,7 +50,10 @@ export type StatusVariant = "success" | "destructive" | "secondary" | "info" | "
  * "graduated" apart from "active"; DESIGN.md requires exactly that pairing ("never
  * encode meaning in colour alone").
  */
-const STATUS_VARIANT: Record<string, StatusVariant> = {
+// `Record<StudentStatus, ...>`, not `Record<string, ...>` — exhaustively checked
+// against the real 5-value enum, so a 6th status added to `STUDENT_STATUS_VALUES`
+// without a matching entry here is a compile error, not a silent unstyled badge.
+const STATUS_VARIANT: Record<StudentStatus, StatusVariant> = {
   active: "success",
   suspended: "destructive",
   transferred: "info",
@@ -57,8 +61,12 @@ const STATUS_VARIANT: Record<string, StatusVariant> = {
   graduated: "success",
 };
 
+/** `status` is a plain `string`, not `StudentStatus`, because callers pass runtime
+ * values this can't narrow at the type level — `StudentDirectoryFilters`'s own
+ * `statusFilter` state includes the `"all"` sentinel alongside the five real
+ * statuses. Falls back to `secondary` for anything the map above doesn't cover. */
 export function statusVariant(status: string): StatusVariant {
-  return STATUS_VARIANT[status] ?? "secondary";
+  return (STATUS_VARIANT as Record<string, StatusVariant>)[status] ?? "secondary";
 }
 
 /**
@@ -165,7 +173,7 @@ export function useStudentColumns(
                   onEdit(row.original.id);
                 }}
               >
-                <Pencil className="size-4" />
+                <Pencil className="size-4" aria-hidden="true" />
               </Button>
             )}
             {canWithdraw && row.original.status === "active" && (
@@ -180,7 +188,7 @@ export function useStudentColumns(
                   onWithdraw(row.original.id, row.original.name);
                 }}
               >
-                <UserMinus className="size-4" />
+                <UserMinus className="size-4" aria-hidden="true" />
               </Button>
             )}
           </div>

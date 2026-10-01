@@ -229,7 +229,10 @@ describe("WithdrawStudentDialog — mobile drawer", () => {
 
     const pending = await screen.findByRole("button", { name: /withdrawing/i });
     expect(pending).toBeDisabled();
-    expect(pending).not.toHaveTextContent(/withdrawing/i);
+    expect(pending).toHaveAttribute("aria-busy", "true");
+    // The icon hides itself while pending (Button's own spinner renders alongside
+    // `children`, not instead of them) — no LogOut glyph and no spinner competing.
+    expect(pending.querySelector("svg")).not.toBeInTheDocument();
 
     resolveWithdraw(studentRecord({ id: "s1", status: "withdrawn" }));
   });

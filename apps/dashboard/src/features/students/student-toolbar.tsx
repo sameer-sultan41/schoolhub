@@ -3,33 +3,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { m } from "motion/react";
 import { Button, Skeleton } from "@schoolhub/ui";
-import { GraduationCap, Plus, Users } from "lucide-react";
+import { GraduationCap, Plus, Users, type LucideIcon } from "lucide-react";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
+import { StatChip } from "@/components/stat-chip";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import { StudentFormDialog } from "./student-form-dialog";
 
-/** The "—" -> real-number swap, animated once. `key={value}` makes this a real element
- * change to Motion, so `initial` fires when the count first resolves — matching
- * `/staff`'s own `AnimatedStat` exactly. */
-function AnimatedStat({ value }: { value: string }) {
-  return (
-    <m.span
-      key={value}
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-      className="inline-block text-sm leading-none font-semibold text-foreground tabular-nums"
-    >
-      {value}
-    </m.span>
-  );
-}
+type StatChipState =
+  { status: "loading" } | { status: "unavailable" } | { status: "ready"; value: string };
 
 /**
  * Three states, not `/staff`'s simpler pending-and-error-both-show-"—" collapse: a
@@ -37,28 +23,39 @@ function AnimatedStat({ value }: { value: string }) {
  * original `StatCard` this replaces drew the same distinction). `unavailableLabel` is
  * `t("stats.unavailable")`, which already reads as "—" in both locales — so the error
  * state's visible text is unchanged, only no longer reachable while still loading.
+ *
+ * The shared `StatChip` (`@/components/stat-chip`) is purely presentational — icon,
+ * value, label, no loading concept of its own — so the loading/unavailable/ready
+ * branching lives here, the caller, and only a `Skeleton` or a real string ever
+ * reaches it.
  */
-function StatChip({
-  icon: Icon,
+function StudentStatChip({
+  icon,
   label,
   state,
   unavailableLabel,
 }: {
-  icon: typeof Users;
+  icon: LucideIcon;
   label: string;
-  state: { status: "loading" } | { status: "unavailable" } | { status: "ready"; value: string };
+  state: StatChipState;
   unavailableLabel: string;
 }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Icon className="size-3.5 text-primary" aria-hidden="true" />
-      {state.status === "loading" ? (
+  const Icon = icon;
+  if (state.status === "loading") {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Icon className="size-3.5 text-primary" aria-hidden="true" />
         <Skeleton className="h-4 w-6" />
-      ) : (
-        <AnimatedStat value={state.status === "unavailable" ? unavailableLabel : state.value} />
-      )}
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </div>
+    );
+  }
+  return (
+    <StatChip
+      icon={icon}
+      value={state.status === "unavailable" ? unavailableLabel : state.value}
+      label={label}
+    />
   );
 }
 
@@ -82,9 +79,7 @@ export function StudentToolbar() {
     queryKey: queryKeys.list("students", "students", { statsActive: true }),
     queryFn: () => Services.students.fetchStudentsPage({ page: 1, pageSize: 1, status: "active" }),
   });
-  function statChipState(
-    query: typeof totalQuery,
-  ): { status: "loading" } | { status: "unavailable" } | { status: "ready"; value: string } {
+  function statChipState(query: typeof totalQuery): StatChipState {
     if (query.isPending) return { status: "loading" };
     if (query.isError) return { status: "unavailable" };
     // `query.data` is narrowed non-nullish by the two guards above (TanStack Query's result
@@ -113,14 +108,14 @@ export function StudentToolbar() {
           inline
           description={
             <div className="flex w-fit shrink-0 flex-nowrap items-center gap-3 rounded-lg border border-border bg-muted/40 px-2.5 py-1">
-              <StatChip
+              <StudentStatChip
                 icon={Users}
                 label={t("stats.total")}
                 state={statChipState(totalQuery)}
                 unavailableLabel={t("stats.unavailable")}
               />
               <div className="h-4 w-px bg-border" aria-hidden="true" />
-              <StatChip
+              <StudentStatChip
                 icon={GraduationCap}
                 label={t("stats.active")}
                 state={statChipState(activeQuery)}

@@ -277,10 +277,14 @@ export function WithdrawStudentDialog({
               mode="icon"
               shape="circle"
               aria-label={mutation.isPending ? t("withdraw.submitting") : submitLabel}
-              disabled={mutation.isPending}
+              isLoading={mutation.isPending}
+              loadingLabel={t("withdraw.submitting")}
               onClick={handleSubmit}
             >
-              <LogOut aria-hidden="true" />
+              {/* `isLoading` always renders its own spinner alongside `children`, not in
+                  place of them — so the icon hides itself while pending rather than
+                  showing both a spinner and the LogOut glyph side by side. */}
+              {!mutation.isPending && <LogOut aria-hidden="true" />}
             </Button>
           </DrawerFooter>
         </DrawerContent>

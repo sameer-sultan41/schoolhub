@@ -79,10 +79,37 @@ function FieldRow({
         {isPending ? (
           <Skeleton className="h-4 w-24" />
         ) : (
-          <span className="truncate text-sm font-medium text-foreground">{value || "—"}</span>
+          // `title` recovers a truncated value on hover/long-press — no `TooltipProvider`
+          // is wired up anywhere in this app yet, so this is the zero-dependency fix
+          // rather than new app-wide infrastructure for one field. Matters most for
+          // `medical_notes`, which can run well past what a ~190px grid cell shows.
+          <span className="truncate text-sm font-medium text-foreground" title={value || undefined}>
+            {value || "—"}
+          </span>
         )}
       </div>
     </div>
+  );
+}
+
+/** The hero band's one status badge, rendered at two different DOM positions depending
+ * on layout (beside the name on mobile, below the subtitle on desktop) — never both at
+ * once, so `findByText` keeps finding a single match. Defined once so the two call
+ * sites can't drift on variant/appearance/shape/children independently of each other;
+ * only `className` (position-specific) varies per call. */
+function StatusBadge({ status, className }: { status: string; className?: string }) {
+  const t = useTranslations("students");
+  return (
+    <Badge
+      size="sm"
+      variant={statusVariant(status)}
+      appearance="light"
+      shape="circle"
+      className={className}
+    >
+      <BadgeDot />
+      {t(`status.${status}`)}
+    </Badge>
   );
 }
 
@@ -159,34 +186,12 @@ export function StudentDetailSheet({
                   <span className="text-mono truncate text-lg leading-none font-semibold text-foreground">
                     {row.name}
                   </span>
-                  {!isDesktop && (
-                    <Badge
-                      size="sm"
-                      variant={statusVariant(row.status)}
-                      appearance="light"
-                      shape="circle"
-                      className="w-fit shrink-0"
-                    >
-                      <BadgeDot />
-                      {t(`status.${row.status}`)}
-                    </Badge>
-                  )}
+                  {!isDesktop && <StatusBadge status={row.status} className="w-fit shrink-0" />}
                 </div>
                 <span className="truncate text-sm text-muted-foreground">
                   {row.admissionNumber}
                 </span>
-                {isDesktop && (
-                  <Badge
-                    size="sm"
-                    variant={statusVariant(row.status)}
-                    appearance="light"
-                    shape="circle"
-                    className="mt-1 w-fit"
-                  >
-                    <BadgeDot />
-                    {t(`status.${row.status}`)}
-                  </Badge>
-                )}
+                {isDesktop && <StatusBadge status={row.status} className="mt-1 w-fit" />}
               </div>
             </div>
 
