@@ -21,6 +21,7 @@ from apps.school_organization.tests.factories import (
 )
 from apps.student_management.models import Student
 from apps.student_management.tests.factories import StudentFactory, enable_feature
+from core.files.tests.factories import FileFactory
 from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
 
@@ -129,3 +130,17 @@ class CrossTenantAccessTests(APITestCase):
 
         with tenant_context(self.tenant_b.id):
             self.assertFalse(Student.objects.filter(pk=created_id).exists())
+
+    def test_patching_a_photo_from_another_tenant_is_rejected(self) -> None:
+        with tenant_context(self.tenant_b.id):
+            foreign_photo = FileFactory(
+                tenant=self.tenant_b, purpose="student.photo", mime_type="image/png"
+            )
+
+        response = self.client.patch(
+            f"/api/v1/students/{self.own['students'].pk}",
+            {"photo_file_id": str(foreign_photo.pk)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

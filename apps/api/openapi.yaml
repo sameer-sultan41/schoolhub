@@ -20554,6 +20554,11 @@ components:
           type: string
           format: uuid
           nullable: true
+        photo_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
         campus_id:
           type: string
           format: uuid
@@ -22539,6 +22544,11 @@ components:
           type: string
           format: uuid
           nullable: true
+        photo_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
         campus_id:
           type: string
           format: uuid
@@ -22604,6 +22614,7 @@ components:
       - house_name
       - id
       - last_name
+      - photo_url
       - status
       - updated_at
     StudentAttendance:

@@ -28,6 +28,7 @@ from apps.student_management.models import (
     StudentTransfer,
 )
 from core.files.models import File
+from core.files.serializers import SignedFileURLField
 from core.rbac.models import RecordScope
 from core.rbac.permissions import has_permission_key, user_scopes
 
@@ -46,6 +47,9 @@ class StudentSerializer(serializers.ModelSerializer):
     campus_id = _fk(Campus, source="campus")
     house_id = _fk(House, source="house", required=False, allow_null=True)
     photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
+    # The photo above as a display link. get_queryset's select_related("photo_file") keeps it
+    # from costing a query per row.
+    photo_url = SignedFileURLField(source="photo_file")
     # Explicitly optional: the model column has no `blank=True`, so DRF's
     # ModelSerializer would otherwise auto-derive it as *required* — but the
     # service always generates it server-side on create (views.py's
@@ -76,6 +80,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "gender",
             "photo_file_id",
+            "photo_url",
             "campus_id",
             "campus_name",
             "house_id",
@@ -103,6 +108,14 @@ class StudentSerializer(serializers.ModelSerializer):
     def validate_admission_number(self, value: str) -> str:
         if self.instance is not None:
             services.assert_admission_number_immutable(instance=self.instance, new_value=value)
+        return value
+
+    def validate_photo_file_id(self, value: File | None) -> File | None:
+        # `_fk()` only proves the file exists in this tenant. Without this, a PATCH could
+        # point the photo at any ready file and photo_url would sign it for every viewer.
+        # The current photo passes unchecked: edits re-send it unchanged.
+        if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
+            services.assert_file_usable(file=value, purpose=uploads.STUDENT_PHOTO.key)
         return value
 
     def validate_user_id(self, value: uuid.UUID | None) -> uuid.UUID | None:
