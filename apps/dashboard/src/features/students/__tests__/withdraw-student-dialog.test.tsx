@@ -1,5 +1,5 @@
 import { ApiError } from "@schoolhub/api-client";
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
@@ -142,10 +142,26 @@ describe("WithdrawStudentDialog", () => {
     // the portal actually mounted, `container.querySelector` does not.
     const form = screen.getByLabelText(/reason/i).closest("form");
     if (!form) throw new Error("form not found");
-    fireEvent.submit(form);
-    fireEvent.submit(form);
 
-    expect(mockWithdrawStudent).toHaveBeenCalledTimes(1);
+    fireEvent.submit(form);
+    // `handleSubmit`'s `mutation.isPending` guard is checked synchronously, before
+    // react-hook-form's own (always-async, since `zodResolver` returns a Promise)
+    // validation has resolved — so it only protects a submit that arrives AFTER
+    // `mutation.mutate()` has actually fired and flipped `isPending` true, not two
+    // submits dispatched in the same tick. Wait for the first call to land for real
+    // before firing the second, matching what an Enter keypress that lands after the
+    // mutation is already in flight actually looks like.
+    await waitFor(() => {
+      expect(mockWithdrawStudent).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.submit(form);
+    // The guard short-circuits this one synchronously — give any stray async work a
+    // tick to settle before asserting the call count stayed at 1.
+    await waitFor(() => {
+      expect(mockWithdrawStudent).toHaveBeenCalledTimes(1);
+    });
+
     resolveWithdraw(studentRecord({ id: "s1", status: "withdrawn" }));
   });
 });

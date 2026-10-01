@@ -38,6 +38,9 @@ const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFuncti
 const mockFetchCampuses = Services.dashboard.fetchCampuses as jest.MockedFunction<
   typeof Services.dashboard.fetchCampuses
 >;
+const mockFetchStudentById = Services.students.fetchStudentById as jest.MockedFunction<
+  typeof Services.students.fetchStudentById
+>;
 
 // Every permission this table reads, granted — individual tests only care about row
 // data/filters/errors, not permission gating, so a full grant is the sane default; the
@@ -215,5 +218,59 @@ describe("StudentDirectoryTable", () => {
 
     expect(await screen.findByText(/couldn't load the students list/i)).toBeInTheDocument();
     expect(screen.queryByText(/don't have permission/i)).not.toBeInTheDocument();
+  });
+
+  it("opens the edit form dialog, pre-targeted at that row's student, from the row's Edit action", async () => {
+    mockFetchStudentsPage.mockResolvedValue({
+      items: [studentRecord({ id: "stu-1", first_name: "Ayesha", last_name: "Khan" })],
+      pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
+    });
+    mockFetchStudentById.mockResolvedValue(studentRecord({ id: "stu-1" }));
+
+    renderWithProviders(<StudentDirectoryTable />);
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: /edit ayesha khan/i }));
+
+    expect(await screen.findByRole("heading", { name: /edit student/i })).toBeInTheDocument();
+    expect(mockFetchStudentById).toHaveBeenCalledWith("stu-1");
+  });
+
+  it("opens the withdraw dialog for just that row's student from the row's Withdraw action", async () => {
+    mockFetchStudentsPage.mockResolvedValue({
+      items: [
+        studentRecord({ id: "stu-1", first_name: "Ayesha", last_name: "Khan", status: "active" }),
+      ],
+      pagination: { page: 1, page_size: 10, total_count: 1, total_pages: 1 },
+    });
+
+    renderWithProviders(<StudentDirectoryTable />);
+
+    await userEvent
+      .setup()
+      .click(await screen.findByRole("button", { name: /^withdraw ayesha khan/i }));
+
+    expect(await screen.findByText("Withdraw Ayesha Khan")).toBeInTheDocument();
+  });
+
+  it("opens the withdraw dialog for every selected active student via the bulk-withdraw button", async () => {
+    mockFetchStudentsPage.mockResolvedValue({
+      items: [
+        studentRecord({ id: "stu-1", first_name: "Ayesha", last_name: "Khan", status: "active" }),
+        studentRecord({ id: "stu-2", first_name: "Bilal", last_name: "Ahmed", status: "active" }),
+      ],
+      pagination: { page: 1, page_size: 10, total_count: 2, total_pages: 1 },
+    });
+
+    renderWithProviders(<StudentDirectoryTable />);
+    const user = userEvent.setup();
+
+    const rowCheckboxes = await screen.findAllByRole("checkbox", { name: /select this student/i });
+    expect(rowCheckboxes).toHaveLength(2);
+    await user.click(rowCheckboxes[0] as HTMLElement);
+    await user.click(rowCheckboxes[1] as HTMLElement);
+
+    await user.click(screen.getByRole("button", { name: /withdraw 2/i }));
+
+    expect(await screen.findByText("Withdraw 2 students")).toBeInTheDocument();
   });
 });
