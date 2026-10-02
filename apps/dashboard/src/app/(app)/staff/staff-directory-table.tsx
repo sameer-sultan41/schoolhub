@@ -52,6 +52,8 @@ import {
 } from "@schoolhub/ui";
 
 import { Services } from "@/services";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { getInitials, stableSignedUrl } from "@/lib/helpers";
 import { Regex } from "@/lib/regex";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
@@ -176,7 +178,7 @@ function ActionsCell({
 
 export function StaffDirectoryTable() {
   const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS).trim();
   // Defaults to "active" (not "no filter") to match the "Active Users" toggle below
   // defaulting on — the toggle and the Status popover's own "Active" checkbox are the
   // same piece of state, just two different controls for it.
@@ -208,15 +210,6 @@ export function StaffDirectoryTable() {
     }
     previousExitDialogRef.current = exitDialog;
   }, [exitDialog]);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setSearch(searchInput.trim());
-    }, 300);
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, [searchInput]);
 
   useEffect(() => {
     setPagination((current) => ({ ...current, pageIndex: 0 }));

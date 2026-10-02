@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 
 import { useDebouncedValue } from "../use-debounced-value";
 
@@ -22,10 +22,14 @@ describe("useDebouncedValue", () => {
     });
 
     rerender({ value: "al" });
-    jest.advanceTimersByTime(299);
+    act(() => {
+      jest.advanceTimersByTime(299);
+    });
     expect(result.current).toBe("a");
 
-    jest.advanceTimersByTime(1);
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
     expect(result.current).toBe("al");
   });
 
@@ -35,12 +39,18 @@ describe("useDebouncedValue", () => {
     });
 
     rerender({ value: "al" });
-    jest.advanceTimersByTime(200);
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
     rerender({ value: "ali" });
-    jest.advanceTimersByTime(200);
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
     expect(result.current).toBe("a");
 
-    jest.advanceTimersByTime(100);
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
     expect(result.current).toBe("ali");
   });
 });

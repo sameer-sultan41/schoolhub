@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,6 +49,7 @@ import {
 import { StudentAddressFields } from "./student-address-fields";
 import { StudentPhotoField } from "./student-photo-field";
 import { StudentProfileTextFields } from "./student-profile-text-fields";
+import { StudentTextFieldList } from "./student-text-field-list";
 
 export interface StudentFormDialogProps {
   open: boolean;
@@ -86,6 +87,15 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
   const sessionRef = useRef(0);
   const openSessionRef = useRef(0);
   const studentIdRef = useRef(studentId);
+  // Blocks a second submit synchronously, before react-hook-form's own (always async,
+  // since `zodResolver` returns a Promise) validation has resolved — `mutation.isPending`
+  // alone isn't enough: it only flips true once `mutation.mutate()` actually runs, deep
+  // inside that async chain, leaving a window where two submits dispatched close together
+  // both pass a `mutation.isPending` check and both end up calling `mutate()`. Reset in
+  // every exit path: validation failure, the mutation settling, and any unexpected
+  // rejection from `handleSubmit` itself — never just on success, or a validation error
+  // would permanently lock the form.
+  const isSubmittingRef = useRef(false);
   useEffect(() => {
     studentIdRef.current = studentId;
     if (open) {
@@ -202,6 +212,30 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
       openSessionRef.current === uploadSession && studentIdRef.current === uploadedStudentId;
   }
 
+  function onSubmit(event: SyntheticEvent) {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    form
+      .handleSubmit(
+        (values) => {
+          mutation.mutate(values, {
+            onSettled: () => {
+              isSubmittingRef.current = false;
+            },
+          });
+        },
+        () => {
+          // Validation failed — handleSubmit's "valid" callback above never ran, so
+          // nothing will ever call onSettled for this attempt.
+          isSubmittingRef.current = false;
+        },
+      )(event)
+      .catch((error: unknown) => {
+        isSubmittingRef.current = false;
+        console.error(error);
+      });
+  }
+
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent className="max-w-2xl" closeLabel={tCommon("close")}>
@@ -218,13 +252,7 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
           <Form {...form}>
             <form
               noValidate
-              onSubmit={(event) => {
-                form
-                  .handleSubmit((values) => {
-                    mutation.mutate(values);
-                  })(event)
-                  .catch(console.error);
-              }}
+              onSubmit={onSubmit}
               className={isMobile ? "flex min-h-0 grow flex-col" : undefined}
             >
               {/* Desktop bounds the body with its own max-height/scrollbar; the mobile
@@ -239,22 +267,7 @@ export function StudentFormDialog({ open, onOpenChange, mode, studentId }: Stude
               >
                 {formError && <Alert variant="destructive">{formError}</Alert>}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {NAME_FIELDS.map(([name, labelKey]) => (
-                    <FormField
-                      key={name}
-                      control={form.control}
-                      name={name}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t(`fields.${labelKey}`)}</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  ))}
+                  <StudentTextFieldList form={form} fields={NAME_FIELDS} namespace="fields" />
                   <FormField
                     control={form.control}
                     name="date_of_birth"
