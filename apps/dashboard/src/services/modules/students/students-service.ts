@@ -64,23 +64,29 @@ export interface CreateStudentInput {
 }
 
 export async function createStudent(input: CreateStudentInput): Promise<StudentRecord> {
-  const { data } = await apiClient.post<StudentRecord>(endpoints.students.list, {
+  // `!== undefined`, not truthy — matching `updateStudent`'s own pattern below exactly.
+  // `CreateStudentInput`'s optional fields are typed `| null`, same as
+  // `UpdateStudentInput`'s, so a caller sending an explicit `null` must have it reach the
+  // request body rather than being silently dropped the same way an empty string or `0`
+  // would be under a truthy check.
+  const body: Record<string, unknown> = {
     first_name: input.firstName,
     last_name: input.lastName,
     date_of_birth: input.dateOfBirth,
     gender: input.gender,
     campus_id: input.campusId,
     admission_date: input.admissionDate,
-    ...(input.preferredName ? { preferred_name: input.preferredName } : {}),
-    ...(input.houseId ? { house_id: input.houseId } : {}),
-    ...(input.photoFileId ? { photo_file_id: input.photoFileId } : {}),
-    ...(input.bloodGroup ? { blood_group: input.bloodGroup } : {}),
-    ...(input.nationality ? { nationality: input.nationality } : {}),
-    ...(input.religion ? { religion: input.religion } : {}),
-    ...(input.previousSchool ? { previous_school: input.previousSchool } : {}),
-    ...(input.medicalNotes ? { medical_notes: input.medicalNotes } : {}),
-    ...(input.address ? { address: input.address } : {}),
-  });
+  };
+  if (input.preferredName !== undefined) body.preferred_name = input.preferredName;
+  if (input.houseId !== undefined) body.house_id = input.houseId;
+  if (input.photoFileId !== undefined) body.photo_file_id = input.photoFileId;
+  if (input.bloodGroup !== undefined) body.blood_group = input.bloodGroup;
+  if (input.nationality !== undefined) body.nationality = input.nationality;
+  if (input.religion !== undefined) body.religion = input.religion;
+  if (input.previousSchool !== undefined) body.previous_school = input.previousSchool;
+  if (input.medicalNotes !== undefined) body.medical_notes = input.medicalNotes;
+  if (input.address !== undefined) body.address = input.address;
+  const { data } = await apiClient.post<StudentRecord>(endpoints.students.list, body);
   return data;
 }
 

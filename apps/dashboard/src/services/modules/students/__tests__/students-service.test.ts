@@ -84,6 +84,27 @@ describe("students-service", () => {
     });
   });
 
+  it("createStudent sends an explicit null through rather than silently dropping it", async () => {
+    // `createStudent` used to build its body with truthy checks
+    // (`...(input.houseId ? {...} : {})`), which would drop a falsy-but-explicit value —
+    // including `null` — the same way it'd drop an empty string, unlike `updateStudent`'s
+    // own `!== undefined` checks right below, which only ever drop `undefined`.
+    const { createStudent } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { id: "s1" } });
+
+    await createStudent({
+      firstName: "Ali",
+      lastName: "Khan",
+      dateOfBirth: "2012-05-01",
+      gender: "male",
+      campusId: "c1",
+      admissionDate: "2026-01-10",
+      houseId: null,
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/students", expect.objectContaining({ house_id: null }));
+  });
+
   it("updateStudent sends null (not omitted) for an explicitly cleared house", async () => {
     const { updateStudent } = await import("../students-service");
     mockPatch.mockResolvedValue({ data: { id: "s1" } });
