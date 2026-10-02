@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GraduationCap, UserPlus, Users, type IdCard } from "lucide-react";
+import { GraduationCap, UserPlus, Users } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { m } from "motion/react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
@@ -12,6 +11,7 @@ import { Button } from "@schoolhub/ui";
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
 import { StaffImportDialog } from "@/app/(app)/staff/staff-import-dialog";
+import { StatChip } from "@/components/stat-chip";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobPolling } from "@/hooks/use-job-polling";
 import { resolveErrorMessage } from "@/lib/error-message";
@@ -42,44 +42,8 @@ function formatCount(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toLocaleString();
 }
 
-/**
- * The "—" → real-number swap, animated once. `key={value}` is what makes this a real
- * element change to Motion (not a prop update on the same node), so `initial` actually
- * fires when the count first resolves — a single, orchestrated reveal for a real state
- * change (data landing), not a repeating decorative tic on every render.
- */
-function AnimatedStat({ value }: { value: string }) {
-  return (
-    <m.span
-      key={value}
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-      className="inline-block text-sm leading-none font-semibold text-foreground tabular-nums"
-    >
-      {value}
-    </m.span>
-  );
-}
-
-/** One stat chip: icon, animated count, label. */
-function StatChip({
-  icon: Icon,
-  value,
-  label,
-}: {
-  icon: typeof IdCard;
-  value: string;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Icon className="size-3.5 text-primary" aria-hidden="true" />
-      <AnimatedStat value={value} />
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
-  );
-}
+// `AnimatedStat`/`StatChip` live in `@/components/stat-chip` — shared with `/students`'s
+// toolbar (and any future module's) so this shape has exactly one place to change.
 
 export function StaffToolbar() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);

@@ -4,14 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { getCoreRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
+import { m } from "motion/react";
 import {
   Button,
   Card,
   CardFooter,
   CardHeader,
+  CardHeading,
   CardTable,
+  CardToolbar,
   DATA_GRID_CARD_CLASSNAME,
   DataGrid,
+  DataGridColumnVisibility,
   DataGridPagination,
   DataGridTable,
   EmptyState,
@@ -187,6 +191,7 @@ export function StudentDirectoryTable() {
         isLoading={query.isPending}
         onRowClick={setDetailRow}
         caption={t("list.caption")}
+        tableLayout={{ cellBorder: true, columnsVisibility: true }}
         labels={DASHBOARD_DATA_GRID_LABELS}
         emptyState={
           <EmptyState
@@ -196,42 +201,68 @@ export function StudentDirectoryTable() {
           />
         }
       >
-        <Card className={DATA_GRID_CARD_CLASSNAME}>
-          <CardHeader className="flex flex-wrap items-center gap-2.5 py-3.5">
-            <StudentDirectoryFilters
-              searchInput={searchInput}
-              onSearchInputChange={setSearchInput}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              campusId={campusId}
-              onCampusIdChange={setCampusId}
-              houseId={houseId}
-              onHouseIdChange={setHouseId}
-            />
-            {selectedWithdrawable.length > 0 && canWithdraw && (
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setWithdrawDialog({
-                    ids: selectedWithdrawable.map((s) => s.id),
-                    names: selectedWithdrawable.map((s) => s.name),
-                  });
-                }}
-              >
-                {t("withdraw.confirmBulk", { count: selectedWithdrawable.length })}
-              </Button>
-            )}
-          </CardHeader>
-          <ScrollArea>
-            <CardTable>
-              <DataGridTable />
-            </CardTable>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-          <CardFooter>
-            <DataGridPagination />
-          </CardFooter>
-        </Card>
+        {/* No `key`, so a filter/sort/page change doesn't replay this — it fires once,
+            on the table's first appearance, matching `/staff`'s own directory card. */}
+        <m.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          <Card className={DATA_GRID_CARD_CLASSNAME}>
+            <CardHeader className="flex flex-wrap items-center gap-2.5 py-3.5">
+              <CardHeading>
+                {/* `CardHeading` itself only applies vertical spacing (`space-y-1`) for a
+                    stacked title+subtitle; the filter row needs its own horizontal flex,
+                    matching staff's identical inner wrapper. */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <StudentDirectoryFilters
+                    searchInput={searchInput}
+                    onSearchInputChange={setSearchInput}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
+                    campusId={campusId}
+                    onCampusIdChange={setCampusId}
+                    houseId={houseId}
+                    onHouseIdChange={setHouseId}
+                  />
+                </div>
+              </CardHeading>
+              <CardToolbar>
+                {selectedWithdrawable.length > 0 && canWithdraw && (
+                  <m.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        setWithdrawDialog({
+                          ids: selectedWithdrawable.map((s) => s.id),
+                          names: selectedWithdrawable.map((s) => s.name),
+                        });
+                      }}
+                    >
+                      {t("withdraw.confirmBulk", { count: selectedWithdrawable.length })}
+                    </Button>
+                  </m.div>
+                )}
+                <DataGridColumnVisibility />
+              </CardToolbar>
+            </CardHeader>
+            <m.div
+              className="min-w-0"
+              animate={{ opacity: query.isFetching ? 0.5 : 1 }}
+              transition={{ duration: 0.15 }}
+            >
+              <ScrollArea>
+                <CardTable>
+                  <DataGridTable />
+                </CardTable>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            </m.div>
+            <CardFooter className="border-t-0">
+              <DataGridPagination />
+            </CardFooter>
+          </Card>
+        </m.div>
       </DataGrid>
       {formDialog && (
         <StudentFormDialog

@@ -33,6 +33,7 @@ import {
   Input,
   Textarea,
 } from "@schoolhub/ui";
+import { LogOut, X } from "lucide-react";
 
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { resolveErrorMessage } from "@/lib/error-message";
@@ -276,23 +277,32 @@ export function WithdrawStudentDialog({
             <DrawerDescription>{t("withdraw.description")}</DrawerDescription>
           </DrawerHeader>
           {body}
-          <DrawerFooter>
+          <DrawerFooter className="flex-row justify-end gap-2.5">
             <Button
               variant="outline"
+              mode="icon"
+              shape="circle"
+              aria-label={tCommon("cancel")}
               disabled={mutation.isPending}
               onClick={() => {
                 onOpenChange(false);
               }}
             >
-              {tCommon("cancel")}
+              <X aria-hidden="true" />
             </Button>
             <Button
               variant="destructive"
+              mode="icon"
+              shape="circle"
+              aria-label={mutation.isPending ? t("withdraw.submitting") : submitLabel}
               isLoading={mutation.isPending}
               loadingLabel={t("withdraw.submitting")}
               onClick={handleSubmit}
             >
-              {submitLabel}
+              {/* `isLoading` always renders its own spinner alongside `children`, not in
+                  place of them — so the icon hides itself while pending rather than
+                  showing both a spinner and the LogOut glyph side by side. */}
+              {!mutation.isPending && <LogOut aria-hidden="true" />}
             </Button>
           </DrawerFooter>
         </DrawerContent>
