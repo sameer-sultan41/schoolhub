@@ -1,18 +1,13 @@
 "use client";
 
-import { useTranslations } from "next-intl";
-import { FormControl, FormField, FormItem, FormLabel, FormMessage, Input } from "@schoolhub/ui";
 import type { UseFormReturn } from "react-hook-form"; // a direct dependency (apps/dashboard/package.json) — not re-exported by @schoolhub/ui
 import type { StudentFormValues } from "./student-form-schema";
+import { StudentTextFieldList } from "./student-text-field-list";
 
 /** The six structurally-identical simple text fields pulled out of
- * `student-form-dialog.tsx` to stay under the 400-line `max-lines` ceiling (mirrors
- * `student-address-fields.tsx`'s own `.map()` over a `[name, labelKey]` tuple list
- * exactly). Each renders its own `FormMessage`: the dialog maps a server field error onto
- * these by name and suppresses its top-level alert, so without one an error like
- * `blood_group`'s max length would show only a red outline. `medical_notes` is included
- * here so there is one list to maintain, but is filtered back out below unless the caller
- * says to show it. */
+ * `student-form-dialog.tsx` to stay under the 400-line `max-lines` ceiling.
+ * `medical_notes` is included here so there is one list to maintain, but is filtered
+ * back out below unless the caller says to show it. */
 const ALL_FIELDS = [
   ["preferred_name", "preferredName"],
   ["blood_group", "bloodGroup"],
@@ -36,26 +31,6 @@ export function StudentProfileTextFields({
   form: UseFormReturn<StudentFormValues>;
   showMedicalNotes: boolean;
 }) {
-  const t = useTranslations("students");
   const fields = ALL_FIELDS.filter(([name]) => name !== "medical_notes" || showMedicalNotes);
-  return (
-    <>
-      {fields.map(([name, labelKey]) => (
-        <FormField
-          key={name}
-          control={form.control}
-          name={name}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t(`fields.${labelKey}`)}</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      ))}
-    </>
-  );
+  return <StudentTextFieldList form={form} fields={fields} namespace="fields" />;
 }
