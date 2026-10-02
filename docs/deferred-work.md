@@ -769,3 +769,16 @@ either this file or `project-status.md`.
   who wants demo students has to add them by hand (or re-run the one-off shell snippet this
   session used) after `seed-dev.sh`.
 
+- **`staff-form-dialog.tsx` has the identical stale-refetch race `student-form-dialog.tsx`
+  was fixed for (PR #96 review).** Its edit-prefill effect (`useEffect` guarding
+  `form.reset(detailToFormValues(staffDetailQuery.data))`) keys only off
+  `staffDetailQuery.data` itself, with no `populatedStaffId !== staffDetailQuery.data.id`
+  check — so a background refetch of the same staff member (TanStack Query can hand back a
+  new object reference for an unchanged record, e.g. the photo URL's signature rotating)
+  silently calls `form.reset()` over whatever the user is mid-typing, discarding unsaved
+  edits. Not fixed here: this bug is pre-existing and unrelated to anything this PR changed
+  in `/staff` (unlike `staff-import-dialog.tsx`'s scroll-region fix, which addressed a real
+  regression this PR's own shared `DialogContent` change introduced). The fix is the same
+  guard students' own version now has: add `populatedStaffId !== staffDetailQuery.data.id`
+  to the `if`, and add `populatedStaffId` to the effect's dependency array.
+
