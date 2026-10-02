@@ -208,6 +208,7 @@
     "filters": {
       "search": "Search",
       "status": "Status",
+      "statusAriaLabel": "Filter by status",
       "all": "All",
       "campus": "Campus",
       "house": "House",

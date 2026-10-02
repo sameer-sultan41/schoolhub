@@ -107,6 +107,11 @@ export function StudentDirectoryFilters({
         <PopoverTrigger asChild>
           <Button
             variant={statusFilter === ALL ? "outline" : "outline-primary"}
+            // A distinct accessible name from the visible "Status" text — the Status
+            // column's own sort button (`DataGridColumnHeader`) already claims the bare
+            // name "Status", and two same-named buttons on one page is a real a11y bug,
+            // not just a flaky test selector.
+            aria-label={t("filters.statusAriaLabel")}
             className="w-full justify-start sm:w-auto sm:justify-center"
           >
             <Filter className="text-primary" aria-hidden="true" />

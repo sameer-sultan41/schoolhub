@@ -208,6 +208,7 @@
     "filters": {
       "search": "تلاش",
       "status": "حیثیت",
+      "statusAriaLabel": "حیثیت کے لحاظ سے فلٹر کریں",
       "all": "تمام",
       "campus": "کیمپس",
       "house": "ہاؤس",
