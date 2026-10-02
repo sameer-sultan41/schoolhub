@@ -108,6 +108,13 @@ export function WithdrawStudentDialog({
   // or the retry risks reporting a false failure for a student the server already
   // withdrew. Never carried into a later, logically distinct attempt: that is a new
   // open, so a new instance with an empty map (see the mounting contract above).
+  // Blocks a second submit synchronously, before react-hook-form's own (always async)
+  // validation has resolved — `mutation.isPending` alone leaves a window where two
+  // submits dispatched close together both pass that check before either one's
+  // `mutate()` call has actually run. Reset on every exit path (validation failure, the
+  // mutation settling, an unexpected rejection) so a validation error never permanently
+  // locks the form.
+  const isSubmittingRef = useRef(false);
   const keysRef = useRef(new Map<string, string>());
   function keyFor(id: string): string {
     if (!keysRef.current.has(id)) keysRef.current.set(id, crypto.randomUUID());
@@ -168,16 +175,27 @@ export function WithdrawStudentDialog({
   });
 
   function handleSubmit(event: SyntheticEvent) {
-    // Guards against a double submit from pressing Enter in the Textarea/Input while
-    // the mutation is already in flight — the Drawer's confirm button has no `disabled`
-    // of its own (only `isLoading`), and an Enter keypress bypasses a disabled button
-    // anyway since it submits the form directly, not through a click.
-    if (mutation.isPending) return;
+    // Guards against a double submit from pressing Enter in the Textarea/Input while a
+    // submit is already in flight — the Drawer's confirm button has no `disabled` of its
+    // own (only `isLoading`), and an Enter keypress bypasses a disabled button anyway
+    // since it submits the form directly, not through a click.
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     form
-      .handleSubmit((values) => {
-        mutation.mutate(values);
-      })(event)
+      .handleSubmit(
+        (values) => {
+          mutation.mutate(values, {
+            onSettled: () => {
+              isSubmittingRef.current = false;
+            },
+          });
+        },
+        () => {
+          isSubmittingRef.current = false;
+        },
+      )(event)
       .catch((error: unknown) => {
+        isSubmittingRef.current = false;
         console.error("Unexpected error while submitting the student withdrawal form:", error);
       });
   }
