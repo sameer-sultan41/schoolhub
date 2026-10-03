@@ -19,10 +19,12 @@ jest.mock("@/services", () => ({
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     dashboard: {
-      fetchStaffPage: jest.fn(),
       fetchCampuses: jest.fn().mockResolvedValue([]),
       fetchDepartments: jest.fn().mockResolvedValue([]),
       fetchDesignations: jest.fn().mockResolvedValue([]),
+    },
+    staff: {
+      fetchStaffPage: jest.fn(),
       fetchStaffDirectory: jest.fn().mockResolvedValue([]),
       exitStaff: jest.fn(),
       fetchStaffById: jest.fn().mockResolvedValue({
@@ -58,11 +60,11 @@ jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockFetchStaffPage = Services.dashboard.fetchStaffPage as jest.MockedFunction<
-  typeof Services.dashboard.fetchStaffPage
+const mockFetchStaffPage = Services.staff.fetchStaffPage as jest.MockedFunction<
+  typeof Services.staff.fetchStaffPage
 >;
-const mockExitStaff = Services.dashboard.exitStaff as jest.MockedFunction<
-  typeof Services.dashboard.exitStaff
+const mockExitStaff = Services.staff.exitStaff as jest.MockedFunction<
+  typeof Services.staff.exitStaff
 >;
 
 /**

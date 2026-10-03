@@ -70,7 +70,7 @@ export function Teams() {
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["dashboard", "staff-directory"],
-    queryFn: () => Services.dashboard.fetchStaffDirectory(),
+    queryFn: () => Services.staff.fetchStaffDirectory(),
   });
 
   const rows = useMemo<StaffRow[]>(

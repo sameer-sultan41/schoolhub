@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { Services } from "@/services";
 import type { BackgroundJobRecord } from "@/services/modules/jobs/jobs-service";
 import { renderWithProviders } from "@/test-utils";
-import messages from "../../../../../messages/en.json";
+import messages from "../../../../messages/en.json";
 
 import { StaffImportDialog } from "../staff-import-dialog";
 

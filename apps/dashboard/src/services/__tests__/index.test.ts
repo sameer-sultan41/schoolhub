@@ -49,14 +49,18 @@ describe("Services", () => {
     expect(typeof Services.tenant.fetchCurrentTenant).toBe("function");
 
     expect(typeof Services.dashboard.fetchDashboardOverview).toBe("function");
-    expect(typeof Services.dashboard.fetchStaffPage).toBe("function");
-    expect(typeof Services.dashboard.createStaff).toBe("function");
 
     expect(typeof Services.files.uploadFile).toBe("function");
 
     expect(typeof Services.jobs.fetchJob).toBe("function");
     expect(typeof Services.jobs.fetchFileDownloadUrl).toBe("function");
 
+    expect(typeof Services.staff.fetchStaffDirectory).toBe("function");
+    expect(typeof Services.staff.fetchStaffPage).toBe("function");
+    expect(typeof Services.staff.createStaff).toBe("function");
+    expect(typeof Services.staff.updateStaff).toBe("function");
+    expect(typeof Services.staff.exitStaff).toBe("function");
+    expect(typeof Services.staff.fetchStaffById).toBe("function");
     expect(typeof Services.staff.triggerStaffExport).toBe("function");
     expect(typeof Services.staff.triggerStaffImport).toBe("function");
 

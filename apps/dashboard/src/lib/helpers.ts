@@ -1,3 +1,4 @@
+import { formatDistanceToNow } from "date-fns";
 import { Regex } from "./regex";
 
 /**
@@ -86,4 +87,38 @@ export function stableSignedUrl(url: string | null, now: number = Date.now()): s
   }
   inUse.set(object, url);
   return url;
+}
+
+/** "3 days ago" rather than a raw ISO timestamp. Shared by students and staff, each of
+ * which renders a record's `updated_at` this way on its own detail view/directory row. */
+export function formatLastUpdated(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return formatDistanceToNow(parsed, { addSuffix: true });
+}
+
+/** Humanizes an unlabelled snake_case value, e.g. "on_leave" -> "On leave". Shared by
+ * staff (employment fields) and available to any future module with the same need. */
+export function humanizeSnakeCase(value: string): string {
+  const spaced = value.replace(Regex.UNDERSCORE, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Copies `from[camelKey]` to `to[snakeKey]` for each pair in `fields`, when
+ * `include(value)` says to — the shape a module's `to<Domain>Body`/
+ * `to<Domain>QueryParams` helpers need, just with a different `include` predicate and
+ * field list each. `to` is mutated in place so a caller can seed it with
+ * always-present fields first.
+ */
+export function copyMappedFields<T extends object>(
+  from: T,
+  fields: ReadonlyArray<readonly [keyof T, string]>,
+  include: (value: T[keyof T]) => boolean,
+  to: Record<string, unknown>,
+): void {
+  for (const [camelKey, snakeKey] of fields) {
+    const value = from[camelKey];
+    if (include(value)) to[snakeKey] = value;
+  }
 }

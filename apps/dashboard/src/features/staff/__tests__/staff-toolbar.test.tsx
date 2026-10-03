@@ -29,14 +29,16 @@ jest.mock("@/services", () => ({
   Services: {
     auth: { fetchCurrentUser: jest.fn() },
     dashboard: {
-      fetchStaffPage: jest.fn(),
-      fetchStaffTypeCount: jest.fn(),
       fetchCampuses: jest.fn().mockResolvedValue([]),
       fetchDepartments: jest.fn().mockResolvedValue([]),
       fetchDesignations: jest.fn().mockResolvedValue([]),
-      fetchStaffDirectory: jest.fn().mockResolvedValue([]),
     },
-    staff: { triggerStaffExport: jest.fn() },
+    staff: {
+      fetchStaffPage: jest.fn(),
+      fetchStaffTypeCount: jest.fn(),
+      fetchStaffDirectory: jest.fn().mockResolvedValue([]),
+      triggerStaffExport: jest.fn(),
+    },
     jobs: { fetchJob: jest.fn(), fetchFileDownloadUrl: jest.fn() },
   },
 }));
@@ -48,11 +50,11 @@ jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockFetchStaffPage = Services.dashboard.fetchStaffPage as jest.MockedFunction<
-  typeof Services.dashboard.fetchStaffPage
+const mockFetchStaffPage = Services.staff.fetchStaffPage as jest.MockedFunction<
+  typeof Services.staff.fetchStaffPage
 >;
-const mockFetchStaffTypeCount = Services.dashboard.fetchStaffTypeCount as jest.MockedFunction<
-  typeof Services.dashboard.fetchStaffTypeCount
+const mockFetchStaffTypeCount = Services.staff.fetchStaffTypeCount as jest.MockedFunction<
+  typeof Services.staff.fetchStaffTypeCount
 >;
 const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFunction<
   typeof Services.auth.fetchCurrentUser

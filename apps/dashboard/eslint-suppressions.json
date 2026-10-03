@@ -153,43 +153,28 @@
       "count": 2
     }
   },
-  "src/app/(app)/staff/exit-staff-dialog.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    },
+  "src/features/staff/exit-staff-dialog.tsx": {
     "react/jsx-no-literals": {
       "count": 3
     }
   },
-  "src/app/(app)/staff/staff-directory-table.tsx": {
+  "src/features/staff/staff-directory-table.tsx": {
     "max-lines": {
-      "count": 1
-    },
-    "no-restricted-imports": {
-      "count": 1
-    },
-    "no-restricted-syntax": {
       "count": 1
     },
     "react/jsx-no-literals": {
       "count": 9
     }
   },
-  "src/app/(app)/staff/staff-form-dialog.tsx": {
+  "src/features/staff/staff-form-dialog.tsx": {
     "max-lines": {
       "count": 1
-    },
-    "no-restricted-syntax": {
-      "count": 6
     },
     "react/jsx-no-literals": {
       "count": 31
     }
   },
-  "src/app/(app)/staff/staff-toolbar.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    },
+  "src/features/staff/staff-toolbar.tsx": {
     "react/jsx-no-literals": {
       "count": 1
     }

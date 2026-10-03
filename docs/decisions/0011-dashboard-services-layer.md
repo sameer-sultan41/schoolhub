@@ -38,7 +38,11 @@ Each domain gets its own module: staff calls belong in `services/modules/staff/`
 
 ## Consequences
 
-Today the staff screens route through `Services.dashboard.*` — known drift, on the backlog.
-`staff-directory-table.tsx` still imports `ApiError` from the client package; it is suppressed
-in the baseline until the staff screens move to `src/features/staff/`. Query keys come from the `queryKeys` factory in
+The staff screens now route through `Services.staff.*` (`services/modules/staff/`, split per
+[ADR-0018](0018-per-module-file-split-for-growing-domains.md) into its own
+`staff-type.ts`/`staff-constant.ts`/`staff-helper.ts`/`staff.schema.ts`) — the drift this record
+originally flagged is resolved, and the screens themselves moved from `src/app/(app)/staff/`
+into `src/features/staff/`. Reference-data reads shared with other modules
+(`fetchCampuses`/`fetchDepartments`/`fetchDesignations`) stay on `Services.dashboard`, since they
+are not staff-specific. Query keys come from the `queryKeys` factory in
 `src/lib/query-client.ts`, not inline arrays.

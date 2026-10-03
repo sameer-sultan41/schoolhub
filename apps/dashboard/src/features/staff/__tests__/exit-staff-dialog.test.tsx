@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
 import { Services } from "@/services";
-import type { StaffDirectoryRecord } from "@/services/modules/dashboard/dashboard-service";
+import type { StaffDirectoryRecord } from "@/services/modules/staff/staff-type";
 import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { ExitStaffDialog } from "../exit-staff-dialog";
@@ -13,7 +13,7 @@ jest.mock("@/services", () => ({
   // The real class: components `instanceof`-check it, and tests build `new ApiError(...)`.
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
-    dashboard: {
+    staff: {
       exitStaff: jest.fn(),
     },
   },
@@ -25,8 +25,8 @@ jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
-const mockExitStaff = Services.dashboard.exitStaff as jest.MockedFunction<
-  typeof Services.dashboard.exitStaff
+const mockExitStaff = Services.staff.exitStaff as jest.MockedFunction<
+  typeof Services.staff.exitStaff
 >;
 const mockToastSuccess = toast.success as jest.MockedFunction<typeof toast.success>;
 const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;

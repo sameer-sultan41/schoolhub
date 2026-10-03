@@ -203,21 +203,31 @@ unlabeled source of truth, split that concern out
 
 ```
 services/modules/<domain>/
-  <domain>-service.ts     # apiClient calls only — imports its types from ./<domain>-type
-  <domain>-type.ts        # the wire-shape alias + hand-written input/query/view-model types
-  <domain>-constant.ts     # cross-file magic strings/numbers and lookup objects
-  <domain>s-helper.ts     # pure mapper/formatter functions — no React, no API calls
-  <domain>.schema.ts       # Zod schemas and their inferred form-values types
+  <domain>-service.ts    # apiClient calls only — imports its types from ./<domain>-type
+  <domain>-type.ts       # the wire-shape alias + hand-written input/query/view-model types
+  <domain>-constant.ts   # cross-file magic strings/numbers and lookup objects
+  <domain>-helper.ts     # pure mapper/formatter functions — no React, no API calls
+  <domain>.schema.ts     # Zod schemas and their inferred form-values types
 ```
 
 `students` is the reference implementation for this split — see
-`services/modules/students/`. A domain with one or two functions and no shared
-constant gains nothing from five near-empty files; the split is earned by actual
-accumulation, not applied as a blanket template. The wire-shape alias
-(`StudentRecord` et al.) still comes from `ApiSchemas["<Model>"]`
+`services/modules/students/`. `staff` (`services/modules/staff/`) is a second
+worked example, and shows a real variant: its `<domain>-helper.ts` needs *two*
+field-inclusion predicates in the same body builder (`createStaff`/`updateStaff`
+gate a "required-like" field group on truthiness and a genuinely-optional group on
+`!== undefined`), not the one-predicate-for-everything case students has — expressed
+as two calls into the shared `copyMappedFields` loop (promoted to
+`src/lib/helpers.ts` once a second domain needed it), one per field-group constant,
+rather than forcing a single predicate to be wrong for half the fields. A domain
+with one or two functions and no shared constant gains nothing from five near-empty
+files; the split is earned by actual accumulation, not applied as a blanket
+template. The wire-shape alias (`StudentRecord` et al.) still comes from
+`ApiSchemas["<Model>"]`
 ([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)) —
 moving it into `<domain>-type.ts` is relocation, not a second source of truth, as long
-as nothing hand-rolls a competing definition of that same shape elsewhere. A Zod
+as nothing hand-rolls a competing definition of that same shape elsewhere (staff's own
+types are still hand-written, a separate, already-tracked ADR-0017 gap — see
+`docs/deferred-work.md` — not something this split fixed or made worse). A Zod
 schema and its inferred type stay together in `<domain>.schema.ts`; form logic built on
 top of it (defaults, record↔form-values mappers, submit-payload builders) stays in its
 own feature file and imports the schema/type rather than redeclaring it.
@@ -243,6 +253,8 @@ default into either pattern piecemeal.
   domain still at the base three-file shape.
 - `apps/dashboard/src/services/modules/students/` — the reference implementation for
   a domain that has grown into the full constant/type/helper/schema split.
+- `apps/dashboard/src/services/modules/staff/` — a second worked example of the
+  split, with the two-predicate `copyMappedFields` variant students didn't need.
 - [ADR-0018](../../../docs/decisions/0018-per-module-file-split-for-growing-domains.md) —
   why and when to split.
 - `apps/dashboard/AGENTS.md` — "How This App Is Wired" and "Adding a Module Screen".

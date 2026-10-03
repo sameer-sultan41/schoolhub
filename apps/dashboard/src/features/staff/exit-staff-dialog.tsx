@@ -40,10 +40,12 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useForm, type UseFormReturn } from "react-hook-form";
-import { z } from "zod";
 
 import { ApiError, Services } from "@/services";
-import type { ExitStaffInput } from "@/services/modules/dashboard/dashboard-service";
+import { queryKeys } from "@/lib/query-client";
+import { EXIT_REASON_MAX_LENGTH, EXIT_TYPE_OPTIONS } from "@/services/modules/staff/staff-constant";
+import { exitFormSchema, type ExitFormValues } from "@/services/modules/staff/staff.schema";
+import type { ExitStaffInput } from "@/services/modules/staff/staff-type";
 
 export interface ExitStaffDialogProps {
   open: boolean;
@@ -53,37 +55,6 @@ export interface ExitStaffDialogProps {
   /** Optional, same order as `staffIds`, for a friendlier confirmation/failure message. */
   staffNames?: string[];
 }
-
-/**
- * Real enum values, `ExitRequestSerializer` (`apps/api/apps/staff_management/
- * serializers.py:253`). Left with no pre-selected default below — the server itself
- * defaults to `"resigned"` when the field is omitted from the request body entirely, so
- * this component must never spread a client-side `"resigned"` fallback into the payload.
- */
-const EXIT_TYPE_OPTIONS = [
-  { value: "resigned", label: "Resigned" },
-  { value: "retired", label: "Retired" },
-  { value: "terminated", label: "Terminated" },
-];
-
-const EXIT_REASON_MAX_LENGTH = 300;
-
-const exitFormSchema = z.object({
-  exit_date: z.string().min(1, "Exit date is required"),
-  exit_reason: z
-    .string()
-    .min(1, "Exit reason is required")
-    .max(
-      EXIT_REASON_MAX_LENGTH,
-      `Exit reason must be ${EXIT_REASON_MAX_LENGTH} characters or fewer`,
-    ),
-  // Genuinely optional — "" (the untouched default, and the Select's own placeholder
-  // state) is mapped to "field omitted" below, exactly like `exitStaff` (Task 2) expects,
-  // never sent through as a literal empty string.
-  exit_type: z.string().optional(),
-});
-
-type ExitFormValues = z.infer<typeof exitFormSchema>;
 
 const EMPTY_DEFAULTS: ExitFormValues = {
   exit_date: "",
@@ -267,7 +238,7 @@ export function ExitStaffDialog({
       // exit_date before joining_date, a clearance blocker) never stops the rest of the
       // batch from going through.
       const results = await Promise.allSettled(
-        idsToSubmit.map((id) => Services.dashboard.exitStaff(id, input)),
+        idsToSubmit.map((id) => Services.staff.exitStaff(id, input)),
       );
       const succeeded: string[] = [];
       const failed: ExitFailure[] = [];
@@ -299,10 +270,10 @@ export function ExitStaffDialog({
         // The successes are real and already committed server-side even when some ids in
         // the same batch failed, so the directory/toolbar queries are invalidated
         // regardless of whether every id made it through.
-        void queryClient.invalidateQueries({ queryKey: ["staff"] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.module("staff") });
         // Dashboard-home's widgets key their own queries off a separate ["dashboard", ...]
         // prefix (see staff-form-dialog.tsx's own mutation for why this needs its own call).
-        void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.module("dashboard") });
       }
 
       if (result.failed.length === 0) {

@@ -29,12 +29,12 @@ split that concern into its own file under `services/modules/<domain>/`:
 
 ```
 services/modules/<domain>/
-  <domain>-service.ts     # apiClient calls only — imports its types from ./<domain>-type
-  <domain>-type.ts        # domain types: the generated wire-shape alias, hand-written
-                           # input/query interfaces, and shared view-model types
-  <domain>-constant.ts     # cross-file magic strings/numbers and lookup objects
-  <domain>s-helper.ts     # pure functions (mappers, formatters) — no React, no API calls
-  <domain>.schema.ts       # Zod schemas and their inferred form-values types
+  <domain>-service.ts    # apiClient calls only — imports its types from ./<domain>-type
+  <domain>-type.ts       # domain types: the generated wire-shape alias, hand-written
+                         # input/query interfaces, and shared view-model types
+  <domain>-constant.ts   # cross-file magic strings/numbers and lookup objects
+  <domain>-helper.ts     # pure functions (mappers, formatters) — no React, no API calls
+  <domain>.schema.ts     # Zod schemas and their inferred form-values types
   index.ts                # re-exports as `<Domain>Service`
 ```
 
