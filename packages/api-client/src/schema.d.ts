@@ -9305,6 +9305,8 @@ export interface components {
             gender?: components["schemas"]["GenderEnum"];
             /** Format: uuid */
             photo_file_id?: string | null;
+            /** Format: uri */
+            readonly photo_url?: string | null;
             /** Format: uuid */
             campus_id?: string;
             readonly campus_name?: string;
@@ -10293,6 +10295,8 @@ export interface components {
             gender: components["schemas"]["GenderEnum"];
             /** Format: uuid */
             photo_file_id?: string | null;
+            /** Format: uri */
+            readonly photo_url: string | null;
             /** Format: uuid */
             campus_id: string;
             readonly campus_name: string;

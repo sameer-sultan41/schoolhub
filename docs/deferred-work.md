@@ -249,10 +249,24 @@ either this file or `project-status.md`.
   turns any `File` foreign key into a read-only signed GET link (`get_display_url()`), valid
   `FILE_DISPLAY_URL_TTL_SECONDS` (default 1 h) and `null` unless the file is `ready` and not
   soft-deleted. `StaffSerializer.photo_url` uses it, and the dashboard's staff directory and
-  edit dialog render it over an initials fallback. Students and guardians still expose only
-  `photo_file_id` — one `SignedFileURLField(source="photo_file")` line each, plus
-  `select_related("photo_file")`, when their screens need photos. The signer is now one shared
-  SigV4 instance per process (`get_presigner()`), signing for `S3_PUBLIC_ENDPOINT_URL`.
+  edit dialog render it over an initials fallback. `StudentSerializer.photo_url` now uses it
+  too (`students-dashboard-phase1` Task 1), with the same `select_related("photo_file")` and
+  an ownership guard on `photo_file_id` mirroring `staff/serializers.py`; the student
+  directory/form/detail sheet render it over an initials fallback. **Guardians still expose
+  only `photo_file_id`** — the same one-line addition, when a guardian-facing screen needs
+  photos. The signer is now one shared SigV4 instance per process (`get_presigner()`), signing
+  for `S3_PUBLIC_ENDPOINT_URL`.
+  - **`photo_url`'s purpose gate is student-only.** `StudentSerializer.photo_url` was
+    converted from `SignedFileURLField` to a `SerializerMethodField` that refuses to sign a
+    link unless `photo_file.purpose == "student.photo"` (`students-dashboard-phase1` fix
+    wave) — `validate_photo_file_id`'s ownership guard only stops a *new* mismatched file
+    from being attached by PATCH; it does nothing for a `photo_file` that reached the column
+    some other way (a row seeded before the guard existed, a future bulk-import path that
+    bypasses the serializer). `StaffSerializer.photo_url` still uses the plain
+    `SignedFileURLField` with no equivalent purpose check — same latent gap, not yet fixed
+    there. Fixing it needs the identical `SerializerMethodField` conversion in
+    `staff/serializers.py`, its own purpose constant, and a migration note for any existing
+    `staff.photo_file` rows whose purpose predates the check.
 - `medical_notes` field-level restriction and the `filter_assigned_to_user`
   fail-closed default (no `staff` table to join against yet) both ship in
   PR 1, ahead of the features that will exercise them. The student<->guardian
@@ -688,4 +702,83 @@ either this file or `project-status.md`.
   - mypy `disallow_untyped_defs` covers only `core.common`, `core.documents` and `core.money`; the
     other nine `core` packages join the override as they are typed (generate-baselines reports which).
   - Coverage floors to raise toward the 90% target: `apps/fees_finance` 85, `core/rbac` 80.
+
+- **`e2e/tests/live/students-admission-enrollment.spec.ts` needs a rewrite, not just
+  unblocking, once a later phase builds the screens it assumes.** `students-dashboard-phase1`
+  (Task 9) replaced the `/students` placeholder with the real directory — a table plus
+  in-page dialogs (`StudentFormDialog`, `WithdrawStudentDialog`) and a sheet
+  (`StudentDetailSheet`), driven by the new `StudentsPage` page object and
+  `tests/dashboard/students.spec.ts` (mocked). This live spec predates that reset and still
+  drives the earlier, standalone `/students/new` and `/students/{id}` routes via
+  `studentFormPage`/`studentDetailPage` — routes this phase never builds, so the spec stays
+  red for that reason alone, unrelated to Task 9's changes. Left as-is deliberately: those two
+  fixtures and page objects (`StudentFormPage`, `StudentDetailPage`) are untouched so this
+  spec's import surface keeps compiling, but the journey itself (create student → link
+  guardian → add emergency contact → enroll, plus the duplicate-admission rejection) needs
+  re-driving through the new dialogs/sheet once Phase 2 lands guardians/emergency
+  contacts/enrollment in the real UI — a rewrite against the new page objects, not a
+  route-path fix.
+
+- **A 422 duplicate-admission create response has no field for the override reason its own
+  message promises.** `student_management`'s duplicate-admission check (same name + DOB)
+  returns a `non_field` message ending "Pass an override reason to create anyway" — but no
+  `override_reason`/equivalent field exists on `POST /students` for a caller to actually supply
+  one, so no control on the client could actually act on it. `/students`' create dialog
+  (`StudentFormDialog`, `students-dashboard-phase1` Task 5) deliberately shows the server's
+  message plainly rather than adding a button that can't do anything. Not scheduled in
+  `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`'s Phases 2-4 Roadmap — its
+  own small follow-up (a backend field plus a client "create anyway" affordance).
+
+- **`waive_clearance` has no UI control on `/students`' withdraw dialog.**
+  `clearance_blockers()` (`student_management`'s withdraw path) is hard-coded to return `[]`
+  until a fees/library/transport module exists, so a checkbox would always be a no-op today;
+  `withdrawStudent` (`students-dashboard-phase1` Task 3) always sends `waiveClearance: false`.
+  Not one of `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`'s Phases 2-4 —
+  genuinely blocked on `fees-finance`/`library`/`transport` (Tier 3/5+) shipping real blockers
+  first, not on anything in this plan's own Roadmap.
+
+- **`/students`' directory filters stop at search/status/campus/house.** Class, section and
+  academic-session filters were left out this phase — with no enrollment UI yet, they would be
+  dead controls (`students-dashboard-phase1`'s Global Constraints). Phase 3 of
+  `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`'s Roadmap (enrollment
+  lifecycle/transfers) unblocks `class_id`/`section_id`/`academic_session_id` on the directory
+  once it lands.
+
+- **`/students`' detail sheet shows no address.** `StudentFormDialog` captures and edits all
+  six address sub-fields (`student-address-fields.tsx`), but `StudentDetailSheet`
+  (`students-dashboard-phase1` Task 6) renders only its Personal, Academic and Medical
+  sections, so a stored address is visible only by opening Edit. The branch's final review
+  caught the module doc and `project-status.md` claiming the sheet showed address fields;
+  the docs were corrected to match what shipped rather than growing the sheet in that last
+  fix pass. Follow-up: an Address section in the sheet reading `StudentRecord.address`
+  (`line1`/`line2`/`city`/`state`/`postal_code`/`country`), labelled with the existing
+  `students.address.*` keys.
+
+- **`seed_dev_data` enables every `module.*` flag for the demo tenant but seeds no
+  school-organization/student sample data (no campus, no houses, no students).** A first
+  attempt added that seeding directly in `core.rbac.management.commands.seed_dev_data`, which
+  `test_no_new_cross_app_import_violations` (ADR-0013) correctly rejected — `core` imports no
+  app, full stop, and `KNOWN_VIOLATIONS` is shrink-only (`check_baselines_shrink.py`), so a new
+  entry isn't an option either. The real fix is the one `test_import_boundaries.py`'s own
+  comment names: move the seed commands (`seed_dev_data`, `seed_e2e_data`, `seed_all_roles`,
+  all currently under `core.rbac.management.commands` on inherited, grandfathered violations)
+  into a dedicated, non-`core` app — app-to-app model imports are fine, so
+  `apps.<new-app>.management.commands.seed_dev_data` importing `Campus`/`House`/`Student` would
+  need no baseline entry at all. That relocation touches three existing commands' location and
+  whatever references it, so it's its own change, not a one-line add. Until then, a developer
+  who wants demo students has to add them by hand (or re-run the one-off shell snippet this
+  session used) after `seed-dev.sh`.
+
+- **`staff-form-dialog.tsx` has the identical stale-refetch race `student-form-dialog.tsx`
+  was fixed for (PR #96 review).** Its edit-prefill effect (`useEffect` guarding
+  `form.reset(detailToFormValues(staffDetailQuery.data))`) keys only off
+  `staffDetailQuery.data` itself, with no `populatedStaffId !== staffDetailQuery.data.id`
+  check — so a background refetch of the same staff member (TanStack Query can hand back a
+  new object reference for an unchanged record, e.g. the photo URL's signature rotating)
+  silently calls `form.reset()` over whatever the user is mid-typing, discarding unsaved
+  edits. Not fixed here: this bug is pre-existing and unrelated to anything this PR changed
+  in `/staff` (unlike `staff-import-dialog.tsx`'s scroll-region fix, which addressed a real
+  regression this PR's own shared `DialogContent` change introduced). The fix is the same
+  guard students' own version now has: add `populatedStaffId !== staffDetailQuery.data.id`
+  to the `if`, and add `populatedStaffId` to the effect's dependency array.
 

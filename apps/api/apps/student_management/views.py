@@ -146,13 +146,13 @@ class StudentViewSet(TenantModelViewSet):
         would therefore work for an admin and 500 for a class teacher. An annotation
         is in the select list; the alias is safe for both.
 
-        ``select_related`` is what keeps this to the two joins the serializer already
-        needed rather than one query per row.
+        ``select_related`` is what keeps this to the three joins the serializer already
+        needed (campus, house, photo_file) rather than one query per row.
         """
         return (
             super()
             .get_queryset()
-            .select_related("campus", "house")
+            .select_related("campus", "house", "photo_file")
             .annotate(campus_name=F("campus__name"), house_name=F("house__name"))
         )
 

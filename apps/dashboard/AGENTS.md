@@ -64,6 +64,7 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Feature API calls (one file per domain, no hardcoded paths) | `src/services/endpoints.ts` + `src/services/modules/<domain>/`, aggregated as `Services` in `src/services/index.ts` |
 | Permission helpers | `src/lib/permissions.ts` → `canAccessModule(user, module)` (whole-module, used by the sidebar) and `hasPermission(user, key)` (per-action — `/staff`'s Export/Import buttons are its first user). A declarative `<Can>` JSX wrapper still does not exist; add one to `src/components/` on top of `hasPermission` when a screen wants that shape |
 | Background-job polling (`202 + job`, e.g. bulk import/export) | `src/hooks/use-job-polling.ts` |
+| Debouncing a value (e.g. a search input) before it drives a query | `src/hooks/use-debounced-value.ts` — check `src/hooks/` for an existing hook before inlining a new `useState`+`useEffect`/`setTimeout` pair for a cross-cutting UI concern like this one |
 | TanStack Query client + key factory | `src/lib/query-client.ts` |
 | Validated public env | `src/lib/env.ts` |
 | Tenant branding → CSS variables | Not rebuilt since the shell reset: `Services.tenant` fetches branding, nothing applies it yet (`docs/metronic-dashboard-shell.md` backlog) |
@@ -81,9 +82,21 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 2. API calls: add a `<module>` entry to `src/services/endpoints.ts` (paths, or
    param-taking functions for anything with an id); create
    `src/services/modules/<module>/<module>-service.ts` with the actual `apiClient` calls,
-   typed against `packages/types` or the feature's own local types; register it in
-   `src/services/index.ts` as `Services.<module>`. See `src/services/modules/auth/` for the
-   reference shape, or `src/services/modules/tenant/` for the smallest one.
+   typed against the generated `ApiSchemas["<Model>"]` (`@schoolhub/api-client`),
+   type-aliased in that same service module —
+   `export type StudentRecord = ApiSchemas["Student"]`, or a `Pick<>` of one for a
+   narrower reference-data shape — never hand-written there or in `packages/types` (see
+   [ADR-0017](../../docs/decisions/0017-generated-wire-types-for-new-domains.md));
+   `packages/types` keeps only cross-cutting types with no generated source
+   (envelope/pagination, auth/RBAC, tenant/website, and enum value-arrays such as
+   `GENDER_VALUES`); register it in `src/services/index.ts` as `Services.<module>`. See
+   `src/services/modules/auth/` for the reference shape, or `src/services/modules/tenant/`
+   for the smallest one. Once a module accumulates enough hand-written input types,
+   cross-file constants, pure helpers or Zod schemas that a service/feature file has
+   become their unlabeled source of truth, split those into sibling
+   `<module>-type.ts`/`<module>-constant.ts`/`<module>-helper.ts`/`<module>.schema.ts`
+   files — not before ([ADR-0018](../../docs/decisions/0018-per-module-file-split-for-growing-domains.md),
+   reference shape: `src/services/modules/students/`).
 3. Feature code: `src/features/<module>/` — components and hooks. A screen's
    `useQuery`/`useMutation` calls `Services.<module>.<action>(...)` as its
    `queryFn`/`mutationFn` — never `apiClient` directly, never a hardcoded path.

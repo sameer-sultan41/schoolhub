@@ -35,7 +35,9 @@ describe("Services", () => {
       "dashboard",
       "files",
       "jobs",
+      "schoolOrganization",
       "staff",
+      "students",
       "tenant",
     ]);
 
@@ -57,5 +59,13 @@ describe("Services", () => {
 
     expect(typeof Services.staff.triggerStaffExport).toBe("function");
     expect(typeof Services.staff.triggerStaffImport).toBe("function");
+
+    expect(typeof Services.schoolOrganization.fetchHouses).toBe("function");
+
+    expect(typeof Services.students.fetchStudentsPage).toBe("function");
+    expect(typeof Services.students.fetchStudentById).toBe("function");
+    expect(typeof Services.students.createStudent).toBe("function");
+    expect(typeof Services.students.updateStudent).toBe("function");
+    expect(typeof Services.students.withdrawStudent).toBe("function");
   });
 });

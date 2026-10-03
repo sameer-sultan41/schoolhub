@@ -11,7 +11,20 @@ const dialogContentVariants = cva(
   {
     variants: {
       variant: {
-        default: "left-[50%] top-[50%] max-w-lg translate-x-[-50%] translate-y-[-50%] w-full",
+        // `max-h-[90vh] overflow-hidden`: a hard cap so a caller whose own content
+        // (header + body + footer) runs taller than the viewport at a short browser
+        // window can never push the top (title, close button) above y=0 via
+        // `top-[50%] translate-y-[-50%]`'s centering math — the page behind a modal
+        // doesn't scroll, so that would otherwise make the title unreachable.
+        // `overflow-hidden`, not `overflow-y-auto`: this container must never grow its
+        // own scrollbar — a caller's own scrollable region (e.g. a body wrapper with
+        // `max-h-[65vh] overflow-y-auto`) is the one intended scroll area. An outer
+        // scrollbar too produces two independently-scrolling regions fighting for the
+        // same few pixels of width, each eating into the other's content box — visible
+        // as a field's right edge looking clipped where the two scrollbar tracks sit
+        // almost on top of each other.
+        default:
+          "left-[50%] top-[50%] max-w-lg max-h-[90vh] translate-x-[-50%] translate-y-[-50%] w-full overflow-hidden",
         fullscreen: "inset-5",
       },
     },

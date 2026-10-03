@@ -48,13 +48,28 @@ export function buildDepartment(overrides: Partial<Department> = {}): Department
   };
 }
 
+/** Trimmed to the fields the students feature reads (house select/filter). */
+export interface House {
+  id: string;
+  name: string;
+}
+
+export function buildHouse(overrides: Partial<House> = {}): House {
+  return {
+    id: id("house"),
+    name: "Red House",
+    ...overrides,
+  };
+}
+
 export interface SchoolOrganizationOptions {
   campuses?: Campus[];
   departments?: Department[];
+  houses?: House[];
 }
 
 /**
- * `/campuses`, `/departments` and friends.
+ * `/campuses`, `/departments`, `/houses` and friends.
  *
  * New modules get a sibling file here; nothing else changes. A spec opts in with
  * `mockApi.use(schoolOrganizationModule({ campuses }))`.
@@ -63,6 +78,7 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
   return (api) => {
     const campuses = [...(options.campuses ?? [buildCampus()])];
     const departments = [...(options.departments ?? [buildDepartment()])];
+    const houses = [...(options.houses ?? [buildHouse()])];
 
     api.get("/campuses", () => pagedList(campuses));
 
@@ -87,5 +103,7 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     });
 
     api.get("/departments", () => pagedList(departments));
+
+    api.get("/houses", () => pagedList(houses));
   };
 }

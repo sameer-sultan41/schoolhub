@@ -6,3 +6,4 @@ export * from "./domains/staff";
 export * from "./domains/jobs";
 export * from "./domains/tenant";
 export * from "./domains/dashboard-home";
+export * from "./domains/students";

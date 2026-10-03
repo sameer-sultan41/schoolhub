@@ -1,11 +1,13 @@
 /**
  * @schoolhub/types — shared types mirroring the SchoolHub API contract.
  *
- * The API-shaped types here are hand-maintained only until the OpenAPI generator lands
- * (see `packages/api-client/README.md`); the envelope, error, and pagination primitives
- * in `./api` are cross-cutting and stay hand-written.
+ * A new domain's own wire types come from `ApiSchemas` (`@schoolhub/api-client`),
+ * re-exported from its `services/modules/<domain>/` — see ADR-0017
+ * (`docs/decisions/0017-generated-wire-types-for-new-domains.md`). This file is for
+ * cross-cutting types and runtime value-arrays with no generated source.
  */
 export * from "./api";
 export * from "./auth";
+export * from "./student";
 export * from "./tenant";
 export * from "./website";

@@ -332,3 +332,6 @@ unenforced
 btext
 subpackages
 fileobj
+dedup
+regen
+uncleareable

@@ -2,7 +2,9 @@ import { AuthService } from "./modules/auth";
 import { DashboardService } from "./modules/dashboard";
 import { FilesService } from "./modules/files";
 import { JobsService } from "./modules/jobs";
+import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
+import { StudentsService } from "./modules/students";
 import { TenantService } from "./modules/tenant";
 
 /**
@@ -13,6 +15,8 @@ import { TenantService } from "./modules/tenant";
  * boundary via `TRANSPORT` in `apps/dashboard/eslint.config.mjs`.
  */
 export { ApiError } from "@schoolhub/api-client";
+
+export type { StudentRecord } from "./modules/students";
 
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
@@ -32,4 +36,6 @@ export const Services = {
   files: FilesService,
   jobs: JobsService,
   staff: StaffService,
+  schoolOrganization: SchoolOrganizationService,
+  students: StudentsService,
 } as const;

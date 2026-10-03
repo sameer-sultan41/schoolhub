@@ -74,4 +74,14 @@ export const endpoints = {
   jobs: {
     detail: (id: string) => `/jobs/${id}`,
   },
+  schoolOrganization: {
+    houses: "/houses",
+  },
+  students: {
+    list: "/students",
+    detail: (id: string) => `/students/${id}`,
+    /** Colon-action, not a nested path — the real registered route is
+     * `/students/{id}:withdraw`. */
+    withdraw: (id: string) => `/students/${id}:withdraw`,
+  },
 } as const;

@@ -48,6 +48,8 @@
     ".cspell/project-words.txt",
     "COMMENT: Metronic's own CSS, vendored verbatim as a reference source for the metronic colour preset — not this repo's own prose, and not to be edited to satisfy the spellchecker.",
     "packages/ui/src/styles/metronic/**",
-    "**/eslint-suppressions.json"
+    "**/eslint-suppressions.json",
+    "COMMENT: seed_dev_data.py's demo roster is personal names, not this repo's own prose — adding each one to project-words.txt as it's edited is exactly the busywork ignorePaths exists to avoid.",
+    "apps/api/core/rbac/management/commands/seed_dev_data.py"
   ]
 }

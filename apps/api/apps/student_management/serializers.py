@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.school_organization.models import AcademicSession, Campus, Class, House, Section
@@ -28,6 +29,7 @@ from apps.student_management.models import (
     StudentTransfer,
 )
 from core.files.models import File
+from core.files.services import get_display_url
 from core.rbac.models import RecordScope
 from core.rbac.permissions import has_permission_key, user_scopes
 
@@ -46,6 +48,12 @@ class StudentSerializer(serializers.ModelSerializer):
     campus_id = _fk(Campus, source="campus")
     house_id = _fk(House, source="house", required=False, allow_null=True)
     photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
+    # The photo above as a display link. Gated on the attached file's own purpose, not just
+    # `SignedFileURLField`'s usual status/deleted_at check — `validate_photo_file_id` only
+    # stops a NEW mismatched file from being attached; it does nothing for a photo_file that
+    # was already attached before that guard existed. Reuses get_queryset's
+    # select_related("photo_file"), so this costs no query per row either.
+    photo_url = serializers.SerializerMethodField()
     # Explicitly optional: the model column has no `blank=True`, so DRF's
     # ModelSerializer would otherwise auto-derive it as *required* — but the
     # service always generates it server-side on create (views.py's
@@ -76,6 +84,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "gender",
             "photo_file_id",
+            "photo_url",
             "campus_id",
             "campus_name",
             "house_id",
@@ -104,6 +113,25 @@ class StudentSerializer(serializers.ModelSerializer):
         if self.instance is not None:
             services.assert_admission_number_immutable(instance=self.instance, new_value=value)
         return value
+
+    def validate_photo_file_id(self, value: File | None) -> File | None:
+        # `_fk()` only proves the file exists in this tenant. Without this, a PATCH could
+        # point the photo at any ready file and photo_url would sign it for every viewer.
+        # The current photo passes unchecked: edits re-send it unchanged.
+        if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
+            services.assert_file_usable(file=value, purpose=uploads.STUDENT_PHOTO.key)
+        return value
+
+    @extend_schema_field({"type": "string", "format": "uri", "nullable": True})
+    def get_photo_url(self, instance: Student) -> str | None:
+        # Signs a display link only for a file whose purpose is actually a student photo —
+        # a row whose photo_file predates validate_photo_file_id's own guard (or reached
+        # this column some other way) must not have an arbitrary file signed and handed
+        # out as this student's photo.
+        photo = instance.photo_file
+        if photo is None or photo.purpose != uploads.STUDENT_PHOTO.key:
+            return None
+        return get_display_url(photo)
 
     def validate_user_id(self, value: uuid.UUID | None) -> uuid.UUID | None:
         """Re-run on every write, not just create.

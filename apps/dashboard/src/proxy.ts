@@ -21,8 +21,10 @@ export function proxy(request: NextRequest): NextResponse {
   const { pathname, search } = request.nextUrl;
   const hasSession = request.cookies.has(Cookies.SESSION);
 
-  // Signed in and heading for the sign-in page: send them where they meant to go.
-  if (hasSession && isPublicPath(pathname)) {
+  // Signed in and heading for the sign-in page, or the bare root (which has no page of
+  // its own — only /dashboard, /staff, /students, etc. do): send them where they meant
+  // to go.
+  if (hasSession && (isPublicPath(pathname) || pathname === "/")) {
     const nextParam = request.nextUrl.searchParams.get("next");
     const target = nextParam?.startsWith("/") ? nextParam : Paths.DASHBOARD;
     return NextResponse.redirect(new URL(target, request.url));

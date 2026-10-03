@@ -47,6 +47,15 @@ describe("proxy", () => {
     expect(response.status).toBe(200);
   });
 
+  it("sends a signed-in visitor at the bare root to /dashboard, not a 404", () => {
+    // The bare root has no page of its own — only /dashboard, /staff, /students, etc.
+    // do — so a signed-in visitor must be redirected, not passed through to a route
+    // that doesn't exist.
+    const response = proxy(makeRequest("/", { session: true }));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://app.schoolhub.test/dashboard");
+  });
+
   it("sends a signed-in visitor away from /login to /dashboard", () => {
     const response = proxy(makeRequest("/login", { session: true }));
     expect(response.status).toBe(307);
