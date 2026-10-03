@@ -222,7 +222,10 @@ describe("StaffService", () => {
       );
     });
 
-    it("omits a null optional field rather than sending it through", async () => {
+    // Root cause: createStaff used to truthy-gate its optional fields, silently
+    // dropping an explicit `null` for a nullable relation — unlike updateStaff's own
+    // `!== undefined` gating for the identical field. Fixed so both agree.
+    it("sends an explicit null for a cleared relation field, not dropping it", async () => {
       const { createStaff } = await import("../staff-service");
       mockPost.mockResolvedValue({ data: {} });
 
@@ -236,8 +239,10 @@ describe("StaffService", () => {
         departmentId: null,
       });
 
-      const [, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
-      expect(body).not.toHaveProperty("department_id");
+      expect(mockPost).toHaveBeenCalledWith(
+        "/staff",
+        expect.objectContaining({ department_id: null }),
+      );
     });
   });
 

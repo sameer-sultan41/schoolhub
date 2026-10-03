@@ -52,20 +52,18 @@ export function formatDate(value: string): string {
 }
 
 /**
- * camelCase `CreateStaffInput`/`UpdateStaffInput` -> the API's snake_case body. Pure
- * reorganization of the pre-existing `createStaff`/`updateStaff` body-building code —
- * same per-field gating each already had, just expressed as a shared loop over the
- * `STAFF_REQUIRED_LIKE_FIELDS`/`STAFF_OPTIONAL_FIELDS` constants instead of two
- * hand-spread object literals. `createStaff` and `updateStaff` keep *different*
- * gating for `STAFF_OPTIONAL_FIELDS` — truthy for create (an empty/falsy optional
- * value is omitted, as it always was), `!== undefined` for update (so an explicit
- * `null` reaches the server, as it always did) — this divergence is pre-existing
- * behavior being preserved here, not introduced by the split.
+ * camelCase `CreateStaffInput`/`UpdateStaffInput` -> the API's snake_case body.
+ * `STAFF_REQUIRED_LIKE_FIELDS` is truthy-gated for both (an empty string is never
+ * sent for one of these). `STAFF_OPTIONAL_FIELDS` is gated on `!== undefined` for
+ * both too, so a caller can explicitly clear a nullable field with `null` on
+ * *either* create or update — `createStaff` used to truthy-gate its optional fields
+ * (silently dropping an explicit `null`, unlike `updateStaff`); unified so both
+ * behave the same way for the same input shape.
  */
 export function toStaffCreateBody(input: CreateStaffInput): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   copyMappedFields(input, STAFF_REQUIRED_LIKE_FIELDS, Boolean, body);
-  copyMappedFields(input, STAFF_OPTIONAL_FIELDS, Boolean, body);
+  copyMappedFields(input, STAFF_OPTIONAL_FIELDS, (value) => value !== undefined, body);
   return body;
 }
 

@@ -43,9 +43,20 @@ describe("toStaffCreateBody", () => {
     expect(body).toEqual({ last_name: "Khan" });
   });
 
-  it("truthy-gates optional fields too, omitting a null one", () => {
+  // Root cause: createStaff used to truthy-gate its optional fields (an explicit
+  // `null` for a nullable relation was silently dropped, unlike updateStaff's own
+  // `!== undefined` gating for the identical field) — unified so create and update
+  // agree on what "the caller explicitly cleared this field" means.
+  it("sends an explicit null for a cleared optional relation field, not dropping it", () => {
     const body = toStaffCreateBody({
       departmentId: null,
+    } as Partial<CreateStaffInput> as CreateStaffInput);
+    expect(body).toEqual({ department_id: null });
+  });
+
+  it("omits an optional field left undefined", () => {
+    const body = toStaffCreateBody({
+      departmentId: undefined,
     } as Partial<CreateStaffInput> as CreateStaffInput);
     expect(body).toEqual({});
   });
