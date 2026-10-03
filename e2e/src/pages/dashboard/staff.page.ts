@@ -4,7 +4,7 @@ import { BasePage } from "../base.page";
 /**
  * `/staff` — the directory table plus its two dialogs: Add/Edit (`StaffFormDialog`) and
  * Exit (`ExitStaffDialog`, behind each row's "Delete" action). See
- * `apps/dashboard/src/app/(app)/staff/`.
+ * `apps/dashboard/src/features/staff/`.
  *
  * This route's strings are hardcoded English on this branch (no `staff` messages
  * namespace yet — see apps/dashboard/AGENTS.md), so the accessible names below come from

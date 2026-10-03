@@ -1,6 +1,6 @@
 import { Container } from "@/app/(app)/shell/partials/common/container";
-import { StaffDirectoryTable } from "@/app/(app)/staff/staff-directory-table";
-import { StaffToolbar } from "@/app/(app)/staff/staff-toolbar";
+import { StaffDirectoryTable } from "@/features/staff/staff-directory-table";
+import { StaffToolbar } from "@/features/staff/staff-toolbar";
 
 // No page-level authorization check of its own — same as every route in this app,
 // /dashboard included. Session presence is enforced app-wide by the routing-only guard

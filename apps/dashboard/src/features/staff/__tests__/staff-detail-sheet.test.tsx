@@ -2,21 +2,21 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
+import type { StaffRow } from "@/services/modules/staff/staff-type";
 import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { StaffDetailSheet } from "../staff-detail-sheet";
-import type { StaffRow } from "../staff-directory-table";
 
 jest.mock("@/services", () => ({
   Services: {
-    dashboard: {
+    staff: {
       fetchStaffById: jest.fn(),
     },
   },
 }));
 
-const mockFetchStaffById = Services.dashboard.fetchStaffById as jest.MockedFunction<
-  typeof Services.dashboard.fetchStaffById
+const mockFetchStaffById = Services.staff.fetchStaffById as jest.MockedFunction<
+  typeof Services.staff.fetchStaffById
 >;
 
 function staffRow(overrides: Partial<StaffRow> = {}): StaffRow {
@@ -34,7 +34,7 @@ function staffRow(overrides: Partial<StaffRow> = {}): StaffRow {
 
 // Typed from fetchStaffById so the fixture tracks what it actually returns.
 function staffDetail(
-  overrides: Partial<Awaited<ReturnType<typeof Services.dashboard.fetchStaffById>>> = {},
+  overrides: Partial<Awaited<ReturnType<typeof Services.staff.fetchStaffById>>> = {},
 ) {
   return {
     id: "st-1",

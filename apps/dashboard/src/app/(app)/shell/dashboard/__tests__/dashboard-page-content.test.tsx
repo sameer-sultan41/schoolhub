@@ -33,8 +33,8 @@ jest.mock("@/services", () => ({
       fetchDashboardOverview: jest.fn(),
       fetchTeacherLoadSummary: jest.fn(),
       fetchMyTimetable: jest.fn(),
-      fetchStaffDirectory: jest.fn(),
     },
+    staff: { fetchStaffDirectory: jest.fn() },
   },
 }));
 
@@ -54,8 +54,8 @@ const mockFetchTeacherLoadSummary = Services.dashboard
 const mockFetchMyTimetable = Services.dashboard.fetchMyTimetable as jest.MockedFunction<
   typeof Services.dashboard.fetchMyTimetable
 >;
-const mockFetchStaffDirectory = Services.dashboard.fetchStaffDirectory as jest.MockedFunction<
-  typeof Services.dashboard.fetchStaffDirectory
+const mockFetchStaffDirectory = Services.staff.fetchStaffDirectory as jest.MockedFunction<
+  typeof Services.staff.fetchStaffDirectory
 >;
 
 // Each `.mockImplementation` relies on contextual typing: `new Promise(() => {})` takes

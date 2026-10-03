@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Services } from "@/services";
-import type { StaffDetailRecord } from "@/services/modules/dashboard/dashboard-service";
+import type { StaffDetailRecord } from "@/services/modules/staff/staff-type";
 import { renderWithProviders } from "@/test-utils";
 
 import { StaffFormDialog } from "../staff-form-dialog";
@@ -25,6 +25,8 @@ jest.mock("@/services", () => ({
       fetchCampuses: jest.fn(),
       fetchDepartments: jest.fn(),
       fetchDesignations: jest.fn(),
+    },
+    staff: {
       fetchStaffDirectory: jest.fn(),
       fetchStaffById: jest.fn(),
       createStaff: jest.fn(),
@@ -52,17 +54,17 @@ const mockFetchDepartments = Services.dashboard.fetchDepartments as jest.MockedF
 const mockFetchDesignations = Services.dashboard.fetchDesignations as jest.MockedFunction<
   typeof Services.dashboard.fetchDesignations
 >;
-const mockFetchStaffDirectory = Services.dashboard.fetchStaffDirectory as jest.MockedFunction<
-  typeof Services.dashboard.fetchStaffDirectory
+const mockFetchStaffDirectory = Services.staff.fetchStaffDirectory as jest.MockedFunction<
+  typeof Services.staff.fetchStaffDirectory
 >;
-const mockFetchStaffById = Services.dashboard.fetchStaffById as jest.MockedFunction<
-  typeof Services.dashboard.fetchStaffById
+const mockFetchStaffById = Services.staff.fetchStaffById as jest.MockedFunction<
+  typeof Services.staff.fetchStaffById
 >;
-const mockCreateStaff = Services.dashboard.createStaff as jest.MockedFunction<
-  typeof Services.dashboard.createStaff
+const mockCreateStaff = Services.staff.createStaff as jest.MockedFunction<
+  typeof Services.staff.createStaff
 >;
-const mockUpdateStaff = Services.dashboard.updateStaff as jest.MockedFunction<
-  typeof Services.dashboard.updateStaff
+const mockUpdateStaff = Services.staff.updateStaff as jest.MockedFunction<
+  typeof Services.staff.updateStaff
 >;
 const mockToastSuccess = toast.success as jest.MockedFunction<typeof toast.success>;
 const mockUploadFile = Services.files.uploadFile as jest.MockedFunction<

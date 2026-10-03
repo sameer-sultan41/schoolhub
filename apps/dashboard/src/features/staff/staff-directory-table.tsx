@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpDown, Filter, Pencil, Search, Trash2, Users, X } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { m } from "motion/react";
 import {
@@ -15,7 +14,6 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 
-import { ApiError } from "@schoolhub/api-client";
 import {
   Avatar,
   AvatarFallback,
@@ -51,19 +49,27 @@ import {
   Switch,
 } from "@schoolhub/ui";
 
-import { Services } from "@/services";
+import { ApiError, Services } from "@/services";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
-import { getInitials, stableSignedUrl } from "@/lib/helpers";
-import { Regex } from "@/lib/regex";
+import { formatLastUpdated, getInitials } from "@/lib/helpers";
+import { queryKeys } from "@/lib/query-client";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
-import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
-import { ExitStaffDialog } from "@/app/(app)/staff/exit-staff-dialog";
-import { StaffDetailSheet } from "@/app/(app)/staff/staff-detail-sheet";
+import {
+  DEFAULT_SORTING,
+  JOINING_DATE_SORT_ID,
+  SORT_FIELD,
+  STATUS_META,
+} from "@/services/modules/staff/staff-constant";
+import { statusMeta, toStaffRow } from "@/services/modules/staff/staff-helper";
+import type { StaffRow } from "@/services/modules/staff/staff-type";
+import { StaffFormDialog } from "./staff-form-dialog";
+import { ExitStaffDialog } from "./exit-staff-dialog";
+import { StaffDetailSheet } from "./staff-detail-sheet";
 
 /**
  * The `/staff` route's own directory — every staff member, server-paginated/sorted/
- * searched via `Services.dashboard.fetchStaffPage`. Distinct from the dashboard-home
+ * searched via `Services.staff.fetchStaffPage`. Distinct from the dashboard-home
  * Teams widget, which shows a fixed one-page preview and never changes page/search/sort.
  *
  * Visually ported from Metronic's `network/user-table/team-crew` reference
@@ -75,64 +81,6 @@ import { StaffDetailSheet } from "@/app/(app)/staff/staff-detail-sheet";
  * This preview has no i18n wiring yet (see the plan's Global Constraints), so — same as
  * `teams.tsx` — this is the one place with hardcoded English strings.
  */
-export interface StaffRow {
-  id: string;
-  name: string;
-  designation: string;
-  campus: string;
-  status: string;
-  updatedAt: string;
-  photoUrl: string | null;
-}
-
-/**
- * Column id -> the real `?ordering=` field name confirmed against `StaffViewSet.
- * ordering_fields` (apps/api/apps/staff_management/views.py). `joiningDate` is not a
- * real column — it is the sentinel id the Sort Order popover below writes into
- * `sorting` state (see that popover's comment for why sharing one state slot with the
- * column-header sort is deliberate). There is no entry for the "Last updated" column:
- * `updated_at` is not in `ordering_fields` (only `created_at` is), so that column is
- * built with `enableSorting: false` rather than wiring a sort that would silently do
- * nothing on the server.
- */
-const SORT_FIELD: Record<string, string> = {
-  name: "last_name",
-  role: "designation_name",
-  status: "employment_status",
-  campus: "campus_name",
-  joiningDate: "joining_date",
-};
-
-const DEFAULT_SORTING: SortingState = [{ id: "name", desc: false }];
-const JOINING_DATE_SORT_ID = "joiningDate";
-
-type StatusVariant = "success" | "warning" | "destructive" | "secondary" | "info" | "rose";
-
-/** employment_status -> badge; mirrors EmploymentStatus in staff_management/models.py. */
-const STATUS_META: Record<string, { variant: StatusVariant; label: string }> = {
-  active: { variant: "success", label: "Active" },
-  on_leave: { variant: "warning", label: "On leave" },
-  suspended: { variant: "destructive", label: "Suspended" },
-  resigned: { variant: "rose", label: "Resigned" },
-  retired: { variant: "info", label: "Retired" },
-  terminated: { variant: "destructive", label: "Terminated" },
-};
-
-/** Humanizes an unlabelled snake_case value, e.g. "on_leave" -> "On leave". */
-export function humanizeSnakeCase(value: string): string {
-  const spaced = value.replace(Regex.UNDERSCORE, " ");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
-export function statusMeta(status: string): { variant: StatusVariant; label: string } {
-  return STATUS_META[status] ?? { variant: "secondary", label: humanizeSnakeCase(status) };
-}
-
-export function formatLastUpdated(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return formatDistanceToNow(parsed, { addSuffix: true });
-}
 
 /** A row's direct Edit and Delete icon buttons. */
 function ActionsCell({
@@ -227,9 +175,9 @@ export function StaffDirectoryTable() {
   const pageSize = pagination.pageSize;
 
   const { data, isPending, isFetching, isError, error } = useQuery({
-    queryKey: ["staff", "directory", { page, pageSize, search, ordering, statusFilter }],
+    queryKey: queryKeys.list("staff", "staff", { page, pageSize, search, ordering, statusFilter }),
     queryFn: () =>
-      Services.dashboard.fetchStaffPage({
+      Services.staff.fetchStaffPage({
         page,
         pageSize,
         search: search || undefined,
@@ -239,22 +187,7 @@ export function StaffDirectoryTable() {
     placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo<StaffRow[]>(
-    () =>
-      (data?.items ?? []).map((staff) => ({
-        id: staff.id,
-        name: `${staff.first_name} ${staff.last_name}`,
-        designation:
-          staff.designation_name ??
-          (staff.staff_type === "teaching" ? "Teaching staff" : "Non-teaching staff"),
-        campus: staff.campus_name,
-        status: staff.employment_status,
-        updatedAt: staff.updated_at,
-        // A refetch re-signs every link; keep the one in use so avatars don't blink.
-        photoUrl: stableSignedUrl(staff.photo_url),
-      })),
-    [data],
-  );
+  const rows = useMemo<StaffRow[]>(() => (data?.items ?? []).map(toStaffRow), [data]);
 
   // `data.pagination` is the `Pagination` union (`CursorPagination | OffsetPagination`);
   // `total_pages` exists only on the `OffsetPagination` arm (`/staff` is page-number
