@@ -208,9 +208,11 @@
     "filters": {
       "search": "تلاش",
       "status": "حیثیت",
+      "statusAriaLabel": "حیثیت کے لحاظ سے فلٹر کریں",
       "all": "تمام",
       "campus": "کیمپس",
-      "house": "ہاؤس"
+      "house": "ہاؤس",
+      "clearSearch": "تلاش صاف کریں"
     },
     "status": {
       "active": "فعال",
@@ -255,7 +257,8 @@
       "city": "شہر",
       "state": "ریاست/صوبہ",
       "postalCode": "پوسٹل کوڈ",
-      "country": "ملک"
+      "country": "ملک",
+      "title": "پتہ"
     },
     "form": {
       "createTitle": "نیا طالب علم",
