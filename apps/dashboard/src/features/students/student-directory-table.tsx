@@ -29,12 +29,18 @@ import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import {
+  SORT_FIELD,
+  STUDENT_FILTER_ALL,
+  STUDENT_WITHDRAWABLE_STATUS,
+} from "@/services/modules/students/students-constant";
+import { toStudentRow } from "@/services/modules/students/students-helper";
+import type { StudentRow } from "@/services/modules/students/students-type";
 import { StudentFormDialog } from "./student-form-dialog";
 import { StudentDetailSheet } from "./student-detail-sheet";
 import { WithdrawStudentDialog } from "./withdraw-student-dialog";
 import { StudentDirectoryFilters } from "./student-directory-filters";
-import { SORT_FIELD, useStudentColumns } from "./student-columns";
-import { toStudentRow, type StudentRow } from "./student-row";
+import { useStudentColumns } from "./student-columns";
 
 /**
  * The `/students` route's directory table — server-paginated/sorted/searched via
@@ -54,7 +60,7 @@ export function StudentDirectoryTable() {
 
   const [searchInput, setSearchInput] = useState("");
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
-  const [statusFilter, setStatusFilter] = useState("active");
+  const [statusFilter, setStatusFilter] = useState(STUDENT_WITHDRAWABLE_STATUS);
   const [campusId, setCampusId] = useState("");
   const [houseId, setHouseId] = useState("");
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
@@ -71,7 +77,10 @@ export function StudentDirectoryTable() {
   // Default: status filter starts at "active", not "all" — so the defaults themselves
   // never count as "the viewer applied a filter" (see `hasActiveFilter` below).
   const hasActiveFilter =
-    search !== "" || statusFilter !== "active" || campusId !== "" || houseId !== "";
+    search !== "" ||
+    statusFilter !== STUDENT_WITHDRAWABLE_STATUS ||
+    campusId !== "" ||
+    houseId !== "";
 
   useEffect(() => {
     setPagination((p) => ({ ...p, pageIndex: 0 }));
@@ -99,7 +108,7 @@ export function StudentDirectoryTable() {
         pageSize,
         search: search || undefined,
         ordering,
-        status: statusFilter === "all" ? undefined : statusFilter,
+        status: statusFilter === STUDENT_FILTER_ALL ? undefined : statusFilter,
         campusId: campusId || undefined,
         houseId: houseId || undefined,
       }),
@@ -157,7 +166,7 @@ export function StudentDirectoryTable() {
   const selected = table.getSelectedRowModel().rows.map((r) => r.original);
   // Bulk withdraw only ever offers/acts on the ACTIVE subset of what's selected,
   // regardless of `canWithdraw` — a non-active row has nothing to withdraw from.
-  const selectedWithdrawable = selected.filter((s) => s.status === "active");
+  const selectedWithdrawable = selected.filter((s) => s.status === STUDENT_WITHDRAWABLE_STATUS);
 
   useEffect(() => {
     if (withdrawDialog === null) setRowSelection({});

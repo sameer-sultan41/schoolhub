@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import {
   Alert,
   AlertDescription,
@@ -38,6 +37,10 @@ import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import {
+  withdrawFormSchema,
+  type WithdrawFormValues,
+} from "@/services/modules/students/students.schema";
 
 export interface WithdrawStudentDialogProps {
   open: boolean;
@@ -48,12 +51,6 @@ export interface WithdrawStudentDialogProps {
    * list both key off a student's name by position in this array. */
   studentNames: string[];
 }
-
-const withdrawFormSchema = z.object({
-  reason: z.string().min(1),
-  effective_date: z.string().min(1),
-});
-type WithdrawFormValues = z.infer<typeof withdrawFormSchema>;
 
 interface WithdrawTarget {
   id: string;

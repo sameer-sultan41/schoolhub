@@ -2,7 +2,6 @@
 
 import { Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Pencil, UserMinus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Skeleton } from "@schoolhub/ui";
@@ -18,7 +17,9 @@ import {
 import { getInitials } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
-import type { StudentRow } from "./student-row";
+import { STUDENT_WITHDRAWABLE_STATUS } from "@/services/modules/students/students-constant";
+import { formatLastUpdated } from "@/services/modules/students/students-helper";
+import type { StudentRow } from "@/services/modules/students/students-type";
 
 export interface StudentDetailSheetProps {
   row: StudentRow | null;
@@ -27,15 +28,6 @@ export interface StudentDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   onEdit: (id: string) => void;
   onWithdraw: (id: string, name: string) => void;
-}
-
-/** "3 days ago" rather than a raw ISO timestamp — the same `formatDistanceToNow` rendering
- * as `/staff`'s `formatLastUpdated` (`staff-directory-table.tsx`), replicated rather than
- * imported so this feature doesn't depend on another route's table module. */
-function formatLastUpdated(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return formatDistanceToNow(parsed, { addSuffix: true });
 }
 
 function FieldRow({
@@ -202,7 +194,7 @@ function DetailFooter({
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
   const isDrawer = useIsDrawer();
-  const showWithdraw = canWithdraw && row.status === "active";
+  const showWithdraw = canWithdraw && row.status === STUDENT_WITHDRAWABLE_STATUS;
 
   return (
     <ResponsiveSheetFooter>

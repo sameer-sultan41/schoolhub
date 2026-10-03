@@ -1,5 +1,5 @@
 import type { StudentRecord } from "@/services";
-import { toStudentRow } from "../student-row";
+import { toStudentRow } from "../students-helper";
 
 function studentRecord(overrides: Partial<StudentRecord> = {}): StudentRecord {
   return {

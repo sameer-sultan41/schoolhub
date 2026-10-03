@@ -14,10 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
-
-/** Sentinel for "no filter" in each `Select` — the actual query omits the param
- * entirely rather than sending the literal string "all". */
-const ALL = "all";
+import { STUDENT_FILTER_ALL as ALL } from "@/services/modules/students/students-constant";
 
 export interface StudentDirectoryFiltersProps {
   searchInput: string;

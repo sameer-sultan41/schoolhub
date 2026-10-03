@@ -193,18 +193,40 @@ convention, not a flat `*.test.ts` beside the source.
    structurally new kind of concern (it usually isn't — most new domains need no doc
    change beyond what's already there).
 
+## When a domain outgrows three files
+
+Start every new domain with exactly the three files above — don't pre-create any of
+the split files below empty "for consistency." Once a domain actually accumulates
+enough of a given concern that `<domain>-service.ts` or a feature file has become its
+unlabeled source of truth, split that concern out
+([ADR-0018](../../../docs/decisions/0018-per-module-file-split-for-growing-domains.md)):
+
+```
+services/modules/<domain>/
+  <domain>-service.ts     # apiClient calls only — imports its types from ./<domain>-type
+  <domain>-type.ts        # the wire-shape alias + hand-written input/query/view-model types
+  <domain>-constant.ts     # cross-file magic strings/numbers and lookup objects
+  <domain>s-helper.ts     # pure mapper/formatter functions — no React, no API calls
+  <domain>.schema.ts       # Zod schemas and their inferred form-values types
+```
+
+`students` is the reference implementation for this split — see
+`services/modules/students/`. A domain with one or two functions and no shared
+constant gains nothing from five near-empty files; the split is earned by actual
+accumulation, not applied as a blanket template. The wire-shape alias
+(`StudentRecord` et al.) still comes from `ApiSchemas["<Model>"]`
+([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)) —
+moving it into `<domain>-type.ts` is relocation, not a second source of truth, as long
+as nothing hand-rolls a competing definition of that same shape elsewhere. A Zod
+schema and its inferred type stay together in `<domain>.schema.ts`; form logic built on
+top of it (defaults, record↔form-values mappers, submit-payload builders) stays in its
+own feature file and imports the schema/type rather than redeclaring it.
+
 ## What this skill deliberately does NOT do
 
-Two things the reference pattern this was adapted from does, on purpose left out:
-
-- **No per-module `type.ts`/`dal.ts`/`actions.ts` split.** A domain's wire shape is
-  the generated `ApiSchemas["<Model>"]`, re-exported from its own `<domain>-service.ts`
-  ([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)) —
-  a separate per-module `type.ts` duplicating that would be a second source of truth
-  for the same shape. `actions.ts`'s only reason to exist in the reference project was
-  a Next.js `'use server'` directive boundary; nothing here needs that split yet — if a
-  mutation genuinely needs to be a Server Action, that's a reason to revisit this, not
-  a reason to pre-build it now.
+- **No `actions.ts` / `'use server'` split.** Nothing here needs that boundary yet — if
+  a mutation genuinely needs to be a Server Action, that's a reason to revisit this,
+  not a reason to pre-build it now.
 - **No `[error, data]` tuple return.** This repo already throws `ApiError` and lets
   TanStack Query's own error channel (`isError`, `error`, `onError`) handle it — see
   `login-form.tsx`'s `mutation.error instanceof ApiError` pattern. A tuple return would
@@ -217,7 +239,12 @@ default into either pattern piecemeal.
 
 ## Related
 
-- `apps/dashboard/src/services/modules/auth/` — the reference implementation.
+- `apps/dashboard/src/services/modules/auth/` — the reference implementation for a
+  domain still at the base three-file shape.
+- `apps/dashboard/src/services/modules/students/` — the reference implementation for
+  a domain that has grown into the full constant/type/helper/schema split.
+- [ADR-0018](../../../docs/decisions/0018-per-module-file-split-for-growing-domains.md) —
+  why and when to split.
 - `apps/dashboard/AGENTS.md` — "How This App Is Wired" and "Adding a Module Screen".
 - `apps/dashboard/src/lib/auth.ts` — the transport/session infrastructure every
   service module builds on (the `apiClient` instance, token store, 401 handling).

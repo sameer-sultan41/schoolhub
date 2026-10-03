@@ -11,6 +11,7 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { STUDENT_WITHDRAWABLE_STATUS } from "@/services/modules/students/students-constant";
 import { StudentFormDialog } from "./student-form-dialog";
 
 /**
@@ -31,7 +32,12 @@ export function StudentToolbar() {
   });
   const activeQuery = useQuery({
     queryKey: queryKeys.list("students", "students", { statsActive: true }),
-    queryFn: () => Services.students.fetchStudentsPage({ page: 1, pageSize: 1, status: "active" }),
+    queryFn: () =>
+      Services.students.fetchStudentsPage({
+        page: 1,
+        pageSize: 1,
+        status: STUDENT_WITHDRAWABLE_STATUS,
+      }),
   });
 
   const { data: currentUser, isError: isCurrentUserError } = useCurrentUser();

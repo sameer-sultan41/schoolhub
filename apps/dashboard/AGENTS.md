@@ -91,7 +91,12 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
    (envelope/pagination, auth/RBAC, tenant/website, and enum value-arrays such as
    `GENDER_VALUES`); register it in `src/services/index.ts` as `Services.<module>`. See
    `src/services/modules/auth/` for the reference shape, or `src/services/modules/tenant/`
-   for the smallest one.
+   for the smallest one. Once a module accumulates enough hand-written input types,
+   cross-file constants, pure helpers or Zod schemas that a service/feature file has
+   become their unlabeled source of truth, split those into sibling
+   `<module>-type.ts`/`<module>-constant.ts`/`<module>-helper.ts`/`<module>.schema.ts`
+   files — not before ([ADR-0018](../../docs/decisions/0018-per-module-file-split-for-growing-domains.md),
+   reference shape: `src/services/modules/students/`).
 3. Feature code: `src/features/<module>/` — components and hooks. A screen's
    `useQuery`/`useMutation` calls `Services.<module>.<action>(...)` as its
    `queryFn`/`mutationFn` — never `apiClient` directly, never a hardcoded path.

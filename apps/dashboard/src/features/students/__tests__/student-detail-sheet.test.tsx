@@ -6,7 +6,7 @@ import type { StudentRecord } from "@/services";
 import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { StudentDetailSheet } from "../student-detail-sheet";
-import type { StudentRow } from "../student-row";
+import type { StudentRow } from "@/services/modules/students/students-type";
 
 jest.mock("@/services", () => ({
   Services: {

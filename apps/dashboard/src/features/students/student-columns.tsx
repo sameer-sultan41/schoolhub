@@ -15,16 +15,8 @@ import {
 import { Pencil, UserMinus } from "lucide-react";
 
 import { getInitials } from "@/lib/helpers";
-import type { StudentRow } from "./student-row";
-
-/** Column id -> the real `?ordering=` field name the `/students` list endpoint accepts. */
-export const SORT_FIELD: Record<string, string> = {
-  name: "last_name",
-  admissionNumber: "admission_number",
-  admissionDate: "admission_date",
-  status: "status",
-  campus: "campus_name",
-};
+import { STUDENT_WITHDRAWABLE_STATUS } from "@/services/modules/students/students-constant";
+import type { StudentRow } from "@/services/modules/students/students-type";
 
 /**
  * The directory table's column defs. Memoized on its real inputs — `t`, the two
@@ -98,7 +90,7 @@ export function useStudentColumns(
                 <Pencil className="size-4" />
               </Button>
             )}
-            {canWithdraw && row.original.status === "active" && (
+            {canWithdraw && row.original.status === STUDENT_WITHDRAWABLE_STATUS && (
               <Button
                 size="icon"
                 variant="ghost"
