@@ -172,6 +172,11 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
     enabled: row !== null,
   });
 
+  // Computed once per render rather than at each of the two badges below (one
+  // renders on mobile, the other on desktop — never both at once, but each still
+  // read the same `row.status` lookup independently before).
+  const statusBadge = row ? statusMeta(row.status) : null;
+
   return (
     <ResponsiveSheet
       open={row !== null}
@@ -208,32 +213,32 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                   <span className="text-mono min-w-0 truncate text-base leading-none font-semibold text-foreground md:text-lg">
                     {row.name}
                   </span>
-                  {isMobile && (
+                  {isMobile && statusBadge && (
                     <Badge
                       size="sm"
-                      variant={statusMeta(row.status).variant}
+                      variant={statusBadge.variant}
                       appearance="light"
                       shape="circle"
                       className="w-fit shrink-0"
                     >
                       <BadgeDot />
-                      {statusMeta(row.status).label}
+                      {statusBadge.label}
                     </Badge>
                   )}
                 </div>
                 <span className="truncate text-sm text-muted-foreground">
                   {row.designation} · {row.campus}
                 </span>
-                {!isMobile && (
+                {!isMobile && statusBadge && (
                   <Badge
                     size="sm"
-                    variant={statusMeta(row.status).variant}
+                    variant={statusBadge.variant}
                     appearance="light"
                     shape="circle"
                     className="mt-1 w-fit"
                   >
                     <BadgeDot />
-                    {statusMeta(row.status).label}
+                    {statusBadge.label}
                   </Badge>
                 )}
               </div>

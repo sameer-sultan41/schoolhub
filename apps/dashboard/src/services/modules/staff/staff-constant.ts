@@ -1,3 +1,4 @@
+import { GENDER_VALUES } from "@schoolhub/types";
 import type { StaffDirectoryQuery, UpdateStaffInput } from "./staff-type";
 
 /**
@@ -41,15 +42,21 @@ export const STATUS_META: Record<string, { variant: StatusVariant; label: string
 };
 
 /**
- * Real enum values, verified against `apps/api/apps/staff_management/models.py` — used
- * verbatim as each `<Select>`'s options, never invented client-side.
+ * Options derived from the shared `GENDER_VALUES` (`@schoolhub/types`) — the same
+ * source students' own form uses — so the value set can't drift from it. Labels stay
+ * hardcoded English here (not `t(`gender.${value}`)`): this route has no i18n wiring
+ * at all yet (see `staff-directory-table.tsx`'s own comment on that).
  */
-export const GENDER_OPTIONS = [
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
-  { value: "other", label: "Other" },
-  { value: "unspecified", label: "Unspecified" },
-];
+const GENDER_LABELS: Record<(typeof GENDER_VALUES)[number], string> = {
+  male: "Male",
+  female: "Female",
+  other: "Other",
+  unspecified: "Unspecified",
+};
+export const GENDER_OPTIONS = GENDER_VALUES.map((value) => ({
+  value,
+  label: GENDER_LABELS[value],
+}));
 
 export const STAFF_TYPE_OPTIONS = [
   { value: "teaching", label: "Teaching" },
@@ -104,39 +111,38 @@ export const REQUIRED_COLUMNS = [
 export const OPTIONAL_COLUMNS = ["gender", "date_of_birth", "email", "national_id"];
 
 /**
- * camelCase `UpdateStaffInput` key -> the API's snake_case body key, for the six
- * fields that behave like required fields (always present on create, truthy-gated on
- * update so an empty string never silently blanks one via PATCH). Drives
- * `toStaffCreateBody`/`toStaffUpdateBody` (`staff-helper.ts`).
+ * Which predicate `toStaffBody` (`staff-helper.ts`) applies to a field's value before
+ * copying it: `"truthy"` (an empty string is never sent — the six fields that behave
+ * like required fields, always present on create, truthy-gated on update so an empty
+ * string never silently blanks one via PATCH) or `"defined"` (`!== undefined`, so a
+ * caller can explicitly clear a nullable field with `null`). The gate travels with
+ * the field in one row — not implied by which of two separate arrays a field was
+ * placed in, which had no way to catch a field landing in the wrong one.
  */
-export const STAFF_REQUIRED_LIKE_FIELDS: ReadonlyArray<readonly [keyof UpdateStaffInput, string]> =
-  [
-    ["campusId", "campus_id"],
-    ["joiningDate", "joining_date"],
-    ["firstName", "first_name"],
-    ["lastName", "last_name"],
-    ["staffType", "staff_type"],
-    ["phone", "phone"],
-  ];
+export type StaffBodyFieldGate = "truthy" | "defined";
 
-/**
- * camelCase `UpdateStaffInput` key -> the API's snake_case body key, for the
- * genuinely-optional fields — gated on `!== undefined` so a caller can explicitly
- * clear one with `""`/`null`.
- */
-export const STAFF_OPTIONAL_FIELDS: ReadonlyArray<readonly [keyof UpdateStaffInput, string]> = [
-  ["departmentId", "department_id"],
-  ["designationId", "designation_id"],
-  ["reportsToStaffId", "reports_to_staff_id"],
-  ["userId", "user_id"],
-  ["photoFileId", "photo_file_id"],
-  ["gender", "gender"],
-  ["dateOfBirth", "date_of_birth"],
-  ["employmentType", "employment_type"],
-  ["email", "email"],
-  ["nationalId", "national_id"],
-  ["publicBio", "public_bio"],
-  ["address", "address"],
+/** camelCase `UpdateStaffInput` key -> the API's snake_case body key -> its gate. */
+export const STAFF_BODY_FIELDS: ReadonlyArray<
+  readonly [keyof UpdateStaffInput, string, StaffBodyFieldGate]
+> = [
+  ["campusId", "campus_id", "truthy"],
+  ["joiningDate", "joining_date", "truthy"],
+  ["firstName", "first_name", "truthy"],
+  ["lastName", "last_name", "truthy"],
+  ["staffType", "staff_type", "truthy"],
+  ["phone", "phone", "truthy"],
+  ["departmentId", "department_id", "defined"],
+  ["designationId", "designation_id", "defined"],
+  ["reportsToStaffId", "reports_to_staff_id", "defined"],
+  ["userId", "user_id", "defined"],
+  ["photoFileId", "photo_file_id", "defined"],
+  ["gender", "gender", "defined"],
+  ["dateOfBirth", "date_of_birth", "defined"],
+  ["employmentType", "employment_type", "defined"],
+  ["email", "email", "defined"],
+  ["nationalId", "national_id", "defined"],
+  ["publicBio", "public_bio", "defined"],
+  ["address", "address", "defined"],
 ];
 
 /** camelCase `StaffDirectoryQuery` key -> the `/staff` list endpoint's `?`-string

@@ -118,7 +118,11 @@ function detailToFormValues(detail: StaffDetailRecord): StaffFormValues {
   return {
     first_name: detail.first_name,
     last_name: detail.last_name,
-    gender: detail.gender ?? "",
+    // `StaffDetailRecord.gender` is `string | null` (hand-written, not generated —
+    // a pre-existing ADR-0017 gap, see docs/deferred-work.md), but the real model
+    // field it comes from only ever holds a `GENDER_VALUES` member; narrowed here
+    // the same way `buildStaffInput` below narrows `staffType` back the other way.
+    gender: (detail.gender ?? "") as StaffFormValues["gender"],
     date_of_birth: detail.date_of_birth ?? "",
     photo_file_id: detail.photo_file_id ?? "",
     staff_type: detail.staff_type,

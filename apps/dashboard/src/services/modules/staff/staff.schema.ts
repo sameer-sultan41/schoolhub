@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GENDER_VALUES } from "@schoolhub/types";
 import { EXIT_REASON_MAX_LENGTH } from "./staff-constant";
 
 /**
@@ -30,7 +31,11 @@ const addressSchema = z.object({
 export const staffFormSchema = z.object({
   first_name: z.string().min(1),
   last_name: z.string().min(1),
-  gender: z.string().optional(),
+  // `""` (the untouched default/placeholder state) or one of the real enum values —
+  // same shape as `email` below, and the same reason: Zod's own `.optional()` alone
+  // would reject the form's actual untouched-field value (`""`), which is not
+  // `undefined`.
+  gender: z.literal("").or(z.enum(GENDER_VALUES)).optional(),
   date_of_birth: z.string().optional(),
   photo_file_id: z.string().optional(),
   staff_type: z.string().min(1),

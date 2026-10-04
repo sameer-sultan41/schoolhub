@@ -1,9 +1,8 @@
 import { format } from "date-fns";
 import { copyMappedFields, humanizeSnakeCase, stableSignedUrl } from "@/lib/helpers";
 import {
-  STAFF_OPTIONAL_FIELDS,
+  STAFF_BODY_FIELDS,
   STAFF_QUERY_FIELDS,
-  STAFF_REQUIRED_LIKE_FIELDS,
   STATUS_META,
   type StatusVariant,
 } from "./staff-constant";
@@ -52,26 +51,29 @@ export function formatDate(value: string): string {
 }
 
 /**
- * camelCase `CreateStaffInput`/`UpdateStaffInput` -> the API's snake_case body.
- * `STAFF_REQUIRED_LIKE_FIELDS` is truthy-gated for both (an empty string is never
- * sent for one of these). `STAFF_OPTIONAL_FIELDS` is gated on `!== undefined` for
- * both too, so a caller can explicitly clear a nullable field with `null` on
- * *either* create or update — `createStaff` used to truthy-gate its optional fields
- * (silently dropping an explicit `null`, unlike `updateStaff`); unified so both
- * behave the same way for the same input shape.
+ * camelCase `CreateStaffInput`/`UpdateStaffInput` -> the API's snake_case body, one
+ * row of `STAFF_BODY_FIELDS` at a time: a `"truthy"`-gated field is never sent empty;
+ * a `"defined"`-gated one is sent whenever it's not literally `undefined`, so a
+ * caller can explicitly clear it with `null`. `createStaff` and `updateStaff` share
+ * this one implementation — `CreateStaffInput`'s required fields are always present
+ * and truthy by construction, so the same gating is correct for both callers.
  */
-export function toStaffCreateBody(input: CreateStaffInput): Record<string, unknown> {
+function toStaffBody(input: UpdateStaffInput): Record<string, unknown> {
   const body: Record<string, unknown> = {};
-  copyMappedFields(input, STAFF_REQUIRED_LIKE_FIELDS, Boolean, body);
-  copyMappedFields(input, STAFF_OPTIONAL_FIELDS, (value) => value !== undefined, body);
+  for (const [camelKey, snakeKey, gate] of STAFF_BODY_FIELDS) {
+    const value = input[camelKey];
+    const include = gate === "truthy" ? Boolean(value) : value !== undefined;
+    if (include) body[snakeKey] = value;
+  }
   return body;
 }
 
+export function toStaffCreateBody(input: CreateStaffInput): Record<string, unknown> {
+  return toStaffBody(input);
+}
+
 export function toStaffUpdateBody(input: UpdateStaffInput): Record<string, unknown> {
-  const body: Record<string, unknown> = {};
-  copyMappedFields(input, STAFF_REQUIRED_LIKE_FIELDS, Boolean, body);
-  copyMappedFields(input, STAFF_OPTIONAL_FIELDS, (value) => value !== undefined, body);
-  return body;
+  return toStaffBody(input);
 }
 
 /** `StaffDirectoryQuery` -> the `/staff` list endpoint's `?`-string params. Every
