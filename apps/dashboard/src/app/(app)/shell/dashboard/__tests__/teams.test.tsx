@@ -5,11 +5,11 @@ import { Services } from "@/services";
 import { Teams } from "../teams";
 
 jest.mock("@/services", () => ({
-  Services: { dashboard: { fetchStaffDirectory: jest.fn() } },
+  Services: { staff: { fetchStaffDirectory: jest.fn() } },
 }));
 
-const mockFetchStaffDirectory = Services.dashboard.fetchStaffDirectory as jest.MockedFunction<
-  typeof Services.dashboard.fetchStaffDirectory
+const mockFetchStaffDirectory = Services.staff.fetchStaffDirectory as jest.MockedFunction<
+  typeof Services.staff.fetchStaffDirectory
 >;
 
 describe("Teams", () => {

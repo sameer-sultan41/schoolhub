@@ -9,15 +9,16 @@ import { toast } from "sonner";
 import { Button } from "@schoolhub/ui";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
-import { StaffFormDialog } from "@/app/(app)/staff/staff-form-dialog";
-import { StaffImportDialog } from "@/app/(app)/staff/staff-import-dialog";
 import { StatChip } from "@/components/stat-chip";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobPolling } from "@/hooks/use-job-polling";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
+import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import type { ExportJobResult } from "@/services/modules/jobs/jobs-service";
+import { StaffFormDialog } from "./staff-form-dialog";
+import { StaffImportDialog } from "./staff-import-dialog";
 
 /**
  * The `/staff` toolbar's live stat line and its two action buttons — split out of
@@ -34,7 +35,7 @@ import type { ExportJobResult } from "@/services/modules/jobs/jobs-service";
  * line markup/classes, but the vendor's "Pro Licenses" (no licensing concept exists for a
  * school) is replaced with a second REAL number, Teaching Staff headcount — see the
  * plan's "Toolbar's stat line" note. Both counts come from real service calls
- * (`Services.dashboard.fetchStaffPage`/`fetchStaffTypeCount`), never a fabricated number;
+ * (`Services.staff.fetchStaffPage`/`fetchStaffTypeCount`), never a fabricated number;
  * a `null`/pending count renders "—", the same convention `highlights.tsx`'s own
  * `formatValue` already established for a pending numeric stat elsewhere in this app.
  */
@@ -53,19 +54,20 @@ export function StaffToolbar() {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
 
-  // `pageSize: 1` mirrors dashboard-service.ts's own fetchTotal/fetchStaffTypeCount
+  // `pageSize: 1` mirrors dashboard-service.ts's own fetchTotal and staff-service.ts's
+  // own fetchStaffTypeCount
   // pattern: read the server's reported total_count without draining the list. This is
   // deliberately its own query, not reused from the directory table's: the table's own
   // fetchStaffPage call reflects whatever search/status filter the user currently has
   // active, but "All Members" here must always mean the school's true, unfiltered
   // headcount.
   const { data: allStaffPage, isPending: isAllMembersPending } = useQuery({
-    queryKey: ["staff", "toolbar", "all-members-count"],
-    queryFn: () => Services.dashboard.fetchStaffPage({ pageSize: 1 }),
+    queryKey: queryKeys.list("staff", "staff", { statsAll: true }),
+    queryFn: () => Services.staff.fetchStaffPage({ pageSize: 1 }),
   });
   const { data: teachingStaffCount, isPending: isTeachingStaffPending } = useQuery({
-    queryKey: ["staff", "toolbar", "teaching-staff-count"],
-    queryFn: () => Services.dashboard.fetchStaffTypeCount("teaching"),
+    queryKey: queryKeys.list("staff", "staff", { statsTeaching: true }),
+    queryFn: () => Services.staff.fetchStaffTypeCount("teaching"),
   });
   // The same shared query `sidebar-menu.tsx`'s own permission check already populates —
   // this never issues a second request.

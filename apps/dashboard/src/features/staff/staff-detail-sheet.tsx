@@ -12,7 +12,6 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
@@ -35,15 +34,11 @@ import {
   useIsDrawer,
 } from "@/components/responsive-dialog";
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
-import { getInitials } from "@/lib/helpers";
+import { formatLastUpdated, getInitials, humanizeSnakeCase } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
-import {
-  formatLastUpdated,
-  humanizeSnakeCase,
-  statusMeta,
-  type StaffRow,
-} from "@/app/(app)/staff/staff-directory-table";
+import { formatDate, statusMeta } from "@/services/modules/staff/staff-helper";
+import type { StaffRow } from "@/services/modules/staff/staff-type";
 
 /** Row-click detail view: row summary fields render at once, the rest after fetchStaffById. */
 export interface StaffDetailSheetProps {
@@ -51,11 +46,6 @@ export interface StaffDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string, name: string) => void;
-}
-
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : format(parsed, "PPP");
 }
 
 function FieldRow({
@@ -178,9 +168,14 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
     isError,
   } = useQuery({
     queryKey: queryKeys.detail("staff", "staff", row?.id ?? ""),
-    queryFn: () => Services.dashboard.fetchStaffById(row?.id as string),
+    queryFn: () => Services.staff.fetchStaffById(row?.id as string),
     enabled: row !== null,
   });
+
+  // Computed once per render rather than at each of the two badges below (one
+  // renders on mobile, the other on desktop — never both at once, but each still
+  // read the same `row.status` lookup independently before).
+  const statusBadge = row ? statusMeta(row.status) : null;
 
   return (
     <ResponsiveSheet
@@ -218,32 +213,32 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                   <span className="text-mono min-w-0 truncate text-base leading-none font-semibold text-foreground md:text-lg">
                     {row.name}
                   </span>
-                  {isMobile && (
+                  {isMobile && statusBadge && (
                     <Badge
                       size="sm"
-                      variant={statusMeta(row.status).variant}
+                      variant={statusBadge.variant}
                       appearance="light"
                       shape="circle"
                       className="w-fit shrink-0"
                     >
                       <BadgeDot />
-                      {statusMeta(row.status).label}
+                      {statusBadge.label}
                     </Badge>
                   )}
                 </div>
                 <span className="truncate text-sm text-muted-foreground">
                   {row.designation} · {row.campus}
                 </span>
-                {!isMobile && (
+                {!isMobile && statusBadge && (
                   <Badge
                     size="sm"
-                    variant={statusMeta(row.status).variant}
+                    variant={statusBadge.variant}
                     appearance="light"
                     shape="circle"
                     className="mt-1 w-fit"
                   >
                     <BadgeDot />
-                    {statusMeta(row.status).label}
+                    {statusBadge.label}
                   </Badge>
                 )}
               </div>

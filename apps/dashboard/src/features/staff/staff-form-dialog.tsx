@@ -27,7 +27,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 
 import {
   ResponsiveDialog,
@@ -41,10 +40,14 @@ import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { ApiError, Services } from "@/services";
 import { getInitials, stableSignedUrl } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
-import type {
-  CreateStaffInput,
-  StaffDetailRecord,
-} from "@/services/modules/dashboard/dashboard-service";
+import {
+  EMPLOYMENT_TYPE_OPTIONS,
+  GENDER_OPTIONS,
+  STAFF_TYPE_OPTIONS,
+  UNSET_VALUE,
+} from "@/services/modules/staff/staff-constant";
+import { staffFormSchema, type StaffFormValues } from "@/services/modules/staff/staff.schema";
+import type { CreateStaffInput, StaffDetailRecord } from "@/services/modules/staff/staff-type";
 
 /**
  * One dialog, two jobs: creating a brand-new staff member and editing an existing one.
@@ -64,86 +67,6 @@ export interface StaffFormDialogProps {
   /** Required when `mode === "edit"`, ignored when `mode === "create"`. */
   staffId?: string;
 }
-
-/**
- * Real enum values, verified against `apps/api/apps/staff_management/models.py` — used
- * verbatim as each `<Select>`'s options, never invented client-side.
- */
-const GENDER_OPTIONS = [
-  { value: "male", label: "Male" },
-  { value: "female", label: "Female" },
-  { value: "other", label: "Other" },
-  { value: "unspecified", label: "Unspecified" },
-];
-
-const STAFF_TYPE_OPTIONS = [
-  { value: "teaching", label: "Teaching" },
-  { value: "non_teaching", label: "Non-teaching" },
-];
-
-const EMPLOYMENT_TYPE_OPTIONS = [
-  { value: "full_time", label: "Full time" },
-  { value: "part_time", label: "Part time" },
-  { value: "contract", label: "Contract" },
-  { value: "visiting", label: "Visiting" },
-];
-
-/**
- * Sentinel for "no department/designation/manager/employment type" in a `<Select>` —
- * Radix disallows a real `<SelectItem value="">`, so an explicit "None" choice needs a
- * non-empty value of its own. `buildStaffInput` below maps both this and a genuinely
- * untouched `""` back to `undefined` (the key omitted from the request body) before
- * anything is sent to `createStaff`/`updateStaff`.
- */
-const UNSET_VALUE = "unset";
-
-const addressSchema = z.object({
-  line1: z.string().optional(),
-  line2: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  postal_code: z.string().optional(),
-  country: z.string().optional(),
-});
-
-/**
- * Field names are snake_case (matching the API's own field names) rather than this
- * codebase's usual camelCase, deliberately — `error.fieldErrors()` keys come back
- * snake_case from the server, and matching them 1:1 here means the server-error-mapping
- * loop below needs no re-mapping step, mirroring `login-form.tsx`'s pattern.
- *
- * Every required/optional split matches the real `create_staff` service signature
- * (`apps/api/apps/staff_management/services.py`) exactly: `campus_id`, `joining_date`,
- * `first_name`, `last_name`, `staff_type`, `phone` required; everything else optional.
- * Zod here is instant client-side feedback only — the API remains the authority (it
- * still enforces things like `national_id` uniqueness or `reports_to` cycles that
- * Zod deliberately does not re-implement).
- */
-const staffFormSchema = z.object({
-  first_name: z.string().min(1),
-  last_name: z.string().min(1),
-  gender: z.string().optional(),
-  date_of_birth: z.string().optional(),
-  photo_file_id: z.string().optional(),
-  staff_type: z.string().min(1),
-  campus_id: z.string().min(1),
-  department_id: z.string().optional(),
-  designation_id: z.string().optional(),
-  reports_to_staff_id: z.string().optional(),
-  employment_type: z.string().optional(),
-  joining_date: z.string().min(1),
-  phone: z.string().min(1),
-  email: z.literal("").or(z.email()).optional(),
-  national_id: z.string().optional(),
-  public_bio: z.string().optional(),
-  // Not `.optional()` at this level, unlike every other optional field above: this
-  // form's own default values (both `EMPTY_DEFAULTS` and `detailToFormValues`) always
-  // populate a full address object (each sub-field an empty string when unset), so
-  // `address` itself is never actually absent — only its individual sub-fields are.
-  address: addressSchema,
-});
-
-type StaffFormValues = z.infer<typeof staffFormSchema>;
 
 const EMPTY_DEFAULTS: StaffFormValues = {
   first_name: "",
@@ -195,7 +118,11 @@ function detailToFormValues(detail: StaffDetailRecord): StaffFormValues {
   return {
     first_name: detail.first_name,
     last_name: detail.last_name,
-    gender: detail.gender ?? "",
+    // `StaffDetailRecord.gender` is `string | null` (hand-written, not generated —
+    // a pre-existing ADR-0017 gap, see docs/deferred-work.md), but the real model
+    // field it comes from only ever holds a `GENDER_VALUES` member; narrowed here
+    // the same way `buildStaffInput` below narrows `staffType` back the other way.
+    gender: (detail.gender ?? "") as StaffFormValues["gender"],
     date_of_birth: detail.date_of_birth ?? "",
     photo_file_id: detail.photo_file_id ?? "",
     staff_type: detail.staff_type,
@@ -303,31 +230,31 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
 
   // Gated on `open` so the dialog never fetches any of these before it's ever opened.
   const campusesQuery = useQuery({
-    queryKey: ["staff", "form", "campuses"],
+    queryKey: queryKeys.list("school-organization", "campuses"),
     queryFn: () => Services.dashboard.fetchCampuses(),
     enabled: open,
   });
   const departmentsQuery = useQuery({
-    queryKey: ["staff", "form", "departments"],
+    queryKey: queryKeys.list("school-organization", "departments"),
     queryFn: () => Services.dashboard.fetchDepartments(),
     enabled: open,
   });
   const designationsQuery = useQuery({
-    queryKey: ["staff", "form", "designations"],
+    queryKey: queryKeys.list("staff", "designations"),
     queryFn: () => Services.dashboard.fetchDesignations(),
     enabled: open,
   });
   // The "Reports to" dropdown's option source — bounded to 100 staff, same as
   // `teams.tsx`'s dashboard-home preview.
   const staffDirectoryQuery = useQuery({
-    queryKey: ["staff", "form", "directory"],
-    queryFn: () => Services.dashboard.fetchStaffDirectory(),
+    queryKey: queryKeys.list("staff", "staff-directory"),
+    queryFn: () => Services.staff.fetchStaffDirectory(),
     enabled: open,
   });
 
   const staffDetailQuery = useQuery({
     queryKey: queryKeys.detail("staff", "staff", staffId ?? ""),
-    queryFn: () => Services.dashboard.fetchStaffById(staffId as string),
+    queryFn: () => Services.staff.fetchStaffById(staffId as string),
     enabled: mode === "edit" && open && Boolean(staffId),
   });
 
@@ -385,8 +312,8 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
     mutationFn: (values: StaffFormValues) => {
       const input = buildStaffInput(values);
       return mode === "create"
-        ? Services.dashboard.createStaff(input)
-        : Services.dashboard.updateStaff(staffId as string, input);
+        ? Services.staff.createStaff(input)
+        : Services.staff.updateStaff(staffId as string, input);
     },
     onSuccess: () => {
       // A prefix match (TanStack Query v5's `invalidateQueries` default, `exact: false`)
@@ -395,12 +322,12 @@ export function StaffFormDialog({ open, onOpenChange, mode, staffId }: StaffForm
       // "toolbar", ...]`), and this dialog's own reference-data/detail queries — so a
       // newly created staff member is immediately selectable as someone else's "Reports
       // to" option too, without a page reload.
-      void queryClient.invalidateQueries({ queryKey: ["staff"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.module("staff") });
       // The dashboard-home widgets (channel-stats, highlights, teams, …) key their own
       // queries off ["dashboard", ...] instead — a separate prefix the line above never
       // touches, so they'd otherwise keep showing stale staff counts/names/photos after
       // this save until something else happened to refetch them.
-      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.module("dashboard") });
       onOpenChange(false);
       toast.success(mode === "create" ? "Staff member added" : "Staff member updated");
     },

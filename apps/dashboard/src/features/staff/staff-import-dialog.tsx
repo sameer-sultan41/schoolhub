@@ -33,29 +33,17 @@ import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import type { ImportJobResult } from "@/services/modules/jobs/jobs-service";
+import {
+  ACCEPTED_EXTENSIONS,
+  ACTIVE_JOB_STORAGE_PREFIX,
+  OPTIONAL_COLUMNS,
+  REQUIRED_COLUMNS,
+} from "@/services/modules/staff/staff-constant";
 
 export interface StaffImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const ACCEPTED_EXTENSIONS = ".csv,.xlsx";
-/** Per user as well as per tab: a different sign-in in the same tab never reconnects
- * to someone else's import. */
-const ACTIVE_JOB_STORAGE_PREFIX = "schoolhub:staff-import-job:";
-/** Mirrors `REQUIRED_IMPORT_COLUMNS`/`IMPORT_COLUMNS`
- * (`apps/api/apps/staff_management/staff/services/import_staff.py`) verbatim — shown
- * so the person picking a file knows the header row's exact contract before they
- * upload it. */
-const REQUIRED_COLUMNS = [
-  "first_name",
-  "last_name",
-  "staff_type",
-  "campus_code",
-  "joining_date",
-  "phone",
-];
-const OPTIONAL_COLUMNS = ["gender", "date_of_birth", "email", "national_id"];
 
 /**
  * File picker -> `POST /staff-imports` -> poll -> per-row result. Ported from this

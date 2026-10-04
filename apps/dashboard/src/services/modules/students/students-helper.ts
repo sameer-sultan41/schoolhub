@@ -1,5 +1,4 @@
-import { formatDistanceToNow } from "date-fns";
-import { stableSignedUrl } from "@/lib/helpers";
+import { copyMappedFields, formatLastUpdated, stableSignedUrl } from "@/lib/helpers";
 import { STUDENT_BODY_FIELDS, STUDENTS_QUERY_FIELDS } from "./students-constant";
 import type {
   StudentRecord,
@@ -7,6 +6,8 @@ import type {
   StudentsPageQuery,
   UpdateStudentInput,
 } from "./students-type";
+
+export { formatLastUpdated };
 
 /**
  * The students module's pure helper functions — single source of truth, so a mapper or
@@ -30,34 +31,6 @@ export function toStudentRow(record: StudentRecord): StudentRow {
     updatedAt: record.updated_at,
     signedPhotoUrl: stableSignedUrl(record.photo_url) ?? undefined,
   };
-}
-
-/** "3 days ago" rather than a raw ISO timestamp — the same `formatDistanceToNow` rendering
- * as `/staff`'s `formatLastUpdated` (`staff-directory-table.tsx`), replicated rather than
- * imported so this module doesn't depend on another route's table module. */
-export function formatLastUpdated(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return formatDistanceToNow(parsed, { addSuffix: true });
-}
-
-/**
- * Copies `from[camelKey]` to `to[snakeKey]` for each pair in `fields`, when
- * `include(value)` says to — the shape both `toStudentBody` and
- * `toStudentsQueryParams` need, just with a different `include` predicate and field
- * list. `to` is mutated in place so a caller can seed it with always-present fields
- * first (`toStudentsQueryParams`'s `page`/`page_size`).
- */
-function copyMappedFields<T extends object>(
-  from: T,
-  fields: ReadonlyArray<readonly [keyof T, string]>,
-  include: (value: T[keyof T]) => boolean,
-  to: Record<string, unknown>,
-): void {
-  for (const [camelKey, snakeKey] of fields) {
-    const value = from[camelKey];
-    if (include(value)) to[snakeKey] = value;
-  }
 }
 
 /**

@@ -10,6 +10,15 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
+  aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,
+  `StaffDetailRecord`, `CreateStaffInput`, etc. are hand-declared — a pre-existing
+  [ADR-0017](decisions/0017-generated-wire-types-for-new-domains.md) violation that
+  predates the staff file-split PR (which only reorganized where these types live,
+  moving them out of `dashboard-service.ts`, without changing their source). Fixing it
+  means re-verifying every staff field against the generated schema and is its own,
+  separate PR — not bundled into a file-organization change.
+
 - **Staff (and student) CSV export downloads have no `Content-Disposition` override.**
   `POST /files/{id}:download` (`core.files`) returns a bare presigned object-storage
   URL with no `ResponseContentDisposition`, so the browser names the downloaded file
