@@ -3,20 +3,28 @@
 > **Agent Context:** This is the design spec for Phase 2 of the `/students` dashboard
 > rebuild, per the Roadmap in `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`.
 > It is implemented against `main` as of PR #96 (Phase 1) and PR #97 (UI polish), both
-> merged. This phase is dashboard-first, but carries three small, deliberate backend
-> additions surfaced across two rounds of independent plan review (ADR-0015):
+> merged. This phase is dashboard-first, but carries four small, deliberate backend
+> additions surfaced across three rounds of independent plan review (ADR-0015):
 > `GuardianSerializer` gains a `photo_url` field (guardians have no display URL for their
 > uploaded photo today, unlike students); the `principal` role gains
-> `students.document.view` (it already holds `.verify`, but not the view permission
-> needed to see the tab it verifies from — a pre-existing gap in the permission matrix),
-> backed by a data migration so tenants that already have a `principal` role get the
-> grant too, not only freshly-seeded ones; and `core/files`' signed download URLs gain a
-> `Content-Disposition: attachment` header, so a document download forces a real
-> save-as/download regardless of file type instead of relying on an anchor's `download`
-> attribute, which browsers ignore cross-origin. Every other endpoint this phase needs
-> already exists and is already wired. The Guardians tab's per-guardian name resolution
-> (fan out one `GET /guardians/{id}` per linked guardian, rather than a backend-embedded
-> summary) is itself recorded as [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md).
+> `students.document.view` in the permission registry (it already holds `.verify`, but
+> not the view permission needed to see the tab it verifies from — a pre-existing gap in
+> the permission matrix) — **this reaches only freshly dev/e2e-seeded `principal` roles**,
+> since no production code anywhere provisions a default role but `school_owner` for an
+> already-live tenant (a pre-existing, platform-wide `core.rbac`/`core.tenancy` gap,
+> recorded in `docs/deferred-work.md`, not fixed by this phase — a backfill migration was
+> considered and explicitly rejected once this was understood); `core/files`' signed
+> download URLs gain a `Content-Disposition: attachment` header, applied globally, so a
+> document download forces a real save-as/download regardless of file type instead of
+> relying on an anchor's `download` attribute, which browsers ignore cross-origin; and a
+> new `students.document.view`-gated `:download` action on `StudentDocumentViewSet`, so
+> the dashboard's own document-download path no longer relies on the generic, every-
+> staff-role `platform.file.view` key — though that generic `core/files` endpoint itself
+> remains open platform-wide (pre-existing, cross-cutting, out of scope here). Every other
+> endpoint this phase needs already exists and is already wired. The Guardians tab's
+> per-guardian name resolution (fan out one `GET /guardians/{id}` per linked guardian,
+> rather than a backend-embedded summary) is itself recorded as
+> [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md).
 
 **Work tier:** 2
 
@@ -53,23 +61,28 @@ from the same tab. All three flows work on mobile (drawer) as well as desktop (s
   is list+create only).
 - Documents tab: list (type, title, verification status, expiry); upload (file +
   type + title + optional notes/expiry); verify/reject (permission-gated); delete
-  (permission-gated); download (via `core/files`' existing `:download` action).
-- New `Services.guardians` domain; additions to `Services.students` for the nested
-  emergency-contacts/documents/guardian-link calls and for fetching one guardian by id
-  (`fetchGuardianById`, needed so the Guardians tab can show a linked guardian's name —
-  a link row carries only `guardian_id`). Document download reuses the existing
-  `Services.jobs.fetchFileDownloadUrl` (`POST /files/{id}:download`) — it already exists,
-  wrapping the same `core/files` colon-action; no new `Services.files` addition needed.
-- Three small backend additions (see the Agent Context note above): `GuardianSerializer.
+  (permission-gated); download (via a new, `students.document.view`-gated `:download`
+  action on `StudentDocumentViewSet` — see below).
+- New `Services.guardians` domain (five-file shape, ADR-0019); additions to
+  `Services.students` for the nested emergency-contacts/documents/guardian-link calls,
+  for fetching one guardian by id (`fetchGuardianById`, needed so the Guardians tab can
+  show a linked guardian's name — a link row carries only `guardian_id`), and for the
+  new `getDocumentDownloadUrl` (wrapping the new `:download` action below — not a reuse
+  of `Services.jobs.fetchFileDownloadUrl`, since that wraps the generic `core/files`
+  action this phase deliberately doesn't use for student documents).
+- Four small backend additions (see the Agent Context note above): `GuardianSerializer.
   photo_url` (mirrors `StudentSerializer.get_photo_url`'s purpose-gated pattern exactly);
   `principal` added to `students.document.view`'s allowed roles in
   `apps/api/apps/student_management/permissions.py` (plus the matching row in
-  `docs/03-modules/student-management.md` §4) and a data migration backfilling existing
-  tenants' `principal` role; and a `Content-Disposition: attachment` header on
-  `core/files`' signed download URLs (`core/files/storage.py`/`services.py`). The first
-  two regenerate `openapi.yaml`/`schema.d.ts` per `.claude/rules/api-contract.md`; the
-  third changes no serializer/view signature, so it doesn't touch the API contract.
-- Backend test gaps closed (otherwise no new backend code beyond the three additions
+  `docs/03-modules/student-management.md` §4) — reaching only dev/e2e-seeded tenants, no
+  production backfill (see Agent Context); a `Content-Disposition: attachment` header,
+  applied globally, on `core/files`' signed download URLs
+  (`core/files/storage.py`/`services.py`); and a new `students.document.view`-gated
+  `:download` action on `StudentDocumentViewSet`. The first and last regenerate
+  `openapi.yaml`/`schema.d.ts` per `.claude/rules/api-contract.md`; the permission and
+  Content-Disposition changes touch no serializer/view signature, so neither alone
+  touches the API contract.
+- Backend test gaps closed (otherwise no new backend code beyond the four additions
   above — the rest are tests only): a cross-tenant test for emergency contacts (none
   exists, plus one for creating a contact under another tenant's student), `GET
   /student-guardians/{id}` and the guardians list (untested), `PATCH /guardians/{id}`
@@ -146,13 +159,18 @@ always fit on one line; verify visually at 375px in both locales during implemen
   `fetchEmergencyContacts(studentId)`, `addEmergencyContact(studentId, input)`,
   `fetchDocuments(studentId)`, `uploadDocumentRecord(studentId, input)` (the metadata
   POST after the file itself is already uploaded via `Services.files.uploadFile`),
-  `deleteDocument(documentId)`, `verifyDocument(documentId, decision)`. These go directly
-  into the existing `students-service.ts`/`students-type.ts` files (no new per-resource
-  file split — ADR-0018's split trigger doesn't fire at this size).
-- **Document download** reuses the existing `Services.jobs.fetchFileDownloadUrl(fileId)`
-  (`apps/dashboard/src/services/modules/jobs/jobs-service.ts`), which already wraps
-  `POST /files/{id}:download` — no new `Services.files` addition; it already exists and
-  is already used by `/staff`'s export download.
+  `deleteDocument(documentId)`, `verifyDocument(documentId, decision)`,
+  `getDocumentDownloadUrl(documentId)` (see below). These go directly into the existing
+  `students-service.ts`/`students-type.ts` files (no new per-resource file split —
+  ADR-0019's five-file shape applies to the brand-new `Services.guardians` domain, not to
+  an existing module gaining a few more functions).
+- **Document download** is its own `getDocumentDownloadUrl(documentId)` wrapping the new
+  `students.document.view`-gated `POST /student-documents/{id}:download` action (Task 1)
+  — deliberately NOT a reuse of `Services.jobs.fetchFileDownloadUrl`
+  (`apps/dashboard/src/services/modules/jobs/jobs-service.ts`), which wraps the generic
+  `core/files` `POST /files/{id}:download` gated only by the broad `platform.file.view`
+  key. `/staff`'s export download keeps using the generic one; student documents use the
+  new, narrower action instead.
 
 Query keys follow the existing `queryKeys` factory, whose third argument is a params
 *object*, not a bare id: `queryKeys.list("students", "guardian-links", { studentId })`,
@@ -167,7 +185,7 @@ delete mutation invalidates the matching list key.
 | `StudentGuardiansTab` | Lists linked guardians + flags (resolved via `fetchGuardianById` fan-out); "Add guardian" opens the chooser (search vs. create); shows a load-error state with retry on a failed fetch, distinct from the empty-list state. |
 | `GuardianPickerDialog` | One dialog, two internal steps — never a dialog nested inside another (`packages/ui`'s `ResponsiveDialog` has no supported nested-drawer pattern on mobile). Step 1 ("choose"): search-existing (debounced `Select`, excluding guardians already linked to this student) **or** a "create new" tab with the same fields (including photo) as `GuardianFormDialog`, inlined directly rather than opened as a second dialog. Step 2 ("link"), reached from either path: the chosen/created guardian + relationship, ending in `linkGuardianToStudent`, retried on failure without re-creating the guardian. |
 | `GuardianFormDialog` | Create/edit a guardian's own fields, including the photo via a shared `PhotoUploadField` (extracted from `StudentPhotoField` on this, its third use — students, staff, guardians — per the repo's third-copy rule; purpose `guardian.photo`). Shared by "create new" and "edit this guardian." |
-| `GuardianLinkFlagsDialog` | Edit one link's `relationship`/`is_primary`/`is_fee_responsible`/`can_pick_up`/`receives_communications` — a small form, `PATCH /student-guardians/{id}`. |
+| `GuardianLinkFlagsDialog` | Edit one link's `relationship`/`is_fee_responsible`/`can_pick_up`/`receives_communications` — a small form, `PATCH /student-guardians/{id}`. Never includes `is_primary`: promoting primary is a separate one-click row action (see below), since demoting without picking a replacement isn't an operation the backend supports directly. |
 | `StudentEmergencyContactsTab` | Ordered list (read-only rows) + one add form. No per-row actions. |
 | `StudentDocumentsTab` | List with per-row Verify/Reject, Download, Delete (each permission-gated); "Upload document" opens the upload dialog. |
 | `DocumentUploadDialog` | File picker + `document_type` `Select` (6 seeded defaults) + title + optional notes/expiry; drives `Services.files.uploadFile` then `uploadDocumentRecord`. |
@@ -306,9 +324,10 @@ place.
   own filter) does the job.
 - **Embed a guardian summary on `StudentGuardianSerializer` instead of a per-guardian
   `fetchGuardianById` fan-out.** Considered — it would save N requests per student's
-  guardian list. Rejected for this phase because it's a backend change beyond the three
-  already added (photo_url, the principal permission fix + migration, download
-  Content-Disposition), and a tenant's guardians-per-student count is small (the UI shows
+  guardian list. Rejected for this phase because it's a backend change beyond the four
+  already added (photo_url, the principal permission fix, download Content-Disposition,
+  the gated document `:download` action), and a tenant's guardians-per-student count is
+  small (the UI shows
   a handful of rows, not pages); the fan-out goes through `Services.guardians` properly
   either way, so upgrading to an embedded summary later is a pure backend+client change
   with no tab-component rewrite. Recorded as
@@ -346,10 +365,25 @@ the already-approved guardian photo actually displayable), and grant `principal`
 `students.document.view` permission (so the spec's own "a principal later verifies it"
 success case is actually reachable). A second review round surfaced three more, also
 resolved with the user: back-fill that permission onto tenants that already have a
-`principal` role via a one-off data migration, rather than leaving it reachable only by
-freshly-seeded roles; force a real download via a `Content-Disposition: attachment`
-header on `core/files`' signed download URLs, rather than relying on an anchor's
-`download` attribute (which browsers ignore cross-origin); and record the per-guardian
-`fetchGuardianById` fan-out as its own ADR ([ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md))
-rather than leaving an undocumented precedent for how the dashboard resolves ids from
-other nested lists.
+`principal` role via a one-off data migration; force a real download via a
+`Content-Disposition: attachment` header on `core/files`' signed download URLs, rather
+than relying on an anchor's `download` attribute (which browsers ignore cross-origin);
+and record the per-guardian `fetchGuardianById` fan-out as its own ADR
+([ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md)) rather
+than leaving an undocumented precedent for how the dashboard resolves ids from other
+nested lists.
+
+A third review round investigated the proposed backfill migration and found its premise
+wrong: no production code anywhere provisions a default role other than `school_owner`
+for an already-live tenant, so a migration scoped to "existing tenants' `principal`
+role" would only ever touch dev/e2e seed fixtures — giving false confidence that
+production tenants are covered when none are. **The user, informed of this, chose to
+drop the migration** and document the real, platform-wide `core.rbac`/`core.tenancy` gap
+in `docs/deferred-work.md` rather than expand this phase into building a tenant
+role-provisioning system. The same round added a `students.document.view`-gated
+`:download` action on `StudentDocumentViewSet`, so the dashboard's document-download path
+no longer relies on the broad, every-staff-role `platform.file.view` key — **the user
+confirmed this ships as-is**, without also closing the separate, pre-existing, and
+cross-cutting exposure that `core/files`' own generic `GET /files`/`:download` endpoints
+still grant to any `platform.file.view` holder (out of scope for this phase; recorded in
+`docs/deferred-work.md`).
