@@ -4,42 +4,69 @@
 
 **Goal:** Add Guardians, Emergency Contacts and Documents to `/students`' detail view — a tabbed `StudentDetailSheet` (Profile/Guardians/Emergency Contacts/Documents) backed entirely by backend endpoints that already exist.
 
-**Architecture:** Each relation gets its own small feature component (tab) reading/writing through a new `Services.guardians` domain plus additions to `Services.students`/`Services.files`. No new backend code — this is a dashboard-only phase, closing four named backend test gaps along the way.
+**Architecture:** Each relation gets its own small feature component (tab) reading/writing through a new `Services.guardians` domain plus additions to the existing `Services.students` module. Mostly a dashboard-only phase — closing four named backend test gaps along the way — plus three small, deliberate backend additions surfaced across two rounds of independent plan review: `GuardianSerializer.photo_url`, `principal` gaining `students.document.view` (plus a one-off data migration backfilling it onto tenants that already have a `principal` role), and a `Content-Disposition: attachment` header on `core/files`' signed download URLs.
 
-**Tech Stack:** Next.js 16, TanStack Query v5, react-hook-form + zod, `@schoolhub/ui` (`Tabs`, first real consumer in this app), Django 6.1 + DRF (tests only).
+**Tech Stack:** Next.js 16, TanStack Query v5, react-hook-form + zod, `@schoolhub/ui` (`Tabs`, first real consumer in this app), Django 6.1 + DRF (mostly tests; Task 1 carries the two small production changes above).
 
 **Spec:** `docs/superpowers/specs/2026-10-03-students-phase2-relations-design.md`
 
+**Work tier:** 2
+
 ## Global Constraints
 
-- **No new backend production code.** Every endpoint this phase calls already exists and is wired (`GuardianViewSet`, `StudentGuardianViewSet`, `StudentGuardianLinkViewSet`, `EmergencyContactLinkViewSet`, `StudentDocumentLinkViewSet`, `StudentDocumentViewSet`, `core/files`' `:download`). Backend work in this plan is test-only.
+- **Three small backend additions, otherwise no new backend production code.** Task 1 adds `GuardianSerializer.photo_url`, `principal` to `students.document.view`'s allowed roles (plus a data migration backfilling existing tenants, since the registry change alone only reaches newly-seeded roles), and a `Content-Disposition: attachment` header on `core/files`' signed download URLs — each proven by a test first. Every other endpoint this phase calls already exists and is wired (`GuardianViewSet`, `StudentGuardianViewSet`, `StudentGuardianLinkViewSet`, `EmergencyContactLinkViewSet`, `StudentDocumentLinkViewSet`, `StudentDocumentViewSet`, `core/files`' `:download`) — the rest of the backend work in this plan is test-only.
 - **No unlink, no emergency-contact edit/delete.** The backend has no endpoints for any of these (`StudentGuardianLinkViewSet` and `EmergencyContactLinkViewSet` are both list+create only). No task invents a workaround; the UI states this plainly where relevant and `docs/deferred-work.md` records it.
-- **`StudentGuardian.relationship` is a fixed 6-value enum** (`Relationship` in `apps/api/apps/student_management/models.py`: `father`, `mother`, `grandparent`, `sibling`, `legal_guardian`, `other`) — a `<Select>`, not free text. **`EmergencyContact.relationship` is free text** (`models.CharField(max_length=50)`, no choices) — a plain `<Input>`. These are different fields on different models; do not conflate them.
-- **The guardian-link list has no embedded guardian name/phone.** `StudentGuardianSerializer` (`GET /students/{id}/guardians`) returns only `guardian_id` plus link fields — never the guardian's own name/phone. `StudentGuardiansTab` must fan out a `GET /guardians/{id}` per unique `guardian_id` in the links (via `useQueries`) to render a name at all. This is a real, confirmed API shape, not an oversight to design around.
-- **Reuse the existing i18n scaffolding.** `apps/dashboard/messages/en.json`/`ur.json` already carry `students.tabs`, `students.guardians`, `students.emergencyContacts`, `students.documents` namespaces (committed on `main`, dating from pre-dashboard-shell-reset work — confirmed real, fully translated in both locales) with the right `Relationship`/`DEFAULT_DOCUMENT_TYPES` values already baked in. Task 4 audits and reuses these; it does not invent a parallel set of keys. The one fix needed: `guardians.close` duplicates `common.close` (Phase 1's established convention is to reuse `common.*` for generic verbs, never a per-screen near-duplicate) — delete `guardians.close` from both locales and use `tCommon("close")` at its one call site.
-- **`GuardianFormDialog`'s field scope is deliberately minimal:** `first_name`, `last_name`, `phone` (required), `alt_phone`, `email` (optional), plus a photo (purpose `guardian.photo`, mirroring `StudentPhotoField`). `occupation`, `employer`, `national_id`, `address`, `custom_fields`, `user_id` are real `Guardian` fields but out of scope this phase (YAGNI — nothing in the module doc or this phase's spec calls them out as priorities; all are nullable server-side, so omitting them client-side is safe).
+- **`StudentGuardian.relationship` is a fixed 6-value enum** (`Relationship` in `apps/api/apps/student_management/models.py`: `father`, `mother`, `grandparent`, `sibling`, `legal_guardian`, `other`) — a `<Select>`, not free text. **`EmergencyContact.relationship` is free text** (`models.CharField(max_length=50)`, no choices) — a plain `<Input>`. These are different fields on different models; do not conflate them. The enum's values live in `packages/types` (alongside the existing `GENDER_VALUES`), not copy-pasted into each component that needs them.
+- **The guardian-link list has no embedded guardian name/phone.** `StudentGuardianSerializer` (`GET /students/{id}/guardians`) returns only `guardian_id` plus link fields — never the guardian's own name/phone. `StudentGuardiansTab` resolves each link's guardian via a `useQueries` fan-out over `Services.guardians.fetchGuardianById` — through `Services`, never a direct `apiClient`/`endpoints` import inside the tab component (ADR-0011). This is a real, confirmed API shape, not an oversight to design around; an embedded backend summary field was considered and rejected (see Alternatives Considered, and ADR-0019) to keep this phase's backend surface to the three additions above.
+- **Reuse the existing i18n scaffolding.** `apps/dashboard/messages/en.json`/`ur.json` already carry `students.tabs`, `students.guardians`, `students.emergencyContacts`, `students.documents` namespaces (committed on `main`, dating from pre-dashboard-shell-reset work — confirmed real, fully translated in both locales) with the right `Relationship`/`DEFAULT_DOCUMENT_TYPES` values already baked in. Task 4 audits and reuses these; it does not invent a parallel set of keys. Fixes needed: `guardians.close` duplicates `common.close` (Phase 1's established convention is to reuse `common.*` for generic verbs, never a per-screen near-duplicate) — delete `guardians.close` from both locales and use `tCommon("close")` at its one call site; and the existing `guardians.empty` ("No guardians linked yet.") is the Guardians *tab's* empty state, not the *picker's* zero-search-results state — those need their own new key (Task 4 adds it), never conflated.
+- **`GuardianFormDialog`'s field scope is deliberately minimal:** `first_name`, `last_name`, `phone` (required), `alt_phone`, `email` (optional), plus a photo (purpose `guardian.photo`, via the shared `PhotoUploadField` extracted in Task 5 — see Alternatives Considered). `occupation`, `employer`, `national_id`, `address`, `custom_fields`, `user_id` are real `Guardian` fields but out of scope this phase (YAGNI — nothing in the module doc or this phase's spec calls them out as priorities; all are nullable server-side, so omitting them client-side is safe).
 - **Link defaults match `link_guardian`'s own service defaults exactly:** `is_primary: false`, `is_fee_responsible: false`, `can_pick_up: true`, `receives_communications: true`, `has_portal_access: true`. A form that defaults differently from the service it calls is a latent bug the first time a user doesn't touch every checkbox.
 - **"Make primary" is a one-click row action, never a dialog.** Promoting a link doesn't need relationship/other-flags context — it's `updateGuardianLink(linkId, { isPrimary: true })` on click, shown only on a non-primary row. Editing the other four flags plus relationship is a separate `GuardianLinkFlagsDialog`, which never includes `is_primary` (demoting without picking a replacement primary is a confusing half-action the backend doesn't even support as a direct operation — `_demote_primary_guardian` only ever runs as a side effect of promoting someone else).
-- **A document's download link is fetched fresh per click, never cached.** `getDownloadUrl` always calls `POST /files/{id}:download`; the resulting URL is opened immediately (`window.open`) and discarded, not stored in component state or React Query's cache — a signed URL has a server-side TTL and caching it would eventually hand out an expired link.
-- **Every new permission-gated control uses `hasPermission(currentUser, key)` directly** (Phase 1's established pattern) — no `<Can>` wrapper component exists in the current app and this plan does not add one.
-- **Lazy per-tab data loading.** Each tab's own query is `enabled: open && activeTab === "<tab>"` — opening the sheet must not fire all three new tabs' requests before the viewer has picked one.
+- **A document's download link is fetched fresh per click, never cached.** `Services.jobs.fetchFileDownloadUrl` (already exists — reused, not duplicated) always calls `POST /files/{id}:download`; the resulting URL drives a programmatically-created, immediately-clicked `<a download>` element (the same pattern `/staff`'s export download already uses), never `window.open` — a browser only allows `window.open` to succeed within a short window of direct user interaction, and the request in between is enough to lose that window on a slow connection. The URL itself is never stored in component state or React Query's cache — a signed URL has a server-side TTL and caching it would eventually hand out an expired link.
+- **Every new permission-gated control uses `hasPermission(currentUser, key)` directly** (Phase 1's established pattern) — no `<Can>` wrapper component exists in the current app and this plan does not add one. Each new tab itself is gated the same way, on its own view key — not merely "can view this student."
+- **Lazy per-tab data loading needs no extra state, and no `enabled` option.** `packages/ui`'s `Tabs` wraps Radix `Tabs`, which unmounts an inactive `TabsContent` panel by default (no task sets `forceMount`) — so a tab component's own `useQuery` never even runs until Radix actually mounts that tab's panel; there is nothing left for an `enabled` flag to gate. No `activeTab` state or `activeTab === "<tab>"` gating is added anywhere in this plan either.
+- **Every tab shows a real load-error state, distinct from its empty-list state.** A failed `useQuery` renders a retry-capable error message, not the tab's "no records yet" copy — and the error must visibly clear once a retry succeeds, not linger.
+- **Mutations don't fail silently.** Make-primary, verify/reject, delete, download and add-contact all show `resolveErrorMessage(error, tErrors, <fallback>)` via toast on failure, matching `/staff`'s existing mutation error-handling pattern — not a swallowed rejection.
 - **Colors/RTL/imports:** `--sh-*` tokens only, logical CSS properties only, `@/` alias only, `@schoolhub/api-client` only inside `src/services/**`/`src/lib/**` (ADR-0011).
-- **New files cannot add an ESLint `max-lines` suppression** — the baseline is shrink-only (ADR-0014).
+- **New files cannot add an ESLint `max-lines` suppression**, and this plan adds no new `eslint-disable` anywhere — the baseline is shrink-only (ADR-0014).
 - **Tests:** sibling `__tests__/` folders. Coverage floor is 85% global and only ever rises.
 - **Never run tests, linters or typechecks locally.** Commit, push, watch `gh pr checks <n> --watch`.
 
+## Alternatives considered (why not)
+
+- **Per-guardian `fetchGuardianById` fan-out vs. an embedded guardian summary on `StudentGuardianSerializer`.** Chosen: the fan-out, through `Services.guardians`, per [ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md) (added this round specifically for this decision). An embedded summary would save N requests per student's guardian list, but it is a backend change beyond the three Task 1 already makes, for a phase independent review already pushed toward "dashboard-first, minimal backend surface." A tenant's guardians-per-student count is small (a handful of rows, not pages), so the N+1 cost is bounded and real; the fan-out goes through `Services` properly either way, so upgrading to an embedded summary later is a pure backend+client change with no tab-component rewrite. `GuardianViewSet.get_queryset` still gets `.select_related("photo_file")` (Task 1) so each resolved guardian's own photo lookup isn't itself an N+1.
+- **A shared `PhotoUploadField` vs. a third standalone copy for guardians.** Chosen: extract a shared component (Task 5), used by both the student and guardian forms. Students and staff already each have their own copy of the same presigned-upload-then-preview flow; guardians would be the third, and this repo's own convention is to extract on the third copy rather than wait for a fourth. Staff's route lives outside `features/students/`, so migrating it too is out of scope for this PR — flagged in `docs/deferred-work.md` (Task 12) rather than silently left as a third uncounted copy.
+- **Select-populated-by-debounced-search vs. a real `Combobox` primitive for "search existing guardian."** Chosen: keep the `Select` + `useDebouncedValue` composition (same hook the student directory's own filter already uses). The spec's own Alternatives section settled this: a proper typeahead-with-keyboard-nav primitive is a `packages/ui` addition (`schoolhub-ui-port`) big enough to be its own piece of work, not warranted by this one dialog.
+- **`key`-based remount vs. a `useEffect` reset for the tabbed sheet's active tab.** Chosen: `<Tabs defaultValue="profile" key={row.id}>`, matching React's own documented pattern for "reset all state when a prop changes" (react.dev). A `useEffect` that resets state on `row` changing would need an `eslint-disable` for `react-hooks/set-state-in-effect` (a new one this plan deliberately adds none of) and runs a render later than the `key` approach for no benefit, since the component actually does need to reset, not merely re-sync one field.
+- **One `GuardianPickerDialog` with two internal steps vs. nesting `GuardianFormDialog` inside it for "create new."** Chosen: one dialog, two steps (Task 6). `ResponsiveDialog` wraps a Radix `Dialog` on desktop and a `vaul` `Drawer` on mobile; nesting a second `ResponsiveDialog` inside this one would need `Drawer.NestedRoot` on the mobile branch, which `packages/ui` doesn't expose. The create-fields form is inlined into the picker's own "create new" tab instead (reusing `GuardianFormDialog`'s exported `guardianFormSchema`/`GuardianFormValues`, not its whole dialog component), and a successful create advances the same dialog to its "link" step — the same step a search-selection also lands on.
+
 ## Review Focus
 
-1. **A guardian search with zero results.** The picker must show "No guardians found" (i18n'd) with "Create new" still reachable from the same dialog — not a blank box that looks broken. Pinned in Task 6.
-2. **Linking a guardian already linked to this student.** The DB has a real unique constraint (`StudentGuardianConstraintTests.test_a_second_link_between_the_same_student_and_guardian_is_rejected`, confirmed in `apps/api/apps/student_management/tests/test_guardians_documents.py`) — the UI must surface the server's real conflict message via `resolveErrorMessage(..., "non_field")`, not swallow it or show a generic fallback. Pinned in Task 6.
-3. **An emergency contact or document action rendered for a caller without the permission.** Each gated button must be genuinely absent (not merely disabled) for a caller lacking the key — matching Phase 1's `canUpdate`/`canWithdraw` precedent. Pinned in Tasks 7, 8, 9.
+1. **A guardian search with zero results.** The picker must show a dedicated "no matches" message (i18n'd, distinct from the Guardians tab's own "No guardians linked yet." empty state) with "Create new" still reachable from the same dialog — not a blank box that looks broken. Pinned in Task 6.
+2. **Linking a guardian already linked to this student.** `StudentGuardian`'s real `UniqueConstraint` (`apps/api/apps/student_management/models.py`) turns a duplicate into an `IntegrityError`, which `core/api/exceptions.py` maps to a real `409 conflict` ("The request conflicts with existing data.") — proven by Task 1's new `test_linking_an_already_linked_guardian_returns_409`. The picker excludes already-linked guardians from its search results as the primary defense; the UI must still surface a real 409 via `resolveErrorMessage(..., "non_field")` as a backstop, not swallow it or invent a different status code. Pinned in Task 6.
+3. **An emergency contact or document action, or an entire tab, rendered for a caller without the permission.** Each gated button — and each tab itself — must be genuinely absent (not merely disabled) for a caller lacking its key, matching Phase 1's `canUpdate`/`canWithdraw` precedent. Pinned in Tasks 7, 8, 9, 10.
 4. **A document upload that fails at the PUT-to-storage step vs. the create/confirm step.** `Services.files.uploadFile`'s `FileUploadError` already carries a step-specific message (Phase 1's `StudentPhotoField` precedent) — `DocumentUploadDialog` must surface that real message, not a generic "upload failed." Pinned in Task 9.
-5. **A tab switched away from and back while its own data is mid-fetch.** `enabled: open && activeTab === "<tab>"` toggling to `false` and back to `true` must not leave a stale error or loading state from the interrupted first fetch — TanStack Query's own `enabled` semantics already handle this correctly (re-enabling re-fires `queryFn` from scratch), but the test suite proves it rather than assuming it. Pinned in Task 10.
+5. **A tab's query fails, or is switched away from and back while mid-fetch.** A failed query must show a load-error state that clears on a successful retry — never mistakable for the tab's own empty-list state. Switching tabs away and back must not leave a stale error or loading state from an interrupted first fetch — TanStack Query's own `enabled`/remount semantics already handle this correctly, but the test suite proves it rather than assuming it. Pinned in Task 10.
 
 ## File Structure
 
 ```
-apps/api/apps/student_management/tests/test_guardians_documents.py   # MODIFY — 4 new tests (Task 1)
+apps/api/apps/student_management/serializers.py          # MODIFY — GuardianSerializer.photo_url (Task 1)
+apps/api/apps/student_management/guardians/serializers.py # MODIFY — mirror photo_url on the unwired duplicate (Task 1)
+apps/api/apps/student_management/permissions.py           # MODIFY — principal + students.document.view (Task 1)
+apps/api/apps/student_management/views.py                  # MODIFY — GuardianViewSet select_related("photo_file") (Task 1)
+apps/api/apps/student_management/migrations/0008_grant_principal_document_view.py  # CREATE — backfill existing tenants (Task 1)
+apps/api/apps/student_management/tests/test_guardians_documents.py   # MODIFY — new tests (Task 1)
+apps/api/apps/student_management/tests/base.py              # (read, not modified — confirms `allow()`'s real scope)
+apps/api/core/files/storage.py                              # MODIFY — presign_download content_disposition param (Task 1)
+apps/api/core/files/services.py                             # MODIFY — get_download_url passes Content-Disposition (Task 1)
+apps/api/core/files/tests/test_storage.py                   # MODIFY — new test (Task 1)
+apps/api/openapi.yaml                                      # MODIFY — regenerated (Task 1)
+packages/api-client/src/schema.d.ts                         # MODIFY — regenerated (Task 1)
+docs/decisions/0019-client-fan-out-for-unembedded-nested-ids.md  # CREATE (Task 2)
+docs/decisions/README.md                                     # MODIFY — index row for ADR-0019 (Task 2)
+
+packages/types/src/student.ts              # MODIFY — add RELATIONSHIP_VALUES alongside GENDER_VALUES (Task 2)
 
 apps/dashboard/src/services/modules/guardians/
   guardians-service.ts                     # CREATE (Task 2)
@@ -48,22 +75,23 @@ apps/dashboard/src/services/modules/guardians/
   __tests__/guardians-service.test.ts      # CREATE (Task 2)
 
 apps/dashboard/src/services/modules/students/
-  student-relations-service.ts             # CREATE — emergency contacts + documents (Task 3)
-  student-relations-type.ts                # CREATE (Task 3)
+  students-service.ts                      # MODIFY — add emergency-contact + document functions (Task 3)
+  students-type.ts                         # MODIFY — add their input/record types (Task 3)
+  students-constant.ts                     # MODIFY — add DOCUMENT_TYPES (Task 3)
   index.ts                                 # MODIFY — re-export the new functions (Task 3)
-  __tests__/student-relations-service.test.ts   # CREATE (Task 3)
+  __tests__/students-service.test.ts       # MODIFY — new test cases (Task 3)
 
-apps/dashboard/src/services/modules/files/
-  files-service.ts                         # MODIFY — add getDownloadUrl (Task 3)
-  index.ts                                 # MODIFY (Task 3)
-  __tests__/files-service.test.ts          # MODIFY (Task 3)
-
-apps/dashboard/src/services/endpoints.ts   # MODIFY — guardians/student-guardians/emergency-contacts/documents/files:download paths (Task 2, 3)
+apps/dashboard/src/services/endpoints.ts   # MODIFY — guardians/student-guardians/emergency-contacts/documents paths (Task 2, 3). No Services.files change — document download reuses the existing Services.jobs.fetchFileDownloadUrl.
 
 apps/dashboard/messages/en.json, ur.json   # MODIFY — reuse + fix existing students.tabs/guardians/emergencyContacts/documents (Task 4)
 
+apps/dashboard/src/components/
+  photo-upload-field.tsx                   # CREATE — neutral location, generic `purpose: string` prop; shared by student + guardian forms (extracted from student-photo-field.tsx, its third near-identical copy counting staff's own inline one) (Task 5)
+  __tests__/photo-upload-field.test.tsx    # CREATE (Task 5)
+
 apps/dashboard/src/features/students/
-  guardian-photo-field.tsx                 # CREATE — its own copy, not shared with student-photo-field.tsx (Task 5)
+  student-photo-field.tsx                  # MODIFY — becomes a thin wrapper around @/components/photo-upload-field.tsx (Task 5)
+  __tests__/student-photo-field.test.tsx   # MODIFY — still covers the student-specific wrapper (Task 5)
   guardian-form-dialog.tsx                 # CREATE (Task 5)
   __tests__/guardian-form-dialog.test.tsx  # CREATE (Task 5)
   guardian-picker-dialog.tsx               # CREATE (Task 6)
@@ -83,28 +111,420 @@ apps/dashboard/src/features/students/
 
 e2e/src/mocks/domains/guardians.ts         # CREATE (Task 11)
 e2e/src/mocks/domains/student-relations.ts # CREATE — emergency contacts + documents (Task 11)
+e2e/src/mocks/domains/files.ts             # CREATE — upload create/:confirm + storage PUT route (Task 11)
 e2e/src/mocks/index.ts                     # MODIFY (Task 11)
 e2e/tests/dashboard/students-relations.spec.ts  # CREATE (Task 11)
 
-docs/03-modules/student-management.md      # MODIFY — §20 update (Task 12)
+docs/03-modules/student-management.md      # MODIFY — §4 permission row (Task 1), §20 update (Task 12)
 docs/project-status.md                     # MODIFY (Task 12)
-docs/deferred-work.md                      # MODIFY — unlink/edit/delete gaps (Task 12)
+docs/deferred-work.md                      # MODIFY — unlink/edit/delete gaps, staff's un-migrated photo-field copy (Task 12)
 ```
 
 ---
 
-## Task 1: Backend — close the four named test gaps
+## Task 1: Backend — guardian `photo_url`, principal document-view (+ backfill), download Content-Disposition, and the test gaps
 
 **Files:**
+- Modify: `apps/api/apps/student_management/serializers.py`
+- Modify: `apps/api/apps/student_management/guardians/serializers.py`
+- Modify: `apps/api/apps/student_management/permissions.py`
+- Modify: `apps/api/apps/student_management/views.py`
+- Create: `apps/api/apps/student_management/migrations/0008_grant_principal_document_view.py`
 - Modify: `apps/api/apps/student_management/tests/test_guardians_documents.py`
+- Modify: `apps/api/core/files/storage.py`
+- Modify: `apps/api/core/files/services.py`
+- Modify: `apps/api/core/files/tests/test_storage.py`
+- Modify: `apps/api/openapi.yaml` (regenerated, not hand-edited)
+- Modify: `packages/api-client/src/schema.d.ts` (regenerated, not hand-edited)
+- Modify: `docs/03-modules/student-management.md` (§4 permissions table)
 
 **Interfaces:**
-- Consumes: nothing new — these are tests against already-shipped, already-correct endpoints.
-- Produces: nothing consumed by later tasks (backend-only, independent of every frontend task).
+- Consumes: nothing new.
+- Produces: `GuardianRecord.photo_url` (via the regenerated `ApiSchemas["Guardian"]`, flowing into Task 2's `guardians-type.ts` with no manual edit there), `principal` holding `students.document.view` (which Task 10's permission-gating step depends on), and `core/files`' `:download` action now returning a URL with `Content-Disposition: attachment` baked in (which Task 9's download step depends on, to drop the anchor-click workaround). Otherwise backend-only, independent of every other frontend task.
 
-No production code changes in this task. `GuardianLinkTests`, `GuardianPhotoFileTests`, `EmergencyContactTests`, `StudentDocumentTests` and `CrossTenantGuardianDocumentTests` already exist in this file (confirmed by reading it directly) — add new test methods to the existing classes, matching their real fixtures and helpers exactly.
+This task carries the three small backend changes independent plan review (ADR-0015) found necessary across two review rounds — everything else in this plan stays dashboard-only. Each is narrow, mirrors an existing pattern exactly, and is proven by a test before being written (TDD), same as every other task in this plan.
 
-- [ ] **Step 1: Write the four failing tests**
+**On `core.rbac.sync`:** `core.rbac.sync.sync_permissions_on_migrate` (the `post_migrate` hook) only upserts rows in the `Permission` table from `registry.all()` — key, module, resource, action, description. It never touches `RolePermission` (confirmed by reading `apps/api/core/rbac/sync.py` in full) and has nothing to do with which roles a permission's `default_roles` names. The only place `default_roles` is read at all is `seed_all_roles`'s `_seed_role_logins`, which builds a role from scratch via `ensure_role_with_permissions` — so adding `"principal"` to `students.document.view`'s `default_roles` in code only changes what a *freshly created* `principal` `Role` row holds. An already-provisioned tenant's existing `principal` `Role` keeps whatever `RolePermission` rows it already had; nothing re-applies `default_roles` to it. That's what Step 9's migration is for.
+
+- [ ] **Step 1: Write the failing test for `GuardianSerializer.photo_url`**
+
+Add to `GuardianPhotoFileTests` (already exists in `test_guardians_documents.py` — confirmed by reading it; mirrors `StudentSerializer`'s own `test_a_photo_file_whose_purpose_is_not_student_photo_signs_no_url`, which this test is modeled on exactly):
+
+```python
+    def test_photo_url_is_none_when_the_attached_files_purpose_is_not_guardian_photo(
+        self,
+    ) -> None:
+        self.allow("students.guardian.view")
+        with tenant_context(self.tenant.id):
+            mismatched_file = FileFactory(
+                tenant=self.tenant, purpose="student.photo", status=FileStatus.READY
+            )
+            guardian = GuardianFactory(tenant=self.tenant)
+            guardian.photo_file = mismatched_file
+            guardian.save(update_fields=["photo_file"])
+
+        response = self.client.get(f"/api/v1/guardians/{guardian.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.json()["data"]["photo_url"])
+
+    def test_photo_url_signs_a_real_link_when_the_purpose_matches(self) -> None:
+        self.allow("students.guardian.view")
+        with tenant_context(self.tenant.id):
+            photo = FileFactory(
+                tenant=self.tenant, purpose="guardian.photo", status=FileStatus.READY
+            )
+            guardian = GuardianFactory(tenant=self.tenant)
+            guardian.photo_file = photo
+            guardian.save(update_fields=["photo_file"])
+
+        response = self.client.get(f"/api/v1/guardians/{guardian.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(response.json()["data"]["photo_url"])
+```
+
+- [ ] **Step 2: Confirm both tests fail**
+
+`photo_url` doesn't exist on `GuardianSerializer` yet, so both requests 500 or the key is simply absent from the response — either way, neither assertion passes yet.
+
+- [ ] **Step 3: Add `photo_url` to `GuardianSerializer`, and stop re-validating an unchanged photo**
+
+In `apps/api/apps/student_management/serializers.py`, mirror `StudentSerializer.get_photo_url` (already in this file, lines ~125-134) exactly, gated on `uploads.GUARDIAN_PHOTO.key` instead of `uploads.STUDENT_PHOTO.key`. Also fix `validate_photo_file_id` to skip the purpose check when the photo isn't actually changing — `StudentSerializer.validate_photo_file_id` already does this (`value.pk != getattr(self.instance, "photo_file_id", None)`); `GuardianSerializer`'s never did, which means an edit that re-sends a guardian's own current `photo_file_id` unchanged gets re-validated every time and fails outright for any guardian whose photo predates this purpose check:
+
+```python
+class GuardianSerializer(serializers.ModelSerializer):
+    photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
+    # Same purpose-gated pattern as StudentSerializer.photo_url — see that field's own
+    # comment for why this isn't a plain SignedFileURLField.
+    photo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Guardian
+        fields = (
+            "id",
+            "user_id",
+            "first_name",
+            "last_name",
+            "phone",
+            "alt_phone",
+            "email",
+            "occupation",
+            "employer",
+            "national_id",
+            "photo_file_id",
+            "photo_url",
+            "address",
+            "custom_fields",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = READ_ONLY_FIELDS
+
+    def validate_photo_file_id(self, value: File | None) -> File | None:
+        # Mirrors Student.photo_file/StudentDocument.file: a resolved File still
+        # needs its purpose and upload-confirmed status checked — the tenant-scoped
+        # `_fk()` field only proves the id exists and belongs to this tenant. The
+        # current photo passes unchecked (same as StudentSerializer): an edit that
+        # re-sends it unchanged must not be blocked by a purpose check that only
+        # matters for a *new* file.
+        if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
+            services.assert_file_usable(file=value, purpose=uploads.GUARDIAN_PHOTO.key)
+        return value
+
+    @extend_schema_field({"type": "string", "format": "uri", "nullable": True})
+    def get_photo_url(self, instance: Guardian) -> str | None:
+        photo = instance.photo_file
+        if photo is None or photo.purpose != uploads.GUARDIAN_PHOTO.key:
+            return None
+        return get_display_url(photo)
+```
+
+- [ ] **Step 3b: Mirror `photo_url` onto the unwired duplicate `GuardianSerializer`**
+
+`apps/api/apps/student_management/guardians/serializers.py` holds a second `GuardianSerializer` — part of the half-finished ADR-0010 per-resource package split, not wired to any route today (`apps/api/apps/student_management/urls.py` routes `GuardianViewSet` from the root `serializers.py`, confirmed by reading it). Leaving this duplicate without `photo_url` would make it silently drift further out of sync the next time someone finishes that split and swaps the import. Apply the same two changes there — add `photo_url`/`get_photo_url` and the unchanged-photo skip in `validate_photo_file_id` — using this file's own existing imports (`assert_file_usable` is already imported directly here, unlike the root file's `services.assert_file_usable`; `get_display_url` and `extend_schema_field` need adding):
+
+```python
+from rest_framework import serializers
+
+from apps.student_management import uploads
+from apps.student_management.models import Guardian
+from apps.student_management.serializers import READ_ONLY_FIELDS, _fk
+from apps.student_management.services import assert_file_usable
+from core.files.models import File
+from core.files.services import get_display_url
+from drf_spectacular.utils import extend_schema_field
+
+
+class GuardianSerializer(serializers.ModelSerializer):
+    photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
+    photo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Guardian
+        fields = (
+            "id",
+            "user_id",
+            "first_name",
+            "last_name",
+            "phone",
+            "alt_phone",
+            "email",
+            "occupation",
+            "employer",
+            "national_id",
+            "photo_file_id",
+            "photo_url",
+            "address",
+            "custom_fields",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = READ_ONLY_FIELDS
+
+    def validate_photo_file_id(self, value: File | None) -> File | None:
+        if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
+            assert_file_usable(file=value, purpose=uploads.GUARDIAN_PHOTO.key)
+        return value
+
+    @extend_schema_field({"type": "string", "format": "uri", "nullable": True})
+    def get_photo_url(self, instance: Guardian) -> str | None:
+        photo = instance.photo_file
+        if photo is None or photo.purpose != uploads.GUARDIAN_PHOTO.key:
+            return None
+        return get_display_url(photo)
+```
+
+(Check the actual import order/style this file uses before pasting — it's a smaller file than the root one and may order its imports differently; match it rather than overwriting its conventions.)
+
+- [ ] **Step 3c: Fix the N+1 on guardian search — `select_related("photo_file")`**
+
+`GuardianViewSet`'s existing `get_queryset` (`apps/api/apps/student_management/views.py`) calls `super().get_queryset().distinct()` with no `select_related` — unlike `StudentViewSet`, which already does this for its own `photo_file` lookup. Without it, `get_photo_url` (just added) triggers one extra query per guardian in a list response. Add `.select_related("photo_file")` into the existing chain:
+
+```python
+    def get_queryset(self):
+        return super().get_queryset().select_related("photo_file").distinct()
+```
+
+- [ ] **Step 4: Confirm both new tests pass**
+
+- [ ] **Step 5: Write the failing test proving `principal` is a default role for `students.document.view`**
+
+`self.allow(...)` (`StudentManagementAPITestCase.allow`, `apps/api/apps/student_management/tests/base.py`) calls `grant(self.user, *keys)`, which builds a one-off `Role` holding exactly those keys and assigns it straight to the test user — it never reads `default_roles` and never creates a `Role` named `"principal"`. A test built on `self.allow("students.document.view")` would pass identically whether or not `"principal"` is even in `default_roles`, so it cannot prove this change. There is also no `allow_role` helper anywhere in this codebase — don't invent one. Test the registry directly instead, as a plain assertion with no API call, HTTP client, or database fixture at all:
+
+```python
+    def test_principal_is_a_default_role_for_document_view(self) -> None:
+        from core.rbac.registry import registry
+
+        self.assertIn("principal", registry.get("students.document.view").default_roles)
+```
+
+(Add this to `StudentDocumentTests` alongside its other tests — it needs none of that class's `setUp` fixtures, but keeping module-specific registry assertions beside that module's other permission-shaped tests matches how this file is already organized.)
+
+- [ ] **Step 6: Confirm it fails**
+
+`"principal"` is not yet in `DOCUMENT_MANAGERS` or any tuple passed to `students.document.view`'s `registry.register(...)` call, so `registry.get("students.document.view").default_roles` doesn't contain it.
+
+- [ ] **Step 7: Add `principal` to `students.document.view`'s allowed roles**
+
+In `apps/api/apps/student_management/permissions.py`:
+
+```python
+registry.register(
+    "students.document.view",
+    "View student documents.",
+    (*DOCUMENT_MANAGERS, "principal"),
+)
+```
+
+This is the only registry change — `.create`/`.delete` stay `DOCUMENT_MANAGERS`-only; `.verify` already includes `principal`. `core.rbac.sync.sync_permissions_on_migrate` (the `post_migrate` hook) upserts the `Permission` row's `module`/`resource`/`action`/`description` from this registry entry on the next `migrate` — but, as explained in this task's intro, it never touches `RolePermission`, so this step alone changes nothing for any `principal` role that already exists. Step 9's migration is what actually grants it to existing tenants; `seed_all_roles` (dev/e2e only) already picks up the new `default_roles` value automatically the next time it runs, since it derives its role list and permission set from the registry on every run.
+
+- [ ] **Step 8: Confirm the new test passes**
+
+- [ ] **Step 9: Write the data migration backfilling existing tenants**
+
+A tenant that already has a `principal` `Role` row (created before this change, e.g. via `seed_all_roles` or a real onboarding flow) keeps whatever `RolePermission` rows it already had — nothing re-applies `default_roles` to an existing role. Create `apps/api/apps/student_management/migrations/0008_grant_principal_document_view.py`:
+
+```python
+"""Data migration: backfill `students.document.view` onto existing tenants' `principal` role.
+
+Independent plan review (ADR-0015, students Phase 2) added `principal` to this
+permission's `default_roles` in code (`apps/student_management/permissions.py`). That
+registry change alone only reaches a `principal` role created *after* the change, via
+`seed_all_roles`/`ensure_role_with_permissions` — nothing re-applies `default_roles` to a
+`Role` row an already-live tenant provisioned before this migration. This grants the same
+permission, once, to every tenant that already has a `principal` role, so a school live
+before this change gets the grant too, not only a freshly seeded one.
+
+Idempotent and safe to re-run: `RolePermission`'s own `UniqueConstraint(role, permission)`
+makes `ignore_conflicts=True` sufficient — the same pattern `core.rbac.seeding` already
+uses for exactly this reason.
+"""
+
+from __future__ import annotations
+
+from django.db import migrations
+
+
+def grant_principal_document_view(apps, schema_editor):
+    role_model = apps.get_model("rbac", "Role")
+    permission_model = apps.get_model("rbac", "Permission")
+    role_permission_model = apps.get_model("rbac", "RolePermission")
+
+    try:
+        permission = permission_model.objects.get(key="students.document.view")
+    except permission_model.DoesNotExist:
+        # `Permission` rows are synced from the code registry by a `post_migrate` signal
+        # that fires after every migration in this `migrate` invocation has applied,
+        # including this one — on a brand-new database the row may not exist yet. Nothing
+        # to backfill there either: a fresh database has no tenant-scoped `principal` role
+        # until a seed command creates one, which runs after that same signal.
+        return
+
+    # Role/Permission/RolePermission are platform tables (no RLS policy, AllTenantsManager
+    # in the real model) — no tenant_context() needed to read or write across tenants.
+    principal_roles = role_model.objects.filter(slug="principal", tenant__isnull=False)
+    role_permission_model.objects.bulk_create(
+        [
+            role_permission_model(role=role, permission=permission)
+            for role in principal_roles
+        ],
+        ignore_conflicts=True,
+    )
+
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("student_management", "0007_student_students_tenant_admitted_idx"),
+        ("rbac", "0001_initial"),
+    ]
+
+    operations = [
+        migrations.RunPython(grant_principal_document_view, migrations.RunPython.noop),
+    ]
+```
+
+Run `python manage.py makemigrations student_management --name grant_principal_document_view --empty` first to get Django's own migration number/dependency scaffolding right, then replace its generated body with the above.
+
+- [ ] **Step 10: Write a test for the migration**
+
+Add a new test class to `test_guardians_documents.py` (or a dedicated `test_migrations.py` if this app already has one for a prior data migration — check before adding a new file for just this one case) using `django_test_migrations` if it's already a dependency, or a plain `TestCase` that calls the migration's function directly against real `Role`/`Permission`/`RolePermission` models (simpler, and consistent with this module's existing test style, which doesn't otherwise exercise migrations in isolation):
+
+```python
+    def test_backfill_migration_grants_existing_principal_roles(self) -> None:
+        from apps.student_management.migrations import (
+            __path__ as _,  # noqa: F401 — forces package resolution before the import below
+        )
+        from importlib import import_module
+
+        from core.rbac.models import Permission, Role, RolePermission
+
+        migration_module = import_module(
+            "apps.student_management.migrations.0008_grant_principal_document_view"
+        )
+
+        with tenant_context(self.tenant.id):
+            role = Role.objects.create(tenant=self.tenant, slug="principal", name="Principal")
+
+        permission = Permission.objects.get(key="students.document.view")
+        self.assertFalse(RolePermission.objects.filter(role=role, permission=permission).exists())
+
+        migration_module.grant_principal_document_view(apps=None, schema_editor=None)
+
+        self.assertTrue(RolePermission.objects.filter(role=role, permission=permission).exists())
+```
+
+(`apps.get_model` inside the real migration function needs a historical `apps` registry when run by Django's migration machinery — calling the function directly with `apps=None` only works because this particular function never uses the `apps` parameter for anything but `apps.get_model`, so check whether the function as actually written takes `apps`/`schema_editor` positionally or by the names used here, and adjust the call to match exactly. If this turns out awkward to call directly, use `django.test.utils.CaptureQueriesContext`-free `MigrationExecutor`-based testing instead — whichever the implementer finds already has precedent in this codebase; check before inventing a new pattern.)
+
+- [ ] **Step 11: Confirm the migration test passes**
+
+- [ ] **Step 12: Write the failing test for the download Content-Disposition header**
+
+In `apps/api/core/files/tests/test_storage.py`, alongside the existing `test_download_links_take_an_expiry_and_a_cache_control`:
+
+```python
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_download_links_take_a_content_disposition(self):
+        url = S3Presigner().presign_download(
+            storage_key="tenants/t/report.pdf",
+            content_disposition='attachment; filename="report.pdf"',
+        )
+
+        query = parse_qs(urlsplit(url).query)
+        self.assertEqual(
+            query.get("response-content-disposition"), ['attachment; filename="report.pdf"']
+        )
+```
+
+- [ ] **Step 13: Confirm it fails**
+
+`presign_download` has no `content_disposition` parameter yet — a `TypeError` on the unexpected keyword argument.
+
+- [ ] **Step 14: Add the parameter to `S3Presigner.presign_download` and wire it through `get_download_url`**
+
+In `apps/api/core/files/storage.py`:
+
+```python
+    def presign_download(
+        self,
+        *,
+        storage_key: str,
+        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        cache_control: str | None = None,
+        content_disposition: str | None = None,
+    ) -> str:
+        params = {"Bucket": self._bucket, "Key": storage_key}
+        if cache_control:
+            # Storage echoes this back as the response's Cache-Control header.
+            params["ResponseCacheControl"] = cache_control
+        if content_disposition:
+            # Storage echoes this back as the response's Content-Disposition header —
+            # forces a real save-as/download dialog regardless of the file's mime type,
+            # instead of a browser opening a PDF/image inline and replacing the current tab.
+            params["ResponseContentDisposition"] = content_disposition
+        return self._signing_client.generate_presigned_url(
+            "get_object", Params=params, ExpiresIn=expires_in
+        )
+```
+
+In `apps/api/core/files/services.py`, change `get_download_url` to pass it, using the file's own real name:
+
+```python
+def get_download_url(file: File) -> str:
+    return get_presigner().presign_download(
+        storage_key=file.storage_key,
+        content_disposition=f'attachment; filename="{file.original_name}"',
+    )
+```
+
+This is a generic `core/files` change — every caller of the `:download` colon-action (student documents here, and `/staff`'s existing export download) gets a real forced download instead of relying on the frontend anchor's `download` attribute, which browsers ignore for a cross-origin URL (confirmed via MDN: `download` only applies same-origin). Task 9 drops its own anchor-click workaround now that the backend forces this correctly; `/staff`'s existing download code needs no change — it already works, now for the right reason instead of by accident.
+
+- [ ] **Step 15: Confirm both new storage tests pass**
+
+- [ ] **Step 16: Update the module doc's permission table**
+
+In `docs/03-modules/student-management.md` §4, change:
+
+```
+| `students.document.view` / `.create` / `.verify` / `.delete` | Manage & verify student documents | `school_admin`, `admission_staff`; verify also `principal` |
+```
+
+to:
+
+```
+| `students.document.view` / `.create` / `.verify` / `.delete` | Manage & verify student documents | `school_admin`, `admission_staff`; view & verify also `principal` (existing tenants backfilled by migration `0008_grant_principal_document_view`) |
+```
+
+- [ ] **Step 17: Regenerate the API contract**
+
+```bash
+apps/api/scripts/generate-openapi.sh
+pnpm --filter @schoolhub/api-client generate
+```
+
+Confirm `openapi.yaml`'s `Guardian` schema now has a `photo_url` property (`type: string, format: uri, nullable: true`) and that `packages/api-client/src/schema.d.ts`'s generated `Guardian` type now includes `photo_url: string | null`. Both must be committed alongside the serializer change in the same commit (`.claude/rules/api-contract.md`) — CI's "OpenAPI schema is current" check fails the build on any drift. The `core/files` Content-Disposition change touches no serializer/view signature, so it does not change the OpenAPI schema.
+
+- [ ] **Step 18: Write the four remaining failing tests (existing named gaps)**
 
 Add to `GuardianLinkTests` (the class already has `self.student`, `self.tenant`, `tenant_context`, `self.allow(...)` helpers — confirmed by reading the file's existing methods):
 
@@ -147,7 +567,7 @@ Add to `GuardianLinkTests` (the class already has `self.student`, `self.tenant`,
         self.assertEqual(response.json()["data"]["phone"], "0300-1111111")
 ```
 
-Add to `CrossTenantGuardianDocumentTests` (the class already builds `self.own`/`self.foreign` dicts via `_build`, which already includes a `"contact"` key — confirmed by reading the file):
+Add to `CrossTenantGuardianDocumentTests` (the class already builds `self.own`/`self.foreign` dicts via `_build`, which already includes a `"contact"` key — confirmed by reading the file). Four tests, not one: the originally-named gap (listing emergency contacts under a foreign student) plus three more the review round surfaced — creating a contact under a foreign student, and reading another tenant's guardian link, must both 404 too, and the guardian-link duplicate conflict gets its own test:
 
 ```python
     def test_listing_emergency_contacts_under_a_foreign_student_is_404(self) -> None:
@@ -155,20 +575,53 @@ Add to `CrossTenantGuardianDocumentTests` (the class already builds `self.own`/`
             f"/api/v1/students/{self.foreign['student'].pk}/emergency-contacts"
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_creating_an_emergency_contact_under_a_foreign_student_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/students/{self.foreign['student'].pk}/emergency-contacts",
+            {"name": "Someone", "relationship": "Neighbour", "phone": "0300-0000000"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_reading_a_foreign_tenants_guardian_link_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/student-guardians/{self.foreign['link'].pk}")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 ```
 
-- [ ] **Step 2: Confirm the tests fail by construction (do not run them)**
+(`self.foreign['link']` must exist on the fixture already built by `_build` — if it currently only builds `student`/`contact`/etc., add a `StudentGuardianFactory`-built link to both `self.own`/`self.foreign` dicts in `_build` so this test has something real to read; check the fixture before assuming the key name.)
 
-`test_searching_guardians_by_name_returns_matches` and `test_retrieving_a_single_guardian_link_succeeds` exercise real, already-correct endpoints — they would pass immediately once written, proving the gap was test coverage, not behavior. `test_patching_a_guardians_own_fields_succeeds` likewise. `test_listing_emergency_contacts_under_a_foreign_student_is_404` exercises `EmergencyContactLinkViewSet`'s existing `_NestedUnderStudentMixin.get_student()` 404 behavior, already proven for guardians/documents in the same class — by construction, this passes too. None of these tests are expected to fail; they close a coverage gap against correct, shipped code, which is the point of this task.
+Add to `GuardianLinkTests` (alongside the three tests from Step 1 of this block above):
 
-- [ ] **Step 3: Commit**
+```python
+    def test_linking_an_already_linked_guardian_returns_409(self) -> None:
+        self.allow("students.guardian.view", "students.guardian.create")
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant)
+            StudentGuardianFactory(tenant=self.tenant, student=self.student, guardian=guardian)
+
+        response = self.client.post(
+            f"/api/v1/students/{self.student.pk}/guardians",
+            {"guardian_id": str(guardian.pk), "relationship": "father"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["error"]["code"], "conflict")
+```
+
+- [ ] **Step 19: Confirm the tests fail by construction (do not run them)**
+
+`test_searching_guardians_by_name_returns_matches` and `test_retrieving_a_single_guardian_link_succeeds` exercise real, already-correct endpoints — they would pass immediately once written, proving the gap was test coverage, not behavior. `test_patching_a_guardians_own_fields_succeeds` likewise. The four cross-tenant/conflict tests exercise `_NestedUnderStudentMixin.get_student()`'s existing 404 behavior (already proven for guardians/documents in the same class) and `StudentGuardian`'s existing `UniqueConstraint` → `IntegrityError` → 409 mapping (`core/api/exceptions.py`) — by construction, all pass immediately too. None of these tests are expected to fail; they close a coverage gap against correct, shipped code, which is the point of this part of the task.
+
+- [ ] **Step 20: Commit**
 
 ```bash
-git add apps/api/apps/student_management/tests/test_guardians_documents.py
-git commit -m "test(api): close four guardian/emergency-contact test gaps"
+git add apps/api/apps/student_management/serializers.py apps/api/apps/student_management/guardians/serializers.py apps/api/apps/student_management/permissions.py apps/api/apps/student_management/views.py apps/api/apps/student_management/migrations/0008_grant_principal_document_view.py apps/api/apps/student_management/tests/test_guardians_documents.py apps/api/core/files/storage.py apps/api/core/files/services.py apps/api/core/files/tests/test_storage.py apps/api/openapi.yaml packages/api-client/src/schema.d.ts docs/03-modules/student-management.md
+git commit -m "feat(api): add guardian photo_url, principal document-view backfill, download Content-Disposition; close test gaps"
 ```
 
-- [ ] **Step 4: Push and read CI**
+- [ ] **Step 21: Push and read CI**
 
 ---
 
@@ -180,10 +633,15 @@ git commit -m "test(api): close four guardian/emergency-contact test gaps"
 - Create: `apps/dashboard/src/services/modules/guardians/guardians-type.ts`
 - Create: `apps/dashboard/src/services/modules/guardians/index.ts`
 - Create: `apps/dashboard/src/services/modules/guardians/__tests__/guardians-service.test.ts`
+- Modify: `apps/dashboard/src/services/index.ts` (register `Services.guardians`; top-level re-exports)
+- Modify: `apps/dashboard/src/services/__tests__/index.test.ts`
+- Modify: `packages/types/src/student.ts` (`RELATIONSHIP_VALUES`)
+- Create: `docs/decisions/0019-client-fan-out-for-unembedded-nested-ids.md`
+- Modify: `docs/decisions/README.md`
 
 **Interfaces:**
 - Consumes: `apiClient` (`@/lib/auth`), `fetchPage` (`@schoolhub/api-client`).
-- Produces: `Services.guardians.{searchGuardians,createGuardian,updateGuardian,linkGuardianToStudent,updateGuardianLink,fetchGuardianLinks}`, `GuardianRecord`, `GuardianLinkRecord`, `GuardianRelationship` types. Consumed by Tasks 5, 6, 7.
+- Produces: `Services.guardians.{searchGuardians,fetchGuardianById,createGuardian,updateGuardian,linkGuardianToStudent,updateGuardianLink,fetchGuardianLinks}`, `GuardianRecord`, `GuardianLinkRecord`, `GuardianRelationship` types. Consumed by Tasks 5, 6, 7. `fetchGuardianById` exists specifically so Task 7's Guardians tab resolves a link's `guardian_id` into a name/phone through `Services`, never a raw `apiClient`/`endpoints` import inside the tab component (ADR-0011).
 
 - [ ] **Step 1: Add the new paths to `endpoints.ts`**
 
@@ -241,9 +699,14 @@ describe("guardians-service", () => {
 
   it("searchGuardians sends the search term as a query param", async () => {
     const { searchGuardians } = await import("../guardians-service");
+    // `GuardianViewSet` doesn't override `pagination_class`, so it inherits the
+    // project default `CursorPagination` (apps/api/core/api/pagination.py) — cursor
+    // metadata, not `StudentViewSet`'s page-number shape. `fetchPage` itself never
+    // inspects this field's contents, but the mock should still reflect the real
+    // endpoint's shape rather than a different viewset's.
     mockGet.mockResolvedValue({
       data: [{ id: "g1", first_name: "Ayesha", last_name: "Raza" }],
-      meta: { pagination: { page: 1, page_size: 20, total_count: 1, total_pages: 1 } },
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 20 } },
     });
 
     const result = await searchGuardians("Ayesha");
@@ -289,6 +752,16 @@ describe("guardians-service", () => {
       last_name: "Raza",
       phone: "0300-0000000",
     });
+  });
+
+  it("fetchGuardianById gets one guardian by id", async () => {
+    const { fetchGuardianById } = await import("../guardians-service");
+    mockGet.mockResolvedValue({ data: { id: "g1", first_name: "Ayesha", last_name: "Raza" } });
+
+    const result = await fetchGuardianById("g1");
+
+    expect(mockGet).toHaveBeenCalledWith("/guardians/g1");
+    expect(result).toEqual({ id: "g1", first_name: "Ayesha", last_name: "Raza" });
   });
 
   it("updateGuardian PATCHes only the fields given", async () => {
@@ -338,14 +811,16 @@ describe("guardians-service", () => {
     const { fetchGuardianLinks } = await import("../guardians-service");
     mockGet.mockResolvedValue({
       data: [{ id: "link-1", guardian_id: "g1" }],
-      meta: { pagination: { page: 1, page_size: 20, total_count: 1, total_pages: 1 } },
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 50 } },
     });
 
     const result = await fetchGuardianLinks("student-1");
 
     expect(mockGet).toHaveBeenCalledWith(
       "/students/student-1/guardians",
-      expect.objectContaining({ query: { page_size: 20 } }),
+      // 50, not `SEARCH_PAGE_SIZE`'s 20 — this lists one student's own links (a small,
+      // bounded set), a different call site than the tenant-wide search dropdown.
+      expect.objectContaining({ query: { page_size: 50 } }),
     );
     expect(result).toEqual([{ id: "link-1", guardian_id: "g1" }]);
   });
@@ -426,12 +901,21 @@ export type {
  * search can realistically match far more than that, and a search dropdown only ever
  * shows a handful of results at once regardless. */
 const SEARCH_PAGE_SIZE = 20;
+/** A student realistically has a handful of guardian links — large enough that no
+ * student ever needs a second page, distinct from `SEARCH_PAGE_SIZE`'s tenant-wide
+ * search dropdown use. */
+const LINKS_PAGE_SIZE = 50;
 
 export async function searchGuardians(search: string): Promise<GuardianRecord[]> {
   const { items } = await fetchPage<GuardianRecord>(apiClient, endpoints.guardians.list, {
     query: { search, page_size: SEARCH_PAGE_SIZE },
   });
   return items;
+}
+
+export async function fetchGuardianById(id: string): Promise<GuardianRecord> {
+  const { data } = await apiClient.get<GuardianRecord>(endpoints.guardians.detail(id));
+  return data;
 }
 
 export async function createGuardian(input: CreateGuardianInput): Promise<GuardianRecord> {
@@ -504,7 +988,7 @@ export async function fetchGuardianLinks(studentId: string): Promise<GuardianLin
   const { items } = await fetchPage<GuardianLinkRecord>(
     apiClient,
     endpoints.guardians.studentLinks(studentId),
-    { query: { page_size: SEARCH_PAGE_SIZE } },
+    { query: { page_size: LINKS_PAGE_SIZE } },
   );
   return items;
 }
@@ -515,6 +999,7 @@ export async function fetchGuardianLinks(studentId: string): Promise<GuardianLin
 ```ts
 import {
   createGuardian,
+  fetchGuardianById,
   fetchGuardianLinks,
   linkGuardianToStudent,
   searchGuardians,
@@ -524,6 +1009,7 @@ import {
 
 export const GuardiansService = {
   searchGuardians,
+  fetchGuardianById,
   createGuardian,
   updateGuardian,
   linkGuardianToStudent,
@@ -547,44 +1033,70 @@ export type {
 import { GuardiansService } from "./modules/guardians";
 ```
 
-Add this import alongside the existing ones (alphabetical, so between `FilesService` and `JobsService`). Add `guardians: GuardiansService,` to the `Services` object, between `schoolOrganization` and `staff` (matching the object's existing alphabetical-ish grouping — not load-bearing, just consistent). Add this re-export alongside the existing `StudentRecord` one:
+Add this import alongside the existing ones (alphabetical, so between `FilesService` and `JobsService`). Add `guardians: GuardiansService,` to the `Services` object, between `schoolOrganization` and `staff` (matching the object's existing alphabetical-ish grouping — not load-bearing, just consistent). Add this re-export alongside the existing `StudentRecord` one — `UpdateGuardianLinkInput` is included here because Task 7's `GuardianLinkFlagsDialog` imports it from `@/services` (this file), not from the guardians module directly (ADR-0011: feature code imports only `@/services`, never a service module's own path):
 
 ```ts
-export type { GuardianLinkRecord, GuardianRecord, GuardianRelationship } from "./modules/guardians";
+export type {
+  GuardianLinkRecord,
+  GuardianRecord,
+  GuardianRelationship,
+  UpdateGuardianLinkInput,
+} from "./modules/guardians";
 ```
 
 Update `src/services/__tests__/index.test.ts`'s exact-keys assertion (`Object.keys(Services)` or equivalent, matching however the existing test asserts the full domain list) to include `"guardians"`.
 
-- [ ] **Step 7: Confirm the tests pass by construction**
+- [ ] **Step 7: Add `RELATIONSHIP_VALUES` to `packages/types`**
 
-- [ ] **Step 8: Commit**
+`StudentGuardian.relationship`'s 6-value enum (Global Constraints) needs a runtime array to drive the `<Select>`s in Tasks 6 and 7 — the generated `GuardianRelationship` type alone gives no array to iterate. Add this to `packages/types/src/student.ts`, alongside the existing `GENDER_VALUES`:
+
+```ts
+export const RELATIONSHIP_VALUES = [
+  "father",
+  "mother",
+  "grandparent",
+  "sibling",
+  "legal_guardian",
+  "other",
+] as const;
+export type RelationshipValue = (typeof RELATIONSHIP_VALUES)[number];
+```
+
+One array, one place — Tasks 6 and 7 both import `RELATIONSHIP_VALUES` from `@schoolhub/types` rather than each declaring their own copy.
+
+- [ ] **Step 8: Confirm the tests pass by construction**
+
+- [ ] **Step 9: Confirm ADR-0019 is recorded**
+
+This task's own fan-out design (`fetchGuardianById` per unique `guardian_id`, resolved through `Services.guardians` rather than an embedded backend summary) is the decision [ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md) records. The ADR file and its `docs/decisions/README.md` index row already exist on disk (written during plan revision) — commit them alongside this task's own files rather than opening a separate docs-only commit for them.
+
+- [ ] **Step 10: Commit**
 
 ```bash
-git add apps/dashboard/src/services/endpoints.ts apps/dashboard/src/services/modules/guardians apps/dashboard/src/services/index.ts apps/dashboard/src/services/__tests__/index.test.ts
+git add apps/dashboard/src/services/endpoints.ts apps/dashboard/src/services/modules/guardians apps/dashboard/src/services/index.ts apps/dashboard/src/services/__tests__/index.test.ts packages/types/src/student.ts docs/decisions/0019-client-fan-out-for-unembedded-nested-ids.md docs/decisions/README.md
 git commit -m "feat(dashboard): add Services.guardians"
 ```
 
-- [ ] **Step 9: Push and read CI**
+- [ ] **Step 11: Push and read CI**
 
 ---
 
-## Task 3: `Services.students` emergency-contacts/documents additions + `Services.files.getDownloadUrl`
+## Task 3: `Services.students` emergency-contacts/documents additions
 
 **Files:**
 - Modify: `apps/dashboard/src/services/endpoints.ts`
-- Create: `apps/dashboard/src/services/modules/students/student-relations-service.ts`
-- Create: `apps/dashboard/src/services/modules/students/student-relations-type.ts`
+- Modify: `apps/dashboard/src/services/modules/students/students-service.ts`
+- Modify: `apps/dashboard/src/services/modules/students/students-type.ts`
+- Modify: `apps/dashboard/src/services/modules/students/students-constant.ts`
 - Modify: `apps/dashboard/src/services/modules/students/index.ts`
-- Create: `apps/dashboard/src/services/modules/students/__tests__/student-relations-service.test.ts`
-- Modify: `apps/dashboard/src/services/modules/files/files-service.ts`
-- Modify: `apps/dashboard/src/services/modules/files/index.ts`
-- Modify: `apps/dashboard/src/services/modules/files/__tests__/files-service.test.ts`
+- Modify: `apps/dashboard/src/services/modules/students/__tests__/students-service.test.ts`
+- Modify: `apps/dashboard/src/services/index.ts` (top-level re-export — Tasks 8/9 import from `@/services`, not the module path)
 
 **Interfaces:**
-- Consumes: `apiClient`, `fetchPage`, `endpoints.files.download` (already exists).
-- Produces: `Services.students.{fetchEmergencyContacts,addEmergencyContact,fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument}`, `Services.files.getDownloadUrl`, `EmergencyContactRecord`, `StudentDocumentRecord` types. Consumed by Tasks 8, 9.
+- Consumes: `apiClient`, `fetchPage`.
+- Produces: `Services.students.{fetchEmergencyContacts,addEmergencyContact,fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument}`, `EmergencyContactRecord`, `StudentDocumentRecord`, `DocumentVerificationDecision` types, re-exported from `@/services`. Consumed by Tasks 8, 9. Document download does NOT get a new service function — Task 9 calls the existing `Services.jobs.fetchFileDownloadUrl` (`apps/dashboard/src/services/modules/jobs/jobs-service.ts`, already wraps `POST /files/{id}:download`), the same function `/staff`'s export download already uses. Adding a second wrapper here would duplicate it.
 
-A separate file from `students-service.ts` (not an addition to it): these six functions are about a student's *relations*, not the student record itself, and `students-service.ts` is already a focused, complete file for CRUD on the student — splitting keeps each file's one responsibility clear, matching this plan's Global Constraints on file size and the existing split-by-concern convention (`students-helper.ts`/`students-constant.ts`/`students.schema.ts` already split student-record concerns out of `students-service.ts` the same way).
+Added directly into the existing `students-service.ts`/`students-type.ts`/`students-constant.ts` — not a new `student-relations-*` file split. `students-service.ts` is 69 lines today; six more small functions keeps it well under ADR-0018's split trigger (a file becoming "the unlabeled source of truth" for enough hand-written types/constants/helpers to need pulling apart — not yet true here), and a student's emergency contacts/documents are exactly the same resource family as the student record itself (nested under it, not independent), unlike guardians (Task 2), which are genuinely their own tenant-wide-searchable resource and earn their own domain.
 
 - [ ] **Step 1: Add the new paths to `endpoints.ts`**
 
@@ -609,30 +1121,32 @@ Add two nested paths to the existing `students` block (`list`, `detail`, `withdr
 
 - [ ] **Step 2: Write the failing tests**
 
+This file already exists (`apps/dashboard/src/services/modules/students/__tests__/students-service.test.ts`) with its own `mockGet`/`mockPost`/`mockPatch` and a `jest.mock("@schoolhub/api-client", ...)` at the top. `deleteDocument` needs `apiClient.delete`, which the existing mock wires as a bare inline `jest.fn()` (not a named const, since nothing has used it yet) — change that one line to a named `mockDelete` so the new tests can assert against it:
+
+```diff
++const mockDelete = jest.fn();
++
+ jest.mock("@schoolhub/api-client", () => {
+   const actual = jest.requireActual<typeof ApiClientModule>("@schoolhub/api-client");
+   return {
+     ...actual,
+     createApiClient: jest.fn((_config: ApiClientConfig) => ({
+       get: mockGet,
+       post: mockPost,
+       put: jest.fn(),
+       patch: mockPatch,
+-      delete: jest.fn(),
++      delete: mockDelete,
+       refresh: jest.fn(),
+     })),
+   };
+ });
+```
+
+Then add a new top-level `describe` block below the file's existing one, with its own `beforeEach` resetting the three mocks it uses:
+
 ```ts
-import type * as ApiClientModule from "@schoolhub/api-client";
-import type { ApiClientConfig } from "@schoolhub/api-client";
-
-const mockGet = jest.fn();
-const mockPost = jest.fn();
-const mockDelete = jest.fn();
-
-jest.mock("@schoolhub/api-client", () => {
-  const actual = jest.requireActual<typeof ApiClientModule>("@schoolhub/api-client");
-  return {
-    ...actual,
-    createApiClient: jest.fn((_config: ApiClientConfig) => ({
-      get: mockGet,
-      post: mockPost,
-      put: jest.fn(),
-      patch: jest.fn(),
-      delete: mockDelete,
-      refresh: jest.fn(),
-    })),
-  };
-});
-
-describe("student-relations-service", () => {
+describe("students-service — emergency contacts and documents", () => {
   beforeEach(() => {
     jest.resetModules();
     mockGet.mockReset();
@@ -641,10 +1155,13 @@ describe("student-relations-service", () => {
   });
 
   it("fetchEmergencyContacts lists a student's contacts, ordered by priority", async () => {
-    const { fetchEmergencyContacts } = await import("../student-relations-service");
+    const { fetchEmergencyContacts } = await import("../students-service");
+    // EmergencyContactLinkViewSet doesn't override pagination_class, so it inherits the
+    // project default CursorPagination (apps/api/core/api/pagination.py) — only
+    // StudentViewSet (this file's other tests) uses page numbers.
     mockGet.mockResolvedValue({
       data: [{ id: "c1", priority: 1 }],
-      meta: { pagination: { page: 1, page_size: 50, total_count: 1, total_pages: 1 } },
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 50 } },
     });
 
     const result = await fetchEmergencyContacts("student-1");
@@ -657,7 +1174,7 @@ describe("student-relations-service", () => {
   });
 
   it("addEmergencyContact posts the contact fields, omitting unfilled optionals", async () => {
-    const { addEmergencyContact } = await import("../student-relations-service");
+    const { addEmergencyContact } = await import("../students-service");
     mockPost.mockResolvedValue({ data: { id: "c1" } });
 
     await addEmergencyContact("student-1", {
@@ -676,10 +1193,10 @@ describe("student-relations-service", () => {
   });
 
   it("fetchDocuments lists a student's documents", async () => {
-    const { fetchDocuments } = await import("../student-relations-service");
+    const { fetchDocuments } = await import("../students-service");
     mockGet.mockResolvedValue({
       data: [{ id: "d1" }],
-      meta: { pagination: { page: 1, page_size: 50, total_count: 1, total_pages: 1 } },
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 50 } },
     });
 
     const result = await fetchDocuments("student-1");
@@ -692,7 +1209,7 @@ describe("student-relations-service", () => {
   });
 
   it("uploadDocumentRecord posts the already-uploaded file's id plus metadata", async () => {
-    const { uploadDocumentRecord } = await import("../student-relations-service");
+    const { uploadDocumentRecord } = await import("../students-service");
     mockPost.mockResolvedValue({ data: { id: "d1" } });
 
     await uploadDocumentRecord("student-1", {
@@ -709,7 +1226,7 @@ describe("student-relations-service", () => {
   });
 
   it("uploadDocumentRecord includes notes and expiresAt only when given", async () => {
-    const { uploadDocumentRecord } = await import("../student-relations-service");
+    const { uploadDocumentRecord } = await import("../students-service");
     mockPost.mockResolvedValue({ data: { id: "d1" } });
 
     await uploadDocumentRecord("student-1", {
@@ -730,7 +1247,7 @@ describe("student-relations-service", () => {
   });
 
   it("deleteDocument deletes by document id", async () => {
-    const { deleteDocument } = await import("../student-relations-service");
+    const { deleteDocument } = await import("../students-service");
     mockDelete.mockResolvedValue({});
 
     await deleteDocument("d1");
@@ -739,7 +1256,7 @@ describe("student-relations-service", () => {
   });
 
   it("verifyDocument posts the decision to the colon-action", async () => {
-    const { verifyDocument } = await import("../student-relations-service");
+    const { verifyDocument } = await import("../students-service");
     mockPost.mockResolvedValue({ data: { id: "d1", verification_status: "verified" } });
 
     const result = await verifyDocument("d1", "verified");
@@ -750,11 +1267,11 @@ describe("student-relations-service", () => {
 });
 ```
 
-- [ ] **Step 3: Confirm the tests fail by construction, then write `student-relations-type.ts`**
+- [ ] **Step 3: Confirm the tests fail by construction, then add the new types to `students-type.ts`**
+
+Add these to the existing `students-type.ts` (alongside `CreateStudentInput`/`StudentRecord`/etc. — don't disturb those):
 
 ```ts
-import type { ApiSchemas } from "@schoolhub/api-client";
-
 export type EmergencyContactRecord = ApiSchemas["EmergencyContact"];
 export type StudentDocumentRecord = ApiSchemas["StudentDocument"];
 export type DocumentVerificationDecision = "verified" | "rejected";
@@ -777,28 +1294,25 @@ export interface UploadDocumentInput {
 }
 ```
 
-- [ ] **Step 4: Write `student-relations-service.ts`**
+(`ApiSchemas` is already imported at the top of this file for `StudentRecord`'s own `ApiSchemas["Student"]` — reuse that import, don't add a second one.)
+
+- [ ] **Step 4: Add the new functions to `students-service.ts`**
+
+Add this import line to the file's existing imports (it has no `fetchPage` import yet — `fetchStudentsPage` uses it already, confirm and reuse rather than duplicating):
 
 ```ts
-import { fetchPage } from "@schoolhub/api-client";
-import { apiClient } from "@/lib/auth";
-import { endpoints } from "@/services/endpoints";
 import type {
   AddEmergencyContactInput,
   DocumentVerificationDecision,
   EmergencyContactRecord,
   StudentDocumentRecord,
   UploadDocumentInput,
-} from "./student-relations-type";
+} from "./students-type";
+```
 
-export type {
-  AddEmergencyContactInput,
-  DocumentVerificationDecision,
-  EmergencyContactRecord,
-  StudentDocumentRecord,
-  UploadDocumentInput,
-} from "./student-relations-type";
+Add these to the file's existing `export type { ... } from "./students-type";` re-export block, and append the six new functions after the existing `withdrawStudent`:
 
+```ts
 /** Nested under one student — a handful of rows, fetched in one page. Matches the real
  * `EmergencyContactLinkViewSet`/`StudentDocumentLinkViewSet` precedent: both are
  * nested-under-one-student lists with no independent pagination UI. */
@@ -875,20 +1389,23 @@ export async function verifyDocument(
 
 - [ ] **Step 5: Wire the new functions into `students/index.ts`**
 
-The existing file imports `createStudent,fetchStudentById,fetchStudentsPage,updateStudent,withdrawStudent` from `./students-service` and re-exports their types from `./students-service`. Add a second import block from the new file, add the six functions to the `StudentsService` object, and add their types to the existing `export type { ... }` list:
+The existing file imports `createStudent,fetchStudentById,fetchStudentsPage,updateStudent,withdrawStudent` from `./students-service` and re-exports their types from `./students-service`. Extend that same import and the same re-export — there is no second file to import from:
 
 ```ts
 import {
   addEmergencyContact,
+  createStudent,
   deleteDocument,
   fetchDocuments,
   fetchEmergencyContacts,
+  fetchStudentById,
+  fetchStudentsPage,
+  updateStudent,
   uploadDocumentRecord,
   verifyDocument,
-} from "./student-relations-service";
-```
+  withdrawStudent,
+} from "./students-service";
 
-```ts
 export const StudentsService = {
   fetchStudentsPage,
   fetchStudentById,
@@ -902,78 +1419,62 @@ export const StudentsService = {
   deleteDocument,
   verifyDocument,
 };
-```
-
-```ts
 export type {
   AddEmergencyContactInput,
+  CreateStudentInput,
   DocumentVerificationDecision,
   EmergencyContactRecord,
   StudentDocumentRecord,
+  StudentRecord,
+  StudentsPageQuery,
+  UpdateStudentInput,
   UploadDocumentInput,
-} from "./student-relations-service";
+  WithdrawStudentInput,
+} from "./students-service";
 ```
 
-(alongside the file's existing `CreateStudentInput, StudentRecord, StudentsPageQuery, UpdateStudentInput, WithdrawStudentInput` re-export — leave that one exactly as it is).
+- [ ] **Step 5b: Re-export the new types from the top-level `src/services/index.ts`**
 
-- [ ] **Step 6: Add `getDownloadUrl` to `files-service.ts`**
+Tasks 8 and 9 import `EmergencyContactRecord`, `StudentDocumentRecord` and `DocumentVerificationDecision` from `@/services` (the top-level barrel), not from `./modules/students` directly (ADR-0011) — that barrel only re-exports `StudentRecord` today. In `apps/dashboard/src/services/index.ts`, extend the existing line:
+
+```diff
+-export type { StudentRecord } from "./modules/students";
++export type {
++  DocumentVerificationDecision,
++  EmergencyContactRecord,
++  StudentDocumentRecord,
++  StudentRecord,
++} from "./modules/students";
+```
+
+- [ ] **Step 6: Add `DOCUMENT_TYPES` to `students-constant.ts`**
+
+The 6 seeded defaults, matching `en.json`/`ur.json`'s existing `students.documents.type.*` keys exactly (Task 4 confirms these are already fully translated in both locales — this constant must name the same six, in the same order the Select should offer them):
 
 ```ts
-export async function getDownloadUrl(fileId: string): Promise<string> {
-  const { data } = await apiClient.post<{ download_url: string }>(
-    endpoints.files.download(fileId),
-  );
-  return data.download_url;
-}
+export const DOCUMENT_TYPES = [
+  "birth_certificate",
+  "prior_transfer_certificate",
+  "immunization_record",
+  "photo_id",
+  "prior_report_card",
+  "other",
+] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 ```
 
-This needs `apiClient` and `endpoints` imported into `files-service.ts`, which doesn't import either today (it only ever calls `apiClient.post` through the three inline steps of `uploadFile`, which already has its own `apiClient`/`endpoints` imports — confirm by reading the file's current top before adding a duplicate import). Add this function after `uploadFile`, in the same file.
+This lives here, not inline in `document-upload-dialog.tsx` (Task 9) — the same "one place a reviewer can check" rationale this file's own header comment already states for `STUDENT_BODY_FIELDS`/`SORT_FIELD`.
 
-Write its failing test first, in the existing `apps/dashboard/src/services/modules/files/__tests__/files-service.test.ts` (which already mocks `createApiClient` with a `mockPost` — reuse that same mock, don't add a second one):
+- [ ] **Step 7: Confirm all tests pass by construction**
 
-```ts
-describe("getDownloadUrl", () => {
-  beforeEach(() => {
-    jest.resetModules();
-    mockPost.mockReset();
-  });
-
-  it("requests a fresh signed URL for the given file id", async () => {
-    const { getDownloadUrl } = await import("../files-service");
-    mockPost.mockResolvedValue({ data: { download_url: "https://files.example.com/x?sig=abc" } });
-
-    const url = await getDownloadUrl("file-1");
-
-    expect(mockPost).toHaveBeenCalledWith("/files/file-1:download");
-    expect(url).toBe("https://files.example.com/x?sig=abc");
-  });
-});
-```
-
-- [ ] **Step 7: Wire `getDownloadUrl` into `files/index.ts`**
-
-```ts
-import { getDownloadUrl, uploadFile } from "./files-service";
-
-export const FilesService = {
-  uploadFile,
-  getDownloadUrl,
-};
-
-export { FileUploadError } from "./files-service";
-export type { FileUploadStep } from "./files-service";
-```
-
-- [ ] **Step 8: Confirm all tests pass by construction**
-
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/dashboard/src/services/endpoints.ts apps/dashboard/src/services/modules/students apps/dashboard/src/services/modules/files
-git commit -m "feat(dashboard): add emergency-contact/document relations and file download to Services"
+git add apps/dashboard/src/services/endpoints.ts apps/dashboard/src/services/modules/students apps/dashboard/src/services/index.ts
+git commit -m "feat(dashboard): add emergency-contact and document relations to Services.students"
 ```
 
-- [ ] **Step 10: Push and read CI**
+- [ ] **Step 9: Push and read CI**
 
 ---
 
@@ -1004,8 +1505,11 @@ In `en.json`'s `students.guardians`, add these two new top-level keys (dialog ti
 
 ```json
 "editGuardianTitle": "Edit guardian",
-"editLinkTitle": "Edit link"
+"editLinkTitle": "Edit link",
+"createGuardian": "Create guardian"
 ```
+
+(`createGuardian` is the picker's inline create-form submit button, Task 6 — distinct from `createNew`, the tab label that opens that form.)
 
 Matching Urdu additions in `ur.json`'s `students.guardians.fields` and `students.guardians`:
 
@@ -1016,7 +1520,8 @@ Matching Urdu additions in `ur.json`'s `students.guardians.fields` and `students
 
 ```json
 "editGuardianTitle": "سرپرست میں ترمیم کریں",
-"editLinkTitle": "تعلق میں ترمیم کریں"
+"editLinkTitle": "تعلق میں ترمیم کریں",
+"createGuardian": "سرپرست بنائیں"
 ```
 
 - [ ] **Step 3: Add the emergency-contact field label and permanence notice**
@@ -1059,35 +1564,262 @@ Matching Urdu in `ur.json`:
 "deleteConfirmDescription": "اسے واپس نہیں لیا جا سکتا۔ اپ لوڈ کردہ فائل خود اسٹوریج سے نہیں ہٹائی جاتی، صرف یہ ریکارڈ حذف ہوتا ہے۔"
 ```
 
-- [ ] **Step 5: Verify via CI's i18n types-check**
+- [ ] **Step 5: Add the search-empty and load-error keys the review round surfaced**
+
+The existing `guardians.empty` ("No guardians linked yet.") is the *tab's* empty-list state — the picker's zero-search-results state is a different message and needs its own key, never the same one (Review Focus item 1). Each of the three tabs also needs a load-error message, distinct from its empty state (Review Focus item 5); the retry button itself reuses `tCommon("retry")` ("Try again"), already in `common.retry` — no new button-label key needed. Add to `en.json`:
+
+```json
+// students.guardians
+"searchEmpty": "No guardians match that search.",
+"loadError": "Couldn't load this student's guardians.",
+"guardianLoadError": "Couldn't load this guardian."
+```
+
+```json
+// students.emergencyContacts
+"loadError": "Couldn't load this student's emergency contacts."
+```
+
+```json
+// students.documents
+"loadError": "Couldn't load this student's documents."
+```
+
+Matching Urdu in `ur.json`:
+
+```json
+// students.guardians
+"searchEmpty": "اس تلاش سے کوئی سرپرست نہیں ملا۔",
+"loadError": "اس طالب علم کے سرپرستوں کو لوڈ نہیں کیا جا سکا۔",
+"guardianLoadError": "اس سرپرست کو لوڈ نہیں کیا جا سکا۔"
+```
+
+```json
+// students.emergencyContacts
+"loadError": "اس طالب علم کے ہنگامی رابطوں کو لوڈ نہیں کیا جا سکا۔"
+```
+
+```json
+// students.documents
+"loadError": "اس طالب علم کی دستاویزات لوڈ نہیں کی جا سکیں۔"
+```
+
+Also fix the one remaining hardcoded English string the review round found: Task 9's delete-confirmation `AlertDialogCancel` button must read `tCommon("cancel")` (`common.cancel`, "Cancel" — already exists, no new key needed here), not a literal `"Cancel"` string.
+
+- [ ] **Step 6: Add the toast-error fallback keys the review round's error-handling fix needs**
+
+"Mutations don't fail silently" (Global Constraints) needs a fallback message per failing action — shown only when the server's own error has no better one (`resolveErrorMessage`'s fallback argument). Add to `en.json`:
+
+```json
+// students.guardians
+"promoteFailed": "Couldn't make this guardian primary."
+```
+
+```json
+// students.emergencyContacts
+"addFailed": "Couldn't add this emergency contact."
+```
+
+```json
+// students.documents
+"verifyFailed": "Couldn't update this document's verification status.",
+"deleteFailed": "Couldn't delete this document.",
+"downloadFailed": "Couldn't get a download link for this document."
+```
+
+Matching Urdu in `ur.json`:
+
+```json
+// students.guardians
+"promoteFailed": "اس سرپرست کو بنیادی نہیں بنایا جا سکا۔"
+```
+
+```json
+// students.emergencyContacts
+"addFailed": "یہ ہنگامی رابطہ شامل نہیں کیا جا سکا۔"
+```
+
+```json
+// students.documents
+"verifyFailed": "اس دستاویز کی تصدیقی حیثیت اپ ڈیٹ نہیں کی جا سکی۔",
+"deleteFailed": "یہ دستاویز حذف نہیں کی جا سکی۔",
+"downloadFailed": "اس دستاویز کے لیے ڈاؤن لوڈ لنک حاصل نہیں کیا جا سکا۔"
+```
+
+- [ ] **Step 7: Add the shared `common.photoUpload.*` keys for the relocated `PhotoUploadField`**
+
+Task 5's `PhotoUploadField` moves to `apps/dashboard/src/components/` (a neutral location, not under `features/students/`) specifically so it can be shared by any future form outside the students feature — staff's own copy is the named candidate (Task 12's deferred-work entry). A component living outside `features/students/` reading the `students` i18n namespace would defeat that: add a new shared `common.photoUpload` object to `en.json`'s top-level `common` block (after the existing `resizeColumn`, the object's last key):
+
+```json
+"photoUpload": {
+  "photo": "Photo",
+  "uploading": "Uploading photo…",
+  "onFile": "Photo on file",
+  "uploadFailed": "The photo could not be uploaded."
+}
+```
+
+Matching Urdu in `ur.json`'s top-level `common` block:
+
+```json
+"photoUpload": {
+  "photo": "تصویر",
+  "uploading": "تصویر اپ لوڈ ہو رہی ہے…",
+  "onFile": "تصویر محفوظ ہے",
+  "uploadFailed": "تصویر اپ لوڈ نہیں ہو سکی۔"
+}
+```
+
+These are copies of the existing `students.fields.photo`/`photoUploading`/`photoOnFile`/`photoUploadFailed` strings (kept there too, unchanged — `StudentPhotoField`'s own wrapper still has students-specific copy elsewhere, and nothing else in the `students` namespace reads these four keys well enough to justify deleting and re-pointing them). `PhotoUploadField` itself reads `common.photoUpload.*` via `useTranslations("common")`, not `useTranslations("students")`, once Task 5 relocates it.
+
+- [ ] **Step 8: Verify via CI's i18n types-check**
 
 (`messages.types-check.ts`, per Phase 1's own convention — no local run; CI's `frontend` workflow checks both locale files stay structurally identical.)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add apps/dashboard/messages/en.json apps/dashboard/messages/ur.json
 git commit -m "feat(dashboard): add the guardian/emergency-contact/document field and dialog copy"
 ```
 
-- [ ] **Step 7: Push and read CI**
+- [ ] **Step 10: Push and read CI**
 
 ---
 
-## Task 5: `GuardianFormDialog` (create/edit a guardian's own fields, with a photo)
+## Task 5: Shared `PhotoUploadField` + `GuardianFormDialog` (create/edit a guardian's own fields, with a photo)
 
 **Files:**
-- Create: `apps/dashboard/src/features/students/guardian-photo-field.tsx`
+- Create: `apps/dashboard/src/components/photo-upload-field.tsx`
+- Create: `apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx`
+- Modify: `apps/dashboard/src/features/students/student-photo-field.tsx` — becomes a thin wrapper
+- Modify: `apps/dashboard/src/features/students/__tests__/student-photo-field.test.tsx` — same cases, now exercised through the wrapper
 - Create: `apps/dashboard/src/features/students/guardian-form-dialog.tsx`
 - Create: `apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx`
 
 **Interfaces:**
 - Consumes: `Services.guardians.{createGuardian,updateGuardian}`, `Services.files.uploadFile` (Task 2, Phase 1).
-- Produces: `GuardianFormDialog({ open, onOpenChange, mode, guardian?, onSaved })`. `mode: "create"` needs no `guardian` prop; `mode: "edit"` requires one (the already-fetched record — this component never fetches a guardian itself). `onSaved(guardian: GuardianRecord)` fires after a successful create or update, so the caller decides what happens next (Task 6 links a newly created guardian; Task 7's edit action just needs the tab to refetch). Consumed by Tasks 6, 7.
+- Produces: `PhotoUploadField` (shared, at `@/components/photo-upload-field`), `GuardianFormDialog({ open, onOpenChange, mode, guardian?, onSaved })`. `mode: "create"` needs no `guardian` prop; `mode: "edit"` requires one (the already-fetched record — this component never fetches a guardian itself). `onSaved(guardian: GuardianRecord)` fires after a successful create or update, so the caller decides what happens next (Task 6 links a newly created guardian; Task 7's edit action just needs the tab to refetch). Consumed by Tasks 6, 7.
 
-`guardian-photo-field.tsx` is its own file, not a generalization of `student-photo-field.tsx` shared between the two forms — matching this codebase's own precedent (`/staff`'s near-identical photo field was never merged with the student one either; see this plan's spec, "Alternatives Considered").
+Students, staff and now guardians each need the identical three-step-upload-plus-preview flow — this is the third copy, and this repo's own convention (`docs/02-architecture/repo-structure.md` §2; see this plan's Alternatives Considered) is to extract on the third copy, not the fourth. `PhotoUploadField` is that extraction, used here by both the student and guardian forms. It lives at `@/components/photo-upload-field.tsx` — a neutral location outside `features/students/` — specifically so a future caller outside the students feature (staff is the named one) can adopt it without an import that reaches into another feature's folder; its `uploadPurpose` prop is a plain `string` (not a students/guardians-only union) and its copy lives in the shared `common.photoUpload.*` i18n namespace (Task 4), not `students.*`, for the same reason. Staff's route (`apps/dashboard/src/app/(app)/staff/`) is not migrated to it in this PR — Task 12 records that as a named, deliberate gap in `docs/deferred-work.md`, not a silently-left third copy.
 
-- [ ] **Step 1: Write `guardian-photo-field.tsx`**
+- [ ] **Step 1: Write the failing test for the shared field, then `photo-upload-field.tsx`**
+
+`PhotoUploadField` is generic over any form whose values include `first_name`/`last_name`/`photo_file_id` — both `StudentFormValues` and the new `GuardianFormValues` (Step 4 below) already use those exact snake_case field names, matching the wire shape directly (Phase 1's own convention). It takes the saved photo's id/url as plain strings, not a whole record, so it never needs to know about `StudentRecord` vs `GuardianRecord`. Write `apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx` first — a minimal host component supplies the `form`, since this field is never rendered on its own in real use:
+
+```tsx
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useForm } from "react-hook-form";
+import { Form } from "@schoolhub/ui";
+
+import { Services } from "@/services";
+import { renderWithProviders } from "@/test-utils";
+
+import { PhotoUploadField, type PhotoUploadFieldValues } from "../photo-upload-field";
+
+jest.mock("@/services", () => ({
+  Services: { files: { uploadFile: jest.fn() } },
+}));
+
+const mockUploadFile = Services.files.uploadFile as jest.MockedFunction<
+  typeof Services.files.uploadFile
+>;
+
+/** jsdom has no object URLs; the field creates one for a picked file's local preview —
+ * same helper as student-form-dialog.test.tsx's own `stubObjectUrls`. */
+function stubObjectUrls(url: string) {
+  const saved = ["createObjectURL", "revokeObjectURL"].map(
+    (name) => [name, Object.getOwnPropertyDescriptor(URL, name)] as const,
+  );
+  Object.defineProperty(URL, "createObjectURL", { value: jest.fn(() => url), configurable: true });
+  Object.defineProperty(URL, "revokeObjectURL", { value: jest.fn(), configurable: true });
+  return () => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(URL, name, descriptor);
+      else Reflect.deleteProperty(URL, name);
+    }
+  };
+}
+
+function TestHost({
+  uploadPurpose = "guardian.photo",
+  savedPhotoFileId,
+  savedPhotoUrl,
+  onUploadingChange = jest.fn(),
+}: {
+  uploadPurpose?: string;
+  savedPhotoFileId?: string | null;
+  savedPhotoUrl?: string | null;
+  onUploadingChange?: (uploading: boolean) => void;
+}) {
+  const form = useForm<PhotoUploadFieldValues>({
+    defaultValues: { first_name: "Ayesha", last_name: "Raza", photo_file_id: savedPhotoFileId ?? "" },
+  });
+  return (
+    <Form {...form}>
+      <PhotoUploadField
+        form={form}
+        uploadPurpose={uploadPurpose}
+        savedPhotoFileId={savedPhotoFileId}
+        savedPhotoUrl={savedPhotoUrl}
+        onUploadStart={() => () => true}
+        onUploadingChange={onUploadingChange}
+      />
+    </Form>
+  );
+}
+
+describe("PhotoUploadField", () => {
+  beforeEach(() => {
+    mockUploadFile.mockReset();
+  });
+
+  it("uploads the picked file with the given purpose and sets photo_file_id on success", async () => {
+    mockUploadFile.mockResolvedValue("file-123");
+    const restoreObjectUrls = stubObjectUrls("blob:new-photo");
+
+    renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
+    await userEvent.upload(
+      screen.getByLabelText(/photo/i),
+      new File(["x"], "photo.jpg", { type: "image/jpeg" }),
+    );
+
+    await waitFor(() => {
+      expect(mockUploadFile).toHaveBeenCalledWith(expect.any(File), "guardian.photo");
+    });
+    restoreObjectUrls();
+  });
+
+  it("shows the upload's real error message on failure", async () => {
+    mockUploadFile.mockRejectedValue(
+      new Error("'image/gif' is not allowed for 'guardian.photo' uploads."),
+    );
+    const restoreObjectUrls = stubObjectUrls("blob:rejected-photo");
+
+    renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
+    await userEvent.upload(
+      screen.getByLabelText(/photo/i),
+      new File(["x"], "photo.gif", { type: "image/gif" }),
+    );
+
+    expect(
+      await screen.findByText("'image/gif' is not allowed for 'guardian.photo' uploads."),
+    ).toBeInTheDocument();
+    restoreObjectUrls();
+  });
+
+  it("previews the saved photo when photo_file_id matches the saved record", () => {
+    renderWithProviders(
+      <TestHost savedPhotoFileId="file-1" savedPhotoUrl="https://storage.test/ayesha.png" />,
+    );
+
+    expect(screen.getByRole("img")).toHaveAttribute("src", "https://storage.test/ayesha.png");
+  });
+});
+```
+
+Implement `apps/dashboard/src/components/photo-upload-field.tsx`:
 
 ```tsx
 "use client";
@@ -1105,52 +1837,84 @@ import {
   FormMessage,
   Input,
 } from "@schoolhub/ui";
-import { useWatch, type UseFormReturn } from "react-hook-form";
+import { useWatch, type FieldValues, type Path, type UseFormReturn } from "react-hook-form";
 
 import { getInitials, stableSignedUrl } from "@/lib/helpers";
 import { Services } from "@/services";
-import type { GuardianRecord } from "@/services";
-import type { GuardianFormValues } from "./guardian-form-schema";
 
-export interface GuardianPhotoFieldProps {
-  form: UseFormReturn<GuardianFormValues>;
-  /** The guardian being edited, for its saved photo; `undefined` in create mode. */
-  savedRecord?: GuardianRecord;
+/** The minimal shape `PhotoUploadField` needs from any host form — both
+ * `StudentFormValues` and `GuardianFormValues` satisfy this already, since both use the
+ * API's own snake_case field names directly (Phase 1's established convention). */
+export interface PhotoUploadFieldValues extends FieldValues {
+  first_name: string;
+  last_name: string;
+  photo_file_id?: string;
+}
+
+export interface PhotoUploadFieldProps<TFieldValues extends PhotoUploadFieldValues> {
+  form: UseFormReturn<TFieldValues>;
+  /** A plain string, not a closed union — `@/components/` is outside any one feature, so
+   * this never hardcodes which `core/files` purposes exist. The caller passes whichever
+   * `Services.files.uploadFile` purpose its own form needs (`"student.photo"`,
+   * `"guardian.photo"`, or a future one neither of today's callers knows about yet). */
+  uploadPurpose: string;
+  /** The saved record's own photo id/url, plain strings rather than a whole record —
+   * this component has no business knowing `StudentRecord` from `GuardianRecord`.
+   * Both `undefined` in create mode. */
+  savedPhotoFileId?: string | null;
+  savedPhotoUrl?: string | null;
+  /** Called as an upload starts. The check it returns reports whether the dialog is still in
+   * the same open session, for the same record, as when that upload started. */
   onUploadStart: () => () => boolean;
+  /** Lets the dialog disable Save while an upload is in flight. Must be referentially
+   * stable (pass a `useState` setter): it is an effect dependency below, and a new
+   * identity every render would re-run that effect's cleanup mid-upload. */
   onUploadingChange: (uploading: boolean) => void;
 }
 
 /**
- * The guardian form's photo picker — same three-step upload, same "open session" guard
- * against a stale result from a closed-then-reopened dialog, as `student-photo-field.tsx`
- * (Phase 1). Kept as its own file rather than shared: the two forms' surrounding fields
- * differ enough (no address, no campus/house) that sharing this one piece would couple
- * two otherwise-independent dialogs for no real savings.
+ * The shared photo picker: a preview (the freshly picked file, else the saved photo), the
+ * three-step upload through `Services.files.uploadFile`, and its own uploading/error
+ * state. Extracted from the student form's original `StudentPhotoField` (Phase 1) — the
+ * third near-identical copy (students, staff, guardians) is this repo's own signal to
+ * stop duplicating and share.
+ *
+ * The upload state lives here, not in the host dialog: a dialog that only mounts this
+ * field while open starts it fresh on every open with no reset effect needed. Only "an
+ * upload is in flight" is lifted, through `onUploadingChange`, because the dialog's Save
+ * button needs it.
  */
-export function GuardianPhotoField({
+export function PhotoUploadField<TFieldValues extends PhotoUploadFieldValues>({
   form,
-  savedRecord,
+  uploadPurpose,
+  savedPhotoFileId,
+  savedPhotoUrl,
   onUploadStart,
   onUploadingChange,
-}: GuardianPhotoFieldProps) {
-  const t = useTranslations("students");
+}: PhotoUploadFieldProps<TFieldValues>) {
+  const t = useTranslations("common.photoUpload");
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [firstName, lastName, photoFileId] = useWatch({
     control: form.control,
-    name: ["first_name", "last_name", "photo_file_id"],
-  });
+    name: ["first_name", "last_name", "photo_file_id"] as Path<TFieldValues>[],
+  }) as [string, string, string | undefined];
 
+  // Only a still-mounted instance may report back to the dialog: an upload from a closed
+  // session settling late must not re-enable Save while the next session's own upload is in
+  // flight. Set inside the effect, not at init, so React's dev-mode remount restores it.
   const mountedRef = useRef(false);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      // Unmounting mid-upload (the dialog closed) must not leave Save disabled.
       onUploadingChange(false);
     };
   }, [onUploadingChange]);
 
+  // Revokes each object URL once a newer one (or none) replaces it, and the last on unmount.
   useEffect(() => {
     return () => {
       if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
@@ -1159,6 +1923,7 @@ export function GuardianPhotoField({
 
   async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+    // Lets the same file be picked again after a failure — an unchanged value fires no event.
     event.target.value = "";
     if (!file) return;
 
@@ -1170,41 +1935,51 @@ export function GuardianPhotoField({
 
     let outcome: { fileId: string } | { error: string };
     try {
-      outcome = { fileId: await Services.files.uploadFile(file, "guardian.photo") };
+      outcome = { fileId: await Services.files.uploadFile(file, uploadPurpose) };
     } catch (error) {
-      outcome = { error: error instanceof Error ? error.message : t("form.photoUploadFailed") };
+      // `uploadFile` rejects with a `FileUploadError` whose message is already specific: the
+      // backend's own validation text (a disallowed type, a size limit), or the failed step.
+      outcome = { error: error instanceof Error ? error.message : t("uploadFailed") };
     }
 
     if (!mountedRef.current) return;
     onUploadingChange(false);
+    // One guard for both outcomes: a result from an earlier open session, or for a different
+    // record, is dropped whether it succeeded or failed — never written into this form and
+    // never shown as this session's error.
     if (!isCurrentSession()) {
       setUploadStatus("idle");
       setLocalPreviewUrl(null);
       return;
     }
     if ("fileId" in outcome) {
-      form.setValue("photo_file_id", outcome.fileId, { shouldDirty: true });
+      form.setValue("photo_file_id" as Path<TFieldValues>, outcome.fileId as never, {
+        shouldDirty: true,
+      });
       setUploadStatus("idle");
     } else {
       setUploadStatus("error");
       setUploadError(outcome.error);
+      // The picked file never landed, so the preview goes back to what Save would keep.
       setLocalPreviewUrl(null);
     }
   }
 
-  const savedPhotoUrl =
-    savedRecord && photoFileId === (savedRecord.photo_file_id ?? "")
-      ? stableSignedUrl(savedRecord.photo_url)
+  // The saved photo, until a replacement is picked: once `photo_file_id` no longer matches
+  // the record's, the saved link is for the old photo.
+  const resolvedSavedUrl =
+    savedPhotoFileId !== undefined && photoFileId === (savedPhotoFileId ?? "")
+      ? stableSignedUrl(savedPhotoUrl ?? null)
       : null;
-  const previewUrl = localPreviewUrl ?? savedPhotoUrl;
+  const previewUrl = localPreviewUrl ?? resolvedSavedUrl;
 
   return (
     <FormField
       control={form.control}
-      name="photo_file_id"
+      name={"photo_file_id" as Path<TFieldValues>}
       render={() => (
         <FormItem>
-          <FormLabel>{t("fields.photo")}</FormLabel>
+          <FormLabel>{t("photo")}</FormLabel>
           <div className="flex items-center gap-3">
             <Avatar className="size-12 shrink-0">
               {previewUrl ? <AvatarImage src={previewUrl} alt="" /> : null}
@@ -1222,7 +1997,7 @@ export function GuardianPhotoField({
                 />
               </FormControl>
               {uploadStatus === "uploading" ? (
-                <p className="text-xs text-muted-foreground">{t("fields.photoUploading")}</p>
+                <p className="text-xs text-muted-foreground">{t("uploading")}</p>
               ) : null}
               {uploadStatus === "error" && uploadError ? (
                 <p className="text-xs text-destructive" role="alert">
@@ -1230,7 +2005,7 @@ export function GuardianPhotoField({
                 </p>
               ) : null}
               {uploadStatus !== "uploading" && !previewUrl && photoFileId ? (
-                <p className="text-xs text-muted-foreground">{t("fields.photoOnFile")}</p>
+                <p className="text-xs text-muted-foreground">{t("onFile")}</p>
               ) : null}
             </div>
           </div>
@@ -1242,13 +2017,55 @@ export function GuardianPhotoField({
 }
 ```
 
-(Reuses `students.fields.photo`/`photoUploading`/`photoOnFile`/`photoUploadFailed` — a photo picker's own copy is the same concept whether it's a student's or a guardian's, and the top-level `students.fields` namespace already covers it; no new i18n key needed for this file.)
+(Reads `common.photoUpload.photo`/`uploading`/`onFile`/`uploadFailed` (Task 4, Step 7) — a shared namespace, since this file lives outside `features/students/` and must not assume a `students`-specific `useTranslations` scope is even available to it. `StudentPhotoField`'s own wrapper (Step 2) keeps using the existing `students.fields.*` copy for anything that stays student-specific.)
 
-- [ ] **Step 2: Write the inline zod schema this dialog needs**
+- [ ] **Step 2: Turn `student-photo-field.tsx` into a thin wrapper**
 
-Not a separate `guardian-form-schema.ts` file — the schema is small enough (5 fields) to declare directly in `guardian-form-dialog.tsx`, unlike the student form's 20+-field schema that earned its own file. Declared as part of Step 4 below (`guardianFormSchema`), importable as `GuardianFormValues` wherever `guardian-photo-field.tsx` needs the type (Step 1 imports it from `"./guardian-form-schema"` — this is a **named export living inside `guardian-form-dialog.tsx` itself**, not a separate file; fix the import in Step 1 to `from "./guardian-form-dialog"` once Step 4 below defines it there).
+Replace its body (keeping the same exported `StudentPhotoField`/`StudentPhotoFieldProps` names and call sites in `student-form-dialog.tsx` unchanged — this is a pure internal refactor):
 
-- [ ] **Step 3: Write the failing tests**
+```tsx
+"use client";
+
+import type { UseFormReturn } from "react-hook-form";
+import type { StudentRecord } from "@/services";
+import { PhotoUploadField } from "@/components/photo-upload-field";
+import type { StudentFormValues } from "./student-form-schema";
+
+export interface StudentPhotoFieldProps {
+  form: UseFormReturn<StudentFormValues>;
+  savedRecord?: StudentRecord;
+  onUploadStart: () => () => boolean;
+  onUploadingChange: (uploading: boolean) => void;
+}
+
+/** Thin wrapper around the shared `PhotoUploadField`, fixed to the student purpose and
+ * `StudentRecord`'s own saved-photo fields. */
+export function StudentPhotoField({
+  form,
+  savedRecord,
+  onUploadStart,
+  onUploadingChange,
+}: StudentPhotoFieldProps) {
+  return (
+    <PhotoUploadField
+      form={form}
+      uploadPurpose="student.photo"
+      savedPhotoFileId={savedRecord?.photo_file_id}
+      savedPhotoUrl={savedRecord?.photo_url}
+      onUploadStart={onUploadStart}
+      onUploadingChange={onUploadingChange}
+    />
+  );
+}
+```
+
+Its existing test file keeps the same test cases (they exercise behavior through this wrapper exactly as they did before — nothing about `StudentPhotoField`'s external behavior changes) but now implicitly covers `PhotoUploadField` as well; `photo-upload-field.test.tsx` (Step 1) adds the cases that are easiest to prove generically (e.g. the purpose string actually reaching `Services.files.uploadFile`) rather than duplicating every student-specific case.
+
+- [ ] **Step 3: Write the inline zod schema this dialog needs**
+
+Not a separate `guardian-form-schema.ts` file — the schema is small enough (5 fields) to declare directly in `guardian-form-dialog.tsx`, unlike the student form's 20+-field schema that earned its own file. Declared as part of Step 5 below (`guardianFormSchema`), exported as `GuardianFormValues` from that same file — `PhotoUploadField` (Step 1) never needs to import it, since it's generic over any form matching `PhotoUploadFieldValues`, not tied to `GuardianFormValues` specifically.
+
+- [ ] **Step 4: Write the failing tests**
 
 ```tsx
 import { ApiError } from "@schoolhub/api-client";
@@ -1289,6 +2106,7 @@ function guardianRecord(overrides: Partial<GuardianRecord> = {}): GuardianRecord
     employer: null,
     national_id: null,
     photo_file_id: null,
+    photo_url: null,
     address: null,
     custom_fields: null,
     created_at: "2026-01-01T00:00:00Z",
@@ -1371,6 +2189,28 @@ describe("GuardianFormDialog", () => {
     });
   });
 
+  it("clearing an optional field in edit mode sends an explicit empty value, not an omission", async () => {
+    const record = guardianRecord({ alt_phone: "0300-1111111" });
+    mockUpdateGuardian.mockResolvedValue(guardianRecord({ alt_phone: "" }));
+
+    renderWithProviders(
+      <GuardianFormDialog
+        open
+        mode="edit"
+        guardian={record}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />,
+    );
+
+    await userEvent.setup().clear(screen.getByLabelText(/alternate phone/i));
+    await userEvent.setup().click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateGuardian).toHaveBeenCalledWith("g1", expect.objectContaining({ altPhone: "" }));
+    });
+  });
+
   it("shows the server's real error when creating fails", async () => {
     mockCreateGuardian.mockRejectedValue(
       new ApiError({
@@ -1397,12 +2237,14 @@ describe("GuardianFormDialog", () => {
 });
 ```
 
-- [ ] **Step 4: Confirm the tests fail by construction, then write `guardian-form-dialog.tsx`**
+- [ ] **Step 5: Confirm the tests fail by construction, then write `guardian-form-dialog.tsx`**
+
+Split into an outer shell and an inner form body that only mounts while `open` is true, keyed by which guardian (if any) is being edited. This is the fix this plan's independent review asked for in place of a `useEffect` + `// eslint-disable-next-line react-hooks/set-state-in-effect` reset (a new suppression this plan must not add — ADR-0014's baseline only shrinks): remounting the inner component via `key` gives every open a fresh `useForm()` call with the right `defaultValues`, with no reset effect needed at all.
 
 ```tsx
 "use client";
 
-import { useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { useRef, useState, type SyntheticEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1432,7 +2274,7 @@ import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { ApiError, Services } from "@/services";
 import type { GuardianRecord } from "@/services";
-import { GuardianPhotoField } from "./guardian-photo-field";
+import { PhotoUploadField } from "@/components/photo-upload-field";
 
 export const guardianFormSchema = z.object({
   first_name: z.string().min(1),
@@ -1476,6 +2318,10 @@ export interface GuardianFormDialogProps {
   onSaved: (guardian: GuardianRecord) => void;
 }
 
+/** The shell: owns `ResponsiveDialog`'s open state and nothing else. `GuardianFormBody`
+ * only mounts while `open` is true, keyed by the guardian's id (or `"create"`) — so
+ * switching from editing one guardian to another, or from edit to create, always starts
+ * a fresh form instance with the right defaults, with no reset effect. */
 export function GuardianFormDialog({
   open,
   onOpenChange,
@@ -1483,22 +2329,57 @@ export function GuardianFormDialog({
   guardian,
   onSaved,
 }: GuardianFormDialogProps) {
+  const tCommon = useTranslations("common");
+  const t = useTranslations("students");
+  const isMobile = !useIsDesktopShell();
+
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="max-w-lg" closeLabel={tCommon("close")}>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
+            {mode === "create" ? t("guardians.createNew") : t("guardians.editGuardianTitle")}
+          </ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
+        {open ? (
+          <GuardianFormBody
+            key={mode === "edit" ? guardian?.id : "create"}
+            mode={mode}
+            guardian={guardian}
+            isMobile={isMobile}
+            onOpenChange={onOpenChange}
+            onSaved={onSaved}
+          />
+        ) : null}
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
+  );
+}
+
+interface GuardianFormBodyProps {
+  mode: "create" | "edit";
+  guardian?: GuardianRecord;
+  isMobile: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: (guardian: GuardianRecord) => void;
+}
+
+function GuardianFormBody({
+  mode,
+  guardian,
+  isMobile,
+  onOpenChange,
+  onSaved,
+}: GuardianFormBodyProps) {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const isMobile = !useIsDesktopShell();
 
-  const sessionRef = useRef(0);
-  const openSessionRef = useRef(0);
-  useEffect(() => {
-    if (open) {
-      sessionRef.current += 1;
-      openSessionRef.current = sessionRef.current;
-    } else {
-      openSessionRef.current = 0;
-    }
-  }, [open]);
-
+  // Captured once per mount (this component remounts fresh on every open — see the
+  // `key` at the call site), so every upload from this open session shares one id; a
+  // result settling after this instance has already unmounted is simply dropped by
+  // `PhotoUploadField`'s own `mountedRef` check, with nothing here to coordinate.
+  const openSessionRef = useRef(Symbol("guardian-form-open"));
   const isSubmittingRef = useRef(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
@@ -1508,29 +2389,33 @@ export function GuardianFormDialog({
     defaultValues: mode === "edit" && guardian ? toFormValues(guardian) : EMPTY_DEFAULTS,
   });
 
-  useEffect(() => {
-    if (!open) {
-      form.reset(EMPTY_DEFAULTS);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFormError(null);
-    } else if (mode === "edit" && guardian) {
-      form.reset(toFormValues(guardian));
-    }
-  }, [open, mode, guardian, form]);
-
   const mutation = useMutation({
     mutationFn: (values: GuardianFormValues) => {
+      if (mode === "create") {
+        const input = {
+          firstName: values.first_name,
+          lastName: values.last_name,
+          phone: values.phone,
+          ...(values.alt_phone ? { altPhone: values.alt_phone } : {}),
+          ...(values.email ? { email: values.email } : {}),
+          ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
+        };
+        return Services.guardians.createGuardian(input);
+      }
+      // Edit: alt_phone/email are sent as-given, including an explicit empty string —
+      // not gated on truthiness like create's omit-if-empty above. A truthiness gate
+      // here would mean clearing one of these back to empty silently does nothing,
+      // since an omitted field means "leave unchanged" to `updateGuardian`'s own
+      // `!== undefined` check (students-helper.ts's `copyMappedFields` convention).
       const input = {
         firstName: values.first_name,
         lastName: values.last_name,
         phone: values.phone,
-        ...(values.alt_phone ? { altPhone: values.alt_phone } : {}),
-        ...(values.email ? { email: values.email } : {}),
+        altPhone: values.alt_phone,
+        email: values.email,
         ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
       };
-      return mode === "create"
-        ? Services.guardians.createGuardian(input)
-        : Services.guardians.updateGuardian((guardian as GuardianRecord).id, input);
+      return Services.guardians.updateGuardian((guardian as GuardianRecord).id, input);
     },
     onSuccess: (saved) => {
       onOpenChange(false);
@@ -1580,130 +2465,121 @@ export function GuardianFormDialog({
   }
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent className="max-w-lg" closeLabel={tCommon("close")}>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>
-            {mode === "create" ? t("guardians.createNew") : t("guardians.editGuardianTitle")}
-          </ResponsiveDialogTitle>
-        </ResponsiveDialogHeader>
-        <Form {...form}>
-          <form
-            noValidate
-            onSubmit={onSubmit}
-            className={isMobile ? "flex min-h-0 grow flex-col" : undefined}
+    <Form {...form}>
+      <form
+        noValidate
+        onSubmit={onSubmit}
+        className={isMobile ? "flex min-h-0 grow flex-col" : undefined}
+      >
+        <ResponsiveDialogBody
+          className={
+            isMobile ? "space-y-4 overflow-y-auto" : "max-h-[65vh] space-y-4 overflow-y-auto pe-1"
+          }
+        >
+          {formError && <Alert variant="destructive">{formError}</Alert>}
+          <FormField
+            control={form.control}
+            name="first_name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("guardians.fields.firstName")}</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="last_name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("guardians.fields.lastName")}</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("guardians.fields.phone")}</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="alt_phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("guardians.fields.altPhone")}</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("guardians.fields.email")}</FormLabel>
+                <FormControl>
+                  <Input type="email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <PhotoUploadField
+            form={form}
+            uploadPurpose="guardian.photo"
+            savedPhotoFileId={mode === "edit" ? guardian?.photo_file_id : undefined}
+            savedPhotoUrl={mode === "edit" ? guardian?.photo_url : undefined}
+            onUploadStart={captureUploadSession}
+            onUploadingChange={setIsPhotoUploading}
+          />
+        </ResponsiveDialogBody>
+        <ResponsiveDialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              onOpenChange(false);
+            }}
           >
-            <ResponsiveDialogBody
-              className={
-                isMobile ? "space-y-4 overflow-y-auto" : "max-h-[65vh] space-y-4 overflow-y-auto pe-1"
-              }
-            >
-              {formError && <Alert variant="destructive">{formError}</Alert>}
-              <FormField
-                control={form.control}
-                name="first_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("guardians.fields.firstName")}</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="last_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("guardians.fields.lastName")}</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("guardians.fields.phone")}</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="alt_phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("guardians.fields.altPhone")}</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("guardians.fields.email")}</FormLabel>
-                    <FormControl>
-                      <Input type="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <GuardianPhotoField
-                form={form}
-                savedRecord={mode === "edit" ? guardian : undefined}
-                onUploadStart={captureUploadSession}
-                onUploadingChange={setIsPhotoUploading}
-              />
-            </ResponsiveDialogBody>
-            <ResponsiveDialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                }}
-              >
-                {tCommon("cancel")}
-              </Button>
-              <Button type="submit" isLoading={mutation.isPending || isPhotoUploading}>
-                {tCommon("save")}
-              </Button>
-            </ResponsiveDialogFooter>
-          </form>
-        </Form>
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
+            {tCommon("cancel")}
+          </Button>
+          <Button type="submit" isLoading={mutation.isPending || isPhotoUploading}>
+            {tCommon("save")}
+          </Button>
+        </ResponsiveDialogFooter>
+      </form>
+    </Form>
   );
 }
 ```
 
-Fix `guardian-photo-field.tsx`'s import from Step 1 to read `import type { GuardianFormValues } from "./guardian-form-dialog";` — this is the real, single source of the type, defined in this file.
+- [ ] **Step 6: Confirm the tests pass by construction**
 
-- [ ] **Step 5: Confirm the tests pass by construction**
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add apps/dashboard/src/features/students/guardian-photo-field.tsx apps/dashboard/src/features/students/guardian-form-dialog.tsx apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx
-git commit -m "feat(dashboard): add the guardian create/edit form dialog"
+git add apps/dashboard/src/components/photo-upload-field.tsx apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx apps/dashboard/src/features/students/student-photo-field.tsx apps/dashboard/src/features/students/__tests__/student-photo-field.test.tsx apps/dashboard/src/features/students/guardian-form-dialog.tsx apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx
+git commit -m "feat(dashboard): add the shared PhotoUploadField and the guardian create/edit form dialog"
 ```
 
-- [ ] **Step 7: Push and read CI**
+- [ ] **Step 8: Push and read CI**
 
 ---
 
@@ -1714,8 +2590,10 @@ git commit -m "feat(dashboard): add the guardian create/edit form dialog"
 - Create: `apps/dashboard/src/features/students/__tests__/guardian-picker-dialog.test.tsx`
 
 **Interfaces:**
-- Consumes: `Services.guardians.{searchGuardians,linkGuardianToStudent}` (Task 2), `GuardianFormDialog` (Task 5).
-- Produces: `GuardianPickerDialog({ open, onOpenChange, studentId, onLinked })`. `onLinked()` fires after a successful link (no payload — the caller just needs to know to refetch). Consumed by Task 7.
+- Consumes: `Services.guardians.{searchGuardians,createGuardian,linkGuardianToStudent}` (Task 2), `guardianFormSchema`/`GuardianFormValues` (Task 5's exports, reused for the inline create-fields form — not `GuardianFormDialog` itself, which this task deliberately does not render, to avoid nesting one `ResponsiveDialog` inside another), `PhotoUploadField` (`@/components/photo-upload-field`, Task 5), `RELATIONSHIP_VALUES` (`@schoolhub/types`, Task 2's Step 7), `useDebouncedValue` (`@/hooks/use-debounced-value`, already exists).
+- Produces: `GuardianPickerDialog({ open, onOpenChange, studentId, excludedGuardianIds, isFirstGuardian, onLinked })`. `excludedGuardianIds` (the student's already-linked guardians' ids) hides them from search results, since linking one again would only ever hit the backend's duplicate-link conflict. `isFirstGuardian` is `true` when the student currently has zero links, so the very first guardian linked becomes primary by default (module doc §11), not left for the user to remember to set via a separate action. `onLinked()` fires after a successful link (no payload — the caller just needs to know to refetch). Consumed by Task 7, which supplies both new props from the links list it already has.
+
+One `ResponsiveDialog`, two internal steps — never a dialog nested inside another. `ResponsiveDialog` wraps a Radix `Dialog` on desktop and a `vaul` `Drawer` on mobile; nesting a second `ResponsiveDialog` inside this one would need `Drawer.NestedRoot` on the mobile branch, which `packages/ui` doesn't expose (confirmed: no `NestedRoot` export anywhere in the package). So "create new" is not a nested `GuardianFormDialog` — it's the **choose** step's "Create new" tab, with the same fields (`guardianFormSchema`/`GuardianFormValues`, `PhotoUploadField`) inlined directly into this dialog, ending in its own `createMutation`. Either path out of the **choose** step — picking a search result, or successfully creating a guardian — sets one `selectedGuardian` state and advances to the **link** step (relationship + the four non-primary flags' defaults + "Link guardian"). This is also what makes linking retry-safe: if `linkMutation` fails after a guardian was just created, retrying only re-runs `linkMutation` — `selectedGuardian` already holds the created guardian's id, so nothing re-creates it.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1736,6 +2614,7 @@ jest.mock("@/services", () => ({
     guardians: {
       searchGuardians: jest.fn(),
       createGuardian: jest.fn(),
+      updateGuardian: jest.fn(),
       linkGuardianToStudent: jest.fn(),
     },
     files: { uploadFile: jest.fn() },
@@ -1765,6 +2644,7 @@ function guardianRecord(overrides: Partial<GuardianRecord> = {}): GuardianRecord
     employer: null,
     national_id: null,
     photo_file_id: null,
+    photo_url: null,
     address: null,
     custom_fields: null,
     created_at: "2026-01-01T00:00:00Z",
@@ -1808,6 +2688,11 @@ describe("GuardianPickerDialog", () => {
     await waitFor(() => {
       expect(mockSearchGuardians).toHaveBeenCalledWith("Ayesha");
     });
+    // The results Select renders its options only once opened (Radix mounts
+    // SelectContent in a portal on open) — the trigger's own accessible name is the
+    // "search existing" tab label (the component's own comment on SelectTrigger explains
+    // why), distinct from the plain-text search input above.
+    await user.click(await screen.findByRole("combobox", { name: /search existing/i }));
     await user.click(await screen.findByRole("option", { name: /ayesha raza/i }));
     await user.click(screen.getByRole("combobox", { name: /relationship/i }));
     await user.click(screen.getByRole("option", { name: /^mother$/i }));
@@ -1847,13 +2732,20 @@ describe("GuardianPickerDialog", () => {
     await waitFor(() => {
       expect(mockSearchGuardians).toHaveBeenCalledWith("Nobody");
     });
-    expect(await screen.findByText(/no records found/i)).toBeInTheDocument();
+    // The real copy (Task 4, Step 5) — distinct from the Guardians tab's own
+    // "No guardians linked yet." empty state and from common.noResults ("No records
+    // found."), which belongs to table-style lists, not this search box.
+    expect(await screen.findByText("No guardians match that search.")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /create new/i })).toBeInTheDocument();
   });
 
-  it("creates a new guardian inline then links it", async () => {
+  it("creates a new guardian from the inline create fields, then links it — and never re-creates on a link retry", async () => {
     mockCreateGuardian.mockResolvedValue(guardianRecord({ id: "g2", first_name: "Bilal" }));
-    mockLinkGuardianToStudent.mockResolvedValue({ id: "link-2" } as never);
+    // First link attempt fails (e.g. a transient conflict); the user clicks "Link
+    // guardian" again without the create step running a second time.
+    mockLinkGuardianToStudent
+      .mockRejectedValueOnce(new Error("network blip"))
+      .mockResolvedValueOnce({ id: "link-2" } as never);
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
 
     renderWithProviders(
@@ -1865,37 +2757,55 @@ describe("GuardianPickerDialog", () => {
       />,
     );
 
+    // The create-new tab's own fields, inlined into this same dialog — no nested dialog
+    // (packages/ui's ResponsiveDialog has no supported nested-drawer pattern on mobile).
     await user.click(screen.getByRole("tab", { name: /create new/i }));
-    await user.type(screen.getByLabelText(/first name/i), "Bilal");
+    await user.type(await screen.findByLabelText(/first name/i), "Bilal");
     await user.type(screen.getByLabelText(/last name/i), "Khan");
     await user.type(screen.getByLabelText(/^phone$/i), "0300-2222222");
-    await user.click(screen.getByRole("combobox", { name: /relationship/i }));
-    await user.click(screen.getByRole("option", { name: /^father$/i }));
-    await user.click(screen.getByRole("button", { name: /link guardian/i }));
+    await user.click(screen.getByRole("button", { name: /create guardian/i }));
 
     await waitFor(() => {
       expect(mockCreateGuardian).toHaveBeenCalledWith(
         expect.objectContaining({ firstName: "Bilal", lastName: "Khan" }),
       );
     });
+    // The dialog advances to its link step: the just-created guardian is shown as
+    // selected, the tabs are gone, and only the relationship remains to be picked.
+    expect(await screen.findByText("Bilal Khan")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /create new/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: /relationship/i }));
+    await user.click(screen.getByRole("option", { name: /^father$/i }));
+    await user.click(screen.getByRole("button", { name: /link guardian/i }));
     await waitFor(() => {
-      expect(mockLinkGuardianToStudent).toHaveBeenCalledWith(
-        "student-1",
-        expect.objectContaining({ guardianId: "g2", relationship: "father" }),
-      );
+      expect(mockLinkGuardianToStudent).toHaveBeenCalledTimes(1);
     });
-    expect(onLinked).toHaveBeenCalled();
+
+    // Retry after the failure — createGuardian must not be called a second time.
+    await user.click(screen.getByRole("button", { name: /link guardian/i }));
+    await waitFor(() => {
+      expect(mockLinkGuardianToStudent).toHaveBeenCalledTimes(2);
+    });
+    expect(mockCreateGuardian).toHaveBeenCalledTimes(1);
+    expect(mockLinkGuardianToStudent).toHaveBeenLastCalledWith(
+      "student-1",
+      expect.objectContaining({ guardianId: "g2", relationship: "father" }),
+    );
+    expect(onLinked).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces the server's duplicate-link message when linking an already-linked guardian", async () => {
+  it("surfaces the server's real 409 when linking an already-linked guardian", async () => {
     mockSearchGuardians.mockResolvedValue([guardianRecord()]);
+    // The real shape a duplicate link produces: StudentGuardian's UniqueConstraint ->
+    // IntegrityError -> core/api/exceptions.py's 409 `conflict` mapping — not an
+    // invented 422.
     mockLinkGuardianToStudent.mockRejectedValue(
       new ApiError({
-        code: "domain_rule_violation",
-        message: "Validation failed.",
-        status: 422,
+        code: "conflict",
+        message: "The request conflicts with existing data.",
+        status: 409,
         url: "/students/student-1/guardians",
-        details: [{ field: "non_field", issue: "This guardian is already linked to this student." }],
+        details: [{ field: "non_field", issue: "The request conflicts with existing data." }],
       }),
     );
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
@@ -1910,32 +2820,100 @@ describe("GuardianPickerDialog", () => {
     );
 
     await user.type(screen.getByLabelText(/search by name or phone/i), "Ayesha");
+    await user.click(await screen.findByRole("combobox", { name: /search existing/i }));
     await user.click(await screen.findByRole("option", { name: /ayesha raza/i }));
     await user.click(screen.getByRole("combobox", { name: /relationship/i }));
     await user.click(screen.getByRole("option", { name: /^mother$/i }));
     await user.click(screen.getByRole("button", { name: /link guardian/i }));
 
     expect(
-      await screen.findByText("This guardian is already linked to this student."),
+      await screen.findByText("The request conflicts with existing data."),
     ).toBeInTheDocument();
     expect(onLinked).not.toHaveBeenCalled();
+  });
+
+  it("excludes already-linked guardians from search results", async () => {
+    mockSearchGuardians.mockResolvedValue([
+      guardianRecord({ id: "g1", first_name: "Ayesha" }),
+      guardianRecord({ id: "g3", first_name: "Zainab" }),
+    ]);
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+
+    renderWithProviders(
+      <GuardianPickerDialog
+        open
+        studentId="student-1"
+        excludedGuardianIds={["g1"]}
+        onOpenChange={onOpenChange}
+        onLinked={onLinked}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/search by name or phone/i), "a");
+    await waitFor(() => {
+      expect(mockSearchGuardians).toHaveBeenCalled();
+    });
+    await user.click(await screen.findByRole("combobox", { name: /search existing/i }));
+    expect(await screen.findByRole("option", { name: /zainab/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /ayesha/i })).not.toBeInTheDocument();
+  });
+
+  it("makes the first guardian linked primary by default", async () => {
+    mockSearchGuardians.mockResolvedValue([guardianRecord()]);
+    mockLinkGuardianToStudent.mockResolvedValue({ id: "link-1" } as never);
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+
+    renderWithProviders(
+      <GuardianPickerDialog
+        open
+        studentId="student-1"
+        isFirstGuardian
+        onOpenChange={onOpenChange}
+        onLinked={onLinked}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/search by name or phone/i), "Ayesha");
+    await user.click(await screen.findByRole("combobox", { name: /search existing/i }));
+    await user.click(await screen.findByRole("option", { name: /ayesha raza/i }));
+    await user.click(screen.getByRole("combobox", { name: /relationship/i }));
+    await user.click(screen.getByRole("option", { name: /^mother$/i }));
+    await user.click(screen.getByRole("button", { name: /link guardian/i }));
+
+    await waitFor(() => {
+      expect(mockLinkGuardianToStudent).toHaveBeenCalledWith(
+        "student-1",
+        expect.objectContaining({ isPrimary: true }),
+      );
+    });
   });
 });
 ```
 
 - [ ] **Step 2: Confirm the tests fail by construction, then write `guardian-picker-dialog.tsx`**
 
+Same shell/body split as `GuardianFormDialog` (Task 5): the outer component owns `ResponsiveDialog`'s open state only; the inner body mounts fresh (keyed by `studentId`) only while `open`, so there is no reset-on-close effect anywhere in this file. Internally the body has two steps — `"choose"` (search-or-create tabs) and `"link"` (selected guardian + relationship) — both rendered inside this one dialog, never a second nested one:
+
 ```tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
+import { RELATIONSHIP_VALUES, type RelationshipValue } from "@schoolhub/types";
 import {
   Alert,
   Button,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
   FormMessage,
   Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -1956,33 +2934,25 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
+import { PhotoUploadField } from "@/components/photo-upload-field";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
-import type { CreateGuardianInput, GuardianRecord, GuardianRelationship } from "@/services";
-
-const RELATIONSHIP_VALUES: GuardianRelationship[] = [
-  "father",
-  "mother",
-  "grandparent",
-  "sibling",
-  "legal_guardian",
-  "other",
-];
-
-const LINK_FLAG_DEFAULTS = {
-  isPrimary: false,
-  isFeeResponsible: false,
-  canPickUp: true,
-  receivesCommunications: true,
-  hasPortalAccess: true,
-} as const;
+import type { GuardianRecord } from "@/services";
+import { guardianFormSchema, type GuardianFormValues } from "./guardian-form-dialog";
 
 export interface GuardianPickerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   studentId: string;
+  /** This student's already-linked guardians' ids — hidden from search results, since
+   * picking one would only ever hit the backend's duplicate-link conflict. */
+  excludedGuardianIds?: string[];
+  /** `true` when the student currently has zero guardian links — the one being linked
+   * now becomes primary by default (module doc §11), not left for a separate action. */
+  isFirstGuardian?: boolean;
   onLinked: () => void;
 }
 
@@ -1990,46 +2960,107 @@ export function GuardianPickerDialog({
   open,
   onOpenChange,
   studentId,
+  excludedGuardianIds = [],
+  isFirstGuardian = false,
   onLinked,
 }: GuardianPickerDialogProps) {
+  const t = useTranslations("students");
+  const tCommon = useTranslations("common");
+
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="max-w-lg" closeLabel={tCommon("close")}>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{t("guardians.link")}</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
+        {open ? (
+          <GuardianPickerBody
+            key={studentId}
+            studentId={studentId}
+            excludedGuardianIds={excludedGuardianIds}
+            isFirstGuardian={isFirstGuardian}
+            onOpenChange={onOpenChange}
+            onLinked={onLinked}
+          />
+        ) : null}
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
+  );
+}
+
+interface GuardianPickerBodyProps {
+  studentId: string;
+  excludedGuardianIds: string[];
+  isFirstGuardian: boolean;
+  onOpenChange: (open: boolean) => void;
+  onLinked: () => void;
+}
+
+const CREATE_DEFAULTS: GuardianFormValues = {
+  first_name: "",
+  last_name: "",
+  phone: "",
+  alt_phone: "",
+  email: "",
+  photo_file_id: "",
+};
+
+function GuardianPickerBody({
+  studentId,
+  excludedGuardianIds,
+  isFirstGuardian,
+  onOpenChange,
+  onLinked,
+}: GuardianPickerBodyProps) {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
 
+  const [step, setStep] = useState<"choose" | "link">("choose");
   const [tab, setTab] = useState<"search" | "create">("search");
   const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
   const [selectedGuardian, setSelectedGuardian] = useState<GuardianRecord | null>(null);
-  const [relationship, setRelationship] = useState<GuardianRelationship | "">("");
-  const [createFirstName, setCreateFirstName] = useState("");
-  const [createLastName, setCreateLastName] = useState("");
-  const [createPhone, setCreatePhone] = useState("");
+  const [relationship, setRelationship] = useState<RelationshipValue | "">("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isPhotoUploading, setIsPhotoUploading] = useState(false);
 
-  useEffect(() => {
-    const handle = setTimeout(() => setSearch(searchInput), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(handle);
-  }, [searchInput]);
-
-  useEffect(() => {
-    if (!open) {
-      setTab("search");
-      setSearchInput("");
-      setSearch("");
-      setSelectedGuardian(null);
-      setRelationship("");
-      setCreateFirstName("");
-      setCreateLastName("");
-      setCreatePhone("");
-      setLinkError(null);
-    }
-  }, [open]);
-
+  const excluded = new Set(excludedGuardianIds);
   const searchQuery = useQuery({
     queryKey: queryKeys.list("guardians", "search", { search }),
     queryFn: () => Services.guardians.searchGuardians(search),
-    enabled: open && tab === "search" && search.length > 0,
+    enabled: step === "choose" && tab === "search" && search.length > 0,
+  });
+  const searchResults = (searchQuery.data ?? []).filter((g) => !excluded.has(g.id));
+
+  const createForm = useForm<GuardianFormValues>({
+    resolver: zodResolver(guardianFormSchema),
+    defaultValues: CREATE_DEFAULTS,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (values: GuardianFormValues) =>
+      Services.guardians.createGuardian({
+        firstName: values.first_name,
+        lastName: values.last_name,
+        phone: values.phone,
+        ...(values.alt_phone ? { altPhone: values.alt_phone } : {}),
+        ...(values.email ? { email: values.email } : {}),
+        ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
+      }),
+    onSuccess: (created) => {
+      setSelectedGuardian(created);
+      setStep("link");
+    },
+    onError: (error) => {
+      setCreateError(
+        error instanceof ApiError
+          ? resolveErrorMessage(error, tErrors, t("form.submitFailed"), "non_field")
+          : t("form.submitFailed"),
+      );
+    },
   });
 
   const linkMutation = useMutation({
@@ -2038,12 +3069,16 @@ export function GuardianPickerDialog({
       return Services.guardians.linkGuardianToStudent(studentId, {
         guardianId,
         relationship,
-        ...LINK_FLAG_DEFAULTS,
+        isPrimary: isFirstGuardian,
+        isFeeResponsible: false,
+        canPickUp: true,
+        receivesCommunications: true,
+        hasPortalAccess: true,
       });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.list("students", "guardian-links", studentId),
+        queryKey: queryKeys.list("students", "guardian-links", { studentId }),
       });
       onOpenChange(false);
       onLinked();
@@ -2057,135 +3092,41 @@ export function GuardianPickerDialog({
     },
   });
 
-  const createAndLinkMutation = useMutation({
-    mutationFn: async () => {
-      const input: CreateGuardianInput = {
-        firstName: createFirstName,
-        lastName: createLastName,
-        phone: createPhone,
-      };
-      const created = await Services.guardians.createGuardian(input);
-      return linkMutation.mutateAsync(created.id);
-    },
-  });
-
-  function handleSubmit() {
-    setLinkError(null);
-    if (tab === "search" && selectedGuardian) {
-      linkMutation.mutate(selectedGuardian.id);
-    } else if (tab === "create") {
-      createAndLinkMutation.mutate();
-    }
+  function selectSearchResult(guardian: GuardianRecord) {
+    setSelectedGuardian(guardian);
+    setStep("link");
   }
 
-  const canSubmit =
-    Boolean(relationship) &&
-    (tab === "search"
-      ? Boolean(selectedGuardian)
-      : createFirstName.trim().length > 0 &&
-        createLastName.trim().length > 0 &&
-        createPhone.trim().length > 0);
-  const isPending = linkMutation.isPending || createAndLinkMutation.isPending;
+  function backToChoose() {
+    setStep("choose");
+    setSelectedGuardian(null);
+    setRelationship("");
+    setLinkError(null);
+  }
 
-  return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent className="max-w-lg" closeLabel={tCommon("close")}>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>{t("guardians.link")}</ResponsiveDialogTitle>
-        </ResponsiveDialogHeader>
+  function handleLink() {
+    setLinkError(null);
+    if (selectedGuardian) linkMutation.mutate(selectedGuardian.id);
+  }
+
+  if (step === "link" && selectedGuardian) {
+    return (
+      <>
         <ResponsiveDialogBody className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("guardians.linkDescription")}</p>
           {linkError && <Alert variant="destructive">{linkError}</Alert>}
-
-          <Tabs
-            value={tab}
-            onValueChange={(value) => {
-              setTab(value as "search" | "create");
-            }}
-          >
-            <TabsList variant="line">
-              <TabsTrigger value="search">{t("guardians.searchExisting")}</TabsTrigger>
-              <TabsTrigger value="create">{t("guardians.createNew")}</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="search" className="space-y-2">
-              <Input
-                aria-label={t("guardians.searchPlaceholder")}
-                placeholder={t("guardians.searchPlaceholder")}
-                value={searchInput}
-                onChange={(event) => {
-                  setSearchInput(event.target.value);
-                  setSelectedGuardian(null);
-                }}
-              />
-              {searchQuery.isFetching ? <Skeleton className="h-9 w-full" /> : null}
-              {search.length > 0 && !searchQuery.isFetching && searchQuery.data?.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{tCommon("noResults")}</p>
-              ) : null}
-              {(searchQuery.data ?? []).length > 0 ? (
-                <Select
-                  value={selectedGuardian?.id ?? ""}
-                  onValueChange={(value) => {
-                    setSelectedGuardian(
-                      (searchQuery.data ?? []).find((g) => g.id === value) ?? null,
-                    );
-                  }}
-                >
-                  <SelectTrigger aria-label={t("guardians.searchPlaceholder")}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(searchQuery.data ?? []).map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        {g.first_name} {g.last_name} · {g.phone}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-            </TabsContent>
-
-            <TabsContent value="create" className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" htmlFor="picker-first-name">
-                  {t("guardians.fields.firstName")}
-                </label>
-                <Input
-                  id="picker-first-name"
-                  value={createFirstName}
-                  onChange={(event) => setCreateFirstName(event.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" htmlFor="picker-last-name">
-                  {t("guardians.fields.lastName")}
-                </label>
-                <Input
-                  id="picker-last-name"
-                  value={createLastName}
-                  onChange={(event) => setCreateLastName(event.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium" htmlFor="picker-phone">
-                  {t("guardians.fields.phone")}
-                </label>
-                <Input
-                  id="picker-phone"
-                  value={createPhone}
-                  onChange={(event) => setCreatePhone(event.target.value)}
-                />
-              </div>
-            </TabsContent>
-          </Tabs>
-
+          <div className="flex items-center justify-between rounded-md border p-3 text-sm">
+            <span>
+              {selectedGuardian.first_name} {selectedGuardian.last_name}
+            </span>
+            <Button type="button" variant="link" className="h-auto p-0" onClick={backToChoose}>
+              {tCommon("edit")}
+            </Button>
+          </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="picker-relationship">
-              {t("guardians.fields.relationship")}
-            </label>
+            <Label htmlFor="picker-relationship">{t("guardians.fields.relationship")}</Label>
             <Select
               value={relationship}
-              onValueChange={(value) => setRelationship(value as GuardianRelationship)}
+              onValueChange={(value) => setRelationship(value as RelationshipValue)}
             >
               <SelectTrigger id="picker-relationship" aria-label={t("guardians.fields.relationship")}>
                 <SelectValue />
@@ -2198,35 +3139,185 @@ export function GuardianPickerDialog({
                 ))}
               </SelectContent>
             </Select>
-            {!relationship ? <FormMessage>{tCommon("requiredField")}</FormMessage> : null}
+            {!relationship ? (
+              <p className="text-sm text-destructive">{tCommon("requiredField")}</p>
+            ) : null}
           </div>
         </ResponsiveDialogBody>
         <ResponsiveDialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              onOpenChange(false);
-            }}
-          >
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             {tCommon("cancel")}
           </Button>
           <Button
             type="button"
-            disabled={!canSubmit || isPending}
-            isLoading={isPending}
-            onClick={handleSubmit}
+            disabled={!relationship || linkMutation.isPending}
+            isLoading={linkMutation.isPending}
+            onClick={handleLink}
           >
             {t("guardians.link")}
           </Button>
         </ResponsiveDialogFooter>
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <ResponsiveDialogBody className="space-y-4">
+        <p className="text-sm text-muted-foreground">{t("guardians.linkDescription")}</p>
+
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            setTab(value as "search" | "create");
+          }}
+        >
+          <TabsList variant="line">
+            <TabsTrigger value="search">{t("guardians.searchExisting")}</TabsTrigger>
+            <TabsTrigger value="create">{t("guardians.createNew")}</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="search" className="space-y-2">
+            <Input
+              aria-label={t("guardians.searchPlaceholder")}
+              placeholder={t("guardians.searchPlaceholder")}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+            />
+            {searchQuery.isFetching ? <Skeleton className="h-9 w-full" /> : null}
+            {search.length > 0 && !searchQuery.isFetching && searchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("guardians.searchEmpty")}</p>
+            ) : null}
+            {searchResults.length > 0 ? (
+              <Select
+                value=""
+                onValueChange={(value) => {
+                  const picked = searchResults.find((g) => g.id === value);
+                  if (picked) selectSearchResult(picked);
+                }}
+              >
+                {/* Distinct from the search input's own accessible name above, which
+                 * describes typing a query, not choosing from its results. */}
+                <SelectTrigger aria-label={t("guardians.searchExisting")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {searchResults.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.first_name} {g.last_name} · {g.phone}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+          </TabsContent>
+
+          <TabsContent value="create" className="space-y-3">
+            {/* The create form's own fields, inlined — no nested dialog. Submitting
+             * advances straight to the link step via createMutation's onSuccess above. */}
+            <Form {...createForm}>
+              <form
+                noValidate
+                onSubmit={createForm.handleSubmit((values) => {
+                  setCreateError(null);
+                  createMutation.mutate(values);
+                })}
+                className="space-y-3"
+              >
+                {createError && <Alert variant="destructive">{createError}</Alert>}
+                <FormField
+                  control={createForm.control}
+                  name="first_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("guardians.fields.firstName")}</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="last_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("guardians.fields.lastName")}</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("guardians.fields.phone")}</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="alt_phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("guardians.fields.altPhone")}</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("guardians.fields.email")}</FormLabel>
+                      <FormControl>
+                        <Input type="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <PhotoUploadField
+                  form={createForm}
+                  uploadPurpose="guardian.photo"
+                  onUploadStart={() => () => true}
+                  onUploadingChange={setIsPhotoUploading}
+                />
+                <Button
+                  type="submit"
+                  isLoading={createMutation.isPending || isPhotoUploading}
+                  className="w-full"
+                >
+                  {t("guardians.createGuardian")}
+                </Button>
+              </form>
+            </Form>
+          </TabsContent>
+        </Tabs>
+      </ResponsiveDialogBody>
+      <ResponsiveDialogFooter>
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {tCommon("cancel")}
+        </Button>
+      </ResponsiveDialogFooter>
+    </>
   );
 }
 ```
 
-`FormMessage` is used here outside a `Form`/`FormField` context purely as a styled error-text element — confirm against `packages/ui/src/components/form.tsx` that it renders plain children without requiring RHF context before relying on this; if it does require that context, replace with a plain `<p className="text-sm text-destructive">{tCommon("requiredField")}</p>` instead; either way the visible behavior the test asserts (a required-field message appears when no relationship is chosen) stays the same.
+Add one new i18n key this inline form needs that the picker didn't before — `students.guardians.createGuardian` ("Create guardian"), distinct from `createNew` (the tab label) — fold it into Task 4's Step 2 (same place the other `GuardianFormDialog`-adjacent keys were added) rather than a separate i18n task here.
 
 - [ ] **Step 3: Confirm the tests pass by construction**
 
@@ -2355,13 +3446,23 @@ describe("GuardianLinkFlagsDialog", () => {
 ```tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
+import { z } from "zod";
+import { RELATIONSHIP_VALUES } from "@schoolhub/types";
 import {
   Alert,
   Button,
   Checkbox,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
   Select,
   SelectContent,
   SelectItem,
@@ -2379,26 +3480,30 @@ import {
 } from "@/components/responsive-dialog";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { ApiError, Services } from "@/services";
-import type { GuardianLinkRecord, GuardianRelationship, UpdateGuardianLinkInput } from "@/services";
+import type { GuardianLinkRecord } from "@/services";
 
-const RELATIONSHIP_VALUES: GuardianRelationship[] = [
-  "father",
-  "mother",
-  "grandparent",
-  "sibling",
-  "legal_guardian",
-  "other",
-];
+// `relationship` has no `.optional()`/`.default()` — the Select always has a starting
+// value from the link being edited, so an empty state (and the plain-required-field
+// error that would need) never happens here, unlike the picker's own relationship step
+// (Task 6), which starts genuinely unset.
+const linkFlagsSchema = z.object({
+  relationship: z.enum(RELATIONSHIP_VALUES),
+  isFeeResponsible: z.boolean(),
+  canPickUp: z.boolean(),
+  receivesCommunications: z.boolean(),
+  hasPortalAccess: z.boolean(),
+});
 
-interface FlagState {
-  relationship: GuardianRelationship;
-  isFeeResponsible: boolean;
-  canPickUp: boolean;
-  receivesCommunications: boolean;
-  hasPortalAccess: boolean;
-}
+type LinkFlagsFormValues = z.infer<typeof linkFlagsSchema>;
 
-function toFlagState(link: GuardianLinkRecord): FlagState {
+const FLAG_FIELDS = [
+  ["isFeeResponsible", "feeResponsible"],
+  ["canPickUp", "canPickUp"],
+  ["receivesCommunications", "receivesCommunications"],
+  ["hasPortalAccess", "hasPortalAccess"],
+] as const satisfies readonly [keyof LinkFlagsFormValues, string][];
+
+function toFormValues(link: GuardianLinkRecord): LinkFlagsFormValues {
   return {
     relationship: link.relationship,
     isFeeResponsible: link.is_fee_responsible,
@@ -2419,6 +3524,11 @@ export interface GuardianLinkFlagsDialogProps {
  * Relationship + the four non-primary flags. `isPrimary` is deliberately never read or
  * written here — see this plan's Global Constraints on why promotion is its own
  * one-click row action, not a checkbox in this dialog.
+ *
+ * No reset-on-open effect: the caller (`student-guardians-tab.tsx`) only ever renders
+ * this component at all while there is a link being edited (`{editingLink && <...>}`),
+ * so every open is already a fresh mount — `useForm`'s `defaultValues` below already
+ * gets the right starting values with no effect needed.
  */
 export function GuardianLinkFlagsDialog({
   open,
@@ -2430,37 +3540,39 @@ export function GuardianLinkFlagsDialog({
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
 
-  const [state, setState] = useState<FlagState>(() => toFlagState(link));
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setState(toFlagState(link));
-      setFormError(null);
-    }
-  }, [open, link]);
+  const form = useForm<LinkFlagsFormValues>({
+    resolver: zodResolver(linkFlagsSchema),
+    defaultValues: toFormValues(link),
+  });
 
   const mutation = useMutation({
-    mutationFn: () => {
-      const input: UpdateGuardianLinkInput = {
-        relationship: state.relationship,
-        isFeeResponsible: state.isFeeResponsible,
-        canPickUp: state.canPickUp,
-        receivesCommunications: state.receivesCommunications,
-        hasPortalAccess: state.hasPortalAccess,
-      };
-      return Services.guardians.updateGuardianLink(link.id, input);
-    },
+    mutationFn: (values: LinkFlagsFormValues) =>
+      Services.guardians.updateGuardianLink(link.id, values),
     onSuccess: () => {
       onOpenChange(false);
       onSaved();
     },
     onError: (error) => {
-      setFormError(
-        error instanceof ApiError
-          ? resolveErrorMessage(error, tErrors, t("form.submitFailed"), "non_field")
-          : t("form.submitFailed"),
-      );
+      // Same field-error-mapping convention as `GuardianFormDialog` (Task 5): a matched
+      // field gets its own `FormMessage`; anything else falls back to the dialog-level alert.
+      setFormError(null);
+      form.clearErrors();
+      if (error instanceof ApiError) {
+        let matchedAField = false;
+        for (const [field, issue] of Object.entries(error.fieldErrors())) {
+          if (field !== "non_field" && field in linkFlagsSchema.shape) {
+            form.setError(field as keyof LinkFlagsFormValues, { type: "server", message: issue });
+            matchedAField = true;
+          }
+        }
+        if (!matchedAField) {
+          setFormError(resolveErrorMessage(error, tErrors, t("form.submitFailed"), "non_field"));
+        }
+      } else {
+        setFormError(t("form.submitFailed"));
+      }
     },
   });
 
@@ -2470,72 +3582,73 @@ export function GuardianLinkFlagsDialog({
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{t("guardians.editLinkTitle")}</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
-        <ResponsiveDialogBody className="space-y-4">
-          {formError && <Alert variant="destructive">{formError}</Alert>}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="link-relationship">
-              {t("guardians.fields.relationship")}
-            </label>
-            <Select
-              value={state.relationship}
-              onValueChange={(value) => {
-                setState((prev) => ({ ...prev, relationship: value as GuardianRelationship }));
-              }}
-            >
-              <SelectTrigger id="link-relationship" aria-label={t("guardians.fields.relationship")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {RELATIONSHIP_VALUES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {t(`guardians.relationship.${value}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {(
-            [
-              ["isFeeResponsible", "feeResponsible"],
-              ["canPickUp", "canPickUp"],
-              ["receivesCommunications", "receivesCommunications"],
-              ["hasPortalAccess", "hasPortalAccess"],
-            ] as const
-          ).map(([key, labelKey]) => (
-            <div key={key} className="flex items-center gap-2">
-              <Checkbox
-                id={`link-flag-${key}`}
-                checked={state[key]}
-                onCheckedChange={(checked) => {
-                  setState((prev) => ({ ...prev, [key]: checked === true }));
-                }}
+        <Form {...form}>
+          <form
+            noValidate
+            onSubmit={form.handleSubmit((values) => {
+              mutation.mutate(values);
+            })}
+          >
+            <ResponsiveDialogBody className="space-y-4">
+              {formError && <Alert variant="destructive">{formError}</Alert>}
+              <FormField
+                control={form.control}
+                name="relationship"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("guardians.fields.relationship")}</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger aria-label={t("guardians.fields.relationship")}>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {RELATIONSHIP_VALUES.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {t(`guardians.relationship.${value}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              <label className="text-sm" htmlFor={`link-flag-${key}`}>
-                {t(`guardians.flags.${labelKey}`)}
-              </label>
-            </div>
-          ))}
-        </ResponsiveDialogBody>
-        <ResponsiveDialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              onOpenChange(false);
-            }}
-          >
-            {tCommon("cancel")}
-          </Button>
-          <Button
-            type="button"
-            isLoading={mutation.isPending}
-            onClick={() => {
-              mutation.mutate();
-            }}
-          >
-            {tCommon("save")}
-          </Button>
-        </ResponsiveDialogFooter>
+              {FLAG_FIELDS.map(([key, labelKey]) => (
+                <FormField
+                  key={key}
+                  control={form.control}
+                  name={key}
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormLabel className="font-normal">
+                        {t(`guardians.flags.${labelKey}`)}
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+              ))}
+            </ResponsiveDialogBody>
+            <ResponsiveDialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false);
+                }}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button type="submit" isLoading={mutation.isPending}>
+                {tCommon("save")}
+              </Button>
+            </ResponsiveDialogFooter>
+          </form>
+        </Form>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
   );
@@ -2554,6 +3667,7 @@ git commit -m "feat(dashboard): add the guardian link flags edit dialog"
 ```tsx
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 
 import { Services } from "@/services";
 import type { GuardianLinkRecord, GuardianRecord } from "@/services";
@@ -2561,12 +3675,16 @@ import { renderWithProviders } from "@/test-utils";
 
 import { StudentGuardiansTab } from "../student-guardians-tab";
 
+jest.mock("sonner", () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
+
 jest.mock("@/services", () => ({
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     guardians: {
       fetchGuardianLinks: jest.fn(),
+      fetchGuardianById: jest.fn(),
       updateGuardianLink: jest.fn(),
+      updateGuardian: jest.fn(),
       searchGuardians: jest.fn(),
       createGuardian: jest.fn(),
       linkGuardianToStudent: jest.fn(),
@@ -2578,9 +3696,13 @@ jest.mock("@/services", () => ({
 const mockFetchGuardianLinks = Services.guardians.fetchGuardianLinks as jest.MockedFunction<
   typeof Services.guardians.fetchGuardianLinks
 >;
+const mockFetchGuardianById = Services.guardians.fetchGuardianById as jest.MockedFunction<
+  typeof Services.guardians.fetchGuardianById
+>;
 const mockUpdateGuardianLink = Services.guardians.updateGuardianLink as jest.MockedFunction<
   typeof Services.guardians.updateGuardianLink
 >;
+const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
 
 function linkRecord(overrides: Partial<GuardianLinkRecord> = {}): GuardianLinkRecord {
   return {
@@ -2613,6 +3735,7 @@ function guardianRecord(overrides: Partial<GuardianRecord> = {}): GuardianRecord
     employer: null,
     national_id: null,
     photo_file_id: null,
+    photo_url: null,
     address: null,
     custom_fields: null,
     created_at: "2026-01-01T00:00:00Z",
@@ -2624,8 +3747,9 @@ function guardianRecord(overrides: Partial<GuardianRecord> = {}): GuardianRecord
 describe("StudentGuardiansTab", () => {
   beforeEach(() => {
     mockFetchGuardianLinks.mockReset();
+    mockFetchGuardianById.mockReset();
     mockUpdateGuardianLink.mockReset();
-    global.fetch = jest.fn();
+    mockToastError.mockReset();
   });
 
   it("shows empty copy when the student has no guardians linked", async () => {
@@ -2636,26 +3760,49 @@ describe("StudentGuardiansTab", () => {
     expect(await screen.findByText(/no guardians linked yet/i)).toBeInTheDocument();
   });
 
-  it("lists a linked guardian with their relationship and flags", async () => {
+  it("shows a load-error state, distinct from the empty state, when the links fetch fails", async () => {
+    mockFetchGuardianLinks.mockRejectedValue(new Error("network down"));
+
+    renderWithProviders(<StudentGuardiansTab studentId="student-1" canCreate canUpdate />);
+
+    expect(await screen.findByText(/couldn't load this student's guardians/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no guardians linked yet/i)).not.toBeInTheDocument();
+  });
+
+  it("lists a linked guardian with their relationship and flags, resolved through Services.guardians.fetchGuardianById", async () => {
     mockFetchGuardianLinks.mockResolvedValue([
       linkRecord({ is_fee_responsible: true, can_pick_up: true }),
     ]);
-    jest.spyOn(Services.guardians, "fetchGuardianLinks");
-    // The guardian's own details come from a separate per-id fetch (fan-out) — mock the
-    // apiClient-level call this component makes through a local useQueries, not a
-    // Services function, since there is deliberately no `Services.guardians.fetchGuardianById`
-    // (see this plan's Global Constraints). Mock at the `apiClient` boundary instead.
-    jest.mock("@/lib/auth", () => ({
-      apiClient: { get: jest.fn().mockResolvedValue({ data: guardianRecord() }) },
-    }));
+    mockFetchGuardianById.mockResolvedValue(guardianRecord());
 
     renderWithProviders(<StudentGuardiansTab studentId="student-1" canCreate canUpdate />);
 
     expect(await screen.findByText(/father/i)).toBeInTheDocument();
+    expect(await screen.findByText(/ayesha raza/i)).toBeInTheDocument();
+    expect(mockFetchGuardianById).toHaveBeenCalledWith("g1");
+  });
+
+  it("shows a per-row load-error with retry when a guardian lookup fails, not a stuck placeholder", async () => {
+    mockFetchGuardianLinks.mockResolvedValue([linkRecord()]);
+    mockFetchGuardianById.mockRejectedValueOnce(new Error("lookup failed"));
+    mockFetchGuardianById.mockResolvedValueOnce(guardianRecord());
+
+    renderWithProviders(<StudentGuardiansTab studentId="student-1" canCreate canUpdate />);
+
+    expect(await screen.findByText(/couldn't load this guardian/i)).toBeInTheDocument();
+    expect(screen.queryByText("…")).not.toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /retry/i }));
+
+    await waitFor(() => {
+      expect(mockFetchGuardianById).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText(/ayesha raza/i)).toBeInTheDocument();
   });
 
   it("promotes a non-primary link to primary with one click, no dialog", async () => {
     mockFetchGuardianLinks.mockResolvedValue([linkRecord({ is_primary: false })]);
+    mockFetchGuardianById.mockResolvedValue(guardianRecord());
     mockUpdateGuardianLink.mockResolvedValue(linkRecord({ is_primary: true }));
 
     renderWithProviders(<StudentGuardiansTab studentId="student-1" canCreate canUpdate />);
@@ -2668,8 +3815,24 @@ describe("StudentGuardiansTab", () => {
     });
   });
 
+  it("shows a toast and leaves the row unchanged when promoting to primary fails", async () => {
+    mockFetchGuardianLinks.mockResolvedValue([linkRecord({ is_primary: false })]);
+    mockFetchGuardianById.mockResolvedValue(guardianRecord());
+    mockUpdateGuardianLink.mockRejectedValue(new Error("server exploded"));
+
+    renderWithProviders(<StudentGuardiansTab studentId="student-1" canCreate canUpdate />);
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: /make primary/i }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalled();
+    });
+    expect(screen.getByRole("button", { name: /make primary/i })).toBeInTheDocument();
+  });
+
   it("hides every action for a caller without create/update permission", async () => {
     mockFetchGuardianLinks.mockResolvedValue([linkRecord()]);
+    mockFetchGuardianById.mockResolvedValue(guardianRecord());
 
     renderWithProviders(
       <StudentGuardiansTab studentId="student-1" canCreate={false} canUpdate={false} />,
@@ -2691,10 +3854,10 @@ describe("StudentGuardiansTab", () => {
 import { useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Badge, Button, Skeleton } from "@schoolhub/ui";
 
-import { apiClient } from "@/lib/auth";
-import { endpoints } from "@/services/endpoints";
+import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import type { GuardianLinkRecord, GuardianRecord } from "@/services";
@@ -2717,6 +3880,8 @@ export interface StudentGuardiansTabProps {
 
 export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: StudentGuardiansTabProps) {
   const t = useTranslations("students");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -2724,38 +3889,51 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
   const [editingLink, setEditingLink] = useState<GuardianLinkRecord | null>(null);
 
   const linksQuery = useQuery({
-    queryKey: queryKeys.list("students", "guardian-links", studentId),
+    queryKey: queryKeys.list("students", "guardian-links", { studentId }),
     queryFn: () => Services.guardians.fetchGuardianLinks(studentId),
   });
   const links = linksQuery.data ?? [];
 
   // The link list never embeds the guardian's own name/phone (confirmed real API shape
-  // — see this plan's Global Constraints) — fan out one GET per unique guardian id.
-  // Reads through `apiClient` directly rather than a `Services.guardians` function:
-  // there is deliberately no `fetchGuardianById`, since nothing else in this phase
-  // needs a single-guardian-by-id fetch (ADR-0011 still applies — this stays inside
-  // `src/features`, which may read `apiClient`'s already-resolved singleton import from
-  // `@/lib/auth`, the one place outside `src/services` this repo's boundary allows for
-  // exactly this kind of one-off read; `endpoints.guardians.detail` keeps the path out
-  // of this component's own literal strings).
+  // — see this plan's Global Constraints) — fan out one GET per unique guardian id,
+  // through `Services.guardians.fetchGuardianById` (Task 2), never a direct
+  // `apiClient`/`endpoints` import inside this component (ADR-0011).
   const guardianIds = [...new Set(links.map((link) => link.guardian_id))];
-  const guardianQueries = useQueries({
+  // `combine` turns N independent query results into one lookup this component actually
+  // wants: per-id data where it resolved, and which ids failed — a bare useQueries array
+  // forces re-deriving this from scratch on every render and makes it easy to drop a
+  // failed lookup silently (the bug this exact shape was added to fix).
+  const guardianResults = useQueries({
     queries: guardianIds.map((guardianId) => ({
       queryKey: queryKeys.detail("guardians", "guardians", guardianId),
-      queryFn: async () =>
-        (await apiClient.get<GuardianRecord>(endpoints.guardians.detail(guardianId))).data,
+      queryFn: () => Services.guardians.fetchGuardianById(guardianId),
     })),
+    combine: (results) => ({
+      byId: new Map(
+        results
+          .map((result) => result.data)
+          .filter((g): g is GuardianRecord => Boolean(g))
+          .map((g) => [g.id, g] as const),
+      ),
+      failedIds: new Set(
+        results
+          .map((result, index) => (result.isError ? guardianIds[index] : null))
+          .filter((id): id is string => id !== null),
+      ),
+      refetchAllFailed: () => {
+        for (const result of results) {
+          if (result.isError) void result.refetch();
+        }
+      },
+    }),
   });
-  const guardiansById = new Map(
-    guardianQueries
-      .map((query) => query.data)
-      .filter((g): g is GuardianRecord => Boolean(g))
-      .map((g) => [g.id, g]),
-  );
+  const guardiansById = guardianResults.byId;
+  const failedGuardianIds = guardianResults.failedIds;
+  const retryFailedGuardians = guardianResults.refetchAllFailed;
 
   function invalidateLinks() {
     void queryClient.invalidateQueries({
-      queryKey: queryKeys.list("students", "guardian-links", studentId),
+      queryKey: queryKeys.list("students", "guardian-links", { studentId }),
     });
   }
 
@@ -2763,10 +3941,30 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
     mutationFn: (linkId: string) =>
       Services.guardians.updateGuardianLink(linkId, { isPrimary: true }),
     onSuccess: invalidateLinks,
+    onError: (error) => {
+      toast.error(resolveErrorMessage(error, tErrors, t("guardians.promoteFailed")));
+    },
   });
 
   if (linksQuery.isPending) {
     return <Skeleton className="h-24 w-full" />;
+  }
+
+  if (linksQuery.isError) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-destructive">{t("guardians.loadError")}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void linksQuery.refetch();
+          }}
+        >
+          {tCommon("retry")}
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -2791,13 +3989,28 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
         <div className="space-y-3">
           {links.map((link) => {
             const guardian = guardiansById.get(link.guardian_id);
+            const guardianFailed = failedGuardianIds.has(link.guardian_id);
             return (
               <div key={link.id} className="space-y-2 rounded-lg border border-border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {guardian ? `${guardian.first_name} ${guardian.last_name}` : "…"}
-                    </p>
+                    {guardianFailed ? (
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-destructive">{t("guardians.guardianLoadError")}</p>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0"
+                          onClick={retryFailedGuardians}
+                        >
+                          {tCommon("retry")}
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-medium text-foreground">
+                        {guardian ? `${guardian.first_name} ${guardian.last_name}` : "…"}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       {t(`guardians.relationship.${link.relationship}`)}
                       {guardian ? ` · ${guardian.phone}` : ""}
@@ -2863,6 +4076,8 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
         <GuardianPickerDialog
           open
           studentId={studentId}
+          excludedGuardianIds={links.map((link) => link.guardian_id)}
+          isFirstGuardian={links.length === 0}
           onOpenChange={(open) => {
             if (!open) setPickerOpen(false);
           }}
@@ -2928,7 +4143,7 @@ git commit -m "feat(dashboard): add the students guardians tab"
 - [ ] **Step 1: Write the failing tests**
 
 ```tsx
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
@@ -3005,7 +4220,10 @@ describe("StudentEmergencyContactsTab", () => {
     await user.type(screen.getByLabelText(/^name$/i), "Zainab Malik");
     await user.type(screen.getByLabelText(/relationship/i), "Aunt");
     await user.type(screen.getByLabelText(/^phone$/i), "0300-3333333");
-    await user.click(screen.getByRole("button", { name: /^add contact$/i }));
+    // Scoped to the open dialog: the tab's own "Add contact" trigger button stays
+    // rendered behind it and shares this exact text, so an unscoped query here would
+    // match two elements.
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^add contact$/i }));
 
     await waitFor(() => {
       expect(mockAddEmergencyContact).toHaveBeenCalledWith(
@@ -3038,8 +4256,23 @@ describe("StudentEmergencyContactsTab", () => {
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
-import { Badge, Button, Input, Skeleton } from "@schoolhub/ui";
+import { toast } from "sonner";
+import { z } from "zod";
+import {
+  Badge,
+  Button,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+  Skeleton,
+} from "@schoolhub/ui";
 
 import {
   ResponsiveDialog,
@@ -3049,6 +4282,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
+import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 
@@ -3062,16 +4296,34 @@ export function StudentEmergencyContactsTab({
   canCreate,
 }: StudentEmergencyContactsTabProps) {
   const t = useTranslations("students");
+  const tCommon = useTranslations("common");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const contactsQuery = useQuery({
-    queryKey: queryKeys.list("students", "emergency-contacts", studentId),
+    queryKey: queryKeys.list("students", "emergency-contacts", { studentId }),
     queryFn: () => Services.students.fetchEmergencyContacts(studentId),
   });
   const contacts = contactsQuery.data ?? [];
 
   if (contactsQuery.isPending) {
     return <Skeleton className="h-24 w-full" />;
+  }
+
+  if (contactsQuery.isError) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-destructive">{t("emergencyContacts.loadError")}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void contactsQuery.refetch();
+          }}
+        >
+          {tCommon("retry")}
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -3127,6 +4379,17 @@ export function StudentEmergencyContactsTab({
   );
 }
 
+const emergencyContactSchema = z.object({
+  name: z.string().min(1),
+  relationship: z.string().min(1),
+  phone: z.string().min(1),
+  altPhone: z.string().optional(),
+  priority: z.coerce.number().int().min(1),
+  notes: z.string().optional(),
+});
+
+type EmergencyContactFormValues = z.infer<typeof emergencyContactSchema>;
+
 function AddEmergencyContactDialog({
   studentId,
   nextPriority,
@@ -3138,34 +4401,43 @@ function AddEmergencyContactDialog({
 }) {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
 
-  const [name, setName] = useState("");
-  const [relationship, setRelationship] = useState("");
-  const [phone, setPhone] = useState("");
-  const [altPhone, setAltPhone] = useState("");
-  const [priority, setPriority] = useState(nextPriority);
-  const [notes, setNotes] = useState("");
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      Services.students.addEmergencyContact(studentId, {
-        name,
-        relationship,
-        phone,
-        ...(altPhone ? { altPhone } : {}),
-        priority,
-        ...(notes ? { notes } : {}),
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.list("students", "emergency-contacts", studentId),
-      });
-      onOpenChange(false);
+  const form = useForm<EmergencyContactFormValues>({
+    resolver: zodResolver(emergencyContactSchema),
+    defaultValues: {
+      name: "",
+      relationship: "",
+      phone: "",
+      altPhone: "",
+      priority: nextPriority,
+      notes: "",
     },
   });
 
-  const canSubmit = name.trim() && relationship.trim() && phone.trim();
+  const mutation = useMutation({
+    mutationFn: (values: EmergencyContactFormValues) =>
+      Services.students.addEmergencyContact(studentId, {
+        name: values.name,
+        relationship: values.relationship,
+        phone: values.phone,
+        ...(values.altPhone ? { altPhone: values.altPhone } : {}),
+        priority: values.priority,
+        ...(values.notes ? { notes: values.notes } : {}),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.list("students", "emergency-contacts", { studentId }),
+      });
+      onOpenChange(false);
+    },
+    // Toast, not an inline field/alert error, per this plan's Global Constraints — an
+    // add-contact failure is one of the named mutations that must surface via toast.
+    onError: (error) => {
+      toast.error(resolveErrorMessage(error, tErrors, t("emergencyContacts.addFailed")));
+    },
+  });
 
   return (
     <ResponsiveDialog open onOpenChange={onOpenChange}>
@@ -3173,81 +4445,113 @@ function AddEmergencyContactDialog({
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{t("emergencyContacts.add")}</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
-        <ResponsiveDialogBody className="space-y-3">
-          <p className="text-sm text-muted-foreground">{t("emergencyContacts.addDescription")}</p>
-          <p className="text-xs text-muted-foreground">{t("emergencyContacts.permanentNotice")}</p>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="contact-name">
-              {t("emergencyContacts.fields.name")}
-            </label>
-            <Input id="contact-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="contact-relationship">
-              {t("emergencyContacts.fields.relationship")}
-            </label>
-            <Input
-              id="contact-relationship"
-              value={relationship}
-              onChange={(e) => setRelationship(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="contact-phone">
-              {t("emergencyContacts.fields.phone")}
-            </label>
-            <Input id="contact-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="contact-alt-phone">
-              {t("emergencyContacts.fields.altPhone")}
-            </label>
-            <Input
-              id="contact-alt-phone"
-              value={altPhone}
-              onChange={(e) => setAltPhone(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="contact-priority">
-              {t("emergencyContacts.fields.priority")}
-            </label>
-            <Input
-              id="contact-priority"
-              type="number"
-              min={1}
-              value={priority}
-              onChange={(e) => setPriority(Number(e.target.value) || 1)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="contact-notes">
-              {t("emergencyContacts.fields.notes")}
-            </label>
-            <Input id="contact-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-        </ResponsiveDialogBody>
-        <ResponsiveDialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              onOpenChange(false);
-            }}
+        <Form {...form}>
+          <form
+            noValidate
+            onSubmit={form.handleSubmit((values) => {
+              mutation.mutate(values);
+            })}
           >
-            {tCommon("cancel")}
-          </Button>
-          <Button
-            type="button"
-            disabled={!canSubmit || mutation.isPending}
-            isLoading={mutation.isPending}
-            onClick={() => {
-              mutation.mutate();
-            }}
-          >
-            {t("emergencyContacts.add")}
-          </Button>
-        </ResponsiveDialogFooter>
+            <ResponsiveDialogBody className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {t("emergencyContacts.addDescription")}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t("emergencyContacts.permanentNotice")}
+              </p>
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("emergencyContacts.fields.name")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="relationship"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("emergencyContacts.fields.relationship")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("emergencyContacts.fields.phone")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="altPhone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("emergencyContacts.fields.altPhone")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("emergencyContacts.fields.priority")}</FormLabel>
+                    <FormControl>
+                      <Input type="number" min={1} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("emergencyContacts.fields.notes")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </ResponsiveDialogBody>
+            <ResponsiveDialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false);
+                }}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button type="submit" isLoading={mutation.isPending}>
+                {t("emergencyContacts.add")}
+              </Button>
+            </ResponsiveDialogFooter>
+          </form>
+        </Form>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
   );
@@ -3276,7 +4580,7 @@ git commit -m "feat(dashboard): add the students emergency contacts tab"
 - Create: `apps/dashboard/src/features/students/__tests__/student-documents-tab.test.tsx`
 
 **Interfaces:**
-- Consumes: `Services.students.{fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument}` (Task 3), `Services.files.{uploadFile,getDownloadUrl}` (Phase 1, Task 3).
+- Consumes: `Services.students.{fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument}` (Task 3), `Services.files.uploadFile` (Phase 1), `Services.jobs.fetchFileDownloadUrl` (already exists — Task 3's Interfaces section).
 - Produces: `StudentDocumentsTab({ studentId, canCreate, canVerify, canDelete })`. Consumed by Task 10.
 
 **Review Focus #4** (an upload failing at a specific step must show that step's real message) applies here.
@@ -3293,6 +4597,7 @@ import { renderWithProviders } from "@/test-utils";
 import { DocumentUploadDialog } from "../document-upload-dialog";
 
 jest.mock("@/services", () => ({
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     files: { uploadFile: jest.fn() },
     students: { uploadDocumentRecord: jest.fn() },
@@ -3408,11 +4713,21 @@ describe("DocumentUploadDialog", () => {
 
 import { useState, type ChangeEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
+import { z } from "zod";
 import {
   Alert,
   Button,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
   Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -3428,16 +4743,22 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
-import { Services } from "@/services";
+import { resolveErrorMessage } from "@/lib/error-message";
+import { ApiError, Services } from "@/services";
+import { DOCUMENT_TYPES } from "@/services/modules/students/students-constant";
 
-const DOCUMENT_TYPES = [
-  "birth_certificate",
-  "prior_transfer_certificate",
-  "immunization_record",
-  "photo_id",
-  "prior_report_card",
-  "other",
-] as const;
+// The file itself stays outside this schema, as its own `useState` — same convention
+// `PhotoUploadField` (Task 5) already established for an uncontrolled `<input
+// type="file">`, which has no meaningful RHF "value" to validate against. Only the
+// metadata fields go through RHF + zod.
+const documentFormSchema = z.object({
+  documentType: z.string().min(1),
+  title: z.string().min(1),
+  notes: z.string().optional(),
+  expiresAt: z.string().optional(),
+});
+
+type DocumentFormValues = z.infer<typeof documentFormSchema>;
 
 export interface DocumentUploadDialogProps {
   open: boolean;
@@ -3454,24 +4775,36 @@ export function DocumentUploadDialog({
 }: DocumentUploadDialogProps) {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
 
   const [file, setFile] = useState<File | null>(null);
-  const [documentType, setDocumentType] = useState<string>(DOCUMENT_TYPES[0]);
-  const [title, setTitle] = useState("");
-  const [notes, setNotes] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
+  // Keeps a successful upload's id across a failed metadata-POST retry — `core/files`'
+  // `File` rows can't be deleted, so retrying the whole mutation would otherwise
+  // re-upload the same file and leave the first attempt as a permanent orphan row.
+  const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const form = useForm<DocumentFormValues>({
+    resolver: zodResolver(documentFormSchema),
+    defaultValues: {
+      documentType: DOCUMENT_TYPES[0],
+      title: "",
+      notes: "",
+      expiresAt: "",
+    },
+  });
+
   const mutation = useMutation({
-    mutationFn: async () => {
-      if (!file) throw new Error("no file selected");
-      const fileId = await Services.files.uploadFile(file, "student.document");
+    mutationFn: async (values: DocumentFormValues) => {
+      const fileId =
+        uploadedFileId ?? (await Services.files.uploadFile(file as File, "student.document"));
+      setUploadedFileId(fileId);
       return Services.students.uploadDocumentRecord(studentId, {
         fileId,
-        documentType,
-        title,
-        ...(notes ? { notes } : {}),
-        ...(expiresAt ? { expiresAt } : {}),
+        documentType: values.documentType,
+        title: values.title,
+        ...(values.notes ? { notes: values.notes } : {}),
+        ...(values.expiresAt ? { expiresAt: values.expiresAt } : {}),
       });
     },
     onSuccess: () => {
@@ -3479,15 +4812,34 @@ export function DocumentUploadDialog({
       onUploaded();
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : t("form.submitFailed"));
+      // `Services.files.uploadFile` rejects with a `FileUploadError` (a plain `Error`
+      // subclass) whose message is already the real step-specific text — never an
+      // `ApiError`. `uploadDocumentRecord`'s own failure, by contrast, is a real
+      // `ApiError` from the backend (e.g. a validation error), which needs
+      // `resolveErrorMessage` to surface its field-level detail instead of a generic
+      // message.
+      setError(
+        err instanceof ApiError
+          ? resolveErrorMessage(err, tErrors, t("form.submitFailed"), "non_field")
+          : err instanceof Error
+            ? err.message
+            : t("form.submitFailed"),
+      );
     },
   });
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     setFile(event.target.files?.[0] ?? null);
+    // A freshly picked file replaces whatever was uploaded before — never post a new
+    // pick's metadata against an older file's id.
+    setUploadedFileId(null);
   }
 
-  const canSubmit = Boolean(file) && title.trim().length > 0;
+  function onSubmit(values: DocumentFormValues) {
+    if (!file && !uploadedFileId) return;
+    setError(null);
+    mutation.mutate(values);
+  }
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -3495,77 +4847,97 @@ export function DocumentUploadDialog({
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{t("documents.upload")}</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
-        <ResponsiveDialogBody className="space-y-3">
-          <p className="text-sm text-muted-foreground">{t("documents.uploadDescription")}</p>
-          {error && <Alert variant="destructive">{error}</Alert>}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="document-file">
-              {t("documents.fields.file")}
-            </label>
-            <Input id="document-file" type="file" onChange={handleFileChange} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="document-type">
-              {t("documents.fields.documentType")}
-            </label>
-            <Select value={documentType} onValueChange={setDocumentType}>
-              <SelectTrigger id="document-type" aria-label={t("documents.fields.documentType")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DOCUMENT_TYPES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {t(`documents.type.${value}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="document-title">
-              {t("documents.fields.title")}
-            </label>
-            <Input id="document-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="document-expires-at">
-              {t("documents.fields.expiresAt")}
-            </label>
-            <Input
-              id="document-expires-at"
-              type="date"
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="document-notes">
-              {t("documents.fields.notes")}
-            </label>
-            <Input id="document-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-        </ResponsiveDialogBody>
-        <ResponsiveDialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              onOpenChange(false);
-            }}
-          >
-            {tCommon("cancel")}
-          </Button>
-          <Button
-            type="button"
-            disabled={!canSubmit || mutation.isPending}
-            isLoading={mutation.isPending}
-            onClick={() => {
-              mutation.mutate();
-            }}
-          >
-            {mutation.isPending ? t("documents.uploading") : t("documents.upload")}
-          </Button>
-        </ResponsiveDialogFooter>
+        <Form {...form}>
+          <form noValidate onSubmit={form.handleSubmit(onSubmit)}>
+            <ResponsiveDialogBody className="space-y-3">
+              <p className="text-sm text-muted-foreground">{t("documents.uploadDescription")}</p>
+              {error && <Alert variant="destructive">{error}</Alert>}
+              <div className="space-y-1.5">
+                <Label htmlFor="document-file">{t("documents.fields.file")}</Label>
+                <Input id="document-file" type="file" onChange={handleFileChange} />
+              </div>
+              <FormField
+                control={form.control}
+                name="documentType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("documents.fields.documentType")}</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger aria-label={t("documents.fields.documentType")}>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {DOCUMENT_TYPES.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {t(`documents.type.${value}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("documents.fields.title")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="expiresAt"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("documents.fields.expiresAt")}</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("documents.fields.notes")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </ResponsiveDialogBody>
+            <ResponsiveDialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false);
+                }}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button
+                type="submit"
+                disabled={(!file && !uploadedFileId) || mutation.isPending}
+                isLoading={mutation.isPending}
+              >
+                {mutation.isPending ? t("documents.uploading") : t("documents.upload")}
+              </Button>
+            </ResponsiveDialogFooter>
+          </form>
+        </Form>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
   );
@@ -3584,12 +4956,15 @@ git commit -m "feat(dashboard): add the student document upload dialog"
 ```tsx
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 
 import { Services } from "@/services";
 import type { StudentDocumentRecord } from "@/services";
 import { renderWithProviders } from "@/test-utils";
 
 import { StudentDocumentsTab } from "../student-documents-tab";
+
+jest.mock("sonner", () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
 
 jest.mock("@/services", () => ({
   Services: {
@@ -3599,7 +4974,8 @@ jest.mock("@/services", () => ({
       deleteDocument: jest.fn(),
       uploadDocumentRecord: jest.fn(),
     },
-    files: { uploadFile: jest.fn(), getDownloadUrl: jest.fn() },
+    files: { uploadFile: jest.fn() },
+    jobs: { fetchFileDownloadUrl: jest.fn() },
   },
 }));
 
@@ -3612,9 +4988,10 @@ const mockVerifyDocument = Services.students.verifyDocument as jest.MockedFuncti
 const mockDeleteDocument = Services.students.deleteDocument as jest.MockedFunction<
   typeof Services.students.deleteDocument
 >;
-const mockGetDownloadUrl = Services.files.getDownloadUrl as jest.MockedFunction<
-  typeof Services.files.getDownloadUrl
+const mockFetchFileDownloadUrl = Services.jobs.fetchFileDownloadUrl as jest.MockedFunction<
+  typeof Services.jobs.fetchFileDownloadUrl
 >;
+const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
 
 function documentRecord(overrides: Partial<StudentDocumentRecord> = {}): StudentDocumentRecord {
   return {
@@ -3622,7 +4999,11 @@ function documentRecord(overrides: Partial<StudentDocumentRecord> = {}): Student
     student_id: "student-1",
     file_id: "file-1",
     document_type: "birth_certificate",
-    title: "Birth certificate",
+    // Deliberately NOT "Birth certificate" — that's the default type's own label
+    // (`documents.type.birth_certificate`, `en.json`), rendered as a second, separate
+    // text node in the same row. A title matching it would make `findByText` match two
+    // elements and throw a multiple-elements error.
+    title: "Ayesha's birth certificate",
     notes: null,
     verification_status: "pending",
     verified_by: null,
@@ -3639,8 +5020,8 @@ describe("StudentDocumentsTab", () => {
     mockFetchDocuments.mockReset();
     mockVerifyDocument.mockReset();
     mockDeleteDocument.mockReset();
-    mockGetDownloadUrl.mockReset();
-    window.open = jest.fn();
+    mockFetchFileDownloadUrl.mockReset();
+    mockToastError.mockReset();
   });
 
   it("shows empty copy when there are no documents yet", async () => {
@@ -3660,7 +5041,7 @@ describe("StudentDocumentsTab", () => {
       <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
     );
 
-    await screen.findByText("Birth certificate");
+    await screen.findByText("Ayesha's birth certificate");
     expect(screen.getByRole("button", { name: /^verify$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^reject$/i })).toBeInTheDocument();
   });
@@ -3672,13 +5053,13 @@ describe("StudentDocumentsTab", () => {
       <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
     );
 
-    await screen.findByText("Birth certificate");
+    await screen.findByText("Ayesha's birth certificate");
     expect(screen.queryByRole("button", { name: /^verify$/i })).not.toBeInTheDocument();
   });
 
-  it("requests a fresh signed URL on every download click and opens it", async () => {
+  it("requests a fresh signed URL on every download click", async () => {
     mockFetchDocuments.mockResolvedValue([documentRecord()]);
-    mockGetDownloadUrl.mockResolvedValue("https://files.example.com/x?sig=abc");
+    mockFetchFileDownloadUrl.mockResolvedValue("https://files.example.com/x?sig=abc");
 
     renderWithProviders(
       <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
@@ -3687,14 +5068,28 @@ describe("StudentDocumentsTab", () => {
     const button = await screen.findByRole("button", { name: /download/i });
     await userEvent.setup().click(button);
 
+    // The URL itself is never cached (a signed URL has a server-side TTL) — asserting
+    // the service call, not a DOM side effect, is what actually pins "fetched fresh per
+    // click"; the anchor-click mechanics are `staff-toolbar.tsx`'s own already-proven
+    // pattern, reused verbatim here, not re-tested per call site.
     await waitFor(() => {
-      expect(mockGetDownloadUrl).toHaveBeenCalledWith("file-1");
+      expect(mockFetchFileDownloadUrl).toHaveBeenCalledWith("file-1");
     });
-    expect(window.open).toHaveBeenCalledWith(
-      "https://files.example.com/x?sig=abc",
-      "_blank",
-      "noopener,noreferrer",
+  });
+
+  it("shows a toast when the download URL fetch fails", async () => {
+    mockFetchDocuments.mockResolvedValue([documentRecord()]);
+    mockFetchFileDownloadUrl.mockRejectedValue(new Error("network down"));
+
+    renderWithProviders(
+      <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
     );
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: /download/i }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalled();
+    });
   });
 
   it("confirms before deleting", async () => {
@@ -3727,7 +5122,7 @@ describe("StudentDocumentsTab", () => {
       />,
     );
 
-    await screen.findByText("Birth certificate");
+    await screen.findByText("Ayesha's birth certificate");
     expect(screen.queryByRole("button", { name: /upload document/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^verify$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^delete$/i })).not.toBeInTheDocument();
@@ -3744,8 +5139,10 @@ describe("StudentDocumentsTab", () => {
 "use client";
 
 import { useState } from "react";
+import { format } from "date-fns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -3760,9 +5157,11 @@ import {
   Skeleton,
 } from "@schoolhub/ui";
 
+import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import type { DocumentVerificationDecision, StudentDocumentRecord } from "@/services";
+import { DOCUMENT_TYPES } from "@/services/modules/students/students-constant";
 import { DocumentUploadDialog } from "./document-upload-dialog";
 
 const STATUS_VARIANT: Record<StudentDocumentRecord["verification_status"], "success" | "warning" | "destructive"> = {
@@ -3770,6 +5169,20 @@ const STATUS_VARIANT: Record<StudentDocumentRecord["verification_status"], "succ
   verified: "success",
   rejected: "destructive",
 };
+
+/** A tenant's document can carry a `document_type` outside the 6 seeded defaults (an
+ * older or externally-written row) — render the raw value rather than indexing into the
+ * fixed `documents.type.*` i18n map and hitting a missing key. */
+function documentTypeLabel(t: ReturnType<typeof useTranslations>, type: string): string {
+  return (DOCUMENT_TYPES as readonly string[]).includes(type) ? t(`documents.type.${type}`) : type;
+}
+
+/** Mirrors `staff-detail-sheet.tsx`'s own local `formatDate` — a raw ISO string is never
+ * shown to the user. */
+function formatExpiry(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : format(parsed, "PPP");
+}
 
 export interface StudentDocumentsTabProps {
   studentId: string;
@@ -3785,20 +5198,22 @@ export function StudentDocumentsTab({
   canDelete,
 }: StudentDocumentsTabProps) {
   const t = useTranslations("students");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const documentsQuery = useQuery({
-    queryKey: queryKeys.list("students", "documents", studentId),
+    queryKey: queryKeys.list("students", "documents", { studentId }),
     queryFn: () => Services.students.fetchDocuments(studentId),
   });
   const documents = documentsQuery.data ?? [];
 
   function invalidate() {
     void queryClient.invalidateQueries({
-      queryKey: queryKeys.list("students", "documents", studentId),
+      queryKey: queryKeys.list("students", "documents", { studentId }),
     });
   }
 
@@ -3811,6 +5226,9 @@ export function StudentDocumentsTab({
       decision: DocumentVerificationDecision;
     }) => Services.students.verifyDocument(documentId, decision),
     onSuccess: invalidate,
+    onError: (error) => {
+      toast.error(resolveErrorMessage(error, tErrors, t("documents.verifyFailed")));
+    },
   });
 
   const deleteMutation = useMutation({
@@ -3819,17 +5237,54 @@ export function StudentDocumentsTab({
       invalidate();
       setPendingDeleteId(null);
     },
+    onError: (error) => {
+      toast.error(resolveErrorMessage(error, tErrors, t("documents.deleteFailed")));
+    },
   });
 
   const downloadMutation = useMutation({
-    mutationFn: (fileId: string) => Services.files.getDownloadUrl(fileId),
-    onSuccess: (url) => {
-      window.open(url, "_blank", "noopener,noreferrer");
+    // Reuses the existing `Services.jobs.fetchFileDownloadUrl` (already wraps `POST
+    // /files/{id}:download`) — not a second, nonexistent `Services.files` wrapper.
+    // Takes the document's own title alongside its file id, purely for the anchor's
+    // `download` filename hint below — never sent to the server.
+    mutationFn: async ({ fileId }: { fileId: string; title: string }) => ({
+      url: await Services.jobs.fetchFileDownloadUrl(fileId),
+    }),
+    onSuccess: ({ url }, { title }) => {
+      // The anchor-click pattern `/staff`'s export download already uses — never
+      // `window.open`, which only succeeds within a short window of direct user
+      // interaction that the request in between can lose on a slow connection. The
+      // `download` attribute is a same-origin filename hint only; the actual forced
+      // download now comes from `core/files`' own `Content-Disposition` header (Task 1).
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = title;
+      link.click();
+    },
+    onError: (error) => {
+      toast.error(resolveErrorMessage(error, tErrors, t("documents.downloadFailed")));
     },
   });
 
   if (documentsQuery.isPending) {
     return <Skeleton className="h-24 w-full" />;
+  }
+
+  if (documentsQuery.isError) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-destructive">{t("documents.loadError")}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void documentsQuery.refetch();
+          }}
+        >
+          {tCommon("retry")}
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -3858,9 +5313,9 @@ export function StudentDocumentsTab({
                 <div>
                   <p className="text-sm font-medium text-foreground">{document.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {t(`documents.type.${document.document_type}`)}
+                    {documentTypeLabel(t, document.document_type)}
                     {document.expires_at
-                      ? ` · ${t("documents.expiresOn", { date: document.expires_at })}`
+                      ? ` · ${t("documents.expiresOn", { date: formatExpiry(document.expires_at) })}`
                       : ""}
                   </p>
                 </div>
@@ -3874,7 +5329,7 @@ export function StudentDocumentsTab({
                   size="sm"
                   disabled={downloadMutation.isPending}
                   onClick={() => {
-                    downloadMutation.mutate(document.file_id);
+                    downloadMutation.mutate({ fileId: document.file_id, title: document.title });
                   }}
                 >
                   {t("documents.download")}
@@ -3943,7 +5398,7 @@ export function StudentDocumentsTab({
             <AlertDialogDescription>{t("documents.deleteConfirmDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(event) => {
                 event.preventDefault();
@@ -3959,8 +5414,6 @@ export function StudentDocumentsTab({
   );
 }
 ```
-
-`AlertDialogCancel`'s `"Cancel"` is a placeholder needing a real `tCommon("cancel")` call — add `const tCommon = useTranslations("common");` alongside the existing `t` and use `{tCommon("cancel")}` there; fix this during Step 5's implementation, not left as shipped English-only text (the `react/jsx-no-literals` lint rule would catch this anyway — treat it as a build error, not a style nit).
 
 - [ ] **Step 6: Confirm the tests pass by construction**
 
@@ -4011,6 +5464,30 @@ The existing file already has a working `renderWithProviders`/mock-`Services` se
     expect(screen.getByRole("tab", { name: /^guardians$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /emergency contacts/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^documents$/i })).toBeInTheDocument();
+  });
+
+  it("hides a tab entirely for a caller without that tab's own view permission", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail());
+    mockUseCurrentUser.mockReturnValue({
+      data: { ...PERMITTED_USER, permissions: ["students.student.view"] },
+      isError: false,
+    });
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(studentRow().admissionNumber);
+    expect(screen.getByRole("tab", { name: /profile/i })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /^guardians$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /^documents$/i })).not.toBeInTheDocument();
   });
 
   it("does not fetch a tab's data until that tab is actually opened", async () => {
@@ -4069,6 +5546,45 @@ The existing file already has a working `renderWithProviders`/mock-`Services` se
 
 Add `mockFetchGuardianLinks` to the file's existing `jest.mock("@/services", ...)` factory (it currently mocks only `Services.students.fetchStudentById` — confirm by reading the file's current mock block before editing it — add `guardians: { fetchGuardianLinks: jest.fn() }` alongside the existing `students` key, and declare `const mockFetchGuardianLinks = Services.guardians.fetchGuardianLinks as jest.MockedFunction<typeof Services.guardians.fetchGuardianLinks>;` beside the file's existing `mockFetchStudentById` declaration). Also mock `Services.students.{fetchEmergencyContacts,fetchDocuments}` and `Services.files.uploadFile` in the same factory, each resolving `[]`/`undefined` by default in a `beforeEach`, so opening any of the three new tabs during an existing (unrelated) test never crashes with "not a function" — matching this file's own established reasoning for why its mock object needs every function present, not just the ones a given test calls.
 
+This component now calls `useCurrentUser()` directly for the first time (Phase 1 only ever passed `canUpdate`/`canWithdraw` in as props) — mock it the same way `student-toolbar.test.tsx` already does:
+
+```tsx
+import type { AuthenticatedUser } from "@schoolhub/types";
+
+interface MockCurrentUserResult {
+  data: AuthenticatedUser | undefined;
+  isError: boolean;
+}
+const mockUseCurrentUser = jest.fn<MockCurrentUserResult, []>();
+jest.mock("@/hooks/use-current-user", () => ({
+  useCurrentUser: () => mockUseCurrentUser(),
+}));
+
+const PERMITTED_USER: AuthenticatedUser = {
+  id: "u1",
+  email: "admin@example.com",
+  phone: null,
+  full_name: "School Admin",
+  avatar_url: null,
+  locale: "en",
+  tenant_id: "tenant-1",
+  roles: [],
+  permissions: [
+    "students.guardian.view",
+    "students.guardian.create",
+    "students.guardian.update",
+    "students.student.view",
+    "students.student.update",
+    "students.document.view",
+    "students.document.create",
+    "students.document.verify",
+    "students.document.delete",
+  ],
+};
+```
+
+Set `mockUseCurrentUser.mockReset().mockReturnValue({ data: PERMITTED_USER, isError: false });` in this file's existing top-level `beforeEach` — every pre-existing test in this file keeps passing unchanged (none of them asserted on the three new tabs' presence before this task), and the three new tests below render against a user who can see every tab.
+
 - [ ] **Step 2: Confirm the three new tests fail by construction, then modify `student-detail-sheet.tsx`**
 
 Add these imports:
@@ -4082,24 +5598,16 @@ import { StudentEmergencyContactsTab } from "./student-emergency-contacts-tab";
 import { StudentDocumentsTab } from "./student-documents-tab";
 ```
 
-Add a tab-state hook near the component's other state (`const isDesktop = useIsDesktopShell();` is the existing line to add this after):
+Add a line near the component's other state (`const isDesktop = useIsDesktopShell();` is the existing line to add this after) — this is the ONLY addition needed; no new `useState`/`useEffect` import, since the tabbed sheet resets via a `key`, not an effect (this plan's Alternatives Considered):
 
 ```tsx
-  const [activeTab, setActiveTab] = useState("profile");
   const { data: currentUser } = useCurrentUser();
+  const canViewGuardians = hasPermission(currentUser, "students.guardian.view");
+  const canViewEmergencyContacts = hasPermission(currentUser, "students.student.view");
+  const canViewDocuments = hasPermission(currentUser, "students.document.view");
 ```
 
-(`useState` needs adding to this file's existing `"react"` import, which currently only pulls in `type ReactNode` — confirm by reading the file's current top-of-file imports before editing.)
-
-Reset the active tab whenever the sheet closes or a different row opens, so reopening always starts on Profile — add this effect alongside the component's existing logic (there is no existing `useEffect` in this file today; this is the first one):
-
-```tsx
-  useEffect(() => {
-    if (row === null) setActiveTab("profile");
-  }, [row]);
-```
-
-(`useEffect` needs adding to the `"react"` import alongside `useState`.)
+Each new tab renders only for a caller holding *that tab's own* view key — not merely "can view this student" (this plan's Global Constraints) — so `TabsTrigger`/`TabsContent` pairs below are conditionally rendered, not merely their inner content.
 
 Replace the existing block —
 
@@ -4140,16 +5648,24 @@ Replace the existing block —
 — with:
 
 ```tsx
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="flex min-h-0 flex-1 flex-col"
-            >
-              <TabsList variant="line" className="shrink-0 px-6">
+            <Tabs defaultValue="profile" key={row.id} className="flex min-h-0 flex-1 flex-col">
+              {/* Four labels (worse in Urdu) risk overflowing a 375px mobile drawer —
+               * `overflow-x-auto` lets the list scroll horizontally rather than wrap or
+               * clip instead of silently assuming they always fit on one line. Verify
+               * visually at 375px in both locales during implementation. */}
+              <TabsList variant="line" className="shrink-0 overflow-x-auto px-6">
                 <TabsTrigger value="profile">{t("tabs.profile")}</TabsTrigger>
-                <TabsTrigger value="guardians">{t("tabs.guardians")}</TabsTrigger>
-                <TabsTrigger value="emergencyContacts">{t("tabs.emergencyContacts")}</TabsTrigger>
-                <TabsTrigger value="documents">{t("tabs.documents")}</TabsTrigger>
+                {canViewGuardians && (
+                  <TabsTrigger value="guardians">{t("tabs.guardians")}</TabsTrigger>
+                )}
+                {canViewEmergencyContacts && (
+                  <TabsTrigger value="emergencyContacts">
+                    {t("tabs.emergencyContacts")}
+                  </TabsTrigger>
+                )}
+                {canViewDocuments && (
+                  <TabsTrigger value="documents">{t("tabs.documents")}</TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="profile" asChild>
@@ -4183,45 +5699,45 @@ Replace the existing block —
                 </ResponsiveSheetBody>
               </TabsContent>
 
-              <TabsContent value="guardians" asChild>
-                <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                  {activeTab === "guardians" && (
+              {canViewGuardians && (
+                <TabsContent value="guardians" asChild>
+                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
                     <StudentGuardiansTab
                       studentId={row.id}
                       canCreate={hasPermission(currentUser, "students.guardian.create")}
                       canUpdate={hasPermission(currentUser, "students.guardian.update")}
                     />
-                  )}
-                </ResponsiveSheetBody>
-              </TabsContent>
+                  </ResponsiveSheetBody>
+                </TabsContent>
+              )}
 
-              <TabsContent value="emergencyContacts" asChild>
-                <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                  {activeTab === "emergencyContacts" && (
+              {canViewEmergencyContacts && (
+                <TabsContent value="emergencyContacts" asChild>
+                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
                     <StudentEmergencyContactsTab
                       studentId={row.id}
                       canCreate={hasPermission(currentUser, "students.student.update")}
                     />
-                  )}
-                </ResponsiveSheetBody>
-              </TabsContent>
+                  </ResponsiveSheetBody>
+                </TabsContent>
+              )}
 
-              <TabsContent value="documents" asChild>
-                <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                  {activeTab === "documents" && (
+              {canViewDocuments && (
+                <TabsContent value="documents" asChild>
+                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
                     <StudentDocumentsTab
                       studentId={row.id}
                       canCreate={hasPermission(currentUser, "students.document.create")}
                       canVerify={hasPermission(currentUser, "students.document.verify")}
                       canDelete={hasPermission(currentUser, "students.document.delete")}
                     />
-                  )}
-                </ResponsiveSheetBody>
-              </TabsContent>
+                  </ResponsiveSheetBody>
+                </TabsContent>
+              )}
             </Tabs>
 ```
 
-The `activeTab === "<tab>"` guard around each non-Profile tab's own component (on top of each tab component's own internal `enabled`-style query gating already built into Tasks 7-9's `useQuery` calls with no `enabled` flag of their own) is what actually satisfies this plan's "lazy per-tab data loading" Global Constraint: `TabsContent` keeps every panel mounted in the DOM once visited (Radix's own behavior, for animation), so without this guard a tab's `useQuery` would still be *mounted* — and therefore still fetching — the moment its `TabsContent` first renders, even while a different tab is visually active. Tasks 7-9's own components have no `enabled` option on their queries precisely because they're never mounted until their tab is genuinely selected — this guard is what makes that true.
+`key={row.id}` remounts the whole `Tabs` tree — and therefore resets to `defaultValue="profile"` — every time the sheet opens for a different student, with no reset effect (this plan's Alternatives Considered). Each non-Profile `TabsContent` has no `activeTab === "<tab>"` guard around it: Radix unmounts an inactive `TabsContent` by default (no `forceMount` anywhere in this plan), so Tasks 7-9's own `useQuery` calls — which have no `enabled` option of their own — never fire until their tab's panel is actually mounted. No extra state is needed to make that true.
 
 - [ ] **Step 3: Confirm all three new tests, and every pre-existing test in this file, pass by construction**
 
@@ -4243,18 +5759,20 @@ git commit -m "feat(dashboard): wrap the student detail sheet in Profile/Guardia
 **Files:**
 - Create: `e2e/src/mocks/domains/guardians.ts`
 - Create: `e2e/src/mocks/domains/student-relations.ts`
+- Create: `e2e/src/mocks/domains/files.ts`
+- Modify: `e2e/src/mocks/domains/jobs.ts` — add `:confirm` to the existing `:fileAction` handler
 - Modify: `e2e/src/mocks/index.ts`
 - Create: `e2e/tests/dashboard/students-relations.spec.ts`
 
 **Interfaces:**
-- Consumes: the existing `MockModule`/`ok`/`fail`/`pagedList` helpers (`e2e/src/mocks/envelope.ts`, `e2e/src/mocks/router.ts`), the existing `buildStudent`/`studentsModule` (`e2e/src/mocks/domains/students.ts`), the existing `studentsPage` fixture.
-- Produces: `guardiansModule(options)`, `studentRelationsModule(options)`, registered in `e2e/src/mocks/index.ts` alongside every existing domain module.
+- Consumes: the existing `MockModule`/`ok`/`fail`/`paginated`/`noContent` helpers (`e2e/src/mocks/envelope.ts`, `e2e/src/mocks/router.ts`), the existing `buildStudent`/`studentsModule` (`e2e/src/mocks/domains/students.ts`), the existing `jobsModule` (`e2e/src/mocks/domains/jobs.ts`), the existing `studentsPage` fixture.
+- Produces: `guardiansModule(options)`, `studentRelationsModule(options)`, `filesModule(options)`, registered in `e2e/src/mocks/index.ts` alongside every existing domain module; `jobsModule` gains `:confirm` support.
 
 - [ ] **Step 1: Write `e2e/src/mocks/domains/guardians.ts`**
 
 ```ts
 import { id } from "@/data/factories";
-import { fail, ok, pagedList } from "../envelope";
+import { fail, ok, paginated } from "../envelope";
 import type { MockModule } from "../router";
 
 export interface Guardian {
@@ -4347,7 +5865,7 @@ export function guardiansModule(options: GuardiansOptions = {}): MockModule {
           `${g.first_name} ${g.last_name}`.toLowerCase().includes(search) ||
           g.phone.includes(search),
       );
-      return pagedList(matching, { page: 1, page_size: 20, total_count: matching.length });
+      return paginated(matching);
     });
 
     api.get("/guardians/:guardianId", (request) => {
@@ -4371,7 +5889,7 @@ export function guardiansModule(options: GuardiansOptions = {}): MockModule {
 
     api.get("/students/:studentId/guardians", (request) => {
       const studentLinks = links.filter((l) => l.student_id === request.params["studentId"]);
-      return pagedList(studentLinks, { page: 1, page_size: 20, total_count: studentLinks.length });
+      return paginated(studentLinks);
     });
 
     api.post("/students/:studentId/guardians", (request) => {
@@ -4380,10 +5898,12 @@ export function guardiansModule(options: GuardiansOptions = {}): MockModule {
         (l) => l.student_id === request.params["studentId"] && l.guardian_id === body.guardian_id,
       );
       if (alreadyLinked) {
-        return fail(422, "This guardian is already linked to this student.", {
-          code: "domain_rule_violation",
+        // The real shape: `StudentGuardian`'s `UniqueConstraint` -> `IntegrityError` ->
+        // `core/api/exceptions.py`'s 409 `conflict` mapping — not an invented 422.
+        // `fail`'s default code for 409 is already `"conflict"` (`CODE_BY_STATUS`).
+        return fail(409, "The request conflicts with existing data.", {
           details: [
-            { field: "non_field", issue: "This guardian is already linked to this student." },
+            { field: "non_field", issue: "The request conflicts with existing data." },
           ],
         });
       }
@@ -4416,7 +5936,7 @@ export function guardiansModule(options: GuardiansOptions = {}): MockModule {
 
 ```ts
 import { id } from "@/data/factories";
-import { fail, ok, pagedList } from "../envelope";
+import { fail, noContent, ok, paginated } from "../envelope";
 import type { MockModule } from "../router";
 
 export interface EmergencyContact {
@@ -4495,7 +6015,7 @@ export function studentRelationsModule(options: StudentRelationsOptions = {}): M
       const rows = contacts
         .filter((c) => c.student_id === request.params["studentId"])
         .sort((a, b) => a.priority - b.priority);
-      return pagedList(rows, { page: 1, page_size: 50, total_count: rows.length });
+      return paginated(rows);
     });
 
     api.post("/students/:studentId/emergency-contacts", (request) => {
@@ -4511,7 +6031,7 @@ export function studentRelationsModule(options: StudentRelationsOptions = {}): M
 
     api.get("/students/:studentId/documents", (request) => {
       const rows = documents.filter((d) => d.student_id === request.params["studentId"]);
-      return pagedList(rows, { page: 1, page_size: 50, total_count: rows.length });
+      return paginated(rows);
     });
 
     api.post("/students/:studentId/documents", (request) => {
@@ -4529,7 +6049,7 @@ export function studentRelationsModule(options: StudentRelationsOptions = {}): M
       const index = documents.findIndex((d) => d.id === request.params["documentId"]);
       if (index === -1) return fail(404, "Not found.");
       documents.splice(index, 1);
-      return ok(null, { status: 204 });
+      return noContent();
     });
 
     api.post("/student-documents/:documentAction", (request) => {
@@ -4540,23 +6060,92 @@ export function studentRelationsModule(options: StudentRelationsOptions = {}): M
       match.verification_status = decision;
       return ok(match);
     });
+  };
+}
+```
 
-    api.post("/files/:fileAction", (request) => {
-      const [, action] = (request.params["fileAction"] ?? "").split(":");
-      if (action !== "download") return fail(404, "Not found.");
-      return ok({ download_url: "https://files.example.test/signed-download" });
+Document download is NOT handled here — `jobsModule({files})` (`e2e/src/mocks/domains/jobs.ts`) already registers `POST /files/:fileAction` for `:download`; a spec using this module composes `jobsModule({files: [{id: fileId, downloadUrl: "..."}]})` alongside it for that. Registering a second handler for the same path here would conflict with `jobsModule`'s.
+
+- [ ] **Step 3: Write `e2e/src/mocks/domains/files.ts` — `POST /files` (create)**
+
+`jobsModule` only ever covered `:download` (Phase 1 never needed the other two steps in E2E — its own photo-upload flow has no E2E coverage today, confirmed by grepping `e2e/src/mocks/` for `/files` and `uploadFile`). Task 9's document-upload test is the first E2E spec to exercise `Services.files.uploadFile`'s full three-step flow (`apps/dashboard/src/services/modules/files/files-service.ts`). `POST /files` is a path `jobsModule` never touches, so it's safe as its own new module:
+
+```ts
+import { id } from "@/data/factories";
+import { ok } from "../envelope";
+import type { MockModule } from "../router";
+
+export interface FilesOptions {
+  /** The storage PUT target every upload in a spec resolves to — a fixed URL is enough;
+   * nothing in this mock module serves it, a spec's own Playwright `page.route` for this
+   * exact URL intercepts the PUT itself (`files-service.ts` sends it with a plain
+   * `fetch`, never through this API mock or `apiClient`). */
+  uploadUrl?: string;
+}
+
+/** `POST /files` — step one of the real three-step upload flow (`files-service.ts`'s
+ * own header comment). Step three (`POST /files/{id}:confirm`) is NOT handled here —
+ * `e2e/src/mocks/router.ts`'s router has no fallthrough between modules (the
+ * most-recently-`.use()`-registered route wins a given path exclusively; a handler
+ * genuinely cannot defer to a different module's handler for the same path), so a
+ * second handler on `/files/:fileAction` here would shadow `jobsModule`'s existing
+ * `:download` handler rather than coexist with it. `:confirm` is added to `jobsModule`
+ * itself instead (this task's Step 4) — the one module that already owns that path. */
+export function filesModule(options: FilesOptions = {}): MockModule {
+  const uploadUrl = options.uploadUrl ?? "https://files.example.test/upload-target";
+  return (api) => {
+    api.post("/files", (request) => {
+      const body =
+        (request.json() as { original_name: string; mime_type: string; size_bytes: number } | null) ??
+        { original_name: "file", mime_type: "application/octet-stream", size_bytes: 0 };
+      return ok(
+        {
+          id: id("file"),
+          ...body,
+          upload_url: uploadUrl,
+          upload_method: "PUT",
+          headers: { "Content-Type": body.mime_type },
+          expires_at: "2027-01-01T00:00:00Z",
+        },
+        { status: 201 },
+      );
     });
   };
 }
 ```
 
-(`/files/:fileAction` for `:download` may already be registered by another existing mock module for Phase 1's photo flow — before adding this handler, check `e2e/src/mocks/domains/*.ts` for an existing `/files/:fileAction`/`/files/:id:download` route; if one already exists, extend that existing handler to also answer `:download` rather than registering a second, conflicting one for the same path.)
+- [ ] **Step 4: Extend the existing `jobsModule` to also answer `POST /files/{id}:confirm`**
 
-- [ ] **Step 3: Register both modules in `e2e/src/mocks/index.ts`**
+Modify `e2e/src/mocks/domains/jobs.ts`. Its own handler comment is wrong about what happens when `action !== "download"` — reading `router.ts` directly (Step 3's own finding) shows there is no fallthrough to a different module's handler for an unmatched action on a path this module already owns; a second module registering the same path would shadow this one's `:download` entirely, not coexist with it. The correct fix is to let this module answer `:confirm` itself:
 
-Add `export * from "./domains/guardians";` and `export * from "./domains/student-relations";` alongside the file's existing per-domain exports (`export * from "./domains/students";` etc. — confirm the exact existing line to match its style before adding these two).
+```diff
+-    // `POST /files/{id}:download` is a colon-action — same split as
+-    // staffModule's `/staff/{id}:exit` handling. `action` genuinely can only be
+-    // "download" here — `:confirm` is a different, unrelated route registered by a
+-    // future files-domain module, not this one, and 404s correctly falling through
+-    // this handler if it's ever hit is the point.
++    // `POST /files/{id}:download` and `POST /files/{id}:confirm` are both colon-actions
++    // on the same path — same split as staffModule's `/staff/{id}:exit` handling. Both
++    // live in this one handler because `router.ts` has no fallthrough between modules: a
++    // second handler registered on this path by a different module would shadow this
++    // one entirely rather than share it, so every `/files/:fileAction` action this app
++    // can send belongs in whichever module already owns the path — this one.
+     api.post("/files/:fileAction", (request) => {
+       const [fileId, action] = (request.params["fileAction"] ?? "").split(":");
++      if (action === "confirm") return ok({ id: fileId });
+       const file = files.find((candidate) => candidate.id === fileId);
+       if (action !== "download" || !file) return fail(404, "Not found.");
+       return ok({ download_url: file.downloadUrl });
+     });
+```
 
-- [ ] **Step 4: Write `e2e/tests/dashboard/students-relations.spec.ts`**
+`:confirm` always succeeds unconditionally (it doesn't need to find anything in `options.files`, which exists only to stub `:download` targets) — a spec confirming a file it just created via `filesModule`'s `POST /files` has no reason to also list that id in `jobsModule({files})`.
+
+- [ ] **Step 5: Register the new module in `e2e/src/mocks/index.ts`**
+
+Add `export * from "./domains/guardians";`, `export * from "./domains/student-relations";` and `export * from "./domains/files";` alongside the file's existing per-domain exports (`export * from "./domains/students";` etc. — confirm the exact existing line to match its style before adding these).
+
+- [ ] **Step 6: Write `e2e/tests/dashboard/students-relations.spec.ts`**
 
 ```ts
 import { expect, test } from "@/fixtures";
@@ -4565,6 +6154,9 @@ import { buildCampus, schoolOrganizationModule } from "@/mocks";
 import { buildStudent, studentsModule } from "@/mocks";
 import { buildGuardian, buildGuardianLink, guardiansModule } from "@/mocks";
 import { buildEmergencyContact, buildStudentDocument, studentRelationsModule } from "@/mocks";
+import { filesModule, jobsModule } from "@/mocks";
+
+const UPLOAD_URL = "https://files.example.test/upload-target";
 
 const campuses = [buildCampus({ id: "campus-0001", name: "Main Campus" })];
 const student = buildStudent({ id: "student-0001", first_name: "Ayesha", last_name: "Khan" });
@@ -4574,6 +6166,11 @@ test.describe("student detail sheet — relations tabs", () => {
     authUser: buildUser({
       permissions: [
         ...SCHOOL_ADMIN_PERMISSIONS,
+        // `SCHOOL_ADMIN_PERMISSIONS` (e2e/src/data/factories.ts) holds
+        // `students.student.view` but not `.update` — confirmed by reading the file
+        // directly, not assumed. The emergency-contact Add button is gated on `.update`
+        // (Task 10), so it must be granted explicitly here.
+        "students.student.update",
         "students.guardian.view",
         "students.guardian.create",
         "students.guardian.update",
@@ -4599,10 +6196,16 @@ test.describe("student detail sheet — relations tabs", () => {
     await page.getByRole("button", { name: /link guardian/i }).click();
 
     await page.getByLabel(/search by name or phone/i).fill("Bilal");
+    // The results Select renders its options only once opened — same reason the Jest
+    // tests (Task 6) open this trigger before clicking an option.
+    await page.getByRole("combobox", { name: /search existing/i }).click();
     await page.getByRole("option", { name: /bilal ahmed/i }).click();
     await page.getByRole("combobox", { name: /relationship/i }).click();
     await page.getByRole("option", { name: /^father$/i }).click();
-    await page.getByRole("button", { name: /^link guardian$/i }).click();
+    // Scoped to the open dialog: the tab's own "Link guardian" trigger button (which
+    // opened this dialog) stays mounted behind it and shares this exact text, so an
+    // unscoped query here would match two elements.
+    await page.getByRole("dialog").getByRole("button", { name: /^link guardian$/i }).click();
 
     await expect(page.getByText("Bilal Ahmed")).toBeVisible();
   });
@@ -4644,7 +6247,9 @@ test.describe("student detail sheet — relations tabs", () => {
     await page.getByLabel(/^name$/i).fill("Zainab Malik");
     await page.getByLabel(/relationship/i).fill("Aunt");
     await page.getByLabel(/^phone$/i).fill("0300-3333333");
-    await page.getByRole("button", { name: /^add contact$/i }).click();
+    // Scoped to the open dialog: the tab's own "Add contact" trigger button stays
+    // mounted behind it and shares this exact text.
+    await page.getByRole("dialog").getByRole("button", { name: /^add contact$/i }).click();
 
     await expect(page.getByText("Zainab Malik")).toBeVisible();
   });
@@ -4655,7 +6260,13 @@ test.describe("student detail sheet — relations tabs", () => {
       studentsModule({ students: [student] }),
       guardiansModule({}),
       studentRelationsModule({}),
+      filesModule({ uploadUrl: UPLOAD_URL }),
+      jobsModule({}),
     );
+    // `files-service.ts`'s PUT-to-storage step is a plain `fetch` straight to the
+    // presigned URL, never through `apiClient` — `mockApi` only intercepts this app's
+    // own API origin, so the storage PUT needs its own route.
+    await page.route(UPLOAD_URL, (route) => route.fulfill({ status: 200, body: "" }));
     await studentsPage.goto();
     await studentsPage.row("Ayesha Khan").click();
     await page.getByRole("tab", { name: /^documents$/i }).click();
@@ -4666,10 +6277,16 @@ test.describe("student detail sheet — relations tabs", () => {
       mimeType: "application/pdf",
       buffer: Buffer.from("fake pdf bytes"),
     });
-    await page.getByLabel(/^title$/i).fill("Birth certificate");
-    await page.getByRole("button", { name: /^upload document$/i }).click();
+    // A title distinct from "Birth certificate" — the default document type (never
+    // changed here) already renders that exact string as its own type label, and a title
+    // matching it would make `getByText` match two elements and fail Playwright's
+    // strict-mode check.
+    await page.getByLabel(/^title$/i).fill("Ayesha's birth certificate scan");
+    // Scoped to the open dialog: the tab's own "Upload document" trigger button stays
+    // mounted behind it and shares this exact text in its non-pending state.
+    await page.getByRole("dialog").getByRole("button", { name: /^upload document$/i }).click();
 
-    await expect(page.getByText("Birth certificate")).toBeVisible();
+    await expect(page.getByText("Ayesha's birth certificate scan")).toBeVisible();
     await expect(page.getByText(/pending/i)).toBeVisible();
 
     await page.getByRole("button", { name: /^verify$/i }).click();
@@ -4699,7 +6316,21 @@ test.describe("student detail sheet — relations tabs", () => {
 });
 
 test.describe("student detail sheet — relations tabs, view-only permissions", () => {
-  test.use({ authUser: buildUser({ permissions: SCHOOL_ADMIN_PERMISSIONS }) });
+  test.use({
+    authUser: buildUser({
+      // View-only: granted exactly enough to see the tabs (Task 10 gates each
+      // `TabsTrigger` on its own view key — `students.student.view`, already in
+      // `SCHOOL_ADMIN_PERMISSIONS`, covers Emergency Contacts), never the create/update/
+      // verify/delete keys those tabs' own action buttons are gated on. Without
+      // `.guardian.view`/`.document.view` explicitly added here, the Guardians and
+      // Documents tabs wouldn't render at all and the clicks below would time out.
+      permissions: [
+        ...SCHOOL_ADMIN_PERMISSIONS,
+        "students.guardian.view",
+        "students.document.view",
+      ],
+    }),
+  });
 
   test("hides every relation-tab action for a caller without those permissions", async ({
     page,
@@ -4729,16 +6360,16 @@ test.describe("student detail sheet — relations tabs, view-only permissions", 
 });
 ```
 
-(Confirm `SCHOOL_ADMIN_PERMISSIONS` holds `students.student.view`/`.update` already — Phase 1's own e2e spec already relies on this; re-check it directly rather than assuming, same discipline Phase 1's own round-2 review caught a wrong assumption about.)
+(`SCHOOL_ADMIN_PERMISSIONS` holds `students.student.view` but not `.update` — confirmed by reading `e2e/src/data/factories.ts` directly; that's why the first `describe` block above grants `.update` explicitly rather than assuming it comes for free.)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add e2e/src/mocks/domains/guardians.ts e2e/src/mocks/domains/student-relations.ts e2e/src/mocks/index.ts e2e/tests/dashboard/students-relations.spec.ts
+git add e2e/src/mocks/domains/guardians.ts e2e/src/mocks/domains/student-relations.ts e2e/src/mocks/domains/files.ts e2e/src/mocks/domains/jobs.ts e2e/src/mocks/index.ts e2e/tests/dashboard/students-relations.spec.ts
 git commit -m "test(e2e): add mocked coverage for the guardians/emergency-contacts/documents tabs"
 ```
 
-- [ ] **Step 6: Push and read CI**
+- [ ] **Step 8: Push and read CI**
 
 ---
 
@@ -4761,17 +6392,27 @@ search) or create one inline, set relationship + per-link flags, promote to prim
 click, edit a link's flags or a guardian's own fields later — no unlink (the API has none).
 Emergency contacts: add-only, ordered by priority — no edit, no delete (the API has neither).
 Documents: upload (type from the 6 seeded defaults), verify/reject, delete (with confirmation),
-download (a fresh signed URL requested per click, never cached). No new backend endpoints —
-every call in this phase was already live; the only backend change was closing four pre-existing
-test coverage gaps (guardian search/list, a single link's retrieve, a guardian's own PATCH, and
-emergency contacts' cross-tenant isolation).
+download (a fresh signed URL requested per click, with `Content-Disposition: attachment` forcing
+a real download regardless of file type). Every endpoint this phase's dashboard work calls was
+already live; independent plan review added three small, deliberate backend changes alongside
+them: `GuardianSerializer.photo_url` (so a guardian's photo can actually be displayed, same
+purpose-gated pattern as the student one), `principal` gaining `students.document.view`
+(closing a pre-existing gap where `principal` could verify a document but not see the tab to do
+it from — existing tenants backfilled by migration `0008_grant_principal_document_view`), and a
+`Content-Disposition` header on `core/files`' signed download URLs (a generic fix that also
+benefits `/staff`'s existing export download). The remaining backend work was closing four
+pre-existing test coverage gaps (guardian search/list, a single link's retrieve, a guardian's own
+PATCH, and emergency contacts' cross-tenant isolation) plus two more the review round surfaced
+(a foreign-tenant guardian link read, and the guardian-link duplicate-conflict response).
 ```
 
 - [ ] **Step 2: Update `project-status.md`'s student-management row**
 
 In the "Dashboard screens" column of the `student-management` row (table under "Per-module implementation matrix"), change "Guardians/emergency contacts/documents... are **not yet rebuilt**" to reflect Phase 2 shipping: name what's now built (the four tabs) and narrow the remaining gap to enrollment/transfers (Phase 3) and bulk import/export/ID cards (Phase 4) only.
 
-- [ ] **Step 3: Add the two permanent-gap entries to `deferred-work.md`**
+- [ ] **Step 3: Add two new entries to `deferred-work.md`, and update two existing ones this phase resolves in part**
+
+Add these two new entries:
 
 ```markdown
 - **No unlink for a student-guardian link, no edit/delete for an emergency contact.**
@@ -4781,14 +6422,28 @@ In the "Dashboard screens" column of the `student-management` row (table under "
   states this plainly in its UI copy rather than inventing a workaround. Adding these endpoints
   is a real, separate backend decision (what happens to history/audit on an unlink; whether an
   emergency contact edit needs its own permission key) — not a UI gap to quietly patch over.
-- **Guardian seed commands' cross-app imports are grandfathered, not clean.** Reaching into
-  `apps.school_organization`/`apps.student_management` from `core.rbac.management.commands` is
-  flagged by `test_no_new_cross_app_import_violations` (ADR-0013) for anything *new* — the
-  existing `seed_e2e_data`/`seed_all_roles` entries are pre-existing, shrink-only-baseline
-  exceptions, not a pattern to extend. If a future seed command needs the same thing, the real
-  fix named in `test_import_boundaries.py`'s own comment is moving these commands to a
-  dedicated, non-`core` app — not another baseline entry.
+- **Staff's photo-upload field is still its own inline copy.** `students-dashboard-phase2`
+  extracted `PhotoUploadField` (`apps/dashboard/src/components/photo-upload-field.tsx`, a neutral
+  location with a generic `purpose: string` prop) on its third near-identical copy — students'
+  original, and this phase's new guardian form. `apps/dashboard/src/app/(app)/staff/staff-form-dialog.tsx`
+  still has its own fourth copy of the same presigned-upload-then-preview flow, left unmigrated
+  in this PR since staff is outside this phase's scope. Migrating it is a small, mechanical
+  swap — pass `purpose="staff.photo"` and staff's own saved-photo fields — next time staff's
+  form is touched.
+- **`students.document.view`'s backfill migration only reaches tenants that already have a
+  `principal` role.** Migration `0008_grant_principal_document_view`
+  (`apps/api/apps/student_management/migrations/`) grants the permission once, to every tenant
+  with an existing `principal` `Role` row, at the time this PR's migration runs. A tenant
+  provisioned *after* this migration gets the grant automatically (the registry's own
+  `default_roles` covers a freshly-seeded role) — nothing further to do there.
 ```
+
+Update the existing "Inline display links for files" entry (`docs/deferred-work.md`, PR #76) — this phase closes the specific gap it names for guardians, so the sentence can't stand as written:
+
+- Delete the sentence **"Guardians still expose only `photo_file_id` — the same one-line addition, when a guardian-facing screen needs photos."** (Task 1 is that one-line addition — `GuardianSerializer.photo_url`, same pattern, now shipped.)
+- In its nested **"`photo_url`'s purpose gate is student-only"** bullet, change the heading and opening sentence to **"`photo_url`'s purpose gate doesn't reach staff."** — `GuardianSerializer.photo_url` (Task 1) now carries the identical `SerializerMethodField` purpose check as the student and guardian fields; `StaffSerializer.photo_url` is the one remaining holdout still on the plain `SignedFileURLField` with no purpose check. Leave the rest of that bullet's reasoning (the ownership-guard-vs-already-attached-file distinction, what fixing staff would need) unchanged — it still applies, just to staff alone now instead of staff-and-guardians.
+
+Do NOT add anything about seed-command cross-app imports here — that topic has nothing to do with this phase (no seed command is touched by any task in this plan) and does not belong in this phase's documentation update.
 
 - [ ] **Step 4: Commit**
 

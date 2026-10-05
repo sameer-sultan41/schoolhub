@@ -3,8 +3,20 @@
 > **Agent Context:** This is the design spec for Phase 2 of the `/students` dashboard
 > rebuild, per the Roadmap in `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`.
 > It is implemented against `main` as of PR #96 (Phase 1) and PR #97 (UI polish), both
-> merged. The backend for everything this phase needs already exists — this is a
-> dashboard-only phase.
+> merged. This phase is dashboard-first, but carries three small, deliberate backend
+> additions surfaced across two rounds of independent plan review (ADR-0015):
+> `GuardianSerializer` gains a `photo_url` field (guardians have no display URL for their
+> uploaded photo today, unlike students); the `principal` role gains
+> `students.document.view` (it already holds `.verify`, but not the view permission
+> needed to see the tab it verifies from — a pre-existing gap in the permission matrix),
+> backed by a data migration so tenants that already have a `principal` role get the
+> grant too, not only freshly-seeded ones; and `core/files`' signed download URLs gain a
+> `Content-Disposition: attachment` header, so a document download forces a real
+> save-as/download regardless of file type instead of relying on an anchor's `download`
+> attribute, which browsers ignore cross-origin. Every other endpoint this phase needs
+> already exists and is already wired. The Guardians tab's per-guardian name resolution
+> (fan out one `GET /guardians/{id}` per linked guardian, rather than a backend-embedded
+> summary) is itself recorded as [ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md).
 
 **Work tier:** 2
 
@@ -43,11 +55,26 @@ from the same tab. All three flows work on mobile (drawer) as well as desktop (s
   type + title + optional notes/expiry); verify/reject (permission-gated); delete
   (permission-gated); download (via `core/files`' existing `:download` action).
 - New `Services.guardians` domain; additions to `Services.students` for the nested
-  emergency-contacts/documents/guardian-link calls; a small addition to `Services.files`
-  for the download action (doesn't exist yet).
-- Backend test gaps closed (no new backend *code* — these are tests only): a
-  cross-tenant test for emergency contacts (none exists), `GET /student-guardians/{id}`
-  and the guardians list (untested), `PATCH /guardians/{id}` (untested).
+  emergency-contacts/documents/guardian-link calls and for fetching one guardian by id
+  (`fetchGuardianById`, needed so the Guardians tab can show a linked guardian's name —
+  a link row carries only `guardian_id`). Document download reuses the existing
+  `Services.jobs.fetchFileDownloadUrl` (`POST /files/{id}:download`) — it already exists,
+  wrapping the same `core/files` colon-action; no new `Services.files` addition needed.
+- Three small backend additions (see the Agent Context note above): `GuardianSerializer.
+  photo_url` (mirrors `StudentSerializer.get_photo_url`'s purpose-gated pattern exactly);
+  `principal` added to `students.document.view`'s allowed roles in
+  `apps/api/apps/student_management/permissions.py` (plus the matching row in
+  `docs/03-modules/student-management.md` §4) and a data migration backfilling existing
+  tenants' `principal` role; and a `Content-Disposition: attachment` header on
+  `core/files`' signed download URLs (`core/files/storage.py`/`services.py`). The first
+  two regenerate `openapi.yaml`/`schema.d.ts` per `.claude/rules/api-contract.md`; the
+  third changes no serializer/view signature, so it doesn't touch the API contract.
+- Backend test gaps closed (otherwise no new backend code beyond the three additions
+  above — the rest are tests only): a cross-tenant test for emergency contacts (none
+  exists, plus one for creating a contact under another tenant's student), `GET
+  /student-guardians/{id}` and the guardians list (untested), `PATCH /guardians/{id}`
+  (untested), reading another tenant's guardian link (404), and the guardian-link
+  duplicate conflict (409).
 - i18n: `students.guardians.*`, `students.emergencyContacts.*`, `students.documents.*`
   namespaces, in both `en.json` and `ur.json`.
 
@@ -65,9 +92,11 @@ from the same tab. All three flows work on mobile (drawer) as well as desktop (s
 - AI-STU-03 (document OCR/extraction) — `docs/04-ai/ai-governance.md` gates every AI
   feature behind its own approval flow; not this phase's problem.
 - A `Combobox`/typeahead primitive. The Roadmap already settled this: "search existing
-  guardian" reuses the same `Select`-populated-from-a-debounced-query composition
-  Phase 1's Campus/House pickers use. A real combobox is its own `packages/ui` addition
-  (`schoolhub-ui-port`), out of scope here.
+  guardian" reuses a `Select` populated by a debounced search query — the same
+  `useDebouncedValue` hook the student directory table's own filter already uses
+  (Phase 1's Campus/House pickers are a different case: they list every campus/house with
+  no search or debounce at all, since those lists are small and tenant-bounded). A real
+  combobox is its own `packages/ui` addition (`schoolhub-ui-port`), out of scope here.
 - Guardian "change-request" flow from the parent portal (§6) — portal-side, not this
   phase's dashboard-admin surface.
 
@@ -81,54 +110,69 @@ ported, unused anywhere in this app yet — this is its first real consumer). Th
 existing Profile/Academic/Medical `FieldSection`s move under a `Profile` tab,
 unchanged. Three new `TabsContent` panels render the three new feature components.
 
-**Lazy per-tab data loading:** each tab's own `useQuery` is `enabled: isOpen &&
-activeTab === "guardians"` (etc.) — a viewer who only ever opens Profile never fires
-the other three tabs' requests. This mirrors the existing `enabled: mode === "edit" &&
-open` gating pattern already used by the edit-form's detail query (Phase 1), extended
-to one `enabled` check per tab.
+**Lazy per-tab data loading:** `packages/ui`'s `Tabs` wraps Radix `Tabs`, which unmounts
+an inactive `TabsContent` panel by default (no `forceMount` is set anywhere in this
+plan) — so a tab component's own `useQuery` never even runs until Radix actually mounts
+that panel; there is nothing left for an `enabled` flag to gate, and no extra
+`activeTab === "..."` state or gating is needed on top. Reopening the sheet
+for a different student resets to the Profile tab via React's `key`-based remount
+(`<Tabs defaultValue="profile" key={row.id}>`), not a `useEffect`.
 
 **Mobile:** the existing `ResponsiveSheet`/`useIsDrawer()` split is unaffected — `Tabs`
-renders identically in both the `Sheet` and `Drawer` branches. On narrow viewports the
-`TabsList` scrolls horizontally rather than wrapping (four short labels fit in practice,
-but this is the correct baseline behavior regardless).
+renders identically in both the `Sheet` and `Drawer` branches. Four labels
+(Profile/Guardians/Emergency contacts/Documents) risk overflowing a 375px drawer, worse
+in Urdu — `packages/ui`'s `TabsList` does not build in scroll handling on its own, so the
+`TabsList` gets `overflow-x-auto` as a defensive measure rather than assuming the labels
+always fit on one line; verify visually at 375px in both locales during implementation.
 
 ### 3.2 Services layer (ADR-0011)
 
 - **`Services.guardians`** (new domain) — the `Guardian` person resource and its link to
-  a student: `searchGuardians(query)` (`GET /guardians?search=`), `createGuardian(input)`
-  (`POST /guardians`), `updateGuardian(id, input)` (`PATCH /guardians/{id}`),
-  `linkGuardianToStudent(studentId, input)` (`POST /students/{id}/guardians`),
-  `updateGuardianLink(linkId, input)` (`PATCH /student-guardians/{id}`),
-  `fetchGuardianLinks(studentId)` (`GET /students/{id}/guardians`).
+  a student: `searchGuardians(query)` (`GET /guardians?search=`), `fetchGuardianById(id)`
+  (`GET /guardians/{id}`, used to resolve a link row's name/phone — a
+  `GET /students/{id}/guardians` link carries only `guardian_id`, no embedded guardian
+  fields), `createGuardian(input)` (`POST /guardians`), `updateGuardian(id, input)`
+  (`PATCH /guardians/{id}`), `linkGuardianToStudent(studentId, input)` (`POST
+  /students/{id}/guardians`), `updateGuardianLink(linkId, input)` (`PATCH
+  /student-guardians/{id}`), `fetchGuardianLinks(studentId)` (`GET
+  /students/{id}/guardians`). The Guardians tab resolves each link's guardian via a
+  `useQueries` fan-out over `fetchGuardianById` — through `Services`, never a direct
+  `apiClient`/`endpoints` call from the component (ADR-0011) — rather than adding a
+  backend-embedded guardian summary; a tenant's guardian-per-student count is small
+  enough that the extra per-row requests aren't worth a new serializer shape.
 - **`Services.students`** — additions for the two remaining nested relations, which have
   no identity or reuse outside a single student's detail view (unlike guardians, which
   are genuinely shared across siblings and searched tenant-wide):
   `fetchEmergencyContacts(studentId)`, `addEmergencyContact(studentId, input)`,
   `fetchDocuments(studentId)`, `uploadDocumentRecord(studentId, input)` (the metadata
   POST after the file itself is already uploaded via `Services.files.uploadFile`),
-  `deleteDocument(documentId)`, `verifyDocument(documentId, decision)`.
-- **`Services.files`** — add `getDownloadUrl(fileId)` wrapping `POST
-  /files/{id}:download`, returning the `download_url` string. Confirmed against
-  `apps/api/core/files/views.py`/`urls.py` directly: a colon-action, not a nested path.
+  `deleteDocument(documentId)`, `verifyDocument(documentId, decision)`. These go directly
+  into the existing `students-service.ts`/`students-type.ts` files (no new per-resource
+  file split — ADR-0018's split trigger doesn't fire at this size).
+- **Document download** reuses the existing `Services.jobs.fetchFileDownloadUrl(fileId)`
+  (`apps/dashboard/src/services/modules/jobs/jobs-service.ts`), which already wraps
+  `POST /files/{id}:download` — no new `Services.files` addition; it already exists and
+  is already used by `/staff`'s export download.
 
-Query keys follow the existing `queryKeys` factory: `queryKeys.list("students",
-"guardian-links", studentId)`, `.list("students", "emergency-contacts", studentId)`,
-`.list("students", "documents", studentId)`, `.list("guardians", "search", query)`. A
-link/add/upload/verify/delete mutation invalidates the matching list key.
+Query keys follow the existing `queryKeys` factory, whose third argument is a params
+*object*, not a bare id: `queryKeys.list("students", "guardian-links", { studentId })`,
+`.list("students", "emergency-contacts", { studentId })`, `.list("students", "documents",
+{ studentId })`, `.list("guardians", "search", { query })`. A link/add/upload/verify/
+delete mutation invalidates the matching list key.
 
 ### 3.3 Component responsibilities
 
 | Component | Responsibility |
 | --- | --- |
-| `StudentGuardiansTab` | Lists linked guardians + flags; "Add guardian" opens the chooser (search vs. create). |
-| `GuardianPickerDialog` | Search-existing (debounced `Select`) **or** switch to create-new inline; ends in `linkGuardianToStudent`. |
-| `GuardianFormDialog` | Create/edit a guardian's own fields, including the photo (same upload pattern as `StudentPhotoField`, purpose `guardian.photo`). Shared by "create new" and "edit this guardian." |
+| `StudentGuardiansTab` | Lists linked guardians + flags (resolved via `fetchGuardianById` fan-out); "Add guardian" opens the chooser (search vs. create); shows a load-error state with retry on a failed fetch, distinct from the empty-list state. |
+| `GuardianPickerDialog` | One dialog, two internal steps — never a dialog nested inside another (`packages/ui`'s `ResponsiveDialog` has no supported nested-drawer pattern on mobile). Step 1 ("choose"): search-existing (debounced `Select`, excluding guardians already linked to this student) **or** a "create new" tab with the same fields (including photo) as `GuardianFormDialog`, inlined directly rather than opened as a second dialog. Step 2 ("link"), reached from either path: the chosen/created guardian + relationship, ending in `linkGuardianToStudent`, retried on failure without re-creating the guardian. |
+| `GuardianFormDialog` | Create/edit a guardian's own fields, including the photo via a shared `PhotoUploadField` (extracted from `StudentPhotoField` on this, its third use — students, staff, guardians — per the repo's third-copy rule; purpose `guardian.photo`). Shared by "create new" and "edit this guardian." |
 | `GuardianLinkFlagsDialog` | Edit one link's `relationship`/`is_primary`/`is_fee_responsible`/`can_pick_up`/`receives_communications` — a small form, `PATCH /student-guardians/{id}`. |
 | `StudentEmergencyContactsTab` | Ordered list (read-only rows) + one add form. No per-row actions. |
 | `StudentDocumentsTab` | List with per-row Verify/Reject, Download, Delete (each permission-gated); "Upload document" opens the upload dialog. |
 | `DocumentUploadDialog` | File picker + `document_type` `Select` (6 seeded defaults) + title + optional notes/expiry; drives `Services.files.uploadFile` then `uploadDocumentRecord`. |
 
-### 3.4 Permissions (module doc §4, already registered — no new keys)
+### 3.4 Permissions (module doc §4; one key's allowed roles change — see below)
 
 | Action | Key |
 | --- | --- |
@@ -141,8 +185,18 @@ link/add/upload/verify/delete mutation invalidates the matching list key.
 | Verify/reject a document | `students.document.verify` |
 | Delete a document | `students.document.delete` |
 
-Every action button is gated with `hasPermission(currentUser, key)`, same as Phase 1 —
-UI hiding, never enforcement; the server is the real gate.
+`students.document.view` currently grants `school_admin`/`admission_staff` only, while
+`.verify` already grants those two plus `principal` — so a principal holds a permission
+to verify a tab they cannot otherwise see. This phase adds `principal` to
+`.view`'s allowed roles (`apps/api/apps/student_management/permissions.py` +
+`docs/03-modules/student-management.md` §4), closing that gap rather than carrying it
+forward silently.
+
+Each new tab renders only for a caller holding *that tab's own* view key — not merely
+"can view this student" — mirroring how the Documents tab's verify/reject/delete buttons
+are already individually gated. Every action button is gated with
+`hasPermission(currentUser, key)`, same as Phase 1 — UI hiding, never enforcement; the
+server is the real gate.
 
 ## 4. Data flow — worked examples
 
@@ -152,12 +206,14 @@ UI hiding, never enforcement; the server is the real gate.
 `linkGuardianToStudent(studentId, {guardianId, relationship, isPrimary, ...})` →
 invalidate the guardian-links list key → tab re-renders with the new row.
 
-**Create and link a new guardian.** Same entry point → "Create new" → `GuardianFormDialog`
-(first/last name, phone, email, optional photo, etc.) → on submit, `createGuardian`
-returns the new guardian's id → immediately `linkGuardianToStudent` with that id and the
-relationship/flags collected in the same dialog (a two-step flow presented as one form,
-matching how Phase 1's `StudentFormDialog` already composes a multi-field save into one
-submit) → same invalidation.
+**Create and link a new guardian.** Same entry point → "Create new" tab (first/last name,
+phone, email, optional photo — the same fields `GuardianFormDialog` uses, inlined into
+this same picker dialog, not a nested second one) → on submit, `createGuardian` returns
+the new guardian's id → the dialog advances to its link step, showing that guardian
+selected → user picks a relationship → `linkGuardianToStudent` with that id and the
+relationship/flags (defaulting as described above) → same invalidation. If linking fails,
+retrying only re-runs `linkGuardianToStudent` — the guardian's id is already held in
+state, so nothing re-creates it.
 
 **Promote a link to primary.** Guardians tab's row action "Make primary" →
 `updateGuardianLink(linkId, {isPrimary: true})` → the backend's own
@@ -174,16 +230,19 @@ place.
 
 ## 5. Error handling
 
-- **Duplicate/conflicting guardian search:** no special handling needed — `searchGuardians`
-  is read-only; an empty result just shows "No guardians found" (i18n'd), with "Create
-  new" still available from the same dialog.
-- **Linking a guardian already linked to this student:** the backend's `link_guardian`
-  service — confirmed by reading `apps/api/apps/student_management/services.py` — does
-  not already special-case this; if it allows a duplicate link or raises a constraint
-  violation, the dashboard surfaces whatever `error.fieldErrors()`/`non_field` message
-  comes back via `resolveErrorMessage`, per the existing Phase 1 convention. The plan
-  phase verifies the exact backend behavior here (a one-line check) rather than this
-  spec guessing at it.
+- **Guardian search with no results:** `searchGuardians` is read-only; an empty result
+  shows a dedicated "no matches" message (a new i18n key, distinct from the tab's own
+  `guardians.empty` "No guardians linked yet." — this is a *search* empty state, not the
+  tab's list empty state), with "Create new" still available from the same dialog.
+- **Linking a guardian already linked to this student:** confirmed by reading
+  `StudentGuardian`'s model constraints (`apps/api/apps/student_management/models.py`) —
+  `UniqueConstraint(tenant, student, guardian, condition=deleted_at__isnull=True)`. A
+  duplicate raises `IntegrityError`, which `core/api/exceptions.py`'s handler maps to a
+  real `409 conflict` ("The request conflicts with existing data."), not an invented
+  validation error. The picker excludes guardians already linked to this student from
+  its search results as the primary defense; the 409 path is a defense-in-depth backstop
+  (e.g. a second tab linking the same guardian concurrently), surfaced via the same
+  `resolveErrorMessage` convention as every other mutation here.
 - **Promoting primary when it's already primary:** idempotent no-op either way (the
   backend's `set_primary_guardian` only acts on an actual change); no special client
   handling needed.
@@ -195,14 +254,29 @@ place.
   cache of permissions), the mutation's `onError` shows the server's real message, not a
   generic one — same `resolveErrorMessage(..., "non_field")` convention as every other
   mutation in this module.
+- **A failed tab query (guardians/contacts/documents list):** each tab shows its own
+  load-error message with a retry action, distinct from — and never mistakable for —
+  that tab's empty-list state; a stale error must clear once a retry succeeds.
+- **Creating a guardian succeeds but the immediately following link fails:** the
+  guardian's new id is kept in local state and only the link step is retried — the
+  guardian is never re-created, since `GuardianViewSet` has no destroy endpoint and a
+  duplicate create would be a permanent, unremovable record.
+- **A tenant's document has a `document_type` outside the 6 seeded defaults** (a value
+  the create form's `Select` never offers, but an older or externally-written row could
+  still carry): the Documents tab renders the raw `document_type` string as a fallback
+  rather than indexing into the fixed `documents.type.*` i18n map and hitting a missing
+  key.
 
 ## 6. Testing strategy
 
-- **Backend (Django):** close the three named gaps — a cross-tenant test for
-  `EmergencyContactLinkViewSet` (none exists today), a test for `GET
-  /student-guardians/{id}` and the guardians list (untested), a test for `PATCH
-  /guardians/{id}` (untested). These are additive test files/cases against
-  already-shipped, already-correct endpoints — not new production code.
+- **Backend (Django):** close the named gaps — a cross-tenant test for
+  `EmergencyContactLinkViewSet` (none exists today, plus one for creating a contact
+  under another tenant's student), a test for `GET /student-guardians/{id}` and the
+  guardians list (untested), a test for `PATCH /guardians/{id}` (untested), reading
+  another tenant's guardian link (404), and the guardian-link duplicate conflict (409).
+  These are additive test files/cases against already-shipped, already-correct
+  endpoints — not new production code (except the registry/migration/storage tests the
+  three backend additions above need, which do cover new code).
 - **Jest (dashboard):** one `__tests__` file per new component, following the Phase 1
   pattern (mocked `Services.*`, `renderWithProviders`). Key cases: search-then-link,
   create-then-link, primary-promotion badge swap, emergency-contact add with no
@@ -227,8 +301,24 @@ place.
 - **Build a real Combobox now instead of reusing the `Select`-search composition.**
   Rejected for this phase — the Roadmap already settled this, and a proper
   typeahead-with-keyboard-nav primitive is its own `packages/ui` scope
-  (`schoolhub-ui-port`), not warranted by this phase alone when the existing
-  composition already works (Phase 1's Campus/House pickers).
+  (`schoolhub-ui-port`), not warranted by this phase alone when a `Select` populated by a
+  debounced search query (`useDebouncedValue`, already proven by the student directory's
+  own filter) does the job.
+- **Embed a guardian summary on `StudentGuardianSerializer` instead of a per-guardian
+  `fetchGuardianById` fan-out.** Considered — it would save N requests per student's
+  guardian list. Rejected for this phase because it's a backend change beyond the three
+  already added (photo_url, the principal permission fix + migration, download
+  Content-Disposition), and a tenant's guardians-per-student count is small (the UI shows
+  a handful of rows, not pages); the fan-out goes through `Services.guardians` properly
+  either way, so upgrading to an embedded summary later is a pure backend+client change
+  with no tab-component rewrite. Recorded as
+  [ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md), since the
+  choice sets a precedent for how the dashboard resolves ids from other nested lists.
+- **Give guardians their own dedicated photo-upload component instead of sharing one with
+  students.** Rejected — this would be the third near-identical copy of the same
+  presigned-upload-then-preview flow (student, staff, guardian); the repo's own
+  third-copy rule says extract at that point, so this phase pulls a shared
+  `PhotoUploadField` out instead of adding a third copy.
 - **Add backend unlink/edit/delete endpoints for guardian links and emergency contacts
   in this PR, to round out the UI.** Rejected — this phase's own framing (and the
   Roadmap) is dashboard-only; adding backend write paths the module doc never specified
@@ -242,10 +332,24 @@ place.
 
 ## 8. Open questions
 
-None blocking. Two decisions were made explicitly during brainstorming rather than left
-open: guardians get a photo-upload field in this phase (reusing the `StudentPhotoField`
-pattern), and the document-type picker is a `Select` over the 6 seeded defaults (not a
-free-text field) — a tenant-extended type is reachable only via `other` + notes this
-phase, which is an acceptable gap given no endpoint currently lists a tenant's
-extensions (`apps/dashboard/AGENTS.md`'s ADR-0017 convention doesn't apply here, since
-there's no generated source for this list either way).
+None blocking. Four decisions were made explicitly rather than left open: during
+brainstorming, guardians get a photo-upload field in this phase (reusing the shared
+`PhotoUploadField` pattern), and the document-type picker is a `Select` over the 6 seeded
+defaults (not a free-text field) — a tenant-extended type is reachable only via `other` +
+notes this phase, which is an acceptable gap given no endpoint currently lists a
+tenant's extensions (`apps/dashboard/AGENTS.md`'s ADR-0017 convention doesn't apply here,
+since there's no generated source for this list either way).
+
+During independent plan review (ADR-0015), two more were resolved with the user in the
+first round: add `GuardianSerializer.photo_url` (a small backend change, needed to make
+the already-approved guardian photo actually displayable), and grant `principal` the
+`students.document.view` permission (so the spec's own "a principal later verifies it"
+success case is actually reachable). A second review round surfaced three more, also
+resolved with the user: back-fill that permission onto tenants that already have a
+`principal` role via a one-off data migration, rather than leaving it reachable only by
+freshly-seeded roles; force a real download via a `Content-Disposition: attachment`
+header on `core/files`' signed download URLs, rather than relying on an anchor's
+`download` attribute (which browsers ignore cross-origin); and record the per-guardian
+`fetchGuardianById` fan-out as its own ADR ([ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md))
+rather than leaving an undocumented precedent for how the dashboard resolves ids from
+other nested lists.

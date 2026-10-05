@@ -48,6 +48,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0017](0017-generated-wire-types-for-new-domains.md) | A new domain's wire types come from the generated API contract, not a hand-written packages/types copy | Accepted | review only |
 | [0018](0018-per-module-file-split-for-growing-domains.md) | A growing service module splits into constant/type/helper/schema files | Superseded by 0019 | review only — `schoolhub-api-services` skill checklist, `change-reviewer` agent |
 | [0019](0019-every-module-uses-the-five-file-shape.md) | Every service module uses the five-file shape from creation | Accepted | review only — `schoolhub-api-services` skill checklist, `change-reviewer` agent |
+| [0020](0020-client-fan-out-for-unembedded-nested-ids.md) | A nested list carrying only a foreign id resolves it client-side, by fan-out | Accepted | review only — `change-reviewer` agent, `schoolhub-api-services` skill checklist |
 
 "Planned" items land in the stacked PRs described in
 [`../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md`](../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md);
