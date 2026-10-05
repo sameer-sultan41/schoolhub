@@ -4,9 +4,9 @@
 
 **Goal:** Add Guardians, Emergency Contacts and Documents to `/students`' detail view — a tabbed `StudentDetailSheet` (Profile/Guardians/Emergency Contacts/Documents) backed entirely by backend endpoints that already exist.
 
-**Architecture:** Each relation gets its own small feature component (tab) reading/writing through a new `Services.guardians` domain plus additions to the existing `Services.students` module. Mostly a dashboard-only phase — closing four named backend test gaps along the way — plus three small, deliberate backend additions surfaced across two rounds of independent plan review: `GuardianSerializer.photo_url`, `principal` gaining `students.document.view` (plus a one-off data migration backfilling it onto tenants that already have a `principal` role), and a `Content-Disposition: attachment` header on `core/files`' signed download URLs.
+**Architecture:** Each relation gets its own small feature component (tab) reading/writing through a new `Services.guardians` domain plus additions to the existing `Services.students` module. Mostly a dashboard-only phase — closing four named backend test gaps along the way — plus four small, deliberate backend additions surfaced across three rounds of independent plan review: `GuardianSerializer.photo_url`; `principal` gaining `students.document.view` in the registry (reaches dev/e2e-seeded tenants only — see Global Constraints and `docs/deferred-work.md` for why no production backfill exists); a `Content-Disposition: attachment` header on `core/files`' signed download URLs; and a `students.document.view`-gated `:download` action on `StudentDocumentViewSet` so a student document's download is no longer authorized only by the broader, every-staff-role `platform.file.view` key.
 
-**Tech Stack:** Next.js 16, TanStack Query v5, react-hook-form + zod, `@schoolhub/ui` (`Tabs`, first real consumer in this app), Django 6.1 + DRF (mostly tests; Task 1 carries the two small production changes above).
+**Tech Stack:** Next.js 16, TanStack Query v5, react-hook-form + zod, `@schoolhub/ui` (`Tabs`, first real consumer in this app), Django 6.1 + DRF (mostly tests; Task 1 carries the four small production changes above).
 
 **Spec:** `docs/superpowers/specs/2026-10-03-students-phase2-relations-design.md`
 
@@ -14,15 +14,15 @@
 
 ## Global Constraints
 
-- **Three small backend additions, otherwise no new backend production code.** Task 1 adds `GuardianSerializer.photo_url`, `principal` to `students.document.view`'s allowed roles (plus a data migration backfilling existing tenants, since the registry change alone only reaches newly-seeded roles), and a `Content-Disposition: attachment` header on `core/files`' signed download URLs — each proven by a test first. Every other endpoint this phase calls already exists and is wired (`GuardianViewSet`, `StudentGuardianViewSet`, `StudentGuardianLinkViewSet`, `EmergencyContactLinkViewSet`, `StudentDocumentLinkViewSet`, `StudentDocumentViewSet`, `core/files`' `:download`) — the rest of the backend work in this plan is test-only.
+- **Four small backend additions, otherwise no new backend production code.** Task 1 adds `GuardianSerializer.photo_url`; `principal` to `students.document.view`'s allowed roles in the registry (this alone only reaches a `principal` role created *after* the change — `seed_all_roles`/`seed_e2e_data`, dev/e2e only; there is no production mechanism anywhere in this codebase that provisions a default role, other than `school_owner`, for an already-live tenant, so no migration can "backfill" a role that nothing ever creates — this is a pre-existing, platform-wide `core.rbac`/`core.tenancy` gap, recorded in `docs/deferred-work.md`, not something this phase fixes); a `Content-Disposition: attachment` header on `core/files`' signed download URLs, applied to every presigner implementation so every `:download` caller keeps working; and a new `students.document.view`-gated `:download` action on `StudentDocumentViewSet`, so a student document's download is no longer authorized only by `platform.file.view` (every staff role) — each proven by a test first. Every other endpoint this phase calls already exists and is wired (`GuardianViewSet`, `StudentGuardianViewSet`, `StudentGuardianLinkViewSet`, `EmergencyContactLinkViewSet`, `StudentDocumentLinkViewSet`, `StudentDocumentViewSet`) — the rest of the backend work in this plan is test-only.
 - **No unlink, no emergency-contact edit/delete.** The backend has no endpoints for any of these (`StudentGuardianLinkViewSet` and `EmergencyContactLinkViewSet` are both list+create only). No task invents a workaround; the UI states this plainly where relevant and `docs/deferred-work.md` records it.
 - **`StudentGuardian.relationship` is a fixed 6-value enum** (`Relationship` in `apps/api/apps/student_management/models.py`: `father`, `mother`, `grandparent`, `sibling`, `legal_guardian`, `other`) — a `<Select>`, not free text. **`EmergencyContact.relationship` is free text** (`models.CharField(max_length=50)`, no choices) — a plain `<Input>`. These are different fields on different models; do not conflate them. The enum's values live in `packages/types` (alongside the existing `GENDER_VALUES`), not copy-pasted into each component that needs them.
-- **The guardian-link list has no embedded guardian name/phone.** `StudentGuardianSerializer` (`GET /students/{id}/guardians`) returns only `guardian_id` plus link fields — never the guardian's own name/phone. `StudentGuardiansTab` resolves each link's guardian via a `useQueries` fan-out over `Services.guardians.fetchGuardianById` — through `Services`, never a direct `apiClient`/`endpoints` import inside the tab component (ADR-0011). This is a real, confirmed API shape, not an oversight to design around; an embedded backend summary field was considered and rejected (see Alternatives Considered, and ADR-0019) to keep this phase's backend surface to the three additions above.
+- **The guardian-link list has no embedded guardian name/phone.** `StudentGuardianSerializer` (`GET /students/{id}/guardians`) returns only `guardian_id` plus link fields — never the guardian's own name/phone. `StudentGuardiansTab` resolves each link's guardian via a `useQueries` fan-out over `Services.guardians.fetchGuardianById` — through `Services`, never a direct `apiClient`/`endpoints` import inside the tab component (ADR-0011). This is a real, confirmed API shape, not an oversight to design around; an embedded backend summary field was considered and rejected (see Alternatives Considered, and ADR-0020) to keep this phase's backend surface to the three additions above.
 - **Reuse the existing i18n scaffolding.** `apps/dashboard/messages/en.json`/`ur.json` already carry `students.tabs`, `students.guardians`, `students.emergencyContacts`, `students.documents` namespaces (committed on `main`, dating from pre-dashboard-shell-reset work — confirmed real, fully translated in both locales) with the right `Relationship`/`DEFAULT_DOCUMENT_TYPES` values already baked in. Task 4 audits and reuses these; it does not invent a parallel set of keys. Fixes needed: `guardians.close` duplicates `common.close` (Phase 1's established convention is to reuse `common.*` for generic verbs, never a per-screen near-duplicate) — delete `guardians.close` from both locales and use `tCommon("close")` at its one call site; and the existing `guardians.empty` ("No guardians linked yet.") is the Guardians *tab's* empty state, not the *picker's* zero-search-results state — those need their own new key (Task 4 adds it), never conflated.
 - **`GuardianFormDialog`'s field scope is deliberately minimal:** `first_name`, `last_name`, `phone` (required), `alt_phone`, `email` (optional), plus a photo (purpose `guardian.photo`, via the shared `PhotoUploadField` extracted in Task 5 — see Alternatives Considered). `occupation`, `employer`, `national_id`, `address`, `custom_fields`, `user_id` are real `Guardian` fields but out of scope this phase (YAGNI — nothing in the module doc or this phase's spec calls them out as priorities; all are nullable server-side, so omitting them client-side is safe).
 - **Link defaults match `link_guardian`'s own service defaults exactly:** `is_primary: false`, `is_fee_responsible: false`, `can_pick_up: true`, `receives_communications: true`, `has_portal_access: true`. A form that defaults differently from the service it calls is a latent bug the first time a user doesn't touch every checkbox.
 - **"Make primary" is a one-click row action, never a dialog.** Promoting a link doesn't need relationship/other-flags context — it's `updateGuardianLink(linkId, { isPrimary: true })` on click, shown only on a non-primary row. Editing the other four flags plus relationship is a separate `GuardianLinkFlagsDialog`, which never includes `is_primary` (demoting without picking a replacement primary is a confusing half-action the backend doesn't even support as a direct operation — `_demote_primary_guardian` only ever runs as a side effect of promoting someone else).
-- **A document's download link is fetched fresh per click, never cached.** `Services.jobs.fetchFileDownloadUrl` (already exists — reused, not duplicated) always calls `POST /files/{id}:download`; the resulting URL drives a programmatically-created, immediately-clicked `<a download>` element (the same pattern `/staff`'s export download already uses), never `window.open` — a browser only allows `window.open` to succeed within a short window of direct user interaction, and the request in between is enough to lose that window on a slow connection. The URL itself is never stored in component state or React Query's cache — a signed URL has a server-side TTL and caching it would eventually hand out an expired link.
+- **A document's download link is fetched fresh per click, never cached.** `Services.students.getDocumentDownloadUrl` (Task 3's own new function, wrapping Task 1's `students.document.view`-gated `POST /student-documents/{id}:download`) always requests a fresh URL; the resulting URL drives a programmatically-created, immediately-clicked `<a download>` element (the same pattern `/staff`'s export download already uses), never `window.open` — a browser only allows `window.open` to succeed within a short window of direct user interaction, and the request in between is enough to lose that window on a slow connection. The URL itself is never stored in component state or React Query's cache — a signed URL has a server-side TTL and caching it would eventually hand out an expired link. `core/files`' own `Content-Disposition: attachment` header (Task 1) forces the actual save-as behavior regardless of file type; the anchor's `download` attribute is a same-origin filename hint on top of that, not load-bearing on its own.
 - **Every new permission-gated control uses `hasPermission(currentUser, key)` directly** (Phase 1's established pattern) — no `<Can>` wrapper component exists in the current app and this plan does not add one. Each new tab itself is gated the same way, on its own view key — not merely "can view this student."
 - **Lazy per-tab data loading needs no extra state, and no `enabled` option.** `packages/ui`'s `Tabs` wraps Radix `Tabs`, which unmounts an inactive `TabsContent` panel by default (no task sets `forceMount`) — so a tab component's own `useQuery` never even runs until Radix actually mounts that tab's panel; there is nothing left for an `enabled` flag to gate. No `activeTab` state or `activeTab === "<tab>"` gating is added anywhere in this plan either.
 - **Every tab shows a real load-error state, distinct from its empty-list state.** A failed `useQuery` renders a retry-capable error message, not the tab's "no records yet" copy — and the error must visibly clear once a retry succeeds, not linger.
@@ -34,11 +34,11 @@
 
 ## Alternatives considered (why not)
 
-- **Per-guardian `fetchGuardianById` fan-out vs. an embedded guardian summary on `StudentGuardianSerializer`.** Chosen: the fan-out, through `Services.guardians`, per [ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md) (added this round specifically for this decision). An embedded summary would save N requests per student's guardian list, but it is a backend change beyond the three Task 1 already makes, for a phase independent review already pushed toward "dashboard-first, minimal backend surface." A tenant's guardians-per-student count is small (a handful of rows, not pages), so the N+1 cost is bounded and real; the fan-out goes through `Services` properly either way, so upgrading to an embedded summary later is a pure backend+client change with no tab-component rewrite. `GuardianViewSet.get_queryset` still gets `.select_related("photo_file")` (Task 1) so each resolved guardian's own photo lookup isn't itself an N+1.
+- **Per-guardian `fetchGuardianById` fan-out vs. an embedded guardian summary on `StudentGuardianSerializer`.** Chosen: the fan-out, through `Services.guardians`, per [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md) (added this round specifically for this decision). An embedded summary would save N requests per student's guardian list, but it is a backend change beyond the three Task 1 already makes, for a phase independent review already pushed toward "dashboard-first, minimal backend surface." A tenant's guardians-per-student count is small (a handful of rows, not pages), so the N+1 cost is bounded and real; the fan-out goes through `Services` properly either way, so upgrading to an embedded summary later is a pure backend+client change with no tab-component rewrite. `GuardianViewSet.get_queryset` still gets `.select_related("photo_file")` (Task 1) so each resolved guardian's own photo lookup isn't itself an N+1.
 - **A shared `PhotoUploadField` vs. a third standalone copy for guardians.** Chosen: extract a shared component (Task 5), used by both the student and guardian forms. Students and staff already each have their own copy of the same presigned-upload-then-preview flow; guardians would be the third, and this repo's own convention is to extract on the third copy rather than wait for a fourth. Staff's route lives outside `features/students/`, so migrating it too is out of scope for this PR — flagged in `docs/deferred-work.md` (Task 12) rather than silently left as a third uncounted copy.
 - **Select-populated-by-debounced-search vs. a real `Combobox` primitive for "search existing guardian."** Chosen: keep the `Select` + `useDebouncedValue` composition (same hook the student directory's own filter already uses). The spec's own Alternatives section settled this: a proper typeahead-with-keyboard-nav primitive is a `packages/ui` addition (`schoolhub-ui-port`) big enough to be its own piece of work, not warranted by this one dialog.
 - **`key`-based remount vs. a `useEffect` reset for the tabbed sheet's active tab.** Chosen: `<Tabs defaultValue="profile" key={row.id}>`, matching React's own documented pattern for "reset all state when a prop changes" (react.dev). A `useEffect` that resets state on `row` changing would need an `eslint-disable` for `react-hooks/set-state-in-effect` (a new one this plan deliberately adds none of) and runs a render later than the `key` approach for no benefit, since the component actually does need to reset, not merely re-sync one field.
-- **One `GuardianPickerDialog` with two internal steps vs. nesting `GuardianFormDialog` inside it for "create new."** Chosen: one dialog, two steps (Task 6). `ResponsiveDialog` wraps a Radix `Dialog` on desktop and a `vaul` `Drawer` on mobile; nesting a second `ResponsiveDialog` inside this one would need `Drawer.NestedRoot` on the mobile branch, which `packages/ui` doesn't expose. The create-fields form is inlined into the picker's own "create new" tab instead (reusing `GuardianFormDialog`'s exported `guardianFormSchema`/`GuardianFormValues`, not its whole dialog component), and a successful create advances the same dialog to its "link" step — the same step a search-selection also lands on.
+- **One `GuardianPickerDialog` with two internal steps vs. nesting `GuardianFormDialog` inside it for "create new."** Chosen: one dialog, two steps (Task 6). `ResponsiveDialog` wraps a Radix `Dialog` on desktop and a `vaul` `Drawer` on mobile; nesting a second `ResponsiveDialog` inside this one would need `Drawer.NestedRoot` on the mobile branch, which `packages/ui` doesn't expose. The create-fields form is inlined into the picker's own "create new" tab instead (reusing `guardians.schema.ts`'s exported `guardianFormSchema`/`GuardianFormValues`, Task 2 — not `GuardianFormDialog`'s whole dialog component), and a successful create advances the same dialog to its "link" step — the same step a search-selection also lands on.
 
 ## Review Focus
 
@@ -53,26 +53,35 @@
 ```
 apps/api/apps/student_management/serializers.py          # MODIFY — GuardianSerializer.photo_url (Task 1)
 apps/api/apps/student_management/guardians/serializers.py # MODIFY — mirror photo_url on the unwired duplicate (Task 1)
+apps/api/apps/student_management/guardians/viewset.py      # MODIFY — mirror select_related("photo_file") (Task 1)
 apps/api/apps/student_management/permissions.py           # MODIFY — principal + students.document.view (Task 1)
-apps/api/apps/student_management/views.py                  # MODIFY — GuardianViewSet select_related("photo_file") (Task 1)
-apps/api/apps/student_management/migrations/0008_grant_principal_document_view.py  # CREATE — backfill existing tenants (Task 1)
+apps/api/apps/student_management/views.py                  # MODIFY — GuardianViewSet select_related("photo_file"); StudentDocumentViewSet.download (Task 1)
+apps/api/apps/student_management/urls.py                   # MODIFY — wire the new :download route (Task 1)
 apps/api/apps/student_management/tests/test_guardians_documents.py   # MODIFY — new tests (Task 1)
 apps/api/apps/student_management/tests/base.py              # (read, not modified — confirms `allow()`'s real scope)
-apps/api/core/files/storage.py                              # MODIFY — presign_download content_disposition param (Task 1)
+apps/api/core/files/storage.py                              # MODIFY — content_disposition on Presigner/NullPresigner/S3Presigner (Task 1)
 apps/api/core/files/services.py                             # MODIFY — get_download_url passes Content-Disposition (Task 1)
-apps/api/core/files/tests/test_storage.py                   # MODIFY — new test (Task 1)
+apps/api/core/files/tests/test_storage.py                   # MODIFY — new tests (Task 1)
 apps/api/openapi.yaml                                      # MODIFY — regenerated (Task 1)
 packages/api-client/src/schema.d.ts                         # MODIFY — regenerated (Task 1)
-docs/decisions/0019-client-fan-out-for-unembedded-nested-ids.md  # CREATE (Task 2)
-docs/decisions/README.md                                     # MODIFY — index row for ADR-0019 (Task 2)
+docs/deferred-work.md                                       # MODIFY — production role-provisioning gap; remove the now-closed Content-Disposition entry (Task 1)
+docs/decisions/0020-client-fan-out-for-unembedded-nested-ids.md  # CREATE (Task 2)
+docs/decisions/README.md                                     # MODIFY — index row for ADR-0020 (Task 2)
 
 packages/types/src/student.ts              # MODIFY — add RELATIONSHIP_VALUES alongside GENDER_VALUES (Task 2)
 
-apps/dashboard/src/services/modules/guardians/
+apps/dashboard/src/services/modules/guardians/     # five-file shape from creation (ADR-0019)
   guardians-service.ts                     # CREATE (Task 2)
   guardians-type.ts                        # CREATE (Task 2)
+  guardians-constant.ts                    # CREATE (Task 2)
+  guardians-helper.ts                      # CREATE (Task 2)
+  guardians.schema.ts                      # CREATE (Task 2)
   index.ts                                 # CREATE (Task 2)
   __tests__/guardians-service.test.ts      # CREATE (Task 2)
+  __tests__/guardians-helper.test.ts       # CREATE (Task 2)
+
+apps/dashboard/src/lib/error-message.ts            # MODIFY — add applyServerFieldErrors (Task 5)
+apps/dashboard/src/lib/__tests__/error-message.test.ts  # MODIFY — new test case (Task 5)
 
 apps/dashboard/src/services/modules/students/
   students-service.ts                      # MODIFY — add emergency-contact + document functions (Task 3)
@@ -81,7 +90,7 @@ apps/dashboard/src/services/modules/students/
   index.ts                                 # MODIFY — re-export the new functions (Task 3)
   __tests__/students-service.test.ts       # MODIFY — new test cases (Task 3)
 
-apps/dashboard/src/services/endpoints.ts   # MODIFY — guardians/student-guardians/emergency-contacts/documents paths (Task 2, 3). No Services.files change — document download reuses the existing Services.jobs.fetchFileDownloadUrl.
+apps/dashboard/src/services/endpoints.ts   # MODIFY — guardians/student-guardians/emergency-contacts/documents paths, including studentDocuments.download (Task 2, 3).
 
 apps/dashboard/messages/en.json, ur.json   # MODIFY — reuse + fix existing students.tabs/guardians/emergencyContacts/documents (Task 4)
 
@@ -122,29 +131,31 @@ docs/deferred-work.md                      # MODIFY — unlink/edit/delete gaps,
 
 ---
 
-## Task 1: Backend — guardian `photo_url`, principal document-view (+ backfill), download Content-Disposition, and the test gaps
+## Task 1: Backend — guardian `photo_url`, principal document-view, a gated document `:download`, download Content-Disposition, and the test gaps
 
 **Files:**
 - Modify: `apps/api/apps/student_management/serializers.py`
 - Modify: `apps/api/apps/student_management/guardians/serializers.py`
+- Modify: `apps/api/apps/student_management/guardians/viewset.py`
 - Modify: `apps/api/apps/student_management/permissions.py`
 - Modify: `apps/api/apps/student_management/views.py`
-- Create: `apps/api/apps/student_management/migrations/0008_grant_principal_document_view.py`
+- Modify: `apps/api/apps/student_management/urls.py`
 - Modify: `apps/api/apps/student_management/tests/test_guardians_documents.py`
 - Modify: `apps/api/core/files/storage.py`
 - Modify: `apps/api/core/files/services.py`
 - Modify: `apps/api/core/files/tests/test_storage.py`
 - Modify: `apps/api/openapi.yaml` (regenerated, not hand-edited)
 - Modify: `packages/api-client/src/schema.d.ts` (regenerated, not hand-edited)
-- Modify: `docs/03-modules/student-management.md` (§4 permissions table)
+- Modify: `docs/03-modules/student-management.md` (§4 permissions table, §16 endpoint list)
+- Modify: `docs/deferred-work.md` (the production role-provisioning gap — see Step 7)
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: `GuardianRecord.photo_url` (via the regenerated `ApiSchemas["Guardian"]`, flowing into Task 2's `guardians-type.ts` with no manual edit there), `principal` holding `students.document.view` (which Task 10's permission-gating step depends on), and `core/files`' `:download` action now returning a URL with `Content-Disposition: attachment` baked in (which Task 9's download step depends on, to drop the anchor-click workaround). Otherwise backend-only, independent of every other frontend task.
+- Produces: `GuardianRecord.photo_url` (via the regenerated `ApiSchemas["Guardian"]`, flowing into Task 2's `guardians-type.ts` with no manual edit there), `principal` holding `students.document.view` in the registry (which Task 10's permission-gating step depends on — reaches dev/e2e-seeded tenants only, see Step 7), a new `students.document.view`-gated `POST /student-documents/{id}:download` action (which Task 3's `getDocumentDownloadUrl` and Task 9's download step depend on), and `core/files`' `:download` action now returning a URL with `Content-Disposition: attachment` baked in on every presigner (which the new document `:download` action, and `/staff`'s existing export download, both benefit from). Otherwise backend-only, independent of every other frontend task.
 
-This task carries the three small backend changes independent plan review (ADR-0015) found necessary across two review rounds — everything else in this plan stays dashboard-only. Each is narrow, mirrors an existing pattern exactly, and is proven by a test before being written (TDD), same as every other task in this plan.
+This task carries the four small backend changes independent plan review (ADR-0015) found necessary across three review rounds — everything else in this plan stays dashboard-only. Each is narrow, mirrors an existing pattern exactly, and is proven by a test before being written (TDD), same as every other task in this plan.
 
-**On `core.rbac.sync`:** `core.rbac.sync.sync_permissions_on_migrate` (the `post_migrate` hook) only upserts rows in the `Permission` table from `registry.all()` — key, module, resource, action, description. It never touches `RolePermission` (confirmed by reading `apps/api/core/rbac/sync.py` in full) and has nothing to do with which roles a permission's `default_roles` names. The only place `default_roles` is read at all is `seed_all_roles`'s `_seed_role_logins`, which builds a role from scratch via `ensure_role_with_permissions` — so adding `"principal"` to `students.document.view`'s `default_roles` in code only changes what a *freshly created* `principal` `Role` row holds. An already-provisioned tenant's existing `principal` `Role` keeps whatever `RolePermission` rows it already had; nothing re-applies `default_roles` to it. That's what Step 9's migration is for.
+**On `core.rbac.sync`, and why there is no backfill migration:** `core.rbac.sync.sync_permissions_on_migrate` (the `post_migrate` hook) only upserts rows in the `Permission` table from `registry.all()` — key, module, resource, action, description. It never touches `RolePermission` (confirmed by reading `apps/api/core/rbac/sync.py` in full) and has nothing to do with which roles a permission's `default_roles` names. The only place `default_roles` is read at all is `seed_all_roles`'s `_seed_role_logins` and `seed_e2e_data`'s equivalent, both of which build a role from scratch via `ensure_role_with_permissions` — so adding `"principal"` to `students.document.view`'s `default_roles` in code only changes what a *freshly created* `principal` `Role` row holds, in a dev/e2e-seeded tenant. A migration backfilling "existing tenants' `principal` role" was considered and rejected: reading `apps/api/core/rbac/seeding.py` and `apps/api/apps/staff_management/staff/services/invite.py` in full shows there is **no production code anywhere that creates a platform-default (`tenant=None`) `Role` row for any role except `school_owner`** (via `ensure_school_owner_role`) — not `principal`, not `teacher`, not `school_admin`. The invite flow is written to let an admin assign a `tenant=None` default role, but nothing ever creates one for a real tenant. A migration that filtered for tenant-scoped `principal` rows would only ever touch dev/e2e seed fixtures, giving false confidence that production tenants are covered when none are. This is a pre-existing, platform-wide gap in `core.rbac`/`core.tenancy` (no tenant-provisioning system exists yet for any default role but `school_owner`) — out of scope for this phase. Step 7 records it precisely in `docs/deferred-work.md` instead of papering over it with a migration that cannot do what its name claims.
 
 - [ ] **Step 1: Write the failing test for `GuardianSerializer.photo_url`**
 
@@ -182,11 +193,38 @@ Add to `GuardianPhotoFileTests` (already exists in `test_guardians_documents.py`
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsNotNone(response.json()["data"]["photo_url"])
+
+    def test_patching_a_guardian_with_their_own_unchanged_mismatched_photo_succeeds(
+        self,
+    ) -> None:
+        """Pins Step 3's `validate_photo_file_id` skip: re-sending the guardian's own
+
+        current `photo_file_id` unchanged must succeed even when that file's purpose
+        predates this check — without the skip, every edit to a guardian whose photo
+        was uploaded before the purpose check existed would fail outright.
+        """
+        self.allow("students.guardian.view", "students.guardian.update")
+        with tenant_context(self.tenant.id):
+            mismatched_file = FileFactory(
+                tenant=self.tenant, purpose="student.photo", status=FileStatus.READY
+            )
+            guardian = GuardianFactory(tenant=self.tenant, phone="0300-0000000")
+            guardian.photo_file = mismatched_file
+            guardian.save(update_fields=["photo_file"])
+
+        response = self.client.patch(
+            f"/api/v1/guardians/{guardian.pk}",
+            {"phone": "0300-1111111", "photo_file_id": str(mismatched_file.pk)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["phone"], "0300-1111111")
 ```
 
-- [ ] **Step 2: Confirm both tests fail**
+- [ ] **Step 2: Confirm all three tests fail**
 
-`photo_url` doesn't exist on `GuardianSerializer` yet, so both requests 500 or the key is simply absent from the response — either way, neither assertion passes yet.
+`photo_url` doesn't exist on `GuardianSerializer` yet, so the first two requests 500 or the key is simply absent from the response — either way, neither assertion passes yet. The third (`test_patching_a_guardian_with_their_own_unchanged_mismatched_photo_succeeds`) fails for a different reason: `validate_photo_file_id` has no unchanged-photo skip yet, so re-sending the guardian's own current `photo_file_id` still re-runs `assert_file_usable`, which rejects it for the mismatched purpose and the PATCH 422s instead of succeeding.
 
 - [ ] **Step 3: Add `photo_url` to `GuardianSerializer`, and stop re-validating an unchanged photo**
 
@@ -295,7 +333,7 @@ class GuardianSerializer(serializers.ModelSerializer):
         return get_display_url(photo)
 ```
 
-(Check the actual import order/style this file uses before pasting — it's a smaller file than the root one and may order its imports differently; match it rather than overwriting its conventions.)
+(Check the actual import order/style this file uses before pasting — it's a smaller file than the root one and may order its imports differently; match it rather than overwriting its conventions.) Also mirror the `select_related("photo_file")` fix from Step 3c below onto this unrouted duplicate's own `apps/api/apps/student_management/guardians/viewset.py:get_queryset` — a half-maintained duplicate that gets the field but not the query fix is worse than consistently maintaining both.
 
 - [ ] **Step 3c: Fix the N+1 on guardian search — `select_related("photo_file")`**
 
@@ -306,7 +344,9 @@ class GuardianSerializer(serializers.ModelSerializer):
         return super().get_queryset().select_related("photo_file").distinct()
 ```
 
-- [ ] **Step 4: Confirm both new tests pass**
+Apply the identical one-line change to the unrouted duplicate's `get_queryset` in `apps/api/apps/student_management/guardians/viewset.py` (currently `return super().get_queryset().distinct()`, no `select_related` either).
+
+- [ ] **Step 4: Confirm all three new tests pass**
 
 - [ ] **Step 5: Write the failing test proving `principal` is a default role for `students.document.view`**
 
@@ -316,16 +356,17 @@ class GuardianSerializer(serializers.ModelSerializer):
     def test_principal_is_a_default_role_for_document_view(self) -> None:
         from core.rbac.registry import registry
 
-        self.assertIn("principal", registry.get("students.document.view").default_roles)
+        spec = next(s for s in registry.for_module("students") if s.key == "students.document.view")
+        self.assertIn("principal", spec.default_roles)
 ```
 
-(Add this to `StudentDocumentTests` alongside its other tests — it needs none of that class's `setUp` fixtures, but keeping module-specific registry assertions beside that module's other permission-shaped tests matches how this file is already organized.)
+(Add this to `StudentDocumentTests` alongside its other tests — it needs none of that class's `setUp` fixtures, but keeping module-specific registry assertions beside that module's other permission-shaped tests matches how this file is already organized. The registry has no `get(key)` lookup — only `register`, `all()`, `keys()`, `for_module(module)` and `__contains__` — confirmed by reading `apps/api/core/rbac/registry.py` in full, so the spec is found by filtering `for_module("students")`.)
 
 - [ ] **Step 6: Confirm it fails**
 
-`"principal"` is not yet in `DOCUMENT_MANAGERS` or any tuple passed to `students.document.view`'s `registry.register(...)` call, so `registry.get("students.document.view").default_roles` doesn't contain it.
+`"principal"` is not yet in `DOCUMENT_MANAGERS` or any tuple passed to `students.document.view`'s `registry.register(...)` call, so no spec found via `for_module("students")` has it in `default_roles` yet.
 
-- [ ] **Step 7: Add `principal` to `students.document.view`'s allowed roles**
+- [ ] **Step 7: Add `principal` to `students.document.view`'s allowed roles, and record the production-backfill gap**
 
 In `apps/api/apps/student_management/permissions.py`:
 
@@ -337,110 +378,131 @@ registry.register(
 )
 ```
 
-This is the only registry change — `.create`/`.delete` stay `DOCUMENT_MANAGERS`-only; `.verify` already includes `principal`. `core.rbac.sync.sync_permissions_on_migrate` (the `post_migrate` hook) upserts the `Permission` row's `module`/`resource`/`action`/`description` from this registry entry on the next `migrate` — but, as explained in this task's intro, it never touches `RolePermission`, so this step alone changes nothing for any `principal` role that already exists. Step 9's migration is what actually grants it to existing tenants; `seed_all_roles` (dev/e2e only) already picks up the new `default_roles` value automatically the next time it runs, since it derives its role list and permission set from the registry on every run.
+This is the only registry change — `.create`/`.delete` stay `DOCUMENT_MANAGERS`-only; `.verify` already includes `principal`. `core.rbac.sync.sync_permissions_on_migrate` (the `post_migrate` hook) upserts the `Permission` row's `module`/`resource`/`action`/`description` from this registry entry on the next `migrate` — but, as explained in this task's intro, it never touches `RolePermission`, so this step alone changes nothing for any `principal` role that already exists anywhere. `seed_all_roles`/`seed_e2e_data` (dev/e2e only) already pick up the new `default_roles` value automatically the next time either runs, since both derive their role list and permission set from the registry on every run — that is the only place this grant actually reaches a `principal` role today.
+
+Add this entry to `docs/deferred-work.md` in the same step, stating the real, platform-wide gap precisely rather than inventing a migration that can't do what its name would claim:
+
+```markdown
+- **No production mechanism provisions a tenant's default roles.** `principal`'s new
+  `students.document.view` grant (`apps/api/apps/student_management/permissions.py`,
+  students Phase 2) reaches a `principal` role only when one is created via
+  `seed_all_roles`/`seed_e2e_data` (dev/e2e tooling) — both derive the role's permission
+  set from the registry's `default_roles` on every run. Reading `core/rbac/seeding.py`
+  and `apps/staff_management/staff/services/invite.py` in full confirms there is no
+  production code anywhere that creates a platform-default (`tenant=None`) `Role` row for
+  any role except `school_owner` (`ensure_school_owner_role`) — not `principal`, not
+  `teacher`, not `school_admin`. The staff invite flow is written to let an admin assign a
+  `tenant=None` default role, but nothing ever creates one for a real tenant. A migration
+  "backfilling existing tenants' `principal` role" was considered during this phase's plan
+  review and rejected for exactly this reason — it would only ever touch dev/e2e seed
+  fixtures, giving false confidence that production tenants are covered when none are.
+  This is a pre-existing, platform-wide gap in `core.rbac`/`core.tenancy` — building a
+  real tenant-provisioning system for default roles is its own spec and plan, not a
+  one-permission backfill inside a dashboard-tabs PR.
+```
 
 - [ ] **Step 8: Confirm the new test passes**
 
-- [ ] **Step 9: Write the data migration backfilling existing tenants**
+- [ ] **Step 9: Write the failing tests for a `students.document.view`-gated document `:download` action**
 
-A tenant that already has a `principal` `Role` row (created before this change, e.g. via `seed_all_roles` or a real onboarding flow) keeps whatever `RolePermission` rows it already had — nothing re-applies `default_roles` to an existing role. Create `apps/api/apps/student_management/migrations/0008_grant_principal_document_view.py`:
+Student documents currently have no download path of their own — the dashboard would otherwise have to call `core/files`' generic `/files/{id}:download`, gated only by `platform.file.view` (every staff role, `apps/api/core/files/permissions.py`'s `ALL_STAFF`), which is too broad for a specific student's documents. Add to `StudentDocumentTests` (same file, same class as Step 1's `_ready_file()` helper):
 
 ```python
-"""Data migration: backfill `students.document.view` onto existing tenants' `principal` role.
+    def test_downloading_a_document_returns_a_signed_url(self) -> None:
+        self.allow("students.document.create", "students.document.view")
+        file = self._ready_file()
+        create_response = self.client.post(
+            f"/api/v1/students/{self.student.pk}/documents",
+            {"file_id": str(file.pk), "document_type": "birth_certificate", "title": "Birth cert"},
+            format="json",
+        )
+        document_id = create_response.json()["data"]["id"]
 
-Independent plan review (ADR-0015, students Phase 2) added `principal` to this
-permission's `default_roles` in code (`apps/student_management/permissions.py`). That
-registry change alone only reaches a `principal` role created *after* the change, via
-`seed_all_roles`/`ensure_role_with_permissions` — nothing re-applies `default_roles` to a
-`Role` row an already-live tenant provisioned before this migration. This grants the same
-permission, once, to every tenant that already has a `principal` role, so a school live
-before this change gets the grant too, not only a freshly seeded one.
+        response = self.client.post(f"/api/v1/student-documents/{document_id}:download")
 
-Idempotent and safe to re-run: `RolePermission`'s own `UniqueConstraint(role, permission)`
-makes `ignore_conflicts=True` sufficient — the same pattern `core.rbac.seeding` already
-uses for exactly this reason.
-"""
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.json()["data"]["download_url"])
+```
 
-from __future__ import annotations
+Add to `CrossTenantGuardianDocumentTests` (alongside the existing `test_verifying_a_foreign_document_is_404`/`test_deleting_a_foreign_document_is_404`):
 
-from django.db import migrations
+```python
+    def test_downloading_a_foreign_document_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/student-documents/{self.foreign['document'].pk}:download"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+```
 
+- [ ] **Step 10: Confirm both fail**
 
-def grant_principal_document_view(apps, schema_editor):
-    role_model = apps.get_model("rbac", "Role")
-    permission_model = apps.get_model("rbac", "Permission")
-    role_permission_model = apps.get_model("rbac", "RolePermission")
+Neither `StudentDocumentViewSet` nor the URL conf has a `download` action/route yet, so both requests 404 at the routing layer (not the permission layer) — `NoReverseMatch` if hit through Django's reverse resolution, or DRF's own 404 for an unmatched path when hit directly by path string, which is what the test client does here.
 
-    try:
-        permission = permission_model.objects.get(key="students.document.view")
-    except permission_model.DoesNotExist:
-        # `Permission` rows are synced from the code registry by a `post_migrate` signal
-        # that fires after every migration in this `migrate` invocation has applied,
-        # including this one — on a brand-new database the row may not exist yet. Nothing
-        # to backfill there either: a fresh database has no tenant-scoped `principal` role
-        # until a seed command creates one, which runs after that same signal.
-        return
+- [ ] **Step 11: Add the `:download` action to `StudentDocumentViewSet` and wire its URL**
 
-    # Role/Permission/RolePermission are platform tables (no RLS policy, AllTenantsManager
-    # in the real model) — no tenant_context() needed to read or write across tenants.
-    principal_roles = role_model.objects.filter(slug="principal", tenant__isnull=False)
-    role_permission_model.objects.bulk_create(
-        [
-            role_permission_model(role=role, permission=permission)
-            for role in principal_roles
-        ],
-        ignore_conflicts=True,
+In `apps/api/apps/student_management/views.py`, extend `StudentDocumentViewSet`:
+
+```python
+class StudentDocumentViewSet(
+    TenantScopedViewSetMixin,
+    mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Top-level access for `DELETE /student-documents/{id}`, and the
+
+    `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+    names no endpoint for it — added here so the key is reachable; the module doc gets the
+    corresponding update in this PR. `:download` is its own action rather than reusing
+    `core/files`' generic `/files/{id}:download`, because that one is gated only by
+    `platform.file.view` (every staff role) — too broad for one specific student's
+    documents, which need `students.document.view`.
+    """
+
+    queryset = StudentDocument.objects
+    serializer_class = StudentDocumentSerializer
+    required_feature = "module.students"
+    required_permission = "students.document.view"
+    required_permission_map = {
+        "destroy": "students.document.delete",
+        "verify": "students.document.verify",
+        # Explicit rather than left to the required_permission fallback — same reasoning
+        # as FileViewSet.required_permission_map's own "download" entry.
+        "download": "students.document.view",
+    }
+    scope_campus_field = "student__campus_id"
+
+    @extend_schema(...)  # existing verify() stays exactly as it is — unchanged
+
+    @extend_schema(
+        summary="Get a signed download URL for a student document",
+        request=None,
+        responses={200: OpenApiResponse(description="{'download_url': str}")},
     )
+    def download(self, request, pk=None) -> Response:
+        from core.files.services import get_download_url
 
-
-class Migration(migrations.Migration):
-    dependencies = [
-        ("student_management", "0007_student_students_tenant_admitted_idx"),
-        ("rbac", "0001_initial"),
-    ]
-
-    operations = [
-        migrations.RunPython(grant_principal_document_view, migrations.RunPython.noop),
-    ]
+        document = self.get_object()
+        return ActionResponse.ok({"download_url": get_download_url(document.file)})
 ```
 
-Run `python manage.py makemigrations student_management --name grant_principal_document_view --empty` first to get Django's own migration number/dependency scaffolding right, then replace its generated body with the above.
+(`ActionResponse` and `extend_schema`/`OpenApiResponse` are already imported at this file's top — reuse them, don't re-import. The local `from core.files.services import get_download_url` matches this file's own convention of local-importing cross-core helpers, e.g. `record_audit` throughout this same file, rather than a new top-level `core.files` import.)
 
-- [ ] **Step 10: Write a test for the migration**
-
-Add a new test class to `test_guardians_documents.py` (or a dedicated `test_migrations.py` if this app already has one for a prior data migration — check before adding a new file for just this one case) using `django_test_migrations` if it's already a dependency, or a plain `TestCase` that calls the migration's function directly against real `Role`/`Permission`/`RolePermission` models (simpler, and consistent with this module's existing test style, which doesn't otherwise exercise migrations in isolation):
+In `apps/api/apps/student_management/urls.py`, add a route alongside the existing `:verify` one:
 
 ```python
-    def test_backfill_migration_grants_existing_principal_roles(self) -> None:
-        from apps.student_management.migrations import (
-            __path__ as _,  # noqa: F401 — forces package resolution before the import below
-        )
-        from importlib import import_module
-
-        from core.rbac.models import Permission, Role, RolePermission
-
-        migration_module = import_module(
-            "apps.student_management.migrations.0008_grant_principal_document_view"
-        )
-
-        with tenant_context(self.tenant.id):
-            role = Role.objects.create(tenant=self.tenant, slug="principal", name="Principal")
-
-        permission = Permission.objects.get(key="students.document.view")
-        self.assertFalse(RolePermission.objects.filter(role=role, permission=permission).exists())
-
-        migration_module.grant_principal_document_view(apps=None, schema_editor=None)
-
-        self.assertTrue(RolePermission.objects.filter(role=role, permission=permission).exists())
+    path(
+        "student-documents/<uuid:pk>:download",
+        StudentDocumentViewSet.as_view({"post": "download"}),
+        name="student-documents-download",
+    ),
 ```
 
-(`apps.get_model` inside the real migration function needs a historical `apps` registry when run by Django's migration machinery — calling the function directly with `apps=None` only works because this particular function never uses the `apps` parameter for anything but `apps.get_model`, so check whether the function as actually written takes `apps`/`schema_editor` positionally or by the names used here, and adjust the call to match exactly. If this turns out awkward to call directly, use `django.test.utils.CaptureQueriesContext`-free `MigrationExecutor`-based testing instead — whichever the implementer finds already has precedent in this codebase; check before inventing a new pattern.)
+- [ ] **Step 12: Confirm the new tests pass**
 
-- [ ] **Step 11: Confirm the migration test passes**
+- [ ] **Step 13: Write the failing tests for the download Content-Disposition header**
 
-- [ ] **Step 12: Write the failing test for the download Content-Disposition header**
-
-In `apps/api/core/files/tests/test_storage.py`, alongside the existing `test_download_links_take_an_expiry_and_a_cache_control`:
+In `apps/api/core/files/tests/test_storage.py`, alongside the existing `test_download_links_take_an_expiry_and_a_cache_control` — one test at the presigner level (proves the header reaches the signed URL), one at the `get_download_url` level (proves the real call site actually sets it, per round-3 review: a presigner-level test alone wouldn't have caught `get_download_url`/`NullPresigner`/the `Presigner` Protocol being left out of this change):
 
 ```python
     @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
@@ -456,15 +518,66 @@ In `apps/api/core/files/tests/test_storage.py`, alongside the existing `test_dow
         )
 ```
 
-- [ ] **Step 13: Confirm it fails**
-
-`presign_download` has no `content_disposition` parameter yet — a `TypeError` on the unexpected keyword argument.
-
-- [ ] **Step 14: Add the parameter to `S3Presigner.presign_download` and wire it through `get_download_url`**
-
-In `apps/api/core/files/storage.py`:
+Add a new test class in the same file (needs `File` and `get_download_url`, not imported there yet):
 
 ```python
+from core.files.models import File
+from core.files.services import get_download_url
+
+
+class GetDownloadUrlTests(SimpleTestCase):
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_sets_a_content_disposition_header_from_the_files_own_name(self):
+        # Unsaved instance — SimpleTestCase forbids DB access, but constructing a model
+        # in memory without .save() never touches the database.
+        file = File(storage_key="tenants/t/report.pdf", original_name="Report Card.pdf")
+
+        url = get_download_url(file)
+
+        query = parse_qs(urlsplit(url).query)
+        self.assertIn("response-content-disposition", query)
+        self.assertIn("Report Card.pdf", query["response-content-disposition"][0])
+```
+
+- [ ] **Step 14: Confirm both fail**
+
+`presign_download` has no `content_disposition` parameter yet, so the first test fails with a `TypeError` on the unexpected keyword argument. `get_download_url` doesn't pass one at all, so the second test's query has no `response-content-disposition` key.
+
+- [ ] **Step 15: Add `content_disposition` to every `Presigner` implementation, and wire `get_download_url` through Django's own RFC 6266 helper**
+
+The round-3 review's exact failure mode: adding `content_disposition` to only `S3Presigner.presign_download` leaves the `Presigner` Protocol and `NullPresigner` — the one every test and local/CI run actually uses (`get_presigner()` returns `NullPresigner` whenever `S3_ENDPOINT_URL` is unset) — without the parameter, so **every** `:download` call anywhere, including `/staff`'s existing export download, would raise `TypeError` the moment `get_download_url` tries to pass it. All three need the parameter together, in `apps/api/core/files/storage.py`:
+
+```python
+class Presigner(Protocol):
+    def presign_upload(self, *, storage_key: str, mime_type: str) -> PresignedUpload: ...
+    def presign_download(
+        self,
+        *,
+        storage_key: str,
+        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        cache_control: str | None = None,
+        content_disposition: str | None = None,
+    ) -> str: ...
+    ...
+```
+
+```python
+class NullPresigner:
+    ...
+    def presign_download(
+        self,
+        *,
+        storage_key: str,
+        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        cache_control: str | None = None,
+        content_disposition: str | None = None,
+    ) -> str:
+        return f"https://null-presigner.invalid/{storage_key}"
+```
+
+```python
+class S3Presigner:
+    ...
     def presign_download(
         self,
         *,
@@ -487,21 +600,24 @@ In `apps/api/core/files/storage.py`:
         )
 ```
 
-In `apps/api/core/files/services.py`, change `get_download_url` to pass it, using the file's own real name:
+In `apps/api/core/files/services.py`, change `get_download_url` to pass it, using Django's own `content_disposition_header` (`django.utils.http`, RFC 6266) rather than a raw f-string — a raw `f'attachment; filename="{file.original_name}"'` breaks quoting on a `"` in the name and mishandles a non-ASCII name (e.g. a real Urdu filename), both of which this helper already gets right:
 
 ```python
+from django.utils.http import content_disposition_header
+
+
 def get_download_url(file: File) -> str:
     return get_presigner().presign_download(
         storage_key=file.storage_key,
-        content_disposition=f'attachment; filename="{file.original_name}"',
+        content_disposition=content_disposition_header(True, file.original_name),
     )
 ```
 
-This is a generic `core/files` change — every caller of the `:download` colon-action (student documents here, and `/staff`'s existing export download) gets a real forced download instead of relying on the frontend anchor's `download` attribute, which browsers ignore for a cross-origin URL (confirmed via MDN: `download` only applies same-origin). Task 9 drops its own anchor-click workaround now that the backend forces this correctly; `/staff`'s existing download code needs no change — it already works, now for the right reason instead of by accident.
+This is a generic `core/files` change, applied globally (not scoped to document/export-purpose files only) — every caller of a `:download`-style action gets a real forced download: the new student-document `:download` action above, and `/staff`'s existing export download, which previously relied on the frontend anchor's `download` attribute, something browsers ignore for a cross-origin URL (confirmed via MDN: `download` only applies same-origin). Task 9 drops its own anchor-click workaround now that the backend forces this correctly; `/staff`'s existing download code needs no change to its own logic — it already works, now for the right reason instead of by accident. This also resolves the `deferred-work.md` entry already tracking this exact Content-Disposition gap (recorded before this phase) — Step 17 below removes that entry rather than leaving a stale "still open" note beside a now-closed gap.
 
-- [ ] **Step 15: Confirm both new storage tests pass**
+- [ ] **Step 16: Confirm all three new storage tests pass**
 
-- [ ] **Step 16: Update the module doc's permission table**
+- [ ] **Step 17: Update the module doc's permission table and endpoint list; remove the now-stale `deferred-work.md` entry**
 
 In `docs/03-modules/student-management.md` §4, change:
 
@@ -512,19 +628,23 @@ In `docs/03-modules/student-management.md` §4, change:
 to:
 
 ```
-| `students.document.view` / `.create` / `.verify` / `.delete` | Manage & verify student documents | `school_admin`, `admission_staff`; view & verify also `principal` (existing tenants backfilled by migration `0008_grant_principal_document_view`) |
+| `students.document.view` / `.create` / `.verify` / `.delete` | Manage & verify student documents | `school_admin`, `admission_staff`; view & verify also `principal` (dev/e2e-seeded tenants only — see docs/deferred-work.md) |
 ```
 
-- [ ] **Step 17: Regenerate the API contract**
+In §16's endpoint list, add the new `POST /student-documents/{id}:download` action alongside the existing `:verify` entry.
+
+In `docs/deferred-work.md`, remove (or mark resolved, matching this file's own convention for closed entries) the existing entry that already tracks "no `Content-Disposition` forcing a real download" — Step 15 closes it globally, so leaving it in place would describe a gap that no longer exists.
+
+- [ ] **Step 18: Regenerate the API contract**
 
 ```bash
 apps/api/scripts/generate-openapi.sh
 pnpm --filter @schoolhub/api-client generate
 ```
 
-Confirm `openapi.yaml`'s `Guardian` schema now has a `photo_url` property (`type: string, format: uri, nullable: true`) and that `packages/api-client/src/schema.d.ts`'s generated `Guardian` type now includes `photo_url: string | null`. Both must be committed alongside the serializer change in the same commit (`.claude/rules/api-contract.md`) — CI's "OpenAPI schema is current" check fails the build on any drift. The `core/files` Content-Disposition change touches no serializer/view signature, so it does not change the OpenAPI schema.
+Confirm `openapi.yaml`'s `Guardian` schema now has a `photo_url` property (`type: string, format: uri, nullable: true`), that it has a new `/student-documents/{id}:download` path (from Step 11's new action), and that `packages/api-client/src/schema.d.ts`'s generated types reflect both — the new `Guardian.photo_url: string | null` field and the new download operation. All must be committed alongside the serializer/view changes in the same commit (`.claude/rules/api-contract.md`) — CI's "OpenAPI schema is current" check fails the build on any drift. The `core/files` Content-Disposition change touches no serializer/view signature, so it alone would not change the OpenAPI schema — the new `:download` action is what does.
 
-- [ ] **Step 18: Write the four remaining failing tests (existing named gaps)**
+- [ ] **Step 19: Write the four remaining failing tests (existing named gaps)**
 
 Add to `GuardianLinkTests` (the class already has `self.student`, `self.tenant`, `tenant_context`, `self.allow(...)` helpers — confirmed by reading the file's existing methods):
 
@@ -567,7 +687,7 @@ Add to `GuardianLinkTests` (the class already has `self.student`, `self.tenant`,
         self.assertEqual(response.json()["data"]["phone"], "0300-1111111")
 ```
 
-Add to `CrossTenantGuardianDocumentTests` (the class already builds `self.own`/`self.foreign` dicts via `_build`, which already includes a `"contact"` key — confirmed by reading the file). Four tests, not one: the originally-named gap (listing emergency contacts under a foreign student) plus three more the review round surfaced — creating a contact under a foreign student, and reading another tenant's guardian link, must both 404 too, and the guardian-link duplicate conflict gets its own test:
+Add to `CrossTenantGuardianDocumentTests` (the class's `_build` helper already returns a dict with `student`/`guardian`/`link`/`contact`/`document` keys for both `self.own` and `self.foreign` — confirmed by reading the file in full; `self.foreign['link']` already exists, no fixture change needed). Five tests, not one: the originally-named gap (listing emergency contacts under a foreign student) plus four more the review rounds surfaced — creating a contact under a foreign student and reading another tenant's guardian link must both 404 too, a foreign tenant's guardian must never leak into a search result, and the guardian-link duplicate conflict gets its own test:
 
 ```python
     def test_listing_emergency_contacts_under_a_foreign_student_is_404(self) -> None:
@@ -587,9 +707,20 @@ Add to `CrossTenantGuardianDocumentTests` (the class already builds `self.own`/`
     def test_reading_a_foreign_tenants_guardian_link_is_404(self) -> None:
         response = self.client.get(f"/api/v1/student-guardians/{self.foreign['link'].pk}")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-```
 
-(`self.foreign['link']` must exist on the fixture already built by `_build` — if it currently only builds `student`/`contact`/etc., add a `StudentGuardianFactory`-built link to both `self.own`/`self.foreign` dicts in `_build` so this test has something real to read; check the fixture before assuming the key name.)
+    def test_searching_guardians_excludes_a_foreign_tenants_guardian(self) -> None:
+        """List-leakage, distinct from `test_retrieving_a_foreign_guardian_is_404` above —
+
+        that one proves a direct fetch by id 404s; this one proves the foreign guardian
+        doesn't quietly show up in a *search* result instead.
+        """
+        response = self.client.get(
+            "/api/v1/guardians", {"search": self.foreign["guardian"].first_name}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(self.foreign["guardian"].pk), ids)
+```
 
 Add to `GuardianLinkTests` (alongside the three tests from Step 1 of this block above):
 
@@ -610,18 +741,18 @@ Add to `GuardianLinkTests` (alongside the three tests from Step 1 of this block 
         self.assertEqual(response.json()["error"]["code"], "conflict")
 ```
 
-- [ ] **Step 19: Confirm the tests fail by construction (do not run them)**
+- [ ] **Step 20: Confirm the tests fail by construction (do not run them)**
 
-`test_searching_guardians_by_name_returns_matches` and `test_retrieving_a_single_guardian_link_succeeds` exercise real, already-correct endpoints — they would pass immediately once written, proving the gap was test coverage, not behavior. `test_patching_a_guardians_own_fields_succeeds` likewise. The four cross-tenant/conflict tests exercise `_NestedUnderStudentMixin.get_student()`'s existing 404 behavior (already proven for guardians/documents in the same class) and `StudentGuardian`'s existing `UniqueConstraint` → `IntegrityError` → 409 mapping (`core/api/exceptions.py`) — by construction, all pass immediately too. None of these tests are expected to fail; they close a coverage gap against correct, shipped code, which is the point of this part of the task.
+`test_searching_guardians_by_name_returns_matches` and `test_retrieving_a_single_guardian_link_succeeds` exercise real, already-correct endpoints — they would pass immediately once written, proving the gap was test coverage, not behavior. `test_patching_a_guardians_own_fields_succeeds` likewise. The five cross-tenant/conflict tests exercise `_NestedUnderStudentMixin.get_student()`'s existing 404 behavior (already proven for guardians/documents in the same class), the existing tenant-scoped queryset's exclusion of a foreign guardian from search results, and `StudentGuardian`'s existing `UniqueConstraint` → `IntegrityError` → 409 mapping (`core/api/exceptions.py`) — by construction, all pass immediately too. None of these tests are expected to fail; they close a coverage gap against correct, shipped code, which is the point of this part of the task.
 
-- [ ] **Step 20: Commit**
+- [ ] **Step 21: Commit**
 
 ```bash
-git add apps/api/apps/student_management/serializers.py apps/api/apps/student_management/guardians/serializers.py apps/api/apps/student_management/permissions.py apps/api/apps/student_management/views.py apps/api/apps/student_management/migrations/0008_grant_principal_document_view.py apps/api/apps/student_management/tests/test_guardians_documents.py apps/api/core/files/storage.py apps/api/core/files/services.py apps/api/core/files/tests/test_storage.py apps/api/openapi.yaml packages/api-client/src/schema.d.ts docs/03-modules/student-management.md
-git commit -m "feat(api): add guardian photo_url, principal document-view backfill, download Content-Disposition; close test gaps"
+git add apps/api/apps/student_management/serializers.py apps/api/apps/student_management/guardians/serializers.py apps/api/apps/student_management/guardians/viewset.py apps/api/apps/student_management/permissions.py apps/api/apps/student_management/views.py apps/api/apps/student_management/urls.py apps/api/apps/student_management/tests/test_guardians_documents.py apps/api/core/files/storage.py apps/api/core/files/services.py apps/api/core/files/tests/test_storage.py apps/api/openapi.yaml packages/api-client/src/schema.d.ts docs/03-modules/student-management.md docs/deferred-work.md
+git commit -m "feat(api): add guardian photo_url, gated document download, global Content-Disposition; close test gaps"
 ```
 
-- [ ] **Step 21: Push and read CI**
+- [ ] **Step 22: Push and read CI**
 
 ---
 
@@ -631,17 +762,21 @@ git commit -m "feat(api): add guardian photo_url, principal document-view backfi
 - Modify: `apps/dashboard/src/services/endpoints.ts`
 - Create: `apps/dashboard/src/services/modules/guardians/guardians-service.ts`
 - Create: `apps/dashboard/src/services/modules/guardians/guardians-type.ts`
+- Create: `apps/dashboard/src/services/modules/guardians/guardians-constant.ts`
+- Create: `apps/dashboard/src/services/modules/guardians/guardians-helper.ts`
+- Create: `apps/dashboard/src/services/modules/guardians/guardians.schema.ts`
 - Create: `apps/dashboard/src/services/modules/guardians/index.ts`
 - Create: `apps/dashboard/src/services/modules/guardians/__tests__/guardians-service.test.ts`
+- Create: `apps/dashboard/src/services/modules/guardians/__tests__/guardians-helper.test.ts`
 - Modify: `apps/dashboard/src/services/index.ts` (register `Services.guardians`; top-level re-exports)
 - Modify: `apps/dashboard/src/services/__tests__/index.test.ts`
 - Modify: `packages/types/src/student.ts` (`RELATIONSHIP_VALUES`)
-- Create: `docs/decisions/0019-client-fan-out-for-unembedded-nested-ids.md`
+- Create: `docs/decisions/0020-client-fan-out-for-unembedded-nested-ids.md`
 - Modify: `docs/decisions/README.md`
 
 **Interfaces:**
-- Consumes: `apiClient` (`@/lib/auth`), `fetchPage` (`@schoolhub/api-client`).
-- Produces: `Services.guardians.{searchGuardians,fetchGuardianById,createGuardian,updateGuardian,linkGuardianToStudent,updateGuardianLink,fetchGuardianLinks}`, `GuardianRecord`, `GuardianLinkRecord`, `GuardianRelationship` types. Consumed by Tasks 5, 6, 7. `fetchGuardianById` exists specifically so Task 7's Guardians tab resolves a link's `guardian_id` into a name/phone through `Services`, never a raw `apiClient`/`endpoints` import inside the tab component (ADR-0011).
+- Consumes: `apiClient` (`@/lib/auth`), `fetchPage` (`@schoolhub/api-client`), `copyMappedFields` (`@/lib/helpers`).
+- Produces: `Services.guardians.{searchGuardians,fetchGuardianById,createGuardian,updateGuardian,linkGuardianToStudent,updateGuardianLink,fetchGuardianLinks}`, `GuardianRecord`, `GuardianLinkRecord`, `GuardianRelationship` types (all via the `Services` barrel, ADR-0011). `guardianFormSchema`/`GuardianFormValues` (`guardians.schema.ts`) and `toCreateGuardianBody`/`toUpdateGuardianBody` (`guardians-helper.ts`) are imported directly by their own module path, not through the barrel — matching this codebase's real existing precedent (`features/auth/login-form.tsx` imports `loginSchema` from `@/services/modules/auth/auth.schema` directly, never through `@/services`). Consumed by Tasks 5, 6, 7. `fetchGuardianById` exists specifically so Task 7's Guardians tab resolves a link's `guardian_id` into a name/phone through `Services`, never a raw `apiClient`/`endpoints` import inside the tab component (ADR-0011). Five-file shape (`-type`/`-constant`/`-helper`/`.schema`/`-service`) from creation, per [ADR-0019](../../decisions/0019-every-module-uses-the-five-file-shape.md) — `Services.guardians` is a brand-new domain as of this plan, so the "from creation" rule applies directly, unlike `students` (Task 3), an existing domain ADR-0019 doesn't retrofit in this PR.
 
 - [ ] **Step 1: Add the new paths to `endpoints.ts`**
 
@@ -818,8 +953,9 @@ describe("guardians-service", () => {
 
     expect(mockGet).toHaveBeenCalledWith(
       "/students/student-1/guardians",
-      // 50, not `SEARCH_PAGE_SIZE`'s 20 — this lists one student's own links (a small,
-      // bounded set), a different call site than the tenant-wide search dropdown.
+      // 50 (GUARDIAN_LINKS_PAGE_SIZE), not GUARDIAN_SEARCH_PAGE_SIZE's 20 — this lists one
+      // student's own links (a small, bounded set), a different call site than the
+      // tenant-wide search dropdown.
       expect.objectContaining({ query: { page_size: 50 } }),
     );
     expect(result).toEqual([{ id: "link-1", guardian_id: "g1" }]);
@@ -871,12 +1007,206 @@ export interface UpdateGuardianLinkInput {
 }
 ```
 
+- [ ] **Step 3a: Write `guardians-constant.ts`**
+
+Per [ADR-0019](../../decisions/0019-every-module-uses-the-five-file-shape.md), a new domain gets this file from creation — here it holds real content from the start (the page-size tuning and the body-field maps `guardians-helper.ts` needs next), unlike a domain with nothing yet to put in it:
+
+```ts
+import type {
+  CreateGuardianInput,
+  LinkGuardianInput,
+  UpdateGuardianLinkInput,
+} from "./guardians-type";
+
+/** The guardians module's constants — collected here so the service functions below, and
+ * any future caller, share one definition instead of repeating a literal. */
+
+/** Reference-data-sized page for a live search dropdown — not `MAX_PAGE_SIZE` (reserved
+ * for a small, bounded reference list like campuses/houses): a tenant-wide guardian
+ * search can realistically match far more than that, and a search dropdown only ever
+ * shows a handful of results at once regardless. */
+export const GUARDIAN_SEARCH_PAGE_SIZE = 20;
+
+/** A student realistically has a handful of guardian links — large enough that no
+ * student ever needs a second page, distinct from `GUARDIAN_SEARCH_PAGE_SIZE`'s
+ * tenant-wide search dropdown use. */
+export const GUARDIAN_LINKS_PAGE_SIZE = 50;
+
+/** camelCase `CreateGuardianInput`/`UpdateGuardianInput` key -> the API's snake_case body
+ * key. Drives `toCreateGuardianBody`/`toUpdateGuardianBody` (`guardians-helper.ts`) —
+ * kept here, not inline in those functions, matching `students-constant.ts`'s
+ * `STUDENT_BODY_FIELDS` convention exactly. */
+export const GUARDIAN_BODY_FIELDS: ReadonlyArray<readonly [keyof CreateGuardianInput, string]> = [
+  ["firstName", "first_name"],
+  ["lastName", "last_name"],
+  ["phone", "phone"],
+  ["altPhone", "alt_phone"],
+  ["email", "email"],
+  ["photoFileId", "photo_file_id"],
+];
+
+/** Same convention, for `linkGuardianToStudent`/`updateGuardianLink`'s request bodies. */
+export const GUARDIAN_LINK_BODY_FIELDS: ReadonlyArray<
+  readonly [keyof (LinkGuardianInput & UpdateGuardianLinkInput), string]
+> = [
+  ["guardianId", "guardian_id"],
+  ["relationship", "relationship"],
+  ["isPrimary", "is_primary"],
+  ["isFeeResponsible", "is_fee_responsible"],
+  ["canPickUp", "can_pick_up"],
+  ["receivesCommunications", "receives_communications"],
+  ["hasPortalAccess", "has_portal_access"],
+];
+```
+
+- [ ] **Step 3b: Write `guardians-helper.ts`, with its own failing test first**
+
+Write `apps/dashboard/src/services/modules/guardians/__tests__/guardians-helper.test.ts`:
+
+```ts
+import {
+  formValuesToCreateGuardianInput,
+  toCreateGuardianBody,
+  toUpdateGuardianBody,
+} from "../guardians-helper";
+
+describe("guardians-helper", () => {
+  it("toCreateGuardianBody omits an unset optional entirely", () => {
+    const body = toCreateGuardianBody({ firstName: "Ayesha", lastName: "Raza", phone: "0300-0000000" });
+
+    expect(body).toEqual({ first_name: "Ayesha", last_name: "Raza", phone: "0300-0000000" });
+  });
+
+  it("toUpdateGuardianBody sends an explicit empty string, to clear a field", () => {
+    const body = toUpdateGuardianBody({ altPhone: "" });
+
+    expect(body).toEqual({ alt_phone: "" });
+  });
+
+  it("toUpdateGuardianBody omits a field that was never provided at all", () => {
+    const body = toUpdateGuardianBody({ phone: "0300-1111111" });
+
+    expect(body).toEqual({ phone: "0300-1111111" });
+  });
+
+  it("formValuesToCreateGuardianInput maps the form's snake_case fields to camelCase, omitting empty optionals", () => {
+    const input = formValuesToCreateGuardianInput({
+      first_name: "Ayesha",
+      last_name: "Raza",
+      phone: "0300-0000000",
+      alt_phone: "",
+      email: "",
+      photo_file_id: "",
+    });
+
+    expect(input).toEqual({ firstName: "Ayesha", lastName: "Raza", phone: "0300-0000000" });
+  });
+});
+```
+
+Confirm it fails (`guardians-helper.ts` doesn't exist yet), then write it:
+
+```ts
+import { copyMappedFields } from "@/lib/helpers";
+import { GUARDIAN_BODY_FIELDS, GUARDIAN_LINK_BODY_FIELDS } from "./guardians-constant";
+import type { GuardianFormValues } from "./guardians.schema";
+import type {
+  CreateGuardianInput,
+  LinkGuardianInput,
+  UpdateGuardianInput,
+  UpdateGuardianLinkInput,
+} from "./guardians-type";
+
+/**
+ * The guardians module's pure helper functions — single source of truth, so a mapper
+ * isn't reimplemented per call site. Plain data in, plain data out; no React, no API
+ * calls.
+ */
+
+/** `GuardianFormValues` (snake_case, the Zod form shape) -> `CreateGuardianInput`
+ * (camelCase, the service input shape), omitting an unset optional entirely. Shared by
+ * `GuardianFormDialog`'s create branch (Task 5) and `GuardianPickerDialog`'s inline
+ * create-tab (Task 6) — both build a brand-new guardian from the identical form. */
+export function formValuesToCreateGuardianInput(values: GuardianFormValues): CreateGuardianInput {
+  return {
+    firstName: values.first_name,
+    lastName: values.last_name,
+    phone: values.phone,
+    ...(values.alt_phone ? { altPhone: values.alt_phone } : {}),
+    ...(values.email ? { email: values.email } : {}),
+    ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
+  };
+}
+
+/** camelCase `CreateGuardianInput` -> the API's snake_case body, omitting an unset
+ * optional entirely rather than sending it as empty — there is no existing guardian yet
+ * for an omitted field to "leave unchanged", so there's nothing to clear. */
+export function toCreateGuardianBody(input: CreateGuardianInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  copyMappedFields(input, GUARDIAN_BODY_FIELDS, (value) => Boolean(value), body);
+  return body;
+}
+
+/** camelCase `UpdateGuardianInput` -> the API's snake_case body. Gated on `!== undefined`,
+ * not truthiness: an explicit empty string (clearing `alt_phone`/`email`) must reach the
+ * request body rather than being silently dropped — unlike `toCreateGuardianBody` above,
+ * there IS a current value here that an omitted field would otherwise leave unchanged. */
+export function toUpdateGuardianBody(input: UpdateGuardianInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  copyMappedFields(input, GUARDIAN_BODY_FIELDS, (value) => value !== undefined, body);
+  return body;
+}
+
+export function toLinkGuardianBody(input: LinkGuardianInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  copyMappedFields(input, GUARDIAN_LINK_BODY_FIELDS, (value) => value !== undefined, body);
+  return body;
+}
+
+export function toUpdateGuardianLinkBody(input: UpdateGuardianLinkInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  copyMappedFields(input, GUARDIAN_LINK_BODY_FIELDS, (value) => value !== undefined, body);
+  return body;
+}
+```
+
+Confirm the three `guardians-helper.test.ts` cases now pass.
+
+- [ ] **Step 3c: Write `guardians.schema.ts`**
+
+```ts
+import { z } from "zod";
+
+/**
+ * The guardians module's Zod schemas — single source of truth for `GuardianFormDialog`
+ * (Task 5, create/edit a guardian's own fields) and `GuardianPickerDialog`'s inline
+ * create-tab (Task 6), so the same 5-field schema isn't redeclared in both places.
+ */
+export const guardianFormSchema = z.object({
+  first_name: z.string().min(1),
+  last_name: z.string().min(1),
+  phone: z.string().min(1),
+  alt_phone: z.string().optional(),
+  email: z.string().optional(),
+  photo_file_id: z.string().optional(),
+});
+
+export type GuardianFormValues = z.infer<typeof guardianFormSchema>;
+```
+
 - [ ] **Step 4: Write `guardians-service.ts`**
 
 ```ts
 import { fetchPage } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import { GUARDIAN_LINKS_PAGE_SIZE, GUARDIAN_SEARCH_PAGE_SIZE } from "./guardians-constant";
+import {
+  toCreateGuardianBody,
+  toLinkGuardianBody,
+  toUpdateGuardianBody,
+  toUpdateGuardianLinkBody,
+} from "./guardians-helper";
 import type {
   CreateGuardianInput,
   GuardianLinkRecord,
@@ -896,19 +1226,9 @@ export type {
   UpdateGuardianLinkInput,
 } from "./guardians-type";
 
-/** Reference-data-sized page for a live search dropdown — not `MAX_PAGE_SIZE` (reserved
- * for a small, bounded reference list like campuses/houses): a tenant-wide guardian
- * search can realistically match far more than that, and a search dropdown only ever
- * shows a handful of results at once regardless. */
-const SEARCH_PAGE_SIZE = 20;
-/** A student realistically has a handful of guardian links — large enough that no
- * student ever needs a second page, distinct from `SEARCH_PAGE_SIZE`'s tenant-wide
- * search dropdown use. */
-const LINKS_PAGE_SIZE = 50;
-
 export async function searchGuardians(search: string): Promise<GuardianRecord[]> {
   const { items } = await fetchPage<GuardianRecord>(apiClient, endpoints.guardians.list, {
-    query: { search, page_size: SEARCH_PAGE_SIZE },
+    query: { search, page_size: GUARDIAN_SEARCH_PAGE_SIZE },
   });
   return items;
 }
@@ -919,14 +1239,10 @@ export async function fetchGuardianById(id: string): Promise<GuardianRecord> {
 }
 
 export async function createGuardian(input: CreateGuardianInput): Promise<GuardianRecord> {
-  const { data } = await apiClient.post<GuardianRecord>(endpoints.guardians.list, {
-    first_name: input.firstName,
-    last_name: input.lastName,
-    phone: input.phone,
-    ...(input.altPhone ? { alt_phone: input.altPhone } : {}),
-    ...(input.email ? { email: input.email } : {}),
-    ...(input.photoFileId ? { photo_file_id: input.photoFileId } : {}),
-  });
+  const { data } = await apiClient.post<GuardianRecord>(
+    endpoints.guardians.list,
+    toCreateGuardianBody(input),
+  );
   return data;
 }
 
@@ -934,14 +1250,10 @@ export async function updateGuardian(
   id: string,
   input: UpdateGuardianInput,
 ): Promise<GuardianRecord> {
-  const body: Record<string, unknown> = {};
-  if (input.firstName !== undefined) body.first_name = input.firstName;
-  if (input.lastName !== undefined) body.last_name = input.lastName;
-  if (input.phone !== undefined) body.phone = input.phone;
-  if (input.altPhone !== undefined) body.alt_phone = input.altPhone;
-  if (input.email !== undefined) body.email = input.email;
-  if (input.photoFileId !== undefined) body.photo_file_id = input.photoFileId;
-  const { data } = await apiClient.patch<GuardianRecord>(endpoints.guardians.detail(id), body);
+  const { data } = await apiClient.patch<GuardianRecord>(
+    endpoints.guardians.detail(id),
+    toUpdateGuardianBody(input),
+  );
   return data;
 }
 
@@ -951,15 +1263,7 @@ export async function linkGuardianToStudent(
 ): Promise<GuardianLinkRecord> {
   const { data } = await apiClient.post<GuardianLinkRecord>(
     endpoints.guardians.studentLinks(studentId),
-    {
-      guardian_id: input.guardianId,
-      relationship: input.relationship,
-      is_primary: input.isPrimary,
-      is_fee_responsible: input.isFeeResponsible,
-      can_pick_up: input.canPickUp,
-      receives_communications: input.receivesCommunications,
-      has_portal_access: input.hasPortalAccess,
-    },
+    toLinkGuardianBody(input),
   );
   return data;
 }
@@ -968,18 +1272,9 @@ export async function updateGuardianLink(
   linkId: string,
   input: UpdateGuardianLinkInput,
 ): Promise<GuardianLinkRecord> {
-  const body: Record<string, unknown> = {};
-  if (input.relationship !== undefined) body.relationship = input.relationship;
-  if (input.isFeeResponsible !== undefined) body.is_fee_responsible = input.isFeeResponsible;
-  if (input.canPickUp !== undefined) body.can_pick_up = input.canPickUp;
-  if (input.receivesCommunications !== undefined) {
-    body.receives_communications = input.receivesCommunications;
-  }
-  if (input.hasPortalAccess !== undefined) body.has_portal_access = input.hasPortalAccess;
-  if (input.isPrimary !== undefined) body.is_primary = input.isPrimary;
   const { data } = await apiClient.patch<GuardianLinkRecord>(
     endpoints.studentGuardians.detail(linkId),
-    body,
+    toUpdateGuardianLinkBody(input),
   );
   return data;
 }
@@ -988,11 +1283,13 @@ export async function fetchGuardianLinks(studentId: string): Promise<GuardianLin
   const { items } = await fetchPage<GuardianLinkRecord>(
     apiClient,
     endpoints.guardians.studentLinks(studentId),
-    { query: { page_size: LINKS_PAGE_SIZE } },
+    { query: { page_size: GUARDIAN_LINKS_PAGE_SIZE } },
   );
   return items;
 }
 ```
+
+`createGuardian`/`updateGuardian`/`linkGuardianToStudent`/`updateGuardianLink` no longer hand-roll their own field-by-field body mapping — `guardians-helper.ts` (Step 3b) does it once, via `copyMappedFields` (`@/lib/helpers`), the same convention `students-helper.ts`'s `toStudentBody` already established. Step 2's tests above assert the same request bodies as before; this is a pure internal refactor, not a behavior change.
 
 - [ ] **Step 5: Write `index.ts`**
 
@@ -1064,16 +1361,29 @@ export type RelationshipValue = (typeof RELATIONSHIP_VALUES)[number];
 
 One array, one place — Tasks 6 and 7 both import `RELATIONSHIP_VALUES` from `@schoolhub/types` rather than each declaring their own copy.
 
+Also add a compile-time link to `guardians-type.ts` so the two can't silently drift apart — `packages/types` can't import `GuardianRelationship` itself (it's a lower-level shared package; `apps/dashboard` depends on it, never the reverse), so the check lives on the dashboard side, where both types are already in scope:
+
+```ts
+import { RELATIONSHIP_VALUES } from "@schoolhub/types";
+
+// Compile-time link: if the backend ever adds/renames a relationship value, this line
+// stops compiling the moment RELATIONSHIP_VALUES (packages/types) and GuardianRelationship
+// (the generated wire type, derived above) disagree — rather than drifting silently.
+RELATIONSHIP_VALUES satisfies readonly GuardianRelationship[];
+```
+
+(Append this import + assertion to the bottom of `guardians-type.ts` from Step 3 above — it needs `GuardianRelationship`, already defined there, and `RELATIONSHIP_VALUES`, just added to `packages/types` in this step.)
+
 - [ ] **Step 8: Confirm the tests pass by construction**
 
-- [ ] **Step 9: Confirm ADR-0019 is recorded**
+- [ ] **Step 9: Confirm ADR-0020 is recorded**
 
-This task's own fan-out design (`fetchGuardianById` per unique `guardian_id`, resolved through `Services.guardians` rather than an embedded backend summary) is the decision [ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md) records. The ADR file and its `docs/decisions/README.md` index row already exist on disk (written during plan revision) — commit them alongside this task's own files rather than opening a separate docs-only commit for them.
+This task's own fan-out design (`fetchGuardianById` per unique `guardian_id`, resolved through `Services.guardians` rather than an embedded backend summary) is the decision [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md) records. The ADR file and its `docs/decisions/README.md` index row already exist on disk (written during plan revision) — commit them alongside this task's own files rather than opening a separate docs-only commit for them.
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add apps/dashboard/src/services/endpoints.ts apps/dashboard/src/services/modules/guardians apps/dashboard/src/services/index.ts apps/dashboard/src/services/__tests__/index.test.ts packages/types/src/student.ts docs/decisions/0019-client-fan-out-for-unembedded-nested-ids.md docs/decisions/README.md
+git add apps/dashboard/src/services/endpoints.ts apps/dashboard/src/services/modules/guardians apps/dashboard/src/services/index.ts apps/dashboard/src/services/__tests__/index.test.ts packages/types/src/student.ts docs/decisions/0020-client-fan-out-for-unembedded-nested-ids.md docs/decisions/README.md
 git commit -m "feat(dashboard): add Services.guardians"
 ```
 
@@ -1094,9 +1404,9 @@ git commit -m "feat(dashboard): add Services.guardians"
 
 **Interfaces:**
 - Consumes: `apiClient`, `fetchPage`.
-- Produces: `Services.students.{fetchEmergencyContacts,addEmergencyContact,fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument}`, `EmergencyContactRecord`, `StudentDocumentRecord`, `DocumentVerificationDecision` types, re-exported from `@/services`. Consumed by Tasks 8, 9. Document download does NOT get a new service function — Task 9 calls the existing `Services.jobs.fetchFileDownloadUrl` (`apps/dashboard/src/services/modules/jobs/jobs-service.ts`, already wraps `POST /files/{id}:download`), the same function `/staff`'s export download already uses. Adding a second wrapper here would duplicate it.
+- Produces: `Services.students.{fetchEmergencyContacts,addEmergencyContact,fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument,getDocumentDownloadUrl}`, `EmergencyContactRecord`, `StudentDocumentRecord`, `DocumentVerificationDecision` types, re-exported from `@/services`. Consumed by Tasks 8, 9. `getDocumentDownloadUrl` wraps Task 1's new `POST /student-documents/{id}:download` action — genuinely distinct from the existing `Services.jobs.fetchFileDownloadUrl` (`apps/dashboard/src/services/modules/jobs/jobs-service.ts`, wraps the generic `/files/{id}:download`), which stays exactly as it is for `/staff`'s export download. This isn't a duplicate wrapper around the same endpoint: it calls a different, more narrowly `students.document.view`-gated route, keyed on the document's own id rather than its underlying file id.
 
-Added directly into the existing `students-service.ts`/`students-type.ts`/`students-constant.ts` — not a new `student-relations-*` file split. `students-service.ts` is 69 lines today; six more small functions keeps it well under ADR-0018's split trigger (a file becoming "the unlabeled source of truth" for enough hand-written types/constants/helpers to need pulling apart — not yet true here), and a student's emergency contacts/documents are exactly the same resource family as the student record itself (nested under it, not independent), unlike guardians (Task 2), which are genuinely their own tenant-wide-searchable resource and earn their own domain.
+Added directly into the existing `students-service.ts`/`students-type.ts`/`students-constant.ts` — not a second, separate `student-relations-*` domain. `students` already has the full five-file shape ([ADR-0019](../../decisions/0019-every-module-uses-the-five-file-shape.md) names it, alongside `staff`, as a domain that already grew into it) — this task adds to those existing files, it doesn't create a new split. A student's emergency contacts/documents are exactly the same resource family as the student record itself (nested under it, not independent), unlike guardians (Task 2), which are genuinely their own tenant-wide-searchable resource and earn their own domain under ADR-0019's "every new domain, from creation" rule.
 
 - [ ] **Step 1: Add the new paths to `endpoints.ts`**
 
@@ -1110,12 +1420,13 @@ Add two nested paths to the existing `students` block (`list`, `detail`, `withdr
     emergencyContacts: (studentId: string) => `/students/${studentId}/emergency-contacts`,
     documents: (studentId: string) => `/students/${studentId}/documents`,
   },
-  /** Top-level access to a single document — `DELETE` and the `:verify` colon-action.
-   * Upload (create) always goes through the nested `students.documents` path above,
-   * where the student is unambiguous from the URL. */
+  /** Top-level access to a single document — `DELETE` and the `:verify`/`:download`
+   * colon-actions. Upload (create) always goes through the nested `students.documents`
+   * path above, where the student is unambiguous from the URL. */
   studentDocuments: {
     detail: (id: string) => `/student-documents/${id}`,
     verify: (id: string) => `/student-documents/${id}:verify`,
+    download: (id: string) => `/student-documents/${id}:download`,
   },
 ```
 
@@ -1264,6 +1575,16 @@ describe("students-service — emergency contacts and documents", () => {
     expect(mockPost).toHaveBeenCalledWith("/student-documents/d1:verify", { decision: "verified" });
     expect(result).toEqual({ id: "d1", verification_status: "verified" });
   });
+
+  it("getDocumentDownloadUrl posts to the document's own :download action and returns the url", async () => {
+    const { getDocumentDownloadUrl } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { download_url: "https://files.example.com/x?sig=abc" } });
+
+    const result = await getDocumentDownloadUrl("d1");
+
+    expect(mockPost).toHaveBeenCalledWith("/student-documents/d1:download");
+    expect(result).toBe("https://files.example.com/x?sig=abc");
+  });
 });
 ```
 
@@ -1385,6 +1706,15 @@ export async function verifyDocument(
   );
   return data;
 }
+
+/** Task 1's own `students.document.view`-gated action — distinct from the generic
+ * `Services.jobs.fetchFileDownloadUrl`, which stays `/staff`'s export download path. */
+export async function getDocumentDownloadUrl(documentId: string): Promise<string> {
+  const { data } = await apiClient.post<{ download_url: string }>(
+    endpoints.studentDocuments.download(documentId),
+  );
+  return data.download_url;
+}
 ```
 
 - [ ] **Step 5: Wire the new functions into `students/index.ts`**
@@ -1400,6 +1730,7 @@ import {
   fetchEmergencyContacts,
   fetchStudentById,
   fetchStudentsPage,
+  getDocumentDownloadUrl,
   updateStudent,
   uploadDocumentRecord,
   verifyDocument,
@@ -1418,6 +1749,7 @@ export const StudentsService = {
   uploadDocumentRecord,
   deleteDocument,
   verifyDocument,
+  getDocumentDownloadUrl,
 };
 export type {
   AddEmergencyContactInput,
@@ -1646,6 +1978,34 @@ Matching Urdu in `ur.json`:
 "downloadFailed": "اس دستاویز کے لیے ڈاؤن لوڈ لنک حاصل نہیں کیا جا سکا۔"
 ```
 
+Also add the `loadingLabel` announcements `Button`'s discriminated union requires wherever `isLoading` is passed (ADR-0009) — these are screen-reader text, not visible button labels, so they can be terse. Add to `en.json`:
+
+```json
+// students.guardians
+"submitting": "Saving…",
+"linking": "Linking…"
+```
+
+```json
+// students.emergencyContacts
+"submitting": "Saving…"
+```
+
+Matching Urdu in `ur.json`:
+
+```json
+// students.guardians
+"submitting": "محفوظ ہو رہا ہے…",
+"linking": "منسلک ہو رہا ہے…"
+```
+
+```json
+// students.emergencyContacts
+"submitting": "محفوظ ہو رہا ہے…"
+```
+
+(The Documents tab's own upload button reuses its already-existing `documents.uploading` key for its `loadingLabel` — no new key needed there.)
+
 - [ ] **Step 7: Add the shared `common.photoUpload.*` keys for the relocated `PhotoUploadField`**
 
 Task 5's `PhotoUploadField` moves to `apps/dashboard/src/components/` (a neutral location, not under `features/students/`) specifically so it can be shared by any future form outside the students feature — staff's own copy is the named candidate (Task 12's deferred-work entry). A component living outside `features/students/` reading the `students` i18n namespace would defeat that: add a new shared `common.photoUpload` object to `en.json`'s top-level `common` block (after the existing `resizeColumn`, the object's last key):
@@ -1694,12 +2054,14 @@ git commit -m "feat(dashboard): add the guardian/emergency-contact/document fiel
 - Create: `apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx`
 - Modify: `apps/dashboard/src/features/students/student-photo-field.tsx` — becomes a thin wrapper
 - Modify: `apps/dashboard/src/features/students/__tests__/student-photo-field.test.tsx` — same cases, now exercised through the wrapper
+- Modify: `apps/dashboard/src/lib/error-message.ts` — add `applyServerFieldErrors` (see Step 3a)
+- Modify: `apps/dashboard/src/lib/__tests__/error-message.test.ts`
 - Create: `apps/dashboard/src/features/students/guardian-form-dialog.tsx`
 - Create: `apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx`
 
 **Interfaces:**
 - Consumes: `Services.guardians.{createGuardian,updateGuardian}`, `Services.files.uploadFile` (Task 2, Phase 1).
-- Produces: `PhotoUploadField` (shared, at `@/components/photo-upload-field`), `GuardianFormDialog({ open, onOpenChange, mode, guardian?, onSaved })`. `mode: "create"` needs no `guardian` prop; `mode: "edit"` requires one (the already-fetched record — this component never fetches a guardian itself). `onSaved(guardian: GuardianRecord)` fires after a successful create or update, so the caller decides what happens next (Task 6 links a newly created guardian; Task 7's edit action just needs the tab to refetch). Consumed by Tasks 6, 7.
+- Produces: `PhotoUploadField` (shared, at `@/components/photo-upload-field`), `applyServerFieldErrors` (shared, at `@/lib/error-message` — the server-field-error-mapping loop this task and Task 7's `GuardianLinkFlagsDialog` both need, extracted once rather than duplicated a second time), `GuardianFormDialog({ open, onOpenChange, mode, guardian?, onSaved })`. `mode: "create"` needs no `guardian` prop; `mode: "edit"` requires one (the already-fetched record — this component never fetches a guardian itself). `onSaved(guardian: GuardianRecord)` fires after a successful create or update, so the caller decides what happens next (Task 6 links a newly created guardian; Task 7's edit action just needs the tab to refetch). Consumed by Tasks 6, 7.
 
 Students, staff and now guardians each need the identical three-step-upload-plus-preview flow — this is the third copy, and this repo's own convention (`docs/02-architecture/repo-structure.md` §2; see this plan's Alternatives Considered) is to extract on the third copy, not the fourth. `PhotoUploadField` is that extraction, used here by both the student and guardian forms. It lives at `@/components/photo-upload-field.tsx` — a neutral location outside `features/students/` — specifically so a future caller outside the students feature (staff is the named one) can adopt it without an import that reaches into another feature's folder; its `uploadPurpose` prop is a plain `string` (not a students/guardians-only union) and its copy lives in the shared `common.photoUpload.*` i18n namespace (Task 4), not `students.*`, for the same reason. Staff's route (`apps/dashboard/src/app/(app)/staff/`) is not migrated to it in this PR — Task 12 records that as a named, deliberate gap in `docs/deferred-work.md`, not a silently-left third copy.
 
@@ -2061,9 +2423,57 @@ export function StudentPhotoField({
 
 Its existing test file keeps the same test cases (they exercise behavior through this wrapper exactly as they did before — nothing about `StudentPhotoField`'s external behavior changes) but now implicitly covers `PhotoUploadField` as well; `photo-upload-field.test.tsx` (Step 1) adds the cases that are easiest to prove generically (e.g. the purpose string actually reaching `Services.files.uploadFile`) rather than duplicating every student-specific case.
 
-- [ ] **Step 3: Write the inline zod schema this dialog needs**
+- [ ] **Step 3: Confirm `guardianFormSchema` already exists (Task 2), and add the shared `applyServerFieldErrors` helper**
 
-Not a separate `guardian-form-schema.ts` file — the schema is small enough (5 fields) to declare directly in `guardian-form-dialog.tsx`, unlike the student form's 20+-field schema that earned its own file. Declared as part of Step 5 below (`guardianFormSchema`), exported as `GuardianFormValues` from that same file — `PhotoUploadField` (Step 1) never needs to import it, since it's generic over any form matching `PhotoUploadFieldValues`, not tied to `GuardianFormValues` specifically.
+The guardian form's Zod schema (`guardianFormSchema`/`GuardianFormValues`) is NOT declared here — it lives in `apps/dashboard/src/services/modules/guardians/guardians.schema.ts` (Task 2, Step 4c), per [ADR-0019](../../decisions/0019-every-module-uses-the-five-file-shape.md): a new domain's five-file shape includes its own `.schema.ts` from creation, and `Services.guardians` is a brand-new domain as of this plan. This also lets Task 6's picker import the exact same schema for its inline create-tab, rather than reaching into this component file for it (the round-3 review's own finding: a component importing another component's exported schema is precisely the cross-module reach [ADR-0018](../../decisions/0018-per-module-file-split-for-growing-domains.md)/ADR-0019 mean to prevent). `PhotoUploadField` (Step 1) never needs this schema either way, since it's generic over any form matching `PhotoUploadFieldValues`, not tied to `GuardianFormValues` specifically.
+
+This dialog and Task 7's `GuardianLinkFlagsDialog` both map a `422`'s per-field `error.fieldErrors()` onto their own `react-hook-form` instance, falling back to a dialog-level alert when nothing matches — identical logic, two copies. Add a shared helper to the existing `apps/dashboard/src/lib/error-message.ts` (alongside `resolveErrorMessage`, which it reuses for the fallback case):
+
+```ts
+import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+
+/**
+ * Maps a failed mutation's server field errors onto a react-hook-form instance, falling
+ * back to a dialog-level message when nothing matches a known field — the one mapping
+ * loop every form dialog in this module needs, instead of each redeclaring it.
+ */
+export function applyServerFieldErrors<TValues extends FieldValues>({
+  error,
+  form,
+  knownFields,
+  tErrors,
+  fallback,
+  setFormError,
+}: {
+  error: unknown;
+  form: Pick<UseFormReturn<TValues>, "setError" | "clearErrors">;
+  knownFields: readonly string[];
+  tErrors: ErrorCodeTranslator;
+  fallback: string;
+  setFormError: (message: string | null) => void;
+}): void {
+  setFormError(null);
+  form.clearErrors();
+  if (!(error instanceof ApiError)) {
+    setFormError(fallback);
+    return;
+  }
+  let matchedAField = false;
+  for (const [field, issue] of Object.entries(error.fieldErrors())) {
+    if (field !== "non_field" && knownFields.includes(field)) {
+      form.setError(field as Path<TValues>, { type: "server", message: issue });
+      matchedAField = true;
+    }
+  }
+  if (!matchedAField) {
+    setFormError(resolveErrorMessage(error, tErrors, fallback, "non_field"));
+  }
+}
+```
+
+(`ApiError` is already imported at the top of `error-message.ts` for `resolveErrorMessage`'s own `instanceof` check — reuse it, don't re-import. `knownFields` is passed as `Object.keys(someSchema.shape)` by each caller, rather than this helper importing a specific schema, so it stays generic across every form that uses it.)
+
+Add a matching test to `apps/dashboard/src/lib/__tests__/error-message.test.ts`: a minimal `form` stub (`{ setError: jest.fn(), clearErrors: jest.fn() }`) confirms a matched field calls `setError` with that field and skips `setFormError`, and an unmatched field calls `setFormError` with the resolved message instead.
 
 - [ ] **Step 4: Write the failing tests**
 
@@ -2249,7 +2659,6 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
-import { z } from "zod";
 import {
   Alert,
   Button,
@@ -2271,21 +2680,15 @@ import {
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
-import { resolveErrorMessage } from "@/lib/error-message";
-import { ApiError, Services } from "@/services";
+import { applyServerFieldErrors } from "@/lib/error-message";
+import { Services } from "@/services";
 import type { GuardianRecord } from "@/services";
+import { formValuesToCreateGuardianInput } from "@/services/modules/guardians/guardians-helper";
+import {
+  guardianFormSchema,
+  type GuardianFormValues,
+} from "@/services/modules/guardians/guardians.schema";
 import { PhotoUploadField } from "@/components/photo-upload-field";
-
-export const guardianFormSchema = z.object({
-  first_name: z.string().min(1),
-  last_name: z.string().min(1),
-  phone: z.string().min(1),
-  alt_phone: z.string().optional(),
-  email: z.string().optional(),
-  photo_file_id: z.string().optional(),
-});
-
-export type GuardianFormValues = z.infer<typeof guardianFormSchema>;
 
 const EMPTY_DEFAULTS: GuardianFormValues = {
   first_name: "",
@@ -2392,21 +2795,13 @@ function GuardianFormBody({
   const mutation = useMutation({
     mutationFn: (values: GuardianFormValues) => {
       if (mode === "create") {
-        const input = {
-          firstName: values.first_name,
-          lastName: values.last_name,
-          phone: values.phone,
-          ...(values.alt_phone ? { altPhone: values.alt_phone } : {}),
-          ...(values.email ? { email: values.email } : {}),
-          ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
-        };
-        return Services.guardians.createGuardian(input);
+        return Services.guardians.createGuardian(formValuesToCreateGuardianInput(values));
       }
       // Edit: alt_phone/email are sent as-given, including an explicit empty string —
       // not gated on truthiness like create's omit-if-empty above. A truthiness gate
       // here would mean clearing one of these back to empty silently does nothing,
       // since an omitted field means "leave unchanged" to `updateGuardian`'s own
-      // `!== undefined` check (students-helper.ts's `copyMappedFields` convention).
+      // `toUpdateGuardianBody` (`guardians-helper.ts`), which gates on `!== undefined`.
       const input = {
         firstName: values.first_name,
         lastName: values.last_name,
@@ -2422,22 +2817,14 @@ function GuardianFormBody({
       onSaved(saved);
     },
     onError: (error) => {
-      setFormError(null);
-      form.clearErrors();
-      if (error instanceof ApiError) {
-        let matchedAField = false;
-        for (const [field, issue] of Object.entries(error.fieldErrors())) {
-          if (field !== "non_field" && field in guardianFormSchema.shape) {
-            form.setError(field as keyof GuardianFormValues, { type: "server", message: issue });
-            matchedAField = true;
-          }
-        }
-        if (!matchedAField) {
-          setFormError(resolveErrorMessage(error, tErrors, t("form.submitFailed"), "non_field"));
-        }
-      } else {
-        setFormError(t("form.submitFailed"));
-      }
+      applyServerFieldErrors({
+        error,
+        form,
+        knownFields: Object.keys(guardianFormSchema.shape),
+        tErrors,
+        fallback: t("form.submitFailed"),
+        setFormError,
+      });
     },
   });
 
@@ -2560,7 +2947,11 @@ function GuardianFormBody({
           >
             {tCommon("cancel")}
           </Button>
-          <Button type="submit" isLoading={mutation.isPending || isPhotoUploading}>
+          <Button
+            type="submit"
+            isLoading={mutation.isPending || isPhotoUploading}
+            loadingLabel={t("guardians.submitting")}
+          >
             {tCommon("save")}
           </Button>
         </ResponsiveDialogFooter>
@@ -2575,7 +2966,7 @@ function GuardianFormBody({
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/dashboard/src/components/photo-upload-field.tsx apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx apps/dashboard/src/features/students/student-photo-field.tsx apps/dashboard/src/features/students/__tests__/student-photo-field.test.tsx apps/dashboard/src/features/students/guardian-form-dialog.tsx apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx
+git add apps/dashboard/src/components/photo-upload-field.tsx apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx apps/dashboard/src/features/students/student-photo-field.tsx apps/dashboard/src/features/students/__tests__/student-photo-field.test.tsx apps/dashboard/src/lib/error-message.ts apps/dashboard/src/lib/__tests__/error-message.test.ts apps/dashboard/src/features/students/guardian-form-dialog.tsx apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx
 git commit -m "feat(dashboard): add the shared PhotoUploadField and the guardian create/edit form dialog"
 ```
 
@@ -2590,7 +2981,7 @@ git commit -m "feat(dashboard): add the shared PhotoUploadField and the guardian
 - Create: `apps/dashboard/src/features/students/__tests__/guardian-picker-dialog.test.tsx`
 
 **Interfaces:**
-- Consumes: `Services.guardians.{searchGuardians,createGuardian,linkGuardianToStudent}` (Task 2), `guardianFormSchema`/`GuardianFormValues` (Task 5's exports, reused for the inline create-fields form — not `GuardianFormDialog` itself, which this task deliberately does not render, to avoid nesting one `ResponsiveDialog` inside another), `PhotoUploadField` (`@/components/photo-upload-field`, Task 5), `RELATIONSHIP_VALUES` (`@schoolhub/types`, Task 2's Step 7), `useDebouncedValue` (`@/hooks/use-debounced-value`, already exists).
+- Consumes: `Services.guardians.{searchGuardians,createGuardian,linkGuardianToStudent}` (Task 2), `guardianFormSchema`/`GuardianFormValues` (Task 2's `guardians.schema.ts`, imported directly by path — not through `GuardianFormDialog`, which this task deliberately does not render, to avoid nesting one `ResponsiveDialog` inside another), `PhotoUploadField` (`@/components/photo-upload-field`, Task 5), `RELATIONSHIP_VALUES` (`@schoolhub/types`, Task 2's Step 7), `useDebouncedValue` (`@/hooks/use-debounced-value`, already exists).
 - Produces: `GuardianPickerDialog({ open, onOpenChange, studentId, excludedGuardianIds, isFirstGuardian, onLinked })`. `excludedGuardianIds` (the student's already-linked guardians' ids) hides them from search results, since linking one again would only ever hit the backend's duplicate-link conflict. `isFirstGuardian` is `true` when the student currently has zero links, so the very first guardian linked becomes primary by default (module doc §11), not left for the user to remember to set via a separate action. `onLinked()` fires after a successful link (no payload — the caller just needs to know to refetch). Consumed by Task 7, which supplies both new props from the links list it already has.
 
 One `ResponsiveDialog`, two internal steps — never a dialog nested inside another. `ResponsiveDialog` wraps a Radix `Dialog` on desktop and a `vaul` `Drawer` on mobile; nesting a second `ResponsiveDialog` inside this one would need `Drawer.NestedRoot` on the mobile branch, which `packages/ui` doesn't expose (confirmed: no `NestedRoot` export anywhere in the package). So "create new" is not a nested `GuardianFormDialog` — it's the **choose** step's "Create new" tab, with the same fields (`guardianFormSchema`/`GuardianFormValues`, `PhotoUploadField`) inlined directly into this dialog, ending in its own `createMutation`. Either path out of the **choose** step — picking a search result, or successfully creating a guardian — sets one `selectedGuardian` state and advances to the **link** step (relationship + the four non-primary flags' defaults + "Link guardian"). This is also what makes linking retry-safe: if `linkMutation` fails after a guardian was just created, retrying only re-runs `linkMutation` — `selectedGuardian` already holds the created guardian's id, so nothing re-creates it.
@@ -2941,7 +3332,11 @@ import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import type { GuardianRecord } from "@/services";
-import { guardianFormSchema, type GuardianFormValues } from "./guardian-form-dialog";
+import { formValuesToCreateGuardianInput } from "@/services/modules/guardians/guardians-helper";
+import {
+  guardianFormSchema,
+  type GuardianFormValues,
+} from "@/services/modules/guardians/guardians.schema";
 
 export interface GuardianPickerDialogProps {
   open: boolean;
@@ -3023,6 +3418,9 @@ function GuardianPickerBody({
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
   const [selectedGuardian, setSelectedGuardian] = useState<GuardianRecord | null>(null);
   const [relationship, setRelationship] = useState<RelationshipValue | "">("");
+  // Gates the "required" message below — without it, the message shows the instant this
+  // step renders, before the user has had any chance to pick a relationship at all.
+  const [linkAttempted, setLinkAttempted] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
@@ -3042,14 +3440,7 @@ function GuardianPickerBody({
 
   const createMutation = useMutation({
     mutationFn: (values: GuardianFormValues) =>
-      Services.guardians.createGuardian({
-        firstName: values.first_name,
-        lastName: values.last_name,
-        phone: values.phone,
-        ...(values.alt_phone ? { altPhone: values.alt_phone } : {}),
-        ...(values.email ? { email: values.email } : {}),
-        ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
-      }),
+      Services.guardians.createGuardian(formValuesToCreateGuardianInput(values)),
     onSuccess: (created) => {
       setSelectedGuardian(created);
       setStep("link");
@@ -3101,11 +3492,14 @@ function GuardianPickerBody({
     setStep("choose");
     setSelectedGuardian(null);
     setRelationship("");
+    setLinkAttempted(false);
     setLinkError(null);
   }
 
   function handleLink() {
+    setLinkAttempted(true);
     setLinkError(null);
+    if (!relationship) return;
     if (selectedGuardian) linkMutation.mutate(selectedGuardian.id);
   }
 
@@ -3139,7 +3533,7 @@ function GuardianPickerBody({
                 ))}
               </SelectContent>
             </Select>
-            {!relationship ? (
+            {linkAttempted && !relationship ? (
               <p className="text-sm text-destructive">{tCommon("requiredField")}</p>
             ) : null}
           </div>
@@ -3152,6 +3546,7 @@ function GuardianPickerBody({
             type="button"
             disabled={!relationship || linkMutation.isPending}
             isLoading={linkMutation.isPending}
+            loadingLabel={t("guardians.linking")}
             onClick={handleLink}
           >
             {t("guardians.link")}
@@ -3298,6 +3693,7 @@ function GuardianPickerBody({
                 <Button
                   type="submit"
                   isLoading={createMutation.isPending || isPhotoUploading}
+                  loadingLabel={t("guardians.submitting")}
                   className="w-full"
                 >
                   {t("guardians.createGuardian")}
@@ -3478,8 +3874,8 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
-import { resolveErrorMessage } from "@/lib/error-message";
-import { ApiError, Services } from "@/services";
+import { applyServerFieldErrors } from "@/lib/error-message";
+import { Services } from "@/services";
 import type { GuardianLinkRecord } from "@/services";
 
 // `relationship` has no `.optional()`/`.default()` — the Select always has a starting
@@ -3555,24 +3951,17 @@ export function GuardianLinkFlagsDialog({
       onSaved();
     },
     onError: (error) => {
-      // Same field-error-mapping convention as `GuardianFormDialog` (Task 5): a matched
-      // field gets its own `FormMessage`; anything else falls back to the dialog-level alert.
-      setFormError(null);
-      form.clearErrors();
-      if (error instanceof ApiError) {
-        let matchedAField = false;
-        for (const [field, issue] of Object.entries(error.fieldErrors())) {
-          if (field !== "non_field" && field in linkFlagsSchema.shape) {
-            form.setError(field as keyof LinkFlagsFormValues, { type: "server", message: issue });
-            matchedAField = true;
-          }
-        }
-        if (!matchedAField) {
-          setFormError(resolveErrorMessage(error, tErrors, t("form.submitFailed"), "non_field"));
-        }
-      } else {
-        setFormError(t("form.submitFailed"));
-      }
+      // Same shared field-error-mapping helper as `GuardianFormDialog` (Task 5): a
+      // matched field gets its own `FormMessage`; anything else falls back to the
+      // dialog-level alert.
+      applyServerFieldErrors({
+        error,
+        form,
+        knownFields: Object.keys(linkFlagsSchema.shape),
+        tErrors,
+        fallback: t("form.submitFailed"),
+        setFormError,
+      });
     },
   });
 
@@ -3643,7 +4032,11 @@ export function GuardianLinkFlagsDialog({
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" isLoading={mutation.isPending}>
+              <Button
+                type="submit"
+                isLoading={mutation.isPending}
+                loadingLabel={t("guardians.submitting")}
+              >
                 {tCommon("save")}
               </Button>
             </ResponsiveDialogFooter>
@@ -3851,8 +4244,14 @@ describe("StudentGuardiansTab", () => {
 ```tsx
 "use client";
 
-import { useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+  type QueryObserverResult,
+} from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Badge, Button, Skeleton } from "@schoolhub/ui";
@@ -3898,17 +4297,19 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
   // — see this plan's Global Constraints) — fan out one GET per unique guardian id,
   // through `Services.guardians.fetchGuardianById` (Task 2), never a direct
   // `apiClient`/`endpoints` import inside this component (ADR-0011).
-  const guardianIds = [...new Set(links.map((link) => link.guardian_id))];
+  // Memoized on `links`, not recomputed as a fresh array every render — `combine` below
+  // closes over this, and TanStack Query's own guidance is that `combine` must be
+  // referentially stable (wrap it in `useCallback`) or its memoization never holds.
+  const guardianIds = useMemo(
+    () => [...new Set(links.map((link) => link.guardian_id))],
+    [links],
+  );
   // `combine` turns N independent query results into one lookup this component actually
   // wants: per-id data where it resolved, and which ids failed — a bare useQueries array
   // forces re-deriving this from scratch on every render and makes it easy to drop a
   // failed lookup silently (the bug this exact shape was added to fix).
-  const guardianResults = useQueries({
-    queries: guardianIds.map((guardianId) => ({
-      queryKey: queryKeys.detail("guardians", "guardians", guardianId),
-      queryFn: () => Services.guardians.fetchGuardianById(guardianId),
-    })),
-    combine: (results) => ({
+  const combineGuardianResults = useCallback(
+    (results: QueryObserverResult<GuardianRecord>[]) => ({
       byId: new Map(
         results
           .map((result) => result.data)
@@ -3926,6 +4327,14 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
         }
       },
     }),
+    [guardianIds],
+  );
+  const guardianResults = useQueries({
+    queries: guardianIds.map((guardianId) => ({
+      queryKey: queryKeys.detail("guardians", "guardians", guardianId),
+      queryFn: () => Services.guardians.fetchGuardianById(guardianId),
+    })),
+    combine: combineGuardianResults,
   });
   const guardiansById = guardianResults.byId;
   const failedGuardianIds = guardianResults.failedIds;
@@ -4006,10 +4415,12 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
                           {tCommon("retry")}
                         </Button>
                       </div>
-                    ) : (
+                    ) : guardian ? (
                       <p className="text-sm font-medium text-foreground">
-                        {guardian ? `${guardian.first_name} ${guardian.last_name}` : "…"}
+                        {guardian.first_name} {guardian.last_name}
                       </p>
+                    ) : (
+                      <Skeleton className="h-4 w-32" />
                     )}
                     <p className="text-xs text-muted-foreground">
                       {t(`guardians.relationship.${link.relationship}`)}
@@ -4546,7 +4957,11 @@ function AddEmergencyContactDialog({
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" isLoading={mutation.isPending}>
+              <Button
+                type="submit"
+                isLoading={mutation.isPending}
+                loadingLabel={t("emergencyContacts.submitting")}
+              >
                 {t("emergencyContacts.add")}
               </Button>
             </ResponsiveDialogFooter>
@@ -4580,7 +4995,7 @@ git commit -m "feat(dashboard): add the students emergency contacts tab"
 - Create: `apps/dashboard/src/features/students/__tests__/student-documents-tab.test.tsx`
 
 **Interfaces:**
-- Consumes: `Services.students.{fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument}` (Task 3), `Services.files.uploadFile` (Phase 1), `Services.jobs.fetchFileDownloadUrl` (already exists — Task 3's Interfaces section).
+- Consumes: `Services.students.{fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument,getDocumentDownloadUrl}` (Task 3), `Services.files.uploadFile` (Phase 1).
 - Produces: `StudentDocumentsTab({ studentId, canCreate, canVerify, canDelete })`. Consumed by Task 10.
 
 **Review Focus #4** (an upload failing at a specific step must show that step's real message) applies here.
@@ -4932,6 +5347,7 @@ export function DocumentUploadDialog({
                 type="submit"
                 disabled={(!file && !uploadedFileId) || mutation.isPending}
                 isLoading={mutation.isPending}
+                loadingLabel={t("documents.uploading")}
               >
                 {mutation.isPending ? t("documents.uploading") : t("documents.upload")}
               </Button>
@@ -4973,9 +5389,9 @@ jest.mock("@/services", () => ({
       verifyDocument: jest.fn(),
       deleteDocument: jest.fn(),
       uploadDocumentRecord: jest.fn(),
+      getDocumentDownloadUrl: jest.fn(),
     },
     files: { uploadFile: jest.fn() },
-    jobs: { fetchFileDownloadUrl: jest.fn() },
   },
 }));
 
@@ -4988,8 +5404,8 @@ const mockVerifyDocument = Services.students.verifyDocument as jest.MockedFuncti
 const mockDeleteDocument = Services.students.deleteDocument as jest.MockedFunction<
   typeof Services.students.deleteDocument
 >;
-const mockFetchFileDownloadUrl = Services.jobs.fetchFileDownloadUrl as jest.MockedFunction<
-  typeof Services.jobs.fetchFileDownloadUrl
+const mockGetDocumentDownloadUrl = Services.students.getDocumentDownloadUrl as jest.MockedFunction<
+  typeof Services.students.getDocumentDownloadUrl
 >;
 const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
 
@@ -5020,7 +5436,7 @@ describe("StudentDocumentsTab", () => {
     mockFetchDocuments.mockReset();
     mockVerifyDocument.mockReset();
     mockDeleteDocument.mockReset();
-    mockFetchFileDownloadUrl.mockReset();
+    mockGetDocumentDownloadUrl.mockReset();
     mockToastError.mockReset();
   });
 
@@ -5057,29 +5473,33 @@ describe("StudentDocumentsTab", () => {
     expect(screen.queryByRole("button", { name: /^verify$/i })).not.toBeInTheDocument();
   });
 
-  it("requests a fresh signed URL on every download click", async () => {
+  it("requests a fresh signed URL on every download click, not a cached one", async () => {
     mockFetchDocuments.mockResolvedValue([documentRecord()]);
-    mockFetchFileDownloadUrl.mockResolvedValue("https://files.example.com/x?sig=abc");
+    mockGetDocumentDownloadUrl.mockResolvedValue("https://files.example.com/x?sig=abc");
+    const user = userEvent.setup();
 
     renderWithProviders(
       <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
     );
 
     const button = await screen.findByRole("button", { name: /download/i });
-    await userEvent.setup().click(button);
+    await user.click(button);
+    await user.click(button);
 
-    // The URL itself is never cached (a signed URL has a server-side TTL) — asserting
-    // the service call, not a DOM side effect, is what actually pins "fetched fresh per
-    // click"; the anchor-click mechanics are `staff-toolbar.tsx`'s own already-proven
-    // pattern, reused verbatim here, not re-tested per call site.
+    // Clicked twice, asserting two real calls (not one cached result reused) is what
+    // actually pins "fetched fresh per click" — a signed URL has a server-side TTL, so
+    // reusing one eventually hands out an expired link. The anchor-click mechanics are
+    // `staff-toolbar.tsx`'s own already-proven pattern, reused verbatim here, not
+    // re-tested per call site.
     await waitFor(() => {
-      expect(mockFetchFileDownloadUrl).toHaveBeenCalledWith("file-1");
+      expect(mockGetDocumentDownloadUrl).toHaveBeenCalledTimes(2);
     });
+    expect(mockGetDocumentDownloadUrl).toHaveBeenCalledWith("d1");
   });
 
   it("shows a toast when the download URL fetch fails", async () => {
     mockFetchDocuments.mockResolvedValue([documentRecord()]);
-    mockFetchFileDownloadUrl.mockRejectedValue(new Error("network down"));
+    mockGetDocumentDownloadUrl.mockRejectedValue(new Error("network down"));
 
     renderWithProviders(
       <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
@@ -5243,12 +5663,13 @@ export function StudentDocumentsTab({
   });
 
   const downloadMutation = useMutation({
-    // Reuses the existing `Services.jobs.fetchFileDownloadUrl` (already wraps `POST
-    // /files/{id}:download`) — not a second, nonexistent `Services.files` wrapper.
-    // Takes the document's own title alongside its file id, purely for the anchor's
+    // `Services.students.getDocumentDownloadUrl` (Task 3), keyed on the document's own
+    // id — Task 1's new `students.document.view`-gated `:download` action, not the
+    // generic `Services.jobs.fetchFileDownloadUrl` that `/staff`'s export still uses.
+    // Takes the document's own title alongside its id, purely for the anchor's
     // `download` filename hint below — never sent to the server.
-    mutationFn: async ({ fileId }: { fileId: string; title: string }) => ({
-      url: await Services.jobs.fetchFileDownloadUrl(fileId),
+    mutationFn: async ({ documentId }: { documentId: string; title: string }) => ({
+      url: await Services.students.getDocumentDownloadUrl(documentId),
     }),
     onSuccess: ({ url }, { title }) => {
       // The anchor-click pattern `/staff`'s export download already uses — never
@@ -5329,7 +5750,7 @@ export function StudentDocumentsTab({
                   size="sm"
                   disabled={downloadMutation.isPending}
                   onClick={() => {
-                    downloadMutation.mutate({ fileId: document.file_id, title: document.title });
+                    downloadMutation.mutate({ documentId: document.id, title: document.title });
                   }}
                 >
                   {t("documents.download")}
@@ -5464,6 +5885,9 @@ The existing file already has a working `renderWithProviders`/mock-`Services` se
     expect(screen.getByRole("tab", { name: /^guardians$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /emergency contacts/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^documents$/i })).toBeInTheDocument();
+    // Pins the `asChild`-dropped fix: a real tabpanel role must reach the DOM, not get
+    // silently swallowed by `ResponsiveSheetBody` (which doesn't forward arbitrary props).
+    expect(screen.getByRole("tabpanel")).toBeInTheDocument();
   });
 
   it("hides a tab entirely for a caller without that tab's own view permission", async () => {
@@ -5668,7 +6092,7 @@ Replace the existing block —
                 )}
               </TabsList>
 
-              <TabsContent value="profile" asChild>
+              <TabsContent value="profile" className="flex min-h-0 flex-1 flex-col">
                 <ResponsiveSheetBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
                   {detailQuery.isError ? (
                     <p className="text-sm text-muted-foreground">{t("detail.loadError")}</p>
@@ -5700,7 +6124,7 @@ Replace the existing block —
               </TabsContent>
 
               {canViewGuardians && (
-                <TabsContent value="guardians" asChild>
+                <TabsContent value="guardians" className="flex min-h-0 flex-1 flex-col">
                   <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
                     <StudentGuardiansTab
                       studentId={row.id}
@@ -5712,7 +6136,7 @@ Replace the existing block —
               )}
 
               {canViewEmergencyContacts && (
-                <TabsContent value="emergencyContacts" asChild>
+                <TabsContent value="emergencyContacts" className="flex min-h-0 flex-1 flex-col">
                   <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
                     <StudentEmergencyContactsTab
                       studentId={row.id}
@@ -5723,7 +6147,7 @@ Replace the existing block —
               )}
 
               {canViewDocuments && (
-                <TabsContent value="documents" asChild>
+                <TabsContent value="documents" className="flex min-h-0 flex-1 flex-col">
                   <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
                     <StudentDocumentsTab
                       studentId={row.id}
@@ -5736,6 +6160,8 @@ Replace the existing block —
               )}
             </Tabs>
 ```
+
+No `asChild` on any `TabsContent` here — round-3 review found that `asChild` passes Radix's tab-panel accessibility wiring (`role="tabpanel"`, `id`, `aria-labelledby`) to its single child via `Slot`, and `ResponsiveSheetBody` (`apps/dashboard/src/components/responsive-dialog.tsx`) only accepts `className`/`children`, so none of that wiring would actually reach a real DOM node — every trigger's `aria-controls` would point at nothing. `TabsContent` without `asChild` renders its own wrapping element carrying that wiring correctly and simply contains `ResponsiveSheetBody` as a normal child; the `className` passed to `TabsContent` keeps it a flex child that doesn't break the surrounding layout (`packages/ui`'s `TabsContent` passes `className` straight through to its own underlying Radix node). Task 10's own test suite gets one new assertion for this (Step 2's test list) — `getByRole("tabpanel")` must resolve for the active tab.
 
 `key={row.id}` remounts the whole `Tabs` tree — and therefore resets to `defaultValue="profile"` — every time the sheet opens for a different student, with no reset effect (this plan's Alternatives Considered). Each non-Profile `TabsContent` has no `activeTab === "<tab>"` guard around it: Radix unmounts an inactive `TabsContent` by default (no `forceMount` anywhere in this plan), so Tasks 7-9's own `useQuery` calls — which have no `enabled` option of their own — never fire until their tab's panel is actually mounted. No extra state is needed to make that true.
 
@@ -5787,6 +6213,9 @@ export interface Guardian {
   employer: string | null;
   national_id: string | null;
   photo_file_id: string | null;
+  // Mirrors Task 1's new `GuardianSerializer.photo_url` field — kept here so this mock's
+  // `Guardian` shape matches the real generated `ApiSchemas["Guardian"]`.
+  photo_url: string | null;
   address: Record<string, unknown> | null;
   custom_fields: Record<string, unknown> | null;
   created_at: string;
@@ -5821,6 +6250,7 @@ export function buildGuardian(overrides: Partial<Guardian> = {}): Guardian {
     employer: null,
     national_id: null,
     photo_file_id: null,
+    photo_url: null,
     address: null,
     custom_fields: null,
     created_at: "2026-01-10T00:00:00Z",
@@ -6393,16 +6823,20 @@ click, edit a link's flags or a guardian's own fields later — no unlink (the A
 Emergency contacts: add-only, ordered by priority — no edit, no delete (the API has neither).
 Documents: upload (type from the 6 seeded defaults), verify/reject, delete (with confirmation),
 download (a fresh signed URL requested per click, with `Content-Disposition: attachment` forcing
-a real download regardless of file type). Every endpoint this phase's dashboard work calls was
-already live; independent plan review added three small, deliberate backend changes alongside
-them: `GuardianSerializer.photo_url` (so a guardian's photo can actually be displayed, same
-purpose-gated pattern as the student one), `principal` gaining `students.document.view`
-(closing a pre-existing gap where `principal` could verify a document but not see the tab to do
-it from — existing tenants backfilled by migration `0008_grant_principal_document_view`), and a
-`Content-Disposition` header on `core/files`' signed download URLs (a generic fix that also
-benefits `/staff`'s existing export download). The remaining backend work was closing four
+a real download regardless of file type, via a `students.document.view`-gated `:download`
+action of its own rather than the broader, every-staff-role `core/files` endpoint). Nearly every
+endpoint this phase's dashboard work calls was already live; independent plan review added four
+small, deliberate backend changes alongside them: `GuardianSerializer.photo_url` (so a
+guardian's photo can actually be displayed, same purpose-gated pattern as the student one),
+`principal` gaining `students.document.view` in the registry (closing a pre-existing gap where
+`principal` could verify a document but not see the tab to do it from — reaches dev/e2e-seeded
+tenants only; `docs/deferred-work.md` records the platform-wide absence of any production
+default-role-provisioning mechanism, which this phase surfaced but does not fix), a
+`Content-Disposition` header on `core/files`' signed download URLs (a generic fix, applied to
+every presigner, that also benefits `/staff`'s existing export download), and the new
+document-scoped `:download` action itself. The remaining backend work was closing four
 pre-existing test coverage gaps (guardian search/list, a single link's retrieve, a guardian's own
-PATCH, and emergency contacts' cross-tenant isolation) plus two more the review round surfaced
+PATCH, and emergency contacts' cross-tenant isolation) plus two more the review rounds surfaced
 (a foreign-tenant guardian link read, and the guardian-link duplicate-conflict response).
 ```
 
@@ -6411,6 +6845,8 @@ PATCH, and emergency contacts' cross-tenant isolation) plus two more the review 
 In the "Dashboard screens" column of the `student-management` row (table under "Per-module implementation matrix"), change "Guardians/emergency contacts/documents... are **not yet rebuilt**" to reflect Phase 2 shipping: name what's now built (the four tabs) and narrow the remaining gap to enrollment/transfers (Phase 3) and bulk import/export/ID cards (Phase 4) only.
 
 - [ ] **Step 3: Add two new entries to `deferred-work.md`, and update two existing ones this phase resolves in part**
+
+(Task 1 Step 7 already added a third entry — the platform-wide "no production mechanism provisions a tenant's default roles" gap — in its own commit; this step does not duplicate it.)
 
 Add these two new entries:
 
@@ -6430,12 +6866,6 @@ Add these two new entries:
   in this PR since staff is outside this phase's scope. Migrating it is a small, mechanical
   swap — pass `purpose="staff.photo"` and staff's own saved-photo fields — next time staff's
   form is touched.
-- **`students.document.view`'s backfill migration only reaches tenants that already have a
-  `principal` role.** Migration `0008_grant_principal_document_view`
-  (`apps/api/apps/student_management/migrations/`) grants the permission once, to every tenant
-  with an existing `principal` `Role` row, at the time this PR's migration runs. A tenant
-  provisioned *after* this migration gets the grant automatically (the registry's own
-  `default_roles` covers a freshly-seeded role) — nothing further to do there.
 ```
 
 Update the existing "Inline display links for files" entry (`docs/deferred-work.md`, PR #76) — this phase closes the specific gap it names for guardians, so the sentence can't stand as written:

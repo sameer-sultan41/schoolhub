@@ -16,7 +16,7 @@
 > attribute, which browsers ignore cross-origin. Every other endpoint this phase needs
 > already exists and is already wired. The Guardians tab's per-guardian name resolution
 > (fan out one `GET /guardians/{id}` per linked guardian, rather than a backend-embedded
-> summary) is itself recorded as [ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md).
+> summary) is itself recorded as [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md).
 
 **Work tier:** 2
 
@@ -312,7 +312,7 @@ place.
   a handful of rows, not pages); the fan-out goes through `Services.guardians` properly
   either way, so upgrading to an embedded summary later is a pure backend+client change
   with no tab-component rewrite. Recorded as
-  [ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md), since the
+  [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md), since the
   choice sets a precedent for how the dashboard resolves ids from other nested lists.
 - **Give guardians their own dedicated photo-upload component instead of sharing one with
   students.** Rejected — this would be the third near-identical copy of the same
@@ -350,6 +350,6 @@ resolved with the user: back-fill that permission onto tenants that already have
 freshly-seeded roles; force a real download via a `Content-Disposition: attachment`
 header on `core/files`' signed download URLs, rather than relying on an anchor's
 `download` attribute (which browsers ignore cross-origin); and record the per-guardian
-`fetchGuardianById` fan-out as its own ADR ([ADR-0019](../../decisions/0019-client-fan-out-for-unembedded-nested-ids.md))
+`fetchGuardianById` fan-out as its own ADR ([ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md))
 rather than leaving an undocumented precedent for how the dashboard resolves ids from
 other nested lists.
