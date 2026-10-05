@@ -6,3 +6,4 @@ export const AuthService = {
   fetchCurrentUser,
   restoreSession,
 };
+export type { AuthenticatedUser, LoginCredentials, LoginResponse } from "./auth-service";

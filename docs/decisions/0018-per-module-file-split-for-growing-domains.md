@@ -1,6 +1,6 @@
 # 0018. A growing service module splits into constant/type/helper/schema files
 
-- **Status:** Accepted
+- **Status:** Superseded by [0019](0019-every-module-uses-the-five-file-shape.md)
 - **Date:** 2026-10-03
 - **Enforced by:** review only — `schoolhub-api-services` skill checklist, `change-reviewer` agent
 

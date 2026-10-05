@@ -80,23 +80,23 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 1. Route: `src/app/(app)/<module>/page.tsx` (async server component for chrome).
 2. API calls: add a `<module>` entry to `src/services/endpoints.ts` (paths, or
-   param-taking functions for anything with an id); create
-   `src/services/modules/<module>/<module>-service.ts` with the actual `apiClient` calls,
-   typed against the generated `ApiSchemas["<Model>"]` (`@schoolhub/api-client`),
-   type-aliased in that same service module —
+   param-taking functions for anything with an id); every module gets the full
+   five-file shape from creation
+   ([ADR-0019](../../docs/decisions/0019-every-module-uses-the-five-file-shape.md)):
+   `<module>-type.ts` (the generated `ApiSchemas["<Model>"]` type-alias —
    `export type StudentRecord = ApiSchemas["Student"]`, or a `Pick<>` of one for a
-   narrower reference-data shape — never hand-written there or in `packages/types` (see
-   [ADR-0017](../../docs/decisions/0017-generated-wire-types-for-new-domains.md));
-   `packages/types` keeps only cross-cutting types with no generated source
-   (envelope/pagination, auth/RBAC, tenant/website, and enum value-arrays such as
-   `GENDER_VALUES`); register it in `src/services/index.ts` as `Services.<module>`. See
-   `src/services/modules/auth/` for the reference shape, or `src/services/modules/tenant/`
-   for the smallest one. Once a module accumulates enough hand-written input types,
-   cross-file constants, pure helpers or Zod schemas that a service/feature file has
-   become their unlabeled source of truth, split those into sibling
-   `<module>-type.ts`/`<module>-constant.ts`/`<module>-helper.ts`/`<module>.schema.ts`
-   files — not before ([ADR-0018](../../docs/decisions/0018-per-module-file-split-for-growing-domains.md),
-   reference shape: `src/services/modules/students/`).
+   narrower reference-data shape, never hand-written there or in `packages/types`, see
+   [ADR-0017](../../docs/decisions/0017-generated-wire-types-for-new-domains.md); for a
+   module with no generated source, a re-export of its real cross-cutting types from
+   `packages/types` instead — e.g. `auth-type.ts` re-exporting `AuthenticatedUser`),
+   `<module>-constant.ts` and `<module>-helper.ts` (real content once the module has
+   any, otherwise a short header comment plus `export {};`), `<module>.schema.ts`
+   (Zod schemas + inferred form-values types), and `<module>-service.ts` (the actual
+   `apiClient` calls, importing its types from `./<module>-type`); register it in
+   `src/services/index.ts` as `Services.<module>`. See `src/services/modules/students/`
+   for a module with real content in every file, `src/services/modules/staff/` for the
+   two-predicate `copyMappedFields` variant, or `src/services/modules/auth/` for a
+   module that's deliberately thin in two of them.
 3. Feature code: `src/features/<module>/` — components and hooks. A screen's
    `useQuery`/`useMutation` calls `Services.<module>.<action>(...)` as its
    `queryFn`/`mutationFn` — never `apiClient` directly, never a hardcoded path.

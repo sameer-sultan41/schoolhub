@@ -21,23 +21,12 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { Paths } from "@/config/paths";
 import { env } from "@/lib/env";
 import { parseTenantSlug } from "@/lib/host";
 import { getQueryClient, queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
-
-/**
- * Zod schema mirrors the API's validation (module doc §11) so the user gets instant feedback,
- * but the API remains the authority — its `error.details` are surfaced verbatim below.
- */
-const loginSchema = z.object({
-  identifier: z.string().min(1),
-  password: z.string().min(1),
-});
-
-type LoginValues = z.infer<typeof loginSchema>;
+import { loginSchema, type LoginValues } from "@/services/modules/auth/auth.schema";
 
 export function LoginForm() {
   const t = useTranslations("auth.login");
