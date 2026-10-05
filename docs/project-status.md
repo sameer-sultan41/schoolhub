@@ -182,9 +182,9 @@ with its reasoning. Read the entry for the area you are about to touch before re
    A third follow-up (`refactor/staff-service-split`) finished moving staff off
    `Services.dashboard`: `fetchStaffPage`/`createStaff`/`updateStaff`/`exitStaff`/
    `fetchStaffById`/`fetchStaffDirectory`/`fetchStaffTypeCount` and their types moved
-   out of `dashboard-service.ts` into `services/modules/staff/`, split (then, per
-   [ADR-0018](decisions/0018-per-module-file-split-for-growing-domains.md)) into
-   `staff-type.ts`/`staff-constant.ts`/`staff-helper.ts`/`staff.schema.ts`/
+   out of `dashboard-service.ts` into `services/modules/staff/`, split per the
+   then-current [ADR-0018](decisions/0018-per-module-file-split-for-growing-domains.md)
+   into `staff-type.ts`/`staff-constant.ts`/`staff-helper.ts`/`staff.schema.ts`/
    `staff-service.ts`; the screens themselves moved from `src/app/(app)/staff/` into
    `src/features/staff/`, matching `students`' layout. Reference-data reads shared
    with other modules (`fetchCampuses`/`fetchDepartments`/`fetchDesignations`) stay on

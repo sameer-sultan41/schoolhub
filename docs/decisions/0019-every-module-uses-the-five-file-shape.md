@@ -25,7 +25,8 @@ constant lives.
 
 ## Decision
 
-Every domain, new or existing, uses the full five-file shape from creation:
+Every new domain uses the full five-file shape from creation, and every existing domain is
+brought up to it as its own small change (not instantly — see Consequences):
 
 ```
 services/modules/<domain>/
@@ -62,6 +63,14 @@ truth.
   is exactly what this record is choosing to remove.
 - **Leave `auth`'s shape alone, update nothing.** Why not: this is ADR-0018's status quo,
   already revisited and rejected by the same discussion that produced this record.
+- **Enforce the shape with a CI check (e.g. a small script asserting every
+  `services/modules/*/` directory has all five files) instead of review only.** Deferred,
+  not rejected: a mechanical check is the more durable fix for exactly the kind of drift a
+  judgment call invites, and `schoolhub-api-services`' own checklist is review-only today for
+  the same reason ADR-0018 was. Worth adding once a second domain is retrofitted (see
+  Consequences) and the check has more than one real case to verify against; writing it
+  against a single applied case (`auth`) risks encoding one example's shape rather than the
+  rule itself.
 
 ## Consequences
 

@@ -25,9 +25,8 @@ export type { StudentRecord } from "./modules/students";
  * into (see `src/services/endpoints.ts` for the path-centralization half of this
  * convention).
  *
- * Add a domain here the moment its module lands, following the same
- * `services/modules/<domain>/{<domain>-service.ts,index.ts}` shape as `auth`, `tenant`,
- * `dashboard` and `files`.
+ * Add a domain here the moment its module lands, following the five-file
+ * `services/modules/<domain>/` shape (ADR-0019) — see `students`/`staff`/`auth`.
  */
 export const Services = {
   auth: AuthService,

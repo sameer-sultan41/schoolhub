@@ -10,6 +10,15 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **`tenant`/`files`/`jobs`/`school-organization`/`dashboard` still have only the
+  original three service-module files** (`<domain>-service.ts`/`index.ts`, no
+  `-type`/`-constant`/`-helper`/`.schema`), not yet retrofitted to the five-file shape
+  [ADR-0019](decisions/0019-every-module-uses-the-five-file-shape.md) now requires for
+  every domain. `students`/`staff`/`auth` already have it. Bringing each of the five
+  remaining domains up to it is its own small PR, not bundled into ADR-0019's own PR —
+  pick it up the next time one of them is touched for an unrelated reason, or as a
+  standalone pass.
+
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,
   `StaffDetailRecord`, `CreateStaffInput`, etc. are hand-declared — a pre-existing
