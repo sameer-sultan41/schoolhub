@@ -8,11 +8,14 @@ description: Use when wiring a new backend API call into apps/dashboard — phra
 ## Purpose
 
 `apps/dashboard` centralizes every backend API call behind one small, repeatable
-three-file shape per domain: a path registry, a thin service file, and an aggregated
-`Services` object. A component never calls `apiClient` directly and never hardcodes a
-path string — it calls `Services.<domain>.<action>(...)`. `auth` is the reference
-implementation; follow its exact shape for every new domain (students, staff,
-academics, …).
+five-file shape per domain: a path registry entry, a thin service file, its sibling
+type/constant/helper/schema files, and an aggregated `Services` object. A component
+never calls `apiClient` directly and never hardcodes a path string — it calls
+`Services.<domain>.<action>(...)`. `students` and `staff` are the reference
+implementations for a domain with real accumulated content in every file; `auth` is
+the reference for a domain that's deliberately thin in two of them. Follow one of
+these exact shapes for every new domain (academics, …) —
+[ADR-0019](../../../docs/decisions/0019-every-module-uses-the-five-file-shape.md).
 
 **Why this exists:** before this pattern, `apps/dashboard/src/lib/auth.ts` mixed two
 unrelated things — the `ApiClient` transport wiring (token store, refresh-on-401,
@@ -23,7 +26,7 @@ Adapted from a reference pattern at a sibling project (endpoints file + per-doma
 service file + aggregated `Services` object) — but **not a copy**: see "What this
 skill deliberately does NOT do" below before reaching for something fancier.
 
-## The three files, every time
+## The five files, every time
 
 ```
 apps/dashboard/src/services/
@@ -31,11 +34,25 @@ apps/dashboard/src/services/
   index.ts                            # aggregates every domain into `Services`
   modules/
     <domain>/
-      <domain>-service.ts             # the actual apiClient calls for this domain
+      <domain>-service.ts             # apiClient calls only — imports its types from ./<domain>-type
+      <domain>-type.ts                # domain types: the wire-shape alias (or a re-export,
+                                       # for a domain with no generated one) + hand-written
+                                       # input/query/view-model types
+      <domain>-constant.ts            # cross-file magic strings/numbers and lookup objects
+      <domain>-helper.ts              # pure mapper/formatter functions — no React, no API calls
+      <domain>.schema.ts              # Zod schemas and their inferred form-values types
       index.ts                        # re-exports as `<Domain>Service`
       __tests__/
         <domain>-service.test.ts
 ```
+
+Every domain gets all five files from the moment it's created — per
+[ADR-0019](../../../docs/decisions/0019-every-module-uses-the-five-file-shape.md), not
+once a concern accumulates enough to earn one. A domain with nothing yet to put in
+`<domain>-constant.ts`/`<domain>-helper.ts` still creates it: a short header comment
+saying so, plus `export {};` to keep it a valid module (`auth`'s own
+`auth-constant.ts`/`auth-helper.ts` are exactly this). What goes in each file is
+detailed step by step below.
 
 ### 1. Add the domain's paths to `src/services/endpoints.ts`
 
@@ -60,15 +77,73 @@ export const endpoints = {
 
 Only add paths this app actually calls today. Don't pre-populate a domain "for later."
 
-### 2. Create `src/services/modules/<domain>/<domain>-service.ts`
+### 2. Create `src/services/modules/<domain>/<domain>-type.ts`
 
-Thin async functions, each one `apiClient` call. Real example — `auth-service.ts`:
+A domain with a generated wire shape type-aliases it here (`export type StudentRecord =
+ApiSchemas["Student"]`), plus any hand-written input/query/view-model types. A domain
+with no generated source (`auth`'s `AuthenticatedUser`/`LoginCredentials`/
+`LoginResponse`) re-exports the real cross-cutting types from `@schoolhub/types`
+instead — a named entry point, not a second definition:
+
+```ts
+// auth-type.ts — a domain with no generated wire shape
+export type { AuthenticatedUser, LoginCredentials, LoginResponse } from "@schoolhub/types";
+```
+
+```ts
+// students-type.ts — a domain with one, plus hand-written input types
+export type StudentRecord = ApiSchemas["Student"];
+export interface CreateStudentInput { /* ... */ }
+```
+
+**A domain's own wire shape is the generated `ApiSchemas["<Model>"]` type**
+(`@schoolhub/api-client`) — never hand-written in `packages/types`
+([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)).
+`packages/types` is for cross-cutting types with no generated source (the envelope/
+pagination primitives, auth/RBAC, tenant/website) and small runtime value-arrays an
+enum-backed `<Select>`/`z.enum(...)` needs.
+
+### 3. Create `src/services/modules/<domain>/<domain>-constant.ts` and `<domain>-helper.ts`
+
+Cross-file magic strings/lookup objects, and pure mapper/formatter functions,
+respectively. `students` is the reference for a domain with real content in both —
+`SORT_FIELD`, the `"active"`/`"all"` sentinels, `toStudentRow`, a shared
+`copyMappedFields` loop (promoted to `src/lib/helpers.ts` once a second domain
+needed it) driving `toStudentBody`/`toStudentsQueryParams`. `staff` shows a real
+variant on the same idea: its body builder needs *two* field-inclusion predicates,
+not students' one-predicate-for-everything case (`createStaff`/`updateStaff` gate a
+"required-like" field group on truthiness and a genuinely-optional group on
+`!== undefined`), expressed as one field list carrying an explicit per-row gate tag
+(`STAFF_BODY_FIELDS`, each row `[camelKey, snakeKey, "truthy" | "defined"]`) rather
+than two separate arrays whose gate was only implied by which array a field was
+placed in.
+
+A domain with nothing yet to put in one of these two files still creates it empty —
+a short header comment explaining why, plus `export {};` to keep it a valid module.
+`auth`'s own `auth-constant.ts`/`auth-helper.ts` are exactly this: every function in
+`auth-service.ts` is an API call with a side effect, not a pure mapper, so there is
+nothing to extract yet.
+
+### 4. Create `src/services/modules/<domain>/<domain>.schema.ts`
+
+Zod schemas and their inferred form-values types, if the domain's feature code has a
+form. A domain with none yet (no form) still gets this file, empty, same as
+`-constant.ts`/`-helper.ts`. A schema and its inferred type stay together here; form
+*logic* built on top of a schema (defaults, record↔form-values mappers,
+submit-payload builders) stays in its own feature file, importing the schema/type
+rather than redeclaring it — splitting a schema from its own inferred type across
+two files creates a circular-import risk this shape is meant to avoid.
+
+### 5. Create `src/services/modules/<domain>/<domain>-service.ts`
+
+Thin async functions, each one `apiClient` call, importing its types from
+`./<domain>-type`. Real example — `auth-service.ts`:
 
 ```ts
 import { ApiError } from "@schoolhub/api-client";
-import type { AuthenticatedUser, LoginCredentials, LoginResponse } from "@schoolhub/types";
 import { accessTokenStore, apiClient, authProxyClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import type { AuthenticatedUser, LoginCredentials, LoginResponse } from "./auth-type";
 
 export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
   const { data } = await authProxyClient.post<LoginResponse>(endpoints.auth.login, credentials, {
@@ -99,15 +174,8 @@ Rules for this file:
   return `data`. Let a thrown `ApiError` propagate; don't catch-and-swallow unless the
   function has a real reason to (see `auth-service.ts`'s `logout()` for the one
   legitimate case: a failed logout must never trap the user in the app).
-- **A domain's own wire shape is the generated `ApiSchemas["<Model>"]` type**
-  (`@schoolhub/api-client`), type-aliased and re-exported from this file's `index.ts` —
-  not hand-written in `packages/types`
-  ([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)).
-  `packages/types` is for cross-cutting types with no generated source (the envelope/
-  pagination primitives, auth/RBAC, tenant/website) and small runtime value-arrays an
-  enum-backed `<Select>`/`z.enum(...)` needs.
 
-### 3. Re-export as `<Domain>Service` in `src/services/modules/<domain>/index.ts`
+### 6. Re-export as `<Domain>Service` in `src/services/modules/<domain>/index.ts`
 
 ```ts
 import { fetchCurrentUser, login, logout, restoreSession } from "./auth-service";
@@ -120,7 +188,7 @@ export const AuthService = {
 };
 ```
 
-### 4. Register it in `src/services/index.ts`
+### 7. Register it in `src/services/index.ts`
 
 ```ts
 import { AuthService } from "./modules/auth";
@@ -132,7 +200,7 @@ export const Services = {
 } as const;
 ```
 
-### 5. Call it from a component or hook
+### 8. Call it from a component or hook
 
 ```ts
 import { Services } from "@/services";
@@ -172,15 +240,24 @@ convention, not a flat `*.test.ts` beside the source.
 ## Checklist for a new domain
 
 1. `endpoints.ts` gets the domain's real paths (nothing speculative).
-2. `services/modules/<domain>/<domain>-service.ts` — one function per API call, typed
-   against the domain's own generated `ApiSchemas["<Model>"]` alias
-   ([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)),
-   falling back to `packages/types` only for cross-cutting/no-generated-source cases;
-   every path from `endpoints.<domain>.*`.
-3. `services/modules/<domain>/index.ts` re-exports as `<Domain>Service`.
-4. `services/index.ts` registers it under `Services.<domain>`.
-5. `services/modules/<domain>/__tests__/<domain>-service.test.ts` covers each function.
-6. Every consumer calls `Services.<domain>.<action>(...)` — grep the repo for any
+2. `services/modules/<domain>/<domain>-type.ts` — the domain's wire-shape alias
+   (`ApiSchemas["<Model>"]`,
+   [ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md))
+   or, for a domain with no generated source, a re-export of its real cross-cutting
+   types from `@schoolhub/types` — plus any hand-written input/query/view-model types.
+3. `services/modules/<domain>/<domain>-constant.ts` and `<domain>-helper.ts` — real
+   content if the domain has any yet, otherwise each stays a short header comment
+   plus `export {};`.
+4. `services/modules/<domain>/<domain>.schema.ts` — real content if the domain has a
+   form yet, otherwise the same empty-with-comment shape.
+5. `services/modules/<domain>/<domain>-service.ts` — one function per API call,
+   importing its types from `./<domain>-type`; every path from `endpoints.<domain>.*`.
+6. `services/modules/<domain>/index.ts` re-exports as `<Domain>Service`.
+7. `services/index.ts` registers it under `Services.<domain>`.
+8. `services/modules/<domain>/__tests__/<domain>-service.test.ts` covers each
+   function in `<domain>-service.ts`; a `<domain>-helper.test.ts` alongside it once
+   `<domain>-helper.ts` has real functions to cover.
+9. Every consumer calls `Services.<domain>.<action>(...)` — grep the repo for any
    remaining `apiClient.` or hardcoded path string in the domain's feature code before
    calling the work done; **also grep for any *existing* code that already imported a
    function you're relocating** (e.g. `import { logout } from "@/lib/auth"`) — a stale
@@ -189,48 +266,9 @@ convention, not a flat `*.test.ts` beside the source.
    moved `logout` into `auth-service.ts` and missed a `user-dropdown-menu.tsx` call site
    that imported it from the old location — caught only by a follow-up code review, not
    by the original verification pass.
-7. Update `apps/dashboard/AGENTS.md`'s "How This App Is Wired" table if this is a
-   structurally new kind of concern (it usually isn't — most new domains need no doc
-   change beyond what's already there).
-
-## When a domain outgrows three files
-
-Start every new domain with exactly the three files above — don't pre-create any of
-the split files below empty "for consistency." Once a domain actually accumulates
-enough of a given concern that `<domain>-service.ts` or a feature file has become its
-unlabeled source of truth, split that concern out
-([ADR-0018](../../../docs/decisions/0018-per-module-file-split-for-growing-domains.md)):
-
-```
-services/modules/<domain>/
-  <domain>-service.ts    # apiClient calls only — imports its types from ./<domain>-type
-  <domain>-type.ts       # the wire-shape alias + hand-written input/query/view-model types
-  <domain>-constant.ts   # cross-file magic strings/numbers and lookup objects
-  <domain>-helper.ts     # pure mapper/formatter functions — no React, no API calls
-  <domain>.schema.ts     # Zod schemas and their inferred form-values types
-```
-
-`students` is the reference implementation for this split — see
-`services/modules/students/`. `staff` (`services/modules/staff/`) is a second
-worked example, and shows a real variant: its `<domain>-helper.ts` needs *two*
-field-inclusion predicates in the same body builder (`createStaff`/`updateStaff`
-gate a "required-like" field group on truthiness and a genuinely-optional group on
-`!== undefined`), not the one-predicate-for-everything case students has — expressed
-as two calls into the shared `copyMappedFields` loop (promoted to
-`src/lib/helpers.ts` once a second domain needed it), one per field-group constant,
-rather than forcing a single predicate to be wrong for half the fields. A domain
-with one or two functions and no shared constant gains nothing from five near-empty
-files; the split is earned by actual accumulation, not applied as a blanket
-template. The wire-shape alias (`StudentRecord` et al.) still comes from
-`ApiSchemas["<Model>"]`
-([ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md)) —
-moving it into `<domain>-type.ts` is relocation, not a second source of truth, as long
-as nothing hand-rolls a competing definition of that same shape elsewhere (staff's own
-types are still hand-written, a separate, already-tracked ADR-0017 gap — see
-`docs/deferred-work.md` — not something this split fixed or made worse). A Zod
-schema and its inferred type stay together in `<domain>.schema.ts`; form logic built on
-top of it (defaults, record↔form-values mappers, submit-payload builders) stays in its
-own feature file and imports the schema/type rather than redeclaring it.
+10. Update `apps/dashboard/AGENTS.md`'s "How This App Is Wired" table if this is a
+    structurally new kind of concern (it usually isn't — most new domains need no doc
+    change beyond what's already there).
 
 ## What this skill deliberately does NOT do
 
@@ -249,14 +287,17 @@ default into either pattern piecemeal.
 
 ## Related
 
-- `apps/dashboard/src/services/modules/auth/` — the reference implementation for a
-  domain still at the base three-file shape.
 - `apps/dashboard/src/services/modules/students/` — the reference implementation for
-  a domain that has grown into the full constant/type/helper/schema split.
-- `apps/dashboard/src/services/modules/staff/` — a second worked example of the
-  split, with the two-predicate `copyMappedFields` variant students didn't need.
+  a domain with real, accumulated content in all five files.
+- `apps/dashboard/src/services/modules/staff/` — a second worked example, with the
+  two-predicate `copyMappedFields` variant students didn't need.
+- `apps/dashboard/src/services/modules/auth/` — the reference implementation for a
+  domain that's deliberately thin: `auth-type.ts` and `auth.schema.ts` have real
+  content, `auth-constant.ts`/`auth-helper.ts` are the empty-with-comment shape.
+- [ADR-0019](../../../docs/decisions/0019-every-module-uses-the-five-file-shape.md) —
+  why every domain gets all five files from creation.
 - [ADR-0018](../../../docs/decisions/0018-per-module-file-split-for-growing-domains.md) —
-  why and when to split.
+  superseded by 0019, kept for the original per-file reasoning (what each file is for).
 - `apps/dashboard/AGENTS.md` — "How This App Is Wired" and "Adding a Module Screen".
 - `apps/dashboard/src/lib/auth.ts` — the transport/session infrastructure every
   service module builds on (the `apiClient` instance, token store, 401 handling).

@@ -182,15 +182,28 @@ with its reasoning. Read the entry for the area you are about to touch before re
    A third follow-up (`refactor/staff-service-split`) finished moving staff off
    `Services.dashboard`: `fetchStaffPage`/`createStaff`/`updateStaff`/`exitStaff`/
    `fetchStaffById`/`fetchStaffDirectory`/`fetchStaffTypeCount` and their types moved
-   out of `dashboard-service.ts` into `services/modules/staff/`, split per
-   [ADR-0018](decisions/0018-per-module-file-split-for-growing-domains.md) into
-   `staff-type.ts`/`staff-constant.ts`/`staff-helper.ts`/`staff.schema.ts`/
+   out of `dashboard-service.ts` into `services/modules/staff/`, split per the
+   then-current [ADR-0018](decisions/0018-per-module-file-split-for-growing-domains.md)
+   into `staff-type.ts`/`staff-constant.ts`/`staff-helper.ts`/`staff.schema.ts`/
    `staff-service.ts`; the screens themselves moved from `src/app/(app)/staff/` into
    `src/features/staff/`, matching `students`' layout. Reference-data reads shared
    with other modules (`fetchCampuses`/`fetchDepartments`/`fetchDesignations`) stay on
    `Services.dashboard`. Staff's wire types are still hand-written, not generated
    `ApiSchemas`-derived aliases — a pre-existing ADR-0017 gap, logged in
    `deferred-work.md`, not fixed by this PR.
+
+   A fourth follow-up (`refactor/auth-service-split`) applied the same five-file
+   shape to `auth`: `auth-type.ts` (re-exports `AuthenticatedUser`/`LoginCredentials`/
+   `LoginResponse` from `@schoolhub/types`, which stays their real source — they're
+   consumed outside the auth domain, by `lib/permissions.ts` and tests across
+   `students`/`staff`), `auth.schema.ts` (`loginSchema`/`LoginValues`, moved out of
+   `login-form.tsx`), and empty-but-present `auth-constant.ts`/`auth-helper.ts`
+   (nothing has accumulated in either yet). Recorded as
+   [ADR-0019](decisions/0019-every-module-uses-the-five-file-shape.md), which
+   supersedes ADR-0018: every service module now gets the full five-file shape from
+   creation, not once a concern earns one. `tenant`/`files`/`jobs`/
+   `school-organization`/`dashboard` still have only the original three files as of
+   this PR — bringing each up to five is follow-up work, not done here.
 7. **PR 0 (platform hardening) is done** — three fixes and two new pieces of
    platform infrastructure, all listed above: the upload-purpose registry, the
    guardian record scope, the api-client refresh split, the Celery beat

@@ -1,5 +1,4 @@
 import { ApiError } from "@schoolhub/api-client";
-import type { AuthenticatedUser, LoginCredentials, LoginResponse } from "@schoolhub/types";
 import {
   accessTokenStore,
   apiClient,
@@ -8,12 +7,15 @@ import {
   setSessionCookie,
 } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import type { AuthenticatedUser, LoginCredentials, LoginResponse } from "./auth-type";
 
 /**
  * The auth domain's API calls. Every dashboard consumer reaches these through
  * `Services.auth.*` (see `@/services`) — never by importing this file directly and never
  * by importing `@schoolhub/api-client` directly.
  */
+
+export type { AuthenticatedUser, LoginCredentials, LoginResponse } from "./auth-type";
 
 export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
   const { data } = await authProxyClient.post<LoginResponse>(endpoints.auth.login, credentials, {
