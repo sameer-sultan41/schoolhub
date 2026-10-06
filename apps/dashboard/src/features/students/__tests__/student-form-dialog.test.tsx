@@ -10,7 +10,7 @@ import enMessages from "../../../../messages/en.json";
 
 import { Services } from "@/services";
 import type { StudentRecord } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, stubImageLoading, stubObjectUrls } from "@/test-utils";
 
 import { StudentFormDialog } from "../student-form-dialog";
 
@@ -136,34 +136,6 @@ async function chooseOption(
  * change event instead, same as staff-form-dialog.test.tsx's own `setDate`. */
 function setDate(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value } });
-}
-
-/** jsdom has no object URLs; the photo field creates one for a picked file's local
- * preview — same helper as staff-form-dialog.test.tsx's own `stubObjectUrls`. Descriptors,
- * not method references, so restoring trips no unbound-method lint. */
-function stubObjectUrls(url: string) {
-  const saved = ["createObjectURL", "revokeObjectURL"].map(
-    (name) => [name, Object.getOwnPropertyDescriptor(URL, name)] as const,
-  );
-  Object.defineProperty(URL, "createObjectURL", { value: jest.fn(() => url), configurable: true });
-  Object.defineProperty(URL, "revokeObjectURL", { value: jest.fn(), configurable: true });
-  return () => {
-    for (const [name, descriptor] of saved) {
-      if (descriptor) Object.defineProperty(URL, name, descriptor);
-      else Reflect.deleteProperty(URL, name);
-    }
-  };
-}
-
-/** jsdom never loads images, so Radix's `AvatarImage` would wait forever — reports every
- * image as already loaded, same as staff-form-dialog.test.tsx's `stubImageLoading`. */
-function stubImageLoading() {
-  const complete = jest.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
-  const width = jest.spyOn(HTMLImageElement.prototype, "naturalWidth", "get").mockReturnValue(1);
-  return () => {
-    complete.mockRestore();
-    width.mockRestore();
-  };
 }
 
 /** Fills every field `studentFormSchema` requires for create — `gender` is not among
