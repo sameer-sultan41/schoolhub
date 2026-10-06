@@ -135,4 +135,29 @@ describe("GuardianFormDialog", () => {
     expect(await screen.findByText("Enter a valid phone number.")).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
   });
+
+  it("shows a server field error for alt_phone instead of failing silently", async () => {
+    // Regression for a missing <FormMessage /> on the alt_phone field: without it,
+    // applyServerFieldErrors still calls form.setError("alt_phone", ...) and marks the
+    // field as matched (suppressing the dialog-level fallback alert too), but nothing
+    // was rendered to show it — a save that silently appeared to do nothing.
+    const record = guardianRecord({ alt_phone: "0300-1111111" });
+    mockUpdateGuardian.mockRejectedValue(
+      new ApiError({
+        code: "validation_error",
+        message: "Validation failed.",
+        status: 422,
+        url: "/guardians/g1",
+        details: [{ field: "alt_phone", issue: "Enter a valid alternate phone number." }],
+      }),
+    );
+
+    renderWithProviders(
+      <GuardianFormDialog open guardian={record} onOpenChange={onOpenChange} onSaved={onSaved} />,
+    );
+    await userEvent.setup().click(screen.getByRole("button", { name: /save/i }));
+
+    expect(await screen.findByText("Enter a valid alternate phone number.")).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
 });

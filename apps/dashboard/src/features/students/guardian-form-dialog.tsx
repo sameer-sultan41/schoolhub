@@ -123,6 +123,7 @@ export function GuardianFormFields({
             <FormControl>
               <Input {...field} />
             </FormControl>
+            <FormMessage />
           </FormItem>
         )}
       />
