@@ -41,3 +41,22 @@ export const withdrawFormSchema = z.object({
 });
 
 export type WithdrawFormValues = z.infer<typeof withdrawFormSchema>;
+
+// Field names are snake_case, matching the API's own — same convention as
+// `guardianFormSchema`/`studentFormSchema` (round-5 plan review).
+export const emergencyContactSchema = z.object({
+  name: z.string().min(1),
+  relationship: z.string().min(1),
+  phone: z.string().min(1),
+  alt_phone: z.string().optional(),
+  // Plain z.number(), not z.coerce.number(): a coerced schema's input type (the raw,
+  // pre-coercion form value) differs from its output type, which forces a 3-generic
+  // useForm<Input, unknown, Output> that this codebase's FormField doesn't forward
+  // cleanly (round-5 plan review). The number field below sets its own numeric value via
+  // `valueAsNumber` instead, so RHF's internal value is already a real number and a
+  // single-generic schema/useForm is enough.
+  priority: z.number().int().min(1),
+  notes: z.string().optional(),
+});
+
+export type EmergencyContactFormValues = z.infer<typeof emergencyContactSchema>;
