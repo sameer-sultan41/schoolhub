@@ -51,13 +51,15 @@ export function jobsModule(options: JobsOptions = {}): MockModule {
       return ok(toJobRecord(jobId, stub));
     });
 
-    // `POST /files/{id}:download` is a colon-action — same split as
-    // staffModule's `/staff/{id}:exit` handling. `action` genuinely can only be
-    // "download" here — `:confirm` is a different, unrelated route registered by a
-    // future files-domain module, not this one, and 404s correctly falling through
-    // this handler if it's ever hit is the point.
+    // `POST /files/{id}:download` and `POST /files/{id}:confirm` are both colon-actions
+    // on the same path — same split as staffModule's `/staff/{id}:exit` handling. Both
+    // live in this one handler because `router.ts` has no fallthrough between modules: a
+    // second handler registered on this path by a different module would shadow this
+    // one entirely rather than share it, so every `/files/:fileAction` action this app
+    // can send belongs in whichever module already owns the path — this one.
     api.post("/files/:fileAction", (request) => {
       const [fileId, action] = (request.params["fileAction"] ?? "").split(":");
+      if (action === "confirm") return ok({ id: fileId });
       const file = files.find((candidate) => candidate.id === fileId);
       if (action !== "download" || !file) return fail(404, "Not found.");
       return ok({ download_url: file.downloadUrl });

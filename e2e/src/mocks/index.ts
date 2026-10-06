@@ -7,3 +7,6 @@ export * from "./domains/jobs";
 export * from "./domains/tenant";
 export * from "./domains/dashboard-home";
 export * from "./domains/students";
+export * from "./domains/guardians";
+export * from "./domains/student-relations";
+export * from "./domains/files";
