@@ -294,18 +294,29 @@
     "guardians": {
       "title": "Guardians",
       "empty": "No guardians linked yet.",
+      "searchEmpty": "No guardians match that search.",
+      "loadError": "Couldn't load this student's guardians.",
+      "guardianLoadError": "Couldn't load this guardian.",
       "link": "Link guardian",
       "linkDescription": "Search for an existing guardian, or create a new one.",
-      "close": "Close",
       "searchExisting": "Search existing",
       "createNew": "Create new",
       "searchPlaceholder": "Search by name or phone",
       "primary": "Primary",
       "makePrimary": "Make primary",
+      "editGuardianTitle": "Edit guardian",
+      "editLinkTitle": "Edit link",
+      "createGuardian": "Create guardian",
+      "permanentNotice": "A guardian link can't be removed once created — double-check before linking.",
+      "promoteFailed": "Couldn't make this guardian primary.",
+      "submitting": "Saving…",
+      "linking": "Linking…",
       "fields": {
         "firstName": "First name",
         "lastName": "Last name",
         "phone": "Phone",
+        "altPhone": "Alternate phone",
+        "email": "Email",
         "relationship": "Relationship"
       },
       "relationship": {
@@ -326,20 +337,26 @@
     "emergencyContacts": {
       "title": "Emergency contacts",
       "empty": "No emergency contacts added yet.",
+      "loadError": "Couldn't load this student's emergency contacts.",
       "add": "Add contact",
       "addDescription": "Someone to reach if a guardian cannot be contacted.",
       "priority": "Priority {priority}",
+      "permanentNotice": "This can't be edited or removed after saving — double-check the details first.",
+      "addFailed": "Couldn't add this emergency contact.",
+      "submitting": "Saving…",
       "fields": {
         "name": "Name",
         "relationship": "Relationship",
         "phone": "Phone",
         "altPhone": "Alternate phone",
+        "priority": "Priority",
         "notes": "Notes"
       }
     },
     "documents": {
       "title": "Documents",
       "empty": "No documents uploaded yet.",
+      "loadError": "Couldn't load this student's documents.",
       "upload": "Upload document",
       "uploadDescription": "Uploads go straight to storage — the file never passes through this server.",
       "uploading": "Uploading",
@@ -347,7 +364,12 @@
       "verify": "Verify",
       "reject": "Reject",
       "delete": "Delete",
+      "deleteConfirmTitle": "Delete this document?",
+      "deleteConfirmDescription": "This cannot be undone. The uploaded file itself is not removed from storage, only this record.",
       "expiresOn": "Expires {date}",
+      "verifyFailed": "Couldn't update this document's verification status.",
+      "deleteFailed": "Couldn't delete this document.",
+      "downloadFailed": "Couldn't get a download link for this document.",
       "fields": {
         "file": "File",
         "documentType": "Document type",
@@ -1175,7 +1197,13 @@
     "moveToEnd": "Move to end",
     "dragToReorderColumn": "Drag to reorder column",
     "dragToReorderRow": "Drag to reorder row",
-    "resizeColumn": "Resize {column} column"
+    "resizeColumn": "Resize {column} column",
+    "photoUpload": {
+      "photo": "Photo",
+      "uploading": "Uploading photo…",
+      "onFile": "Photo on file",
+      "uploadFailed": "The photo could not be uploaded."
+    }
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",
