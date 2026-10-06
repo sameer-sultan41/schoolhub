@@ -374,7 +374,11 @@ function GuardianPickerBody({
                           .handleSubmit(
                             (values) => {
                               setCreateError(null);
-                              createMutation.mutate(values, { onSettled: resolve });
+                              createMutation.mutate(values, {
+                                onSettled: () => {
+                                  resolve();
+                                },
+                              });
                             },
                             () => {
                               resolve();

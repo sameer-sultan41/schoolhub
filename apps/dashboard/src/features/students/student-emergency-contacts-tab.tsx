@@ -209,7 +209,11 @@ function AddEmergencyContactDialog({
                     form
                       .handleSubmit(
                         (values) => {
-                          mutation.mutate(values, { onSettled: resolve });
+                          mutation.mutate(values, {
+                            onSettled: () => {
+                              resolve();
+                            },
+                          });
                         },
                         () => {
                           resolve();

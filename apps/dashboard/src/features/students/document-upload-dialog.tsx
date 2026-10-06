@@ -130,7 +130,11 @@ export function DocumentUploadDialog({
     if (!file && !uploadedFileId) return Promise.resolve();
     setError(null);
     return new Promise((resolve) => {
-      mutation.mutate(values, { onSettled: resolve });
+      mutation.mutate(values, {
+        onSettled: () => {
+          resolve();
+        },
+      });
     });
   }
 

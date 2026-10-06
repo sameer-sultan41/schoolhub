@@ -268,7 +268,11 @@ function GuardianFormBody({ guardian, isMobile, onOpenChange, onSaved }: Guardia
           form
             .handleSubmit(
               (values) => {
-                mutation.mutate(values, { onSettled: resolve });
+                mutation.mutate(values, {
+                  onSettled: () => {
+                    resolve();
+                  },
+                });
               },
               () => {
                 resolve();
