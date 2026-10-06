@@ -31,9 +31,15 @@ Reach instead for a backend-embedded summary (e.g. a nested serializer field, or
 
 - the list is large or paginated, so N fans out to a cost that actually matters;
 - more than one screen needs the same resolved fields, so the fan-out logic would otherwise be
-  duplicated across components; or
+  duplicated across components;
 - the resolved fields are needed for filtering/sorting/search server-side, which a client-side
-  fan-out cannot provide.
+  fan-out cannot provide; or
+- the fan-out's own request count meaningfully eats into the per-user rate limit (`"user":
+  "60/min"`, `apps/api/config/settings/base.py`'s `DEFAULT_THROTTLE_RATES`) on top of the
+  screen's other calls — a bounded list of a handful of rows doesn't, but this budget is part of
+  "bounded" and should be checked, not assumed, for a future fan-out with a larger or less
+  predictable row count. Giving the fan-out queries a longer `staleTime` keeps a tab reopened
+  within the same session from re-spending this budget on data that hasn't changed.
 
 ## Alternatives considered
 

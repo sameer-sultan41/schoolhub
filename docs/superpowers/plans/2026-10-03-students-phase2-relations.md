@@ -38,7 +38,7 @@
 - **A shared `PhotoUploadField` vs. a third standalone copy for guardians.** Chosen: extract a shared component (Task 5), used by both the student and guardian forms. Students and staff already each have their own copy of the same presigned-upload-then-preview flow; guardians would be the third, and this repo's own convention is to extract on the third copy rather than wait for a fourth. Staff's route lives outside `features/students/`, so migrating it too is out of scope for this PR — flagged in `docs/deferred-work.md` (Task 12) rather than silently left as a third uncounted copy.
 - **Select-populated-by-debounced-search vs. a real `Combobox` primitive for "search existing guardian."** Chosen: keep the `Select` + `useDebouncedValue` composition (same hook the student directory's own filter already uses). The spec's own Alternatives section settled this: a proper typeahead-with-keyboard-nav primitive is a `packages/ui` addition (`schoolhub-ui-port`) big enough to be its own piece of work, not warranted by this one dialog.
 - **`key`-based remount vs. a `useEffect` reset for the tabbed sheet's active tab.** Chosen: `<Tabs defaultValue="profile" key={row.id}>`, matching React's own documented pattern for "reset all state when a prop changes" (react.dev). A `useEffect` that resets state on `row` changing would need an `eslint-disable` for `react-hooks/set-state-in-effect` (a new one this plan deliberately adds none of) and runs a render later than the `key` approach for no benefit, since the component actually does need to reset, not merely re-sync one field.
-- **One `GuardianPickerDialog` with two internal steps vs. nesting `GuardianFormDialog` inside it for "create new."** Chosen: one dialog, two steps (Task 6). `ResponsiveDialog` wraps a Radix `Dialog` on desktop and a `vaul` `Drawer` on mobile; nesting a second `ResponsiveDialog` inside this one would need `Drawer.NestedRoot` on the mobile branch, which `packages/ui` doesn't expose. The create-fields form is inlined into the picker's own "create new" tab instead (reusing `guardians.schema.ts`'s exported `guardianFormSchema`/`GuardianFormValues`, Task 2 — not `GuardianFormDialog`'s whole dialog component), and a successful create advances the same dialog to its "link" step — the same step a search-selection also lands on.
+- **One `GuardianPickerDialog` with two internal steps vs. nesting `GuardianFormDialog` inside it for "create new."** Chosen: one dialog, two steps (Task 6), even though Task 5 (Part A) now ports `Drawer.NestedRoot` so nesting is technically possible. Inlining still wins on its own merits: it avoids a second dialog's chrome and an extra open/close round-trip for what's really one continuous flow (choose a guardian, then link them), and keeps the picker itself to a single `ResponsiveDialog` (which still needs `nested={true}`, Task 6 — it opens from inside the tabbed sheet same as the other four dialogs). The create-fields form is inlined into the picker's own "create new" tab instead (reusing `guardians.schema.ts`'s exported `guardianFormSchema`/`GuardianFormValues`, Task 2 — not `GuardianFormDialog`'s whole dialog component), and a successful create advances the same dialog to its "link" step — the same step a search-selection also lands on.
 
 ## Review Focus
 
@@ -92,13 +92,19 @@ apps/dashboard/src/services/endpoints.ts   # MODIFY — guardians/student-guardi
 
 apps/dashboard/messages/en.json, ur.json   # MODIFY — reuse + fix existing students.tabs/guardians/emergencyContacts/documents (Task 4)
 
+packages/ui/src/components/drawer.tsx      # MODIFY — `nested` prop backed by vaul's Drawer.NestedRoot (Task 5, Part A)
+packages/ui/src/components/__tests__/drawer.test.tsx  # CREATE (Task 5, Part A)
+apps/dashboard/src/components/responsive-dialog.tsx    # MODIFY — `nested` prop threaded to Drawer (Task 5, Part A)
+
+apps/dashboard/src/hooks/use-submit-guard.ts            # CREATE — shared double-submit guard, used by Task 5's GuardianFormDialog and Task 6/8/9's forms (Task 5, Part C)
+apps/dashboard/src/hooks/__tests__/use-submit-guard.test.ts  # CREATE (Task 5, Part C)
+
 apps/dashboard/src/components/
-  photo-upload-field.tsx                   # CREATE — neutral location, generic `purpose: string` prop; shared by student + guardian forms (extracted from student-photo-field.tsx, its third near-identical copy counting staff's own inline one) (Task 5)
-  __tests__/photo-upload-field.test.tsx    # CREATE (Task 5)
+  photo-upload-field.tsx                   # CREATE — neutral location, generic `purpose: string` prop; shared by student + guardian forms (extracted from student-photo-field.tsx, its third near-identical copy counting staff's own inline one) (Task 5, Part B)
+  __tests__/photo-upload-field.test.tsx    # CREATE (Task 5, Part B)
 
 apps/dashboard/src/features/students/
-  student-photo-field.tsx                  # MODIFY — becomes a thin wrapper around @/components/photo-upload-field.tsx (Task 5)
-  __tests__/student-photo-field.test.tsx   # MODIFY — still covers the student-specific wrapper (Task 5)
+  student-photo-field.tsx                  # MODIFY — becomes a thin wrapper around @/components/photo-upload-field.tsx (Task 5; its own tests live inline in student-form-dialog.test.tsx, no separate test file exists)
   guardian-form-dialog.tsx                 # CREATE (Task 5)
   __tests__/guardian-form-dialog.test.tsx  # CREATE (Task 5)
   guardian-picker-dialog.tsx               # CREATE (Task 6)
@@ -609,6 +615,27 @@ to:
 In §16's endpoint list, add the new `POST /student-documents/{id}:download` action alongside the existing `:verify` entry.
 
 In `docs/deferred-work.md`, remove (or mark resolved, matching this file's own convention for closed entries) the existing entry that already tracks "no `Content-Disposition` forcing a real download" — Step 15 closes it globally, so leaving it in place would describe a gap that no longer exists.
+
+Add a new entry to `docs/deferred-work.md` recording the exposure this phase's own `:download` action deliberately leaves open (**user decision, 2026-10-06** — see the Architecture note and Global Constraints above):
+
+```markdown
+- **`core/files`' generic `GET /files` and `POST /files/{id}:download` remain open to
+  any `platform.file.view` holder, including for student documents.** `platform.file.view`
+  is granted to every staff role (`apps/api/core/files/permissions.py`), so a staff member
+  without `students.document.view` can still list a tenant's files (seeing each one's
+  `purpose`/`original_name`) and download one directly through the generic endpoint,
+  bypassing the students-phase-2 `:download` action's own gate entirely. This predates the
+  students-phase-2 work (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`),
+  which adds a properly `students.document.view`-gated `:download` action on
+  `StudentDocumentViewSet` for the dashboard's own path, but deliberately does not also
+  restrict the generic `core/files` routes — those are cross-cutting infrastructure shared
+  by every module (e.g. `/staff`'s own export download), and narrowing them is a separate,
+  `core/files`-wide authorization decision (SEC-17.3, `docs/06-security/security.md`, calls
+  for every document-bearing endpoint to carry its own permission key — `core/files`'
+  generic routes do not yet). Closing this means adding an owning-permission check to
+  `FileViewSet`'s list and download, keyed by each file's `purpose` — not something to
+  improvise inside one module's PR.
+```
 
 - [ ] **Step 18: Regenerate the API contract**
 
@@ -1381,6 +1408,10 @@ type _AssertRelationshipValuesAreExhaustive =
         GuardianRelationship,
       ];
 const _relationshipValuesAreExhaustive: _AssertRelationshipValuesAreExhaustive = true;
+// Compile-time-only check; nothing ever reads this value. `noUnusedLocals`
+// (tsconfig.base.json) would otherwise reject it — same `void` pattern already used for
+// exactly this reason in apps/dashboard/src/i18n/messages.types-check.ts.
+void _relationshipValuesAreExhaustive;
 ```
 
 (Append this import + assertion to the bottom of `guardians-type.ts` from Step 3 above — it needs `GuardianRelationship`, already defined there, and `RELATIONSHIP_VALUES`, just added to `packages/types` in this step.)
@@ -2061,28 +2092,190 @@ git commit -m "feat(dashboard): add the guardian/emergency-contact/document fiel
 
 ---
 
-## Task 5: Shared `PhotoUploadField` + `GuardianFormDialog` (create/edit a guardian's own fields, with a photo)
+## Task 5: Nested-drawer support, shared `PhotoUploadField` + `GuardianFormDialog` (edit a guardian's own fields, with a photo)
+
+Three pieces of shared infrastructure that later tasks need, done together because each is "the dialog/form layer the rest of this plan builds on" rather than feature work of its own: **Part A** ports vaul's `Drawer.NestedRoot` so a dialog can open from inside the tabbed sheet's own mobile drawer at all; **Part B** is the shared photo field and the guardian edit dialog; **Part C** is a shared double-submit guard, consumed here and by Tasks 6, 8 and 9.
 
 **Files:**
-- Create: `apps/dashboard/src/components/photo-upload-field.tsx`
-- Create: `apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx`
-- Modify: `apps/dashboard/src/features/students/student-photo-field.tsx` — becomes a thin wrapper
-- Modify: `apps/dashboard/src/features/students/__tests__/student-photo-field.test.tsx` — same cases, now exercised through the wrapper
-- Modify: `apps/dashboard/src/test-utils.tsx` — add shared `stubObjectUrls`/`stubImageLoading`
-- Modify: `apps/dashboard/src/features/students/__tests__/student-form-dialog.test.tsx` — drop its local `stubObjectUrls`/`stubImageLoading`, import from `@/test-utils`
-- Modify: `apps/dashboard/src/features/staff/__tests__/staff-form-dialog.test.tsx` — drop its local `stubImageLoading`, import from `@/test-utils`
-- Modify: `apps/dashboard/src/lib/error-message.ts` — add `applyServerFieldErrors` (see Step 3a)
-- Modify: `apps/dashboard/src/lib/__tests__/error-message.test.ts`
-- Create: `apps/dashboard/src/features/students/guardian-form-dialog.tsx`
-- Create: `apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx`
+- Modify: `packages/ui/src/components/drawer.tsx` — `nested` prop on `Drawer`, backed by vaul's `Drawer.NestedRoot` (Part A)
+- Create: `packages/ui/src/components/__tests__/drawer.test.tsx` (Part A)
+- Modify: `apps/dashboard/src/components/responsive-dialog.tsx` — `nested` prop on `ResponsiveDialog`, threaded to `Drawer` (Part A)
+- Create: `apps/dashboard/src/components/photo-upload-field.tsx` (Part B)
+- Create: `apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx` (Part B)
+- Modify: `apps/dashboard/src/features/students/student-photo-field.tsx` — becomes a thin wrapper (Part B; no separate test file exists for it — its cases live inline in `student-form-dialog.test.tsx`, below)
+- Modify: `apps/dashboard/src/test-utils.tsx` — add shared `stubObjectUrls`/`stubImageLoading` (Part B)
+- Modify: `apps/dashboard/src/features/students/__tests__/student-form-dialog.test.tsx` — drop its local `stubObjectUrls`/`stubImageLoading`, import from `@/test-utils` (Part B)
+- Modify: `apps/dashboard/src/features/staff/__tests__/staff-form-dialog.test.tsx` — drop its local `stubImageLoading`, import from `@/test-utils` (Part B)
+- Modify: `apps/dashboard/src/lib/error-message.ts` — add `applyServerFieldErrors` (Part B)
+- Modify: `apps/dashboard/src/lib/__tests__/error-message.test.ts` (Part B)
+- Create: `apps/dashboard/src/features/students/guardian-form-dialog.tsx` (Part B)
+- Create: `apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx` (Part B)
+- Create: `apps/dashboard/src/hooks/use-submit-guard.ts` (Part C)
+- Create: `apps/dashboard/src/hooks/__tests__/use-submit-guard.test.ts` (Part C)
 
 **Interfaces:**
 - Consumes: `Services.guardians.{createGuardian,updateGuardian}`, `Services.files.uploadFile` (Task 2, Phase 1).
-- Produces: `PhotoUploadField` (shared, at `@/components/photo-upload-field`), `applyServerFieldErrors` (shared, at `@/lib/error-message` — the server-field-error-mapping loop this task and Task 7's `GuardianLinkFlagsDialog` both need, extracted once rather than duplicated a second time), `GuardianFormFields({ form, savedPhotoFileId?, savedPhotoUrl?, onUploadStart, onUploadingChange })` (the guardian person-fields JSX alone — exported from `guardian-form-dialog.tsx` so Task 6's picker can render the identical fields in its own inline create-tab without a second, nested dialog; see that task), `GuardianFormDialog({ open, onOpenChange, mode, guardian?, onSaved })` (this dialog's own chrome/mutation wrapped around `GuardianFormFields`). `mode: "create"` needs no `guardian` prop; `mode: "edit"` requires one (the already-fetched record — this component never fetches a guardian itself). `onSaved(guardian: GuardianRecord)` fires after a successful create or update, so the caller decides what happens next (Task 6 links a newly created guardian; Task 7's edit action just needs the tab to refetch). Consumed by Tasks 6, 7.
+- Produces: `Drawer`'s `nested?: boolean` prop (Part A — default `false`, no effect unless set) and `ResponsiveDialog`'s own `nested?: boolean` prop (Part A — same default, no effect on the desktop `Dialog` branch), consumed by Tasks 6, 7, 8 and 9 for the dialogs each renders from inside the tabbed `StudentDetailSheet`'s mobile drawer; `PhotoUploadField` (shared, at `@/components/photo-upload-field`); `applyServerFieldErrors` (shared, at `@/lib/error-message` — the server-field-error-mapping loop this task and Task 7's `GuardianLinkFlagsDialog` both need, extracted once rather than duplicated a second time); `GuardianFormFields({ form, savedPhotoFileId?, savedPhotoUrl?, onUploadStart, onUploadingChange })` (the guardian person-fields JSX alone — exported from `guardian-form-dialog.tsx` so Task 6's picker can render the identical fields in its own inline create-tab without a second, nested dialog; see that task); `GuardianFormDialog({ open, onOpenChange, guardian, onSaved })` (edit-only — this dialog's own chrome/mutation wrapped around `GuardianFormFields`; nothing in this plan ever opens it to create a guardian, since the picker's create-tab renders `GuardianFormFields` directly — see Alternatives Considered). `onSaved(guardian: GuardianRecord)` fires after a successful update, so the caller (Task 7's edit action) knows to refetch. Consumed by Task 7.
 
 Students, staff and now guardians each need the identical three-step-upload-plus-preview flow — this is the third copy, and this repo's own convention (`docs/02-architecture/repo-structure.md` §2; see this plan's Alternatives Considered) is to extract on the third copy, not the fourth. `PhotoUploadField` is that extraction, used here by both the student and guardian forms. It lives at `@/components/photo-upload-field.tsx` — a neutral location outside `features/students/` — specifically so a future caller outside the students feature (staff is the named one) can adopt it without an import that reaches into another feature's folder; its `uploadPurpose` prop is a plain `string` (not a students/guardians-only union) and its copy lives in the shared `common.photoUpload.*` i18n namespace (Task 4), not `students.*`, for the same reason. Staff's route (`apps/dashboard/src/app/(app)/staff/`) is not migrated to it in this PR — Task 12 records that as a named, deliberate gap in `docs/deferred-work.md`, not a silently-left third copy.
 
-- [ ] **Step 1: Write the failing test for the shared field, then `photo-upload-field.tsx`**
+### Part A: `Drawer.NestedRoot`
+
+**User decision (2026-10-06):** round 5 of independent plan review found that all five of this plan's new dialogs (the guardian picker, link-flags, edit-guardian, add-contact and upload) open from inside `StudentDetailSheet`, which is itself a vaul `Drawer` on mobile — and vaul doesn't support nesting a `Drawer.Root` inside another open one (confirmed by reading `node_modules/vaul`'s own type definitions: `NestedRoot` is vaul's dedicated primitive for exactly this, with the same prop surface as `Root`). The user chose to port `Drawer.NestedRoot` into `packages/ui` (this Part) rather than close the sheet before opening each dialog (Phase 1's pattern for Edit/Withdraw) — a reusable fix for this and any future sheet-with-sub-dialogs screen, not a one-off workaround.
+
+- [ ] **Step 1: Write the failing test for `Drawer`'s `nested` prop**
+
+```tsx
+// packages/ui/src/components/__tests__/drawer.test.tsx
+import { render, screen } from "@testing-library/react";
+
+const rootSpy = jest.fn((props: { children?: React.ReactNode }) => <>{props.children}</>);
+const nestedRootSpy = jest.fn((props: { children?: React.ReactNode }) => <>{props.children}</>);
+
+jest.mock("vaul", () => {
+  const actual = jest.requireActual<typeof import("vaul")>("vaul");
+  return { ...actual, Drawer: { ...actual.Drawer, Root: rootSpy, NestedRoot: nestedRootSpy } };
+});
+
+import { Drawer } from "../drawer";
+
+describe("Drawer nested mode", () => {
+  afterEach(() => {
+    rootSpy.mockClear();
+    nestedRootSpy.mockClear();
+  });
+
+  it("renders vaul's Root by default", () => {
+    render(
+      <Drawer open onOpenChange={jest.fn()}>
+        <div>content</div>
+      </Drawer>,
+    );
+
+    expect(screen.getByText("content")).toBeInTheDocument();
+    expect(rootSpy).toHaveBeenCalled();
+    expect(nestedRootSpy).not.toHaveBeenCalled();
+  });
+
+  it("renders vaul's NestedRoot when nested is true, never Root", () => {
+    render(
+      <Drawer open onOpenChange={jest.fn()} nested>
+        <div>nested content</div>
+      </Drawer>,
+    );
+
+    expect(screen.getByText("nested content")).toBeInTheDocument();
+    expect(nestedRootSpy).toHaveBeenCalled();
+    expect(rootSpy).not.toHaveBeenCalled();
+  });
+});
+```
+
+(Mocking vaul's `Drawer.Root`/`Drawer.NestedRoot` directly, rather than rendering the real primitives, is deliberate: vaul's actual nested-vs-not behavior is gesture/animation-driven and not meaningfully observable in jsdom — without the mock, both branches would render near-identically today regardless of whether `nested` is wired correctly, which is exactly the false-confidence failure mode a real TDD test here has to avoid. The real end-to-end proof that nesting actually works is each of Tasks 6, 7, 8 and 9's own 375px test, added in those tasks.)
+
+- [ ] **Step 2: Confirm it fails**
+
+`Drawer` doesn't accept a `nested` prop yet and always renders `DrawerPrimitive.Root` — the second test's `nestedRootSpy` assertion fails (never called), and TypeScript itself would already flag the unknown `nested` prop once `tsc` runs.
+
+- [ ] **Step 3: Add the `nested` prop to `Drawer`**
+
+In `packages/ui/src/components/drawer.tsx`, add a 10th departure to the file's header comment:
+
+```
+ * 10. `Drawer` takes an optional `nested` prop, rendering vaul's `Drawer.NestedRoot`
+ *     instead of `Drawer.Root` — required when this drawer opens from inside another
+ *     already-open `Drawer`'s content tree, which vaul doesn't support with two
+ *     independent `Root`s. The vendor file has no such prop since it ports only `Root`.
+```
+
+Then change the `Drawer` function itself:
+
+```tsx
+function Drawer({
+  shouldScaleBackground = false,
+  onOpenChange,
+  nested = false,
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Root> & {
+  /** Renders vaul's `Drawer.NestedRoot` instead of `Drawer.Root` — see departure 10
+   * above. No effect when this drawer isn't nested inside another open one. */
+  nested?: boolean;
+}) {
+  const Root = nested ? DrawerPrimitive.NestedRoot : DrawerPrimitive.Root;
+  return (
+    <DrawerCloseHandlerContext.Provider value={() => onOpenChange?.(false)}>
+      <Root
+        data-slot="drawer"
+        shouldScaleBackground={shouldScaleBackground}
+        onOpenChange={onOpenChange}
+        {...props}
+      />
+    </DrawerCloseHandlerContext.Provider>
+  );
+}
+```
+
+- [ ] **Step 4: Confirm the test passes**
+
+- [ ] **Step 5: Thread `nested` through `ResponsiveDialog`**
+
+In `apps/dashboard/src/components/responsive-dialog.tsx`, add `nested` to `ResponsiveRootProps` and pass it to the mobile `Drawer` branch:
+
+```tsx
+interface ResponsiveRootProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+  /** True when this dialog opens from inside another already-open
+   * ResponsiveDialog/ResponsiveSheet's mobile Drawer (e.g. a row action opened from
+   * within the tabbed student detail sheet). On mobile, nests via vaul's
+   * `Drawer.NestedRoot` instead of a second independent `Drawer.Root`, which vaul
+   * doesn't support stacking without. No effect on desktop, which always renders an
+   * independent `Dialog` regardless of nesting. */
+  nested?: boolean;
+}
+
+export function ResponsiveDialog({
+  open,
+  onOpenChange,
+  children,
+  nested = false,
+}: ResponsiveRootProps) {
+  const isMobile = !useIsDesktopShell();
+  return (
+    <ResponsiveDialogContext.Provider value={isMobile}>
+      {isMobile ? (
+        <Drawer
+          open={open}
+          onOpenChange={onOpenChange}
+          nested={nested}
+          handleOnly
+          dismissible={false}
+        >
+          {children}
+        </Drawer>
+      ) : (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          {children}
+        </Dialog>
+      )}
+    </ResponsiveDialogContext.Provider>
+  );
+}
+```
+
+(`ResponsiveSheet` is unchanged — the outer `StudentDetailSheet` itself is never nested inside anything; only the five dialogs that open *from inside* it need `nested`.) Re-run `apps/dashboard/src/components/__tests__/responsive-dialog.test.tsx` as a regression check — its existing cases pass unchanged, since `nested` defaults to `false` and none of them pass it.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/ui/src/components/drawer.tsx packages/ui/src/components/__tests__/drawer.test.tsx apps/dashboard/src/components/responsive-dialog.tsx
+git commit -m "feat(ui): port vaul's Drawer.NestedRoot for dialogs opened from inside another drawer"
+```
+
+### Part B: Shared `PhotoUploadField` + `GuardianFormDialog`
+
+- [ ] **Step 7: Write the failing test for the shared field, then `photo-upload-field.tsx`**
 
 `PhotoUploadField` is generic over any form whose values include `first_name`/`last_name`/`photo_file_id` — both `StudentFormValues` and the new `GuardianFormValues` (Step 4 below) already use those exact snake_case field names, matching the wire shape directly (Phase 1's own convention). It takes the saved photo's id/url as plain strings, not a whole record, so it never needs to know about `StudentRecord` vs `GuardianRecord`.
 
@@ -2426,7 +2619,7 @@ export function PhotoUploadField<TFieldValues extends PhotoUploadFieldValues>({
 
 (Reads `common.photoUpload.photo`/`uploading`/`onFile`/`uploadFailed` (Task 4, Step 7) — a shared namespace, since this file lives outside `features/students/` and must not assume a `students`-specific `useTranslations` scope is even available to it. `StudentPhotoField`'s own wrapper (Step 2) keeps using the existing `students.fields.*` copy for anything that stays student-specific.)
 
-- [ ] **Step 2: Turn `student-photo-field.tsx` into a thin wrapper**
+- [ ] **Step 8: Turn `student-photo-field.tsx` into a thin wrapper**
 
 Replace its body (keeping the same exported `StudentPhotoField`/`StudentPhotoFieldProps` names and call sites in `student-form-dialog.tsx` unchanged — this is a pure internal refactor):
 
@@ -2468,7 +2661,7 @@ export function StudentPhotoField({
 
 Its existing test file keeps the same test cases (they exercise behavior through this wrapper exactly as they did before — nothing about `StudentPhotoField`'s external behavior changes) but now implicitly covers `PhotoUploadField` as well; `photo-upload-field.test.tsx` (Step 1) adds the cases that are easiest to prove generically (e.g. the purpose string actually reaching `Services.files.uploadFile`) rather than duplicating every student-specific case.
 
-- [ ] **Step 3: Confirm `guardianFormSchema` already exists (Task 2), and add the shared `applyServerFieldErrors` helper**
+- [ ] **Step 9: Confirm `guardianFormSchema` already exists (Task 2), and add the shared `applyServerFieldErrors` helper**
 
 The guardian form's Zod schema (`guardianFormSchema`/`GuardianFormValues`) is NOT declared here — it lives in `apps/dashboard/src/services/modules/guardians/guardians.schema.ts` (Task 2, Step 4c), per [ADR-0019](../../decisions/0019-every-module-uses-the-five-file-shape.md): a new domain's five-file shape includes its own `.schema.ts` from creation, and `Services.guardians` is a brand-new domain as of this plan. This also lets Task 6's picker import the exact same schema for its inline create-tab, rather than reaching into this component file for it (the round-3 review's own finding: a component importing another component's exported schema is precisely the cross-module reach [ADR-0018](../../decisions/0018-per-module-file-split-for-growing-domains.md)/ADR-0019 mean to prevent). `PhotoUploadField` (Step 1) never needs this schema either way, since it's generic over any form matching `PhotoUploadFieldValues`, not tied to `GuardianFormValues` specifically.
 
@@ -2520,7 +2713,9 @@ export function applyServerFieldErrors<TValues extends FieldValues>({
 
 Add a matching test to `apps/dashboard/src/lib/__tests__/error-message.test.ts`: a minimal `form` stub (`{ setError: jest.fn(), clearErrors: jest.fn() }`) confirms a matched field calls `setError` with that field and skips `setFormError`, and an unmatched field calls `setFormError` with the resolved message instead.
 
-- [ ] **Step 4: Write the failing tests**
+- [ ] **Step 10: Write the failing tests**
+
+Edit-only: nothing in this plan ever opens `GuardianFormDialog` to create a guardian (the picker's create-tab renders `GuardianFormFields` directly, Task 6) — a "create" branch here with tests would be dead code with dead coverage. Validation and server-error coverage move onto the edit path, which is the dialog's only real caller (Task 7).
 
 ```tsx
 import { ApiError } from "@schoolhub/api-client";
@@ -2536,14 +2731,11 @@ import { GuardianFormDialog } from "../guardian-form-dialog";
 jest.mock("@/services", () => ({
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
-    guardians: { createGuardian: jest.fn(), updateGuardian: jest.fn() },
+    guardians: { updateGuardian: jest.fn() },
     files: { uploadFile: jest.fn() },
   },
 }));
 
-const mockCreateGuardian = Services.guardians.createGuardian as jest.MockedFunction<
-  typeof Services.guardians.createGuardian
->;
 const mockUpdateGuardian = Services.guardians.updateGuardian as jest.MockedFunction<
   typeof Services.guardians.updateGuardian
 >;
@@ -2575,56 +2767,16 @@ describe("GuardianFormDialog", () => {
   const onSaved = jest.fn();
 
   beforeEach(() => {
-    mockCreateGuardian.mockReset();
     mockUpdateGuardian.mockReset();
     onOpenChange.mockReset();
     onSaved.mockReset();
   });
 
-  it("creates a guardian with the required fields and calls onSaved", async () => {
-    mockCreateGuardian.mockResolvedValue(guardianRecord());
-    const user = userEvent.setup();
-
-    renderWithProviders(
-      <GuardianFormDialog open mode="create" onOpenChange={onOpenChange} onSaved={onSaved} />,
-    );
-
-    await user.type(screen.getByLabelText(/first name/i), "Ayesha");
-    await user.type(screen.getByLabelText(/last name/i), "Raza");
-    await user.type(screen.getByLabelText(/^phone$/i), "0300-0000000");
-    await user.click(screen.getByRole("button", { name: /save/i }));
-
-    await waitFor(() => {
-      expect(mockCreateGuardian).toHaveBeenCalledWith({
-        firstName: "Ayesha",
-        lastName: "Raza",
-        phone: "0300-0000000",
-      });
-    });
-    expect(onSaved).toHaveBeenCalledWith(guardianRecord());
-  });
-
-  it("blocks submission when a required field is empty", async () => {
-    renderWithProviders(
-      <GuardianFormDialog open mode="create" onOpenChange={onOpenChange} onSaved={onSaved} />,
-    );
-
-    await userEvent.setup().click(screen.getByRole("button", { name: /save/i }));
-
-    expect(mockCreateGuardian).not.toHaveBeenCalled();
-  });
-
-  it("pre-fills from the given record in edit mode and PATCHes only on submit", async () => {
+  it("pre-fills from the given record and PATCHes only on submit", async () => {
     const record = guardianRecord({ alt_phone: "0300-1111111" });
 
     renderWithProviders(
-      <GuardianFormDialog
-        open
-        mode="edit"
-        guardian={record}
-        onOpenChange={onOpenChange}
-        onSaved={onSaved}
-      />,
+      <GuardianFormDialog open guardian={record} onOpenChange={onOpenChange} onSaved={onSaved} />,
     );
 
     expect(screen.getByDisplayValue("Ayesha")).toBeInTheDocument();
@@ -2644,18 +2796,25 @@ describe("GuardianFormDialog", () => {
     });
   });
 
-  it("clearing an optional field in edit mode sends an explicit empty value, not an omission", async () => {
+  it("blocks submission when a required field is cleared", async () => {
+    const record = guardianRecord();
+
+    renderWithProviders(
+      <GuardianFormDialog open guardian={record} onOpenChange={onOpenChange} onSaved={onSaved} />,
+    );
+
+    await userEvent.setup().clear(screen.getByLabelText(/last name/i));
+    await userEvent.setup().click(screen.getByRole("button", { name: /save/i }));
+
+    expect(mockUpdateGuardian).not.toHaveBeenCalled();
+  });
+
+  it("clearing an optional field sends an explicit empty value, not an omission", async () => {
     const record = guardianRecord({ alt_phone: "0300-1111111" });
     mockUpdateGuardian.mockResolvedValue(guardianRecord({ alt_phone: "" }));
 
     renderWithProviders(
-      <GuardianFormDialog
-        open
-        mode="edit"
-        guardian={record}
-        onOpenChange={onOpenChange}
-        onSaved={onSaved}
-      />,
+      <GuardianFormDialog open guardian={record} onOpenChange={onOpenChange} onSaved={onSaved} />,
     );
 
     await userEvent.setup().clear(screen.getByLabelText(/alternate phone/i));
@@ -2666,25 +2825,25 @@ describe("GuardianFormDialog", () => {
     });
   });
 
-  it("shows the server's real error when creating fails", async () => {
-    mockCreateGuardian.mockRejectedValue(
+  it("shows the server's real error when saving fails", async () => {
+    const record = guardianRecord();
+    mockUpdateGuardian.mockRejectedValue(
       new ApiError({
         code: "validation_error",
         message: "Validation failed.",
         status: 422,
-        url: "/guardians",
+        url: "/guardians/g1",
         details: [{ field: "phone", issue: "Enter a valid phone number." }],
       }),
     );
 
     renderWithProviders(
-      <GuardianFormDialog open mode="create" onOpenChange={onOpenChange} onSaved={onSaved} />,
+      <GuardianFormDialog open guardian={record} onOpenChange={onOpenChange} onSaved={onSaved} />,
     );
-    const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/first name/i), "Ayesha");
-    await user.type(screen.getByLabelText(/last name/i), "Raza");
-    await user.type(screen.getByLabelText(/^phone$/i), "bad");
-    await user.click(screen.getByRole("button", { name: /save/i }));
+    const phoneInput = screen.getByLabelText(/^phone$/i);
+    await userEvent.setup().clear(phoneInput);
+    await userEvent.setup().type(phoneInput, "bad");
+    await userEvent.setup().click(screen.getByRole("button", { name: /save/i }));
 
     expect(await screen.findByText("Enter a valid phone number.")).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
@@ -2692,7 +2851,7 @@ describe("GuardianFormDialog", () => {
 });
 ```
 
-- [ ] **Step 5: Confirm the tests fail by construction, then write `guardian-form-dialog.tsx`**
+- [ ] **Step 11: Confirm the tests fail by construction, then write `guardian-form-dialog.tsx`**
 
 Split into an outer shell and an inner form body that only mounts while `open` is true, keyed by which guardian (if any) is being edited. This is the fix this plan's independent review asked for in place of a `useEffect` + `// eslint-disable-next-line react-hooks/set-state-in-effect` reset (a new suppression this plan must not add — ADR-0014's baseline only shrinks): remounting the inner component via `key` gives every open a fresh `useForm()` call with the right `defaultValues`, with no reset effect needed at all.
 
@@ -2725,24 +2884,15 @@ import {
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
+import { useSubmitGuard } from "@/hooks/use-submit-guard";
 import { applyServerFieldErrors } from "@/lib/error-message";
 import { Services } from "@/services";
 import type { GuardianRecord } from "@/services";
-import { formValuesToCreateGuardianInput } from "@/services/modules/guardians/guardians-helper";
 import {
   guardianFormSchema,
   type GuardianFormValues,
 } from "@/services/modules/guardians/guardians.schema";
 import { PhotoUploadField } from "@/components/photo-upload-field";
-
-const EMPTY_DEFAULTS: GuardianFormValues = {
-  first_name: "",
-  last_name: "",
-  phone: "",
-  alt_phone: "",
-  email: "",
-  photo_file_id: "",
-};
 
 function toFormValues(guardian: GuardianRecord): GuardianFormValues {
   return {
@@ -2861,22 +3011,21 @@ export function GuardianFormFields({
 export interface GuardianFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  mode: "create" | "edit";
-  /** Required when `mode === "edit"` — this dialog never fetches a guardian itself; the
-   * caller already has the record (from the tab's own guardian-details fan-out, or from
-   * a just-created guardian in the picker flow). */
-  guardian?: GuardianRecord;
+  /** This dialog never fetches a guardian itself — the caller already has the record
+   * (the tab's own guardian-details fan-out). Edit-only: nothing in this plan opens it
+   * to create a guardian (the picker's create-tab renders `GuardianFormFields` directly,
+   * Task 6), so there is no `mode` prop and no empty-defaults branch to keep in sync. */
+  guardian: GuardianRecord;
   onSaved: (guardian: GuardianRecord) => void;
 }
 
 /** The shell: owns `ResponsiveDialog`'s open state and nothing else. `GuardianFormBody`
- * only mounts while `open` is true, keyed by the guardian's id (or `"create"`) — so
- * switching from editing one guardian to another, or from edit to create, always starts
- * a fresh form instance with the right defaults, with no reset effect. */
+ * only mounts while `open` is true, keyed by the guardian's id — so switching from
+ * editing one guardian to another always starts a fresh form instance with the right
+ * defaults, with no reset effect. */
 export function GuardianFormDialog({
   open,
   onOpenChange,
-  mode,
   guardian,
   onSaved,
 }: GuardianFormDialogProps) {
@@ -2885,17 +3034,17 @@ export function GuardianFormDialog({
   const isMobile = !useIsDesktopShell();
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    // nested: this dialog's one caller (Task 7's "Edit guardian" row action) always
+    // opens it from inside StudentDetailSheet's own mobile drawer — hardcoded rather
+    // than a prop, since nothing here ever opens standalone (Task 5, Part A).
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} nested>
       <ResponsiveDialogContent className="max-w-lg" closeLabel={tCommon("close")}>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>
-            {mode === "create" ? t("guardians.createNew") : t("guardians.editGuardianTitle")}
-          </ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>{t("guardians.editGuardianTitle")}</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         {open ? (
           <GuardianFormBody
-            key={mode === "edit" ? guardian?.id : "create"}
-            mode={mode}
+            key={guardian.id}
             guardian={guardian}
             isMobile={isMobile}
             onOpenChange={onOpenChange}
@@ -2908,20 +3057,13 @@ export function GuardianFormDialog({
 }
 
 interface GuardianFormBodyProps {
-  mode: "create" | "edit";
-  guardian?: GuardianRecord;
+  guardian: GuardianRecord;
   isMobile: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (guardian: GuardianRecord) => void;
 }
 
-function GuardianFormBody({
-  mode,
-  guardian,
-  isMobile,
-  onOpenChange,
-  onSaved,
-}: GuardianFormBodyProps) {
+function GuardianFormBody({ guardian, isMobile, onOpenChange, onSaved }: GuardianFormBodyProps) {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -2931,25 +3073,22 @@ function GuardianFormBody({
   // result settling after this instance has already unmounted is simply dropped by
   // `PhotoUploadField`'s own `mountedRef` check, with nothing here to coordinate.
   const openSessionRef = useRef(Symbol("guardian-form-open"));
-  const isSubmittingRef = useRef(false);
+  const submitGuard = useSubmitGuard();
   const [formError, setFormError] = useState<string | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
 
   const form = useForm<GuardianFormValues>({
     resolver: zodResolver(guardianFormSchema),
-    defaultValues: mode === "edit" && guardian ? toFormValues(guardian) : EMPTY_DEFAULTS,
+    defaultValues: toFormValues(guardian),
   });
 
   const mutation = useMutation({
     mutationFn: (values: GuardianFormValues) => {
-      if (mode === "create") {
-        return Services.guardians.createGuardian(formValuesToCreateGuardianInput(values));
-      }
-      // Edit: alt_phone/email are sent as-given, including an explicit empty string —
-      // not gated on truthiness like create's omit-if-empty above. A truthiness gate
-      // here would mean clearing one of these back to empty silently does nothing,
-      // since an omitted field means "leave unchanged" to `updateGuardian`'s own
-      // `toUpdateGuardianBody` (`guardians-helper.ts`), which gates on `!== undefined`.
+      // alt_phone/email are sent as-given, including an explicit empty string — not
+      // gated on truthiness: an omitted field means "leave unchanged" to
+      // `updateGuardian`'s own `toUpdateGuardianBody` (`guardians-helper.ts`), which
+      // gates on `!== undefined`, so a truthiness gate here would mean clearing one of
+      // these back to empty silently does nothing.
       const input = {
         firstName: values.first_name,
         lastName: values.last_name,
@@ -2958,7 +3097,7 @@ function GuardianFormBody({
         email: values.email,
         ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
       };
-      return Services.guardians.updateGuardian((guardian as GuardianRecord).id, input);
+      return Services.guardians.updateGuardian(guardian.id, input);
     },
     onSuccess: (saved) => {
       onOpenChange(false);
@@ -2982,21 +3121,23 @@ function GuardianFormBody({
   }
 
   function onSubmit(event: SyntheticEvent) {
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-    form
-      .handleSubmit(
-        (values) => {
-          mutation.mutate(values, { onSettled: () => (isSubmittingRef.current = false) });
-        },
-        () => {
-          isSubmittingRef.current = false;
-        },
-      )(event)
-      .catch((error: unknown) => {
-        isSubmittingRef.current = false;
-        console.error(error);
-      });
+    event.preventDefault();
+    void submitGuard.guard(
+      () =>
+        new Promise<void>((resolve) => {
+          form
+            .handleSubmit(
+              (values) => {
+                mutation.mutate(values, { onSettled: resolve });
+              },
+              () => resolve(),
+            )(event)
+            .catch((error: unknown) => {
+              console.error(error);
+              resolve();
+            });
+        }),
+    );
   }
 
   return (
@@ -3014,8 +3155,8 @@ function GuardianFormBody({
           {formError && <Alert variant="destructive">{formError}</Alert>}
           <GuardianFormFields
             form={form}
-            savedPhotoFileId={mode === "edit" ? guardian?.photo_file_id : undefined}
-            savedPhotoUrl={mode === "edit" ? guardian?.photo_url : undefined}
+            savedPhotoFileId={guardian.photo_file_id}
+            savedPhotoUrl={guardian.photo_url}
             onUploadStart={captureUploadSession}
             onUploadingChange={setIsPhotoUploading}
           />
@@ -3044,16 +3185,109 @@ function GuardianFormBody({
 }
 ```
 
-- [ ] **Step 6: Confirm the tests pass by construction**
+### Part C: `useSubmitGuard` — a shared double-submit guard
 
-- [ ] **Step 7: Commit**
+Phase 1 fixed a real race (commit `e5326cd`): `mutation.isPending` alone leaves a window where two submits dispatched close together both pass the check, because it only flips true once `mutate()` actually runs, deep inside `handleSubmit`'s own (always async) validation chain. The fix is a synchronous `isSubmittingRef` checked and set *before* `form.handleSubmit(...)` is even called — `GuardianFormDialog` above (Part B) already needs this same guard for its edit-mode save, and round 5's plan review found three more forms in this plan that submit records a user can't trivially undo (the picker's create-guardian step, Task 8's add-contact, Task 9's upload) with no guard at all. A fourth near-identical copy is this repo's extraction threshold (`docs/02-architecture/repo-structure.md` §2) — this Part extracts the one shared hook, and Part B's `GuardianFormBody` above is written against it directly (its own `isSubmittingRef`/`onSubmit` shown earlier in this task use the hook, not a raw `useRef`).
 
-```bash
-git add apps/dashboard/src/components/photo-upload-field.tsx apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx apps/dashboard/src/features/students/student-photo-field.tsx apps/dashboard/src/features/students/__tests__/student-photo-field.test.tsx apps/dashboard/src/test-utils.tsx apps/dashboard/src/features/students/__tests__/student-form-dialog.test.tsx apps/dashboard/src/features/staff/__tests__/staff-form-dialog.test.tsx apps/dashboard/src/lib/error-message.ts apps/dashboard/src/lib/__tests__/error-message.test.ts apps/dashboard/src/features/students/guardian-form-dialog.tsx apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx
-git commit -m "feat(dashboard): add the shared PhotoUploadField and the guardian create/edit form dialog"
+**Files (added to this task's own list above):**
+- Create: `apps/dashboard/src/hooks/use-submit-guard.ts`
+- Create: `apps/dashboard/src/hooks/__tests__/use-submit-guard.test.ts`
+
+- [ ] **Step 11b: Write `use-submit-guard.test.ts`'s failing tests**
+
+```ts
+import { renderHook } from "@testing-library/react";
+import { useSubmitGuard } from "../use-submit-guard";
+
+describe("useSubmitGuard", () => {
+  it("runs the wrapped submit on the first call", async () => {
+    const { result } = renderHook(() => useSubmitGuard());
+    const run = jest.fn().mockResolvedValue(undefined);
+
+    await result.current.guard(run);
+
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a second call while the first is still in flight, then allows a new one after release", async () => {
+    const { result } = renderHook(() => useSubmitGuard());
+    let resolveFirst!: () => void;
+    const first = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const second = jest.fn().mockResolvedValue(undefined);
+
+    const firstCall = result.current.guard(first);
+    await result.current.guard(second); // dispatched while `first` is still pending
+    expect(second).not.toHaveBeenCalled();
+
+    resolveFirst();
+    await firstCall;
+    await result.current.guard(second); // guard was released when `first` settled
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the guard even when the wrapped submit throws", async () => {
+    const { result } = renderHook(() => useSubmitGuard());
+    const failing = jest.fn().mockRejectedValue(new Error("boom"));
+    const next = jest.fn().mockResolvedValue(undefined);
+
+    await result.current.guard(failing);
+    await result.current.guard(next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+});
 ```
 
-- [ ] **Step 8: Push and read CI**
+- [ ] **Step 11c: Run the tests to confirm they fail**, then write `use-submit-guard.ts`
+
+```ts
+import { useRef } from "react";
+
+/**
+ * Blocks a second submit dispatched before the first one's async work has settled.
+ * `mutation.isPending` alone isn't enough — it only flips true once `mutate()` actually
+ * runs, deep inside `handleSubmit`'s own (always async) validation chain, leaving a
+ * window where two submits fired close together both pass that check (commit
+ * `e5326cd`'s root cause). `guard` must wrap the full submit — including a form's own
+ * async validation, not just the mutation — so the check-and-set happens synchronously
+ * before any of that async work starts.
+ */
+export function useSubmitGuard() {
+  const isSubmittingRef = useRef(false);
+
+  async function guard(run: () => Promise<void>): Promise<void> {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    try {
+      await run();
+    } finally {
+      isSubmittingRef.current = false;
+    }
+  }
+
+  return { guard };
+}
+```
+
+- [ ] **Step 11d: Run the tests to confirm they pass**
+
+`GuardianFormBody`'s own `onSubmit` (Part B, Step 11 above) is already written against this hook — add `import { useSubmitGuard } from "@/hooks/use-submit-guard";` to that file's imports now that the hook exists; no other change needed there.
+
+- [ ] **Step 12: Confirm the tests pass by construction**
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add apps/dashboard/src/components/photo-upload-field.tsx apps/dashboard/src/components/__tests__/photo-upload-field.test.tsx apps/dashboard/src/features/students/student-photo-field.tsx apps/dashboard/src/test-utils.tsx apps/dashboard/src/features/students/__tests__/student-form-dialog.test.tsx apps/dashboard/src/features/staff/__tests__/staff-form-dialog.test.tsx apps/dashboard/src/lib/error-message.ts apps/dashboard/src/lib/__tests__/error-message.test.ts apps/dashboard/src/features/students/guardian-form-dialog.tsx apps/dashboard/src/features/students/__tests__/guardian-form-dialog.test.tsx apps/dashboard/src/hooks/use-submit-guard.ts apps/dashboard/src/hooks/__tests__/use-submit-guard.test.ts
+git commit -m "feat(dashboard): add the shared PhotoUploadField, the guardian edit form dialog, and a shared double-submit guard"
+```
+
+- [ ] **Step 14: Push and read CI**
 
 ---
 
@@ -3064,21 +3298,22 @@ git commit -m "feat(dashboard): add the shared PhotoUploadField and the guardian
 - Create: `apps/dashboard/src/features/students/__tests__/guardian-picker-dialog.test.tsx`
 
 **Interfaces:**
-- Consumes: `Services.guardians.{searchGuardians,createGuardian,linkGuardianToStudent}` (Task 2), `guardianFormSchema`/`GuardianFormValues` (Task 2's `guardians.schema.ts`, imported directly by path), `GuardianFormFields` (Task 5's `guardian-form-dialog.tsx` — the guardian person-fields JSX, reused as-is for this dialog's own inline create-tab; this task deliberately does NOT render the whole `GuardianFormDialog` component, to avoid nesting one `ResponsiveDialog` inside another), `RELATIONSHIP_VALUES` (`@schoolhub/types`, Task 2's Step 7), `useDebouncedValue` (`@/hooks/use-debounced-value`, already exists).
+- Consumes: `Services.guardians.{searchGuardians,createGuardian,linkGuardianToStudent}` (Task 2), `guardianFormSchema`/`GuardianFormValues` (Task 2's `guardians.schema.ts`, imported directly by path), `GuardianFormFields` (Task 5's `guardian-form-dialog.tsx` — the guardian person-fields JSX, reused as-is for this dialog's own inline create-tab; this task deliberately does NOT render the whole `GuardianFormDialog` component, to avoid nesting one `ResponsiveDialog` inside another), `RELATIONSHIP_VALUES` (`@schoolhub/types`, Task 2's Step 7), `useDebouncedValue` (`@/hooks/use-debounced-value`, already exists), `useSubmitGuard` (Task 5, Part C — guards the create-tab's submit, the one real, undoable-record-creating form in this dialog).
 - Produces: `GuardianPickerDialog({ open, onOpenChange, studentId, excludedGuardianIds, isFirstGuardian, onLinked })`. `excludedGuardianIds` (the student's already-linked guardians' ids) hides them from search results, since linking one again would only ever hit the backend's duplicate-link conflict. `isFirstGuardian` is `true` when the student currently has zero links, so the very first guardian linked becomes primary by default (module doc §11), not left for the user to remember to set via a separate action. `onLinked()` fires after a successful link (no payload — the caller just needs to know to refetch). Consumed by Task 7, which supplies both new props from the links list it already has.
 
-One `ResponsiveDialog`, two internal steps — never a dialog nested inside another. `ResponsiveDialog` wraps a Radix `Dialog` on desktop and a `vaul` `Drawer` on mobile; nesting a second `ResponsiveDialog` inside this one would need `Drawer.NestedRoot` on the mobile branch, which `packages/ui` doesn't expose (confirmed: no `NestedRoot` export anywhere in the package). So "create new" is not a nested `GuardianFormDialog` — it's the **choose** step's "Create new" tab, with the same fields (`guardianFormSchema`/`GuardianFormValues`, `PhotoUploadField`) inlined directly into this dialog, ending in its own `createMutation`. Either path out of the **choose** step — picking a search result, or successfully creating a guardian — sets one `selectedGuardian` state and advances to the **link** step (relationship + the four non-primary flags' defaults + "Link guardian"). This is also what makes linking retry-safe: if `linkMutation` fails after a guardian was just created, retrying only re-runs `linkMutation` — `selectedGuardian` already holds the created guardian's id, so nothing re-creates it.
+One `ResponsiveDialog`, two internal steps — never a dialog nested inside another (see the Alternatives Considered entry on this). This dialog itself DOES open from inside `StudentDetailSheet`'s mobile drawer, though, so it renders `<ResponsiveDialog open={open} onOpenChange={onOpenChange} nested>` (Task 5, Part A) — without it, opening the picker on mobile would try to stack a second `Drawer.Root` inside the sheet's own open `Drawer.Root`, which vaul doesn't support. "Create new" is not a nested `GuardianFormDialog` — it's the **choose** step's "Create new" tab, with the same fields (`guardianFormSchema`/`GuardianFormValues`, `PhotoUploadField`) inlined directly into this dialog, ending in its own `createMutation`. Either path out of the **choose** step — picking a search result, or successfully creating a guardian — sets one `selectedGuardian` state and advances to the **link** step (relationship + the four non-primary flags' defaults + "Link guardian"). This is also what makes linking retry-safe: if `linkMutation` fails after a guardian was just created, retrying only re-runs `linkMutation` — `selectedGuardian` already holds the created guardian's id, so nothing re-creates it.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```tsx
 import { ApiError } from "@schoolhub/api-client";
-import { screen, waitFor } from "@testing-library/react";
+import { Drawer, DrawerContent } from "@schoolhub/ui";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import type { GuardianRecord } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { GuardianPickerDialog } from "../guardian-picker-dialog";
 
@@ -3142,6 +3377,7 @@ describe("GuardianPickerDialog", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+    setMatchesMobile(false);
   });
 
   it("searches, selects a result, picks a relationship, and links", async () => {
@@ -3361,6 +3597,30 @@ describe("GuardianPickerDialog", () => {
       );
     });
   });
+
+  it("opens correctly on a mobile drawer nested inside the detail sheet's own drawer", () => {
+    // This dialog always opens from inside StudentDetailSheet's own mobile Drawer
+    // (Task 10) — proves `nested` is actually wired (Task 5, Part A), not just that the
+    // dialog renders standalone, which every other test here already covers on desktop.
+    setMatchesMobile(true);
+
+    const { baseElement } = render(
+      <Drawer open onOpenChange={jest.fn()}>
+        <DrawerContent closeLabel="Close sheet">
+          <GuardianPickerDialog
+            open
+            studentId="student-1"
+            excludedGuardianIds={[]}
+            isFirstGuardian
+            onOpenChange={onOpenChange}
+            onLinked={onLinked}
+          />
+        </DrawerContent>
+      </Drawer>,
+    );
+
+    expect(baseElement.querySelectorAll('[data-slot="drawer-content"]')).toHaveLength(2);
+  });
 });
 ```
 
@@ -3405,7 +3665,8 @@ import {
 } from "@/components/responsive-dialog";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { resolveErrorMessage } from "@/lib/error-message";
+import { useSubmitGuard } from "@/hooks/use-submit-guard";
+import { applyServerFieldErrors, resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import type { GuardianRecord } from "@/services";
@@ -3441,7 +3702,7 @@ export function GuardianPickerDialog({
   const tCommon = useTranslations("common");
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} nested>
       <ResponsiveDialogContent className="max-w-lg" closeLabel={tCommon("close")}>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{t("guardians.link")}</ResponsiveDialogTitle>
@@ -3515,6 +3776,7 @@ function GuardianPickerBody({
     resolver: zodResolver(guardianFormSchema),
     defaultValues: CREATE_DEFAULTS,
   });
+  const createSubmitGuard = useSubmitGuard();
 
   const createMutation = useMutation({
     mutationFn: (values: GuardianFormValues) =>
@@ -3524,11 +3786,17 @@ function GuardianPickerBody({
       setStep("link");
     },
     onError: (error) => {
-      setCreateError(
-        error instanceof ApiError
-          ? resolveErrorMessage(error, tErrors, t("form.submitFailed"), "non_field")
-          : t("form.submitFailed"),
-      );
+      // Same shared field-error-mapping helper as `GuardianFormDialog` (Task 5) — this
+      // form shares `guardianFormSchema`, so a 422's snake_case field keys already match
+      // the form's own field names with no translation needed.
+      applyServerFieldErrors({
+        error,
+        form: createForm,
+        knownFields: Object.keys(guardianFormSchema.shape),
+        tErrors,
+        fallback: t("form.submitFailed"),
+        setFormError: setCreateError,
+      });
     },
   });
 
@@ -3691,10 +3959,26 @@ function GuardianPickerBody({
             <Form {...createForm}>
               <form
                 noValidate
-                onSubmit={createForm.handleSubmit((values) => {
-                  setCreateError(null);
-                  createMutation.mutate(values);
-                })}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void createSubmitGuard.guard(
+                    () =>
+                      new Promise<void>((resolve) => {
+                        createForm
+                          .handleSubmit(
+                            (values) => {
+                              setCreateError(null);
+                              createMutation.mutate(values, { onSettled: resolve });
+                            },
+                            () => resolve(),
+                          )(event)
+                          .catch((error: unknown) => {
+                            console.error(error);
+                            resolve();
+                          });
+                      }),
+                  );
+                }}
                 className="space-y-3"
               >
                 {createError && <Alert variant="destructive">{createError}</Alert>}
@@ -3763,12 +4047,19 @@ import { RELATIONSHIP_VALUES } from "@schoolhub/types";
 // value from the link being edited, so an empty state (and the plain-required-field
 // error that would need) never happens here, unlike the picker's own relationship step
 // (Task 6), which starts genuinely unset.
+//
+// Field names are snake_case, matching the API's own — same convention as
+// `guardianFormSchema`/`studentFormSchema` (round-5 plan review: a camelCase schema here
+// meant `applyServerFieldErrors`' `error.fieldErrors()` keys never matched these field
+// names). `Services.guardians.updateGuardianLink` itself still takes the camelCase
+// `UpdateGuardianLinkInput` (Task 2) — `toUpdateGuardianLinkInput` below bridges the two,
+// the same shape as `formValuesToCreateGuardianInput` (Task 2).
 export const linkFlagsSchema = z.object({
   relationship: z.enum(RELATIONSHIP_VALUES),
-  isFeeResponsible: z.boolean(),
-  canPickUp: z.boolean(),
-  receivesCommunications: z.boolean(),
-  hasPortalAccess: z.boolean(),
+  is_fee_responsible: z.boolean(),
+  can_pick_up: z.boolean(),
+  receives_communications: z.boolean(),
+  has_portal_access: z.boolean(),
 });
 
 export type LinkFlagsFormValues = z.infer<typeof linkFlagsSchema>;
@@ -3824,7 +4115,10 @@ describe("GuardianLinkFlagsDialog", () => {
     onSaved.mockReset();
   });
 
-  it("pre-fills from the given link and PATCHes only the changed flags", async () => {
+  it("pre-fills from the given link and PATCHes the full current flag set, including the one just toggled", async () => {
+    // This dialog has no partial-PATCH support — the form always submits all four flags
+    // together (see `toUpdateGuardianLinkInput` below), so this asserts the exact body
+    // rather than a loose `objectContaining`, which would also pass a broken partial-send.
     mockUpdateGuardianLink.mockResolvedValue(linkRecord({ is_fee_responsible: true }));
 
     renderWithProviders(
@@ -3841,10 +4135,13 @@ describe("GuardianLinkFlagsDialog", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: /save/i }));
 
     await waitFor(() => {
-      expect(mockUpdateGuardianLink).toHaveBeenCalledWith(
-        "link-1",
-        expect.objectContaining({ isFeeResponsible: true }),
-      );
+      expect(mockUpdateGuardianLink).toHaveBeenCalledWith("link-1", {
+        relationship: linkRecord().relationship,
+        isFeeResponsible: true,
+        canPickUp: true,
+        receivesCommunications: true,
+        hasPortalAccess: true,
+      });
     });
     expect(onSaved).toHaveBeenCalled();
   });
@@ -3911,26 +4208,49 @@ import {
 } from "@/components/responsive-dialog";
 import { applyServerFieldErrors } from "@/lib/error-message";
 import { Services } from "@/services";
-import type { GuardianLinkRecord } from "@/services";
+import type { GuardianLinkRecord, UpdateGuardianLinkInput } from "@/services";
 import {
   linkFlagsSchema,
   type LinkFlagsFormValues,
 } from "@/services/modules/guardians/guardians.schema";
 
-const FLAG_FIELDS = [
-  ["isFeeResponsible", "feeResponsible"],
-  ["canPickUp", "canPickUp"],
-  ["receivesCommunications", "receivesCommunications"],
-  ["hasPortalAccess", "hasPortalAccess"],
-] as const satisfies readonly [keyof LinkFlagsFormValues, string][];
+// `ReadonlyArray<readonly [K, string]>`, not `as const satisfies readonly [K, string][]`
+// — the latter's `readonly [...][]` targets a readonly array of MUTABLE tuples (the
+// `readonly` modifier binds to the outer array, not each tuple — a known TS gotcha),
+// which an `as const` literal's inner readonly tuples can never satisfy. Same pattern
+// as `GUARDIAN_BODY_FIELDS`/`GUARDIAN_LINK_BODY_FIELDS` above (Task 2).
+const FLAG_FIELDS: ReadonlyArray<readonly [keyof LinkFlagsFormValues, string]> = [
+  ["is_fee_responsible", "feeResponsible"],
+  ["can_pick_up", "canPickUp"],
+  ["receives_communications", "receivesCommunications"],
+  ["has_portal_access", "hasPortalAccess"],
+];
 
 function toFormValues(link: GuardianLinkRecord): LinkFlagsFormValues {
+  // The generated StudentGuardian type marks these optional (`boolean | undefined`),
+  // but `LinkFlagsFormValues`'s zod schema requires real booleans — default each with
+  // its own real model default (apps/api/apps/student_management/models.py's
+  // `StudentGuardian` field defaults), not a blanket `false`: only `is_fee_responsible`
+  // defaults false; the other three default true. These are the exact values
+  // `link_guardian`'s own service defaults already use (Global Constraints above).
   return {
     relationship: link.relationship,
-    isFeeResponsible: link.is_fee_responsible,
-    canPickUp: link.can_pick_up,
-    receivesCommunications: link.receives_communications,
-    hasPortalAccess: link.has_portal_access,
+    is_fee_responsible: link.is_fee_responsible ?? false,
+    can_pick_up: link.can_pick_up ?? true,
+    receives_communications: link.receives_communications ?? true,
+    has_portal_access: link.has_portal_access ?? true,
+  };
+}
+
+/** `LinkFlagsFormValues` (snake_case, the Zod form shape) -> `UpdateGuardianLinkInput`
+ * (Task 2, camelCase) — same bridge as `formValuesToCreateGuardianInput` (Task 2). */
+function toUpdateGuardianLinkInput(values: LinkFlagsFormValues): UpdateGuardianLinkInput {
+  return {
+    relationship: values.relationship,
+    isFeeResponsible: values.is_fee_responsible,
+    canPickUp: values.can_pick_up,
+    receivesCommunications: values.receives_communications,
+    hasPortalAccess: values.has_portal_access,
   };
 }
 
@@ -3970,7 +4290,7 @@ export function GuardianLinkFlagsDialog({
 
   const mutation = useMutation({
     mutationFn: (values: LinkFlagsFormValues) =>
-      Services.guardians.updateGuardianLink(link.id, values),
+      Services.guardians.updateGuardianLink(link.id, toUpdateGuardianLinkInput(values)),
     onSuccess: () => {
       onOpenChange(false);
       onSaved();
@@ -3991,7 +4311,7 @@ export function GuardianLinkFlagsDialog({
   });
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} nested>
       <ResponsiveDialogContent className="max-w-md" closeLabel={tCommon("close")}>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{t("guardians.editLinkTitle")}</ResponsiveDialogTitle>
@@ -4359,6 +4679,10 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
     queries: guardianIds.map((guardianId) => ({
       queryKey: queryKeys.detail("guardians", "guardians", guardianId),
       queryFn: () => Services.guardians.fetchGuardianById(guardianId),
+      // A guardian's own name/phone rarely changes mid-session — re-fetching every one
+      // of up to a handful of guardians on every tab reopen spends part of the 60/min
+      // per-user rate limit (ADR-0020) for data that's almost always still correct.
+      staleTime: 5 * 60 * 1000,
     })),
     combine: combineGuardianResults,
   });
@@ -4462,6 +4786,14 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
                           variant="outline"
                           size="sm"
                           disabled={promoteMutation.isPending}
+                          // Row-specific accessible name (WCAG 2.4.6) — every row's button
+                          // otherwise shares the exact same text, so a screen-reader user
+                          // can't tell which guardian "Make primary" would act on.
+                          aria-label={
+                            guardian
+                              ? `${t("guardians.makePrimary")} — ${guardian.first_name} ${guardian.last_name}`
+                              : t("guardians.makePrimary")
+                          }
                           onClick={() => {
                             promoteMutation.mutate(link.id);
                           }}
@@ -4484,6 +4816,11 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
                     <Button
                       variant="outline"
                       size="sm"
+                      aria-label={
+                        guardian
+                          ? `${t("guardians.editLinkTitle")} — ${guardian.first_name} ${guardian.last_name}`
+                          : t("guardians.editLinkTitle")
+                      }
                       onClick={() => {
                         setEditingLink(link);
                       }}
@@ -4494,6 +4831,7 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
                       <Button
                         variant="outline"
                         size="sm"
+                        aria-label={`${t("guardians.editGuardianTitle")} — ${guardian.first_name} ${guardian.last_name}`}
                         onClick={() => {
                           setEditingGuardian(guardian);
                         }}
@@ -4534,7 +4872,6 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
       {editingGuardian && (
         <GuardianFormDialog
           open
-          mode="edit"
           guardian={editingGuardian}
           onOpenChange={(open) => {
             if (!open) setEditingGuardian(null);
@@ -4573,27 +4910,30 @@ git commit -m "feat(dashboard): add the students guardians tab"
 - Create: `apps/dashboard/src/features/students/__tests__/student-emergency-contacts-tab.test.tsx`
 
 **Interfaces:**
-- Consumes: `Services.students.{fetchEmergencyContacts,addEmergencyContact}` (Task 3).
-- Produces: `StudentEmergencyContactsTab({ studentId, canCreate })`; `emergencyContactSchema`/`EmergencyContactFormInput`/`EmergencyContactFormValues`, added to the existing `students.schema.ts` (ADR-0019's five-file shape — a form schema belongs there, not inline in a component file) alongside whatever `studentFormSchema` it already holds. Consumed by Task 10.
+- Consumes: `Services.students.{fetchEmergencyContacts,addEmergencyContact}` (Task 3), `useSubmitGuard` (Task 5, Part C — a contact, once added, has no edit/delete; guards against a double-submit creating two).
+- Produces: `StudentEmergencyContactsTab({ studentId, canCreate })`; `emergencyContactSchema`/`EmergencyContactFormValues`, added to the existing `students.schema.ts` (ADR-0019's five-file shape — a form schema belongs there, not inline in a component file) alongside whatever `studentFormSchema` it already holds. Consumed by Task 10.
 
 - [ ] **Step 0: Add `emergencyContactSchema` to the existing `students.schema.ts`**
 
 ```ts
+// Field names are snake_case, matching the API's own — same convention as
+// `guardianFormSchema`/`studentFormSchema` (round-5 plan review).
 export const emergencyContactSchema = z.object({
   name: z.string().min(1),
   relationship: z.string().min(1),
   phone: z.string().min(1),
-  altPhone: z.string().optional(),
-  priority: z.coerce.number().int().min(1),
+  alt_phone: z.string().optional(),
+  // Plain z.number(), not z.coerce.number(): a coerced schema's input type (the raw,
+  // pre-coercion form value) differs from its output type, which forces a 3-generic
+  // useForm<Input, unknown, Output> that this codebase's FormField doesn't forward
+  // cleanly (round-5 plan review). The number field below sets its own numeric value via
+  // `valueAsNumber` instead, so RHF's internal value is already a real number and a
+  // single-generic schema/useForm is enough.
+  priority: z.number().int().min(1),
   notes: z.string().optional(),
 });
 
-/** `z.coerce.number()` on `priority` makes this schema's input and output types
- * genuinely differ (a form field's live value before Zod coerces it, vs. the coerced
- * `number` after) — both are exported so `useForm` can be given all three of its
- * generics explicitly where this schema is used (see `student-emergency-contacts-tab.tsx`). */
-export type EmergencyContactFormInput = z.input<typeof emergencyContactSchema>;
-export type EmergencyContactFormValues = z.output<typeof emergencyContactSchema>;
+export type EmergencyContactFormValues = z.infer<typeof emergencyContactSchema>;
 ```
 
 (Confirm `z` is already imported in this file for the existing `studentFormSchema` — reuse it, don't re-import.)
@@ -4741,12 +5081,12 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
+import { useSubmitGuard } from "@/hooks/use-submit-guard";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import {
   emergencyContactSchema,
-  type EmergencyContactFormInput,
   type EmergencyContactFormValues,
 } from "@/services/modules/students/students.schema";
 
@@ -4857,22 +5197,18 @@ function AddEmergencyContactDialog({
   const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
 
-  // Three generics, not one: `priority`'s `z.coerce.number()` makes this schema's input
-  // type (a form field's live, pre-submit value — effectively `unknown` until coerced)
-  // differ from its output type (`number`, after Zod resolves it) — `zodResolver`'s
-  // return type reflects that asymmetry, and `useForm<EmergencyContactFormValues>`
-  // alone (implicitly also the output type) doesn't typecheck against it.
-  const form = useForm<EmergencyContactFormInput, unknown, EmergencyContactFormValues>({
+  const form = useForm<EmergencyContactFormValues>({
     resolver: zodResolver(emergencyContactSchema),
     defaultValues: {
       name: "",
       relationship: "",
       phone: "",
-      altPhone: "",
+      alt_phone: "",
       priority: nextPriority,
       notes: "",
     },
   });
+  const submitGuard = useSubmitGuard();
 
   const mutation = useMutation({
     mutationFn: (values: EmergencyContactFormValues) =>
@@ -4880,7 +5216,7 @@ function AddEmergencyContactDialog({
         name: values.name,
         relationship: values.relationship,
         phone: values.phone,
-        ...(values.altPhone ? { altPhone: values.altPhone } : {}),
+        ...(values.alt_phone ? { altPhone: values.alt_phone } : {}),
         priority: values.priority,
         ...(values.notes ? { notes: values.notes } : {}),
       }),
@@ -4898,7 +5234,7 @@ function AddEmergencyContactDialog({
   });
 
   return (
-    <ResponsiveDialog open onOpenChange={onOpenChange}>
+    <ResponsiveDialog open onOpenChange={onOpenChange} nested>
       <ResponsiveDialogContent className="max-w-md" closeLabel={tCommon("close")}>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{t("emergencyContacts.add")}</ResponsiveDialogTitle>
@@ -4906,9 +5242,25 @@ function AddEmergencyContactDialog({
         <Form {...form}>
           <form
             noValidate
-            onSubmit={form.handleSubmit((values) => {
-              mutation.mutate(values);
-            })}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitGuard.guard(
+                () =>
+                  new Promise<void>((resolve) => {
+                    form
+                      .handleSubmit(
+                        (values) => {
+                          mutation.mutate(values, { onSettled: resolve });
+                        },
+                        () => resolve(),
+                      )(event)
+                      .catch((error: unknown) => {
+                        console.error(error);
+                        resolve();
+                      });
+                  }),
+              );
+            }}
           >
             <ResponsiveDialogBody className="space-y-3">
               <p className="text-sm text-muted-foreground">
@@ -4958,7 +5310,7 @@ function AddEmergencyContactDialog({
               />
               <FormField
                 control={form.control}
-                name="altPhone"
+                name="alt_phone"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t("emergencyContacts.fields.altPhone")}</FormLabel>
@@ -4971,11 +5323,16 @@ function AddEmergencyContactDialog({
               <FormField
                 control={form.control}
                 name="priority"
-                render={({ field }) => (
+                render={({ field: { onChange, ...field } }) => (
                   <FormItem>
                     <FormLabel>{t("emergencyContacts.fields.priority")}</FormLabel>
                     <FormControl>
-                      <Input type="number" min={1} {...field} />
+                      <Input
+                        type="number"
+                        min={1}
+                        {...field}
+                        onChange={(event) => onChange(event.target.valueAsNumber)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -5043,7 +5400,7 @@ git commit -m "feat(dashboard): add the students emergency contacts tab"
 - Create: `apps/dashboard/src/features/students/__tests__/student-documents-tab.test.tsx`
 
 **Interfaces:**
-- Consumes: `Services.students.{fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument,getDocumentDownloadUrl}` (Task 3), `Services.files.uploadFile` (Phase 1).
+- Consumes: `Services.students.{fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument,getDocumentDownloadUrl}` (Task 3), `Services.files.uploadFile` (Phase 1), `useSubmitGuard` (Task 5, Part C — the upload mutation does real async work, not just a quick validation round-trip, so a double-submit guard matters even more here).
 - Produces: `StudentDocumentsTab({ studentId, canCreate, canVerify, canDelete })`; `documentFormSchema`/`DocumentFormValues`, added to the existing `students.schema.ts` (ADR-0019 — not inline in a component file). Consumed by Task 10.
 
 - [ ] **Step 0: Add `documentFormSchema` to the existing `students.schema.ts`**
@@ -5053,11 +5410,14 @@ git commit -m "feat(dashboard): add the students emergency contacts tab"
 // convention `PhotoUploadField` (Task 5) already established for an uncontrolled `<input
 // type="file">`, which has no meaningful RHF "value" to validate against. Only the
 // metadata fields go through RHF + zod.
+//
+// Field names are snake_case, matching the API's own — same convention as
+// `guardianFormSchema`/`studentFormSchema` (round-5 plan review).
 export const documentFormSchema = z.object({
-  documentType: z.string().min(1),
+  document_type: z.string().min(1),
   title: z.string().min(1),
   notes: z.string().optional(),
-  expiresAt: z.string().optional(),
+  expires_at: z.string().optional(),
 });
 
 export type DocumentFormValues = z.infer<typeof documentFormSchema>;
@@ -5193,7 +5553,7 @@ describe("DocumentUploadDialog", () => {
 ```tsx
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent, type SyntheticEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -5224,6 +5584,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
+import { useSubmitGuard } from "@/hooks/use-submit-guard";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { ApiError, Services } from "@/services";
 import { DOCUMENT_TYPES } from "@/services/modules/students/students-constant";
@@ -5259,12 +5620,15 @@ export function DocumentUploadDialog({
   const form = useForm<DocumentFormValues>({
     resolver: zodResolver(documentFormSchema),
     defaultValues: {
-      documentType: DOCUMENT_TYPES[0],
+      document_type: DOCUMENT_TYPES[0],
       title: "",
       notes: "",
-      expiresAt: "",
+      expires_at: "",
     },
   });
+  // The upload itself is real async work (not just a quick validation round-trip), so
+  // guarding against a double-submit here matters even more than in a plain form.
+  const submitGuard = useSubmitGuard();
 
   const mutation = useMutation({
     mutationFn: async (values: DocumentFormValues) => {
@@ -5273,10 +5637,10 @@ export function DocumentUploadDialog({
       setUploadedFileId(fileId);
       return Services.students.uploadDocumentRecord(studentId, {
         fileId,
-        documentType: values.documentType,
+        documentType: values.document_type,
         title: values.title,
         ...(values.notes ? { notes: values.notes } : {}),
-        ...(values.expiresAt ? { expiresAt: values.expiresAt } : {}),
+        ...(values.expires_at ? { expiresAt: values.expires_at } : {}),
       });
     },
     onSuccess: () => {
@@ -5307,20 +5671,42 @@ export function DocumentUploadDialog({
     setUploadedFileId(null);
   }
 
-  function onSubmit(values: DocumentFormValues) {
-    if (!file && !uploadedFileId) return;
+  function onSubmit(values: DocumentFormValues): Promise<void> {
+    if (!file && !uploadedFileId) return Promise.resolve();
     setError(null);
-    mutation.mutate(values);
+    return new Promise((resolve) => {
+      mutation.mutate(values, { onSettled: resolve });
+    });
+  }
+
+  function handleFormSubmit(event: SyntheticEvent) {
+    event.preventDefault();
+    void submitGuard.guard(
+      () =>
+        new Promise<void>((resolve) => {
+          form
+            .handleSubmit(
+              (values) => {
+                void onSubmit(values).then(resolve);
+              },
+              () => resolve(),
+            )(event)
+            .catch((error: unknown) => {
+              console.error(error);
+              resolve();
+            });
+        }),
+    );
   }
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} nested>
       <ResponsiveDialogContent className="max-w-md" closeLabel={tCommon("close")}>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{t("documents.upload")}</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <Form {...form}>
-          <form noValidate onSubmit={form.handleSubmit(onSubmit)}>
+          <form noValidate onSubmit={handleFormSubmit}>
             <ResponsiveDialogBody className="space-y-3">
               <p className="text-sm text-muted-foreground">{t("documents.uploadDescription")}</p>
               {error && <Alert variant="destructive">{error}</Alert>}
@@ -5330,7 +5716,7 @@ export function DocumentUploadDialog({
               </div>
               <FormField
                 control={form.control}
-                name="documentType"
+                name="document_type"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t("documents.fields.documentType")}</FormLabel>
@@ -5367,7 +5753,7 @@ export function DocumentUploadDialog({
               />
               <FormField
                 control={form.control}
-                name="expiresAt"
+                name="expires_at"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t("documents.fields.expiresAt")}</FormLabel>
@@ -5515,8 +5901,10 @@ describe("StudentDocumentsTab", () => {
     );
 
     await screen.findByText("Ayesha's birth certificate");
-    expect(screen.getByRole("button", { name: /^verify$/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^reject$/i })).toBeInTheDocument();
+    // Prefix-anchored, not an exact match — the real button also carries a row-specific
+    // accessible name (WCAG 2.4.6: "Verify — <document title>"), not just "Verify".
+    expect(screen.getByRole("button", { name: /^verify/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^reject/i })).toBeInTheDocument();
   });
 
   it("hides verify/reject for an already-verified document", async () => {
@@ -5527,7 +5915,7 @@ describe("StudentDocumentsTab", () => {
     );
 
     await screen.findByText("Ayesha's birth certificate");
-    expect(screen.queryByRole("button", { name: /^verify$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^verify/i })).not.toBeInTheDocument();
   });
 
   it("requests a fresh signed URL on every download click, not a cached one", async () => {
@@ -5578,10 +5966,13 @@ describe("StudentDocumentsTab", () => {
       <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
     );
 
-    await user.click(await screen.findByRole("button", { name: /^delete$/i }));
+    // Prefix-anchored — the row's own button carries a row-specific accessible name
+    // ("Delete — <document title>", WCAG 2.4.6), not plain "Delete".
+    await user.click(await screen.findByRole("button", { name: /^delete/i }));
     expect(mockDeleteDocument).not.toHaveBeenCalled();
-    // Scoped to the open confirmation dialog: its own confirm button reuses the exact
-    // same "Delete" label as the row's trigger button that just opened it.
+    // Scoped to the open confirmation dialog: its own confirm button has no row-specific
+    // suffix, so it's still exactly "Delete" — scoping (not the name) is what disambiguates
+    // it from the row's trigger button.
     const confirmDialog = await screen.findByRole("alertdialog");
     await user.click(within(confirmDialog).getByRole("button", { name: /^delete$/i }));
 
@@ -5604,8 +5995,8 @@ describe("StudentDocumentsTab", () => {
 
     await screen.findByText("Ayesha's birth certificate");
     expect(screen.queryByRole("button", { name: /upload document/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^verify$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^delete$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^verify/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^delete/i })).not.toBeInTheDocument();
     // Download has no permission gate (students.document.view already governs whether the
     // tab is reachable at all), so it stays visible.
     expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
@@ -5804,11 +6195,15 @@ export function StudentDocumentsTab({
                   {t(`documents.status.${document.verification_status}`)}
                 </Badge>
               </div>
+              {/* Row-specific accessible names (WCAG 2.4.6) below — every row otherwise
+               * shares the exact same button text, so a screen-reader user can't tell
+               * which document "Download"/"Verify"/"Reject"/"Delete" would act on. */}
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={downloadMutation.isPending}
+                  aria-label={`${t("documents.download")} — ${document.title}`}
                   onClick={() => {
                     downloadMutation.mutate({ documentId: document.id, title: document.title });
                   }}
@@ -5821,6 +6216,7 @@ export function StudentDocumentsTab({
                       variant="outline"
                       size="sm"
                       disabled={verifyMutation.isPending}
+                      aria-label={`${t("documents.verify")} — ${document.title}`}
                       onClick={() => {
                         verifyMutation.mutate({ documentId: document.id, decision: "verified" });
                       }}
@@ -5831,6 +6227,7 @@ export function StudentDocumentsTab({
                       variant="outline"
                       size="sm"
                       disabled={verifyMutation.isPending}
+                      aria-label={`${t("documents.reject")} — ${document.title}`}
                       onClick={() => {
                         verifyMutation.mutate({ documentId: document.id, decision: "rejected" });
                       }}
@@ -5843,6 +6240,7 @@ export function StudentDocumentsTab({
                   <Button
                     variant="destructive"
                     size="sm"
+                    aria-label={`${t("documents.delete")} — ${document.title}`}
                     onClick={() => {
                       setPendingDeleteId(document.id);
                     }}
@@ -6807,7 +7205,9 @@ test.describe("student detail sheet — relations tabs", () => {
     await expect(page.getByText("Ayesha's birth certificate scan")).toBeVisible();
     await expect(page.getByText(/pending/i)).toBeVisible();
 
-    await page.getByRole("button", { name: /^verify$/i }).click();
+    // Prefix-anchored — the row's own button carries a row-specific accessible name
+    // ("Verify — <document title>", WCAG 2.4.6), not plain "Verify".
+    await page.getByRole("button", { name: /^verify/i }).click();
     await expect(page.getByText(/^verified$/i)).toBeVisible();
   });
 
@@ -6826,9 +7226,11 @@ test.describe("student detail sheet — relations tabs", () => {
     await studentsPage.goto();
     await studentsPage.row("Ayesha Khan").click();
     await page.getByRole("tab", { name: /^documents$/i }).click();
-    await page.getByRole("button", { name: /^delete$/i }).click();
-    // Scoped to the open confirmation dialog: its own confirm button reuses the exact
-    // same "Delete" label as the row's trigger button that just opened it.
+    // Prefix-anchored — the row's own button carries a row-specific accessible name
+    // ("Delete — <document title>", WCAG 2.4.6), not plain "Delete".
+    await page.getByRole("button", { name: /^delete/i }).click();
+    // Scoped to the open confirmation dialog: its own confirm button has no row-specific
+    // suffix, so it's still exactly "Delete" — scoping (not the name) disambiguates it.
     await page.getByRole("alertdialog").getByRole("button", { name: /^delete$/i }).click();
 
     await expect(page.getByText("Old document")).toHaveCount(0);
