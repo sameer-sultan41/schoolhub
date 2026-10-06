@@ -1,4 +1,4 @@
-import { stableSignedUrl } from "../helpers";
+import { formatDate, stableSignedUrl } from "../helpers";
 
 /** A SigV4-shaped link for `path`, signed at `signedAt` (UTC) and valid for `ttlSeconds`. */
 function signedLink(path: string, signedAt: string, ttlSeconds = 3600) {
@@ -51,5 +51,17 @@ describe("stableSignedUrl", () => {
 
     expect(stableSignedUrl(second, T0)).toBe(second);
     expect(stableSignedUrl(null, T0)).toBeNull();
+  });
+});
+
+describe("formatDate", () => {
+  it("returns the raw value unchanged for an invalid date string", () => {
+    expect(formatDate("not-a-date")).toBe("not-a-date");
+  });
+
+  it("formats a valid date as a long absolute date", () => {
+    // date-fns "PPP" format for 2026-01-05 — matches staff-detail-sheet.test.tsx's own
+    // precedent for this same format string.
+    expect(formatDate("2026-01-05")).toBe("January 5th, 2026");
   });
 });

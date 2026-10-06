@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { Regex } from "./regex";
 
 /**
@@ -95,6 +95,14 @@ export function formatLastUpdated(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return formatDistanceToNow(parsed, { addSuffix: true });
+}
+
+/** A longer, absolute rendering ("January 5, 2026") — distinct from `formatLastUpdated`'s
+ * relative one. Used for a fixed date that should read as a calendar date, not an elapsed
+ * time (a staff member's joining date/date of birth; a document's expiry date). */
+export function formatDate(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : format(parsed, "PPP");
 }
 
 /** Humanizes an unlabelled snake_case value, e.g. "on_leave" -> "On leave". Shared by

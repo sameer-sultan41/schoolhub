@@ -60,3 +60,19 @@ export const emergencyContactSchema = z.object({
 });
 
 export type EmergencyContactFormValues = z.infer<typeof emergencyContactSchema>;
+
+// The file itself stays outside this schema, as its own `useState` on the dialog — same
+// convention `PhotoUploadField` (Task 5) already established for an uncontrolled `<input
+// type="file">`, which has no meaningful RHF "value" to validate against. Only the
+// metadata fields go through RHF + zod.
+//
+// Field names are snake_case, matching the API's own — same convention as
+// `guardianFormSchema`/`studentFormSchema` (round-5 plan review).
+export const documentFormSchema = z.object({
+  document_type: z.string().min(1),
+  title: z.string().min(1),
+  notes: z.string().optional(),
+  expires_at: z.string().optional(),
+});
+
+export type DocumentFormValues = z.infer<typeof documentFormSchema>;
