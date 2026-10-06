@@ -57,17 +57,27 @@ import { Button } from "./button";
  *    surface; a lookalike div renders the same pill but is inert under
  *    `handleOnly`, so the drawer becomes entirely impossible to drag behind an
  *    affordance that still visually promises otherwise.
+ * 10. `Drawer` takes an optional `nested` prop, rendering vaul's `Drawer.NestedRoot`
+ *     instead of `Drawer.Root` — required when this drawer opens from inside another
+ *     already-open `Drawer`'s content tree, which vaul doesn't support with two
+ *     independent `Root`s. The vendor file has no such prop since it ports only `Root`.
  */
 const DrawerCloseHandlerContext = createContext<(() => void) | null>(null);
 
 function Drawer({
   shouldScaleBackground = false,
   onOpenChange,
+  nested = false,
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) {
+}: React.ComponentProps<typeof DrawerPrimitive.Root> & {
+  /** Renders vaul's `Drawer.NestedRoot` instead of `Drawer.Root` — see departure 10
+   * above. No effect when this drawer isn't nested inside another open one. */
+  nested?: boolean;
+}) {
+  const Root = nested ? DrawerPrimitive.NestedRoot : DrawerPrimitive.Root;
   return (
     <DrawerCloseHandlerContext.Provider value={() => onOpenChange?.(false)}>
-      <DrawerPrimitive.Root
+      <Root
         data-slot="drawer"
         shouldScaleBackground={shouldScaleBackground}
         onOpenChange={onOpenChange}

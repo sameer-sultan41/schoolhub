@@ -1,4 +1,6 @@
 import { render } from "@testing-library/react";
+import type * as SchoolhubUi from "@schoolhub/ui";
+import { Drawer } from "@schoolhub/ui";
 
 import {
   ResponsiveDialog,
@@ -6,6 +8,19 @@ import {
   useIsDrawer,
 } from "@/components/responsive-dialog";
 import { setMatchesMobile } from "@/test-utils";
+
+// Wraps the real Drawer (forwarding every call to it) rather than stubbing it out: this
+// file's other cases below exercise real rendering via data-slot queries, and vaul's own
+// nested-vs-not behavior isn't observable in jsdom anyway (see packages/ui's own
+// drawer.test.tsx) — a bare stub here would prove nothing. This wrapper only adds call
+// tracking, so the two new cases below can assert the `nested` prop actually reaches
+// `Drawer`, the one thing a DOM query can't show.
+jest.mock("@schoolhub/ui", () => {
+  const actual = jest.requireActual<typeof SchoolhubUi>("@schoolhub/ui");
+  return { ...actual, Drawer: jest.fn(actual.Drawer) };
+});
+
+const mockDrawer = Drawer as jest.MockedFunction<typeof Drawer>;
 
 describe("ResponsiveDialog", () => {
   afterEach(() => {
@@ -79,5 +94,27 @@ describe("ResponsiveDialog", () => {
     );
 
     consoleError.mockRestore();
+  });
+
+  it("passes nested through to Drawer on mobile", () => {
+    setMatchesMobile(true);
+    render(
+      <ResponsiveDialog open onOpenChange={jest.fn()} nested>
+        <div>content</div>
+      </ResponsiveDialog>,
+    );
+    // React 19 still calls a function component with a second argument, but it's always
+    // `undefined` now that legacy context is gone — not the `{}` older React passed.
+    expect(mockDrawer).toHaveBeenCalledWith(expect.objectContaining({ nested: true }), undefined);
+  });
+
+  it("defaults nested to false when the prop is omitted", () => {
+    setMatchesMobile(true);
+    render(
+      <ResponsiveDialog open onOpenChange={jest.fn()}>
+        <div>content</div>
+      </ResponsiveDialog>,
+    );
+    expect(mockDrawer).toHaveBeenCalledWith(expect.objectContaining({ nested: false }), undefined);
   });
 });

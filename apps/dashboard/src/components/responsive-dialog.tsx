@@ -61,9 +61,21 @@ interface ResponsiveRootProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
+  /** True when this dialog opens from inside another already-open
+   * ResponsiveDialog/ResponsiveSheet's mobile Drawer (e.g. a row action opened from
+   * within the tabbed student detail sheet). On mobile, nests via vaul's
+   * `Drawer.NestedRoot` instead of a second independent `Drawer.Root`, which vaul
+   * doesn't support stacking without. No effect on desktop, which always renders an
+   * independent `Dialog` regardless of nesting. */
+  nested?: boolean;
 }
 
-export function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveRootProps) {
+export function ResponsiveDialog({
+  open,
+  onOpenChange,
+  children,
+  nested = false,
+}: ResponsiveRootProps) {
   const isMobile = !useIsDesktopShell();
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
@@ -77,7 +89,13 @@ export function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveRoo
         // a backdrop tap or Escape close instantly, the exact same data loss through
         // a different door. Hardcoded here rather than a prop: revisit if a non-form
         // caller needs the full dismiss-anywhere behavior back.
-        <Drawer open={open} onOpenChange={onOpenChange} handleOnly dismissible={false}>
+        <Drawer
+          open={open}
+          onOpenChange={onOpenChange}
+          nested={nested}
+          handleOnly
+          dismissible={false}
+        >
           {children}
         </Drawer>
       ) : (
