@@ -169,12 +169,7 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
                         <p className="text-sm text-destructive">
                           {t("guardians.guardianLoadError")}
                         </p>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="h-auto p-0"
-                          onClick={retryFailedGuardians}
-                        >
+                        <Button mode="link" size="sm" onClick={retryFailedGuardians}>
                           {tCommon("retry")}
                         </Button>
                       </div>

@@ -249,7 +249,7 @@ function GuardianPickerBody({
              * permanent record (guardians have no delete endpoint) — see `justCreated`'s
              * own comment above. A search-selected guardian can still be changed. */}
             {!justCreated ? (
-              <Button type="button" variant="link" className="h-auto p-0" onClick={backToChoose}>
+              <Button type="button" mode="link" onClick={backToChoose}>
                 {tCommon("edit")}
               </Button>
             ) : null}
