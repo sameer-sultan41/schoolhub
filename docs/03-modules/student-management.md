@@ -237,5 +237,33 @@ are the generated `ApiSchemas["Student"]`, not a hand-maintained duplicate (ADR-
 emergency contacts, documents, enrollment/transfers, and bulk import/export/ID-cards are
 sequenced as later phases — see `docs/project-status.md`.
 
+**Dashboard, Phase 2 (as shipped).** `StudentDetailSheet` is now tabbed — Profile (Phase 1's
+original flat content, unchanged), Guardians, Emergency Contacts, Documents — each tab's data
+fetched only once it is actually opened. Guardians: link an existing guardian (tenant-wide
+search) or create one inline, set relationship + per-link flags, promote to primary with one
+click, edit a link's flags or a guardian's own fields later — no unlink (the API has none).
+Emergency contacts: add-only, ordered by priority — no edit, no delete (the API has neither).
+Documents: upload (type from the 6 seeded defaults), verify/reject, delete (with confirmation),
+download (a fresh signed URL requested per click, with `Content-Disposition: attachment` forcing
+a real download regardless of file type, via a `students.document.view`-gated `:download`
+action of its own rather than the broader, every-staff-role `core/files` endpoint). Nearly every
+endpoint this phase's dashboard work calls was already live; independent plan review added six
+small, deliberate backend changes alongside them: `GuardianSerializer.photo_url` (so a
+guardian's photo can actually be displayed, same purpose-gated pattern as the student one),
+`.select_related("photo_file")` added to `GuardianViewSet.get_queryset` (avoiding an N+1 now
+that every row in a guardian search resolves its photo), a relaxation of
+`validate_photo_file_id` so re-saving a guardian's own unchanged current photo never fails its
+purpose check (matching `StudentSerializer`'s existing behavior), `principal` gaining
+`students.document.view` in the registry (closing a pre-existing gap where `principal` could
+verify a document but not see the tab to do it from — reaches dev/e2e-seeded tenants only;
+`docs/deferred-work.md` records the platform-wide absence of any production
+default-role-provisioning mechanism, which this phase surfaced but does not fix), a
+`Content-Disposition` header on `core/files`' signed download URLs (a generic fix, applied to
+every presigner, that also benefits `/staff`'s existing export download), and the new
+document-scoped `:download` action itself. The remaining backend work was closing four
+pre-existing test coverage gaps (guardian search/list, a single link's retrieve, a guardian's own
+PATCH, and emergency contacts' cross-tenant isolation) plus two more the review rounds surfaced
+(a foreign-tenant guardian link read, and the guardian-link duplicate-conflict response).
+
 The backend's own `emergency_contacts/`, `guardians/`, `student_guardians/` and `transfers/`
 packages exist but are not wired into `urls.py` — a separate, backend-only follow-up.

@@ -253,6 +253,41 @@ either this file or `project-status.md`.
   client upload to wait for. **AV scanning is not implemented** —
   `FileStatus.QUARANTINED` is unreachable; a documented gap against
   `api-architecture.md` §11, not an oversight.
+- **No unlink for a student-guardian link, no edit/delete for an emergency contact.**
+  `StudentGuardianLinkViewSet` and `EmergencyContactLinkViewSet` (`apps/api/apps/student_management/views.py`)
+  are both list+create only — confirmed by reading the real viewset classes, not assumed. The
+  students Phase 2 dashboard work (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`)
+  states this plainly in its UI copy rather than inventing a workaround. Adding these endpoints
+  is a real, separate backend decision (what happens to history/audit on an unlink; whether an
+  emergency contact edit needs its own permission key) — not a UI gap to quietly patch over.
+- **Staff's photo-upload field is still its own inline copy.** `students-dashboard-phase2`
+  extracted `PhotoUploadField` (`apps/dashboard/src/components/photo-upload-field.tsx`, a neutral
+  location with a generic `uploadPurpose: string` prop) on its third near-identical copy — students'
+  original, and this phase's new guardian form. `apps/dashboard/src/features/staff/staff-form-dialog.tsx`
+  still has its own copy of the same presigned-upload-then-preview flow, left unmigrated
+  in this PR since staff is outside this phase's scope. Migrating it is a small, mechanical
+  swap — pass `uploadPurpose="staff.photo"` and staff's own saved-photo fields — next time staff's
+  form is touched.
+- **Two pre-existing double-submit-guard copies weren't migrated onto the new shared
+  `useSubmitGuard` hook.** `apps/dashboard/src/hooks/use-submit-guard.ts` (Task 5, Part C)
+  extracts the `isSubmittingRef` pattern Phase 1's commit `e5326cd` introduced, used by this
+  phase's own four new forms. `apps/dashboard/src/features/students/student-form-dialog.tsx` and
+  `apps/dashboard/src/features/students/withdraw-student-dialog.tsx` still carry their own
+  original inline copies of the same guard — left alone in this PR since neither file otherwise
+  needs a change here, and touching them widens this PR's diff for no behavior change. Migrate
+  both onto `useSubmitGuard` next time either file is touched for an unrelated reason.
+- **The unwired, unrouted duplicate `GuardianSerializer`
+  (`apps/api/apps/student_management/guardians/serializers.py`) now falls further behind the
+  real, routed one.** Students Phase 2 adds `photo_url`, the unchanged-current-photo validation
+  skip, and `select_related("photo_file")` to the serializer/viewset actually reachable from
+  `urls.py` — the duplicate package (part of a half-finished per-resource split,
+  `docs/03-modules/student-management.md`'s own notes already call it not wired in) gets none of
+  these, on purpose: an earlier round of this phase's own review mirrored a smaller change onto
+  it for consistency, then a later round found that was itself scope creep onto dead code and
+  reversed it. Whoever finishes wiring that package in (or deletes it, if the split is abandoned)
+  will need to re-apply `photo_url`/the validation skip/`select_related` at that point — this
+  entry exists so that work isn't a surprise.
+
 - **Inline display links for files** (PR #76): `core.files.serializers.SignedFileURLField`
   turns any `File` foreign key into a read-only signed GET link (`get_display_url()`), valid
   `FILE_DISPLAY_URL_TTL_SECONDS` (default 1 h) and `null` unless the file is `ready` and not
@@ -260,21 +295,21 @@ either this file or `project-status.md`.
   edit dialog render it over an initials fallback. `StudentSerializer.photo_url` now uses it
   too (`students-dashboard-phase1` Task 1), with the same `select_related("photo_file")` and
   an ownership guard on `photo_file_id` mirroring `staff/serializers.py`; the student
-  directory/form/detail sheet render it over an initials fallback. **Guardians still expose
-  only `photo_file_id`** — the same one-line addition, when a guardian-facing screen needs
-  photos. The signer is now one shared SigV4 instance per process (`get_presigner()`), signing
-  for `S3_PUBLIC_ENDPOINT_URL`.
-  - **`photo_url`'s purpose gate is student-only.** `StudentSerializer.photo_url` was
+  directory/form/detail sheet render it over an initials fallback. `GuardianSerializer.photo_url`
+  now does the same (`students-dashboard-phase2` Task 1). The signer is now one shared SigV4
+  instance per process (`get_presigner()`), signing for `S3_PUBLIC_ENDPOINT_URL`.
+  - **`photo_url`'s purpose gate doesn't reach staff.** `StudentSerializer.photo_url` was
     converted from `SignedFileURLField` to a `SerializerMethodField` that refuses to sign a
     link unless `photo_file.purpose == "student.photo"` (`students-dashboard-phase1` fix
     wave) — `validate_photo_file_id`'s ownership guard only stops a *new* mismatched file
     from being attached by PATCH; it does nothing for a `photo_file` that reached the column
     some other way (a row seeded before the guard existed, a future bulk-import path that
-    bypasses the serializer). `StaffSerializer.photo_url` still uses the plain
-    `SignedFileURLField` with no equivalent purpose check — same latent gap, not yet fixed
-    there. Fixing it needs the identical `SerializerMethodField` conversion in
-    `staff/serializers.py`, its own purpose constant, and a migration note for any existing
-    `staff.photo_file` rows whose purpose predates the check.
+    bypasses the serializer). `GuardianSerializer.photo_url` (Task 1) now carries the identical
+    `SerializerMethodField` purpose check as the student one. `StaffSerializer.photo_url` is
+    the one remaining holdout still on the plain `SignedFileURLField` with no purpose check.
+    Fixing staff needs the identical `SerializerMethodField` conversion in `staff/serializers.py`,
+    its own purpose constant, and a migration note for any existing `staff.photo_file` rows
+    whose purpose predates the check.
 - `medical_notes` field-level restriction and the `filter_assigned_to_user`
   fail-closed default (no `staff` table to join against yet) both ship in
   PR 1, ahead of the features that will exercise them. The student<->guardian
@@ -723,9 +758,11 @@ either this file or `project-status.md`.
   fixtures and page objects (`StudentFormPage`, `StudentDetailPage`) are untouched so this
   spec's import surface keeps compiling, but the journey itself (create student → link
   guardian → add emergency contact → enroll, plus the duplicate-admission rejection) needs
-  re-driving through the new dialogs/sheet once Phase 2 lands guardians/emergency
-  contacts/enrollment in the real UI — a rewrite against the new page objects, not a
-  route-path fix.
+  re-driving through the new dialogs/sheet. Guardians and emergency contacts are now real as
+  of students Phase 2 (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`);
+  this spec's journey still can't be fully re-driven until enrollment ships in Phase 3 too —
+  a partial rewrite now would need redoing again for the enrollment step regardless. Left as-is
+  pending the full Phase 3 rewrite.
 
 - **A 422 duplicate-admission create response has no field for the override reason its own
   message promises.** `student_management`'s duplicate-admission check (same name + DOB)
