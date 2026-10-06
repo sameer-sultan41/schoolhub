@@ -72,9 +72,17 @@ export function PhotoUploadField<TFieldValues extends PhotoUploadFieldValues>({
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Cast to a 3-tuple of `Path<TFieldValues>`, not `Path<TFieldValues>[]`: an array type
+  // loses arity, so `useWatch`'s tuple overload (via `FieldPathValues`'s homomorphic
+  // mapped type) returns an array back, which a 3-element destructuring tuple can't
+  // soundly narrow to. A tuple-typed `name` keeps the return a matching 3-tuple.
   const [firstName, lastName, photoFileId] = useWatch({
     control: form.control,
-    name: ["first_name", "last_name", "photo_file_id"] as Path<TFieldValues>[],
+    name: ["first_name", "last_name", "photo_file_id"] as [
+      Path<TFieldValues>,
+      Path<TFieldValues>,
+      Path<TFieldValues>,
+    ],
   }) as [string, string, string | undefined];
 
   // Only a still-mounted instance may report back to the dialog: an upload from a closed
