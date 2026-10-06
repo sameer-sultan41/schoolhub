@@ -1,6 +1,7 @@
 import { AuthService } from "./modules/auth";
 import { DashboardService } from "./modules/dashboard";
 import { FilesService } from "./modules/files";
+import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
@@ -18,6 +19,17 @@ export { ApiError } from "@schoolhub/api-client";
 
 export type { StudentRecord } from "./modules/students";
 
+/** `UpdateGuardianLinkInput` is re-exported here (not just from the guardians module
+ * itself) because Task 7's `GuardianLinkFlagsDialog` imports it from `@/services`, not
+ * from the guardians module directly (ADR-0011: feature code imports only `@/services`,
+ * never a service module's own path). */
+export type {
+  GuardianLinkRecord,
+  GuardianRecord,
+  GuardianRelationship,
+  UpdateGuardianLinkInput,
+} from "./modules/guardians";
+
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
  * and calls `Services.<domain>.<action>(...)` — never `apiClient` and never a service
@@ -34,7 +46,8 @@ export const Services = {
   dashboard: DashboardService,
   files: FilesService,
   jobs: JobsService,
-  staff: StaffService,
   schoolOrganization: SchoolOrganizationService,
+  guardians: GuardiansService,
+  staff: StaffService,
   students: StudentsService,
 } as const;

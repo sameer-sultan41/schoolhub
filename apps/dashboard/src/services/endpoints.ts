@@ -84,4 +84,16 @@ export const endpoints = {
      * `/students/{id}:withdraw`. */
     withdraw: (id: string) => `/students/${id}:withdraw`,
   },
+  guardians: {
+    list: "/guardians",
+    detail: (id: string) => `/guardians/${id}`,
+    /** Nested under one student — `GET` lists that student's links, `POST` creates one.
+     * The guardian itself is not created here (see `guardians.list` above). */
+    studentLinks: (studentId: string) => `/students/${studentId}/guardians`,
+  },
+  /** Top-level access to a single link — `PATCH` only (module doc §16: "link flags
+   * updatable via PATCH /api/v1/student-guardians/{id}"). */
+  studentGuardians: {
+    detail: (id: string) => `/student-guardians/${id}`,
+  },
 } as const;
