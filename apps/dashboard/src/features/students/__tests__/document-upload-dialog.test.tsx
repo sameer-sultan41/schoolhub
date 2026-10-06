@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -98,6 +99,46 @@ describe("DocumentUploadDialog", () => {
       await screen.findByText("The file could not be uploaded to storage."),
     ).toBeInTheDocument();
     expect(mockUploadDocumentRecord).not.toHaveBeenCalled();
+    expect(onUploaded).not.toHaveBeenCalled();
+  });
+
+  it("shows a server field error for notes instead of failing silently", async () => {
+    // Regression for a missing <FormMessage /> on the notes field (same class of bug as
+    // GuardianFormDialog's — see guardian-form-dialog.test.tsx): without it,
+    // applyServerFieldErrors still calls form.setError("notes", ...) and marks the field
+    // as matched (suppressing the dialog-level fallback alert too), but nothing was
+    // rendered to show it — an upload that silently appeared to do nothing.
+    mockUploadFile.mockResolvedValue("file-1");
+    mockUploadDocumentRecord.mockRejectedValue(
+      new ApiError({
+        code: "validation_error",
+        message: "Validation failed.",
+        status: 422,
+        url: "/students/student-1/documents",
+        details: [{ field: "notes", issue: "Ensure this field has no more than 500 characters." }],
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <DocumentUploadDialog
+        open
+        studentId="student-1"
+        onOpenChange={onOpenChange}
+        onUploaded={onUploaded}
+      />,
+    );
+
+    await user.upload(
+      screen.getByLabelText(/^file$/i),
+      new File(["x"], "doc.pdf", { type: "application/pdf" }),
+    );
+    await user.type(screen.getByLabelText(/^title$/i), "Doc");
+    await user.click(screen.getByRole("button", { name: /^upload document$/i }));
+
+    expect(
+      await screen.findByText("Ensure this field has no more than 500 characters."),
+    ).toBeInTheDocument();
     expect(onUploaded).not.toHaveBeenCalled();
   });
 

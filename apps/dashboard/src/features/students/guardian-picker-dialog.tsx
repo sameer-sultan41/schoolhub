@@ -331,8 +331,28 @@ function GuardianPickerBody({
                 setSearchInput(event.target.value);
               }}
             />
-            {searchQuery.isFetching ? <Skeleton className="h-9 w-full" /> : null}
-            {search.length > 0 && !searchQuery.isFetching && searchResults.length === 0 ? (
+            {searchQuery.isFetching ? (
+              <Skeleton className="h-9 w-full" />
+            ) : searchQuery.isError ? (
+              // Distinct from the genuine-no-results copy below: a failed search (network
+              // error, 5xx, or the per-user 60/min rate limit this debounced search
+              // competes against) must never render as "no matches" — guardians have no
+              // delete endpoint, so a user misled into "Create new" here creates a
+              // permanent, unremovable duplicate record (round-7 review finding).
+              <div className="space-y-2">
+                <p className="text-sm text-destructive">{t("guardians.searchError")}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void searchQuery.refetch();
+                  }}
+                >
+                  {tCommon("retry")}
+                </Button>
+              </div>
+            ) : searchQuery.isSuccess && searchResults.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("guardians.searchEmpty")}</p>
             ) : null}
             {searchResults.length > 0 ? (

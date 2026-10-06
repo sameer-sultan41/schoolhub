@@ -284,6 +284,7 @@ function AddEmergencyContactDialog({
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -316,6 +317,7 @@ function AddEmergencyContactDialog({
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

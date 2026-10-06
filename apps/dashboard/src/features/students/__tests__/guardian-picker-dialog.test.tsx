@@ -139,6 +139,44 @@ describe("GuardianPickerDialog", () => {
     expect(screen.getByRole("tab", { name: /create new/i })).toBeInTheDocument();
   });
 
+  it("shows a search error state, distinct from the no-results copy, and clears it on retry", async () => {
+    // Regression: `searchResults` used to derive straight from `searchQuery.data ?? []`
+    // with no `isError` branch at all, so a failed search (network error, 5xx, or this
+    // app's 60/min per-user rate limit) rendered the exact same "No guardians match that
+    // search." empty-state copy as a genuine zero-result search. Guardians have no delete
+    // endpoint, so a user misled by that into "Create new" creates a permanent,
+    // unremovable duplicate record (round-7 review finding).
+    mockSearchGuardians.mockRejectedValueOnce(new Error("network blip"));
+    mockSearchGuardians.mockResolvedValueOnce([guardianRecord()]);
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <GuardianPickerDialog
+        open
+        studentId="student-1"
+        onOpenChange={onOpenChange}
+        onLinked={onLinked}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/search by name or phone/i), "Ayesha");
+    await waitFor(() => {
+      expect(mockSearchGuardians).toHaveBeenCalledWith("Ayesha");
+    });
+
+    expect(await screen.findByText("Couldn't search guardians.")).toBeInTheDocument();
+    expect(screen.queryByText("No guardians match that search.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+
+    await waitFor(() => {
+      expect(mockSearchGuardians).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByText("Couldn't search guardians.")).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("combobox", { name: /search existing/i }));
+    expect(await screen.findByRole("option", { name: /ayesha raza/i })).toBeInTheDocument();
+  });
+
   it("creates a new guardian from the inline create fields, then links it — and never re-creates on a link retry", async () => {
     mockCreateGuardian.mockResolvedValue(
       guardianRecord({ id: "g2", first_name: "Bilal", last_name: "Khan" }),

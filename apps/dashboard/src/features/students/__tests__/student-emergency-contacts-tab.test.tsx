@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -93,6 +94,37 @@ describe("StudentEmergencyContactsTab", () => {
         }),
       );
     });
+  });
+
+  it("shows a server field error for alt_phone instead of failing silently", async () => {
+    // Regression for a missing <FormMessage /> on the alt_phone field (same class of bug
+    // as GuardianFormDialog's — see guardian-form-dialog.test.tsx): without it,
+    // applyServerFieldErrors still calls form.setError("alt_phone", ...) and marks the
+    // field as matched (suppressing the dialog-level fallback toast too), but nothing
+    // was rendered to show it — a save that silently appeared to do nothing.
+    mockFetchEmergencyContacts.mockResolvedValue([]);
+    mockAddEmergencyContact.mockRejectedValue(
+      new ApiError({
+        code: "validation_error",
+        message: "Validation failed.",
+        status: 422,
+        url: "/students/student-1/emergency-contacts",
+        details: [{ field: "alt_phone", issue: "Enter a valid alternate phone number." }],
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderWithProviders(<StudentEmergencyContactsTab studentId="student-1" canCreate />);
+
+    await user.click(await screen.findByRole("button", { name: /add contact/i }));
+    await user.type(screen.getByLabelText(/^name$/i), "Zainab Malik");
+    await user.type(screen.getByLabelText(/relationship/i), "Aunt");
+    await user.type(screen.getByLabelText(/^phone$/i), "0300-3333333");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^add contact$/i }),
+    );
+
+    expect(await screen.findByText("Enter a valid alternate phone number.")).toBeInTheDocument();
   });
 
   it("hides the add action for a caller without create permission", async () => {

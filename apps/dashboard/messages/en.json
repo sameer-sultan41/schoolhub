@@ -291,6 +291,7 @@
       "title": "Guardians",
       "empty": "No guardians linked yet.",
       "searchEmpty": "No guardians match that search.",
+      "searchError": "Couldn't search guardians.",
       "loadError": "Couldn't load this student's guardians.",
       "guardianLoadError": "Couldn't load this guardian.",
       "link": "Link guardian",

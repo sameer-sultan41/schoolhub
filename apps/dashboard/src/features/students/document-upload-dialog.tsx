@@ -221,6 +221,7 @@ export function DocumentUploadDialog({
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -233,6 +234,7 @@ export function DocumentUploadDialog({
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
