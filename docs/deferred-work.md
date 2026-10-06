@@ -28,16 +28,6 @@ either this file or `project-status.md`.
   means re-verifying every staff field against the generated schema and is its own,
   separate PR — not bundled into a file-organization change.
 
-- **Staff (and student) CSV export downloads have no `Content-Disposition` override.**
-  `POST /files/{id}:download` (`core.files`) returns a bare presigned object-storage
-  URL with no `ResponseContentDisposition`, so the browser names the downloaded file
-  after its storage key rather than something like `staff-export.csv`, and some
-  browsers may preview a CSV inline instead of downloading it. Fix: add
-  `ResponseContentDisposition` to `core/files/storage.py`'s presigner (next to its
-  existing `ResponseCacheControl`), scoped to export-purpose files — a backend change
-  to shared platform infra, deliberately kept out of the frontend-only PR that wired up
-  `/staff`'s Export/Import buttons.
-
 - **`apps/dashboard/src/components/app-shell.tsx` and its four `features/dashboard/*`
   panels (capacity-chart, pending-work-panel, school-shape-panel, teacher-load-chart,
   use-school-day) — recovered from a stale local branch that predates the shell reset —
@@ -799,4 +789,38 @@ either this file or `project-status.md`.
   regression this PR's own shared `DialogContent` change introduced). The fix is the same
   guard students' own version now has: add `populatedStaffId !== staffDetailQuery.data.id`
   to the `if`, and add `populatedStaffId` to the effect's dependency array.
+
+- **No production mechanism provisions a tenant's default roles.** `principal`'s new
+  `students.document.view` grant (`apps/api/apps/student_management/permissions.py`,
+  students Phase 2) reaches a `principal` role only when one is created via
+  `seed_all_roles`/`seed_e2e_data` (dev/e2e tooling) — both derive the role's permission
+  set from the registry's `default_roles` on every run. Reading `core/rbac/seeding.py`
+  and `apps/staff_management/staff/services/invite.py` in full confirms there is no
+  production code anywhere that creates a platform-default (`tenant=None`) `Role` row for
+  any role except `school_owner` (`ensure_school_owner_role`) — not `principal`, not
+  `teacher`, not `school_admin`. The staff invite flow is written to let an admin assign a
+  `tenant=None` default role, but nothing ever creates one for a real tenant. A migration
+  "backfilling existing tenants' `principal` role" was considered during this phase's plan
+  review and rejected for exactly this reason — it would only ever touch dev/e2e seed
+  fixtures, giving false confidence that production tenants are covered when none are.
+  This is a pre-existing, platform-wide gap in `core.rbac`/`core.tenancy` — building a
+  real tenant-provisioning system for default roles is its own spec and plan, not a
+  one-permission backfill inside a dashboard-tabs PR.
+
+- **`core/files`' generic `GET /files` and `POST /files/{id}:download` remain open to
+  any `platform.file.view` holder, including for student documents.** `platform.file.view`
+  is granted to every staff role (`apps/api/core/files/permissions.py`), so a staff member
+  without `students.document.view` can still list a tenant's files (seeing each one's
+  `purpose`/`original_name`) and download one directly through the generic endpoint,
+  bypassing the students-phase-2 `:download` action's own gate entirely. This predates the
+  students-phase-2 work (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`),
+  which adds a properly `students.document.view`-gated `:download` action on
+  `StudentDocumentViewSet` for the dashboard's own path, but deliberately does not also
+  restrict the generic `core/files` routes — those are cross-cutting infrastructure shared
+  by every module (e.g. `/staff`'s own export download), and narrowing them is a separate,
+  `core/files`-wide authorization decision (SEC-17.3, `docs/06-security/security.md`, calls
+  for every document-bearing endpoint to carry its own permission key — `core/files`'
+  generic routes do not yet). Closing this means adding an owning-permission check to
+  `FileViewSet`'s list and download, keyed by each file's `purpose` — not something to
+  improvise inside one module's PR.
 

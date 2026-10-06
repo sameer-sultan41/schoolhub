@@ -126,7 +126,7 @@ registry.register(
 registry.register(
     "students.document.view",
     "View student documents.",
-    DOCUMENT_MANAGERS,
+    (*DOCUMENT_MANAGERS, "principal"),
 )
 registry.register(
     "students.document.create",

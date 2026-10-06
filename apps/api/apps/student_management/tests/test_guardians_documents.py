@@ -166,6 +166,60 @@ class GuardianLinkTests(StudentManagementAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_searching_guardians_by_name_returns_matches(self) -> None:
+        self.allow("students.guardian.view")
+        with tenant_context(self.tenant.id):
+            GuardianFactory(tenant=self.tenant, first_name="Ayesha", last_name="Raza")
+            GuardianFactory(tenant=self.tenant, first_name="Bilal", last_name="Khan")
+
+        response = self.client.get("/api/v1/guardians", {"search": "Ayesha"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [(row["first_name"], row["last_name"]) for row in response.json()["data"]]
+        self.assertIn(("Ayesha", "Raza"), names)
+        self.assertNotIn(("Bilal", "Khan"), names)
+
+    def test_retrieving_a_single_guardian_link_succeeds(self) -> None:
+        self.allow("students.guardian.view")
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant)
+            link = StudentGuardianFactory(
+                tenant=self.tenant, student=self.student, guardian=guardian
+            )
+
+        response = self.client.get(f"/api/v1/student-guardians/{link.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["data"]["id"], str(link.pk))
+        self.assertEqual(response.json()["data"]["guardian_id"], str(guardian.pk))
+
+    def test_patching_a_guardians_own_fields_succeeds(self) -> None:
+        self.allow("students.guardian.view", "students.guardian.update")
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant, phone="0300-0000000")
+
+        response = self.client.patch(
+            f"/api/v1/guardians/{guardian.pk}", {"phone": "0300-1111111"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["phone"], "0300-1111111")
+
+    def test_linking_an_already_linked_guardian_returns_409(self) -> None:
+        self.allow("students.guardian.view", "students.guardian.create")
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant)
+            StudentGuardianFactory(tenant=self.tenant, student=self.student, guardian=guardian)
+
+        response = self.client.post(
+            f"/api/v1/students/{self.student.pk}/guardians",
+            {"guardian_id": str(guardian.pk), "relationship": "father"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["error"]["code"], "conflict")
+
 
 class GuardianPhotoFileTests(StudentManagementAPITestCase):
     def test_creating_a_guardian_with_a_ready_guardian_photo_succeeds(self) -> None:
@@ -227,6 +281,65 @@ class GuardianPhotoFileTests(StudentManagementAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def test_photo_url_is_none_when_the_attached_files_purpose_is_not_guardian_photo(
+        self,
+    ) -> None:
+        self.allow("students.guardian.view")
+        with tenant_context(self.tenant.id):
+            mismatched_file = FileFactory(
+                tenant=self.tenant, purpose="student.photo", status=FileStatus.READY
+            )
+            guardian = GuardianFactory(tenant=self.tenant)
+            guardian.photo_file = mismatched_file
+            guardian.save(update_fields=["photo_file"])
+
+        response = self.client.get(f"/api/v1/guardians/{guardian.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.json()["data"]["photo_url"])
+
+    def test_photo_url_signs_a_real_link_when_the_purpose_matches(self) -> None:
+        self.allow("students.guardian.view")
+        with tenant_context(self.tenant.id):
+            photo = FileFactory(
+                tenant=self.tenant, purpose="guardian.photo", status=FileStatus.READY
+            )
+            guardian = GuardianFactory(tenant=self.tenant)
+            guardian.photo_file = photo
+            guardian.save(update_fields=["photo_file"])
+
+        response = self.client.get(f"/api/v1/guardians/{guardian.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(response.json()["data"]["photo_url"])
+
+    def test_patching_a_guardian_with_their_own_unchanged_mismatched_photo_succeeds(
+        self,
+    ) -> None:
+        """Pins Step 3's `validate_photo_file_id` skip: re-sending the guardian's own
+
+        current `photo_file_id` unchanged must succeed even when that file's purpose
+        predates this check — without the skip, every edit to a guardian whose photo
+        was uploaded before the purpose check existed would fail outright.
+        """
+        self.allow("students.guardian.view", "students.guardian.update")
+        with tenant_context(self.tenant.id):
+            mismatched_file = FileFactory(
+                tenant=self.tenant, purpose="student.photo", status=FileStatus.READY
+            )
+            guardian = GuardianFactory(tenant=self.tenant, phone="0300-0000000")
+            guardian.photo_file = mismatched_file
+            guardian.save(update_fields=["photo_file"])
+
+        response = self.client.patch(
+            f"/api/v1/guardians/{guardian.pk}",
+            {"phone": "0300-1111111", "photo_file_id": str(mismatched_file.pk)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["phone"], "0300-1111111")
 
 
 class EmergencyContactTests(StudentManagementAPITestCase):
@@ -329,6 +442,59 @@ class StudentDocumentTests(StudentManagementAPITestCase):
 
         self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
 
+    def test_principal_is_a_default_role_for_document_view(self) -> None:
+        from core.rbac.registry import registry
+
+        spec = next(s for s in registry.for_module("students") if s.key == "students.document.view")
+        self.assertIn("principal", spec.default_roles)
+
+    def test_downloading_a_document_returns_a_signed_url(self) -> None:
+        self.allow("students.document.create", "students.document.view")
+        file = self._ready_file()
+        create_response = self.client.post(
+            f"/api/v1/students/{self.student.pk}/documents",
+            {"file_id": str(file.pk), "document_type": "birth_certificate", "title": "Birth cert"},
+            format="json",
+        )
+        document_id = create_response.json()["data"]["id"]
+
+        response = self.client.post(f"/api/v1/student-documents/{document_id}:download")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.json()["data"]["download_url"])
+
+    def test_downloading_a_document_requires_students_document_view_not_platform_file_view(
+        self,
+    ) -> None:
+        """Proves the new action's own gate, not the generic `core/files` one: holding
+
+        `platform.file.view` (every staff role's broad file-list/download permission)
+        must NOT be enough on its own to call this student-document-specific action —
+        otherwise the whole point of adding a narrower `students.document.view` gate
+        here would be undermined by a caller just using the generic permission instead.
+        A second user is used rather than re-calling `self.allow(...)` on `self.user`,
+        because `grant()` (`apps/school_organization/tests/factories.py`) creates a new
+        `Role` and adds it alongside any existing ones — it is additive, not a
+        replacement — so reusing `self.user` would leave it holding BOTH permissions
+        and prove nothing.
+        """
+        self.allow("students.document.create", "students.document.view")
+        file = self._ready_file()
+        create_response = self.client.post(
+            f"/api/v1/students/{self.student.pk}/documents",
+            {"file_id": str(file.pk), "document_type": "birth_certificate", "title": "Birth cert"},
+            format="json",
+        )
+        document_id = create_response.json()["data"]["id"]
+
+        other_user = UserFactory(tenant=self.tenant)
+        grant(other_user, "platform.file.view")
+        authenticate(self.client, other_user)
+
+        response = self.client.post(f"/api/v1/student-documents/{document_id}:download")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
 
 class CrossTenantGuardianDocumentTests(APITestCase):
     """Extends PR1's cross-tenant matrix to the new endpoint classes."""
@@ -397,9 +563,46 @@ class CrossTenantGuardianDocumentTests(APITestCase):
         response = self.client.delete(f"/api/v1/student-documents/{self.foreign['document'].pk}")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_downloading_a_foreign_document_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/student-documents/{self.foreign['document'].pk}:download"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_own_guardian_link_routes_succeed(self) -> None:
         """Positive control: the 404s above are isolation, not a broken route table."""
         response = self.client.get(f"/api/v1/students/{self.own['student'].pk}/guardians")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         ids = {row["id"] for row in response.json()["data"]}
         self.assertIn(str(self.own["link"].pk), ids)
+
+    def test_listing_emergency_contacts_under_a_foreign_student_is_404(self) -> None:
+        response = self.client.get(
+            f"/api/v1/students/{self.foreign['student'].pk}/emergency-contacts"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_creating_an_emergency_contact_under_a_foreign_student_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/students/{self.foreign['student'].pk}/emergency-contacts",
+            {"name": "Someone", "relationship": "Neighbour", "phone": "0300-0000000"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_reading_a_foreign_tenants_guardian_link_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/student-guardians/{self.foreign['link'].pk}")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_searching_guardians_excludes_a_foreign_tenants_guardian(self) -> None:
+        """List-leakage, distinct from `test_retrieving_a_foreign_guardian_is_404` above —
+
+        that one proves a direct fetch by id 404s; this one proves the foreign guardian
+        doesn't quietly show up in a *search* result instead.
+        """
+        response = self.client.get(
+            "/api/v1/guardians", {"search": self.foreign["guardian"].first_name}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(self.foreign["guardian"].pk), ids)

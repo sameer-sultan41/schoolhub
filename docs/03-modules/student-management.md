@@ -44,7 +44,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `students.transfer.create` / `.approve` | Request / approve transfers (segregation of duties) | create: `school_admin`; approve: `principal` |
 | `students.student.withdraw` | Initiate withdrawal | `school_admin` |
 | `students.withdrawal.approve` | Approve withdrawal after clearance checks | `principal`, `school_owner` |
-| `students.document.view` / `.create` / `.verify` / `.delete` | Manage & verify student documents | `school_admin`, `admission_staff`; verify also `principal` |
+| `students.document.view` / `.create` / `.verify` / `.delete` | Manage & verify student documents | `school_admin`, `admission_staff`; view & verify also `principal` (dev/e2e-seeded tenants only — see docs/deferred-work.md) |
 | `students.guardian.view` / `.create` / `.update` | Manage guardians & links | `school_admin`, `admission_staff`, `reception` (view) |
 | `students.id-card.generate` | Generate student ID cards (single/batch) | `school_admin`, `it_admin` |
 
@@ -193,7 +193,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 - `GET/POST /api/v1/students` · `GET/PATCH/DELETE /api/v1/students/{id}` — filters: `academic_session_id`, `class_id`, `section_id`, `campus_id`, `status`, `house_id`, `search`; cursor pagination.
 - `GET/POST /api/v1/students/{id}/guardians` · `GET/POST /api/v1/guardians` · `PATCH /api/v1/guardians/{id}` — guardian linking uses the sub-resource; link flags updatable via `PATCH /api/v1/student-guardians/{id}`.
-- `GET/POST /api/v1/students/{id}/emergency-contacts` · `GET/POST /api/v1/students/{id}/documents` · `POST /api/v1/student-documents/{id}:verify`.
+- `GET/POST /api/v1/students/{id}/emergency-contacts` · `GET/POST /api/v1/students/{id}/documents` · `POST /api/v1/student-documents/{id}:verify` · `POST /api/v1/student-documents/{id}:download`.
 - `POST /api/v1/students/{id}:enroll` · `POST /api/v1/students/{id}:change-section` · `POST /api/v1/students/{id}:withdraw` (colon-actions; `Idempotency-Key` supported).
 - `GET/POST /api/v1/student-transfers` · `POST /api/v1/student-transfers/{id}:approve` · `:reject` · `:complete`.
 - `GET /api/v1/students/{id}/history` — assembled timeline.

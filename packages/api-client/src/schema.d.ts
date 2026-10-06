@@ -4488,23 +4488,59 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description Top-level access for `DELETE /student-documents/{id}` and the
+         * @description Top-level access for `DELETE /student-documents/{id}`, and the
          *
-         *     `:verify` colon-action. §4 declares ``students.document.delete`` but §16
-         *     names no endpoint for it — added here so the key is reachable; the module
-         *     doc gets the corresponding update in this PR.
+         *     `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+         *     names no endpoint for it — added here so the key is reachable; the module doc gets the
+         *     corresponding update in this PR. `:download` is its own action rather than reusing
+         *     `core/files`' generic `/files/{id}:download`, because that one is gated only by
+         *     `platform.file.view` (every staff role) — too broad for one specific student's
+         *     documents, which need `students.document.view`. See ADR-0021 (the general pattern
+         *     this follows for any sensitive, resource-scoped file).
          */
         get: operations["student_documents_retrieve"];
         put?: never;
         post?: never;
         /**
-         * @description Top-level access for `DELETE /student-documents/{id}` and the
+         * @description Top-level access for `DELETE /student-documents/{id}`, and the
          *
-         *     `:verify` colon-action. §4 declares ``students.document.delete`` but §16
-         *     names no endpoint for it — added here so the key is reachable; the module
-         *     doc gets the corresponding update in this PR.
+         *     `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+         *     names no endpoint for it — added here so the key is reachable; the module doc gets the
+         *     corresponding update in this PR. `:download` is its own action rather than reusing
+         *     `core/files`' generic `/files/{id}:download`, because that one is gated only by
+         *     `platform.file.view` (every staff role) — too broad for one specific student's
+         *     documents, which need `students.document.view`. See ADR-0021 (the general pattern
+         *     this follows for any sensitive, resource-scoped file).
          */
         delete: operations["student_documents_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-documents/{id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a signed download URL for a student document
+         * @description Top-level access for `DELETE /student-documents/{id}`, and the
+         *
+         *     `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+         *     names no endpoint for it — added here so the key is reachable; the module doc gets the
+         *     corresponding update in this PR. `:download` is its own action rather than reusing
+         *     `core/files`' generic `/files/{id}:download`, because that one is gated only by
+         *     `platform.file.view` (every staff role) — too broad for one specific student's
+         *     documents, which need `students.document.view`. See ADR-0021 (the general pattern
+         *     this follows for any sensitive, resource-scoped file).
+         */
+        post: operations["student_documents_:download_create"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4521,11 +4557,15 @@ export interface paths {
         put?: never;
         /**
          * Verify or reject a student document
-         * @description Top-level access for `DELETE /student-documents/{id}` and the
+         * @description Top-level access for `DELETE /student-documents/{id}`, and the
          *
-         *     `:verify` colon-action. §4 declares ``students.document.delete`` but §16
-         *     names no endpoint for it — added here so the key is reachable; the module
-         *     doc gets the corresponding update in this PR.
+         *     `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+         *     names no endpoint for it — added here so the key is reachable; the module doc gets the
+         *     corresponding update in this PR. `:download` is its own action rather than reusing
+         *     `core/files`' generic `/files/{id}:download`, because that one is gated only by
+         *     `platform.file.view` (every staff role) — too broad for one specific student's
+         *     documents, which need `students.document.view`. See ADR-0021 (the general pattern
+         *     this follows for any sensitive, resource-scoped file).
          */
         post: operations["student_documents_:verify_create"];
         delete?: never;
@@ -7129,6 +7169,8 @@ export interface components {
             national_id?: string | null;
             /** Format: uuid */
             photo_file_id?: string | null;
+            /** Format: uri */
+            readonly photo_url: string | null;
             address?: unknown;
             custom_fields?: unknown;
             /** Format: date-time */
@@ -8862,6 +8904,8 @@ export interface components {
             national_id?: string | null;
             /** Format: uuid */
             photo_file_id?: string | null;
+            /** Format: uri */
+            readonly photo_url?: string | null;
             address?: unknown;
             custom_fields?: unknown;
             /** Format: date-time */
@@ -18511,6 +18555,26 @@ export interface operations {
         responses: {
             /** @description No response body */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "student_documents_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {'download_url': str} */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

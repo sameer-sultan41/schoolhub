@@ -39,6 +39,7 @@ class Presigner(Protocol):
         storage_key: str,
         expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
+        content_disposition: str | None = None,
     ) -> str: ...
     def head(self, *, storage_key: str) -> dict | None:
         """Return {"size_bytes": int} if the object exists, else None."""
@@ -81,6 +82,7 @@ class NullPresigner:
         storage_key: str,
         expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
+        content_disposition: str | None = None,
     ) -> str:
         return f"https://null-presigner.invalid/{storage_key}"
 
@@ -144,11 +146,17 @@ class S3Presigner:
         storage_key: str,
         expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
+        content_disposition: str | None = None,
     ) -> str:
         params = {"Bucket": self._bucket, "Key": storage_key}
         if cache_control:
             # Storage echoes this back as the response's Cache-Control header.
             params["ResponseCacheControl"] = cache_control
+        if content_disposition:
+            # Storage echoes this back as the response's Content-Disposition header —
+            # forces a real save-as/download dialog regardless of the file's mime type,
+            # instead of a browser opening a PDF/image inline and replacing the current tab.
+            params["ResponseContentDisposition"] = content_disposition
         return self._signing_client.generate_presigned_url(
             "get_object", Params=params, ExpiresIn=expires_in
         )

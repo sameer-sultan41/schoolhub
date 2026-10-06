@@ -185,6 +185,9 @@ def _can_see_medical_notes(user, student: Student) -> bool:
 
 class GuardianSerializer(serializers.ModelSerializer):
     photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
+    # Same purpose-gated pattern as StudentSerializer.photo_url — see that field's own
+    # comment for why this isn't a plain SignedFileURLField.
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Guardian
@@ -200,6 +203,7 @@ class GuardianSerializer(serializers.ModelSerializer):
             "employer",
             "national_id",
             "photo_file_id",
+            "photo_url",
             "address",
             "custom_fields",
             "created_at",
@@ -210,10 +214,20 @@ class GuardianSerializer(serializers.ModelSerializer):
     def validate_photo_file_id(self, value: File | None) -> File | None:
         # Mirrors Student.photo_file/StudentDocument.file: a resolved File still
         # needs its purpose and upload-confirmed status checked — the tenant-scoped
-        # `_fk()` field only proves the id exists and belongs to this tenant.
-        if value is not None:
+        # `_fk()` field only proves the id exists and belongs to this tenant. The
+        # current photo passes unchecked (same as StudentSerializer): an edit that
+        # re-sends it unchanged must not be blocked by a purpose check that only
+        # matters for a *new* file.
+        if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
             services.assert_file_usable(file=value, purpose=uploads.GUARDIAN_PHOTO.key)
         return value
+
+    @extend_schema_field({"type": "string", "format": "uri", "nullable": True})
+    def get_photo_url(self, instance: Guardian) -> str | None:
+        photo = instance.photo_file
+        if photo is None or photo.purpose != uploads.GUARDIAN_PHOTO.key:
+            return None
+        return get_display_url(photo)
 
 
 class StudentGuardianSerializer(serializers.ModelSerializer):

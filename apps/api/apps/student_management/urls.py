@@ -77,6 +77,11 @@ urlpatterns = [
         name="student-documents-verify",
     ),
     path(
+        "student-documents/<uuid:pk>:download",
+        StudentDocumentViewSet.as_view({"post": "download"}),
+        name="student-documents-download",
+    ),
+    path(
         "student-transfers/<uuid:pk>:approve",
         StudentTransferViewSet.as_view({"post": "approve"}),
         name="student-transfers-approve",
