@@ -39,12 +39,19 @@ import {
   type LinkFlagsFormValues,
 } from "@/services/modules/guardians/guardians.schema";
 
+// Only the boolean flags — never `keyof LinkFlagsFormValues` (which also contains
+// `relationship`, a string-literal union). `FormField`'s `name` prop infers
+// `field.value`'s type from the union of every key this array's type admits, not from
+// each tuple's own literal, so a wider key union here leaks `relationship`'s string
+// values into the `Checkbox`'s `checked` prop below (it expects `CheckedState`).
+type GuardianFlagKey = Exclude<keyof LinkFlagsFormValues, "relationship">;
+
 // `ReadonlyArray<readonly [K, string]>`, not `as const satisfies readonly [K, string][]`
 // — the latter's `readonly [...][]` targets a readonly array of MUTABLE tuples (the
 // `readonly` modifier binds to the outer array, not each tuple — a known TS gotcha),
 // which an `as const` literal's inner readonly tuples can never satisfy. Same pattern
 // as `GUARDIAN_BODY_FIELDS`/`GUARDIAN_LINK_BODY_FIELDS` above (Task 2).
-const FLAG_FIELDS: ReadonlyArray<readonly [keyof LinkFlagsFormValues, string]> = [
+const FLAG_FIELDS: ReadonlyArray<readonly [GuardianFlagKey, string]> = [
   ["is_fee_responsible", "feeResponsible"],
   ["can_pick_up", "canPickUp"],
   ["receives_communications", "receivesCommunications"],
