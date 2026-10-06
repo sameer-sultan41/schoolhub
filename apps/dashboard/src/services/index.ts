@@ -17,7 +17,12 @@ import { TenantService } from "./modules/tenant";
  */
 export { ApiError } from "@schoolhub/api-client";
 
-export type { StudentRecord } from "./modules/students";
+export type {
+  DocumentVerificationDecision,
+  EmergencyContactRecord,
+  StudentDocumentRecord,
+  StudentRecord,
+} from "./modules/students";
 
 /** `UpdateGuardianLinkInput` is re-exported here (not just from the guardians module
  * itself) because Task 7's `GuardianLinkFlagsDialog` imports it from `@/services`, not

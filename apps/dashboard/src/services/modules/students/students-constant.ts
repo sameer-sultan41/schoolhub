@@ -55,3 +55,18 @@ export const STUDENTS_QUERY_FIELDS: ReadonlyArray<readonly [keyof StudentsPageQu
   ["campusId", "campus_id"],
   ["houseId", "house_id"],
 ];
+
+export const DOCUMENT_TYPES = [
+  "birth_certificate",
+  "prior_transfer_certificate",
+  "immunization_record",
+  "photo_id",
+  "prior_report_card",
+  "other",
+] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/** Nested under one student — a handful of rows, fetched in one page. Matches the real
+ * `EmergencyContactLinkViewSet`/`StudentDocumentLinkViewSet` precedent: both are
+ * nested-under-one-student lists with no independent pagination UI. */
+export const RELATION_PAGE_SIZE = 50;

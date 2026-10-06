@@ -1,8 +1,15 @@
 import {
+  addEmergencyContact,
   createStudent,
+  deleteDocument,
+  fetchDocuments,
+  fetchEmergencyContacts,
   fetchStudentById,
   fetchStudentsPage,
+  getDocumentDownloadUrl,
   updateStudent,
+  uploadDocumentRecord,
+  verifyDocument,
   withdrawStudent,
 } from "./students-service";
 
@@ -12,11 +19,23 @@ export const StudentsService = {
   createStudent,
   updateStudent,
   withdrawStudent,
+  fetchEmergencyContacts,
+  addEmergencyContact,
+  fetchDocuments,
+  uploadDocumentRecord,
+  deleteDocument,
+  verifyDocument,
+  getDocumentDownloadUrl,
 };
 export type {
+  AddEmergencyContactInput,
   CreateStudentInput,
+  DocumentVerificationDecision,
+  EmergencyContactRecord,
+  StudentDocumentRecord,
   StudentRecord,
   StudentsPageQuery,
   UpdateStudentInput,
+  UploadDocumentInput,
   WithdrawStudentInput,
 } from "./students-service";
