@@ -103,6 +103,23 @@ describe("StudentDocumentsTab", () => {
     expect(screen.queryByRole("button", { name: /^verify/i })).not.toBeInTheDocument();
   });
 
+  it("falls back to the raw document_type string for a type outside the 6 seeded defaults", async () => {
+    // An older or externally-written row can carry a `document_type` this tenant's own
+    // `documents.type.*` i18n map has no key for — this must render the raw value, not
+    // crash on a missing key (documentTypeLabel's whole reason to exist).
+    mockFetchDocuments.mockResolvedValue([documentRecord({ document_type: "custom_tag" })]);
+
+    renderWithProviders(
+      <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
+    );
+
+    // An exact match, not a substring regex: next-intl's own missing-key fallback renders
+    // the dotted key path itself ("students.documents.type.custom_tag"), which a loose
+    // substring match would still find — this exact match is what actually distinguishes
+    // the real fallback (the raw value alone) from a missing-key crash-avoidance accident.
+    expect(await screen.findByText("custom_tag")).toBeInTheDocument();
+  });
+
   it("requests a fresh signed URL on every download click, not a cached one", async () => {
     mockFetchDocuments.mockResolvedValue([documentRecord()]);
     mockGetDocumentDownloadUrl.mockResolvedValue("https://files.example.com/x?sig=abc");
