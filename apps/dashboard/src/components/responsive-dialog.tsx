@@ -66,7 +66,11 @@ interface ResponsiveRootProps {
    * within the tabbed student detail sheet). On mobile, nests via vaul's
    * `Drawer.NestedRoot` instead of a second independent `Drawer.Root`, which vaul
    * doesn't support stacking without. No effect on desktop, which always renders an
-   * independent `Dialog` regardless of nesting. */
+   * independent `Dialog` regardless of nesting. On mobile, this is NOT optional
+   * polish: vaul's `Drawer.NestedRoot` THROWS ("Drawer.NestedRoot must be placed in
+   * another drawer") if rendered without a parent `Drawer` actually open — so a
+   * caller of this component that hardcodes `nested` must only ever be rendered from
+   * inside another open mobile Drawer, or it crashes outside that context. */
   nested?: boolean;
 }
 

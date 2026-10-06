@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
@@ -118,7 +118,6 @@ function GuardianPickerBody({
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const queryClient = useQueryClient();
 
   const [step, setStep] = useState<"choose" | "link">("choose");
   const [tab, setTab] = useState<"search" | "create">("search");
@@ -191,9 +190,11 @@ function GuardianPickerBody({
       });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.list("students", "guardian-links", { studentId }),
-      });
+      // Invalidating `guardian-links` is `onLinked`'s job — the caller's own single
+      // source of truth for refetching after a link (`StudentGuardiansTab.invalidateLinks`,
+      // the same callback `GuardianLinkFlagsDialog.onSaved` and `GuardianFormDialog.onSaved`
+      // already rely on). Invalidating it here too was a redundant second
+      // invalidate-and-refetch of the exact same query key (round-7 review finding).
       onOpenChange(false);
       onLinked();
     },

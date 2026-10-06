@@ -71,7 +71,10 @@ function Drawer({
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root> & {
   /** Renders vaul's `Drawer.NestedRoot` instead of `Drawer.Root` — see departure 10
-   * above. No effect when this drawer isn't nested inside another open one. */
+   * above. This is NOT a safe-by-default toggle: vaul's `Drawer.NestedRoot` throws
+   * ("Drawer.NestedRoot must be placed in another drawer") if it isn't actually
+   * mounted inside another currently-open `Drawer`. Only pass `true` when a parent
+   * `Drawer` is guaranteed open around this one. */
   nested?: boolean;
 }) {
   const Root = nested ? DrawerPrimitive.NestedRoot : DrawerPrimitive.Root;

@@ -96,7 +96,7 @@ export interface GuardianLinkFlagsDialogProps {
 }
 
 /**
- * Relationship + the four non-primary flags. `isPrimary` is deliberately never read or
+ * Relationship + the three non-primary flags. `isPrimary` is deliberately never read or
  * written here — see this plan's Global Constraints on why promotion is its own
  * one-click row action, not a checkbox in this dialog.
  *
