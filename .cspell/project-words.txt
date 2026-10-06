@@ -204,6 +204,7 @@ relnamespace
 relrowsecurity
 repoint
 resends
+resubmittable
 retriable
 RFID
 Rimsha
