@@ -39,6 +39,9 @@
 - **Select-populated-by-debounced-search vs. a real `Combobox` primitive for "search existing guardian."** Chosen: keep the `Select` + `useDebouncedValue` composition (same hook the student directory's own filter already uses). The spec's own Alternatives section settled this: a proper typeahead-with-keyboard-nav primitive is a `packages/ui` addition (`schoolhub-ui-port`) big enough to be its own piece of work, not warranted by this one dialog.
 - **`key`-based remount vs. a `useEffect` reset for the tabbed sheet's active tab.** Chosen: `<Tabs defaultValue="profile" key={row.id}>`, matching React's own documented pattern for "reset all state when a prop changes" (react.dev). A `useEffect` that resets state on `row` changing would need an `eslint-disable` for `react-hooks/set-state-in-effect` (a new one this plan deliberately adds none of) and runs a render later than the `key` approach for no benefit, since the component actually does need to reset, not merely re-sync one field.
 - **One `GuardianPickerDialog` with two internal steps vs. nesting `GuardianFormDialog` inside it for "create new."** Chosen: one dialog, two steps (Task 6), even though Task 5 (Part A) now ports `Drawer.NestedRoot` so nesting is technically possible. Inlining still wins on its own merits: it avoids a second dialog's chrome and an extra open/close round-trip for what's really one continuous flow (choose a guardian, then link them), and keeps the picker itself to a single `ResponsiveDialog` (which still needs `nested={true}`, Task 6 — it opens from inside the tabbed sheet same as the other four dialogs). The create-fields form is inlined into the picker's own "create new" tab instead (reusing `guardians.schema.ts`'s exported `guardianFormSchema`/`GuardianFormValues`, Task 2 — not `GuardianFormDialog`'s whole dialog component), and a successful create advances the same dialog to its "link" step — the same step a search-selection also lands on.
+- **Nesting the five new dialogs inside the mobile sheet's own drawer vs. closing the sheet first (Phase 1's pattern).** Chosen: nesting, via `Drawer.NestedRoot` (Task 5, Part A). Phase 1's `student-directory-table.tsx` closes the detail sheet before opening Edit or Withdraw — a reasonable choice there, since both are full-screen-feeling actions on the student itself. Here, closing the sheet would mean losing the Guardians/Emergency Contacts/Documents tab context for what are comparatively small, in-context actions (flip a flag, add one contact, pick a file) — a user editing a guardian's phone number from the Guardians tab shouldn't lose their place in the sheet and have to re-navigate back to it afterward. `Drawer.NestedRoot` is vaul's own primitive for exactly this nesting case, and it benefits any future sheet-with-sub-dialogs screen, not just this one.
+- **A document-specific gated `:download` action vs. tightening the generic `core/files` endpoint.** Chosen: the resource-scoped action, per [ADR-0021](../../decisions/0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md) (added this round). Tightening `FileViewSet` itself would need a new purpose-to-permission-key registry shared across every module that uploads files — real, legitimate `core/files` work, but cross-cutting infrastructure well beyond one module's PR. The resource-scoped action is the smaller, shippable fix for the one concrete gap this phase's own UI newly surfaces; the generic endpoint's own broader exposure is recorded, not silently left unaddressed, in `docs/deferred-work.md`.
+- **Content-Disposition: attachment applied globally to every `:download` call vs. scoped only to document/export-purpose files.** Chosen: global, applied once to `core/files`' shared `Presigner` implementations (Task 1) rather than threading a per-purpose flag through every call site. A single code path is simpler to reason about and test, and forcing a real download/save dialog is the correct behavior for every file purpose this app currently signs a download URL for (documents and staff exports) — none of them are meant to navigate the dashboard tab away by opening inline. A future purpose that genuinely wants inline display (e.g. a photo preview) uses a *different* signed-URL path already (`photo_url`'s own field, not the `:download` action), so this global change doesn't reach it.
 
 ## Review Focus
 
@@ -64,7 +67,8 @@ apps/api/openapi.yaml                                      # MODIFY — regenera
 packages/api-client/src/schema.d.ts                         # MODIFY — regenerated (Task 1)
 docs/deferred-work.md                                       # MODIFY — production role-provisioning gap; remove the now-closed Content-Disposition entry (Task 1)
 docs/decisions/0020-client-fan-out-for-unembedded-nested-ids.md  # CREATE (Task 2)
-docs/decisions/README.md                                     # MODIFY — index row for ADR-0020 (Task 2)
+docs/decisions/0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md  # CREATE (Task 1)
+docs/decisions/README.md                                     # MODIFY — index rows for ADR-0020 and ADR-0021 (Tasks 1, 2)
 
 packages/types/src/student.ts              # MODIFY — add RELATIONSHIP_VALUES alongside GENDER_VALUES (Task 2)
 
@@ -437,7 +441,8 @@ class StudentDocumentViewSet(
     corresponding update in this PR. `:download` is its own action rather than reusing
     `core/files`' generic `/files/{id}:download`, because that one is gated only by
     `platform.file.view` (every staff role) — too broad for one specific student's
-    documents, which need `students.document.view`.
+    documents, which need `students.document.view`. See ADR-0021 (the general pattern
+    this follows for any sensitive, resource-scoped file).
     """
 
     queryset = StudentDocument.objects
@@ -750,7 +755,7 @@ Add to `GuardianLinkTests` (alongside the three tests from Step 1 of this block 
 - [ ] **Step 21: Commit**
 
 ```bash
-git add apps/api/apps/student_management/serializers.py apps/api/apps/student_management/permissions.py apps/api/apps/student_management/views.py apps/api/apps/student_management/urls.py apps/api/apps/student_management/tests/test_guardians_documents.py apps/api/core/files/storage.py apps/api/core/files/services.py apps/api/core/files/tests/test_storage.py apps/api/openapi.yaml packages/api-client/src/schema.d.ts docs/03-modules/student-management.md docs/deferred-work.md
+git add apps/api/apps/student_management/serializers.py apps/api/apps/student_management/permissions.py apps/api/apps/student_management/views.py apps/api/apps/student_management/urls.py apps/api/apps/student_management/tests/test_guardians_documents.py apps/api/core/files/storage.py apps/api/core/files/services.py apps/api/core/files/tests/test_storage.py apps/api/openapi.yaml packages/api-client/src/schema.d.ts docs/03-modules/student-management.md docs/deferred-work.md docs/decisions/0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md docs/decisions/README.md
 git commit -m "feat(api): add guardian photo_url, gated document download, global Content-Disposition; close test gaps"
 ```
 
@@ -979,8 +984,13 @@ export interface CreateGuardianInput {
   firstName: string;
   lastName: string;
   phone: string;
-  altPhone?: string;
-  email?: string;
+  // `| null`, not just optional — matching `UpdateStudentInput`'s own convention
+  // (`students-type.ts`) and the fix in commit 378b7e5: an explicit `null` must reach the
+  // request body to clear a field, the same as `UpdateGuardianInput` below needs, rather
+  // than only being distinguishable from "not provided" by an unreliable empty-string
+  // sentinel. `undefined` still means "omit"; `null` means "clear/leave unset".
+  altPhone?: string | null;
+  email?: string | null;
   photoFileId?: string;
 }
 
@@ -1086,6 +1096,7 @@ Write `apps/dashboard/src/services/modules/guardians/__tests__/guardians-helper.
 ```ts
 import {
   formValuesToCreateGuardianInput,
+  formValuesToUpdateGuardianInput,
   toCreateGuardianBody,
   toUpdateGuardianBody,
 } from "../guardians-helper";
@@ -1097,10 +1108,10 @@ describe("guardians-helper", () => {
     expect(body).toEqual({ first_name: "Ayesha", last_name: "Raza", phone: "0300-0000000" });
   });
 
-  it("toUpdateGuardianBody sends an explicit empty string, to clear a field", () => {
-    const body = toUpdateGuardianBody({ altPhone: "" });
+  it("toUpdateGuardianBody sends an explicit null, to clear a field", () => {
+    const body = toUpdateGuardianBody({ altPhone: null });
 
-    expect(body).toEqual({ alt_phone: "" });
+    expect(body).toEqual({ alt_phone: null });
   });
 
   it("toUpdateGuardianBody omits a field that was never provided at all", () => {
@@ -1120,6 +1131,46 @@ describe("guardians-helper", () => {
     });
 
     expect(input).toEqual({ firstName: "Ayesha", lastName: "Raza", phone: "0300-0000000" });
+  });
+
+  it("formValuesToUpdateGuardianInput maps an empty form value to an explicit null, not an omitted field or an empty string", () => {
+    // The bug this guards: editing a guardian re-sends every field on every save (the form
+    // always has a value for each), so "the field is empty" must become `null` (clear the
+    // stored value) — sending `""` back would silently turn a stored `null` into `""`
+    // every time the form is saved, and omitting the key entirely would (per
+    // `toUpdateGuardianBody`'s own `!== undefined` gate) be read as "leave unchanged",
+    // which is wrong when the user just cleared the field.
+    const input = formValuesToUpdateGuardianInput({
+      first_name: "Ayesha",
+      last_name: "Raza",
+      phone: "0300-0000000",
+      alt_phone: "",
+      email: "",
+      photo_file_id: "",
+    });
+
+    expect(input).toEqual({
+      firstName: "Ayesha",
+      lastName: "Raza",
+      phone: "0300-0000000",
+      altPhone: null,
+      email: null,
+    });
+  });
+
+  it("formValuesToUpdateGuardianInput keeps a non-empty optional as-is", () => {
+    const input = formValuesToUpdateGuardianInput({
+      first_name: "Ayesha",
+      last_name: "Raza",
+      phone: "0300-0000000",
+      alt_phone: "0300-1111111",
+      email: "ayesha@example.com",
+      photo_file_id: "",
+    });
+
+    expect(input).toEqual(
+      expect.objectContaining({ altPhone: "0300-1111111", email: "ayesha@example.com" }),
+    );
   });
 });
 ```
@@ -1158,6 +1209,23 @@ export function formValuesToCreateGuardianInput(values: GuardianFormValues): Cre
     phone: values.phone,
     ...(values.alt_phone ? { altPhone: values.alt_phone } : {}),
     ...(values.email ? { email: values.email } : {}),
+    ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
+  };
+}
+
+/** `GuardianFormValues` -> `UpdateGuardianInput`, for `GuardianFormDialog`'s edit save
+ * (Task 5). Unlike the create mapper above, an empty `alt_phone`/`email` maps to an
+ * explicit `null`, never an omitted key or a bare `""` — the form always carries a value
+ * for every field (there is no "not yet provided" case once editing an existing guardian,
+ * only "cleared"), so `""` has to mean "clear this field", and `toUpdateGuardianBody`'s
+ * `!== undefined` gate only forwards clearing when it actually sees `null`. */
+export function formValuesToUpdateGuardianInput(values: GuardianFormValues): UpdateGuardianInput {
+  return {
+    firstName: values.first_name,
+    lastName: values.last_name,
+    phone: values.phone,
+    altPhone: values.alt_phone === "" ? null : values.alt_phone,
+    email: values.email === "" ? null : values.email,
     ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
   };
 }
@@ -1888,6 +1956,12 @@ In `en.json`'s `students.guardians`, add these two new top-level keys (dialog ti
 
 (`createGuardian` is the picker's inline create-form submit button, Task 6 — distinct from `createNew`, the tab label that opens that form.)
 
+**Add the guardian-link permanence notice**, mirroring `emergencyContacts.permanentNotice` below — spec §2 and this plan's own Global Constraints require the UI to state plainly that a guardian link can't be removed once created (`StudentGuardianLinkViewSet` is list+create only). Add to `en.json`'s `students.guardians`, alongside `editGuardianTitle`:
+
+```json
+"permanentNotice": "A guardian link can't be removed once created — double-check before linking."
+```
+
 Matching Urdu additions in `ur.json`'s `students.guardians.fields` and `students.guardians`:
 
 ```json
@@ -1898,7 +1972,8 @@ Matching Urdu additions in `ur.json`'s `students.guardians.fields` and `students
 ```json
 "editGuardianTitle": "سرپرست میں ترمیم کریں",
 "editLinkTitle": "تعلق میں ترمیم کریں",
-"createGuardian": "سرپرست بنائیں"
+"createGuardian": "سرپرست بنائیں",
+"permanentNotice": "ایک بار بنائے جانے کے بعد سرپرست کا تعلق ہٹایا نہیں جا سکتا — لنک کرنے سے پہلے دوبارہ چیک کر لیں۔"
 ```
 
 - [ ] **Step 3: Add the emergency-contact field label and permanence notice**
@@ -2075,7 +2150,7 @@ Matching Urdu in `ur.json`'s top-level `common` block:
 }
 ```
 
-These are copies of the existing `students.fields.photo`/`photoUploading`/`photoOnFile`/`photoUploadFailed` strings (kept there too, unchanged — `StudentPhotoField`'s own wrapper still has students-specific copy elsewhere, and nothing else in the `students` namespace reads these four keys well enough to justify deleting and re-pointing them). `PhotoUploadField` itself reads `common.photoUpload.*` via `useTranslations("common")`, not `useTranslations("students")`, once Task 5 relocates it.
+These start as copies of the existing `students.fields.photo`/`photoUploading`/`photoOnFile`/`students.form.photoUploadFailed` strings. Those four old keys are kept here, unchanged, ONLY because this task runs before Task 5 — deleting them now would break the still-unmodified `StudentPhotoField`, which reads them until Task 5's Step 8 turns it into a thin wrapper around `PhotoUploadField`. Once that happens, nothing reads the four old keys anymore (the wrapper renders no translations of its own — every string flows from `PhotoUploadField` via `common.photoUpload.*`), so **Task 5 Step 8 deletes all four old keys, in both locales, in the same commit** that lands the wrapper. `PhotoUploadField` itself reads `common.photoUpload.*` via `useTranslations("common")`, not `useTranslations("students")`, once Task 5 relocates it.
 
 - [ ] **Step 8: Verify via CI's i18n types-check**
 
@@ -2117,7 +2192,7 @@ Three pieces of shared infrastructure that later tasks need, done together becau
 - Consumes: `Services.guardians.{createGuardian,updateGuardian}`, `Services.files.uploadFile` (Task 2, Phase 1).
 - Produces: `Drawer`'s `nested?: boolean` prop (Part A — default `false`, no effect unless set) and `ResponsiveDialog`'s own `nested?: boolean` prop (Part A — same default, no effect on the desktop `Dialog` branch), consumed by Tasks 6, 7, 8 and 9 for the dialogs each renders from inside the tabbed `StudentDetailSheet`'s mobile drawer; `PhotoUploadField` (shared, at `@/components/photo-upload-field`); `applyServerFieldErrors` (shared, at `@/lib/error-message` — the server-field-error-mapping loop this task and Task 7's `GuardianLinkFlagsDialog` both need, extracted once rather than duplicated a second time); `GuardianFormFields({ form, savedPhotoFileId?, savedPhotoUrl?, onUploadStart, onUploadingChange })` (the guardian person-fields JSX alone — exported from `guardian-form-dialog.tsx` so Task 6's picker can render the identical fields in its own inline create-tab without a second, nested dialog; see that task); `GuardianFormDialog({ open, onOpenChange, guardian, onSaved })` (edit-only — this dialog's own chrome/mutation wrapped around `GuardianFormFields`; nothing in this plan ever opens it to create a guardian, since the picker's create-tab renders `GuardianFormFields` directly — see Alternatives Considered). `onSaved(guardian: GuardianRecord)` fires after a successful update, so the caller (Task 7's edit action) knows to refetch. Consumed by Task 7.
 
-Students, staff and now guardians each need the identical three-step-upload-plus-preview flow — this is the third copy, and this repo's own convention (`docs/02-architecture/repo-structure.md` §2; see this plan's Alternatives Considered) is to extract on the third copy, not the fourth. `PhotoUploadField` is that extraction, used here by both the student and guardian forms. It lives at `@/components/photo-upload-field.tsx` — a neutral location outside `features/students/` — specifically so a future caller outside the students feature (staff is the named one) can adopt it without an import that reaches into another feature's folder; its `uploadPurpose` prop is a plain `string` (not a students/guardians-only union) and its copy lives in the shared `common.photoUpload.*` i18n namespace (Task 4), not `students.*`, for the same reason. Staff's route (`apps/dashboard/src/app/(app)/staff/`) is not migrated to it in this PR — Task 12 records that as a named, deliberate gap in `docs/deferred-work.md`, not a silently-left third copy.
+Students, staff and now guardians each need the identical three-step-upload-plus-preview flow — this is the third copy, and this repo's own convention (`docs/02-architecture/repo-structure.md` §2; see this plan's Alternatives Considered) is to extract on the third copy, not the fourth. `PhotoUploadField` is that extraction, used here by both the student and guardian forms. It lives at `@/components/photo-upload-field.tsx` — a neutral location outside `features/students/` — specifically so a future caller outside the students feature (staff is the named one) can adopt it without an import that reaches into another feature's folder; its `uploadPurpose` prop is a plain `string` (not a students/guardians-only union) and its copy lives in the shared `common.photoUpload.*` i18n namespace (Task 4), not `students.*`, for the same reason. Staff's own copy (`apps/dashboard/src/features/staff/staff-form-dialog.tsx`) is not migrated to it in this PR — Task 12 records that as a named, deliberate gap in `docs/deferred-work.md`, not a silently-left third copy.
 
 ### Part A: `Drawer.NestedRoot`
 
@@ -2128,21 +2203,41 @@ Students, staff and now guardians each need the identical three-step-upload-plus
 ```tsx
 // packages/ui/src/components/__tests__/drawer.test.tsx
 import { render, screen } from "@testing-library/react";
+import type * as Vaul from "vaul";
 
-const rootSpy = jest.fn((props: { children?: React.ReactNode }) => <>{props.children}</>);
-const nestedRootSpy = jest.fn((props: { children?: React.ReactNode }) => <>{props.children}</>);
+// Prefixed `mock*` because babel-plugin-jest-hoist only allows a jest.mock() factory to
+// close over an out-of-scope variable when it's named that way — anything else is a
+// compile-time error once jest.mock() is hoisted above these declarations. Referenced
+// lazily (wrapped in an arrow, not passed directly as `Root: mockRoot`) because that same
+// hoisting moves this file's *value* import of `../drawer` (and so `require("vaul")`,
+// and so this factory's invocation) above these `const` lines too — reading `mockRoot`'s
+// value directly inside the factory body would throw "Cannot access before initialization".
+// Wrapping defers the read until React actually calls `Root`/`NestedRoot`, well after the
+// whole file's top-level code — including these `const`s — has finished running. See the
+// real, working precedent for the `mock`-prefix half of this at
+// apps/dashboard/src/lib/__tests__/auth.test.ts (its mocked import is type-only, so it
+// never hits the lazy-reference half of this problem).
+const mockRoot = jest.fn((props: { children?: React.ReactNode }) => <>{props.children}</>);
+const mockNestedRoot = jest.fn((props: { children?: React.ReactNode }) => <>{props.children}</>);
 
 jest.mock("vaul", () => {
-  const actual = jest.requireActual<typeof import("vaul")>("vaul");
-  return { ...actual, Drawer: { ...actual.Drawer, Root: rootSpy, NestedRoot: nestedRootSpy } };
+  const actual = jest.requireActual<typeof Vaul>("vaul");
+  return {
+    ...actual,
+    Drawer: {
+      ...actual.Drawer,
+      Root: (props: Parameters<typeof mockRoot>[0]) => mockRoot(props),
+      NestedRoot: (props: Parameters<typeof mockNestedRoot>[0]) => mockNestedRoot(props),
+    },
+  };
 });
 
 import { Drawer } from "../drawer";
 
 describe("Drawer nested mode", () => {
   afterEach(() => {
-    rootSpy.mockClear();
-    nestedRootSpy.mockClear();
+    mockRoot.mockClear();
+    mockNestedRoot.mockClear();
   });
 
   it("renders vaul's Root by default", () => {
@@ -2153,8 +2248,8 @@ describe("Drawer nested mode", () => {
     );
 
     expect(screen.getByText("content")).toBeInTheDocument();
-    expect(rootSpy).toHaveBeenCalled();
-    expect(nestedRootSpy).not.toHaveBeenCalled();
+    expect(mockRoot).toHaveBeenCalled();
+    expect(mockNestedRoot).not.toHaveBeenCalled();
   });
 
   it("renders vaul's NestedRoot when nested is true, never Root", () => {
@@ -2165,17 +2260,17 @@ describe("Drawer nested mode", () => {
     );
 
     expect(screen.getByText("nested content")).toBeInTheDocument();
-    expect(nestedRootSpy).toHaveBeenCalled();
-    expect(rootSpy).not.toHaveBeenCalled();
+    expect(mockNestedRoot).toHaveBeenCalled();
+    expect(mockRoot).not.toHaveBeenCalled();
   });
 });
 ```
 
-(Mocking vaul's `Drawer.Root`/`Drawer.NestedRoot` directly, rather than rendering the real primitives, is deliberate: vaul's actual nested-vs-not behavior is gesture/animation-driven and not meaningfully observable in jsdom — without the mock, both branches would render near-identically today regardless of whether `nested` is wired correctly, which is exactly the false-confidence failure mode a real TDD test here has to avoid. The real end-to-end proof that nesting actually works is each of Tasks 6, 7, 8 and 9's own 375px test, added in those tasks.)
+(Mocking vaul's `Drawer.Root`/`Drawer.NestedRoot` directly, rather than rendering the real primitives, is deliberate: vaul's actual nested-vs-not behavior is gesture/animation-driven and not meaningfully observable in jsdom — without the mock, both branches would render near-identically today regardless of whether `nested` is wired correctly, which is exactly the false-confidence failure mode a real TDD test here has to avoid. **This test proves only that `Drawer` itself picks the right vaul primitive** — it does NOT prove that any of the five consuming dialogs actually pass `nested: true` when they should, and it cannot observe vaul's real gesture/scroll-restoration behavior at all (that needs a human on a real device — see the Verification section). The chain of proof for "nesting actually works" is: this test (the primitive switches correctly) → Step 5's new `responsive-dialog.test.tsx` case (the prop reaches `Drawer`) → each of Tasks 6, 7, 8 and 9's own test (each real dialog actually passes `nested: true`) → a manual iOS Safari check (the one thing none of the above can observe).
 
 - [ ] **Step 2: Confirm it fails**
 
-`Drawer` doesn't accept a `nested` prop yet and always renders `DrawerPrimitive.Root` — the second test's `nestedRootSpy` assertion fails (never called), and TypeScript itself would already flag the unknown `nested` prop once `tsc` runs.
+`Drawer` doesn't accept a `nested` prop yet and always renders `DrawerPrimitive.Root` — the second test's `mockNestedRoot` assertion fails (never called), and TypeScript itself would already flag the unknown `nested` prop once `tsc` runs.
 
 - [ ] **Step 3: Add the `nested` prop to `Drawer`**
 
@@ -2266,10 +2361,37 @@ export function ResponsiveDialog({
 
 (`ResponsiveSheet` is unchanged — the outer `StudentDetailSheet` itself is never nested inside anything; only the five dialogs that open *from inside* it need `nested`.) Re-run `apps/dashboard/src/components/__tests__/responsive-dialog.test.tsx` as a regression check — its existing cases pass unchanged, since `nested` defaults to `false` and none of them pass it.
 
+**Add one new case to that same file**, proving the prop actually reaches `Drawer` (the link in the proof chain Step 1's comment describes — this plan's existing `responsive-dialog.test.tsx` mocks `@schoolhub/ui`'s `Drawer`/`Dialog` already for its other cases; follow that file's own existing mock pattern rather than introducing a second one):
+
+```tsx
+// added to apps/dashboard/src/components/__tests__/responsive-dialog.test.tsx
+it("passes nested through to Drawer on mobile", () => {
+  mockUseIsDesktopShell.mockReturnValue(false); // follow this file's existing mobile-mode setup
+  render(
+    <ResponsiveDialog open onOpenChange={jest.fn()} nested>
+      <div>content</div>
+    </ResponsiveDialog>,
+  );
+  expect(mockDrawer).toHaveBeenCalledWith(expect.objectContaining({ nested: true }), {});
+});
+
+it("defaults nested to false when the prop is omitted", () => {
+  mockUseIsDesktopShell.mockReturnValue(false);
+  render(
+    <ResponsiveDialog open onOpenChange={jest.fn()}>
+      <div>content</div>
+    </ResponsiveDialog>,
+  );
+  expect(mockDrawer).toHaveBeenCalledWith(expect.objectContaining({ nested: false }), {});
+});
+```
+
+(`mockUseIsDesktopShell`/`mockDrawer` are illustrative names — use whatever this file's own existing mocks for `useIsDesktopShell`/`Drawer` are actually called; don't introduce new ones.)
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/ui/src/components/drawer.tsx packages/ui/src/components/__tests__/drawer.test.tsx apps/dashboard/src/components/responsive-dialog.tsx
+git add packages/ui/src/components/drawer.tsx packages/ui/src/components/__tests__/drawer.test.tsx apps/dashboard/src/components/responsive-dialog.tsx apps/dashboard/src/components/__tests__/responsive-dialog.test.tsx
 git commit -m "feat(ui): port vaul's Drawer.NestedRoot for dialogs opened from inside another drawer"
 ```
 
@@ -2617,7 +2739,7 @@ export function PhotoUploadField<TFieldValues extends PhotoUploadFieldValues>({
 }
 ```
 
-(Reads `common.photoUpload.photo`/`uploading`/`onFile`/`uploadFailed` (Task 4, Step 7) — a shared namespace, since this file lives outside `features/students/` and must not assume a `students`-specific `useTranslations` scope is even available to it. `StudentPhotoField`'s own wrapper (Step 2) keeps using the existing `students.fields.*` copy for anything that stays student-specific.)
+(Reads `common.photoUpload.photo`/`uploading`/`onFile`/`uploadFailed` (Task 4, Step 7) — a shared namespace, since this file lives outside `features/students/` and must not assume a `students`-specific `useTranslations` scope is even available to it. Once `StudentPhotoField` becomes the thin wrapper in Step 8 below, it renders no translations of its own at all — every string comes from `PhotoUploadField` via `common.photoUpload.*` — so the old `students.fields.photo`/`photoUploading`/`photoOnFile` and `students.form.photoUploadFailed` keys lose their only reader. Step 8 below deletes all four, in both locale files, in the same commit.)
 
 - [ ] **Step 8: Turn `student-photo-field.tsx` into a thin wrapper**
 
@@ -2660,6 +2782,8 @@ export function StudentPhotoField({
 ```
 
 Its existing test file keeps the same test cases (they exercise behavior through this wrapper exactly as they did before — nothing about `StudentPhotoField`'s external behavior changes) but now implicitly covers `PhotoUploadField` as well; `photo-upload-field.test.tsx` (Step 1) adds the cases that are easiest to prove generically (e.g. the purpose string actually reaching `Services.files.uploadFile`) rather than duplicating every student-specific case.
+
+**Delete the four now-dead keys** `students.fields.photo`, `students.fields.photoUploading`, `students.fields.photoOnFile` and `students.form.photoUploadFailed` from both `en.json` and `ur.json` (Task 4 added `common.photoUpload.*` as copies of these; this wrapper was their last reader, and it reads none of them from here on). Run CI's `messages.types-check.ts` check mentally against both files to confirm no other key references them before removing.
 
 - [ ] **Step 9: Confirm `guardianFormSchema` already exists (Task 2), and add the shared `applyServerFieldErrors` helper**
 
@@ -2888,6 +3012,7 @@ import { useSubmitGuard } from "@/hooks/use-submit-guard";
 import { applyServerFieldErrors } from "@/lib/error-message";
 import { Services } from "@/services";
 import type { GuardianRecord } from "@/services";
+import { formValuesToUpdateGuardianInput } from "@/services/modules/guardians/guardians-helper";
 import {
   guardianFormSchema,
   type GuardianFormValues,
@@ -3084,20 +3209,13 @@ function GuardianFormBody({ guardian, isMobile, onOpenChange, onSaved }: Guardia
 
   const mutation = useMutation({
     mutationFn: (values: GuardianFormValues) => {
-      // alt_phone/email are sent as-given, including an explicit empty string — not
-      // gated on truthiness: an omitted field means "leave unchanged" to
-      // `updateGuardian`'s own `toUpdateGuardianBody` (`guardians-helper.ts`), which
-      // gates on `!== undefined`, so a truthiness gate here would mean clearing one of
-      // these back to empty silently does nothing.
-      const input = {
-        firstName: values.first_name,
-        lastName: values.last_name,
-        phone: values.phone,
-        altPhone: values.alt_phone,
-        email: values.email,
-        ...(values.photo_file_id ? { photoFileId: values.photo_file_id } : {}),
-      };
-      return Services.guardians.updateGuardian(guardian.id, input);
+      // `formValuesToUpdateGuardianInput` (`guardians-helper.ts`) maps an empty
+      // alt_phone/email to an explicit `null`, not a bare `""` — this form always
+      // resubmits every field, so an empty value here means "clear it", and only an
+      // explicit `null` reaches the request body through `toUpdateGuardianBody`'s
+      // `!== undefined` gate as a real clear. Sending `""` would silently turn a stored
+      // `null` back into `""` on every unrelated save (round-6 review finding).
+      return Services.guardians.updateGuardian(guardian.id, formValuesToUpdateGuardianInput(values));
     },
     onSuccess: (saved) => {
       onOpenChange(false);
@@ -3187,7 +3305,7 @@ function GuardianFormBody({ guardian, isMobile, onOpenChange, onSaved }: Guardia
 
 ### Part C: `useSubmitGuard` — a shared double-submit guard
 
-Phase 1 fixed a real race (commit `e5326cd`): `mutation.isPending` alone leaves a window where two submits dispatched close together both pass the check, because it only flips true once `mutate()` actually runs, deep inside `handleSubmit`'s own (always async) validation chain. The fix is a synchronous `isSubmittingRef` checked and set *before* `form.handleSubmit(...)` is even called — `GuardianFormDialog` above (Part B) already needs this same guard for its edit-mode save, and round 5's plan review found three more forms in this plan that submit records a user can't trivially undo (the picker's create-guardian step, Task 8's add-contact, Task 9's upload) with no guard at all. A fourth near-identical copy is this repo's extraction threshold (`docs/02-architecture/repo-structure.md` §2) — this Part extracts the one shared hook, and Part B's `GuardianFormBody` above is written against it directly (its own `isSubmittingRef`/`onSubmit` shown earlier in this task use the hook, not a raw `useRef`).
+Phase 1 fixed a real race (commit `e5326cd`): `mutation.isPending` alone leaves a window where two submits dispatched close together both pass the check, because it only flips true once `mutate()` actually runs, deep inside `handleSubmit`'s own (always async) validation chain. The fix is a synchronous `isSubmittingRef` checked and set *before* `form.handleSubmit(...)` is even called — `GuardianFormDialog` above (Part B) already needs this same guard for its edit-mode save, and round 5's plan review found three more forms in this plan that submit records a user can't trivially undo (the picker's create-guardian step, Task 8's add-contact, Task 9's upload) with no guard at all. This repo's own rule (`docs/02-architecture/repo-structure.md` §2, "rule of three": tolerate a second copy, extract on the third) is to extract on the THIRD near-identical copy, not wait for a fourth — and this plan alone would otherwise add four (`GuardianFormDialog`, the picker, add-contact, upload) on top of the two pre-existing inline copies already in this codebase (`student-form-dialog.tsx`, `withdraw-student-dialog.tsx`), for six total. This Part extracts the one shared hook for all four of this plan's own forms; the two pre-existing copies are deliberately NOT migrated in this PR (see this task's Global Constraints / Task 12's `deferred-work.md` entry) — touching `student-form-dialog.tsx` and `withdraw-student-dialog.tsx` is out of scope for a students-relations PR whose own forms don't need either file changed otherwise. Part B's `GuardianFormBody` above is written against the new hook directly (its own `isSubmittingRef`/`onSubmit` shown earlier in this task use the hook, not a raw `useRef`).
 
 **Files (added to this task's own list above):**
 - Create: `apps/dashboard/src/hooks/use-submit-guard.ts`
@@ -3756,6 +3874,13 @@ function GuardianPickerBody({
   const [searchInput, setSearchInput] = useState("");
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
   const [selectedGuardian, setSelectedGuardian] = useState<GuardianRecord | null>(null);
+  // Whether `selectedGuardian` came from THIS open session's own create-tab submission —
+  // distinct from a search pick. Guardians have no delete endpoint, so re-submitting the
+  // create form a second time for the same person is a PERMANENT duplicate record
+  // (round-6 review finding); once a guardian has actually been created, the "link" step
+  // below never offers a way back into the create form, closing that path off entirely
+  // rather than trying to reset or disable it correctly.
+  const [justCreated, setJustCreated] = useState(false);
   const [relationship, setRelationship] = useState<RelationshipValue | "">("");
   // Gates the "required" message below — without it, the message shows the instant this
   // step renders, before the user has had any chance to pick a relationship at all.
@@ -3783,6 +3908,7 @@ function GuardianPickerBody({
       Services.guardians.createGuardian(formValuesToCreateGuardianInput(values)),
     onSuccess: (created) => {
       setSelectedGuardian(created);
+      setJustCreated(true);
       setStep("link");
     },
     onError: (error) => {
@@ -3831,15 +3957,24 @@ function GuardianPickerBody({
 
   function selectSearchResult(guardian: GuardianRecord) {
     setSelectedGuardian(guardian);
+    setJustCreated(false);
     setStep("link");
   }
 
   function backToChoose() {
+    // Never reachable once `justCreated` is true — the link step below doesn't render
+    // this function's caller (the "Edit" button) in that case, so a freshly created
+    // guardian is never resubmittable. Reset `tab`/`createForm` anyway, defensively: if
+    // a future change ever wires another caller to this function, it must not silently
+    // reopen the create tab with stale, already-submitted values.
     setStep("choose");
+    setTab("search");
     setSelectedGuardian(null);
+    setJustCreated(false);
     setRelationship("");
     setLinkAttempted(false);
     setLinkError(null);
+    createForm.reset(CREATE_DEFAULTS);
   }
 
   function handleLink() {
@@ -3858,10 +3993,17 @@ function GuardianPickerBody({
             <span>
               {selectedGuardian.first_name} {selectedGuardian.last_name}
             </span>
-            <Button type="button" variant="link" className="h-auto p-0" onClick={backToChoose}>
-              {tCommon("edit")}
-            </Button>
+            {/* No "Edit"/back affordance once a guardian was just created here: going back
+             * to the create tab would resubmit the same form and create a second,
+             * permanent record (guardians have no delete endpoint) — see `justCreated`'s
+             * own comment above. A search-selected guardian can still be changed. */}
+            {!justCreated ? (
+              <Button type="button" variant="link" className="h-auto p-0" onClick={backToChoose}>
+                {tCommon("edit")}
+              </Button>
+            ) : null}
           </div>
+          <p className="text-xs text-muted-foreground">{t("guardians.permanentNotice")}</p>
           <div className="space-y-1.5">
             <Label htmlFor="picker-relationship">{t("guardians.fields.relationship")}</Label>
             <Select
@@ -4054,12 +4196,19 @@ import { RELATIONSHIP_VALUES } from "@schoolhub/types";
 // names). `Services.guardians.updateGuardianLink` itself still takes the camelCase
 // `UpdateGuardianLinkInput` (Task 2) — `toUpdateGuardianLinkInput` below bridges the two,
 // the same shape as `formValuesToCreateGuardianInput` (Task 2).
+//
+// `has_portal_access` is deliberately NOT a field here (round-6 plan review, user
+// decision 2026-10-06): spec §3.3 lists only relationship, fee-responsible, can-pick-up
+// and receives-communications, and `docs/03-modules/student-management.md` §(link flags)
+// flags custody/blocked-access handling through this exact field as pending client
+// confirmation — exposing an edit control for it here would be building ahead of a
+// decision that hasn't been made yet. The `true` default it gets at link CREATION time
+// (Task 6, `LINK_FLAG_DEFAULTS`) is unaffected; only this edit dialog stays out of it.
 export const linkFlagsSchema = z.object({
   relationship: z.enum(RELATIONSHIP_VALUES),
   is_fee_responsible: z.boolean(),
   can_pick_up: z.boolean(),
   receives_communications: z.boolean(),
-  has_portal_access: z.boolean(),
 });
 
 export type LinkFlagsFormValues = z.infer<typeof linkFlagsSchema>;
@@ -4140,7 +4289,6 @@ describe("GuardianLinkFlagsDialog", () => {
         isFeeResponsible: true,
         canPickUp: true,
         receivesCommunications: true,
-        hasPortalAccess: true,
       });
     });
     expect(onSaved).toHaveBeenCalled();
@@ -4166,6 +4314,28 @@ describe("GuardianLinkFlagsDialog", () => {
     });
     const [, body] = mockUpdateGuardianLink.mock.calls[0] as [string, Record<string, unknown>];
     expect(body).not.toHaveProperty("isPrimary");
+  });
+
+  it("never shows or sends hasPortalAccess — out of spec for this edit dialog (round-6 review)", async () => {
+    mockUpdateGuardianLink.mockResolvedValue(linkRecord());
+
+    renderWithProviders(
+      <GuardianLinkFlagsDialog
+        open
+        link={linkRecord()}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />,
+    );
+
+    expect(screen.queryByText(/portal access/i)).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateGuardianLink).toHaveBeenCalled();
+    });
+    const [, body] = mockUpdateGuardianLink.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body).not.toHaveProperty("hasPortalAccess");
   });
 });
 ```
@@ -4223,7 +4393,6 @@ const FLAG_FIELDS: ReadonlyArray<readonly [keyof LinkFlagsFormValues, string]> =
   ["is_fee_responsible", "feeResponsible"],
   ["can_pick_up", "canPickUp"],
   ["receives_communications", "receivesCommunications"],
-  ["has_portal_access", "hasPortalAccess"],
 ];
 
 function toFormValues(link: GuardianLinkRecord): LinkFlagsFormValues {
@@ -4231,26 +4400,29 @@ function toFormValues(link: GuardianLinkRecord): LinkFlagsFormValues {
   // but `LinkFlagsFormValues`'s zod schema requires real booleans — default each with
   // its own real model default (apps/api/apps/student_management/models.py's
   // `StudentGuardian` field defaults), not a blanket `false`: only `is_fee_responsible`
-  // defaults false; the other three default true. These are the exact values
+  // defaults false; the other two default true. These are the exact values
   // `link_guardian`'s own service defaults already use (Global Constraints above).
+  // `has_portal_access` is read nowhere here — this dialog never edits it (see
+  // `linkFlagsSchema`'s own comment above).
   return {
     relationship: link.relationship,
     is_fee_responsible: link.is_fee_responsible ?? false,
     can_pick_up: link.can_pick_up ?? true,
     receives_communications: link.receives_communications ?? true,
-    has_portal_access: link.has_portal_access ?? true,
   };
 }
 
 /** `LinkFlagsFormValues` (snake_case, the Zod form shape) -> `UpdateGuardianLinkInput`
- * (Task 2, camelCase) — same bridge as `formValuesToCreateGuardianInput` (Task 2). */
+ * (Task 2, camelCase) — same bridge as `formValuesToCreateGuardianInput` (Task 2).
+ * `hasPortalAccess` is simply never set here, so `toUpdateGuardianLinkBody`'s own
+ * `!== undefined` gate omits it from the request entirely — the stored value is left
+ * exactly as `link_guardian` (or a future change) set it. */
 function toUpdateGuardianLinkInput(values: LinkFlagsFormValues): UpdateGuardianLinkInput {
   return {
     relationship: values.relationship,
     isFeeResponsible: values.is_fee_responsible,
     canPickUp: values.can_pick_up,
     receivesCommunications: values.receives_communications,
-    hasPortalAccess: values.has_portal_access,
   };
 }
 
@@ -5082,7 +5254,7 @@ import {
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
 import { useSubmitGuard } from "@/hooks/use-submit-guard";
-import { resolveErrorMessage } from "@/lib/error-message";
+import { applyServerFieldErrors } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import {
@@ -5226,10 +5398,23 @@ function AddEmergencyContactDialog({
       });
       onOpenChange(false);
     },
-    // Toast, not an inline field/alert error, per this plan's Global Constraints — an
-    // add-contact failure is one of the named mutations that must surface via toast.
+    // A matched 422 field error lands inline on its own field (via `applyServerFieldErrors`,
+    // same helper `GuardianFormDialog`/`GuardianLinkFlagsDialog` use); anything unmatched
+    // still surfaces via toast, keeping this a "mutations don't fail silently" case per
+    // this plan's Global Constraints even for the non-field fallback. Round-6 review: the
+    // previous toast-only handling showed a generic "add failed" message even when the
+    // server named a specific bad field, with nothing on the form to show it was that field.
     onError: (error) => {
-      toast.error(resolveErrorMessage(error, tErrors, t("emergencyContacts.addFailed")));
+      applyServerFieldErrors({
+        error,
+        form,
+        knownFields: Object.keys(emergencyContactSchema.shape),
+        tErrors,
+        fallback: t("emergencyContacts.addFailed"),
+        setFormError: (message) => {
+          if (message) toast.error(message);
+        },
+      });
     },
   });
 
@@ -5394,6 +5579,9 @@ git commit -m "feat(dashboard): add the students emergency contacts tab"
 
 **Files:**
 - Modify: `apps/dashboard/src/services/modules/students/students.schema.ts` (add `documentFormSchema`)
+- Modify: `apps/dashboard/src/lib/helpers.ts` (add shared `formatDate`)
+- Modify: `apps/dashboard/src/lib/__tests__/helpers.test.ts` (new test case for `formatDate`)
+- Modify: `apps/dashboard/src/services/modules/staff/staff-helper.ts` (re-export `formatDate` from `@/lib/helpers` instead of its own copy)
 - Create: `apps/dashboard/src/features/students/document-upload-dialog.tsx`
 - Create: `apps/dashboard/src/features/students/student-documents-tab.tsx`
 - Create: `apps/dashboard/src/features/students/__tests__/document-upload-dialog.test.tsx`
@@ -5401,7 +5589,31 @@ git commit -m "feat(dashboard): add the students emergency contacts tab"
 
 **Interfaces:**
 - Consumes: `Services.students.{fetchDocuments,uploadDocumentRecord,deleteDocument,verifyDocument,getDocumentDownloadUrl}` (Task 3), `Services.files.uploadFile` (Phase 1), `useSubmitGuard` (Task 5, Part C — the upload mutation does real async work, not just a quick validation round-trip, so a double-submit guard matters even more here).
-- Produces: `StudentDocumentsTab({ studentId, canCreate, canVerify, canDelete })`; `documentFormSchema`/`DocumentFormValues`, added to the existing `students.schema.ts` (ADR-0019 — not inline in a component file). Consumed by Task 10.
+- Produces: `StudentDocumentsTab({ studentId, canCreate, canVerify, canDelete })`; `documentFormSchema`/`DocumentFormValues`, added to the existing `students.schema.ts` (ADR-0019 — not inline in a component file); `formatDate` (`@/lib/helpers`), moved here from `staff-helper.ts` so both domains share one absolute-date formatter instead of a second copy (round-6 review: this task's own first draft defined a third, byte-identical copy as `formatExpiry`). Consumed by Task 10.
+
+- [ ] **Step -1: Move `formatDate` from `staff-helper.ts` to the shared `@/lib/helpers`**
+
+Add to `apps/dashboard/src/lib/helpers.ts`, alongside `formatLastUpdated` (the exact function `staff-helper.ts` already has, moved verbatim):
+
+```ts
+/** A longer, absolute rendering ("January 5, 2026") — distinct from `formatLastUpdated`'s
+ * relative one. Used for a fixed date that should read as a calendar date, not an elapsed
+ * time (a staff member's joining date/date of birth; a document's expiry date). */
+export function formatDate(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : format(parsed, "PPP");
+}
+```
+
+(`format` from `date-fns` needs adding to this file's existing `date-fns` import alongside `formatDistanceToNow`.) `staff-helper.test.ts` has no existing test for `formatDate` to move — add a new, straightforward one to `apps/dashboard/src/lib/__tests__/helpers.test.ts`: an invalid date string returns the raw value unchanged; a valid one returns the `"PPP"`-formatted string (e.g. `"January 5, 2026"`).
+
+In `apps/dashboard/src/services/modules/staff/staff-helper.ts`, delete the local `formatDate` function and replace it with a re-export, so every existing import site (`import { formatDate } from "@/services/modules/staff/staff-helper"`, if any exist outside this file) keeps working unchanged:
+
+```ts
+export { formatDate } from "@/lib/helpers";
+```
+
+Remove `staff-helper.ts`'s now ONLY-locally-used-if-at-all `format` import from `date-fns` if nothing else in that file still calls it directly (check before removing — `toStaffRow`/`statusMeta` etc. may or may not use `format` elsewhere in that file; leave the import if something else does).
 
 - [ ] **Step 0: Add `documentFormSchema` to the existing `students.schema.ts`**
 
@@ -5585,7 +5797,7 @@ import {
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
 import { useSubmitGuard } from "@/hooks/use-submit-guard";
-import { resolveErrorMessage } from "@/lib/error-message";
+import { applyServerFieldErrors } from "@/lib/error-message";
 import { ApiError, Services } from "@/services";
 import { DOCUMENT_TYPES } from "@/services/modules/students/students-constant";
 import {
@@ -5650,17 +5862,25 @@ export function DocumentUploadDialog({
     onError: (err) => {
       // `Services.files.uploadFile` rejects with a `FileUploadError` (a plain `Error`
       // subclass) whose message is already the real step-specific text — never an
-      // `ApiError`. `uploadDocumentRecord`'s own failure, by contrast, is a real
-      // `ApiError` from the backend (e.g. a validation error), which needs
-      // `resolveErrorMessage` to surface its field-level detail instead of a generic
-      // message.
-      setError(
-        err instanceof ApiError
-          ? resolveErrorMessage(err, tErrors, t("form.submitFailed"), "non_field")
-          : err instanceof Error
-            ? err.message
-            : t("form.submitFailed"),
-      );
+      // `ApiError`; shown as-is, since there's no form field to blame for a failed PUT or
+      // a rejected MIME type. `uploadDocumentRecord`'s own failure, by contrast, is a real
+      // `ApiError` from the backend (e.g. a bad `document_type` or title), which needs
+      // the same `applyServerFieldErrors` helper `GuardianFormDialog`/`AddEmergencyContactDialog`
+      // use — a matched field lands inline on its own `FormMessage` instead of only ever
+      // showing a generic "please correct the highlighted fields" with nothing actually
+      // highlighted (round-6 review finding).
+      if (err instanceof ApiError) {
+        applyServerFieldErrors({
+          error: err,
+          form,
+          knownFields: Object.keys(documentFormSchema.shape),
+          tErrors,
+          fallback: t("form.submitFailed"),
+          setFormError: setError,
+        });
+        return;
+      }
+      setError(err instanceof Error ? err.message : t("form.submitFailed"));
     },
   });
 
@@ -5806,7 +6026,7 @@ export function DocumentUploadDialog({
 - [ ] **Step 3: Confirm `document-upload-dialog.tsx`'s tests pass by construction, then commit it alone**
 
 ```bash
-git add apps/dashboard/src/services/modules/students/students.schema.ts apps/dashboard/src/features/students/document-upload-dialog.tsx apps/dashboard/src/features/students/__tests__/document-upload-dialog.test.tsx
+git add apps/dashboard/src/services/modules/students/students.schema.ts apps/dashboard/src/lib/helpers.ts apps/dashboard/src/lib/__tests__/helpers.test.ts apps/dashboard/src/services/modules/staff/staff-helper.ts apps/dashboard/src/features/students/document-upload-dialog.tsx apps/dashboard/src/features/students/__tests__/document-upload-dialog.test.tsx
 git commit -m "feat(dashboard): add the student document upload dialog"
 ```
 
@@ -6010,7 +6230,6 @@ describe("StudentDocumentsTab", () => {
 "use client";
 
 import { useState } from "react";
-import { format } from "date-fns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -6028,6 +6247,7 @@ import {
   Skeleton,
 } from "@schoolhub/ui";
 
+import { formatDate } from "@/lib/helpers";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
@@ -6048,12 +6268,13 @@ function documentTypeLabel(t: ReturnType<typeof useTranslations>, type: string):
   return (DOCUMENT_TYPES as readonly string[]).includes(type) ? t(`documents.type.${type}`) : type;
 }
 
-/** Mirrors `staff-detail-sheet.tsx`'s own local `formatDate` — a raw ISO string is never
- * shown to the user. */
-function formatExpiry(value: string): string {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : format(parsed, "PPP");
-}
+// A document's expiry date is never shown to the user as a raw ISO string — `formatDate`
+// (`@/lib/helpers`) is the same "January 5, 2026"-style formatter the staff detail sheet
+// already uses for its own absolute dates (joining date, date of birth). Round-6 review:
+// this task originally defined its own byte-identical `formatExpiry`, which would have
+// been a third copy once this phase shipped — `staff-helper.ts`'s own `formatDate` moves
+// to `@/lib/helpers` in this same task (see the file list above) specifically so both
+// domains share one implementation instead.
 
 export interface StudentDocumentsTabProps {
   studentId: string;
@@ -6187,7 +6408,7 @@ export function StudentDocumentsTab({
                   <p className="text-xs text-muted-foreground">
                     {documentTypeLabel(t, document.document_type)}
                     {document.expires_at
-                      ? ` · ${t("documents.expiresOn", { date: formatExpiry(document.expires_at) })}`
+                      ? ` · ${t("documents.expiresOn", { date: formatDate(document.expires_at) })}`
                       : ""}
                   </p>
                 </div>
@@ -7317,12 +7538,16 @@ Documents: upload (type from the 6 seeded defaults), verify/reject, delete (with
 download (a fresh signed URL requested per click, with `Content-Disposition: attachment` forcing
 a real download regardless of file type, via a `students.document.view`-gated `:download`
 action of its own rather than the broader, every-staff-role `core/files` endpoint). Nearly every
-endpoint this phase's dashboard work calls was already live; independent plan review added four
+endpoint this phase's dashboard work calls was already live; independent plan review added six
 small, deliberate backend changes alongside them: `GuardianSerializer.photo_url` (so a
 guardian's photo can actually be displayed, same purpose-gated pattern as the student one),
-`principal` gaining `students.document.view` in the registry (closing a pre-existing gap where
-`principal` could verify a document but not see the tab to do it from — reaches dev/e2e-seeded
-tenants only; `docs/deferred-work.md` records the platform-wide absence of any production
+`.select_related("photo_file")` added to `GuardianViewSet.get_queryset` (avoiding an N+1 now
+that every row in a guardian search resolves its photo), a relaxation of
+`validate_photo_file_id` so re-saving a guardian's own unchanged current photo never fails its
+purpose check (matching `StudentSerializer`'s existing behavior), `principal` gaining
+`students.document.view` in the registry (closing a pre-existing gap where `principal` could
+verify a document but not see the tab to do it from — reaches dev/e2e-seeded tenants only;
+`docs/deferred-work.md` records the platform-wide absence of any production
 default-role-provisioning mechanism, which this phase surfaced but does not fix), a
 `Content-Disposition` header on `core/files`' signed download URLs (a generic fix, applied to
 every presigner, that also benefits `/staff`'s existing export download), and the new
@@ -7352,12 +7577,31 @@ Add these two new entries:
   emergency contact edit needs its own permission key) — not a UI gap to quietly patch over.
 - **Staff's photo-upload field is still its own inline copy.** `students-dashboard-phase2`
   extracted `PhotoUploadField` (`apps/dashboard/src/components/photo-upload-field.tsx`, a neutral
-  location with a generic `purpose: string` prop) on its third near-identical copy — students'
-  original, and this phase's new guardian form. `apps/dashboard/src/app/(app)/staff/staff-form-dialog.tsx`
-  still has its own fourth copy of the same presigned-upload-then-preview flow, left unmigrated
+  location with a generic `uploadPurpose: string` prop) on its third near-identical copy — students'
+  original, and this phase's new guardian form. `apps/dashboard/src/features/staff/staff-form-dialog.tsx`
+  still has its own copy of the same presigned-upload-then-preview flow, left unmigrated
   in this PR since staff is outside this phase's scope. Migrating it is a small, mechanical
-  swap — pass `purpose="staff.photo"` and staff's own saved-photo fields — next time staff's
+  swap — pass `uploadPurpose="staff.photo"` and staff's own saved-photo fields — next time staff's
   form is touched.
+- **Two pre-existing double-submit-guard copies weren't migrated onto the new shared
+  `useSubmitGuard` hook.** `apps/dashboard/src/hooks/use-submit-guard.ts` (Task 5, Part C)
+  extracts the `isSubmittingRef` pattern Phase 1's commit `e5326cd` introduced, used by this
+  phase's own four new forms. `apps/dashboard/src/features/students/student-form-dialog.tsx` and
+  `apps/dashboard/src/features/students/withdraw-student-dialog.tsx` still carry their own
+  original inline copies of the same guard — left alone in this PR since neither file otherwise
+  needs a change here, and touching them widens this PR's diff for no behavior change. Migrate
+  both onto `useSubmitGuard` next time either file is touched for an unrelated reason.
+- **The unwired, unrouted duplicate `GuardianSerializer`
+  (`apps/api/apps/student_management/guardians/serializers.py`) now falls further behind the
+  real, routed one.** Students Phase 2 adds `photo_url`, the unchanged-current-photo validation
+  skip, and `select_related("photo_file")` to the serializer/viewset actually reachable from
+  `urls.py` — the duplicate package (part of a half-finished per-resource split,
+  `docs/03-modules/student-management.md`'s own notes already call it not wired in) gets none of
+  these, on purpose: an earlier round of this phase's own review mirrored a smaller change onto
+  it for consistency, then a later round found that was itself scope creep onto dead code and
+  reversed it. Whoever finishes wiring that package in (or deletes it, if the split is abandoned)
+  will need to re-apply `photo_url`/the validation skip/`select_related` at that point — this
+  entry exists so that work isn't a surprise.
 ```
 
 Update the existing "Inline display links for files" entry (`docs/deferred-work.md`, PR #76) — this phase closes the specific gap it names for guardians, so the sentence can't stand as written:
@@ -7366,6 +7610,8 @@ Update the existing "Inline display links for files" entry (`docs/deferred-work.
 - In its nested **"`photo_url`'s purpose gate is student-only"** bullet, change the heading and opening sentence to **"`photo_url`'s purpose gate doesn't reach staff."** — `GuardianSerializer.photo_url` (Task 1) now carries the identical `SerializerMethodField` purpose check as the student and guardian fields; `StaffSerializer.photo_url` is the one remaining holdout still on the plain `SignedFileURLField` with no purpose check. Leave the rest of that bullet's reasoning (the ownership-guard-vs-already-attached-file distinction, what fixing staff would need) unchanged — it still applies, just to staff alone now instead of staff-and-guardians.
 
 Do NOT add anything about seed-command cross-app imports here — that topic has nothing to do with this phase (no seed command is touched by any task in this plan) and does not belong in this phase's documentation update.
+
+**Fix the stale `students-admission-enrollment.spec.ts` entry** (`docs/deferred-work.md`, around the "A live E2E spec predates the dashboard shell reset" area): it currently says the journey needs re-driving "once Phase 2 lands guardians/emergency contacts/enrollment in the real UI" — written when all three were still future work. Phase 2 (this PR) lands guardians and emergency contacts; enrollment is still Phase 3's. Reword to something like: "guardians and emergency contacts are now real as of students Phase 2 (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`); this spec's journey still can't be fully re-driven until enrollment ships in Phase 3 too — a partial rewrite now would need redoing again for the enrollment step regardless." Keep the rest of that entry's reasoning (why the two legacy page objects stay untouched) unchanged.
 
 - [ ] **Step 4: Commit**
 
@@ -7380,5 +7626,14 @@ git commit -m "docs: record the students Phase 2 (guardians/emergency contacts/d
 
 ## Verification
 
-End-to-end after Task 11: sign in as `school_admin` on a seeded dev tenant, open a student's detail sheet, confirm it opens on Profile exactly as before. Switch to Guardians: link an existing guardian via search, link a brand-new one via create, promote one to primary (watch the other's badge disappear), edit a link's flags, edit a guardian's own phone number. Switch to Emergency Contacts: add one, confirm there is no edit or delete control anywhere on its row. Switch to Documents: upload a PDF, confirm it shows "Pending", verify it, confirm the badge updates, download it (confirm a real signed URL opens), delete a different document after confirming. Switch back to Profile and confirm nothing there changed. Reopen the sheet for a different student and confirm it defaults to Profile again, not whatever tab was last open.
+End-to-end after Task 11: sign in as `school_admin` on a seeded dev tenant, open a student's detail sheet, confirm it opens on Profile exactly as before. Switch to Guardians: link an existing guardian via search, link a brand-new one via create, promote one to primary (watch the other's badge disappear), edit a link's flags, edit a guardian's own phone number. Switch to Emergency Contacts: add one, confirm there is no edit or delete control anywhere on its row. Switch to Documents: upload a PDF, confirm it shows "Pending", verify it, confirm the badge updates, download it (confirm the browser actually saves/downloads the file via the signed URL's `Content-Disposition: attachment` header, rather than navigating the tab to it or opening it inline), delete a different document after confirming. Switch back to Profile and confirm nothing there changed. Reopen the sheet for a different student and confirm it defaults to Profile again, not whatever tab was last open.
+
+**Mobile (manual, on a real device — the automated tests above can only prove the `nested` prop reaches `Drawer`, not vaul's actual gesture/scroll-restoration behavior):** on an iOS Safari device at a phone width, open a student's detail sheet (itself a drawer), switch to the Guardians tab, and open each of the picker, edit-guardian and link-flags dialogs from inside it; switch to Documents and open the upload dialog the same way. Confirm each opens as a proper nested drawer (not a broken double-backdrop, not a drawer that closes the sheet underneath it), that dismissing the nested dialog returns cleanly to the sheet still showing its previous scroll position, and that the sheet's own swipe-to-dismiss gesture doesn't fire while the nested dialog is open.
+
+## Independent review
+
+- **Reviewer:** plan-reviewer agent, 2026-10-06
+- **Verdict:** REVISE — right approach; this round's fixes close the nested-drawer test gap, the guardian-edit null-vs-empty-string convention, the missing permanent-link UI notice, the duplicate-guardian risk in the picker, and the out-of-spec has_portal_access field, plus doc/convention drift.
+- **Findings addressed:** All findings from this round folded into the plan directly (nested-drawer test coverage rebuilt end-to-end; Part A's test-mock bugs fixed; null-vs-empty-string guardian edit convention fixed; guardians.permanentNotice added; applyServerFieldErrors wired into the two remaining dialogs; duplicate-guardian creation risk closed; formatExpiry deduplicated; Alternatives Considered and a new ADR added; i18n/hardcoding/doc-sync cleanup applied).
+- **Unresolved:** None — all three items the reviewer left open were resolved directly: has_portal_access dropped (out of spec), a new ADR added for the document-download gating pattern, and the two pre-existing submit-guard copies' migration deferred and recorded in deferred-work.md.
 

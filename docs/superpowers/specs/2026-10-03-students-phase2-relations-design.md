@@ -183,7 +183,7 @@ delete mutation invalidates the matching list key.
 | Component | Responsibility |
 | --- | --- |
 | `StudentGuardiansTab` | Lists linked guardians + flags (resolved via `fetchGuardianById` fan-out); "Add guardian" opens the chooser (search vs. create); shows a load-error state with retry on a failed fetch, distinct from the empty-list state. |
-| `GuardianPickerDialog` | One dialog, two internal steps — never a dialog nested inside another (`packages/ui`'s `ResponsiveDialog` has no supported nested-drawer pattern on mobile). Step 1 ("choose"): search-existing (debounced `Select`, excluding guardians already linked to this student) **or** a "create new" tab with the same fields (including photo) as `GuardianFormDialog`, inlined directly rather than opened as a second dialog. Step 2 ("link"), reached from either path: the chosen/created guardian + relationship, ending in `linkGuardianToStudent`, retried on failure without re-creating the guardian. |
+| `GuardianPickerDialog` | One dialog, two internal steps, rather than nesting a second dialog inside it for "create new" — simpler on its own merits even though `packages/ui`'s `Drawer` now supports nesting (`Drawer.NestedRoot`, added this phase specifically because the picker itself, and four sibling dialogs, all open from inside the tabbed sheet's own mobile drawer). Step 1 ("choose"): search-existing (debounced `Select`, excluding guardians already linked to this student) **or** a "create new" tab with the same fields (including photo) as `GuardianFormDialog`, inlined directly rather than opened as a second dialog. Step 2 ("link"), reached from either path: the chosen/created guardian + relationship, ending in `linkGuardianToStudent`, retried on failure without re-creating the guardian. |
 | `GuardianFormDialog` | Create/edit a guardian's own fields, including the photo via a shared `PhotoUploadField` (extracted from `StudentPhotoField` on this, its third use — students, staff, guardians — per the repo's third-copy rule; purpose `guardian.photo`). Shared by "create new" and "edit this guardian." |
 | `GuardianLinkFlagsDialog` | Edit one link's `relationship`/`is_fee_responsible`/`can_pick_up`/`receives_communications` — a small form, `PATCH /student-guardians/{id}`. Never includes `is_primary`: promoting primary is a separate one-click row action (see below), since demoting without picking a replacement isn't an operation the backend supports directly. |
 | `StudentEmergencyContactsTab` | Ordered list (read-only rows) + one add form. No per-row actions. |
@@ -293,8 +293,9 @@ place.
   guardians list (untested), a test for `PATCH /guardians/{id}` (untested), reading
   another tenant's guardian link (404), and the guardian-link duplicate conflict (409).
   These are additive test files/cases against already-shipped, already-correct
-  endpoints — not new production code (except the registry/migration/storage tests the
-  three backend additions above need, which do cover new code).
+  endpoints — not new production code (except the registry/view/storage tests the four
+  backend additions above need, which do cover new code — there is no migration; the
+  principal grant reaches only dev/e2e-seeded tenants, see the Agent Context note).
 - **Jest (dashboard):** one `__tests__` file per new component, following the Phase 1
   pattern (mocked `Services.*`, `renderWithProviders`). Key cases: search-then-link,
   create-then-link, primary-promotion badge swap, emergency-contact add with no
