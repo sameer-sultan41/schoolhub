@@ -101,7 +101,9 @@ export function StudentEmergencyContactsTab({
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-foreground">{contact.name}</p>
                 <Badge variant="outline">
-                  {t("emergencyContacts.priority", { priority: contact.priority })}
+                  {/* `priority` is optional only because the backend field has a server-side
+                   * default (`PositiveSmallIntegerField(default=1)`, never null); `?? 1` matches that default. */}
+                  {t("emergencyContacts.priority", { priority: contact.priority ?? 1 })}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
