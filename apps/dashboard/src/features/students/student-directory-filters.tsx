@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@schoolhub/ui";
-import { Building2, Filter, Home, Search, X } from "lucide-react";
+import { BookOpen, Building2, Calendar, Filter, Home, Search, X } from "lucide-react";
 import { STUDENT_STATUS_VALUES } from "@schoolhub/types";
 import { useQuery } from "@tanstack/react-query";
 
@@ -34,6 +34,12 @@ export interface StudentDirectoryFiltersProps {
   onCampusIdChange: (value: string) => void;
   houseId: string;
   onHouseIdChange: (value: string) => void;
+  academicSessionId: string;
+  onAcademicSessionIdChange: (value: string) => void;
+  classId: string;
+  onClassIdChange: (value: string) => void;
+  sectionId: string;
+  onSectionIdChange: (value: string) => void;
 }
 
 /**
@@ -53,6 +59,12 @@ export function StudentDirectoryFilters({
   onCampusIdChange,
   houseId,
   onHouseIdChange,
+  academicSessionId,
+  onAcademicSessionIdChange,
+  classId,
+  onClassIdChange,
+  sectionId,
+  onSectionIdChange,
 }: StudentDirectoryFiltersProps) {
   const t = useTranslations("students");
   const campusesQuery = useQuery({
@@ -62,6 +74,23 @@ export function StudentDirectoryFilters({
   const housesQuery = useQuery({
     queryKey: queryKeys.list("school-organization", "houses"),
     queryFn: () => Services.schoolOrganization.fetchHouses(),
+  });
+  // Directory filter pickers show every option regardless of status — a past enrollment
+  // may reference a now-inactive class/section/session, and filtering by one is the whole
+  // point of a historical register-style query. No `isActive` sent, unlike the enroll/
+  // change-section/complete pickers (`class-section-fields.tsx`).
+  const sessionsQuery = useQuery({
+    queryKey: queryKeys.list("school-organization", "academic-sessions"),
+    queryFn: () => Services.schoolOrganization.fetchAcademicSessions(),
+  });
+  const classesQuery = useQuery({
+    queryKey: queryKeys.list("school-organization", "classes"),
+    queryFn: () => Services.schoolOrganization.fetchClasses(),
+  });
+  const sectionsQuery = useQuery({
+    queryKey: queryKeys.list("school-organization", "sections", { classId }),
+    queryFn: () => Services.schoolOrganization.fetchSections({ classId }),
+    enabled: classId !== "",
   });
 
   return (
@@ -192,6 +221,72 @@ export function StudentDirectoryFilters({
           {(housesQuery.data ?? []).map((house) => (
             <SelectItem key={house.id} value={house.id}>
               {house.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={academicSessionId || ALL}
+        onValueChange={(value) => {
+          onAcademicSessionIdChange(value === ALL ? "" : value);
+        }}
+      >
+        <SelectTrigger
+          className="w-full sm:w-40"
+          aria-label={t("enrollment.fields.academicSession")}
+        >
+          <span className="!flex items-center gap-1.5">
+            <Calendar className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <SelectValue placeholder={t("enrollment.fields.academicSession")} />
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
+          {(sessionsQuery.data ?? []).map((session) => (
+            <SelectItem key={session.id} value={session.id}>
+              {session.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={classId || ALL}
+        onValueChange={(value) => {
+          const next = value === ALL ? "" : value;
+          onClassIdChange(next);
+          onSectionIdChange("");
+        }}
+      >
+        <SelectTrigger className="w-full sm:w-40" aria-label={t("enrollment.fields.class")}>
+          <span className="!flex items-center gap-1.5">
+            <BookOpen className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <SelectValue placeholder={t("enrollment.fields.class")} />
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
+          {(classesQuery.data ?? []).map((schoolClass) => (
+            <SelectItem key={schoolClass.id} value={schoolClass.id}>
+              {schoolClass.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={sectionId || ALL}
+        onValueChange={(value) => {
+          onSectionIdChange(value === ALL ? "" : value);
+        }}
+        disabled={classId === ""}
+      >
+        <SelectTrigger className="w-full sm:w-40" aria-label={t("enrollment.fields.section")}>
+          <SelectValue placeholder={t("enrollment.fields.section")} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
+          {(sectionsQuery.data ?? []).map((section) => (
+            <SelectItem key={section.id} value={section.id}>
+              {section.name}
             </SelectItem>
           ))}
         </SelectContent>

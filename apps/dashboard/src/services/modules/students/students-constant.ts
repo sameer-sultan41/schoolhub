@@ -54,6 +54,9 @@ export const STUDENTS_QUERY_FIELDS: ReadonlyArray<readonly [keyof StudentsPageQu
   ["status", "status"],
   ["campusId", "campus_id"],
   ["houseId", "house_id"],
+  ["academicSessionId", "academic_session_id"],
+  ["classId", "class_id"],
+  ["sectionId", "section_id"],
 ];
 
 export const DOCUMENT_TYPES = [

@@ -19,6 +19,9 @@ export interface StudentsPageQuery {
   status?: string;
   campusId?: string;
   houseId?: string;
+  academicSessionId?: string;
+  classId?: string;
+  sectionId?: string;
 }
 
 /** camelCase, matching every other service input type in this codebase. Nullable

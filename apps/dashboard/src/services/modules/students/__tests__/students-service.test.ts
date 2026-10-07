@@ -52,6 +52,33 @@ describe("students-service", () => {
     );
   });
 
+  it("fetchStudentsPage includes academic_session_id/class_id/section_id when given", async () => {
+    const { fetchStudentsPage } = await import("../students-service");
+    mockGet.mockResolvedValue({
+      data: [],
+      meta: { pagination: { page: 1, page_size: 10, total_count: 0, total_pages: 0 } },
+    });
+
+    await fetchStudentsPage({
+      page: 1,
+      pageSize: 10,
+      academicSessionId: "sess-1",
+      classId: "c1",
+      sectionId: "sec1",
+    });
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/students",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          academic_session_id: "sess-1",
+          class_id: "c1",
+          section_id: "sec1",
+        }),
+      }),
+    );
+  });
+
   it("fetchStudentById requests the single-student endpoint and returns its data", async () => {
     const { fetchStudentById } = await import("../students-service");
     mockGet.mockResolvedValue({ data: { id: "s1", first_name: "Ali" } });
