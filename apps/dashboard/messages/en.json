@@ -447,6 +447,7 @@
       "rejectDescription": "Rejects the transfer request.",
       "complete": "Complete",
       "completeDescription": "Executes the approved transfer.",
+      "completeNoActiveEnrollmentDescription": "This student has no active enrollment — only the campus will be updated.",
       "type": {
         "inter_campus": "Inter-campus",
         "outgoing": "Outgoing",

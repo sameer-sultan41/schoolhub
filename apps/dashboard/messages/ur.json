@@ -447,6 +447,7 @@
       "rejectDescription": "منتقلی کی درخواست کو مسترد کرتا ہے۔",
       "complete": "مکمل کریں",
       "completeDescription": "منظور شدہ منتقلی کو نافذ کرتا ہے۔",
+      "completeNoActiveEnrollmentDescription": "اس طالب علم کا کوئی فعال اندراج نہیں ہے — صرف کیمپس اپ ڈیٹ ہوگا۔",
       "type": {
         "inter_campus": "بین کیمپس",
         "outgoing": "بیرونی",
