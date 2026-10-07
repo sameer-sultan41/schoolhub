@@ -68,17 +68,13 @@ interface ResponsiveRootProps {
    * doesn't support stacking without. No effect on desktop, which always renders an
    * independent `Dialog` regardless of nesting.
    *
-   * In the installed vaul (1.1.2), `NestedRoot` does NOT throw outside a parent
-   * `Drawer` — its guard degrades silently to plain `Root` behavior instead (verified
-   * against vaul's own source; see `packages/ui/src/components/drawer.tsx`'s own
-   * `nested` comment for the detail). The real reason to pass `nested` is to skip
-   * vaul's iOS position-fixed restore behavior, which would otherwise fight a parent
-   * drawer that's still open — not to avoid a crash. Also: every dialog in this app
-   * renders with a controlled `open` prop plus `dismissible={false}`, so vaul's own
-   * open/close-driven parent-scale-back animation never actually runs here either —
-   * don't overstate what `nested` visibly does in THIS app; it's purely about avoiding
-   * that scroll-restore conflict, and getting it wrong outside a real nested context
-   * is a silent bug, not a caught one. */
+   * In this app `nested` currently has no observable effect: every drawer is opened by
+   * a controlled `open` prop (no `DrawerTrigger`), so vaul never sets `hasBeenOpened`
+   * and `usePositionFixed` never engages for parent or child. With `dismissible={false}`
+   * the child can't be dragged, so the parent is never scaled back. It's kept so
+   * nesting is wired correctly if a trigger-opened or dismissible nested drawer is ever
+   * added. See `packages/ui/src/components/drawer.tsx`'s own `nested` comment for
+   * vaul's internals. */
   nested?: boolean;
 }
 

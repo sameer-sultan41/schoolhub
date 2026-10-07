@@ -71,16 +71,13 @@ function Drawer({
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root> & {
   /** Renders vaul's `Drawer.NestedRoot` instead of `Drawer.Root` — see departure 10
-   * above. Verified against the installed vaul (1.1.2) source: `NestedRoot`'s guard
-   * (`if (!onNestedDrag) throw ...`) reads `onNestedDrag` off `DrawerContext`, whose
-   * default value already supplies a no-op `onNestedDrag` — so outside a real parent
-   * `Drawer`, that guard can never actually fire. `NestedRoot` does NOT throw; it
-   * silently behaves like a plain `Root` instead. The real reason to use `nested` is
-   * that it skips vaul's `usePositionFixed` body-position restore (`if (nested || ...)
-   * return` in vaul's own source) — the iOS scroll/position-fixed workaround that hook
-   * exists for — not that it prevents a crash. Using `true` outside an actually-open
-   * parent drawer is therefore a SILENT bug, not a caught one: double-check the parent
-   * is really open before passing `true` here. */
+   * above. vaul 1.1.2's `NestedRoot` doesn't throw outside a parent (its guard reads
+   * `onNestedDrag` from `DrawerContext`, whose default is a no-op). It renders `Root`
+   * with `nested: true` and forwards open/drag/release to the parent's `onNested*`
+   * handlers (outside a parent these are the context's no-ops). `nested: true` also
+   * skips `usePositionFixed`'s iOS-Safari body `position: fixed` set/restore. That
+   * effect only engages after a trigger-driven open (`hasBeenOpened`). So `true`
+   * without an open parent is never caught; it silently drops that iOS handling. */
   nested?: boolean;
 }) {
   const Root = nested ? DrawerPrimitive.NestedRoot : DrawerPrimitive.Root;

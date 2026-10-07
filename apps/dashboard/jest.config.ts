@@ -7,6 +7,10 @@ const createJestConfig = nextJest({ dir: "./" });
 const config: Config = {
   testEnvironment: "jsdom",
   clearMocks: true,
+  // Runs once in Jest's main process before workers fork — the only point at which
+  // setting `process.env.TZ` actually changes the real timezone every test runs under
+  // (see the file's own docstring for why a per-test `beforeAll` cannot do this).
+  globalSetup: "<rootDir>/jest.global-setup.ts",
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   roots: ["<rootDir>/src"],
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
