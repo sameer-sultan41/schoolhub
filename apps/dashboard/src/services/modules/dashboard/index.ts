@@ -1,5 +1,4 @@
 import {
-  fetchAcademicSessions,
   fetchCampuses,
   fetchDashboardOverview,
   fetchDepartments,
@@ -10,7 +9,6 @@ import {
 
 export const DashboardService = {
   fetchDashboardOverview,
-  fetchAcademicSessions,
   fetchTeacherLoadSummary,
   fetchMyTimetable,
   fetchCampuses,

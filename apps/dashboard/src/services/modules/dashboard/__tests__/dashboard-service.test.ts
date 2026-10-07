@@ -108,19 +108,6 @@ describe("DashboardService", () => {
     });
   });
 
-  describe("fetchAcademicSessions", () => {
-    it("drains the academic-sessions list", async () => {
-      const { fetchAcademicSessions } = await import("../dashboard-service");
-      const sessions = [{ id: "s1", name: "2026-27", status: "active", is_current: true }];
-      mockGet.mockResolvedValue({ data: sessions, meta: {} });
-
-      const result = await fetchAcademicSessions();
-
-      expect(mockGet).toHaveBeenCalledWith("/academic-sessions", { query: { page_size: 25 } });
-      expect(result).toEqual(sessions);
-    });
-  });
-
   describe("fetchTeacherLoadSummary", () => {
     it("passes the academic session id as a query parameter", async () => {
       const { fetchTeacherLoadSummary } = await import("../dashboard-service");

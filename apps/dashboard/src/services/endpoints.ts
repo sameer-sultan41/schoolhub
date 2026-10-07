@@ -76,6 +76,15 @@ export const endpoints = {
   },
   schoolOrganization: {
     houses: "/houses",
+    /**
+     * Separate from `dashboard.classes`/`.sections`/`.academicSessions` above: those are
+     * read only for `fetchDashboardOverview`'s counts, these are read for option-list
+     * fetchers. Both sets point at the same real paths — two named callers of one URL,
+     * not a duplication to clean up.
+     */
+    classes: "/classes",
+    sections: "/sections",
+    academicSessions: "/academic-sessions",
   },
   students: {
     list: "/students",

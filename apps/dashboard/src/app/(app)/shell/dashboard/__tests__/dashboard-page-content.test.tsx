@@ -29,11 +29,11 @@ jest.mock("@/services", () => ({
   Services: {
     auth: { fetchCurrentUser: jest.fn() },
     dashboard: {
-      fetchAcademicSessions: jest.fn(),
       fetchDashboardOverview: jest.fn(),
       fetchTeacherLoadSummary: jest.fn(),
       fetchMyTimetable: jest.fn(),
     },
+    schoolOrganization: { fetchAcademicSessions: jest.fn() },
     staff: { fetchStaffDirectory: jest.fn() },
   },
 }));
@@ -41,8 +41,9 @@ jest.mock("@/services", () => ({
 const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFunction<
   typeof Services.auth.fetchCurrentUser
 >;
-const mockFetchAcademicSessions = Services.dashboard.fetchAcademicSessions as jest.MockedFunction<
-  typeof Services.dashboard.fetchAcademicSessions
+const mockFetchAcademicSessions = Services.schoolOrganization
+  .fetchAcademicSessions as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchAcademicSessions
 >;
 const mockFetchDashboardOverview = Services.dashboard.fetchDashboardOverview as jest.MockedFunction<
   typeof Services.dashboard.fetchDashboardOverview

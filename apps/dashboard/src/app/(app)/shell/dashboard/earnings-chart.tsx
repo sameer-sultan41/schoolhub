@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Card, CardContent, CardHeader, CardTitle, Skeleton } from "@schoolhub/ui";
 
+import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
@@ -24,8 +25,8 @@ const MAX_TEACHERS_SHOWN = 10;
  */
 export function EarningsChart() {
   const sessions = useQuery({
-    queryKey: ["dashboard", "academic-sessions"],
-    queryFn: () => Services.dashboard.fetchAcademicSessions(),
+    queryKey: queryKeys.list("school-organization", "academic-sessions"),
+    queryFn: () => Services.schoolOrganization.fetchAcademicSessions(),
   });
 
   const sessionId = useMemo(() => {
