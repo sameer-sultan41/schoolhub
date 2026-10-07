@@ -862,10 +862,11 @@ either this file or `project-status.md`.
   improvise inside one module's PR.
 
 - **The students Phase 2 branch's final pre-PR review (`change-reviewer`, round 8) found
-  nine smaller gaps beyond the two real bugs that round's fix wave actually fixed**
-  (`guardian-picker-dialog.tsx`'s retry-safety gap around an abandoned guardian creation,
-  and `formatDate`'s date-only timezone/locale bug) — grouped here since each is narrow
-  and independent, and none blocks the PR:
+  eleven gaps** — two Medium-severity bugs (`guardian-picker-dialog.tsx`'s retry-safety
+  gap around an abandoned guardian creation, and `formatDate`'s date-only timezone/locale
+  bug) plus nine smaller, independent ones. The following gaps were found during the
+  students Phase 2 final review; two were partially closed (see the two new entries below
+  for what remains), the rest are recorded as-is. None blocks the PR:
   - **No automated test proves `GuardianViewSet`'s `select_related("photo_file")`
     actually avoids an N+1.** The analogous student test,
     `test_listing_photos_costs_no_query_per_row`
@@ -886,7 +887,7 @@ either this file or `project-status.md`.
     pattern at lines 210/250 for makePrimary/editGuardian), the hardcoded `" / "`
     separator in `` ` / ${contact.alt_phone}` `` (`student-emergency-contacts-tab.tsx:111`),
     and the hardcoded `"·"` separator in `{g.first_name} {g.last_name} · {g.phone}`
-    (`guardian-picker-dialog.tsx:410`). Distinct from, and in addition to, the
+    (`guardian-picker-body.tsx:348`). Distinct from, and in addition to, the
     template-literal cases this plan already fixed elsewhere in earlier rounds.
   - **`student-guardians-tab.tsx`'s `staleTime: 5 * 60 * 1000`** (line 104, the guardian
     lookup's `useQueries`) **is an inline magic number** rather than a named constant in
@@ -921,4 +922,30 @@ either this file or `project-status.md`.
     `NullPresigner` returns a predictable `https://null-presigner.invalid/<storage_key>`
     shape (`apps/api/core/files/storage.py`), so asserting the real file's storage key
     appears in the URL is straightforward whenever this is picked up.
+  - **The guardian-picker "just-created guardian" gap is narrowed, not closed.** A fix
+    (lifting the just-created guardian's id into `StudentGuardiansTab`'s own state) now
+    correctly preserves it across a Cancel-and-reopen within the same tab session. But the
+    guardian is still permanently lost if the user switches to a different tab and back
+    (Radix unmounts inactive tab panels, discarding the state), closes the whole detail
+    sheet, navigates to a different student, or reloads the page — any of these still
+    leaves an orphaned, unlinked, PII-holding guardian record that a campus-scoped search
+    can never find again (guardians have no delete endpoint). There's also a narrow race:
+    cancelling while the create request is still in flight, then reopening before it
+    resolves, can still produce a duplicate. Closing this fully needs either a backend
+    create-and-link-in-one-request endpoint, or a way for guardian search to surface a
+    caller's own zero-link guardians — both are real backend changes outside this phase's
+    deliberately dashboard-only scope. A cheaper partial improvement worth considering
+    later: hold the pending guardian in a longer-lived store (e.g. keyed by student id in
+    TanStack Query's cache, not component state) so it survives a tab switch or the sheet
+    closing, without needing a backend change.
+  - **`formatDate`'s locale parameter has no visible effect today.** The function now
+    accepts and threads through a date-fns `Locale` object correctly (verified against
+    date-fns 4.4.0's real `parseISO`/`format` behavior), but this app currently only
+    supports `en` and `ur`, and both map to date-fns' `enUS` locale — so passing a locale
+    changes nothing observable yet; Urdu-locale screens still render month names in
+    English. This was already true of the pre-existing `formatLastUpdated`-style helpers
+    before this phase touched them. Closing this properly means either sourcing a real
+    Urdu date-fns locale (if one exists and this repo wants to adopt it) or switching date
+    formatting to next-intl's own `useFormatter().dateTime(...)`, which formats through
+    `Intl` using the active locale directly — a larger change than this phase's scope.
 
