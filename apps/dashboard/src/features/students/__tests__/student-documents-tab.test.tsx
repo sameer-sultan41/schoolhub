@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { Services } from "@/services";
 import type { StudentDocumentRecord } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setMatchesMobile } from "@/test-utils";
 
 import { StudentDocumentsTab } from "../student-documents-tab";
 
@@ -202,5 +202,73 @@ describe("StudentDocumentsTab", () => {
     // Download has no permission gate (students.document.view already governs whether the
     // tab is reachable at all), so it stays visible.
     expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
+  });
+});
+
+describe("StudentDocumentsTab — mobile drawer delete confirmation", () => {
+  // This tab can render inside StudentDetailSheet's own mobile Drawer, so the delete
+  // confirmation must follow suit (AlertDialog and Drawer are different primitives with
+  // no shared responsive wrapper — see exit-staff-dialog.tsx's identical split, and
+  // exit-staff-dialog.test.tsx's identical mobile describe block this one mirrors).
+  beforeEach(() => {
+    setMatchesMobile(true);
+    mockFetchDocuments.mockReset();
+    mockDeleteDocument.mockReset();
+  });
+
+  afterEach(() => {
+    setMatchesMobile(false);
+  });
+
+  it("renders the delete confirmation as a Drawer, not the desktop AlertDialog", async () => {
+    mockFetchDocuments.mockResolvedValue([documentRecord()]);
+    const user = userEvent.setup();
+
+    // baseElement, not container: Drawer/AlertDialog both portal their content to
+    // document.body, which lands as a sibling of container (the render wrapper div),
+    // never a descendant of it — container.querySelector can't reach portalled content.
+    const { baseElement } = renderWithProviders(
+      <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^delete/i }));
+
+    expect(baseElement.querySelector('[data-slot="drawer-content"]')).toBeInTheDocument();
+    expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).not.toBeInTheDocument();
+  });
+
+  it("confirms the delete through the drawer's own button, identically to the desktop path", async () => {
+    mockFetchDocuments.mockResolvedValue([documentRecord()]);
+    mockDeleteDocument.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^delete/i }));
+    expect(mockDeleteDocument).not.toHaveBeenCalled();
+    const confirmDialog = await screen.findByRole("alertdialog");
+    await user.click(within(confirmDialog).getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => {
+      expect(mockDeleteDocument).toHaveBeenCalledWith("d1");
+    });
+  });
+
+  it("cancels without deleting when the drawer's Cancel button is clicked", async () => {
+    mockFetchDocuments.mockResolvedValue([documentRecord()]);
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <StudentDocumentsTab studentId="student-1" canCreate canVerify canDelete />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^delete/i }));
+    const confirmDialog = await screen.findByRole("alertdialog");
+    await user.click(within(confirmDialog).getByRole("button", { name: /^cancel$/i }));
+
+    expect(mockDeleteDocument).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });

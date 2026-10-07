@@ -15,7 +15,14 @@ import {
   AlertDialogTitle,
   Badge,
   Button,
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
   Skeleton,
+  useIsMobile,
 } from "@schoolhub/ui";
 
 import { formatDate } from "@/lib/helpers";
@@ -68,6 +75,14 @@ export function StudentDocumentsTab({
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const queryClient = useQueryClient();
+  // AlertDialog (Radix) and Drawer (vaul) are different primitives with no shared
+  // "responsive" wrapper (see `exit-staff-dialog.tsx`'s identical comment) — a plain
+  // `Dialog` swaps into `Drawer` through `ResponsiveDialog`, but there is no
+  // alertdialog-equivalent on the Drawer side, so the delete confirmation below picks
+  // the whole tree rather than one component. This tab can render inside
+  // `StudentDetailSheet`'s own mobile `Drawer`, so the desktop-only `AlertDialog` it
+  // used unconditionally before this fix was never reachable there at all.
+  const isMobile = useIsMobile();
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -175,20 +190,23 @@ export function StudentDocumentsTab({
         <p className="text-sm text-muted-foreground">{t("documents.empty")}</p>
       ) : (
         <div className="space-y-3">
-          {documents.map((document) => (
-            <div key={document.id} className="space-y-2 rounded-lg border border-border p-3">
+          {documents.map((documentRecord) => (
+            <div key={documentRecord.id} className="space-y-2 rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{document.title}</p>
+                  <p className="text-sm font-medium text-foreground">{documentRecord.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {documentTypeLabel(t, document.document_type)}
-                    {document.expires_at
-                      ? ` · ${t("documents.expiresOn", { date: formatDate(document.expires_at, locale) })}`
+                    {documentTypeLabel(t, documentRecord.document_type)}
+                    {documentRecord.expires_at
+                      ? ` · ${t("documents.expiresOn", { date: formatDate(documentRecord.expires_at, locale) })}`
                       : ""}
                   </p>
                 </div>
-                <Badge variant={STATUS_VARIANT[document.verification_status]} appearance="light">
-                  {t(`documents.status.${document.verification_status}`)}
+                <Badge
+                  variant={STATUS_VARIANT[documentRecord.verification_status]}
+                  appearance="light"
+                >
+                  {t(`documents.status.${documentRecord.verification_status}`)}
                 </Badge>
               </div>
               {/* Row-specific accessible names (WCAG 2.4.6) below — every row otherwise
@@ -199,22 +217,28 @@ export function StudentDocumentsTab({
                   variant="outline"
                   size="sm"
                   disabled={downloadMutation.isPending}
-                  aria-label={`${t("documents.download")} — ${document.title}`}
+                  aria-label={`${t("documents.download")} — ${documentRecord.title}`}
                   onClick={() => {
-                    downloadMutation.mutate({ documentId: document.id, title: document.title });
+                    downloadMutation.mutate({
+                      documentId: documentRecord.id,
+                      title: documentRecord.title,
+                    });
                   }}
                 >
                   {t("documents.download")}
                 </Button>
-                {canVerify && document.verification_status === "pending" && (
+                {canVerify && documentRecord.verification_status === "pending" && (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
                       disabled={verifyMutation.isPending}
-                      aria-label={`${t("documents.verify")} — ${document.title}`}
+                      aria-label={`${t("documents.verify")} — ${documentRecord.title}`}
                       onClick={() => {
-                        verifyMutation.mutate({ documentId: document.id, decision: "verified" });
+                        verifyMutation.mutate({
+                          documentId: documentRecord.id,
+                          decision: "verified",
+                        });
                       }}
                     >
                       {t("documents.verify")}
@@ -223,9 +247,12 @@ export function StudentDocumentsTab({
                       variant="outline"
                       size="sm"
                       disabled={verifyMutation.isPending}
-                      aria-label={`${t("documents.reject")} — ${document.title}`}
+                      aria-label={`${t("documents.reject")} — ${documentRecord.title}`}
                       onClick={() => {
-                        verifyMutation.mutate({ documentId: document.id, decision: "rejected" });
+                        verifyMutation.mutate({
+                          documentId: documentRecord.id,
+                          decision: "rejected",
+                        });
                       }}
                     >
                       {t("documents.reject")}
@@ -236,9 +263,9 @@ export function StudentDocumentsTab({
                   <Button
                     variant="destructive"
                     size="sm"
-                    aria-label={`${t("documents.delete")} — ${document.title}`}
+                    aria-label={`${t("documents.delete")} — ${documentRecord.title}`}
                     onClick={() => {
-                      setPendingDeleteId(document.id);
+                      setPendingDeleteId(documentRecord.id);
                     }}
                   >
                     {t("documents.delete")}
@@ -261,36 +288,87 @@ export function StudentDocumentsTab({
         />
       )}
 
-      <AlertDialog
-        open={pendingDeleteId !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingDeleteId(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("documents.deleteConfirmTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("documents.deleteConfirmDescription")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={deleteMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                if (pendingDeleteId) deleteMutation.mutate(pendingDeleteId);
-              }}
-            >
-              {/* A real delete-action verb, not the confirmation question repeated as its
-               * own button label — reuses the same `documents.delete` key the row's own
-               * trigger button already uses. */}
-              {t("documents.delete")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isMobile ? (
+        <Drawer
+          open={pendingDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) setPendingDeleteId(null);
+          }}
+          // See the `isMobile` comment above: deliberately not swipe-dismissible, same as
+          // `exit-staff-dialog.tsx`'s identical confirmation drawer — an accidental swipe
+          // must not silently cancel (or worse, feel like it might have confirmed) a
+          // destructive action.
+          dismissible={false}
+        >
+          {/* Both this built-in close button and the footer's Cancel bypass Drawer.Close
+              (see drawer.tsx's own departure-log comment #8) — vaul otherwise ignores
+              every Drawer.Close-driven close whenever dismissible is false. */}
+          <DrawerContent closeLabel={tCommon("close")} role="alertdialog">
+            <DrawerHeader>
+              <DrawerTitle>{t("documents.deleteConfirmTitle")}</DrawerTitle>
+              <DrawerDescription>{t("documents.deleteConfirmDescription")}</DrawerDescription>
+            </DrawerHeader>
+            <DrawerFooter className="flex-row justify-end gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  setPendingDeleteId(null);
+                }}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  if (pendingDeleteId) deleteMutation.mutate(pendingDeleteId);
+                }}
+              >
+                {/* A real delete-action verb, not the confirmation question repeated as its
+                 * own button label — reuses the same `documents.delete` key the row's own
+                 * trigger button already uses. */}
+                {t("documents.delete")}
+              </Button>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <AlertDialog
+          open={pendingDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) setPendingDeleteId(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("documents.deleteConfirmTitle")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("documents.deleteConfirmDescription")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMutation.isPending}>
+                {tCommon("cancel")}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteMutation.isPending}
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (pendingDeleteId) deleteMutation.mutate(pendingDeleteId);
+                }}
+              >
+                {/* A real delete-action verb, not the confirmation question repeated as its
+                 * own button label — reuses the same `documents.delete` key the row's own
+                 * trigger button already uses. */}
+                {t("documents.delete")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
