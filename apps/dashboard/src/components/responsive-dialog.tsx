@@ -66,11 +66,19 @@ interface ResponsiveRootProps {
    * within the tabbed student detail sheet). On mobile, nests via vaul's
    * `Drawer.NestedRoot` instead of a second independent `Drawer.Root`, which vaul
    * doesn't support stacking without. No effect on desktop, which always renders an
-   * independent `Dialog` regardless of nesting. On mobile, this is NOT optional
-   * polish: vaul's `Drawer.NestedRoot` THROWS ("Drawer.NestedRoot must be placed in
-   * another drawer") if rendered without a parent `Drawer` actually open — so a
-   * caller of this component that hardcodes `nested` must only ever be rendered from
-   * inside another open mobile Drawer, or it crashes outside that context. */
+   * independent `Dialog` regardless of nesting.
+   *
+   * In the installed vaul (1.1.2), `NestedRoot` does NOT throw outside a parent
+   * `Drawer` — its guard degrades silently to plain `Root` behavior instead (verified
+   * against vaul's own source; see `packages/ui/src/components/drawer.tsx`'s own
+   * `nested` comment for the detail). The real reason to pass `nested` is to skip
+   * vaul's iOS position-fixed restore behavior, which would otherwise fight a parent
+   * drawer that's still open — not to avoid a crash. Also: every dialog in this app
+   * renders with a controlled `open` prop plus `dismissible={false}`, so vaul's own
+   * open/close-driven parent-scale-back animation never actually runs here either —
+   * don't overstate what `nested` visibly does in THIS app; it's purely about avoiding
+   * that scroll-restore conflict, and getting it wrong outside a real nested context
+   * is a silent bug, not a caught one. */
   nested?: boolean;
 }
 
@@ -166,13 +174,19 @@ export function ResponsiveDialogFooter({
   return <Footer className={className}>{children}</Footer>;
 }
 
+/** `Omit<ResponsiveRootProps, "nested">`, not `ResponsiveRootProps` itself — the desktop
+ * `Sheet` branch below has no concept of nesting (only the mobile `Drawer` branch does),
+ * so a caller passing `nested` here would previously type-check and be silently ignored.
+ * Narrowing the prop type turns that into a compile error instead. */
+type ResponsiveSheetProps = Omit<ResponsiveRootProps, "nested">;
+
 /**
  * A `Sheet` (side panel) on desktop, a bottom `Drawer` on mobile — same idea as
  * `ResponsiveDialog` above, for the one screen (`StaffDetailSheet`) that opens from a
  * row click rather than a toolbar button and stays a side panel on desktop, unlike the
  * two dialogs `ResponsiveDialog` covers.
  */
-export function ResponsiveSheet({ open, onOpenChange, children }: ResponsiveRootProps) {
+export function ResponsiveSheet({ open, onOpenChange, children }: ResponsiveSheetProps) {
   const isMobile = !useIsDesktopShell();
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>

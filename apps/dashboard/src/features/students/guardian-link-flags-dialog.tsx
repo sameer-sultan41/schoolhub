@@ -202,6 +202,7 @@ export function GuardianLinkFlagsDialog({
                       <FormLabel className="font-normal">
                         {t(`guardians.flags.${labelKey}`)}
                       </FormLabel>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />

@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -8,6 +9,7 @@ import { renderWithProviders } from "@/test-utils";
 import { GuardianLinkFlagsDialog } from "../guardian-link-flags-dialog";
 
 jest.mock("@/services", () => ({
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: { guardians: { updateGuardianLink: jest.fn() } },
 }));
 
@@ -115,5 +117,38 @@ describe("GuardianLinkFlagsDialog", () => {
     });
     const [, body] = mockUpdateGuardianLink.mock.calls[0] as [string, Record<string, unknown>];
     expect(body).not.toHaveProperty("hasPortalAccess");
+  });
+
+  it("shows a server field error for a flag checkbox instead of failing silently", async () => {
+    // Regression for a missing <FormMessage /> on the three flag checkboxes — the same
+    // class of bug already fixed for guardian-form-dialog's alt_phone,
+    // emergency-contacts-tab's alt_phone/notes, and document-upload-dialog's
+    // expires_at/notes: without it, applyServerFieldErrors still calls
+    // form.setError("is_fee_responsible", ...) and marks the field as matched
+    // (suppressing the dialog-level fallback alert too), but nothing was rendered to
+    // show it — a save that silently appeared to do nothing.
+    mockUpdateGuardianLink.mockRejectedValue(
+      new ApiError({
+        code: "validation_error",
+        message: "Validation failed.",
+        status: 422,
+        url: "/student-guardians/link-1",
+        details: [{ field: "is_fee_responsible", issue: "This flag conflicts with another link." }],
+      }),
+    );
+
+    renderWithProviders(
+      <GuardianLinkFlagsDialog
+        open
+        link={linkRecord()}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />,
+    );
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /save/i }));
+
+    expect(await screen.findByText("This flag conflicts with another link.")).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });
