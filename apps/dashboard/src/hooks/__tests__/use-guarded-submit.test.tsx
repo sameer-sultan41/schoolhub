@@ -1,7 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useForm } from "react-hook-form";
+import type { SyntheticEvent } from "react";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
 import { useGuardedSubmit, useSubmitGuard } from "../use-submit-guard";
@@ -109,6 +110,39 @@ describe("useGuardedSubmit", () => {
     await user.click(submitButton);
     await waitFor(() => {
       expect(onValid).toHaveBeenCalledTimes(2);
+    });
+    consoleError.mockRestore();
+  });
+
+  it("releases the guard (without calling onValid) when form.handleSubmit's own returned promise rejects", async () => {
+    // Distinct from the test above: that one rejects inside `onValid`, which is caught by
+    // this hook's `.then(resolve, ...)` branch (not the one this test targets). This
+    // exercises the outer `.catch` on `form.handleSubmit(...)(event)` itself — e.g. a
+    // failure in RHF's own validation machinery, before either callback runs — so a
+    // minimal `form` stand-in is used instead of a real react-hook-form instance, which
+    // has no way to make its own `handleSubmit` promise reject on demand.
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    const boom = new Error("boom");
+    const handleSubmit = jest
+      .fn()
+      .mockReturnValueOnce(() => Promise.reject(boom))
+      .mockReturnValue(() => Promise.resolve());
+    const form = { handleSubmit } as unknown as UseFormReturn<Values>;
+    const onValid = jest.fn().mockResolvedValue(undefined);
+    const { result: guardResult } = renderHook(() => useSubmitGuard());
+    const { result } = renderHook(() => useGuardedSubmit(form, guardResult.current, onValid));
+    const event = { preventDefault: jest.fn() } as unknown as SyntheticEvent;
+
+    result.current(event);
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(boom);
+    });
+    expect(onValid).not.toHaveBeenCalled();
+
+    // Guard released: a further submit goes through to form.handleSubmit again.
+    result.current(event);
+    await waitFor(() => {
+      expect(handleSubmit).toHaveBeenCalledTimes(2);
     });
     consoleError.mockRestore();
   });
