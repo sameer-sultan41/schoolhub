@@ -300,7 +300,16 @@ function AddEmergencyContactDialog({
                         min={1}
                         {...field}
                         onChange={(event) => {
-                          onChange(event.target.valueAsNumber);
+                          // `valueAsNumber` is `NaN` for an empty/cleared input (the DOM's
+                          // own contract, not a bug) — writing that straight into the form
+                          // let zod's raw "Expected number, received nan" reach the user
+                          // instead of a normal required-field message. `undefined` is what
+                          // every other optional-at-the-type-level field in this form (e.g.
+                          // `alt_phone`) ends up as once `applyServerFieldErrors`/zod sees a
+                          // cleared value; `emergencyContactSchema.priority`'s own `error` map
+                          // (students.schema.ts) turns that into a friendly "required" message.
+                          const value = event.target.valueAsNumber;
+                          onChange(Number.isNaN(value) ? undefined : value);
                         }}
                       />
                     </FormControl>

@@ -127,6 +127,30 @@ describe("StudentEmergencyContactsTab", () => {
     expect(await screen.findByText("Enter a valid alternate phone number.")).toBeInTheDocument();
   });
 
+  it("shows a friendly required message, not raw zod text, when priority is cleared", async () => {
+    // Regression: `valueAsNumber` is `NaN` for a cleared number input, and writing that
+    // straight into the form used to let zod's own "Expected number, received nan" reach
+    // the user instead of a normal required-field message.
+    mockFetchEmergencyContacts.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    renderWithProviders(<StudentEmergencyContactsTab studentId="student-1" canCreate />);
+
+    await user.click(await screen.findByRole("button", { name: /add contact/i }));
+    await user.type(screen.getByLabelText(/^name$/i), "Zainab Malik");
+    await user.type(screen.getByLabelText(/relationship/i), "Aunt");
+    await user.type(screen.getByLabelText(/^phone$/i), "0300-3333333");
+    await user.clear(screen.getByLabelText(/^priority$/i));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^add contact$/i }),
+    );
+
+    const message = await screen.findByText(/priority is required/i);
+    expect(message.textContent).not.toMatch(/nan/i);
+    expect(message.textContent).not.toMatch(/expected number/i);
+    expect(mockAddEmergencyContact).not.toHaveBeenCalled();
+  });
+
   it("hides the add action for a caller without create permission", async () => {
     mockFetchEmergencyContacts.mockResolvedValue([]);
 
