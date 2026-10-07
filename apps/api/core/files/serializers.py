@@ -43,12 +43,25 @@ class SignedFileURLField(serializers.Field):
     ``source`` names the relation: ``SignedFileURLField(source="photo_file")``. DRF emits
     ``null`` for an empty relation; ``get_display_url`` decides the rest. Pair it with
     ``select_related`` on that relation, or every row costs a query.
+
+    ``expected_purpose``, when given, gates the signed link on the attached file's own
+    ``purpose`` matching it: ``None`` instead of a signed URL for a mismatched file. A
+    relation's own FK field (e.g. ``_fk(File, source="photo_file")``) only proves the file
+    exists and belongs to this tenant, not that it was uploaded for this purpose — and a
+    row's ``photo_file`` can predate a purpose check being added to that FK's own
+    ``validate_*`` method at all, so this field re-checks it on every read rather than
+    trusting that the relation can only ever point at the right kind of file. Formerly
+    hand-rolled identically by both ``StudentSerializer.get_photo_url`` and
+    ``GuardianSerializer.get_photo_url`` before both were consolidated onto this field.
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *, expected_purpose: str | None = None, **kwargs: Any) -> None:
         kwargs["read_only"] = True
         kwargs.setdefault("allow_null", True)
+        self.expected_purpose = expected_purpose
         super().__init__(**kwargs)
 
     def to_representation(self, value: File) -> str | None:
+        if self.expected_purpose is not None and value.purpose != self.expected_purpose:
+            return None
         return get_display_url(value)

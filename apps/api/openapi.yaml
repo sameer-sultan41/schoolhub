@@ -16344,8 +16344,8 @@ components:
         photo_url:
           type: string
           format: uri
-          nullable: true
           readOnly: true
+          nullable: true
         address:
           nullable: true
         custom_fields: {}
@@ -19750,8 +19750,8 @@ components:
         photo_url:
           type: string
           format: uri
-          nullable: true
           readOnly: true
+          nullable: true
         address:
           nullable: true
         custom_fields: {}
@@ -20608,8 +20608,8 @@ components:
         photo_url:
           type: string
           format: uri
-          nullable: true
           readOnly: true
+          nullable: true
         campus_id:
           type: string
           format: uuid
@@ -22598,8 +22598,8 @@ components:
         photo_url:
           type: string
           format: uri
-          nullable: true
           readOnly: true
+          nullable: true
         campus_id:
           type: string
           format: uuid

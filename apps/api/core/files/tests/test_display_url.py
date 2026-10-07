@@ -27,6 +27,13 @@ class _PhotoSerializer(serializers.Serializer):
     photo_url = SignedFileURLField(source="photo_file")
 
 
+class _PurposeGatedPhotoSerializer(serializers.Serializer):
+    """Stands in for `StudentSerializer`/`GuardianSerializer`'s `photo_url` — the one
+    difference from `_PhotoSerializer` above is `expected_purpose`."""
+
+    photo_url = SignedFileURLField(source="photo_file", expected_purpose="student.photo")
+
+
 class DisplayUrlTests(TestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -34,8 +41,12 @@ class DisplayUrlTests(TestCase):
 
     def _file(self, **overrides):
         with tenant_context(self.tenant.id):
+            # Merged, not two literal kwargs, so a caller can override `purpose` itself
+            # (e.g. the `expected_purpose` tests below) without a "multiple values for
+            # keyword argument" clash — same pattern as test_api.py's `_student_with_photo`.
             return FileFactory(
-                tenant=self.tenant, purpose="staff.photo", mime_type="image/png", **overrides
+                tenant=self.tenant,
+                **{"purpose": "staff.photo", "mime_type": "image/png", **overrides},
             )
 
     def test_a_ready_file_gets_a_link(self) -> None:
@@ -59,6 +70,27 @@ class DisplayUrlTests(TestCase):
 
         self.assertIn(file.storage_key, _PhotoSerializer(_PhotoHolder(file)).data["photo_url"])
         self.assertIsNone(_PhotoSerializer(_PhotoHolder(None)).data["photo_url"])
+
+    def test_expected_purpose_signs_a_link_only_for_a_matching_purpose(self) -> None:
+        # `StudentSerializer.photo_url`/`GuardianSerializer.photo_url` both gate on this —
+        # a relation's own FK field only proves tenant ownership, not that the attached file
+        # was actually uploaded for this purpose (see the field's own docstring).
+        matching = self._file(status=FileStatus.READY, purpose="student.photo")
+
+        self.assertIn(
+            matching.storage_key,
+            _PurposeGatedPhotoSerializer(_PhotoHolder(matching)).data["photo_url"],
+        )
+
+    def test_expected_purpose_signs_no_link_for_a_mismatched_purpose(self) -> None:
+        mismatched = self._file(status=FileStatus.READY, purpose="staff.photo")
+
+        self.assertIsNone(
+            _PurposeGatedPhotoSerializer(_PhotoHolder(mismatched)).data["photo_url"],
+        )
+
+    def test_expected_purpose_still_emits_null_for_no_file_at_all(self) -> None:
+        self.assertIsNone(_PurposeGatedPhotoSerializer(_PhotoHolder(None)).data["photo_url"])
 
     @override_settings(
         S3_ENDPOINT_URL="http://minio:9000",
