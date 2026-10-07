@@ -84,6 +84,28 @@ describe("DashboardService", () => {
 
       expect(overview.students).toBeNull();
     });
+
+    it("reports a head count as null when the server reports total_count as null itself", async () => {
+      const { fetchDashboardOverview } = await import("../dashboard-service");
+      mockGet.mockImplementation((path: string) => {
+        if (path === "/staff") {
+          // The total_count key is present (so this isn't the no-key cursor case
+          // above) but its value is explicitly null — still never a fabricated zero.
+          return Promise.resolve({
+            data: rows(1),
+            meta: { pagination: { page: 1, page_size: 1, total_count: null } },
+          });
+        }
+        return Promise.resolve({
+          data: rows(1),
+          meta: { pagination: { page: 1, page_size: 1, total_count: 1 } },
+        });
+      });
+
+      const overview = await fetchDashboardOverview();
+
+      expect(overview.staff).toBeNull();
+    });
   });
 
   describe("fetchAcademicSessions", () => {

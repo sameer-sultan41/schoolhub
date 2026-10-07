@@ -104,4 +104,22 @@ describe("applyServerFieldErrors", () => {
     expect(form.setError).not.toHaveBeenCalled();
     expect(setFormError).toHaveBeenCalledWith("You do not have permission to do that.");
   });
+
+  it("falls back to the fallback message, without touching the form, for a non-ApiError", () => {
+    const form = formStub();
+    const setFormError = jest.fn();
+
+    applyServerFieldErrors({
+      error: new Error("network down"),
+      form,
+      knownFields: ["first_name", "last_name", "phone"],
+      tErrors,
+      fallback: "Something went wrong.",
+      setFormError,
+    });
+
+    expect(form.clearErrors).toHaveBeenCalled();
+    expect(form.setError).not.toHaveBeenCalled();
+    expect(setFormError).toHaveBeenCalledWith("Something went wrong.");
+  });
 });
