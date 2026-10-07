@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -66,6 +66,7 @@ export function StudentDocumentsTab({
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const locale = useLocale();
   const queryClient = useQueryClient();
 
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -182,7 +183,7 @@ export function StudentDocumentsTab({
                   <p className="text-xs text-muted-foreground">
                     {documentTypeLabel(t, document.document_type)}
                     {document.expires_at
-                      ? ` · ${t("documents.expiresOn", { date: formatDate(document.expires_at) })}`
+                      ? ` · ${t("documents.expiresOn", { date: formatDate(document.expires_at, locale) })}`
                       : ""}
                   </p>
                 </div>

@@ -64,4 +64,30 @@ describe("formatDate", () => {
     // precedent for this same format string.
     expect(formatDate("2026-01-05")).toBe("January 5th, 2026");
   });
+
+  it("falls back to English for a locale date-fns ships no translation for", () => {
+    // date-fns has no "ur" locale at all — resolveDateFnsLocale must fall back to enUS
+    // rather than throwing or silently passing an undefined locale to format().
+    expect(formatDate("2026-01-05", "ur")).toBe("January 5th, 2026");
+  });
+
+  describe("in a negative-UTC-offset timezone", () => {
+    // Regression: `new Date("2026-01-05")` is parsed as UTC midnight (ECMA-262's Date
+    // Time String Format for a date-only string), then `format()` rendered that instant
+    // in the BROWSER's LOCAL zone — one calendar day early for any viewer west of UTC.
+    // America/New_York (UTC-5 in January, no DST) reproduces this deterministically.
+    const originalTz = process.env.TZ;
+
+    beforeAll(() => {
+      process.env.TZ = "America/New_York";
+    });
+
+    afterAll(() => {
+      process.env.TZ = originalTz;
+    });
+
+    it("renders a date-only string as the same calendar date, not one day earlier", () => {
+      expect(formatDate("2026-01-05")).toBe("January 5th, 2026");
+    });
+  });
 });
