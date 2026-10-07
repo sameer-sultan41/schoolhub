@@ -27,7 +27,7 @@ import {
 import { ResponsiveDialogBody, ResponsiveDialogFooter } from "@/components/responsive-dialog";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { useSubmitGuard } from "@/hooks/use-submit-guard";
+import { useGuardedSubmit, useSubmitGuard } from "@/hooks/use-submit-guard";
 import { applyServerFieldErrors, resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
@@ -148,6 +148,20 @@ export function GuardianPickerBody({
       });
     },
   });
+
+  const handleCreateSubmit = useGuardedSubmit(
+    createForm,
+    createSubmitGuard,
+    (values) =>
+      new Promise<void>((resolve) => {
+        setCreateError(null);
+        createMutation.mutate(values, {
+          onSettled: () => {
+            resolve();
+          },
+        });
+      }),
+  );
 
   const linkMutation = useMutation({
     mutationFn: async (guardianId: string) => {
@@ -357,36 +371,7 @@ export function GuardianPickerBody({
             {/* The create form's own fields, inlined — no nested dialog. Submitting
              * advances straight to the link step via createMutation's onSuccess above. */}
             <Form {...createForm}>
-              <form
-                noValidate
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void createSubmitGuard.guard(
-                    () =>
-                      new Promise<void>((resolve) => {
-                        createForm
-                          .handleSubmit(
-                            (values) => {
-                              setCreateError(null);
-                              createMutation.mutate(values, {
-                                onSettled: () => {
-                                  resolve();
-                                },
-                              });
-                            },
-                            () => {
-                              resolve();
-                            },
-                          )(event)
-                          .catch((error: unknown) => {
-                            console.error(error);
-                            resolve();
-                          });
-                      }),
-                  );
-                }}
-                className="space-y-3"
-              >
+              <form noValidate onSubmit={handleCreateSubmit} className="space-y-3">
                 {createError && <Alert variant="destructive">{createError}</Alert>}
                 <GuardianFormFields
                   form={createForm}

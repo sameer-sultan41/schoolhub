@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type SyntheticEvent } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,7 +26,7 @@ import {
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
-import { useSubmitGuard } from "@/hooks/use-submit-guard";
+import { useGuardedSubmit, useSubmitGuard } from "@/hooks/use-submit-guard";
 import { applyServerFieldErrors } from "@/lib/error-message";
 import { Services } from "@/services";
 import type { GuardianRecord } from "@/services";
@@ -260,37 +260,24 @@ function GuardianFormBody({ guardian, isMobile, onOpenChange, onSaved }: Guardia
     return () => openSessionRef.current === uploadSession;
   }
 
-  function onSubmit(event: SyntheticEvent) {
-    event.preventDefault();
-    void submitGuard.guard(
-      () =>
-        new Promise<void>((resolve) => {
-          form
-            .handleSubmit(
-              (values) => {
-                mutation.mutate(values, {
-                  onSettled: () => {
-                    resolve();
-                  },
-                });
-              },
-              () => {
-                resolve();
-              },
-            )(event)
-            .catch((error: unknown) => {
-              console.error(error);
-              resolve();
-            });
-        }),
-    );
-  }
+  const handleSubmit = useGuardedSubmit(
+    form,
+    submitGuard,
+    (values) =>
+      new Promise<void>((resolve) => {
+        mutation.mutate(values, {
+          onSettled: () => {
+            resolve();
+          },
+        });
+      }),
+  );
 
   return (
     <Form {...form}>
       <form
         noValidate
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit}
         className={isMobile ? "flex min-h-0 grow flex-col" : undefined}
       >
         <ResponsiveDialogBody

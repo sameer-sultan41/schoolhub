@@ -27,7 +27,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
-import { useSubmitGuard } from "@/hooks/use-submit-guard";
+import { useGuardedSubmit, useSubmitGuard } from "@/hooks/use-submit-guard";
 import { applyServerFieldErrors } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
@@ -194,6 +194,19 @@ function AddEmergencyContactDialog({
     },
   });
 
+  const handleSubmit = useGuardedSubmit(
+    form,
+    submitGuard,
+    (values) =>
+      new Promise<void>((resolve) => {
+        mutation.mutate(values, {
+          onSettled: () => {
+            resolve();
+          },
+        });
+      }),
+  );
+
   return (
     <ResponsiveDialog open onOpenChange={onOpenChange} nested>
       <ResponsiveDialogContent className="max-w-md" closeLabel={tCommon("close")}>
@@ -201,34 +214,7 @@ function AddEmergencyContactDialog({
           <ResponsiveDialogTitle>{t("emergencyContacts.add")}</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <Form {...form}>
-          <form
-            noValidate
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submitGuard.guard(
-                () =>
-                  new Promise<void>((resolve) => {
-                    form
-                      .handleSubmit(
-                        (values) => {
-                          mutation.mutate(values, {
-                            onSettled: () => {
-                              resolve();
-                            },
-                          });
-                        },
-                        () => {
-                          resolve();
-                        },
-                      )(event)
-                      .catch((error: unknown) => {
-                        console.error(error);
-                        resolve();
-                      });
-                  }),
-              );
-            }}
-          >
+          <form noValidate onSubmit={handleSubmit}>
             <ResponsiveDialogBody className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 {t("emergencyContacts.addDescription")}

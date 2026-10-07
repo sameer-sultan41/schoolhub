@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type SyntheticEvent } from "react";
+import { useState, type ChangeEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,7 +31,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/responsive-dialog";
-import { useSubmitGuard } from "@/hooks/use-submit-guard";
+import { useGuardedSubmit, useSubmitGuard } from "@/hooks/use-submit-guard";
 import { applyServerFieldErrors } from "@/lib/error-message";
 import { ApiError, Services } from "@/services";
 import { DOCUMENT_TYPES } from "@/services/modules/students/students-constant";
@@ -138,27 +138,7 @@ export function DocumentUploadDialog({
     });
   }
 
-  function handleFormSubmit(event: SyntheticEvent) {
-    event.preventDefault();
-    void submitGuard.guard(
-      () =>
-        new Promise<void>((resolve) => {
-          form
-            .handleSubmit(
-              (values) => {
-                void onSubmit(values).then(resolve);
-              },
-              () => {
-                resolve();
-              },
-            )(event)
-            .catch((error: unknown) => {
-              console.error(error);
-              resolve();
-            });
-        }),
-    );
-  }
+  const handleFormSubmit = useGuardedSubmit(form, submitGuard, onSubmit);
 
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} nested>
