@@ -120,4 +120,14 @@ export const endpoints = {
   studentGuardians: {
     detail: (id: string) => `/student-guardians/${id}`,
   },
+  /** `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+   * colon-actions — a top-level resource from the start, unlike `studentDocuments`
+   * above (whose creation is nested under `students.documents`). */
+  studentTransfers: {
+    list: "/student-transfers",
+    create: "/student-transfers",
+    approve: (id: string) => `/student-transfers/${id}:approve`,
+    reject: (id: string) => `/student-transfers/${id}:reject`,
+    complete: (id: string) => `/student-transfers/${id}:complete`,
+  },
 } as const;
