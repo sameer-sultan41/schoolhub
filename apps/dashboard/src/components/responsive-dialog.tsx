@@ -61,9 +61,29 @@ interface ResponsiveRootProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
+  /** True when this dialog opens from inside another already-open
+   * ResponsiveDialog/ResponsiveSheet's mobile Drawer (e.g. a row action opened from
+   * within the tabbed student detail sheet). On mobile, nests via vaul's
+   * `Drawer.NestedRoot` instead of a second independent `Drawer.Root`, which vaul
+   * doesn't support stacking without. No effect on desktop, which always renders an
+   * independent `Dialog` regardless of nesting.
+   *
+   * In this app `nested` currently has no observable effect: every drawer is opened by
+   * a controlled `open` prop (no `DrawerTrigger`), so vaul never sets `hasBeenOpened`
+   * and `usePositionFixed` never engages for parent or child. With `dismissible={false}`
+   * the child can't be dragged, so the parent is never scaled back. It's kept so
+   * nesting is wired correctly if a trigger-opened or dismissible nested drawer is ever
+   * added. See `packages/ui/src/components/drawer.tsx`'s own `nested` comment for
+   * vaul's internals. */
+  nested?: boolean;
 }
 
-export function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveRootProps) {
+export function ResponsiveDialog({
+  open,
+  onOpenChange,
+  children,
+  nested = false,
+}: ResponsiveRootProps) {
   const isMobile = !useIsDesktopShell();
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
@@ -77,7 +97,13 @@ export function ResponsiveDialog({ open, onOpenChange, children }: ResponsiveRoo
         // a backdrop tap or Escape close instantly, the exact same data loss through
         // a different door. Hardcoded here rather than a prop: revisit if a non-form
         // caller needs the full dismiss-anywhere behavior back.
-        <Drawer open={open} onOpenChange={onOpenChange} handleOnly dismissible={false}>
+        <Drawer
+          open={open}
+          onOpenChange={onOpenChange}
+          nested={nested}
+          handleOnly
+          dismissible={false}
+        >
           {children}
         </Drawer>
       ) : (
@@ -144,13 +170,19 @@ export function ResponsiveDialogFooter({
   return <Footer className={className}>{children}</Footer>;
 }
 
+/** `Omit<ResponsiveRootProps, "nested">`, not `ResponsiveRootProps` itself — the desktop
+ * `Sheet` branch below has no concept of nesting (only the mobile `Drawer` branch does),
+ * so a caller passing `nested` here would previously type-check and be silently ignored.
+ * Narrowing the prop type turns that into a compile error instead. */
+type ResponsiveSheetProps = Omit<ResponsiveRootProps, "nested">;
+
 /**
  * A `Sheet` (side panel) on desktop, a bottom `Drawer` on mobile — same idea as
  * `ResponsiveDialog` above, for the one screen (`StaffDetailSheet`) that opens from a
  * row click rather than a toolbar button and stays a side panel on desktop, unlike the
  * two dialogs `ResponsiveDialog` covers.
  */
-export function ResponsiveSheet({ open, onOpenChange, children }: ResponsiveRootProps) {
+export function ResponsiveSheet({ open, onOpenChange, children }: ResponsiveSheetProps) {
   const isMobile = !useIsDesktopShell();
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>

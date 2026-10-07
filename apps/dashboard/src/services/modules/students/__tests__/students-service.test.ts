@@ -4,6 +4,7 @@ import type { ApiClientConfig } from "@schoolhub/api-client";
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockPatch = jest.fn();
+const mockDelete = jest.fn();
 
 jest.mock("@schoolhub/api-client", () => {
   const actual = jest.requireActual<typeof ApiClientModule>("@schoolhub/api-client");
@@ -14,7 +15,7 @@ jest.mock("@schoolhub/api-client", () => {
       post: mockPost,
       put: jest.fn(),
       patch: mockPatch,
-      delete: jest.fn(),
+      delete: mockDelete,
       refresh: jest.fn(),
     })),
   };
@@ -125,5 +126,135 @@ describe("students-service", () => {
       { reason: "Relocated", effective_date: "2026-02-01", waive_clearance: false },
       expect.objectContaining({ idempotencyKey: "key-abc" }),
     );
+  });
+});
+
+describe("students-service — emergency contacts and documents", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    mockGet.mockReset();
+    mockPost.mockReset();
+    mockDelete.mockReset();
+  });
+
+  it("fetchEmergencyContacts lists a student's contacts, ordered by priority", async () => {
+    const { fetchEmergencyContacts } = await import("../students-service");
+    // EmergencyContactLinkViewSet doesn't override pagination_class, so it inherits the
+    // project default CursorPagination (apps/api/core/api/pagination.py) — only
+    // StudentViewSet (this file's other tests) uses page numbers.
+    mockGet.mockResolvedValue({
+      data: [{ id: "c1", priority: 1 }],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 50 } },
+    });
+
+    const result = await fetchEmergencyContacts("student-1");
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/students/student-1/emergency-contacts",
+      expect.objectContaining({ query: { ordering: "priority", page_size: 50 } }),
+    );
+    expect(result).toEqual([{ id: "c1", priority: 1 }]);
+  });
+
+  it("addEmergencyContact posts the contact fields, omitting unfilled optionals", async () => {
+    const { addEmergencyContact } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { id: "c1" } });
+
+    await addEmergencyContact("student-1", {
+      name: "Hamza Raza",
+      relationship: "Uncle",
+      phone: "0300-0000000",
+      priority: 2,
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/students/student-1/emergency-contacts", {
+      name: "Hamza Raza",
+      relationship: "Uncle",
+      phone: "0300-0000000",
+      priority: 2,
+    });
+  });
+
+  it("fetchDocuments lists a student's documents", async () => {
+    const { fetchDocuments } = await import("../students-service");
+    mockGet.mockResolvedValue({
+      data: [{ id: "d1" }],
+      meta: { pagination: { next_cursor: null, previous_cursor: null, page_size: 50 } },
+    });
+
+    const result = await fetchDocuments("student-1");
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/students/student-1/documents",
+      expect.objectContaining({ query: { page_size: 50 } }),
+    );
+    expect(result).toEqual([{ id: "d1" }]);
+  });
+
+  it("uploadDocumentRecord posts the already-uploaded file's id plus metadata", async () => {
+    const { uploadDocumentRecord } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { id: "d1" } });
+
+    await uploadDocumentRecord("student-1", {
+      fileId: "file-1",
+      documentType: "birth_certificate",
+      title: "Birth certificate",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/students/student-1/documents", {
+      file_id: "file-1",
+      document_type: "birth_certificate",
+      title: "Birth certificate",
+    });
+  });
+
+  it("uploadDocumentRecord includes notes and expiresAt only when given", async () => {
+    const { uploadDocumentRecord } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { id: "d1" } });
+
+    await uploadDocumentRecord("student-1", {
+      fileId: "file-1",
+      documentType: "other",
+      title: "Note",
+      notes: "Handwritten note from the guardian",
+      expiresAt: "2027-01-01",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/students/student-1/documents", {
+      file_id: "file-1",
+      document_type: "other",
+      title: "Note",
+      notes: "Handwritten note from the guardian",
+      expires_at: "2027-01-01",
+    });
+  });
+
+  it("deleteDocument deletes by document id", async () => {
+    const { deleteDocument } = await import("../students-service");
+    mockDelete.mockResolvedValue({});
+
+    await deleteDocument("d1");
+
+    expect(mockDelete).toHaveBeenCalledWith("/student-documents/d1");
+  });
+
+  it("verifyDocument posts the decision to the colon-action", async () => {
+    const { verifyDocument } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { id: "d1", verification_status: "verified" } });
+
+    const result = await verifyDocument("d1", "verified");
+
+    expect(mockPost).toHaveBeenCalledWith("/student-documents/d1:verify", { decision: "verified" });
+    expect(result).toEqual({ id: "d1", verification_status: "verified" });
+  });
+
+  it("getDocumentDownloadUrl posts to the document's own :download action and returns the url", async () => {
+    const { getDocumentDownloadUrl } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { download_url: "https://files.example.com/x?sig=abc" } });
+
+    const result = await getDocumentDownloadUrl("d1");
+
+    expect(mockPost).toHaveBeenCalledWith("/student-documents/d1:download");
+    expect(result).toBe("https://files.example.com/x?sig=abc");
   });
 });

@@ -83,5 +83,27 @@ export const endpoints = {
     /** Colon-action, not a nested path — the real registered route is
      * `/students/{id}:withdraw`. */
     withdraw: (id: string) => `/students/${id}:withdraw`,
+    emergencyContacts: (studentId: string) => `/students/${studentId}/emergency-contacts`,
+    documents: (studentId: string) => `/students/${studentId}/documents`,
+  },
+  /** Top-level access to a single document — `DELETE` and the `:verify`/`:download`
+   * colon-actions. Upload (create) always goes through the nested `students.documents`
+   * path above, where the student is unambiguous from the URL. */
+  studentDocuments: {
+    detail: (id: string) => `/student-documents/${id}`,
+    verify: (id: string) => `/student-documents/${id}:verify`,
+    download: (id: string) => `/student-documents/${id}:download`,
+  },
+  guardians: {
+    list: "/guardians",
+    detail: (id: string) => `/guardians/${id}`,
+    /** Nested under one student — `GET` lists that student's links, `POST` creates one.
+     * The guardian itself is not created here (see `guardians.list` above). */
+    studentLinks: (studentId: string) => `/students/${studentId}/guardians`,
+  },
+  /** Top-level access to a single link — `PATCH` only (module doc §16: "link flags
+   * updatable via PATCH /api/v1/student-guardians/{id}"). */
+  studentGuardians: {
+    detail: (id: string) => `/student-guardians/${id}`,
   },
 } as const;

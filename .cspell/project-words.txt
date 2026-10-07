@@ -204,6 +204,7 @@ relnamespace
 relrowsecurity
 repoint
 resends
+resubmittable
 retriable
 RFID
 Rimsha
@@ -262,11 +263,13 @@ unioned
 unmarkable
 unmemoized
 unmetered
+unmigrated
 unmoderated
 unparseable
 unpermitted
 Unrestorable
 unroomed
+unrouted
 unstubbed
 unsubmitted
 unvalidated

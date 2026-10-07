@@ -48,6 +48,29 @@ export interface WithdrawStudentInput {
   effectiveDate: string;
 }
 
+export type EmergencyContactRecord = ApiSchemas["EmergencyContact"];
+export type StudentDocumentRecord = ApiSchemas["StudentDocument"];
+/** The generated enum (`schema.d.ts`'s `DocumentVerificationDecisionEnum`, already
+ * `"verified" | "rejected"`) — aliased, not hand-written, per ADR-0017. */
+export type DocumentVerificationDecision = ApiSchemas["DocumentVerificationDecisionEnum"];
+
+export interface AddEmergencyContactInput {
+  name: string;
+  relationship: string;
+  phone: string;
+  altPhone?: string;
+  priority: number;
+  notes?: string;
+}
+
+export interface UploadDocumentInput {
+  fileId: string;
+  documentType: string;
+  title: string;
+  notes?: string;
+  expiresAt?: string;
+}
+
 /** The directory table's view-model row, derived from `StudentRecord` by
  * `toStudentRow` (`src/features/students/student-row.ts`) and shared by the columns,
  * detail sheet and directory table. */

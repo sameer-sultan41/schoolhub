@@ -1,4 +1,5 @@
-import { screen } from "@testing-library/react";
+import type { AuthenticatedUser } from "@schoolhub/types";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
@@ -12,6 +13,14 @@ jest.mock("@/services", () => ({
   Services: {
     students: {
       fetchStudentById: jest.fn(),
+      fetchEmergencyContacts: jest.fn(),
+      fetchDocuments: jest.fn(),
+    },
+    guardians: {
+      fetchGuardianLinks: jest.fn(),
+    },
+    files: {
+      uploadFile: jest.fn(),
     },
   },
 }));
@@ -19,6 +28,54 @@ jest.mock("@/services", () => ({
 const mockFetchStudentById = Services.students.fetchStudentById as jest.MockedFunction<
   typeof Services.students.fetchStudentById
 >;
+const mockFetchGuardianLinks = Services.guardians.fetchGuardianLinks as jest.MockedFunction<
+  typeof Services.guardians.fetchGuardianLinks
+>;
+// Not exercised by any assertion below, but every one of the three new tabs' own
+// `useQuery`/mutation calls must resolve to *something* the instant its panel mounts —
+// an unrelated pre-existing test that happens to render a tab (or a future one) would
+// otherwise crash with "fetchX is not a function" rather than the behavior it's actually
+// testing. Same reasoning this file's `mockFetchStudentById` mock object already follows.
+const mockFetchEmergencyContacts = Services.students.fetchEmergencyContacts as jest.MockedFunction<
+  typeof Services.students.fetchEmergencyContacts
+>;
+const mockFetchDocuments = Services.students.fetchDocuments as jest.MockedFunction<
+  typeof Services.students.fetchDocuments
+>;
+const mockUploadFile = Services.files.uploadFile as jest.MockedFunction<
+  typeof Services.files.uploadFile
+>;
+
+interface MockCurrentUserResult {
+  data: AuthenticatedUser | undefined;
+  isError: boolean;
+}
+const mockUseCurrentUser = jest.fn<MockCurrentUserResult, []>();
+jest.mock("@/hooks/use-current-user", () => ({
+  useCurrentUser: () => mockUseCurrentUser(),
+}));
+
+const PERMITTED_USER: AuthenticatedUser = {
+  id: "u1",
+  email: "admin@example.com",
+  phone: null,
+  full_name: "School Admin",
+  avatar_url: null,
+  locale: "en",
+  tenant_id: "tenant-1",
+  roles: [],
+  permissions: [
+    "students.guardian.view",
+    "students.guardian.create",
+    "students.guardian.update",
+    "students.student.view",
+    "students.student.update",
+    "students.document.view",
+    "students.document.create",
+    "students.document.verify",
+    "students.document.delete",
+  ],
+};
 
 function studentRow(overrides: Partial<StudentRow> = {}): StudentRow {
   return {
@@ -77,6 +134,11 @@ function studentDetail(overrides: Partial<StudentRecord> = {}): StudentRecord {
 describe("StudentDetailSheet", () => {
   beforeEach(() => {
     mockFetchStudentById.mockReset();
+    mockFetchGuardianLinks.mockReset().mockResolvedValue([]);
+    mockFetchEmergencyContacts.mockReset().mockResolvedValue([]);
+    mockFetchDocuments.mockReset().mockResolvedValue([]);
+    mockUploadFile.mockReset().mockResolvedValue("file-1");
+    mockUseCurrentUser.mockReset().mockReturnValue({ data: PERMITTED_USER, isError: false });
   });
 
   it("shows Restricted only when medical_notes is genuinely absent from the response", async () => {
@@ -285,6 +347,111 @@ describe("StudentDetailSheet", () => {
     await userEvent.setup().click(await screen.findByRole("button", { name: /^withdraw$/i }));
 
     expect(onWithdraw).toHaveBeenCalledWith("stu-9", "Ayesha Khan");
+  });
+
+  it("renders four tabs, defaulting to Profile", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail());
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(studentRow().admissionNumber);
+    expect(screen.getByRole("tab", { name: /profile/i })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("tab", { name: /^guardians$/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /emergency contacts/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^documents$/i })).toBeInTheDocument();
+    // Pins the `asChild`-dropped fix: a real tabpanel role must reach the DOM, not get
+    // silently swallowed by `ResponsiveSheetBody` (which doesn't forward arbitrary props).
+    expect(screen.getByRole("tabpanel")).toBeInTheDocument();
+  });
+
+  it("hides a tab entirely for a caller without that tab's own view permission", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail());
+    mockUseCurrentUser.mockReturnValue({
+      data: { ...PERMITTED_USER, permissions: ["students.student.view"] },
+      isError: false,
+    });
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(studentRow().admissionNumber);
+    expect(screen.getByRole("tab", { name: /profile/i })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /^guardians$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /^documents$/i })).not.toBeInTheDocument();
+  });
+
+  it("does not fetch a tab's data until that tab is actually opened", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail());
+    mockFetchGuardianLinks.mockResolvedValue([]);
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(studentRow().admissionNumber);
+    expect(mockFetchGuardianLinks).not.toHaveBeenCalled();
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: /^guardians$/i }));
+
+    await waitFor(() => {
+      expect(mockFetchGuardianLinks).toHaveBeenCalledWith("stu-1");
+    });
+  });
+
+  it("switching tabs away and back does not leave a stale error from an interrupted first fetch", async () => {
+    mockFetchStudentById.mockResolvedValue(studentDetail());
+    mockFetchGuardianLinks.mockRejectedValueOnce(new Error("network blip"));
+    mockFetchGuardianLinks.mockResolvedValueOnce([]);
+
+    renderWithProviders(
+      <StudentDetailSheet
+        row={studentRow()}
+        canUpdate
+        canWithdraw
+        onOpenChange={jest.fn()}
+        onEdit={jest.fn()}
+        onWithdraw={jest.fn()}
+      />,
+    );
+
+    await screen.findByText(studentRow().admissionNumber);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("tab", { name: /^guardians$/i }));
+    await waitFor(() => {
+      expect(mockFetchGuardianLinks).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(screen.getByRole("tab", { name: /profile/i }));
+    await user.click(screen.getByRole("tab", { name: /^guardians$/i }));
+
+    await waitFor(() => {
+      expect(mockFetchGuardianLinks).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText(/no guardians linked yet/i)).toBeInTheDocument();
   });
 });
 

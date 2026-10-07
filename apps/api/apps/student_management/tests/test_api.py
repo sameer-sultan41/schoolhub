@@ -552,8 +552,9 @@ class StudentPhotoUrlTests(StudentManagementAPITestCase):
     def test_a_photo_file_whose_purpose_is_not_student_photo_signs_no_url(self) -> None:
         # Distinct scenario from the "unchanged legacy photo" PATCH test above: this
         # covers a plain GET against a row whose photo_file purpose doesn't match, with
-        # no PATCH involved at all — proving get_photo_url's own gate, not just
-        # validate_photo_file_id's narrower "don't accept a NEW mismatch" guard.
+        # no PATCH involved at all — proving photo_url's own SignedFileURLField
+        # expected_purpose gate, not just validate_photo_file_id's narrower "don't accept
+        # a NEW mismatch" guard.
         self.allow("students.student.view")
         student, mismatched = self._student_with_photo(purpose="student.document")
 

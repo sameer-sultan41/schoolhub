@@ -1,6 +1,10 @@
 import { ApiError } from "@schoolhub/api-client";
 
-import { resolveErrorMessage, type ErrorCodeTranslator } from "../error-message";
+import {
+  applyServerFieldErrors,
+  resolveErrorMessage,
+  type ErrorCodeTranslator,
+} from "../error-message";
 
 const translations: Record<string, string> = {
   permission_denied: "You do not have permission to do that.",
@@ -51,5 +55,71 @@ describe("resolveErrorMessage", () => {
     expect(resolveErrorMessage(error, tErrors, "fallback", "name")).toBe(
       "You do not have permission to do that.",
     );
+  });
+});
+
+describe("applyServerFieldErrors", () => {
+  function formStub() {
+    return { setError: jest.fn(), clearErrors: jest.fn() };
+  }
+
+  it("maps a matched field onto the form and never calls setFormError", () => {
+    const form = formStub();
+    const setFormError = jest.fn();
+    const error = apiError("unprocessable", [
+      { field: "phone", issue: "Enter a valid phone number." },
+    ]);
+
+    applyServerFieldErrors({
+      error,
+      form,
+      knownFields: ["first_name", "last_name", "phone"],
+      tErrors,
+      fallback: "fallback",
+      setFormError,
+    });
+
+    expect(form.clearErrors).toHaveBeenCalled();
+    expect(form.setError).toHaveBeenCalledWith("phone", {
+      type: "server",
+      message: "Enter a valid phone number.",
+    });
+    expect(setFormError).not.toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it("falls back to setFormError with the resolved message when nothing matches a known field", () => {
+    const form = formStub();
+    const setFormError = jest.fn();
+    const error = apiError("permission_denied", [{ field: "unknown_field", issue: "Nope." }]);
+
+    applyServerFieldErrors({
+      error,
+      form,
+      knownFields: ["first_name", "last_name", "phone"],
+      tErrors,
+      fallback: "fallback",
+      setFormError,
+    });
+
+    expect(form.setError).not.toHaveBeenCalled();
+    expect(setFormError).toHaveBeenCalledWith("You do not have permission to do that.");
+  });
+
+  it("falls back to the fallback message, without touching the form, for a non-ApiError", () => {
+    const form = formStub();
+    const setFormError = jest.fn();
+
+    applyServerFieldErrors({
+      error: new Error("network down"),
+      form,
+      knownFields: ["first_name", "last_name", "phone"],
+      tErrors,
+      fallback: "Something went wrong.",
+      setFormError,
+    });
+
+    expect(form.clearErrors).toHaveBeenCalled();
+    expect(form.setError).not.toHaveBeenCalled();
+    expect(setFormError).toHaveBeenCalledWith("Something went wrong.");
   });
 });

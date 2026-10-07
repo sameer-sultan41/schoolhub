@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import {
   Avatar,
@@ -156,6 +156,7 @@ function DetailFooter({
 
 export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffDetailSheetProps) {
   const t = useTranslations("staff");
+  const locale = useLocale();
   // Same breakpoint hook ResponsiveSheet itself calls, not useIsDrawer() — this
   // component is ResponsiveSheet's parent, so no provider exists yet at this point in
   // the tree. useIsDesktopShell(), not @schoolhub/ui's useIsMobile() — see
@@ -273,7 +274,7 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                 <FieldRow
                   icon={Calendar}
                   label={t("fields.joiningDate")}
-                  value={detail?.joining_date ? formatDate(detail.joining_date) : undefined}
+                  value={detail?.joining_date ? formatDate(detail.joining_date, locale) : undefined}
                   loading={isPending}
                 />
                 <FieldRow
@@ -302,7 +303,9 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                 <FieldRow
                   icon={Calendar}
                   label={t("fields.dateOfBirth")}
-                  value={detail?.date_of_birth ? formatDate(detail.date_of_birth) : undefined}
+                  value={
+                    detail?.date_of_birth ? formatDate(detail.date_of_birth, locale) : undefined
+                  }
                   loading={isPending}
                 />
               </FieldSection>

@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { copyMappedFields, humanizeSnakeCase, stableSignedUrl } from "@/lib/helpers";
 import {
   STAFF_BODY_FIELDS,
@@ -15,6 +14,7 @@ import type {
 } from "./staff-type";
 
 export { humanizeSnakeCase };
+export { formatDate } from "@/lib/helpers";
 
 /**
  * The staff module's pure helper functions — single source of truth, so a mapper or
@@ -40,14 +40,6 @@ export function toStaffRow(staff: StaffDirectoryRecord): StaffRow {
 
 export function statusMeta(status: string): { variant: StatusVariant; label: string } {
   return STATUS_META[status] ?? { variant: "secondary", label: humanizeSnakeCase(status) };
-}
-
-/** A longer, absolute rendering ("January 5, 2026") — distinct from `formatLastUpdated`'s
- * relative one, used for the detail sheet's joining-date/date-of-birth fields, which read
- * better as a fixed date than "3 months ago". */
-export function formatDate(value: string): string {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : format(parsed, "PPP");
 }
 
 /**

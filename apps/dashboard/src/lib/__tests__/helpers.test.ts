@@ -1,4 +1,4 @@
-import { stableSignedUrl } from "../helpers";
+import { formatDate, stableSignedUrl } from "../helpers";
 
 /** A SigV4-shaped link for `path`, signed at `signedAt` (UTC) and valid for `ttlSeconds`. */
 function signedLink(path: string, signedAt: string, ttlSeconds = 3600) {
@@ -51,5 +51,37 @@ describe("stableSignedUrl", () => {
 
     expect(stableSignedUrl(second, T0)).toBe(second);
     expect(stableSignedUrl(null, T0)).toBeNull();
+  });
+});
+
+describe("formatDate", () => {
+  it("returns the raw value unchanged for an invalid date string", () => {
+    expect(formatDate("not-a-date")).toBe("not-a-date");
+  });
+
+  it("formats a valid date as a long absolute date", () => {
+    // date-fns "PPP" format for 2026-01-05 — matches staff-detail-sheet.test.tsx's own
+    // precedent for this same format string.
+    expect(formatDate("2026-01-05")).toBe("January 5th, 2026");
+  });
+
+  it("falls back to English for a locale date-fns ships no translation for", () => {
+    // date-fns has no "ur" locale at all — resolveDateFnsLocale must fall back to enUS
+    // rather than throwing or silently passing an undefined locale to format().
+    expect(formatDate("2026-01-05", "ur")).toBe("January 5th, 2026");
+  });
+
+  describe("in a negative-UTC-offset timezone", () => {
+    // Regression: `new Date("2026-01-05")` is parsed as UTC midnight (ECMA-262's Date
+    // Time String Format for a date-only string), then `format()` rendered that instant
+    // in the BROWSER's LOCAL zone — one calendar day early for any viewer west of UTC.
+    // The whole dashboard test suite runs under America/New_York (UTC-5 in January, no
+    // DST) via `jest.global-setup.ts`, which reproduces this deterministically — setting
+    // `process.env.TZ` here instead would not work, since a running test's `process.env`
+    // is a Jest-sandboxed Proxy over a snapshot copy, never read by Node's real
+    // Date/Intl timezone resolution.
+    it("renders a date-only string as the same calendar date, not one day earlier", () => {
+      expect(formatDate("2026-01-05")).toBe("January 5th, 2026");
+    });
   });
 });

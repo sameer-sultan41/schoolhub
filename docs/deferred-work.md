@@ -28,16 +28,6 @@ either this file or `project-status.md`.
   means re-verifying every staff field against the generated schema and is its own,
   separate PR — not bundled into a file-organization change.
 
-- **Staff (and student) CSV export downloads have no `Content-Disposition` override.**
-  `POST /files/{id}:download` (`core.files`) returns a bare presigned object-storage
-  URL with no `ResponseContentDisposition`, so the browser names the downloaded file
-  after its storage key rather than something like `staff-export.csv`, and some
-  browsers may preview a CSV inline instead of downloading it. Fix: add
-  `ResponseContentDisposition` to `core/files/storage.py`'s presigner (next to its
-  existing `ResponseCacheControl`), scoped to export-purpose files — a backend change
-  to shared platform infra, deliberately kept out of the frontend-only PR that wired up
-  `/staff`'s Export/Import buttons.
-
 - **`apps/dashboard/src/components/app-shell.tsx` and its four `features/dashboard/*`
   panels (capacity-chart, pending-work-panel, school-shape-panel, teacher-load-chart,
   use-school-day) — recovered from a stale local branch that predates the shell reset —
@@ -263,6 +253,41 @@ either this file or `project-status.md`.
   client upload to wait for. **AV scanning is not implemented** —
   `FileStatus.QUARANTINED` is unreachable; a documented gap against
   `api-architecture.md` §11, not an oversight.
+- **No unlink for a student-guardian link, no edit/delete for an emergency contact.**
+  `StudentGuardianLinkViewSet` and `EmergencyContactLinkViewSet` (`apps/api/apps/student_management/views.py`)
+  are both list+create only — confirmed by reading the real viewset classes, not assumed. The
+  students Phase 2 dashboard work (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`)
+  states this plainly in its UI copy rather than inventing a workaround. Adding these endpoints
+  is a real, separate backend decision (what happens to history/audit on an unlink; whether an
+  emergency contact edit needs its own permission key) — not a UI gap to quietly patch over.
+- **Staff's photo-upload field is still its own inline copy.** `students-dashboard-phase2`
+  extracted `PhotoUploadField` (`apps/dashboard/src/components/photo-upload-field.tsx`, a neutral
+  location with a generic `uploadPurpose: string` prop) on its third near-identical copy — students'
+  original, and this phase's new guardian form. `apps/dashboard/src/features/staff/staff-form-dialog.tsx`
+  still has its own copy of the same presigned-upload-then-preview flow, left unmigrated
+  in this PR since staff is outside this phase's scope. Migrating it is a small, mechanical
+  swap — pass `uploadPurpose="staff.photo"` and staff's own saved-photo fields — next time staff's
+  form is touched.
+- **Two pre-existing double-submit-guard copies weren't migrated onto the new shared
+  `useSubmitGuard` hook.** `apps/dashboard/src/hooks/use-submit-guard.ts` (Task 5, Part C)
+  extracts the `isSubmittingRef` pattern Phase 1's commit `e5326cd` introduced, used by this
+  phase's own four new forms. `apps/dashboard/src/features/students/student-form-dialog.tsx` and
+  `apps/dashboard/src/features/students/withdraw-student-dialog.tsx` still carry their own
+  original inline copies of the same guard — left alone in this PR since neither file otherwise
+  needs a change here, and touching them widens this PR's diff for no behavior change. Migrate
+  both onto `useSubmitGuard` next time either file is touched for an unrelated reason.
+- **The unwired, unrouted duplicate `GuardianSerializer`
+  (`apps/api/apps/student_management/guardians/serializers.py`) now falls further behind the
+  real, routed one.** Students Phase 2 adds `photo_url`, the unchanged-current-photo validation
+  skip, and `select_related("photo_file")` to the serializer/viewset actually reachable from
+  `urls.py` — the duplicate package (part of a half-finished per-resource split,
+  `docs/03-modules/student-management.md`'s own notes already call it not wired in) gets none of
+  these, on purpose: an earlier round of this phase's own review mirrored a smaller change onto
+  it for consistency, then a later round found that was itself scope creep onto dead code and
+  reversed it. Whoever finishes wiring that package in (or deletes it, if the split is abandoned)
+  will need to re-apply `photo_url`/the validation skip/`select_related` at that point — this
+  entry exists so that work isn't a surprise.
+
 - **Inline display links for files** (PR #76): `core.files.serializers.SignedFileURLField`
   turns any `File` foreign key into a read-only signed GET link (`get_display_url()`), valid
   `FILE_DISPLAY_URL_TTL_SECONDS` (default 1 h) and `null` unless the file is `ready` and not
@@ -270,21 +295,21 @@ either this file or `project-status.md`.
   edit dialog render it over an initials fallback. `StudentSerializer.photo_url` now uses it
   too (`students-dashboard-phase1` Task 1), with the same `select_related("photo_file")` and
   an ownership guard on `photo_file_id` mirroring `staff/serializers.py`; the student
-  directory/form/detail sheet render it over an initials fallback. **Guardians still expose
-  only `photo_file_id`** — the same one-line addition, when a guardian-facing screen needs
-  photos. The signer is now one shared SigV4 instance per process (`get_presigner()`), signing
-  for `S3_PUBLIC_ENDPOINT_URL`.
-  - **`photo_url`'s purpose gate is student-only.** `StudentSerializer.photo_url` was
+  directory/form/detail sheet render it over an initials fallback. `GuardianSerializer.photo_url`
+  now does the same (`students-dashboard-phase2` Task 1). The signer is now one shared SigV4
+  instance per process (`get_presigner()`), signing for `S3_PUBLIC_ENDPOINT_URL`.
+  - **`photo_url`'s purpose gate doesn't reach staff.** `StudentSerializer.photo_url` was
     converted from `SignedFileURLField` to a `SerializerMethodField` that refuses to sign a
     link unless `photo_file.purpose == "student.photo"` (`students-dashboard-phase1` fix
     wave) — `validate_photo_file_id`'s ownership guard only stops a *new* mismatched file
     from being attached by PATCH; it does nothing for a `photo_file` that reached the column
     some other way (a row seeded before the guard existed, a future bulk-import path that
-    bypasses the serializer). `StaffSerializer.photo_url` still uses the plain
-    `SignedFileURLField` with no equivalent purpose check — same latent gap, not yet fixed
-    there. Fixing it needs the identical `SerializerMethodField` conversion in
-    `staff/serializers.py`, its own purpose constant, and a migration note for any existing
-    `staff.photo_file` rows whose purpose predates the check.
+    bypasses the serializer). `GuardianSerializer.photo_url` (Task 1) now carries the identical
+    `SerializerMethodField` purpose check as the student one. `StaffSerializer.photo_url` is
+    the one remaining holdout still on the plain `SignedFileURLField` with no purpose check.
+    Fixing staff needs the identical `SerializerMethodField` conversion in `staff/serializers.py`,
+    its own purpose constant, and a migration note for any existing `staff.photo_file` rows
+    whose purpose predates the check.
 - `medical_notes` field-level restriction and the `filter_assigned_to_user`
   fail-closed default (no `staff` table to join against yet) both ship in
   PR 1, ahead of the features that will exercise them. The student<->guardian
@@ -733,9 +758,11 @@ either this file or `project-status.md`.
   fixtures and page objects (`StudentFormPage`, `StudentDetailPage`) are untouched so this
   spec's import surface keeps compiling, but the journey itself (create student → link
   guardian → add emergency contact → enroll, plus the duplicate-admission rejection) needs
-  re-driving through the new dialogs/sheet once Phase 2 lands guardians/emergency
-  contacts/enrollment in the real UI — a rewrite against the new page objects, not a
-  route-path fix.
+  re-driving through the new dialogs/sheet. Guardians and emergency contacts are now real as
+  of students Phase 2 (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`);
+  this spec's journey still can't be fully re-driven until enrollment ships in Phase 3 too —
+  a partial rewrite now would need redoing again for the enrollment step regardless. Left as-is
+  pending the full Phase 3 rewrite.
 
 - **A 422 duplicate-admission create response has no field for the override reason its own
   message promises.** `student_management`'s duplicate-admission check (same name + DOB)
@@ -799,4 +826,126 @@ either this file or `project-status.md`.
   regression this PR's own shared `DialogContent` change introduced). The fix is the same
   guard students' own version now has: add `populatedStaffId !== staffDetailQuery.data.id`
   to the `if`, and add `populatedStaffId` to the effect's dependency array.
+
+- **No production mechanism provisions a tenant's default roles.** `principal`'s new
+  `students.document.view` grant (`apps/api/apps/student_management/permissions.py`,
+  students Phase 2) reaches a `principal` role only when one is created via
+  `seed_all_roles`/`seed_e2e_data` (dev/e2e tooling) — both derive the role's permission
+  set from the registry's `default_roles` on every run. Reading `core/rbac/seeding.py`
+  and `apps/staff_management/staff/services/invite.py` in full confirms there is no
+  production code anywhere that creates a platform-default (`tenant=None`) `Role` row for
+  any role except `school_owner` (`ensure_school_owner_role`) — not `principal`, not
+  `teacher`, not `school_admin`. The staff invite flow is written to let an admin assign a
+  `tenant=None` default role, but nothing ever creates one for a real tenant. A migration
+  "backfilling existing tenants' `principal` role" was considered during this phase's plan
+  review and rejected for exactly this reason — it would only ever touch dev/e2e seed
+  fixtures, giving false confidence that production tenants are covered when none are.
+  This is a pre-existing, platform-wide gap in `core.rbac`/`core.tenancy` — building a
+  real tenant-provisioning system for default roles is its own spec and plan, not a
+  one-permission backfill inside a dashboard-tabs PR.
+
+- **`core/files`' generic `GET /files` and `POST /files/{id}:download` remain open to
+  any `platform.file.view` holder, including for student documents.** `platform.file.view`
+  is granted to every staff role (`apps/api/core/files/permissions.py`), so a staff member
+  without `students.document.view` can still list a tenant's files (seeing each one's
+  `purpose`/`original_name`) and download one directly through the generic endpoint,
+  bypassing the students-phase-2 `:download` action's own gate entirely. This predates the
+  students-phase-2 work (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`),
+  which adds a properly `students.document.view`-gated `:download` action on
+  `StudentDocumentViewSet` for the dashboard's own path, but deliberately does not also
+  restrict the generic `core/files` routes — those are cross-cutting infrastructure shared
+  by every module (e.g. `/staff`'s own export download), and narrowing them is a separate,
+  `core/files`-wide authorization decision (SEC-17.3, `docs/06-security/security.md`, calls
+  for every document-bearing endpoint to carry its own permission key — `core/files`'
+  generic routes do not yet). Closing this means adding an owning-permission check to
+  `FileViewSet`'s list and download, keyed by each file's `purpose` — not something to
+  improvise inside one module's PR.
+
+- **The students Phase 2 branch's final pre-PR review (`change-reviewer`, round 8) found
+  eleven gaps** — two Medium-severity bugs (`guardian-picker-dialog.tsx`'s retry-safety
+  gap around an abandoned guardian creation, and `formatDate`'s date-only timezone/locale
+  bug) plus nine smaller, independent ones. The following gaps were found during the
+  students Phase 2 final review; two were partially closed (see the two new entries below
+  for what remains), the rest are recorded as-is. None blocks the PR:
+  - **No automated test proves `GuardianViewSet`'s `select_related("photo_file")`
+    actually avoids an N+1.** The analogous student test,
+    `test_listing_photos_costs_no_query_per_row`
+    (`apps/api/apps/student_management/tests/test_api.py:565`), was never mirrored for
+    guardians.
+  - **The `:download` action's response (`{download_url}`) isn't typed via
+    drf-spectacular's `inline_serializer` in the generated OpenAPI contract** — the
+    dashboard client hand-types it, contrary to
+    [ADR-0017](decisions/0017-generated-wire-types-for-new-domains.md)'s convention for a
+    new response shape.
+  - **Nine call sites build user-facing accessible-name/display strings via JS template
+    literals (or chained JSX interpolations) instead of one parameterized i18n message**,
+    so Urdu can't control word order or separator choice for any of them — e.g.
+    `` `${t("documents.download")} — ${document.title}` `` in
+    `student-documents-tab.tsx:202` (and the identical pattern at lines 215/226/239 for
+    verify/reject/delete), `` `${t("guardians.editLinkTitle")} — ${guardian.first_name}
+    ${guardian.last_name}` `` in `student-guardians-tab.tsx:237` (and the identical
+    pattern at lines 210/250 for makePrimary/editGuardian), the hardcoded `" / "`
+    separator in `` ` / ${contact.alt_phone}` `` (`student-emergency-contacts-tab.tsx:111`),
+    and the hardcoded `"·"` separator in `{g.first_name} {g.last_name} · {g.phone}`
+    (`guardian-picker-body.tsx:348`). Distinct from, and in addition to, the
+    template-literal cases this plan already fixed elsewhere in earlier rounds.
+  - **`student-guardians-tab.tsx`'s `staleTime: 5 * 60 * 1000`** (line 104, the guardian
+    lookup's `useQueries`) **is an inline magic number** rather than a named constant in
+    `guardians-constant.ts`.
+  - **`fetchGuardianLinks`/`fetchEmergencyContacts`/`fetchDocuments` each fetch only one
+    page of up to 50 rows and discard pagination metadata** — a student with more than 50
+    guardians, contacts, or documents silently sees a truncated list, with no "showing
+    first N" indication that anything was cut off.
+  - **`applyServerFieldErrors`'s fallback swallows a genuinely new server message.** A 422
+    on a field outside a dialog's own `knownFields` (e.g. `file_id`, `guardian_id`) falls
+    through to the generic "Please correct the highlighted fields" copy even though
+    nothing is actually highlighted, rather than surfacing that specific unmatched
+    field's real server message.
+  - **Tenants can extend the set of valid document types**
+    (`TenantSettings.academic["student_document_types"]`, read by
+    `_document_type_allowed` in `apps/api/apps/student_management/services.py:443-447`),
+    **but no endpoint lists a tenant's custom types for the dashboard to use** — the
+    upload dialog only offers the 6 seeded defaults (the dashboard's own
+    `DOCUMENT_TYPES` constant, `apps/dashboard/src/services/modules/students/students-constant.ts`,
+    mirroring the backend's `DEFAULT_DOCUMENT_TYPES`) plus "other".
+  - **`student-emergency-contacts-tab.tsx` and `students-service.ts`
+    (`addEmergencyContact`/`uploadDocumentRecord`) build request bodies by hand,
+    field-by-field,** while the guardians domain (`Services.guardians`) uses
+    `copyMappedFields`-based helper functions with a `*_BODY_FIELDS` constant — an
+    inconsistency with this plan's own established convention, worth closing the next
+    time either file is touched.
+  - **The `:download` action's own test,
+    `test_downloading_a_document_returns_a_signed_url`
+    (`apps/api/apps/student_management/tests/test_guardians_documents.py:451`), only
+    asserts `assertTrue(response.json()["data"]["download_url"])`** — truthy, which can't
+    catch a regression that signs the wrong underlying file. The test environment's
+    `NullPresigner` returns a predictable `https://null-presigner.invalid/<storage_key>`
+    shape (`apps/api/core/files/storage.py`), so asserting the real file's storage key
+    appears in the URL is straightforward whenever this is picked up.
+  - **The guardian-picker "just-created guardian" gap is narrowed, not closed.** A fix
+    (lifting the just-created guardian's id into `StudentGuardiansTab`'s own state) now
+    correctly preserves it across a Cancel-and-reopen within the same tab session. But the
+    guardian is still permanently lost if the user switches to a different tab and back
+    (Radix unmounts inactive tab panels, discarding the state), closes the whole detail
+    sheet, navigates to a different student, or reloads the page — any of these still
+    leaves an orphaned, unlinked, PII-holding guardian record that a campus-scoped search
+    can never find again (guardians have no delete endpoint). There's also a narrow race:
+    cancelling while the create request is still in flight, then reopening before it
+    resolves, can still produce a duplicate. Closing this fully needs either a backend
+    create-and-link-in-one-request endpoint, or a way for guardian search to surface a
+    caller's own zero-link guardians — both are real backend changes outside this phase's
+    deliberately dashboard-only scope. A cheaper partial improvement worth considering
+    later: hold the pending guardian in a longer-lived store (e.g. keyed by student id in
+    TanStack Query's cache, not component state) so it survives a tab switch or the sheet
+    closing, without needing a backend change.
+  - **`formatDate`'s locale parameter has no visible effect today.** The function now
+    accepts and threads through a date-fns `Locale` object correctly (verified against
+    date-fns 4.4.0's real `parseISO`/`format` behavior), but this app currently only
+    supports `en` and `ur`, and both map to date-fns' `enUS` locale — so passing a locale
+    changes nothing observable yet; Urdu-locale screens still render month names in
+    English. This was already true of the pre-existing `formatLastUpdated`-style helpers
+    before this phase touched them. Closing this properly means either sourcing a real
+    Urdu date-fns locale (if one exists and this repo wants to adopt it) or switching date
+    formatting to next-intl's own `useFormatter().dateTime(...)`, which formats through
+    `Intl` using the active locale directly — a larger change than this phase's scope.
 

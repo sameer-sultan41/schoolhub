@@ -2,12 +2,18 @@ import { fetchPage } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import { RELATION_PAGE_SIZE } from "./students-constant";
 import { toStudentBody, toStudentsQueryParams } from "./students-helper";
 import type {
+  AddEmergencyContactInput,
   CreateStudentInput,
+  DocumentVerificationDecision,
+  EmergencyContactRecord,
+  StudentDocumentRecord,
   StudentRecord,
   StudentsPageQuery,
   UpdateStudentInput,
+  UploadDocumentInput,
   WithdrawStudentInput,
 } from "./students-type";
 
@@ -18,10 +24,15 @@ import type {
  */
 
 export type {
+  AddEmergencyContactInput,
   CreateStudentInput,
+  DocumentVerificationDecision,
+  EmergencyContactRecord,
+  StudentDocumentRecord,
   StudentRecord,
   StudentsPageQuery,
   UpdateStudentInput,
+  UploadDocumentInput,
   WithdrawStudentInput,
 } from "./students-type";
 
@@ -65,4 +76,81 @@ export async function withdrawStudent(
     { idempotencyKey },
   );
   return data;
+}
+
+export async function fetchEmergencyContacts(studentId: string): Promise<EmergencyContactRecord[]> {
+  const { items } = await fetchPage<EmergencyContactRecord>(
+    apiClient,
+    endpoints.students.emergencyContacts(studentId),
+    { query: { ordering: "priority", page_size: RELATION_PAGE_SIZE } },
+  );
+  return items;
+}
+
+export async function addEmergencyContact(
+  studentId: string,
+  input: AddEmergencyContactInput,
+): Promise<EmergencyContactRecord> {
+  const { data } = await apiClient.post<EmergencyContactRecord>(
+    endpoints.students.emergencyContacts(studentId),
+    {
+      name: input.name,
+      relationship: input.relationship,
+      phone: input.phone,
+      ...(input.altPhone ? { alt_phone: input.altPhone } : {}),
+      priority: input.priority,
+      ...(input.notes ? { notes: input.notes } : {}),
+    },
+  );
+  return data;
+}
+
+export async function fetchDocuments(studentId: string): Promise<StudentDocumentRecord[]> {
+  const { items } = await fetchPage<StudentDocumentRecord>(
+    apiClient,
+    endpoints.students.documents(studentId),
+    { query: { page_size: RELATION_PAGE_SIZE } },
+  );
+  return items;
+}
+
+export async function uploadDocumentRecord(
+  studentId: string,
+  input: UploadDocumentInput,
+): Promise<StudentDocumentRecord> {
+  const { data } = await apiClient.post<StudentDocumentRecord>(
+    endpoints.students.documents(studentId),
+    {
+      file_id: input.fileId,
+      document_type: input.documentType,
+      title: input.title,
+      ...(input.notes ? { notes: input.notes } : {}),
+      ...(input.expiresAt ? { expires_at: input.expiresAt } : {}),
+    },
+  );
+  return data;
+}
+
+export async function deleteDocument(documentId: string): Promise<void> {
+  await apiClient.delete(endpoints.studentDocuments.detail(documentId));
+}
+
+export async function verifyDocument(
+  documentId: string,
+  decision: DocumentVerificationDecision,
+): Promise<StudentDocumentRecord> {
+  const { data } = await apiClient.post<StudentDocumentRecord>(
+    endpoints.studentDocuments.verify(documentId),
+    { decision },
+  );
+  return data;
+}
+
+/** Task 1's own `students.document.view`-gated action — distinct from the generic
+ * `Services.jobs.fetchFileDownloadUrl`, which stays `/staff`'s export download path. */
+export async function getDocumentDownloadUrl(documentId: string): Promise<string> {
+  const { data } = await apiClient.post<{ download_url: string }>(
+    endpoints.studentDocuments.download(documentId),
+  );
+  return data.download_url;
 }

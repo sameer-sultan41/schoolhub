@@ -34,6 +34,7 @@ describe("Services", () => {
       "auth",
       "dashboard",
       "files",
+      "guardians",
       "jobs",
       "schoolOrganization",
       "staff",
@@ -65,6 +66,14 @@ describe("Services", () => {
     expect(typeof Services.staff.triggerStaffImport).toBe("function");
 
     expect(typeof Services.schoolOrganization.fetchHouses).toBe("function");
+
+    expect(typeof Services.guardians.searchGuardians).toBe("function");
+    expect(typeof Services.guardians.fetchGuardianById).toBe("function");
+    expect(typeof Services.guardians.createGuardian).toBe("function");
+    expect(typeof Services.guardians.updateGuardian).toBe("function");
+    expect(typeof Services.guardians.linkGuardianToStudent).toBe("function");
+    expect(typeof Services.guardians.updateGuardianLink).toBe("function");
+    expect(typeof Services.guardians.fetchGuardianLinks).toBe("function");
 
     expect(typeof Services.students.fetchStudentsPage).toBe("function");
     expect(typeof Services.students.fetchStudentById).toBe("function");

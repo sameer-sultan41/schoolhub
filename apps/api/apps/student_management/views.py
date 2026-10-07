@@ -362,7 +362,7 @@ class GuardianViewSet(
     scope_campus_field = "student_links__student__campus_id"
 
     def get_queryset(self):
-        return super().get_queryset().distinct()
+        return super().get_queryset().select_related("photo_file").distinct()
 
 
 class StudentGuardianViewSet(
@@ -616,11 +616,15 @@ class StudentDocumentViewSet(
     mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Top-level access for `DELETE /student-documents/{id}` and the
+    """Top-level access for `DELETE /student-documents/{id}`, and the
 
-    `:verify` colon-action. §4 declares ``students.document.delete`` but §16
-    names no endpoint for it — added here so the key is reachable; the module
-    doc gets the corresponding update in this PR.
+    `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+    names no endpoint for it — added here so the key is reachable; the module doc gets the
+    corresponding update in this PR. `:download` is its own action rather than reusing
+    `core/files`' generic `/files/{id}:download`, because that one is gated only by
+    `platform.file.view` (every staff role) — too broad for one specific student's
+    documents, which need `students.document.view`. See ADR-0021 (the general pattern
+    this follows for any sensitive, resource-scoped file).
     """
 
     queryset = StudentDocument.objects
@@ -630,6 +634,9 @@ class StudentDocumentViewSet(
     required_permission_map = {
         "destroy": "students.document.delete",
         "verify": "students.document.verify",
+        # Explicit rather than left to the required_permission fallback — same reasoning
+        # as FileViewSet.required_permission_map's own "download" entry.
+        "download": "students.document.view",
     }
     scope_campus_field = "student__campus_id"
 
@@ -657,6 +664,17 @@ class StudentDocumentViewSet(
         after = self.get_serializer(document).data
         record_audit(request, "verify", document, before=before, after=after)
         return ActionResponse.ok(after, message=f"Document {document.verification_status}.")
+
+    @extend_schema(
+        summary="Get a signed download URL for a student document",
+        request=None,
+        responses={200: OpenApiResponse(description="{'download_url': str}")},
+    )
+    def download(self, request, pk=None) -> Response:
+        from core.files.services import get_download_url
+
+        document = self.get_object()
+        return ActionResponse.ok({"download_url": get_download_url(document.file)})
 
 
 class StudentTransferViewSet(

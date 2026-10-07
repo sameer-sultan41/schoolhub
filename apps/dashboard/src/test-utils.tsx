@@ -47,3 +47,28 @@ export function setMatchesMobile(matches: boolean) {
     dispatchEvent: jest.fn(),
   }));
 }
+
+/** jsdom has no object URLs; a picked file's local preview needs one. */
+export function stubObjectUrls(url: string) {
+  const saved = ["createObjectURL", "revokeObjectURL"].map(
+    (name) => [name, Object.getOwnPropertyDescriptor(URL, name)] as const,
+  );
+  Object.defineProperty(URL, "createObjectURL", { value: jest.fn(() => url), configurable: true });
+  Object.defineProperty(URL, "revokeObjectURL", { value: jest.fn(), configurable: true });
+  return () => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(URL, name, descriptor);
+      else Reflect.deleteProperty(URL, name);
+    }
+  };
+}
+
+/** jsdom never loads images, so Radix's `AvatarImage` would wait forever without this. */
+export function stubImageLoading() {
+  const complete = jest.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
+  const width = jest.spyOn(HTMLImageElement.prototype, "naturalWidth", "get").mockReturnValue(1);
+  return () => {
+    complete.mockRestore();
+    width.mockRestore();
+  };
+}

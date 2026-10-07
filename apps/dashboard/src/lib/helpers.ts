@@ -1,4 +1,7 @@
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { enUS } from "date-fns/locale";
+import type { Locale } from "date-fns";
+import { isSupportedLocale, type SupportedLocale } from "./env";
 import { Regex } from "./regex";
 
 /**
@@ -95,6 +98,44 @@ export function formatLastUpdated(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return formatDistanceToNow(parsed, { addSuffix: true });
+}
+
+/** date-fns' own `Locale` object for each locale this app ships. date-fns has no Urdu
+ * locale at all (`date-fns/locale` exports no `ur`), so `ur` falls back to `enUS` —
+ * that only changes which language month/day names and relative-time phrasing render
+ * in, never which calendar date or instant is computed. */
+const DATE_FNS_LOCALES: Record<SupportedLocale, Locale> = {
+  en: enUS,
+  ur: enUS,
+};
+
+/** Resolves a next-intl locale (e.g. `useLocale()`) to date-fns' own `Locale` object,
+ * so `formatDate` can render in the viewer's language instead of always defaulting to
+ * English regardless of the active locale. Falls back to `enUS` for anything this app
+ * doesn't ship (including no locale at all). */
+function resolveDateFnsLocale(locale: string): Locale {
+  return isSupportedLocale(locale) ? DATE_FNS_LOCALES[locale] : enUS;
+}
+
+/** A longer, absolute rendering ("January 5, 2026") — distinct from `formatLastUpdated`'s
+ * relative one. Used for a fixed date that should read as a calendar date, not an elapsed
+ * time (a staff member's joining date/date of birth; a document's expiry date).
+ *
+ * Takes the viewer's locale (e.g. from `useLocale()`) so the month name renders in their
+ * language rather than always English — a caller with no locale context gets "en".
+ *
+ * Parses with `parseISO`, not `new Date()`: a date-only field (a `DateField` like a
+ * document's `expires_at`, e.g. "2026-01-05", with no time or timezone component) has no
+ * real instant to anchor to, but `new Date()` still treats the bare string as UTC
+ * midnight per the ECMA-262 Date Time String Format — `format()` then renders that UTC
+ * instant in the browser's LOCAL zone, which reads one calendar day early for every
+ * viewer west of UTC (the Americas). `parseISO` parses the same date-only string as LOCAL
+ * midnight instead, which is the correct reading for a field with no time of its own. */
+export function formatDate(value: string, locale: string = "en"): string {
+  const parsed = parseISO(value);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : format(parsed, "PPP", { locale: resolveDateFnsLocale(locale) });
 }
 
 /** Humanizes an unlabelled snake_case value, e.g. "on_leave" -> "On leave". Shared by

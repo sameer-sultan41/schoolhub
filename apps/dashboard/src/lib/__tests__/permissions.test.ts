@@ -1,6 +1,6 @@
 import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 
-import { hasPermission } from "../permissions";
+import { canAccessModule, hasPermission } from "../permissions";
 
 /** A complete, minimal `AuthenticatedUser` — every field is required by the real
  * type (`packages/types/src/auth.ts`), so a partial cast here would let a genuine
@@ -31,5 +31,21 @@ describe("hasPermission", () => {
 
   it("is false for an undefined user (still loading)", () => {
     expect(hasPermission(undefined, "staff.staff.export")).toBe(false);
+  });
+});
+
+describe("canAccessModule", () => {
+  it("is true when the user holds any key under the module", () => {
+    const user = userWith(["staff.staff.view"]);
+    expect(canAccessModule(user, "staff")).toBe(true);
+  });
+
+  it("is false when the user holds keys only for other modules", () => {
+    const user = userWith(["fees.invoice.view"]);
+    expect(canAccessModule(user, "staff")).toBe(false);
+  });
+
+  it("is false for an undefined user (still loading)", () => {
+    expect(canAccessModule(undefined, "staff")).toBe(false);
   });
 });

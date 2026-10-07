@@ -15,3 +15,13 @@ export const STUDENT_STATUS_VALUES = [
   "graduated",
 ] as const;
 export type StudentStatus = (typeof STUDENT_STATUS_VALUES)[number];
+
+export const RELATIONSHIP_VALUES = [
+  "father",
+  "mother",
+  "grandparent",
+  "sibling",
+  "legal_guardian",
+  "other",
+] as const;
+export type RelationshipValue = (typeof RELATIONSHIP_VALUES)[number];

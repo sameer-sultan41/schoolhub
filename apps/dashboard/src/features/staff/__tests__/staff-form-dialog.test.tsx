@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { Services } from "@/services";
 import type { StaffDetailRecord } from "@/services/modules/staff/staff-type";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, stubImageLoading } from "@/test-utils";
 
 import { StaffFormDialog } from "../staff-form-dialog";
 
@@ -133,19 +133,6 @@ async function chooseOption(
  * a change event instead, same as this suite treats the file input's change event. */
 function setDate(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value } });
-}
-
-/** jsdom never loads images, so Radix's `AvatarImage` would wait forever. Report every
- * image as already loaded (width 1) or broken (width 0); returns the restore function. */
-function stubImageLoading(result: "loaded" | "broken") {
-  const complete = jest.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
-  const width = jest
-    .spyOn(HTMLImageElement.prototype, "naturalWidth", "get")
-    .mockReturnValue(result === "loaded" ? 1 : 0);
-  return () => {
-    complete.mockRestore();
-    width.mockRestore();
-  };
 }
 
 /** jsdom has no object URLs; the dialog creates one for a picked file's local preview.
@@ -417,7 +404,7 @@ describe("StaffFormDialog", () => {
     });
 
     it("shows the saved photo in the preview", async () => {
-      const restoreImages = stubImageLoading("loaded");
+      const restoreImages = stubImageLoading();
       try {
         mockReferenceData();
         mockFetchStaffById.mockResolvedValue(
@@ -442,7 +429,7 @@ describe("StaffFormDialog", () => {
     });
 
     it("shows the newly picked photo instead of the saved one", async () => {
-      const restoreImages = stubImageLoading("loaded");
+      const restoreImages = stubImageLoading();
       const restoreObjectUrls = stubObjectUrls("blob:new-photo");
       // Unmounted before the stubs are restored: the dialog revokes its object URL on unmount.
       let unmount: (() => void) | undefined;

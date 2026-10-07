@@ -10784,11 +10784,15 @@ paths:
     get:
       operationId: student_documents_retrieve
       description: |-
-        Top-level access for `DELETE /student-documents/{id}` and the
+        Top-level access for `DELETE /student-documents/{id}`, and the
 
-        `:verify` colon-action. §4 declares ``students.document.delete`` but §16
-        names no endpoint for it — added here so the key is reachable; the module
-        doc gets the corresponding update in this PR.
+        `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+        names no endpoint for it — added here so the key is reachable; the module doc gets the
+        corresponding update in this PR. `:download` is its own action rather than reusing
+        `core/files`' generic `/files/{id}:download`, because that one is gated only by
+        `platform.file.view` (every staff role) — too broad for one specific student's
+        documents, which need `students.document.view`. See ADR-0021 (the general pattern
+        this follows for any sensitive, resource-scoped file).
       parameters:
       - in: path
         name: id
@@ -10811,11 +10815,15 @@ paths:
     delete:
       operationId: student_documents_destroy
       description: |-
-        Top-level access for `DELETE /student-documents/{id}` and the
+        Top-level access for `DELETE /student-documents/{id}`, and the
 
-        `:verify` colon-action. §4 declares ``students.document.delete`` but §16
-        names no endpoint for it — added here so the key is reachable; the module
-        doc gets the corresponding update in this PR.
+        `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+        names no endpoint for it — added here so the key is reachable; the module doc gets the
+        corresponding update in this PR. `:download` is its own action rather than reusing
+        `core/files`' generic `/files/{id}:download`, because that one is gated only by
+        `platform.file.view` (every staff role) — too broad for one specific student's
+        documents, which need `students.document.view`. See ADR-0021 (the general pattern
+        this follows for any sensitive, resource-scoped file).
       parameters:
       - in: path
         name: id
@@ -10831,15 +10839,47 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/student-documents/{id}:download:
+    post:
+      operationId: student_documents_:download_create
+      description: |-
+        Top-level access for `DELETE /student-documents/{id}`, and the
+
+        `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+        names no endpoint for it — added here so the key is reachable; the module doc gets the
+        corresponding update in this PR. `:download` is its own action rather than reusing
+        `core/files`' generic `/files/{id}:download`, because that one is gated only by
+        `platform.file.view` (every staff role) — too broad for one specific student's
+        documents, which need `students.document.view`. See ADR-0021 (the general pattern
+        this follows for any sensitive, resource-scoped file).
+      summary: Get a signed download URL for a student document
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-documents
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: '{''download_url'': str}'
   /api/v1/student-documents/{id}:verify:
     post:
       operationId: student_documents_:verify_create
       description: |-
-        Top-level access for `DELETE /student-documents/{id}` and the
+        Top-level access for `DELETE /student-documents/{id}`, and the
 
-        `:verify` colon-action. §4 declares ``students.document.delete`` but §16
-        names no endpoint for it — added here so the key is reachable; the module
-        doc gets the corresponding update in this PR.
+        `:verify`/`:download` colon-actions. §4 declares ``students.document.delete`` but §16
+        names no endpoint for it — added here so the key is reachable; the module doc gets the
+        corresponding update in this PR. `:download` is its own action rather than reusing
+        `core/files`' generic `/files/{id}:download`, because that one is gated only by
+        `platform.file.view` (every staff role) — too broad for one specific student's
+        documents, which need `students.document.view`. See ADR-0021 (the general pattern
+        this follows for any sensitive, resource-scoped file).
       summary: Verify or reject a student document
       parameters:
       - in: path
@@ -16301,6 +16341,11 @@ components:
           type: string
           format: uuid
           nullable: true
+        photo_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
         address:
           nullable: true
         custom_fields: {}
@@ -16318,6 +16363,7 @@ components:
       - id
       - last_name
       - phone
+      - photo_url
       - updated_at
     HolidayCalendar:
       type: object
@@ -19701,6 +19747,11 @@ components:
           type: string
           format: uuid
           nullable: true
+        photo_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
         address:
           nullable: true
         custom_fields: {}
@@ -20557,8 +20608,8 @@ components:
         photo_url:
           type: string
           format: uri
-          nullable: true
           readOnly: true
+          nullable: true
         campus_id:
           type: string
           format: uuid
@@ -22547,8 +22598,8 @@ components:
         photo_url:
           type: string
           format: uri
-          nullable: true
           readOnly: true
+          nullable: true
         campus_id:
           type: string
           format: uuid

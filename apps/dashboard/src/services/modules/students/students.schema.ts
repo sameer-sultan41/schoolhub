@@ -41,3 +41,54 @@ export const withdrawFormSchema = z.object({
 });
 
 export type WithdrawFormValues = z.infer<typeof withdrawFormSchema>;
+
+// Field names are snake_case, matching the API's own — same convention as
+// `guardianFormSchema`/`studentFormSchema` (round-5 plan review).
+export const emergencyContactSchema = z.object({
+  name: z.string().min(1),
+  relationship: z.string().min(1),
+  phone: z.string().min(1),
+  alt_phone: z.string().optional(),
+  // Plain z.number(), not z.coerce.number(): a coerced schema's input type (the raw,
+  // pre-coercion form value) differs from its output type, which forces a 3-generic
+  // useForm<Input, unknown, Output> that this codebase's FormField doesn't forward
+  // cleanly (round-5 plan review). The number field below sets its own numeric value via
+  // `valueAsNumber` instead, so RHF's internal value is already a real number and a
+  // single-generic schema/useForm is enough. `z.preprocess` would reintroduce that same
+  // Input-vs-Output mismatch (its `_input` is `unknown`), so the NaN/empty case is instead
+  // normalized to `undefined` at the call site (`student-emergency-contacts-tab.tsx`'s
+  // `onChange`) and this schema only needs a friendlier message for that `undefined` (or,
+  // defensively, a raw `NaN` reaching this schema some other way) than zod's default
+  // type-mismatch text ("Expected number, received nan"/"received undefined").
+  priority: z
+    .number({
+      // This `error` customizer is only ever invoked for this schema's own invalid_type
+      // issue (`.int()`/`.min()` below get their own separate per-check customizer slot if
+      // they ever need one), so there's no `issue.code` to branch on here.
+      error: (issue) =>
+        issue.input === undefined || (typeof issue.input === "number" && Number.isNaN(issue.input))
+          ? "Priority is required."
+          : undefined,
+    })
+    .int()
+    .min(1),
+  notes: z.string().optional(),
+});
+
+export type EmergencyContactFormValues = z.infer<typeof emergencyContactSchema>;
+
+// The file itself stays outside this schema, as its own `useState` on the dialog — same
+// convention `PhotoUploadField` (Task 5) already established for an uncontrolled `<input
+// type="file">`, which has no meaningful RHF "value" to validate against. Only the
+// metadata fields go through RHF + zod.
+//
+// Field names are snake_case, matching the API's own — same convention as
+// `guardianFormSchema`/`studentFormSchema` (round-5 plan review).
+export const documentFormSchema = z.object({
+  document_type: z.string().min(1),
+  title: z.string().min(1),
+  notes: z.string().optional(),
+  expires_at: z.string().optional(),
+});
+
+export type DocumentFormValues = z.infer<typeof documentFormSchema>;

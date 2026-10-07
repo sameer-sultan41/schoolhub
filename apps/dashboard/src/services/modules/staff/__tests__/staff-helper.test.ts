@@ -1,4 +1,5 @@
 import {
+  statusMeta,
   toStaffCreateBody,
   toStaffQueryParams,
   toStaffRow,
@@ -31,6 +32,24 @@ describe("toStaffRow", () => {
   it("falls back to a staff-type label when designation_name is absent", () => {
     const row = toStaffRow(staffRecord({ designation_name: null, staff_type: "non_teaching" }));
     expect(row.designation).toBe("Non-teaching staff");
+  });
+
+  it("falls back to the teaching-staff label when designation_name is absent", () => {
+    const row = toStaffRow(staffRecord({ designation_name: null, staff_type: "teaching" }));
+    expect(row.designation).toBe("Teaching staff");
+  });
+});
+
+describe("statusMeta", () => {
+  it("returns the known variant and label for a mapped status", () => {
+    expect(statusMeta("active")).toEqual({ variant: "success", label: "Active" });
+  });
+
+  it("falls back to a secondary variant with a humanized label for an unmapped status", () => {
+    expect(statusMeta("pending_review")).toEqual({
+      variant: "secondary",
+      label: "Pending review",
+    });
   });
 });
 

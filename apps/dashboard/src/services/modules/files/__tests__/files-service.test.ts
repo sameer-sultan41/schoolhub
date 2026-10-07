@@ -82,6 +82,30 @@ describe("uploadFile", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("preserves the backend's own validation message when POST /files rejects with an ApiError", async () => {
+    const { uploadFile } = await import("../files-service");
+    // Imported fresh after `jest.resetModules()`, from the same module registry
+    // `uploadFile` itself resolved against — a statically-imported `ApiError` would be
+    // a different class instance post-reset, and `instanceof` would (wrongly) fail.
+    const { ApiError } = await import("@schoolhub/api-client");
+    mockPost.mockRejectedValue(
+      new ApiError({
+        code: "unsupported_media_type",
+        message: "'image/gif' is not allowed for 'staff_photo' uploads.",
+        status: 422,
+        url: "/files",
+      }),
+    );
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock;
+
+    await expect(uploadFile(fakeFile(), "staff_photo")).rejects.toMatchObject({ step: "create" });
+    await expect(uploadFile(fakeFile(), "staff_photo")).rejects.toThrow(
+      "'image/gif' is not allowed for 'staff_photo' uploads.",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("throws a put-step error and never confirms when the storage PUT fails", async () => {
     const { uploadFile } = await import("../files-service");
     mockPost.mockResolvedValueOnce({

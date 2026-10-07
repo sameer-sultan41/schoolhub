@@ -7,6 +7,8 @@ from urllib.parse import parse_qs, urlsplit
 
 from django.test import SimpleTestCase, override_settings
 
+from core.files.models import File
+from core.files.services import get_download_url
 from core.files.storage import S3Presigner, get_presigner
 
 STORAGE = {
@@ -66,6 +68,32 @@ class S3PresignerSignatureTests(SimpleTestCase):
         query = parse_qs(urlsplit(url).query)
         self.assertEqual(query.get("X-Amz-Expires"), ["3600"])
         self.assertEqual(query.get("response-cache-control"), ["private, max-age=3600"])
+
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_download_links_take_a_content_disposition(self):
+        url = S3Presigner().presign_download(
+            storage_key="tenants/t/report.pdf",
+            content_disposition='attachment; filename="report.pdf"',
+        )
+
+        query = parse_qs(urlsplit(url).query)
+        self.assertEqual(
+            query.get("response-content-disposition"), ['attachment; filename="report.pdf"']
+        )
+
+
+class GetDownloadUrlTests(SimpleTestCase):
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_sets_a_content_disposition_header_from_the_files_own_name(self):
+        # Unsaved instance — SimpleTestCase forbids DB access, but constructing a model
+        # in memory without .save() never touches the database.
+        file = File(storage_key="tenants/t/report.pdf", original_name="Report Card.pdf")
+
+        url = get_download_url(file)
+
+        query = parse_qs(urlsplit(url).query)
+        self.assertIn("response-content-disposition", query)
+        self.assertIn("Report Card.pdf", query["response-content-disposition"][0])
 
 
 class GetPresignerTests(SimpleTestCase):

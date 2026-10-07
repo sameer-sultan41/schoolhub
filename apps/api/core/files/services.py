@@ -14,6 +14,7 @@ import uuid
 
 from django.conf import settings
 from django.db import transaction
+from django.utils.http import content_disposition_header
 
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.models import File, FileStatus
@@ -119,7 +120,10 @@ def confirm_upload(*, file: File, actor_id: uuid.UUID) -> File:
 
 
 def get_download_url(file: File) -> str:
-    return get_presigner().presign_download(storage_key=file.storage_key)
+    return get_presigner().presign_download(
+        storage_key=file.storage_key,
+        content_disposition=content_disposition_header(True, file.original_name),
+    )
 
 
 def get_display_url(file: File) -> str | None:

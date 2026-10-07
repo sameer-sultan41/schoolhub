@@ -57,17 +57,33 @@ import { Button } from "./button";
  *    surface; a lookalike div renders the same pill but is inert under
  *    `handleOnly`, so the drawer becomes entirely impossible to drag behind an
  *    affordance that still visually promises otherwise.
+ * 10. `Drawer` takes an optional `nested` prop, rendering vaul's `Drawer.NestedRoot`
+ *     instead of `Drawer.Root` — required when this drawer opens from inside another
+ *     already-open `Drawer`'s content tree, which vaul doesn't support with two
+ *     independent `Root`s. The vendor file has no such prop since it ports only `Root`.
  */
 const DrawerCloseHandlerContext = createContext<(() => void) | null>(null);
 
 function Drawer({
   shouldScaleBackground = false,
   onOpenChange,
+  nested = false,
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) {
+}: React.ComponentProps<typeof DrawerPrimitive.Root> & {
+  /** Renders vaul's `Drawer.NestedRoot` instead of `Drawer.Root` — see departure 10
+   * above. vaul 1.1.2's `NestedRoot` doesn't throw outside a parent (its guard reads
+   * `onNestedDrag` from `DrawerContext`, whose default is a no-op). It renders `Root`
+   * with `nested: true` and forwards open/drag/release to the parent's `onNested*`
+   * handlers (outside a parent these are the context's no-ops). `nested: true` also
+   * skips `usePositionFixed`'s iOS-Safari body `position: fixed` set/restore. That
+   * effect only engages after a trigger-driven open (`hasBeenOpened`). So `true`
+   * without an open parent is never caught; it silently drops that iOS handling. */
+  nested?: boolean;
+}) {
+  const Root = nested ? DrawerPrimitive.NestedRoot : DrawerPrimitive.Root;
   return (
     <DrawerCloseHandlerContext.Provider value={() => onOpenChange?.(false)}>
-      <DrawerPrimitive.Root
+      <Root
         data-slot="drawer"
         shouldScaleBackground={shouldScaleBackground}
         onOpenChange={onOpenChange}
