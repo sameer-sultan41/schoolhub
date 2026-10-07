@@ -1,4 +1,8 @@
-import { emergencyContactSchema } from "../students.schema";
+import {
+  changeSectionFormSchema,
+  emergencyContactSchema,
+  enrollFormSchema,
+} from "../students.schema";
 
 function baseContact() {
   return { name: "Ayesha Khan", relationship: "Mother", phone: "0300-1234567" };
@@ -34,5 +38,41 @@ describe("emergencyContactSchema.priority", () => {
 
     expect(message).toBeDefined();
     expect(message).not.toBe("Priority is required.");
+  });
+});
+
+describe("enrollFormSchema", () => {
+  it("accepts a valid submission with only the required fields", () => {
+    const result = enrollFormSchema.safeParse({
+      academic_session_id: "sess-1",
+      class_id: "c1",
+      section_id: "sec1",
+      enrollment_date: "2026-04-05",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a submission missing section_id", () => {
+    const result = enrollFormSchema.safeParse({
+      academic_session_id: "sess-1",
+      class_id: "c1",
+      enrollment_date: "2026-04-05",
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("changeSectionFormSchema", () => {
+  it("accepts a valid submission with only section_id", () => {
+    const result = changeSectionFormSchema.safeParse({ section_id: "sec2" });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("has no class_id field at all", () => {
+    expect(changeSectionFormSchema.safeParse({ section_id: "sec2" }).success).toBe(true);
+    expect("class_id" in changeSectionFormSchema.shape).toBe(false);
   });
 });

@@ -42,6 +42,29 @@ export const withdrawFormSchema = z.object({
 
 export type WithdrawFormValues = z.infer<typeof withdrawFormSchema>;
 
+// Field names are snake_case, matching the API's own request body
+// (EnrollRequestSerializer) — same convention as every other schema in this file.
+export const enrollFormSchema = z.object({
+  academic_session_id: z.string().min(1),
+  class_id: z.string().min(1),
+  section_id: z.string().min(1),
+  enrollment_date: z.string().min(1),
+  roll_number: z.string().optional(),
+  capacity_override_reason: z.string().optional(),
+});
+
+export type EnrollFormValues = z.infer<typeof enrollFormSchema>;
+
+// ChangeSectionRequestSerializer has no class_id field — the class is implied by the
+// chosen section, never submitted directly.
+export const changeSectionFormSchema = z.object({
+  section_id: z.string().min(1),
+  roll_number: z.string().optional(),
+  capacity_override_reason: z.string().optional(),
+});
+
+export type ChangeSectionFormValues = z.infer<typeof changeSectionFormSchema>;
+
 // Field names are snake_case, matching the API's own — same convention as
 // `guardianFormSchema`/`studentFormSchema` (round-5 plan review).
 export const emergencyContactSchema = z.object({

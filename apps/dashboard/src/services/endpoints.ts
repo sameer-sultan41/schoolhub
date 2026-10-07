@@ -92,6 +92,11 @@ export const endpoints = {
     /** Colon-action, not a nested path — the real registered route is
      * `/students/{id}:withdraw`. */
     withdraw: (id: string) => `/students/${id}:withdraw`,
+    /** Colon-actions, not nested paths — the real registered routes are
+     * `/students/{id}:enroll`/`/students/{id}:change-section`. */
+    enroll: (id: string) => `/students/${id}:enroll`,
+    changeSection: (id: string) => `/students/${id}:change-section`,
+    history: (id: string) => `/students/${id}/history`,
     emergencyContacts: (studentId: string) => `/students/${studentId}/emergency-contacts`,
     documents: (studentId: string) => `/students/${studentId}/documents`,
   },
