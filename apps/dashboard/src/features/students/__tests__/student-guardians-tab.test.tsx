@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
@@ -34,6 +34,12 @@ const mockFetchGuardianById = Services.guardians.fetchGuardianById as jest.Mocke
 >;
 const mockUpdateGuardianLink = Services.guardians.updateGuardianLink as jest.MockedFunction<
   typeof Services.guardians.updateGuardianLink
+>;
+const mockCreateGuardian = Services.guardians.createGuardian as jest.MockedFunction<
+  typeof Services.guardians.createGuardian
+>;
+const mockLinkGuardianToStudent = Services.guardians.linkGuardianToStudent as jest.MockedFunction<
+  typeof Services.guardians.linkGuardianToStudent
 >;
 const mockToastError = toast.error as jest.MockedFunction<typeof toast.error>;
 
@@ -82,6 +88,8 @@ describe("StudentGuardiansTab", () => {
     mockFetchGuardianLinks.mockReset();
     mockFetchGuardianById.mockReset();
     mockUpdateGuardianLink.mockReset();
+    mockCreateGuardian.mockReset();
+    mockLinkGuardianToStudent.mockReset();
     mockToastError.mockReset();
   });
 
@@ -162,6 +170,65 @@ describe("StudentGuardiansTab", () => {
       expect(mockToastError).toHaveBeenCalled();
     });
     expect(screen.getByRole("button", { name: /make primary/i })).toBeInTheDocument();
+  });
+
+  it("resumes the link step for an already-created guardian after the picker is cancelled before linking", async () => {
+    // Regression (round-8 review, Medium #1): once a guardian is created via the
+    // picker's "Create new" tab, cancelling the dialog before completing the link step
+    // used to unmount GuardianPickerDialog entirely, losing the just-created guardian's
+    // id. Guardians have no delete endpoint, and GuardianViewSet only surfaces a
+    // guardian with at least one student link to a campus-scoped searcher
+    // (apps/api/apps/student_management/views.py), so that guardian became permanently
+    // unfindable — the next "Create new" attempt would silently create a duplicate
+    // record for the same person. The fix lifts the just-created guardian's id into
+    // this component's own state, so reopening the picker resumes straight at the link
+    // step for that SAME guardian instead of restarting at the choose step.
+    mockFetchGuardianLinks.mockResolvedValue([]);
+    mockCreateGuardian.mockResolvedValue(
+      guardianRecord({ id: "g9", first_name: "Bilal", last_name: "Khan" }),
+    );
+    mockLinkGuardianToStudent.mockResolvedValue({ id: "link-9" } as never);
+    const user = userEvent.setup();
+
+    renderWithProviders(<StudentGuardiansTab studentId="student-1" canCreate canUpdate />);
+
+    await user.click(await screen.findByRole("button", { name: /link guardian/i }));
+    let dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("tab", { name: /create new/i }));
+    await user.type(await within(dialog).findByLabelText(/first name/i), "Bilal");
+    await user.type(within(dialog).getByLabelText(/last name/i), "Khan");
+    await user.type(within(dialog).getByLabelText(/^phone$/i), "0300-1111111");
+    await user.click(within(dialog).getByRole("button", { name: /create guardian/i }));
+
+    expect(await within(dialog).findByText("Bilal Khan")).toBeInTheDocument();
+    expect(mockCreateGuardian).toHaveBeenCalledTimes(1);
+
+    // Cancel before linking — the whole dialog unmounts.
+    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    // Reopen: must resume straight at the link step for the SAME guardian, never back
+    // at "choose" (which would make "Create new" reachable again).
+    await user.click(screen.getByRole("button", { name: /link guardian/i }));
+    dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Bilal Khan")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("tab", { name: /create new/i })).not.toBeInTheDocument();
+    expect(mockCreateGuardian).toHaveBeenCalledTimes(1);
+
+    // Completing the link now must reuse the already-created guardian's id.
+    await user.click(within(dialog).getByRole("combobox", { name: /relationship/i }));
+    await user.click(screen.getByRole("option", { name: /^father$/i }));
+    await user.click(within(dialog).getByRole("button", { name: /link guardian/i }));
+
+    await waitFor(() => {
+      expect(mockLinkGuardianToStudent).toHaveBeenCalledWith(
+        "student-1",
+        expect.objectContaining({ guardianId: "g9", relationship: "father" }),
+      );
+    });
+    expect(mockCreateGuardian).toHaveBeenCalledTimes(1);
   });
 
   it("hides every action for a caller without create/update permission", async () => {

@@ -40,6 +40,14 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
   const queryClient = useQueryClient();
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  // A guardian the picker already created (its "Create new" tab succeeded) but hasn't
+  // linked yet — held here, one level up from `GuardianPickerDialog`, so Cancel/closing
+  // the picker before the link step completes doesn't lose it. The picker has no delete
+  // endpoint for guardians and `GuardianViewSet` only surfaces campus-scoped guardians
+  // with at least one student link, so a guardian created and then abandoned here would
+  // otherwise be permanently unfindable the next time anyone searches (round-8 review
+  // finding). Cleared once `onLinked` actually fires for it.
+  const [pendingGuardian, setPendingGuardian] = useState<GuardianRecord | null>(null);
   const [editingGuardian, setEditingGuardian] = useState<GuardianRecord | null>(null);
   const [editingLink, setEditingLink] = useState<GuardianLinkRecord | null>(null);
 
@@ -261,10 +269,15 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
           studentId={studentId}
           excludedGuardianIds={links.map((link) => link.guardian_id)}
           isFirstGuardian={links.length === 0}
+          resumeGuardian={pendingGuardian}
+          onGuardianCreated={setPendingGuardian}
           onOpenChange={(open) => {
             if (!open) setPickerOpen(false);
           }}
-          onLinked={invalidateLinks}
+          onLinked={() => {
+            setPendingGuardian(null);
+            invalidateLinks();
+          }}
         />
       )}
       {editingLink && (
