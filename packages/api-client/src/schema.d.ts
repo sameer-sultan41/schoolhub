@@ -18968,6 +18968,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                student_id?: string;
             };
             header?: never;
             path?: never;

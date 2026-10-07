@@ -22,7 +22,7 @@ from rest_framework.response import Response
 if TYPE_CHECKING:
     from rest_framework.request import Request
 
-from apps.student_management.filters import StudentFilterSet
+from apps.student_management.filters import StudentFilterSet, StudentTransferFilterSet
 from apps.student_management.models import (
     EmergencyContact,
     Guardian,
@@ -696,6 +696,7 @@ class StudentTransferViewSet(
 
     queryset = StudentTransfer.objects
     serializer_class = StudentTransferSerializer
+    filterset_class = StudentTransferFilterSet
     required_feature = "module.students"
     # A transfer is read by its state and its date, which is what a person deciding on
     # one sorts by. No related-field sorts: nothing renders the student's name here yet.

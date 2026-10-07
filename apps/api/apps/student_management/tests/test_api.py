@@ -14,18 +14,22 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.school_organization.tests.factories import (
+    AcademicSessionFactory,
     CampusFactory,
+    ClassFactory,
+    SectionFactory,
     TenantFactory,
     UserFactory,
     authenticate,
     grant,
 )
-from apps.student_management.models import StudentStatus
+from apps.student_management.models import EnrollmentStatus, StudentStatus
 from apps.student_management.tests.factories import (
     DEFAULT_ADMISSION_DATE,
     DEFAULT_DOB,
     GuardianFactory,
     HouseFactory,
+    StudentEnrollmentFactory,
     StudentFactory,
     StudentGuardianFactory,
     enable_feature,
@@ -348,6 +352,112 @@ class StudentListTests(StudentManagementAPITestCase):
 
         ids = {row["id"] for row in response.json()["data"]}
         self.assertEqual(ids, {str(own_student.pk)})
+
+
+class StudentDirectoryEnrollmentFilterTests(StudentManagementAPITestCase):
+    """`academic_session_id`/`class_id`/`section_id` on `/students` must all match
+
+    one enrollment row together, not one row each independently (PR4's fix to a
+    real, pre-existing bug in the three originally-independent filters).
+    """
+
+    def test_combining_session_and_class_filter_requires_one_enrollment_to_match_both(
+        self,
+    ) -> None:
+        self.allow("students.student.view")
+        with tenant_context(self.tenant.id):
+            session_a = AcademicSessionFactory(tenant=self.tenant)
+            session_b = AcademicSessionFactory(tenant=self.tenant)
+            class_a = ClassFactory(tenant=self.tenant)
+            class_b = ClassFactory(tenant=self.tenant)
+            section_in_a = SectionFactory(
+                tenant=self.tenant, school_class=class_a, campus=self.campus
+            )
+            section_in_b = SectionFactory(
+                tenant=self.tenant, school_class=class_b, campus=self.campus
+            )
+
+            cross_row_student = StudentFactory(tenant=self.tenant, campus=self.campus)
+            # One enrollment matches session_a but class_b; another matches session_b
+            # but class_a. Neither single row matches (session_a AND class_a) together.
+            StudentEnrollmentFactory(
+                student=cross_row_student,
+                tenant=self.tenant,
+                academic_session=session_a,
+                school_class=class_b,
+                section=section_in_b,
+            )
+            StudentEnrollmentFactory(
+                student=cross_row_student,
+                tenant=self.tenant,
+                academic_session=session_b,
+                school_class=class_a,
+                section=section_in_a,
+            )
+
+            matching_student = StudentFactory(tenant=self.tenant, campus=self.campus)
+            StudentEnrollmentFactory(
+                student=matching_student,
+                tenant=self.tenant,
+                academic_session=session_a,
+                school_class=class_a,
+                section=section_in_a,
+            )
+
+        response = self.client.get(
+            f"/api/v1/students?academic_session_id={session_a.pk}&class_id={class_a.pk}"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        returned_ids = {row["id"] for row in response.json()["data"]}
+        self.assertEqual(returned_ids, {str(matching_student.pk)})
+        self.assertNotIn(str(cross_row_student.pk), returned_ids)
+
+    def test_session_filter_matches_a_past_non_active_enrollment(self) -> None:
+        self.allow("students.student.view")
+        with tenant_context(self.tenant.id):
+            past_session = AcademicSessionFactory(tenant=self.tenant)
+            school_class = ClassFactory(tenant=self.tenant)
+            section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.campus
+            )
+            student = StudentFactory(tenant=self.tenant, campus=self.campus)
+            StudentEnrollmentFactory(
+                student=student,
+                tenant=self.tenant,
+                academic_session=past_session,
+                school_class=school_class,
+                section=section,
+                status=EnrollmentStatus.PROMOTED,
+            )
+
+        response = self.client.get(f"/api/v1/students?academic_session_id={past_session.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertIn(str(student.pk), {row["id"] for row in response.json()["data"]})
+
+    def test_session_filter_excludes_a_soft_deleted_enrollment(self) -> None:
+        self.allow("students.student.view")
+        with tenant_context(self.tenant.id):
+            session = AcademicSessionFactory(tenant=self.tenant)
+            school_class = ClassFactory(tenant=self.tenant)
+            section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.campus
+            )
+            student = StudentFactory(tenant=self.tenant, campus=self.campus)
+            enrollment = StudentEnrollmentFactory(
+                student=student,
+                tenant=self.tenant,
+                academic_session=session,
+                school_class=school_class,
+                section=section,
+            )
+            enrollment.delete()
+
+        response = self.client.get(f"/api/v1/students?academic_session_id={session.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertNotIn(str(student.pk), {row["id"] for row in response.json()["data"]})
 
 
 class StudentOrderingTests(StudentManagementAPITestCase):

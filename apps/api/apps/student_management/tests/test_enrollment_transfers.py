@@ -255,6 +255,24 @@ class TransferTests(StudentManagementAPITestCase):
         with tenant_context(self.tenant.id):
             self.to_campus = CampusFactory(tenant=self.tenant)
 
+    def test_filters_transfers_by_student_id(self) -> None:
+        self.allow("students.student.view")
+        with tenant_context(self.tenant.id):
+            other_student = StudentFactory(tenant=self.tenant, campus=self.campus)
+            other_transfer = StudentTransferFactory(
+                tenant=self.tenant, student=other_student, from_campus=self.campus
+            )
+            own_transfer = StudentTransferFactory(
+                tenant=self.tenant, student=self.student, from_campus=self.campus
+            )
+
+        response = self.client.get(f"/api/v1/student-transfers?student_id={self.student.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        returned_ids = {row["id"] for row in response.json()["data"]}
+        self.assertEqual(returned_ids, {str(own_transfer.pk)})
+        self.assertNotIn(str(other_transfer.pk), returned_ids)
+
     def test_inter_campus_transfer_requires_both_campuses(self) -> None:
         self.allow("students.transfer.create")
 
@@ -446,3 +464,18 @@ class CrossTenantEnrollmentTests(StudentManagementAPITestCase):
         response = self.client.get(f"/api/v1/student-transfers/{foreign_transfer.pk}")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_transfer_list_filtered_by_foreign_student_id_returns_empty(self) -> None:
+        self.allow("students.student.view")
+        other_tenant = TenantFactory()
+        with tenant_context(other_tenant.id):
+            foreign_campus = CampusFactory(tenant=other_tenant)
+            foreign_student = StudentFactory(tenant=other_tenant, campus=foreign_campus)
+            StudentTransferFactory(
+                tenant=other_tenant, student=foreign_student, from_campus=foreign_campus
+            )
+
+        response = self.client.get(f"/api/v1/student-transfers?student_id={foreign_student.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"], [])
