@@ -15,12 +15,19 @@ jest.mock("@/services", () => ({
       fetchStudentById: jest.fn(),
       fetchEmergencyContacts: jest.fn(),
       fetchDocuments: jest.fn(),
+      fetchStudentHistory: jest.fn(),
     },
     guardians: {
       fetchGuardianLinks: jest.fn(),
     },
     files: {
       uploadFile: jest.fn(),
+    },
+    studentTransfers: {
+      fetchStudentTransfers: jest.fn(),
+    },
+    dashboard: {
+      fetchCampuses: jest.fn(),
     },
   },
 }));
@@ -44,6 +51,16 @@ const mockFetchDocuments = Services.students.fetchDocuments as jest.MockedFuncti
 >;
 const mockUploadFile = Services.files.uploadFile as jest.MockedFunction<
   typeof Services.files.uploadFile
+>;
+const mockFetchStudentHistory = Services.students.fetchStudentHistory as jest.MockedFunction<
+  typeof Services.students.fetchStudentHistory
+>;
+const mockFetchStudentTransfers = Services.studentTransfers
+  .fetchStudentTransfers as jest.MockedFunction<
+  typeof Services.studentTransfers.fetchStudentTransfers
+>;
+const mockFetchCampuses = Services.dashboard.fetchCampuses as jest.MockedFunction<
+  typeof Services.dashboard.fetchCampuses
 >;
 
 interface MockCurrentUserResult {
@@ -138,6 +155,9 @@ describe("StudentDetailSheet", () => {
     mockFetchEmergencyContacts.mockReset().mockResolvedValue([]);
     mockFetchDocuments.mockReset().mockResolvedValue([]);
     mockUploadFile.mockReset().mockResolvedValue("file-1");
+    mockFetchStudentHistory.mockReset().mockResolvedValue([]);
+    mockFetchStudentTransfers.mockReset().mockResolvedValue([]);
+    mockFetchCampuses.mockReset().mockResolvedValue([]);
     mockUseCurrentUser.mockReset().mockReturnValue({ data: PERMITTED_USER, isError: false });
   });
 
@@ -349,7 +369,7 @@ describe("StudentDetailSheet", () => {
     expect(onWithdraw).toHaveBeenCalledWith("stu-9", "Ayesha Khan");
   });
 
-  it("renders four tabs, defaulting to Profile", async () => {
+  it("renders five tabs, defaulting to Profile", async () => {
     mockFetchStudentById.mockResolvedValue(studentDetail());
 
     renderWithProviders(
@@ -368,6 +388,7 @@ describe("StudentDetailSheet", () => {
     expect(screen.getByRole("tab", { name: /^guardians$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /emergency contacts/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^documents$/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^history$/i })).toBeInTheDocument();
     // Pins the `asChild`-dropped fix: a real tabpanel role must reach the DOM, not get
     // silently swallowed by `ResponsiveSheetBody` (which doesn't forward arbitrary props).
     expect(screen.getByRole("tabpanel")).toBeInTheDocument();

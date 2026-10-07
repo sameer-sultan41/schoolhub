@@ -439,6 +439,7 @@
     "transfers": {
       "title": "Transfers",
       "empty": "No transfers on record.",
+      "loadError": "Couldn't load this student's transfers.",
       "request": "Request transfer",
       "requestDescription": "Request an inter-campus or outgoing transfer.",
       "approve": "Approve",
