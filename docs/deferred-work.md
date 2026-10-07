@@ -861,3 +861,64 @@ either this file or `project-status.md`.
   `FileViewSet`'s list and download, keyed by each file's `purpose` — not something to
   improvise inside one module's PR.
 
+- **The students Phase 2 branch's final pre-PR review (`change-reviewer`, round 8) found
+  nine smaller gaps beyond the two real bugs that round's fix wave actually fixed**
+  (`guardian-picker-dialog.tsx`'s retry-safety gap around an abandoned guardian creation,
+  and `formatDate`'s date-only timezone/locale bug) — grouped here since each is narrow
+  and independent, and none blocks the PR:
+  - **No automated test proves `GuardianViewSet`'s `select_related("photo_file")`
+    actually avoids an N+1.** The analogous student test,
+    `test_listing_photos_costs_no_query_per_row`
+    (`apps/api/apps/student_management/tests/test_api.py:565`), was never mirrored for
+    guardians.
+  - **The `:download` action's response (`{download_url}`) isn't typed via
+    drf-spectacular's `inline_serializer` in the generated OpenAPI contract** — the
+    dashboard client hand-types it, contrary to
+    [ADR-0017](decisions/0017-generated-wire-types-for-new-domains.md)'s convention for a
+    new response shape.
+  - **Nine call sites build user-facing accessible-name/display strings via JS template
+    literals (or chained JSX interpolations) instead of one parameterized i18n message**,
+    so Urdu can't control word order or separator choice for any of them — e.g.
+    `` `${t("documents.download")} — ${document.title}` `` in
+    `student-documents-tab.tsx:202` (and the identical pattern at lines 215/226/239 for
+    verify/reject/delete), `` `${t("guardians.editLinkTitle")} — ${guardian.first_name}
+    ${guardian.last_name}` `` in `student-guardians-tab.tsx:237` (and the identical
+    pattern at lines 210/250 for makePrimary/editGuardian), the hardcoded `" / "`
+    separator in `` ` / ${contact.alt_phone}` `` (`student-emergency-contacts-tab.tsx:111`),
+    and the hardcoded `"·"` separator in `{g.first_name} {g.last_name} · {g.phone}`
+    (`guardian-picker-dialog.tsx:410`). Distinct from, and in addition to, the
+    template-literal cases this plan already fixed elsewhere in earlier rounds.
+  - **`student-guardians-tab.tsx`'s `staleTime: 5 * 60 * 1000`** (line 104, the guardian
+    lookup's `useQueries`) **is an inline magic number** rather than a named constant in
+    `guardians-constant.ts`.
+  - **`fetchGuardianLinks`/`fetchEmergencyContacts`/`fetchDocuments` each fetch only one
+    page of up to 50 rows and discard pagination metadata** — a student with more than 50
+    guardians, contacts, or documents silently sees a truncated list, with no "showing
+    first N" indication that anything was cut off.
+  - **`applyServerFieldErrors`'s fallback swallows a genuinely new server message.** A 422
+    on a field outside a dialog's own `knownFields` (e.g. `file_id`, `guardian_id`) falls
+    through to the generic "Please correct the highlighted fields" copy even though
+    nothing is actually highlighted, rather than surfacing that specific unmatched
+    field's real server message.
+  - **Tenants can extend the set of valid document types**
+    (`TenantSettings.academic["student_document_types"]`, read by
+    `_document_type_allowed` in `apps/api/apps/student_management/services.py:443-447`),
+    **but no endpoint lists a tenant's custom types for the dashboard to use** — the
+    upload dialog only offers the 6 seeded defaults (the dashboard's own
+    `DOCUMENT_TYPES` constant, `apps/dashboard/src/services/modules/students/students-constant.ts`,
+    mirroring the backend's `DEFAULT_DOCUMENT_TYPES`) plus "other".
+  - **`student-emergency-contacts-tab.tsx` and `students-service.ts`
+    (`addEmergencyContact`/`uploadDocumentRecord`) build request bodies by hand,
+    field-by-field,** while the guardians domain (`Services.guardians`) uses
+    `copyMappedFields`-based helper functions with a `*_BODY_FIELDS` constant — an
+    inconsistency with this plan's own established convention, worth closing the next
+    time either file is touched.
+  - **The `:download` action's own test,
+    `test_downloading_a_document_returns_a_signed_url`
+    (`apps/api/apps/student_management/tests/test_guardians_documents.py:451`), only
+    asserts `assertTrue(response.json()["data"]["download_url"])`** — truthy, which can't
+    catch a regression that signs the wrong underlying file. The test environment's
+    `NullPresigner` returns a predictable `https://null-presigner.invalid/<storage_key>`
+    shape (`apps/api/core/files/storage.py`), so asserting the real file's storage key
+    appears in the URL is straightforward whenever this is picked up.
+
