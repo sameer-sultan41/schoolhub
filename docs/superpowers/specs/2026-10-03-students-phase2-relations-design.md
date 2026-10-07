@@ -3,11 +3,15 @@
 > **Agent Context:** This is the design spec for Phase 2 of the `/students` dashboard
 > rebuild, per the Roadmap in `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`.
 > It is implemented against `main` as of PR #96 (Phase 1) and PR #97 (UI polish), both
-> merged. This phase is dashboard-first, but carries four small, deliberate backend
-> additions surfaced across three rounds of independent plan review (ADR-0015):
+> merged. This phase is dashboard-first, but carries six small, deliberate backend
+> additions surfaced across six rounds of independent plan review (ADR-0015):
 > `GuardianSerializer` gains a `photo_url` field (guardians have no display URL for their
-> uploaded photo today, unlike students); the `principal` role gains
-> `students.document.view` in the permission registry (it already holds `.verify`, but
+> uploaded photo today, unlike students), plus a matching `.select_related("photo_file")`
+> on `GuardianViewSet.get_queryset` so resolving that field doesn't cost one extra query
+> per row, and a relaxed `validate_photo_file_id` check so re-saving a guardian's own
+> *unchanged* current photo never fails its purpose check (a security-relevant validation
+> change, matching `StudentSerializer`'s existing behavior exactly); the `principal` role
+> gains `students.document.view` in the permission registry (it already holds `.verify`, but
 > not the view permission needed to see the tab it verifies from — a pre-existing gap in
 > the permission matrix) — **this reaches only freshly dev/e2e-seeded `principal` roles**,
 > since no production code anywhere provisions a default role but `school_owner` for an
@@ -20,11 +24,17 @@
 > new `students.document.view`-gated `:download` action on `StudentDocumentViewSet`, so
 > the dashboard's own document-download path no longer relies on the generic, every-
 > staff-role `platform.file.view` key — though that generic `core/files` endpoint itself
-> remains open platform-wide (pre-existing, cross-cutting, out of scope here). Every other
-> endpoint this phase needs already exists and is already wired. The Guardians tab's
-> per-guardian name resolution (fan out one `GET /guardians/{id}` per linked guardian,
-> rather than a backend-embedded summary) is itself recorded as
-> [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md).
+> remains open platform-wide (pre-existing, cross-cutting, out of scope here; see
+> [ADR-0021](../../decisions/0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md)).
+> Every other endpoint this phase needs already exists and is already wired. The Guardians
+> tab's per-guardian name resolution (fan out one `GET /guardians/{id}` per linked
+> guardian, rather than a backend-embedded summary) is itself recorded as
+> [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md). This phase
+> also ports vaul's `Drawer.NestedRoot` into `packages/ui` (a `nested` prop on `Drawer` and
+> `ResponsiveDialog`) — kept as correct, future-ready infrastructure for a dialog opened
+> from inside another open drawer, though in this app's own usage (every dialog here opens
+> via a controlled `open` prop, never a `DrawerTrigger`) it currently has no observable
+> effect; see §3.3 and `packages/ui/src/components/drawer.tsx`'s own comment for why.
 
 **Work tier:** 2
 
@@ -70,24 +80,46 @@ from the same tab. All three flows work on mobile (drawer) as well as desktop (s
   new `getDocumentDownloadUrl` (wrapping the new `:download` action below — not a reuse
   of `Services.jobs.fetchFileDownloadUrl`, since that wraps the generic `core/files`
   action this phase deliberately doesn't use for student documents).
-- Four small backend additions (see the Agent Context note above): `GuardianSerializer.
+- Six small backend additions (see the Agent Context note above): `GuardianSerializer.
   photo_url` (mirrors `StudentSerializer.get_photo_url`'s purpose-gated pattern exactly);
-  `principal` added to `students.document.view`'s allowed roles in
+  `.select_related("photo_file")` added to `GuardianViewSet.get_queryset` (avoids an N+1
+  now that every row in a guardian search resolves its photo); a relaxed
+  `validate_photo_file_id` check so a guardian's own unchanged current photo never
+  re-fails its purpose check (matches `StudentSerializer`'s existing behavior —
+  security-relevant since it changes what a PATCH accepts); `principal` added to
+  `students.document.view`'s allowed roles in
   `apps/api/apps/student_management/permissions.py` (plus the matching row in
   `docs/03-modules/student-management.md` §4) — reaching only dev/e2e-seeded tenants, no
   production backfill (see Agent Context); a `Content-Disposition: attachment` header,
   applied globally, on `core/files`' signed download URLs
   (`core/files/storage.py`/`services.py`); and a new `students.document.view`-gated
-  `:download` action on `StudentDocumentViewSet`. The first and last regenerate
-  `openapi.yaml`/`schema.d.ts` per `.claude/rules/api-contract.md`; the permission and
-  Content-Disposition changes touch no serializer/view signature, so neither alone
-  touches the API contract.
-- Backend test gaps closed (otherwise no new backend code beyond the four additions
+  `:download` action on `StudentDocumentViewSet` ([ADR-0021](../../decisions/0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md)).
+  The `photo_url` field and the new `:download` action regenerate
+  `openapi.yaml`/`schema.d.ts` per `.claude/rules/api-contract.md`; the other four touch
+  no serializer/view signature or add no new route, so none of them alone touches the API
+  contract.
+- Shared `packages/ui`/dashboard infrastructure this phase adds or extracts, consumed by
+  the five new dialogs and three new tabs below: a `nested` prop on `Drawer`
+  (`packages/ui`) and `ResponsiveDialog`, backed by vaul's `Drawer.NestedRoot`, for a
+  dialog opened from inside another already-open drawer (see the Agent Context note on
+  its actual, currently-inert effect in this app); a shared `PhotoUploadField`
+  (`apps/dashboard/src/components/photo-upload-field.tsx`); a shared `useSubmitGuard`
+  double-submit-guard hook; a shared `applyServerFieldErrors` helper mapping a server's
+  422 field errors onto a React Hook Form instance; `ResponsiveSheet` gaining its own
+  narrower props type that excludes `nested` (the desktop/no-drawer sheet has no concept
+  of nesting); and `formatDate` moved from the staff module's own helper file into the
+  shared `@/lib/helpers.ts` (with a timezone-correctness fix — a date-only string now
+  parses as local midnight, not UTC midnight — and a new Jest `globalSetup` so that fix's
+  regression test actually runs in a non-UTC timezone), which `apps/dashboard/src/features/
+  staff/staff-detail-sheet.tsx` inherits automatically since it already called the
+  now-shared helper.
+- Backend test gaps closed (otherwise no new backend code beyond the six additions
   above — the rest are tests only): a cross-tenant test for emergency contacts (none
   exists, plus one for creating a contact under another tenant's student), `GET
   /student-guardians/{id}` and the guardians list (untested), `PATCH /guardians/{id}`
-  (untested), reading another tenant's guardian link (404), and the guardian-link
-  duplicate conflict (409).
+  (untested), reading another tenant's guardian link (404), a guardian-search
+  list-leakage test (a foreign tenant's guardian must never appear in search results),
+  and the guardian-link duplicate conflict (409).
 - i18n: `students.guardians.*`, `students.emergencyContacts.*`, `students.documents.*`
   namespaces, in both `en.json` and `ur.json`.
 
@@ -119,7 +151,8 @@ from the same tab. All three flows work on mobile (drawer) as well as desktop (s
 
 `StudentDetailSheet` (`apps/dashboard/src/features/students/student-detail-sheet.tsx`)
 gains a `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` wrapper (`packages/ui`, already
-ported, unused anywhere in this app yet — this is its first real consumer). The
+ported; already used elsewhere in the shell, e.g. the notifications sheet and a search
+dialog, but this is its first consumer inside the students feature). The
 existing Profile/Academic/Medical `FieldSection`s move under a `Profile` tab,
 unchanged. Three new `TabsContent` panels render the three new feature components.
 
@@ -164,7 +197,8 @@ always fit on one line; verify visually at 375px in both locales during implemen
   `students-service.ts`/`students-type.ts` files (no new per-resource file split —
   ADR-0019's five-file shape applies to the brand-new `Services.guardians` domain, not to
   an existing module gaining a few more functions).
-- **Document download** is its own `getDocumentDownloadUrl(documentId)` wrapping the new
+- **Document download** is its own `getDocumentDownloadUrl(documentId)` wrapping the new,
+  [ADR-0021](../../decisions/0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md)
   `students.document.view`-gated `POST /student-documents/{id}:download` action (Task 1)
   — deliberately NOT a reuse of `Services.jobs.fetchFileDownloadUrl`
   (`apps/dashboard/src/services/modules/jobs/jobs-service.ts`), which wraps the generic
@@ -175,16 +209,18 @@ always fit on one line; verify visually at 375px in both locales during implemen
 Query keys follow the existing `queryKeys` factory, whose third argument is a params
 *object*, not a bare id: `queryKeys.list("students", "guardian-links", { studentId })`,
 `.list("students", "emergency-contacts", { studentId })`, `.list("students", "documents",
-{ studentId })`, `.list("guardians", "search", { query })`. A link/add/upload/verify/
-delete mutation invalidates the matching list key.
+{ studentId })`, `.list("guardians", "search", { search })`. Each resolved guardian in the
+fan-out also gets its own `queryKeys.detail("guardians", "guardians", guardianId)` entry
+(a longer `staleTime`, since a guardian's own name/phone rarely changes mid-session). A
+link/add/upload/verify/delete mutation invalidates the matching list key.
 
 ### 3.3 Component responsibilities
 
 | Component | Responsibility |
 | --- | --- |
 | `StudentGuardiansTab` | Lists linked guardians + flags (resolved via `fetchGuardianById` fan-out); "Add guardian" opens the chooser (search vs. create); shows a load-error state with retry on a failed fetch, distinct from the empty-list state. |
-| `GuardianPickerDialog` | One dialog, two internal steps, rather than nesting a second dialog inside it for "create new" — simpler on its own merits even though `packages/ui`'s `Drawer` now supports nesting (`Drawer.NestedRoot`, added this phase specifically because the picker itself, and four sibling dialogs, all open from inside the tabbed sheet's own mobile drawer). Step 1 ("choose"): search-existing (debounced `Select`, excluding guardians already linked to this student) **or** a "create new" tab with the same fields (including photo) as `GuardianFormDialog`, inlined directly rather than opened as a second dialog. Step 2 ("link"), reached from either path: the chosen/created guardian + relationship, ending in `linkGuardianToStudent`, retried on failure without re-creating the guardian. |
-| `GuardianFormDialog` | Create/edit a guardian's own fields, including the photo via a shared `PhotoUploadField` (extracted from `StudentPhotoField` on this, its third use — students, staff, guardians — per the repo's third-copy rule; purpose `guardian.photo`). Shared by "create new" and "edit this guardian." |
+| `GuardianPickerDialog` | One dialog, two internal steps, rather than nesting a second dialog inside it for "create new" — simpler on its own merits. The dialog itself still opens from inside the tabbed sheet's own mobile drawer (as do four sibling dialogs), via `packages/ui`'s `Drawer`/`ResponsiveDialog` `nested` prop (backed by vaul's `Drawer.NestedRoot`) — kept as correct infrastructure for that case, though in this app's own controlled-`open` usage it currently has no observable effect (see the Agent Context note). Step 1 ("choose"): search-existing (debounced `Select`, excluding guardians already linked to this student) **or** a "create new" tab with the same fields (including photo) as `GuardianFormDialog`, inlined directly rather than opened as a second dialog. Step 2 ("link"), reached from either path: the chosen/created guardian + relationship, ending in `linkGuardianToStudent`, retried on failure without re-creating the guardian. |
+| `GuardianFormDialog` | Edit a guardian's own fields, including the photo via a shared `PhotoUploadField` (extracted from `StudentPhotoField` on this, its third near-identical copy — students, staff, guardians — per the repo's third-copy rule; purpose `guardian.photo`). Edit-only: the picker's "create new" step uses the same underlying `GuardianFormFields` directly rather than opening this dialog a second time. Staff's own copy of the presigned-upload-then-preview flow is **not** migrated onto the new shared `PhotoUploadField` in this phase — it's a separate, deferred follow-up (`docs/deferred-work.md`), out of this phase's scope. |
 | `GuardianLinkFlagsDialog` | Edit one link's `relationship`/`is_fee_responsible`/`can_pick_up`/`receives_communications` — a small form, `PATCH /student-guardians/{id}`. Never includes `is_primary`: promoting primary is a separate one-click row action (see below), since demoting without picking a replacement isn't an operation the backend supports directly. |
 | `StudentEmergencyContactsTab` | Ordered list (read-only rows) + one add form. No per-row actions. |
 | `StudentDocumentsTab` | List with per-row Verify/Reject, Download, Delete (each permission-gated); "Upload document" opens the upload dialog. |
@@ -325,15 +361,33 @@ place.
   own filter) does the job.
 - **Embed a guardian summary on `StudentGuardianSerializer` instead of a per-guardian
   `fetchGuardianById` fan-out.** Considered — it would save N requests per student's
-  guardian list. Rejected for this phase because it's a backend change beyond the four
-  already added (photo_url, the principal permission fix, download Content-Disposition,
-  the gated document `:download` action), and a tenant's guardians-per-student count is
-  small (the UI shows
-  a handful of rows, not pages); the fan-out goes through `Services.guardians` properly
-  either way, so upgrading to an embedded summary later is a pure backend+client change
-  with no tab-component rewrite. Recorded as
+  guardian list. Rejected for this phase because it's a backend change beyond the six
+  already added (photo_url, the `select_related` N+1 fix, the `validate_photo_file_id`
+  relaxation, the principal permission fix, download Content-Disposition, the gated
+  document `:download` action), and a tenant's guardians-per-student count is small (the
+  UI shows a handful of rows, not pages); the fan-out goes through `Services.guardians`
+  properly either way, so upgrading to an embedded summary later is a pure backend+client
+  change with no tab-component rewrite. Recorded as
   [ADR-0020](../../decisions/0020-client-fan-out-for-unembedded-nested-ids.md), since the
   choice sets a precedent for how the dashboard resolves ids from other nested lists.
+- **A purpose-aware permission check built directly into the generic `FileViewSet`'s
+  list/download, instead of a new resource-scoped `:download` action on
+  `StudentDocumentViewSet`.** Rejected for this phase — `core/files` has no concept today
+  of which module "owns" a given upload purpose, so this would need a new
+  purpose-to-permission-key registry shared across every file-uploading module: real,
+  legitimate `core/files` work, but cross-cutting infrastructure well beyond one module's
+  PR. The resource-scoped action is the smaller, shippable fix for this phase's own
+  concrete gap. Recorded as
+  [ADR-0021](../../decisions/0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md).
+- **`Content-Disposition: attachment` applied globally to every `core/files`-signed
+  download URL, instead of an opt-in parameter passed per caller.** Chosen: global,
+  applied once inside `core/files`' shared presigner implementations rather than
+  threading a per-purpose flag through every call site. A single code path is simpler to
+  reason about and test, and forcing a real download/save dialog is the correct behavior
+  for every file purpose this app currently signs a *download* URL for (documents and
+  staff exports) — neither is meant to navigate the dashboard tab away by opening inline.
+  A purpose that genuinely wants inline display (a photo preview) uses a *different*
+  signed-URL path already (`photo_url`'s own field), so this global change doesn't reach it.
 - **Give guardians their own dedicated photo-upload component instead of sharing one with
   students.** Rejected — this would be the third near-identical copy of the same
   presigned-upload-then-preview flow (student, staff, guardian); the repo's own
@@ -352,13 +406,18 @@ place.
 
 ## 8. Open questions
 
-None blocking. Four decisions were made explicitly rather than left open: during
-brainstorming, guardians get a photo-upload field in this phase (reusing the shared
+None blocking. Two decisions were made explicitly during brainstorming rather than left
+open: guardians get a photo-upload field in this phase (reusing the shared
 `PhotoUploadField` pattern), and the document-type picker is a `Select` over the 6 seeded
 defaults (not a free-text field) — a tenant-extended type is reachable only via `other` +
-notes this phase, which is an acceptable gap given no endpoint currently lists a
-tenant's extensions (`apps/dashboard/AGENTS.md`'s ADR-0017 convention doesn't apply here,
-since there's no generated source for this list either way).
+notes this phase. This is an accepted gap, not because no endpoint exists at all (a
+tenant's custom types are real data, readable today via `GET /api/v1/school-settings`'s
+`academic` blob — the same place the backend's own `_document_type_allowed` check reads
+them from, `apps/api/apps/student_management/services.py:443-447`), but because no
+`Services` call or dashboard client wires that endpoint up for this purpose yet; adding
+one is a small, separate follow-up (recorded in `docs/deferred-work.md`), not warranted by
+this phase alone (`apps/dashboard/AGENTS.md`'s ADR-0017 convention doesn't apply here
+either way, since there's no generated source for this specific list).
 
 During independent plan review (ADR-0015), two more were resolved with the user in the
 first round: add `GuardianSerializer.photo_url` (a small backend change, needed to make
@@ -388,3 +447,48 @@ confirmed this ships as-is**, without also closing the separate, pre-existing, a
 cross-cutting exposure that `core/files`' own generic `GET /files`/`:download` endpoints
 still grant to any `platform.file.view` holder (out of scope for this phase; recorded in
 `docs/deferred-work.md`).
+
+Three further rounds (4–6) added the remaining two backend changes
+(`select_related("photo_file")`, the `validate_photo_file_id` relaxation), ported vaul's
+`Drawer.NestedRoot` for the five dialogs that open from inside the tabbed sheet's own
+mobile drawer, and recorded [ADR-0021](../../decisions/0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md)
+for the resource-scoped `:download` action's own design choice.
+
+## Independent review
+
+- **Reviewer:** plan-reviewer agent, 2026-10-07
+- **Verdict:** REVISE — right approach and well-tested backend; this document had drifted
+  from what the branch actually ships (four vs. six backend changes, several dashboard/UI
+  changes missing entirely, ADR-0021 never named) and two of its own stated rationales had
+  gone stale (the document-types reasoning, and the `Drawer.NestedRoot` "needed to prevent
+  a crash" framing, both since corrected in the code's own comments by earlier
+  implementation-phase review rounds).
+- **Findings addressed:** Backend-change count corrected to six everywhere it appears
+  (Agent Context, §2, §7), with the `select_related` N+1 fix and the security-relevant
+  `validate_photo_file_id` relaxation now named explicitly. §2 Scope gained a new bullet
+  listing every shared `packages/ui`/dashboard infrastructure change this phase actually
+  makes (`Drawer`/`ResponsiveDialog` `nested`, `PhotoUploadField`, `useSubmitGuard`,
+  `applyServerFieldErrors`, `ResponsiveSheet`'s narrower props, the `formatDate` move with
+  its timezone fix and `jest.global-setup.ts`). ADR-0021 is now named in the Agent Context
+  note, §2, §3.2 and §7, with its two real alternatives added to §7. §8's "Four decisions"
+  count corrected to two (the two items it actually lists). The document-types rationale
+  (§8) corrected: a tenant's custom types ARE readable today via `GET
+  /api/v1/school-settings`, the real gap is that no dashboard client calls it for this
+  purpose yet — matches the already-existing `docs/deferred-work.md` entry on this, no
+  duplicate added. `GuardianFormDialog`'s row in §3.3 corrected to edit-only and to state
+  plainly that staff's own photo-upload copy is not migrated in this phase.
+  `GuardianPickerDialog`'s row and the Agent Context note corrected to frame
+  `Drawer.NestedRoot` as kept-for-correctness infrastructure with no observable effect in
+  this app's own controlled-`open` usage, not as something actively preventing a crash.
+  §3.1's "first real consumer" claim for `Tabs` corrected (already used in the shell; this
+  is its first use inside the students feature specifically). §3.2's query key fixed to
+  the real `{ search }` param name, with the guardian detail cache key added.
+- **Unresolved:** (1) ADR-0021's own "Alternative 2" rationale (not this spec, which
+  doesn't repeat the claim) somewhat overstates what the new `:download` action protects,
+  since `GET /files` already lets any staff role enumerate every document's id/purpose/
+  filename — worth a wording pass on the ADR itself, not done here since it's a committed,
+  separate decision record. (2) Whether to revisit ADR-0020's client-fan-out choice now
+  that this same PR already modifies the `student_management` backend six times — left as
+  the user's prior accepted decision, not reopened. (3) The residual SEC-17.3 exposure via
+  the generic `/files` endpoint remains a user-accepted, documented gap (ADR-0021,
+  `deferred-work.md`) — not reopened by this round.
