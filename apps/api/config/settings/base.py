@@ -247,6 +247,13 @@ SPECTACULAR_SETTINGS = {
         "AttendanceCorrectionStatusEnum": "apps.attendance.models.CorrectionStatus",
         "AttendanceSourceEnum": "apps.attendance.models.AttendanceSource",
         "AttendanceCorrectionSubjectTypeEnum": "apps.attendance.models.CorrectionSubjectType",
+        # The new StudentHistoryEvent polymorphic response (GET
+        # /students/{id}/history) reuses StudentEnrollmentSerializer's/
+        # StudentTransferSerializer's own status choice sets in a second
+        # component each, which drf-spectacular would otherwise rename with a
+        # hash suffix.
+        "StudentEnrollmentStatusEnum": "apps.student_management.models.EnrollmentStatus",
+        "StudentTransferStatusEnum": "apps.student_management.models.TransferStatus",
         # Same reasoning for examinations, which adds three more `status`/type
         # sets. Registered as each module PR ships the enum, not all at once —
         # an override pointing at a symbol that does not exist yet fails schema

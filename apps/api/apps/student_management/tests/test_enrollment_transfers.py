@@ -16,6 +16,10 @@ from apps.school_organization.tests.factories import (
     TenantFactory,
 )
 from apps.student_management.models import StudentEnrollment, StudentStatus
+from apps.student_management.serializers import (
+    EnrollmentHistoryEventSerializer,
+    TransferHistoryEventSerializer,
+)
 from apps.student_management.tests.factories import (
     EmergencyContactFactory,
     GuardianFactory,
@@ -247,6 +251,40 @@ class EnrollmentTests(StudentManagementAPITestCase):
         events = response.json()["data"]
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["type"], "enrollment")
+
+    def test_history_response_matches_serializer_fields_exactly(self) -> None:
+        self.allow(
+            "students.enrollment.enroll", "students.transfer.create", "students.student.view"
+        )
+        self._satisfy_prerequisites()
+        with tenant_context(self.tenant.id):
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                school_class=self.school_class,
+                section=self.section,
+            )
+            StudentTransferFactory(
+                tenant=self.tenant, student=self.student, from_campus=self.campus
+            )
+
+        response = self.client.get(f"/api/v1/students/{self.student.pk}/history")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        events = response.json()["data"]
+        self.assertEqual(len(events), 2)
+        for event in events:
+            if event["type"] == "enrollment":
+                self.assertEqual(
+                    set(event.keys()), set(EnrollmentHistoryEventSerializer().fields.keys())
+                )
+            elif event["type"] == "transfer":
+                self.assertEqual(
+                    set(event.keys()), set(TransferHistoryEventSerializer().fields.keys())
+                )
+            else:
+                self.fail(f"unexpected event type: {event['type']!r}")
 
 
 class TransferTests(StudentManagementAPITestCase):

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiResponse, PolymorphicProxySerializer, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
@@ -35,6 +35,7 @@ from apps.student_management.serializers import (
     ChangeSectionRequestSerializer,
     DocumentVerifyRequestSerializer,
     EmergencyContactSerializer,
+    EnrollmentHistoryEventSerializer,
     EnrollRequestSerializer,
     GuardianSerializer,
     IdCardGenerateRequestSerializer,
@@ -45,6 +46,7 @@ from apps.student_management.serializers import (
     StudentSerializer,
     StudentTransferSerializer,
     TransferCompleteRequestSerializer,
+    TransferHistoryEventSerializer,
     WithdrawRequestSerializer,
 )
 from apps.student_management.services import (
@@ -76,6 +78,13 @@ from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedVi
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import attach_celery_task_id, create_job
 from core.rbac.permissions import has_permission_key
+
+# PolymorphicProxySerializer is annotation-only (no real to_representation) —
+# the actual runtime dispatch for `history` below is this plain dict lookup.
+_HISTORY_EVENT_SERIALIZERS = {
+    "enrollment": EnrollmentHistoryEventSerializer,
+    "transfer": TransferHistoryEventSerializer,
+}
 
 
 class StudentViewSet(TenantModelViewSet):
@@ -325,11 +334,18 @@ class StudentViewSet(TenantModelViewSet):
 
     @extend_schema(
         summary="Assemble a student's chronological history",
-        responses={200: OpenApiResponse(description="Timeline of enrollment and transfer events")},
+        responses=PolymorphicProxySerializer(
+            component_name="StudentHistoryEvent",
+            serializers=_HISTORY_EVENT_SERIALIZERS,
+            resource_type_field_name="type",
+            many=True,
+        ),
     )
     def history(self, request, pk=None) -> Response:
         student = self.get_object()
-        return ActionResponse.ok(build_history(student))
+        events = build_history(student)
+        serialized = [_HISTORY_EVENT_SERIALIZERS[event["type"]](event).data for event in events]
+        return ActionResponse.ok(serialized)
 
 
 class GuardianViewSet(

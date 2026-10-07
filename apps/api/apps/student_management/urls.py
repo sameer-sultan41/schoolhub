@@ -53,7 +53,12 @@ urlpatterns = [
     ),
     path(
         "students/<uuid:pk>/history",
-        StudentViewSet.as_view({"get": "history"}),
+        # pagination_class/filter_backends excluded: this is a plain list response,
+        # not a paginated/filtered page — StudentViewSet's class-level
+        # pagination_class/filterset_class would otherwise make drf-spectacular
+        # document (and DRF apply) a page wrapper and StudentFilterSet's query
+        # params on an action that returns neither.
+        StudentViewSet.as_view({"get": "history"}, pagination_class=None, filter_backends=[]),
         name="students-history",
     ),
     path(
