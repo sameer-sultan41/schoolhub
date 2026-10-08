@@ -10787,11 +10787,11 @@ export interface components {
          */
         TimetableSlotStatusEnum: "draft" | "published";
         /**
-         * @description `section_id` is required only for an inter-campus transfer — see
+         * @description `section_id` is required only for an inter-campus transfer whose student still has
          *
-         *     services.complete_transfer, which raises a field-specific error when it is
-         *     missing for that type rather than this serializer guessing at a
-         *     conditional-required rule.
+         *     an active enrollment to reassign — see services.complete_transfer, which raises a
+         *     field-specific error when it is missing in that case, rather than this serializer
+         *     guessing at a conditional-required rule.
          */
         TransferCompleteRequest: {
             /** Format: uuid */

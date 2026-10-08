@@ -790,11 +790,23 @@ either this file or `project-status.md`.
   future phase builds a genuine incoming-transfer-student admission flow, design `incoming`'s
   request UI and its completion workflow together then, not before.
 
-- **`enroll_student` doesn't check that a chosen section's campus matches the student's own
-  campus.** A real, pre-existing backend gap — `services.enroll_student` has no such check.
-  Closed client-side only in Phase 3: `ClassSectionFields`'s unlocked mode always scopes its
-  section picker by the student's own `campusId`, so reaching this gap needs deliberately
-  working around the UI. A real fix belongs in `enroll_student` itself.
+- **`enroll_student` and `change_section` don't check that a chosen section's campus matches
+  the student's own campus.** A real, pre-existing backend gap — neither `services
+  .enroll_student` nor `services.change_section` has such a check. Closed client-side only
+  in Phase 3: `ClassSectionFields` always scopes its section picker by the student's own
+  `campusId` in both of this shared component's modes (unlocked, used by enroll; locked,
+  used by change-section), so reaching this gap needs deliberately working around the UI. A
+  real fix belongs in `enroll_student`/`change_section` themselves.
+
+- **`request_transfer` has no idempotency key**, unlike `approve`/`reject`/`complete`, which
+  all go through `replay_or_execute` — confirmed, a deliberate Phase 3 decision (the server's
+  `perform_create` for a transfer request doesn't call it). `StudentTransfer` also has no DB
+  constraint preventing two `requested` rows for the same student. A lost or timed-out
+  response followed by a dashboard retry can therefore create a duplicate pending transfer
+  request. Closing this needs either wiring `request_transfer` through the idempotency
+  framework or adding a uniqueness constraint (partial, on `status = requested`) — a real
+  backend change, not a client-side mitigation, since a lost response gives the client no
+  identifier to retry against.
 
 - **`request_transfer` doesn't check that `from_campus_id`/`to_campus_id` actually differ, or
   that `from_campus_id` matches the student's real current campus.** Phase 3's
@@ -807,6 +819,26 @@ either this file or `project-status.md`.
   has no enforcement, client or server.** Phase 3's request-transfer schema doesn't mirror it —
   doing so needs the dialog to also fetch the relevant session's date range, a dependency not
   otherwise needed. Recorded rather than engineered around for this one narrow, low-stakes gap.
+
+- **`enroll-dialog.tsx`, `change-section-dialog.tsx` and `request-transfer-dialog.tsx` repeat
+  an identical ~85-line form/guard/mutation/error-handling skeleton** (the `useForm` +
+  `useSubmitGuard`/`useGuardedSubmit` + `useMutation` + `applyServerFieldErrors` wiring)
+  instead of sharing one hook. A real "wait for the third-plus copy" extraction candidate —
+  not done in Phase 3 to avoid re-touching three already-reviewed dialogs late in the phase;
+  worth a small, dedicated follow-up once a fourth dialog would otherwise repeat it again.
+
+- **`complete-transfer-dialog.tsx` is the one new Phase 3 dialog that doesn't use the shared
+  `useGuardedSubmit`/`useSubmitGuard` hook** — its section-picker branch instead guards
+  double-submit with `disabled={!form.watch("section_id") || mutation.isPending}`, and its
+  confirm-only branch relies on `ResponsiveAlertDialog`'s own `isPending`-disables-both-buttons
+  behavior. Neither is currently exploitable (both genuinely block a second submit while the
+  mutation is in flight), but it's an inconsistency worth closing for the same reason the
+  other four dialogs standardized on the shared hook.
+
+- **`enroll`/`change_section`'s view actions build an identical `audit_extra`
+  capacity-override dict independently** (`apps/api/apps/student_management/views.py`)
+  instead of sharing a small helper. Same "worth extracting, not urgent" shape as the
+  dashboard dialog skeleton above.
 
 - **`exit-staff-dialog.tsx` and `student-documents-tab.tsx`'s delete confirmation use the wrong
   responsive breakpoint hook.** Both switch on `useIsMobile()` (768px) instead of this app's

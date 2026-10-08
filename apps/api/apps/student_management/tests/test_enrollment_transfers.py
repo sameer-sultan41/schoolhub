@@ -451,6 +451,103 @@ class TransferTests(StudentManagementAPITestCase):
         self.assertEqual(self.student.status, StudentStatus.WITHDRAWN)
         self.assertEqual(self.student.campus_id, self.campus.pk)
 
+    def test_complete_with_active_enrollment_reassigns_section_and_moves_campus(self) -> None:
+        self.allow("students.transfer.create", "students.transfer.approve")
+        with tenant_context(self.tenant.id):
+            session = AcademicSessionFactory(tenant=self.tenant)
+            school_class = ClassFactory(tenant=self.tenant)
+            origin_section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.campus
+            )
+            destination_section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.to_campus, capacity=5
+            )
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=session,
+                school_class=school_class,
+                section=origin_section,
+            )
+            transfer = StudentTransferFactory(
+                tenant=self.tenant,
+                student=self.student,
+                from_campus=self.campus,
+                to_campus=self.to_campus,
+                created_by=None,
+            )
+        approve = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:approve")
+        self.assertEqual(approve.status_code, status.HTTP_200_OK, approve.json())
+
+        complete = self.client.post(
+            f"/api/v1/student-transfers/{transfer.pk}:complete",
+            {"section_id": str(destination_section.pk)},
+            format="json",
+        )
+
+        self.assertEqual(complete.status_code, status.HTTP_200_OK, complete.json())
+        with tenant_context(self.tenant.id):
+            self.student.refresh_from_db()
+            enrollment = StudentEnrollment.objects.get(student=self.student)
+        self.assertEqual(self.student.campus_id, self.to_campus.pk)
+        self.assertEqual(enrollment.section_id, destination_section.pk)
+
+    def test_complete_with_active_enrollment_still_requires_a_section(self) -> None:
+        self.allow("students.transfer.create", "students.transfer.approve")
+        with tenant_context(self.tenant.id):
+            session = AcademicSessionFactory(tenant=self.tenant)
+            school_class = ClassFactory(tenant=self.tenant)
+            origin_section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.campus
+            )
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=session,
+                school_class=school_class,
+                section=origin_section,
+            )
+            transfer = StudentTransferFactory(
+                tenant=self.tenant,
+                student=self.student,
+                from_campus=self.campus,
+                to_campus=self.to_campus,
+                created_by=None,
+            )
+        self.client.post(f"/api/v1/student-transfers/{transfer.pk}:approve")
+
+        complete = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:complete")
+
+        self.assertEqual(
+            complete.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, complete.json()
+        )
+
+    def test_complete_without_active_enrollment_skips_section_and_still_moves_campus(
+        self,
+    ) -> None:
+        # self.student (StudentManagementAPITestCase) has no enrollment at all — the same
+        # "completing a transfer before the student was ever enrolled, or after their
+        # enrollment ended some other way" case `complete-transfer-dialog.tsx` builds a
+        # confirm-only, no-section-picker path for.
+        self.allow("students.transfer.create", "students.transfer.approve")
+        with tenant_context(self.tenant.id):
+            transfer = StudentTransferFactory(
+                tenant=self.tenant,
+                student=self.student,
+                from_campus=self.campus,
+                to_campus=self.to_campus,
+                created_by=None,
+            )
+        approve = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:approve")
+        self.assertEqual(approve.status_code, status.HTTP_200_OK, approve.json())
+
+        complete = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:complete")
+
+        self.assertEqual(complete.status_code, status.HTTP_200_OK, complete.json())
+        with tenant_context(self.tenant.id):
+            self.student.refresh_from_db()
+        self.assertEqual(self.student.campus_id, self.to_campus.pk)
+
     def test_complete_before_approval_is_a_conflict(self) -> None:
         self.allow("students.transfer.create")
         with tenant_context(self.tenant.id):

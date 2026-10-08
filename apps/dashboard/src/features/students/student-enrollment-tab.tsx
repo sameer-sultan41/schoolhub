@@ -76,8 +76,13 @@ export function StudentEnrollmentTab({
     queryKey: queryKeys.list("school-organization", "campuses"),
     queryFn: () => Services.dashboard.fetchCampuses(),
   });
+  const campusNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const campus of campusesQuery.data ?? []) map.set(campus.id, campus.name);
+    return map;
+  }, [campusesQuery.data]);
   const campusName = (id: string | null | undefined) =>
-    (campusesQuery.data ?? []).find((campus) => campus.id === id)?.name ?? id ?? "";
+    (id ? campusNameById.get(id) : undefined) ?? id ?? "";
 
   const currentEnrollment = useMemo(() => {
     const active = (historyQuery.data ?? [])
@@ -92,6 +97,11 @@ export function StudentEnrollmentTab({
   const currentEnrollmentClass = currentEnrollment
     ? { id: currentEnrollment.class_id, name: currentEnrollment.class_name }
     : null;
+
+  const reversedHistory = useMemo(
+    () => [...(historyQuery.data ?? [])].reverse(),
+    [historyQuery.data],
+  );
 
   if (historyQuery.isPending) {
     return <Skeleton className="h-32 w-full" />;
@@ -260,7 +270,7 @@ export function StudentEnrollmentTab({
           <p className="text-sm text-muted-foreground">{t("history.empty")}</p>
         ) : (
           <ul className="space-y-2">
-            {[...historyQuery.data].reverse().map((event) => (
+            {reversedHistory.map((event) => (
               <li key={`${event.type}-${event.id}`} className="text-xs text-muted-foreground">
                 {event.type === "enrollment"
                   ? t("history.event.enrollment", {
