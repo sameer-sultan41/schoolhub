@@ -119,4 +119,37 @@ describe("StudentDirectoryFilters — academic session/class/section", () => {
 
     expect(screen.getByRole("combobox", { name: /^section$/i })).toBeDisabled();
   });
+
+  it("clears the academic session filter when All is re-selected", async () => {
+    const onAcademicSessionIdChange = jest.fn();
+    renderWithProviders(
+      <StudentDirectoryFilters
+        {...baseProps()}
+        academicSessionId="sess-1"
+        onAcademicSessionIdChange={onAcademicSessionIdChange}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("combobox", { name: /academic session/i }));
+    await userEvent.click(await screen.findByRole("option", { name: "All" }));
+
+    expect(onAcademicSessionIdChange).toHaveBeenCalledWith("");
+  });
+
+  it("clears the section filter when All is re-selected", async () => {
+    const onSectionIdChange = jest.fn();
+    renderWithProviders(
+      <StudentDirectoryFilters
+        {...baseProps()}
+        classId="class-1"
+        sectionId="section-1"
+        onSectionIdChange={onSectionIdChange}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("combobox", { name: /^section$/i }));
+    await userEvent.click(await screen.findByRole("option", { name: "All" }));
+
+    expect(onSectionIdChange).toHaveBeenCalledWith("");
+  });
 });

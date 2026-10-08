@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import { renderWithProviders } from "@/test-utils";
@@ -27,6 +28,36 @@ const mockFetchStudentTransfers = Services.studentTransfers
 const mockFetchCampuses = Services.dashboard.fetchCampuses as jest.MockedFunction<
   typeof Services.dashboard.fetchCampuses
 >;
+const mockFetchAcademicSessions = Services.schoolOrganization
+  .fetchAcademicSessions as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchAcademicSessions
+>;
+const mockFetchClasses = Services.schoolOrganization.fetchClasses as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchClasses
+>;
+const mockFetchSections = Services.schoolOrganization.fetchSections as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchSections
+>;
+
+function buildTransfer(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "t1",
+    student_id: "s1",
+    transfer_type: "outgoing",
+    from_campus_id: "campus-1",
+    to_campus_id: null,
+    external_school_name: "Other School",
+    reason: "x",
+    status: "requested",
+    effective_date: "2026-01-01",
+    decided_by: null,
+    decided_at: null,
+    certificate_document_id: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
 
 function allGranted() {
   return {
@@ -55,8 +86,14 @@ describe("StudentEnrollmentTab", () => {
     mockFetchStudentHistory.mockReset();
     mockFetchStudentTransfers.mockReset();
     mockFetchCampuses.mockReset();
+    mockFetchAcademicSessions.mockReset();
+    mockFetchClasses.mockReset();
+    mockFetchSections.mockReset();
     mockFetchCampuses.mockResolvedValue([{ id: "campus-1", name: "Campus One" }]);
     mockFetchStudentTransfers.mockResolvedValue([]);
+    mockFetchAcademicSessions.mockResolvedValue([]);
+    mockFetchClasses.mockResolvedValue([]);
+    mockFetchSections.mockResolvedValue([]);
   });
 
   it("derives current enrollment as the active-status event with the latest date on ties", async () => {
@@ -169,5 +206,122 @@ describe("StudentEnrollmentTab", () => {
     await screen.findByText(/not enrolled/i);
     expect(screen.queryByRole("button", { name: /^enroll$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /request transfer/i })).not.toBeInTheDocument();
+  });
+
+  it("opens the enroll dialog from the Enroll action", async () => {
+    mockFetchStudentHistory.mockResolvedValue([]);
+
+    const { baseElement } = renderWithProviders(
+      <StudentEnrollmentTab studentId="s1" campusId="campus-1" permissions={allGranted()} />,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: /^enroll$/i }));
+
+    expect(baseElement.querySelector('[data-slot="dialog-content"]')).toBeInTheDocument();
+  });
+
+  it("opens the change-section dialog from the Change Section action", async () => {
+    mockFetchStudentHistory.mockResolvedValue([
+      {
+        type: "enrollment",
+        id: "e1",
+        date: "2026-01-01",
+        status: "active",
+        academic_session_id: "s1",
+        academic_session_name: "2026-27",
+        class_id: "c1",
+        class_name: "Grade 1",
+        section_id: "sec1",
+        section_name: "A",
+        roll_number: null,
+      },
+    ] as never);
+
+    const { baseElement } = renderWithProviders(
+      <StudentEnrollmentTab studentId="s1" campusId="campus-1" permissions={allGranted()} />,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: /change section/i }));
+
+    expect(baseElement.querySelector('[data-slot="dialog-content"]')).toBeInTheDocument();
+  });
+
+  it("opens the request-transfer dialog from the Request Transfer action", async () => {
+    mockFetchStudentHistory.mockResolvedValue([
+      {
+        type: "enrollment",
+        id: "e1",
+        date: "2026-01-01",
+        status: "active",
+        academic_session_id: "s1",
+        academic_session_name: "2026-27",
+        class_id: "c1",
+        class_name: "Grade 1",
+        section_id: "sec1",
+        section_name: "A",
+        roll_number: null,
+      },
+    ] as never);
+
+    const { baseElement } = renderWithProviders(
+      <StudentEnrollmentTab studentId="s1" campusId="campus-1" permissions={allGranted()} />,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: /request transfer/i }));
+
+    expect(baseElement.querySelector('[data-slot="dialog-content"]')).toBeInTheDocument();
+  });
+
+  it("shows Approve/Reject for a requested transfer and opens the decision dialog", async () => {
+    mockFetchStudentHistory.mockResolvedValue([]);
+    mockFetchStudentTransfers.mockResolvedValue([
+      buildTransfer({ status: "requested", transfer_type: "outgoing" }),
+    ] as never);
+
+    const { baseElement } = renderWithProviders(
+      <StudentEnrollmentTab studentId="s1" campusId="campus-1" permissions={allGranted()} />,
+    );
+
+    // Covers the external_school_name display branch (no to_campus_id on this transfer).
+    expect(await screen.findByText(/other school/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^approve$/i }));
+
+    expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeInTheDocument();
+  });
+
+  it("hides Approve/Reject on a requested transfer without the decide permission", async () => {
+    mockFetchStudentHistory.mockResolvedValue([]);
+    mockFetchStudentTransfers.mockResolvedValue([buildTransfer({ status: "requested" })] as never);
+
+    renderWithProviders(
+      <StudentEnrollmentTab
+        studentId="s1"
+        campusId="campus-1"
+        permissions={{ ...allGranted(), canDecide: false }}
+      />,
+    );
+
+    await screen.findByText(/other school/i);
+    expect(screen.queryByRole("button", { name: /^approve$/i })).not.toBeInTheDocument();
+  });
+
+  it("shows Complete for an approved, non-incoming transfer and opens the completion dialog", async () => {
+    mockFetchStudentHistory.mockResolvedValue([]);
+    mockFetchStudentTransfers.mockResolvedValue([
+      buildTransfer({
+        status: "approved",
+        transfer_type: "inter_campus",
+        to_campus_id: "campus-1",
+        external_school_name: null,
+      }),
+    ] as never);
+
+    const { baseElement } = renderWithProviders(
+      <StudentEnrollmentTab studentId="s1" campusId="campus-1" permissions={allGranted()} />,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: /^complete$/i }));
+
+    expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeInTheDocument();
   });
 });

@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -6,6 +7,7 @@ import { renderWithProviders } from "@/test-utils";
 import { RequestTransferDialog } from "../request-transfer-dialog";
 
 jest.mock("@/services", () => ({
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     dashboard: { fetchCampuses: jest.fn() },
     studentTransfers: { requestTransfer: jest.fn() },
@@ -94,5 +96,37 @@ describe("RequestTransferDialog", () => {
     await waitFor(() => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
+  });
+
+  it("maps a 422 non_field error onto the form message", async () => {
+    mockRequestTransfer.mockRejectedValue(
+      new ApiError({
+        status: 422,
+        code: "domain_rule_violation",
+        message: "Student is not active.",
+        url: "/student-transfers",
+        details: [{ field: "non_field", issue: "Student is not active." }],
+        requestId: "req-1",
+      }),
+    );
+    renderWithProviders(<RequestTransferDialog {...baseProps()} />);
+
+    await userEvent.click(screen.getByRole("radio", { name: /outgoing/i }));
+    await userEvent.type(screen.getByLabelText(/external school name/i), "Another School");
+    await userEvent.type(screen.getByLabelText(/^reason$/i), "Relocating");
+    await userEvent.type(screen.getByLabelText(/effective date/i), "2026-11-01");
+    await userEvent.click(screen.getByRole("button", { name: /request transfer/i }));
+
+    expect(await screen.findByText("Student is not active.")).toBeInTheDocument();
+  });
+
+  it("closes without submitting when Cancel is clicked", async () => {
+    const onOpenChange = jest.fn();
+    renderWithProviders(<RequestTransferDialog {...baseProps()} onOpenChange={onOpenChange} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(mockRequestTransfer).not.toHaveBeenCalled();
   });
 });

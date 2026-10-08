@@ -89,4 +89,18 @@ describe("ResponsiveAlertDialog", () => {
     expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   });
+
+  it("closes without confirming when Cancel is clicked on the mobile Drawer", async () => {
+    setMatchesMobile(true);
+    const onOpenChange = jest.fn();
+    const onConfirm = jest.fn();
+    renderWithProviders(
+      <ResponsiveAlertDialog {...baseProps()} onOpenChange={onOpenChange} onConfirm={onConfirm} />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });

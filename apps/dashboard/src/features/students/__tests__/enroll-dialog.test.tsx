@@ -128,4 +128,14 @@ describe("EnrollDialog", () => {
 
     expect(await screen.findByText("Capacity exceeded.")).toBeInTheDocument();
   });
+
+  it("closes without submitting when Cancel is clicked", async () => {
+    const onOpenChange = jest.fn();
+    renderWithProviders(<EnrollDialog {...baseProps()} onOpenChange={onOpenChange} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(mockEnrollStudent).not.toHaveBeenCalled();
+  });
 });
