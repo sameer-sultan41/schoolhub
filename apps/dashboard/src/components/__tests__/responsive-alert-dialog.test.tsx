@@ -37,11 +37,12 @@ describe("ResponsiveAlertDialog", () => {
     expect(screen.getByLabelText("Close")).toBeInTheDocument();
   });
 
-  it("renders the desktop primitive, not the mobile Drawer, in the 768-1023px range", () => {
-    // useIsDesktopShell's breakpoint is 1024px (min-width) — 900px must still answer
-    // false to "is mobile" (useIsMobile's own 768px max-width), the exact gap this
-    // component's whole reason for existing closes relative to the two wrong-breakpoint
-    // copies named in its own file comment.
+  it("renders the mobile Drawer, not the desktop primitive, in the 768-1023px range", () => {
+    // useIsDesktopShell's breakpoint is 1024px (min-width) — a simulated 900px viewport
+    // must still answer false to that query, so this component renders the Drawer here.
+    // This is the exact gap the two wrong-breakpoint copies (keyed on useIsMobile's 768px
+    // max-width, which would call 900px "not mobile" and wrongly show the desktop
+    // primitive) get wrong — named in this component's own file comment.
     (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
       matches: /\(min-width:\s*([\d.]+)px\)/.exec(query)
         ? Number(/\(min-width:\s*([\d.]+)px\)/.exec(query)?.[1]) <= 900
@@ -55,10 +56,10 @@ describe("ResponsiveAlertDialog", () => {
       dispatchEvent: jest.fn(),
     }));
 
-    const { baseElement } = renderWithProviders(<ResponsiveAlertDialog {...baseProps()} />);
+    renderWithProviders(<ResponsiveAlertDialog {...baseProps()} />);
 
-    expect(baseElement.querySelector('[data-slot="alert-dialog-content"]')).toBeInTheDocument();
-    expect(screen.queryByLabelText("Close")).not.toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Close")).toBeInTheDocument();
   });
 
   it("calls onConfirm without the dialog closing itself first", async () => {

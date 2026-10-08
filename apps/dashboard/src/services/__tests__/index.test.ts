@@ -38,6 +38,7 @@ describe("Services", () => {
       "jobs",
       "schoolOrganization",
       "staff",
+      "studentTransfers",
       "students",
       "tenant",
     ]);
@@ -80,5 +81,14 @@ describe("Services", () => {
     expect(typeof Services.students.createStudent).toBe("function");
     expect(typeof Services.students.updateStudent).toBe("function");
     expect(typeof Services.students.withdrawStudent).toBe("function");
+    expect(typeof Services.students.enrollStudent).toBe("function");
+    expect(typeof Services.students.changeStudentSection).toBe("function");
+    expect(typeof Services.students.fetchStudentHistory).toBe("function");
+
+    expect(typeof Services.studentTransfers.fetchStudentTransfers).toBe("function");
+    expect(typeof Services.studentTransfers.requestTransfer).toBe("function");
+    expect(typeof Services.studentTransfers.approveTransfer).toBe("function");
+    expect(typeof Services.studentTransfers.rejectTransfer).toBe("function");
+    expect(typeof Services.studentTransfers.completeTransfer).toBe("function");
   });
 });

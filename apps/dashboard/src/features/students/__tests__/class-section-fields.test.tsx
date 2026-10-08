@@ -1,6 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useForm } from "react-hook-form";
+import { Form } from "@schoolhub/ui";
 
 import { Services } from "@/services";
 import { renderWithProviders } from "@/test-utils";
@@ -30,13 +31,15 @@ interface TestFormValues {
 function UnlockedHarness({ campusId = "campus-1" }: { campusId?: string }) {
   const form = useForm<TestFormValues>({ defaultValues: { class_id: "", section_id: "" } });
   return (
-    <ClassSectionFields
-      form={form}
-      campusId={campusId}
-      locked={false}
-      classFieldName="class_id"
-      sectionFieldName="section_id"
-    />
+    <Form {...form}>
+      <ClassSectionFields
+        form={form}
+        campusId={campusId}
+        locked={false}
+        classFieldName="class_id"
+        sectionFieldName="section_id"
+      />
+    </Form>
   );
 }
 
@@ -49,13 +52,15 @@ function LockedHarness({
 }) {
   const form = useForm<TestFormValues>({ defaultValues: { class_id: "", section_id: "" } });
   return (
-    <ClassSectionFields
-      form={form}
-      campusId={campusId}
-      locked
-      currentClass={currentClass}
-      sectionFieldName="section_id"
-    />
+    <Form {...form}>
+      <ClassSectionFields
+        form={form}
+        campusId={campusId}
+        locked
+        currentClass={currentClass}
+        sectionFieldName="section_id"
+      />
+    </Form>
   );
 }
 

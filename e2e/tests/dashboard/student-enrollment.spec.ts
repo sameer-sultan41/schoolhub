@@ -71,7 +71,10 @@ test.describe("student enrollment tab", () => {
       .getByRole("button", { name: /^enroll$/i })
       .click();
 
-    await expect(page.getByText(/2026-27/)).toBeVisible();
+    // Exact text, not a `/2026-27/` substring match — the history timeline's own new
+    // "Enrolled — 2026-27, Grade 1 A" entry contains the same substring and would make
+    // this a strict-mode violation (two matches) otherwise.
+    await expect(page.getByText("2026-27 — Grade 1 A", { exact: true })).toBeVisible();
   });
 
   test("changes section for an already-enrolled student", async ({
@@ -105,7 +108,9 @@ test.describe("student enrollment tab", () => {
     await studentsPage.row("Ayesha Khan").click();
     await page.getByRole("tab", { name: /^history$/i }).click();
 
-    await expect(page.getByText(/2026-27/)).toBeVisible();
+    // Exact text — the history timeline's own "Enrolled — 2026-27, Grade 1 A" entry
+    // contains the same substring and would make this a strict-mode violation otherwise.
+    await expect(page.getByText("2026-27 — Grade 1 A", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /change section/i }).click();
 
     // The class is a fixed label in this dialog, not a Select.

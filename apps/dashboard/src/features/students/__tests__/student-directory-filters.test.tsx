@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -47,6 +48,24 @@ function baseProps() {
   };
 }
 
+/** `StudentDirectoryFilters` is fully controlled by its parent — `classId`/`sectionId` are
+ * props, not internal state. A test that needs the cascading section fetch to actually fire
+ * after picking a class needs a stateful wrapper to feed the changed id back in, the same
+ * way the real `student-directory-table.tsx` parent does. */
+function StatefulHarness() {
+  const [classId, setClassId] = useState("");
+  const [sectionId, setSectionId] = useState("");
+  return (
+    <StudentDirectoryFilters
+      {...baseProps()}
+      classId={classId}
+      onClassIdChange={setClassId}
+      sectionId={sectionId}
+      onSectionIdChange={setSectionId}
+    />
+  );
+}
+
 describe("StudentDirectoryFilters — academic session/class/section", () => {
   beforeEach(() => {
     mockFetchClasses.mockReset();
@@ -75,7 +94,7 @@ describe("StudentDirectoryFilters — academic session/class/section", () => {
   });
 
   it("cascades section options to the chosen class, with no isActive/campus_id param", async () => {
-    renderWithProviders(<StudentDirectoryFilters {...baseProps()} />);
+    renderWithProviders(<StatefulHarness />);
 
     await userEvent.click(screen.getByRole("combobox", { name: /^class$/i }));
     await userEvent.click(await screen.findByRole("option", { name: "Grade 1" }));
