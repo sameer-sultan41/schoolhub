@@ -2179,3 +2179,32 @@ findings in one fix round, re-review the fix's diff only, push, confirm `gh pr c
 green, and mark the PR ready for review (promote from draft if it was opened as one at the
 Task 2 checkpoint) per AGENTS.md's "Working Here" section — stop at "PR open, CI green,"
 never merge.
+
+## Independent review
+
+- **Reviewer:** plan-reviewer agent, 2026-10-07
+- **Verdict:** REVISE — sound design with a proven root cause, but enroll/change-section were
+  gated on the wrong permission keys, the history schema would have published a paginated,
+  filter-polluted contract, the plan directed local `pytest` runs (this repo never runs tests
+  locally), and nearly every dashboard file path, transport-call shape and server field name
+  in the original draft was guessed rather than verified against the real tree.
+- **Findings addressed:** All four High findings fixed before implementation began: `canEnroll`/
+  `canChangeSection` now gate on `students.enrollment.enroll`/`.update` (not
+  `students.student.update`, which gates only the capacity-override field — confirmed from the
+  real `required_permission_map`); the history route excludes `pagination_class`/
+  `filter_backends` via an explicit `as_view()` override, confirmed against the generated
+  OpenAPI output directly (only the `id` path param remains); every local-test-run instruction
+  was replaced with "write the test, do not run it — a task reviewer / CI confirms it"; every
+  dashboard file path, service transport shape (`fetchPage`/`collectPages`/`apiClient.post`,
+  not `apiClient.GET`), and server field name (`change_section` has no `class_id`;
+  `complete_transfer` takes `section_id` only and silently no-ops with no active enrollment)
+  was re-verified against the real repository before the plan was finalized, and the
+  implementation itself was built directly against those verified facts rather than against
+  the plan's own first-draft guesses. The Medium findings (picker `is_active` scoping split,
+  `ResponsiveAlertDialog`'s real prop API and error slot, the Rules-of-Hooks violation in
+  `CompleteTransferDialog`, invalidation keys per mutation, the `school-organization`
+  five-file-shape question) were each resolved the same way, verified against real code during
+  implementation rather than assumed from the plan text. Per the user's explicit instruction to
+  review in a single shot and then implement, this round's findings were folded in directly,
+  with no further plan-review dispatch — implementation proceeded immediately after, verifying
+  each file/path/shape against the real repository as each task was built.
