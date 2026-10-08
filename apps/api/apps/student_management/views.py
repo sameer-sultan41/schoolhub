@@ -15,7 +15,7 @@ from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, PolymorphicProxySerializer, extend_schema
-from rest_framework import mixins, viewsets
+from rest_framework import mixins, serializers, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
@@ -80,8 +80,10 @@ from core.jobs.services import attach_celery_task_id, create_job
 from core.rbac.permissions import has_permission_key
 
 # PolymorphicProxySerializer is annotation-only (no real to_representation) —
-# the actual runtime dispatch for `history` below is this plain dict lookup.
-_HISTORY_EVENT_SERIALIZERS = {
+# the actual runtime dispatch for `history` below is this plain dict lookup. Explicitly
+# typed: an untyped dict literal of two different serializer classes widens the value type
+# enough that mypy loses `.data` on the instance built from it.
+_HISTORY_EVENT_SERIALIZERS: dict[str, type[serializers.Serializer]] = {
     "enrollment": EnrollmentHistoryEventSerializer,
     "transfer": TransferHistoryEventSerializer,
 }

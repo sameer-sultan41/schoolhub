@@ -12,6 +12,7 @@ describe("requestTransferFormSchema", () => {
     });
 
     expect(result).not.toHaveProperty("external_school_name");
+    if (result.transfer_type !== "inter_campus") throw new Error("expected inter_campus");
     expect(result.to_campus_id).toBe("campus-2");
   });
 
@@ -26,6 +27,7 @@ describe("requestTransferFormSchema", () => {
     });
 
     expect(result).not.toHaveProperty("to_campus_id");
+    if (result.transfer_type !== "outgoing") throw new Error("expected outgoing");
     expect(result.external_school_name).toBe("Another School");
   });
 

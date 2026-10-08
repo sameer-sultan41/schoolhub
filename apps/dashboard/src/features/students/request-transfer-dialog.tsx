@@ -130,7 +130,9 @@ function RequestTransferBody({
   );
 
   const form = useForm<RequestTransferFormState>({
-    resolver: zodResolver(requestTransferFormSchema) as Resolver<RequestTransferFormState>,
+    resolver: zodResolver(
+      requestTransferFormSchema,
+    ) as unknown as Resolver<RequestTransferFormState>,
     defaultValues: {
       transfer_type: "inter_campus",
       from_campus_id: currentCampusId,

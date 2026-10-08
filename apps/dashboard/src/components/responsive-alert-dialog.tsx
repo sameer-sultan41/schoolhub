@@ -50,8 +50,10 @@ export interface ResponsiveAlertDialogProps {
   /** A server error to show inline, without closing the dialog — e.g. a 422
    * segregation-of-duties rejection on a transfer decision. */
   error?: string;
-  /** `AlertDialogAction`'s own variant — e.g. `"destructive"` for a reject decision. */
-  variant?: "default" | "destructive";
+  /** `AlertDialogAction`'s own variant — e.g. `"destructive"` for a reject decision.
+   * Omitted entirely for the default styling, never `"default"` (not a real value either
+   * primitive accepts). */
+  variant?: "destructive";
 }
 
 export function ResponsiveAlertDialog({

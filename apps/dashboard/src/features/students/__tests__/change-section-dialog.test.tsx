@@ -86,7 +86,11 @@ describe("ChangeSectionDialog", () => {
         expect.any(String),
       );
     });
-    const [, input] = mockChangeStudentSection.mock.calls[0] as [string, Record<string, unknown>];
+    const [, input] = mockChangeStudentSection.mock.calls[0] as unknown as [
+      string,
+      Record<string, unknown>,
+      string,
+    ];
     expect(input).not.toHaveProperty("classId");
   });
 

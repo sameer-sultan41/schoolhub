@@ -79,7 +79,7 @@ export function TransferDecisionDialog({
           : t("transfers.rejectDescription")
       }
       confirmLabel={decision === "approve" ? t("transfers.approve") : t("transfers.reject")}
-      variant={decision === "reject" ? "destructive" : "default"}
+      variant={decision === "reject" ? "destructive" : undefined}
       isPending={mutation.isPending}
       error={error ?? undefined}
       onConfirm={() => {
