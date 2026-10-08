@@ -10,7 +10,7 @@ import {
 import { buildStudent, studentsModule } from "@/mocks";
 import { guardiansModule } from "@/mocks";
 import { studentRelationsModule } from "@/mocks";
-import { buildEnrollmentHistoryEvent, enrollmentModule } from "@/mocks";
+import { buildEnrollmentHistoryEvent, enrollmentModule, type HistoryEvent } from "@/mocks";
 import { studentTransfersModule } from "@/mocks";
 
 const campuses = [buildCampus({ id: "campus-0001", name: "Main Campus" })];
@@ -40,12 +40,35 @@ test.describe("student enrollment tab", () => {
     mockApi,
     studentsPage,
   }) => {
+    // `studentsModule`'s `:enroll` handler and `enrollmentModule`'s own `GET .../history`
+    // are two separate mock modules with no shared state — `onEnrollmentAction` mirrors the
+    // newly created enrollment into the same `history` object so the post-enroll refetch
+    // actually reflects it, matching what the real backend's history endpoint would show.
+    const history: Record<string, HistoryEvent[]> = { "student-0001": [] };
     mockApi.use(
       schoolOrganizationModule({ campuses, classes, sections, academicSessions: sessions }),
-      studentsModule({ students: [student] }),
+      studentsModule({
+        students: [student],
+        onEnrollmentAction: (_action, enrollment) => {
+          history["student-0001"]?.push(
+            buildEnrollmentHistoryEvent({
+              id: enrollment.id,
+              date: enrollment.enrollment_date,
+              academic_session_id: enrollment.academic_session_id,
+              academic_session_name:
+                sessions.find((s) => s.id === enrollment.academic_session_id)?.name ?? "",
+              class_id: enrollment.class_id,
+              class_name: classes.find((c) => c.id === enrollment.class_id)?.name ?? "",
+              section_id: enrollment.section_id,
+              section_name: sections.find((s) => s.id === enrollment.section_id)?.name ?? "",
+              roll_number: enrollment.roll_number,
+            }),
+          );
+        },
+      }),
       guardiansModule({}),
       studentRelationsModule({}),
-      enrollmentModule({ historyByStudentId: { "student-0001": [] } }),
+      enrollmentModule({ historyByStudentId: history }),
       studentTransfersModule({}),
     );
     await studentsPage.goto();
@@ -122,7 +145,11 @@ test.describe("student enrollment tab", () => {
       .getByRole("button", { name: /change section/i })
       .click();
 
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+    // Not `getByRole("dialog")).toHaveCount(0)` — `StudentDetailSheet` is itself a Radix
+    // `Dialog` under a different visual treatment (`packages/ui`'s `Sheet` is literally
+    // `Dialog as SheetPrimitive`), so it also carries `role="dialog"` and stays open
+    // throughout this test. The section picker is scoped to the now-closed nested dialog.
+    await expect(page.getByRole("combobox", { name: /^section$/i })).toHaveCount(0);
   });
 });
 
