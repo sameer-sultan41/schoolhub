@@ -1,5 +1,5 @@
 import { id } from "@/data/factories";
-import { fail, ok, pagedList } from "../envelope";
+import { fail, ok, pagedList, paginated } from "../envelope";
 import type { MockModule } from "../router";
 
 /** Trimmed to the fields the dashboard reads; extend as the UI grows. */
@@ -62,10 +62,67 @@ export function buildHouse(overrides: Partial<House> = {}): House {
   };
 }
 
+/** Trimmed to the fields `ClassSectionFields`/the directory filters read. Not the same
+ * fixtures `dashboard-home.ts` registers for its own bare `/classes`/`/sections` count
+ * stubs — a spec that needs real, named options composes this module instead. */
+export interface SchoolClass {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+export function buildSchoolClass(overrides: Partial<SchoolClass> = {}): SchoolClass {
+  return {
+    id: id("class"),
+    name: "Grade 1",
+    is_active: true,
+    ...overrides,
+  };
+}
+
+export interface Section {
+  id: string;
+  name: string;
+  class_id: string;
+  campus_id: string;
+  is_active: boolean;
+}
+
+export function buildSection(overrides: Partial<Section> = {}): Section {
+  return {
+    id: id("section"),
+    name: "A",
+    class_id: "",
+    campus_id: "",
+    is_active: true,
+    ...overrides,
+  };
+}
+
+export interface AcademicSession {
+  id: string;
+  name: string;
+  status: "planned" | "active" | "closed" | "archived";
+  is_current: boolean;
+}
+
+export function buildAcademicSession(overrides: Partial<AcademicSession> = {}): AcademicSession {
+  return {
+    id: id("session"),
+    name: "2026-27",
+    status: "active",
+    is_current: true,
+    ...overrides,
+  };
+}
+
 export interface SchoolOrganizationOptions {
   campuses?: Campus[];
   departments?: Department[];
   houses?: House[];
+  classes?: SchoolClass[];
+  sections?: Section[];
+  academicSessions?: AcademicSession[];
 }
 
 /**
@@ -79,6 +136,31 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     const campuses = [...(options.campuses ?? [buildCampus()])];
     const departments = [...(options.departments ?? [buildDepartment()])];
     const houses = [...(options.houses ?? [buildHouse()])];
+    const classes = [...(options.classes ?? [])];
+    const sections = [...(options.sections ?? [])];
+    const academicSessions = [...(options.academicSessions ?? [])];
+
+    api.get("/classes", (request) => {
+      const isActive = request.searchParams.get("is_active");
+      const rows =
+        isActive === null ? classes : classes.filter((c) => String(c.is_active) === isActive);
+      return pagedList(rows);
+    });
+
+    api.get("/sections", (request) => {
+      const classId = request.searchParams.get("class_id");
+      const campusId = request.searchParams.get("campus_id");
+      const isActive = request.searchParams.get("is_active");
+      const rows = sections.filter(
+        (s) =>
+          (!classId || s.class_id === classId) &&
+          (!campusId || s.campus_id === campusId) &&
+          (isActive === null || String(s.is_active) === isActive),
+      );
+      return pagedList(rows);
+    });
+
+    api.get("/academic-sessions", () => paginated(academicSessions));
 
     api.get("/campuses", () => pagedList(campuses));
 

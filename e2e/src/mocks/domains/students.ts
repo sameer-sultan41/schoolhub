@@ -133,15 +133,44 @@ export function studentsModule(options: StudentOptions = {}): MockModule {
     api.post("/students/:studentAction", (request) => {
       const [studentId, action] = (request.params["studentAction"] ?? "").split(":");
       const match = students.find((s) => s.id === studentId);
-      if (action !== "withdraw" || !match) return fail(404, "Not found.");
-      if (match.status !== "active") {
-        return fail(422, `Student is ${match.status}, not active.`, {
-          code: "domain_rule_violation",
-          details: [{ field: "non_field", issue: `Student is ${match.status}, not active.` }],
-        });
+      if (!match) return fail(404, "Not found.");
+
+      if (action === "withdraw") {
+        if (match.status !== "active") {
+          return fail(422, `Student is ${match.status}, not active.`, {
+            code: "domain_rule_violation",
+            details: [{ field: "non_field", issue: `Student is ${match.status}, not active.` }],
+          });
+        }
+        Object.assign(match, { status: "withdrawn", updated_at: "2026-09-02T00:00:00Z" });
+        return ok(match);
       }
-      Object.assign(match, { status: "withdrawn", updated_at: "2026-09-02T00:00:00Z" });
-      return ok(match);
+
+      // `enroll`/`change-section` both return the enrollment record
+      // (`StudentEnrollmentSerializer`), not the student — this mock's job is proving the
+      // dashboard's own request/response wiring, not re-implementing enroll_student's
+      // real validation (capacity, prerequisites, etc. — that belongs to the live lane).
+      if (action === "enroll" || action === "change-section") {
+        const body = (request.json() as Record<string, string> | null) ?? {};
+        return ok(
+          {
+            id: id("enrollment"),
+            student_id: match.id,
+            academic_session_id: body["academic_session_id"] ?? "session-e2e",
+            class_id: body["class_id"] ?? "class-e2e",
+            section_id: body["section_id"] ?? "section-e2e",
+            roll_number: body["roll_number"] ?? null,
+            enrollment_date: body["enrollment_date"] ?? "2026-04-05",
+            end_date: null,
+            status: "active",
+            created_at: "2026-04-05T00:00:00Z",
+            updated_at: "2026-04-05T00:00:00Z",
+          },
+          { status: action === "enroll" ? 201 : 200 },
+        );
+      }
+
+      return fail(404, "Not found.");
     });
   };
 }

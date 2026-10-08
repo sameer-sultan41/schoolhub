@@ -10,3 +10,5 @@ export * from "./domains/students";
 export * from "./domains/guardians";
 export * from "./domains/student-relations";
 export * from "./domains/files";
+export * from "./domains/enrollment";
+export * from "./domains/student-transfers";
