@@ -130,6 +130,7 @@ maxmemory
 Meilisearch
 messageformat
 Metronic
+miswired
 msdownload
 myschool
 nahi
@@ -255,6 +256,7 @@ unapprove
 unapproved
 unapproves
 unauditable
+unbuildable
 unconfigured
 undoable
 ungated

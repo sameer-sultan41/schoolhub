@@ -191,12 +191,12 @@ Full column-level specs live in [`../05-database/entities/people.md`](../05-data
 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
-- `GET/POST /api/v1/students` · `GET/PATCH/DELETE /api/v1/students/{id}` — filters: `academic_session_id`, `class_id`, `section_id`, `campus_id`, `status`, `house_id`, `search`; cursor pagination.
+- `GET/POST /api/v1/students` · `GET/PATCH/DELETE /api/v1/students/{id}` — filters: `academic_session_id`, `class_id`, `section_id`, `campus_id`, `status`, `house_id`, `search`; cursor pagination. Combining `academic_session_id`/`class_id`/`section_id` matches a single enrollment row that satisfies all three together, not independently (fixed a pre-existing bug when the dashboard's own filter UI shipped — Phase 3).
 - `GET/POST /api/v1/students/{id}/guardians` · `GET/POST /api/v1/guardians` · `PATCH /api/v1/guardians/{id}` — guardian linking uses the sub-resource; link flags updatable via `PATCH /api/v1/student-guardians/{id}`.
 - `GET/POST /api/v1/students/{id}/emergency-contacts` · `GET/POST /api/v1/students/{id}/documents` · `POST /api/v1/student-documents/{id}:verify` · `POST /api/v1/student-documents/{id}:download`.
 - `POST /api/v1/students/{id}:enroll` · `POST /api/v1/students/{id}:change-section` · `POST /api/v1/students/{id}:withdraw` (colon-actions; `Idempotency-Key` supported).
-- `GET/POST /api/v1/student-transfers` · `POST /api/v1/student-transfers/{id}:approve` · `:reject` · `:complete`.
-- `GET /api/v1/students/{id}/history` — assembled timeline.
+- `GET/POST /api/v1/student-transfers` — filters: `student_id`. `POST /api/v1/student-transfers/{id}:approve` · `:reject` · `:complete`.
+- `GET /api/v1/students/{id}/history` — assembled timeline; documented response shape (`StudentHistoryEvent`, a discriminated union — see [ADR-0022](../decisions/0022-polymorphic-history-response-via-dict-dispatch.md)).
 - `POST /api/v1/student-imports` → `202` + job; `POST /api/v1/id-cards:generate` → `202` + job (batch PDF).
 
 ## 17. Integration Requirements
@@ -266,4 +266,29 @@ PATCH, and emergency contacts' cross-tenant isolation) plus two more the review 
 (a foreign-tenant guardian link read, and the guardian-link duplicate-conflict response).
 
 The backend's own `emergency_contacts/`, `guardians/`, `student_guardians/` and `transfers/`
-packages exist but are not wired into `urls.py` — a separate, backend-only follow-up.
+packages exist but are not wired into `urls.py` — a separate, backend-only follow-up. Phase 3's
+own `student_id` filter and `StudentFilterSet` fix went into the real, wired root
+`filters.py`/`views.py`; the unwired `transfers/filters.py` received neither and remains the
+same drift this note already flags.
+
+**Dashboard, Phase 3 (as shipped).** `StudentDetailSheet` gains a fifth tab (labeled "History" —
+`tabs.history`), orchestrating enrollment and transfers together: a current-enrollment card (or
+"Not enrolled" with an Enroll action), Change Section, the transfers list with Request/Approve/
+Reject/Complete actions, and the full chronological timeline — all driven from one
+`GET /students/{id}/history` query for the enrollment card and timeline, plus a separate,
+independently-failing `GET /student-transfers?student_id=` query for the transfers list. The
+capacity-override-reason field on Enroll/Change-Section is shown unconditionally to a caller
+holding `students.student.update` (not reactively after a capacity error — the server's 422s
+for capacity vs. every other prerequisite failure are not distinguishable client-side today).
+`incoming` transfers are not offered by the request dialog at all (see `deferred-work.md`).
+Three small, deliberate backend changes: the `student_id` filter on `/student-transfers`, the
+`StudentFilterSet` same-row correctness fix (§16), and the history endpoint's documented
+response shape (ADR-0022). The student directory's `academic_session_id`/`class_id`/`section_id`
+filters, dead controls since Phase 1, are now wired to live `Select`s showing every option
+regardless of status (a historical register-style filter, unlike the enroll/change-section/
+complete pickers, which show only the active/open set). A new shared `ResponsiveAlertDialog`
+(`apps/dashboard/src/components/responsive-alert-dialog.tsx`) and `ClassSectionFields`
+(`apps/dashboard/src/features/students/class-section-fields.tsx`) support this phase's five new
+dialogs; the two pre-existing dialogs on the wrong breakpoint hook (`exit-staff-dialog.tsx`,
+`student-documents-tab.tsx`) were not migrated onto the new shared component in this phase — see
+`deferred-work.md`.

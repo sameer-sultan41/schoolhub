@@ -50,6 +50,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0019](0019-every-module-uses-the-five-file-shape.md) | Every service module uses the five-file shape from creation | Accepted | review only — `schoolhub-api-services` skill checklist, `change-reviewer` agent |
 | [0020](0020-client-fan-out-for-unembedded-nested-ids.md) | A nested list carrying only a foreign id resolves it client-side, by fan-out | Accepted | review only — `change-reviewer` agent, `schoolhub-api-services` skill checklist |
 | [0021](0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md) | A sensitive resource gets its own permission-gated `:download` action, not just the generic `core/files` endpoint | Accepted | review only — `change-reviewer` agent, `schoolhub-backend-module` skill checklist |
+| [0022](0022-polymorphic-history-response-via-dict-dispatch.md) | A polymorphic list response documents with `PolymorphicProxySerializer`, dispatches at runtime with a plain dict lookup | Accepted | review only — `change-reviewer` agent, `schoolhub-backend-module` skill checklist |
 
 "Planned" items land in the stacked PRs described in
 [`../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md`](../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md);
