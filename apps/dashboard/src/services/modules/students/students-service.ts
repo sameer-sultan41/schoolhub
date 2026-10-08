@@ -6,10 +6,14 @@ import { RELATION_PAGE_SIZE } from "./students-constant";
 import { toStudentBody, toStudentsQueryParams } from "./students-helper";
 import type {
   AddEmergencyContactInput,
+  ChangeStudentSectionInput,
   CreateStudentInput,
   DocumentVerificationDecision,
   EmergencyContactRecord,
+  EnrollStudentInput,
   StudentDocumentRecord,
+  StudentEnrollmentRecord,
+  StudentHistoryEvent,
   StudentRecord,
   StudentsPageQuery,
   UpdateStudentInput,
@@ -25,10 +29,14 @@ import type {
 
 export type {
   AddEmergencyContactInput,
+  ChangeStudentSectionInput,
   CreateStudentInput,
   DocumentVerificationDecision,
   EmergencyContactRecord,
+  EnrollStudentInput,
   StudentDocumentRecord,
+  StudentEnrollmentRecord,
+  StudentHistoryEvent,
   StudentRecord,
   StudentsPageQuery,
   UpdateStudentInput,
@@ -74,6 +82,59 @@ export async function withdrawStudent(
     endpoints.students.withdraw(id),
     { reason: input.reason, effective_date: input.effectiveDate, waive_clearance: false },
     { idempotencyKey },
+  );
+  return data;
+}
+
+/** `idempotencyKey`: the caller generates one per dialog-open and resends it on retry,
+ * same convention as `withdrawStudent` above. Returns the enrollment record, not the
+ * student — `enroll`'s real response is `StudentEnrollmentSerializer` data. */
+export async function enrollStudent(
+  studentId: string,
+  input: EnrollStudentInput,
+  idempotencyKey: string,
+): Promise<StudentEnrollmentRecord> {
+  const { data } = await apiClient.post<StudentEnrollmentRecord>(
+    endpoints.students.enroll(studentId),
+    {
+      academic_session_id: input.academicSessionId,
+      class_id: input.classId,
+      section_id: input.sectionId,
+      enrollment_date: input.enrollmentDate,
+      ...(input.rollNumber ? { roll_number: input.rollNumber } : {}),
+      ...(input.capacityOverrideReason
+        ? { capacity_override_reason: input.capacityOverrideReason }
+        : {}),
+    },
+    { idempotencyKey },
+  );
+  return data;
+}
+
+/** No `class_id` in the body — `ChangeSectionRequestSerializer` has none; the class is
+ * implied by the chosen section. */
+export async function changeStudentSection(
+  studentId: string,
+  input: ChangeStudentSectionInput,
+  idempotencyKey: string,
+): Promise<StudentEnrollmentRecord> {
+  const { data } = await apiClient.post<StudentEnrollmentRecord>(
+    endpoints.students.changeSection(studentId),
+    {
+      section_id: input.sectionId,
+      ...(input.rollNumber ? { roll_number: input.rollNumber } : {}),
+      ...(input.capacityOverrideReason
+        ? { capacity_override_reason: input.capacityOverrideReason }
+        : {}),
+    },
+    { idempotencyKey },
+  );
+  return data;
+}
+
+export async function fetchStudentHistory(studentId: string): Promise<StudentHistoryEvent[]> {
+  const { data } = await apiClient.get<StudentHistoryEvent[]>(
+    endpoints.students.history(studentId),
   );
   return data;
 }

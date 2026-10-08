@@ -278,15 +278,19 @@ either this file or `project-status.md`.
   both onto `useSubmitGuard` next time either file is touched for an unrelated reason.
 - **The unwired, unrouted duplicate `GuardianSerializer`
   (`apps/api/apps/student_management/guardians/serializers.py`) now falls further behind the
-  real, routed one.** Students Phase 2 adds `photo_url`, the unchanged-current-photo validation
-  skip, and `select_related("photo_file")` to the serializer/viewset actually reachable from
-  `urls.py` — the duplicate package (part of a half-finished per-resource split,
+  real, routed one — and so does `transfers/filters.py` (students Phase 3).** Students Phase 2
+  adds `photo_url`, the unchanged-current-photo validation skip, and
+  `select_related("photo_file")` to the serializer/viewset actually reachable from `urls.py` —
+  the duplicate package (part of a half-finished per-resource split,
   `docs/03-modules/student-management.md`'s own notes already call it not wired in) gets none of
   these, on purpose: an earlier round of this phase's own review mirrored a smaller change onto
   it for consistency, then a later round found that was itself scope creep onto dead code and
-  reversed it. Whoever finishes wiring that package in (or deletes it, if the split is abandoned)
-  will need to re-apply `photo_url`/the validation skip/`select_related` at that point — this
-  entry exists so that work isn't a surprise.
+  reversed it. Phase 3 hits the identical situation one package along: the new `student_id`
+  transfer filter and the `StudentFilterSet` same-row correctness fix both went into the real,
+  wired root `filters.py`/`views.py`, confirmed via `urls.py`'s actual import — the unwired
+  `transfers/filters.py` receives neither. Whoever finishes wiring either package in (or deletes
+  them, if the split is abandoned) will need to re-apply all of this at that point — this entry
+  exists so that work isn't a surprise.
 
 - **Inline display links for files** (PR #76): `core.files.serializers.SignedFileURLField`
   turns any `File` foreign key into a read-only signed GET link (`get_display_url()`), valid
@@ -746,23 +750,14 @@ either this file or `project-status.md`.
     other nine `core` packages join the override as they are typed (generate-baselines reports which).
   - Coverage floors to raise toward the 90% target: `apps/fees_finance` 85, `core/rbac` 80.
 
-- **`e2e/tests/live/students-admission-enrollment.spec.ts` needs a rewrite, not just
-  unblocking, once a later phase builds the screens it assumes.** `students-dashboard-phase1`
-  (Task 9) replaced the `/students` placeholder with the real directory — a table plus
-  in-page dialogs (`StudentFormDialog`, `WithdrawStudentDialog`) and a sheet
-  (`StudentDetailSheet`), driven by the new `StudentsPage` page object and
-  `tests/dashboard/students.spec.ts` (mocked). This live spec predates that reset and still
-  drives the earlier, standalone `/students/new` and `/students/{id}` routes via
-  `studentFormPage`/`studentDetailPage` — routes this phase never builds, so the spec stays
-  red for that reason alone, unrelated to Task 9's changes. Left as-is deliberately: those two
-  fixtures and page objects (`StudentFormPage`, `StudentDetailPage`) are untouched so this
-  spec's import surface keeps compiling, but the journey itself (create student → link
-  guardian → add emergency contact → enroll, plus the duplicate-admission rejection) needs
-  re-driving through the new dialogs/sheet. Guardians and emergency contacts are now real as
-  of students Phase 2 (`docs/superpowers/plans/2026-10-03-students-phase2-relations.md`);
-  this spec's journey still can't be fully re-driven until enrollment ships in Phase 3 too —
-  a partial rewrite now would need redoing again for the enrollment step regardless. Left as-is
-  pending the full Phase 3 rewrite.
+- ~~**`e2e/tests/live/students-admission-enrollment.spec.ts` needs a rewrite...**~~ **Closed by
+  students Phase 3** (`docs/superpowers/plans/2026-10-07-students-phase3-enrollment.md`). The
+  spec now drives the real, shipped dashboard UI end to end: create student → link guardian →
+  add emergency contact → enroll → change section → request an inter-campus transfer → a
+  second, `principal` identity approves it → completes it → filters the live directory by the
+  transferred-from session, plus the real duplicate-admission rejection. `StudentDetailPage`
+  gained `changeSection`/`requestInterCampusTransfer`/`decideTransfer`/`completeTransfer`, and
+  `signInAsSecondIdentity`'s `SecondIdentity` return type gained `studentDetailPage`.
 
 - **A 422 duplicate-admission create response has no field for the override reason its own
   message promises.** `student_management`'s duplicate-admission check (same name + DOB)
@@ -782,12 +777,79 @@ either this file or `project-status.md`.
   genuinely blocked on `fees-finance`/`library`/`transport` (Tier 3/5+) shipping real blockers
   first, not on anything in this plan's own Roadmap.
 
-- **`/students`' directory filters stop at search/status/campus/house.** Class, section and
-  academic-session filters were left out this phase — with no enrollment UI yet, they would be
-  dead controls (`students-dashboard-phase1`'s Global Constraints). Phase 3 of
-  `docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`'s Roadmap (enrollment
-  lifecycle/transfers) unblocks `class_id`/`section_id`/`academic_session_id` on the directory
-  once it lands.
+- ~~**`/students`' directory filters stop at search/status/campus/house**~~ **Closed by students
+  Phase 3.** `academic_session_id`/`class_id`/`section_id` are now live `Select`s in
+  `student-directory-filters.tsx`, showing every option regardless of status (a historical
+  register-style filter, deliberately unlike the enroll/change-section/complete pickers).
+
+- **`incoming` transfers have no request UI.** A deliberate Phase 3 scope decision, not an
+  oversight: `request_transfer` requires the student to already be `active`, a precondition
+  that fits `inter_campus`/`outgoing` naturally but not "a student incoming from another
+  school" — which more plausibly belongs to a future admission-time flow this module doesn't
+  have yet — and the backend's completion workflow for `incoming` is itself undefined. If a
+  future phase builds a genuine incoming-transfer-student admission flow, design `incoming`'s
+  request UI and its completion workflow together then, not before.
+
+- **`enroll_student` and `change_section` don't check that a chosen section's campus matches
+  the student's own campus.** A real, pre-existing backend gap — neither `services
+  .enroll_student` nor `services.change_section` has such a check. Closed client-side only
+  in Phase 3: `ClassSectionFields` always scopes its section picker by the student's own
+  `campusId` in both of this shared component's modes (unlocked, used by enroll; locked,
+  used by change-section), so reaching this gap needs deliberately working around the UI. A
+  real fix belongs in `enroll_student`/`change_section` themselves.
+
+- **`request_transfer` has no idempotency key**, unlike `approve`/`reject`/`complete`, which
+  all go through `replay_or_execute` — confirmed, a deliberate Phase 3 decision (the server's
+  `perform_create` for a transfer request doesn't call it). `StudentTransfer` also has no DB
+  constraint preventing two `requested` rows for the same student. A lost or timed-out
+  response followed by a dashboard retry can therefore create a duplicate pending transfer
+  request. Closing this needs either wiring `request_transfer` through the idempotency
+  framework or adding a uniqueness constraint (partial, on `status = requested`) — a real
+  backend change, not a client-side mitigation, since a lost response gives the client no
+  identifier to retry against.
+
+- **`request_transfer` doesn't check that `from_campus_id`/`to_campus_id` actually differ, or
+  that `from_campus_id` matches the student's real current campus.** Phase 3's
+  `request-transfer-dialog.tsx` closes this client-side only: `from_campus_id` always renders
+  read-only (the student's own campus, never user-typed), and the `to_campus_id` picker
+  excludes the student's current campus from its own options. A real fix belongs in
+  `services.request_transfer`/`assert_transfer_campus_fields`.
+
+- **Module doc §11's "a transfer's effective date must fall within the active session" rule
+  has no enforcement, client or server.** Phase 3's request-transfer schema doesn't mirror it —
+  doing so needs the dialog to also fetch the relevant session's date range, a dependency not
+  otherwise needed. Recorded rather than engineered around for this one narrow, low-stakes gap.
+
+- **`enroll-dialog.tsx`, `change-section-dialog.tsx` and `request-transfer-dialog.tsx` repeat
+  an identical ~85-line form/guard/mutation/error-handling skeleton** (the `useForm` +
+  `useSubmitGuard`/`useGuardedSubmit` + `useMutation` + `applyServerFieldErrors` wiring)
+  instead of sharing one hook. A real "wait for the third-plus copy" extraction candidate —
+  not done in Phase 3 to avoid re-touching three already-reviewed dialogs late in the phase;
+  worth a small, dedicated follow-up once a fourth dialog would otherwise repeat it again.
+
+- **`complete-transfer-dialog.tsx` is the one new Phase 3 dialog that doesn't use the shared
+  `useGuardedSubmit`/`useSubmitGuard` hook** — its section-picker branch instead guards
+  double-submit with `disabled={!form.watch("section_id") || mutation.isPending}`, and its
+  confirm-only branch relies on `ResponsiveAlertDialog`'s own `isPending`-disables-both-buttons
+  behavior. Neither is currently exploitable (both genuinely block a second submit while the
+  mutation is in flight), but it's an inconsistency worth closing for the same reason the
+  other four dialogs standardized on the shared hook.
+
+- **`enroll`/`change_section`'s view actions build an identical `audit_extra`
+  capacity-override dict independently** (`apps/api/apps/student_management/views.py`)
+  instead of sharing a small helper. Same "worth extracting, not urgent" shape as the
+  dashboard dialog skeleton above.
+
+- **`exit-staff-dialog.tsx` and `student-documents-tab.tsx`'s delete confirmation use the wrong
+  responsive breakpoint hook.** Both switch on `useIsMobile()` (768px) instead of this app's
+  real convention, `useIsDesktopShell()` (1024px) — confirmed in Phase 3
+  (`docs/superpowers/plans/2026-10-07-students-phase3-enrollment.md`), which built the correct,
+  shared `ResponsiveAlertDialog` on the right hook (`withdraw-student-dialog.tsx` already used
+  it correctly) but deliberately did not migrate these two pre-existing copies onto it —
+  migrating them is an unrelated bug fix outside that phase's own goal. Root cause: `6c16a87`
+  introduced `student-documents-tab.tsx`'s copy on the wrong hook; `exit-staff-dialog.tsx`'s
+  predates it. Follow-up: migrate both onto `apps/dashboard/src/components/responsive-alert-dialog.tsx`
+  in their own small `fix` PR, with the real root cause in the `Root cause:` line.
 
 - **`/students`' detail sheet shows no address.** `StudentFormDialog` captures and edits all
   six address sub-fields (`student-address-fields.tsx`), but `StudentDetailSheet`

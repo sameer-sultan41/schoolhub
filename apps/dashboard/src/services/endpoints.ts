@@ -76,6 +76,15 @@ export const endpoints = {
   },
   schoolOrganization: {
     houses: "/houses",
+    /**
+     * Separate from `dashboard.classes`/`.sections`/`.academicSessions` above: those are
+     * read only for `fetchDashboardOverview`'s counts, these are read for option-list
+     * fetchers. Both sets point at the same real paths — two named callers of one URL,
+     * not a duplication to clean up.
+     */
+    classes: "/classes",
+    sections: "/sections",
+    academicSessions: "/academic-sessions",
   },
   students: {
     list: "/students",
@@ -83,6 +92,11 @@ export const endpoints = {
     /** Colon-action, not a nested path — the real registered route is
      * `/students/{id}:withdraw`. */
     withdraw: (id: string) => `/students/${id}:withdraw`,
+    /** Colon-actions, not nested paths — the real registered routes are
+     * `/students/{id}:enroll`/`/students/{id}:change-section`. */
+    enroll: (id: string) => `/students/${id}:enroll`,
+    changeSection: (id: string) => `/students/${id}:change-section`,
+    history: (id: string) => `/students/${id}/history`,
     emergencyContacts: (studentId: string) => `/students/${studentId}/emergency-contacts`,
     documents: (studentId: string) => `/students/${studentId}/documents`,
   },
@@ -105,5 +119,15 @@ export const endpoints = {
    * updatable via PATCH /api/v1/student-guardians/{id}"). */
   studentGuardians: {
     detail: (id: string) => `/student-guardians/${id}`,
+  },
+  /** `GET/POST /student-transfers` plus the `:approve`/`:reject`/`:complete`
+   * colon-actions — a top-level resource from the start, unlike `studentDocuments`
+   * above (whose creation is nested under `students.documents`). */
+  studentTransfers: {
+    list: "/student-transfers",
+    create: "/student-transfers",
+    approve: (id: string) => `/student-transfers/${id}:approve`,
+    reject: (id: string) => `/student-transfers/${id}:reject`,
+    complete: (id: string) => `/student-transfers/${id}:complete`,
   },
 } as const;

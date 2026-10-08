@@ -5094,7 +5094,7 @@ export interface paths {
          * Assemble a student's chronological history
          * @description Student master records (module doc §5.1-2).
          */
-        get: operations["students_history_retrieve"];
+        get: operations["students_history_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6501,6 +6501,39 @@ export interface components {
             roll_number?: string | null;
             capacity_override_reason?: string | null;
         };
+        /**
+         * @description Documents one ``build_history`` enrollment-event dict exactly — the
+         *
+         *     fields here are not derived from a model, they mirror that function's own
+         *     dict construction field-for-field so the two can never silently drift.
+         */
+        EnrollmentHistoryEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "enrollment";
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            status: components["schemas"]["StudentEnrollmentStatusEnum"];
+            /** Format: uuid */
+            academic_session_id: string;
+            academic_session_name: string;
+            /** Format: uuid */
+            class_id: string;
+            class_name: string;
+            /** Format: uuid */
+            section_id: string;
+            section_name: string;
+            roll_number: string | null;
+        };
+        /**
+         * @description * `enrollment` - enrollment
+         * @enum {string}
+         */
+        EnrollmentHistoryEventTypeEnum: "enrollment";
         /** @description `exams` — an examination event (§5.1). */
         Exam: {
             /** Format: uuid */
@@ -10510,6 +10543,7 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        StudentHistoryEvent: components["schemas"]["EnrollmentHistoryEvent"] | components["schemas"]["TransferHistoryEvent"];
         /**
          * @description `POST /student-imports` (multipart).
          *
@@ -10753,16 +10787,48 @@ export interface components {
          */
         TimetableSlotStatusEnum: "draft" | "published";
         /**
-         * @description `section_id` is required only for an inter-campus transfer — see
+         * @description `section_id` is required only for an inter-campus transfer whose student still has
          *
-         *     services.complete_transfer, which raises a field-specific error when it is
-         *     missing for that type rather than this serializer guessing at a
-         *     conditional-required rule.
+         *     an active enrollment to reassign — see services.complete_transfer, which raises a
+         *     field-specific error when it is missing in that case, rather than this serializer
+         *     guessing at a conditional-required rule.
          */
         TransferCompleteRequest: {
             /** Format: uuid */
             section_id?: string | null;
         };
+        /**
+         * @description Documents one ``build_history`` transfer-event dict exactly — see
+         *
+         *     EnrollmentHistoryEventSerializer's docstring for why this mirrors the
+         *     function's dict construction rather than a model.
+         */
+        TransferHistoryEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "transfer";
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            date: string;
+            status: components["schemas"]["StudentTransferStatusEnum"];
+            transfer_type: string;
+            /** Format: uuid */
+            from_campus_id: string | null;
+            from_campus_name: string | null;
+            /** Format: uuid */
+            to_campus_id: string | null;
+            to_campus_name: string | null;
+            external_school_name: string | null;
+            reason: string;
+        };
+        /**
+         * @description * `transfer` - transfer
+         * @enum {string}
+         */
+        TransferHistoryEventTypeEnum: "transfer";
         /**
          * @description * `inter_campus` - Inter-campus
          *     * `outgoing` - Outgoing
@@ -18968,6 +19034,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                student_id?: string;
             };
             header?: never;
             path?: never;
@@ -19259,7 +19326,7 @@ export interface operations {
             };
         };
     };
-    students_history_retrieve: {
+    students_history_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -19270,12 +19337,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Timeline of enrollment and transfer events */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StudentHistoryEvent"][];
+                };
             };
         };
     };

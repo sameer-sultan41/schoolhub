@@ -6,6 +6,7 @@ import { JobsService } from "./modules/jobs";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
 import { StudentsService } from "./modules/students";
+import { StudentTransfersService } from "./modules/student-transfers";
 import { TenantService } from "./modules/tenant";
 
 /**
@@ -55,4 +56,5 @@ export const Services = {
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,
+  studentTransfers: StudentTransfersService,
 } as const;

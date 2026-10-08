@@ -48,6 +48,13 @@ export const E2E_BASELINE_SECTION_NAME = "A";
 export const E2E_BASELINE_SESSION_NAME = "E2E Baseline";
 
 /**
+ * Mirrors seed_e2e_data.py's second campus/section — the inter-campus transfer
+ * journey's destination. Same `E2E_BASELINE_CLASS_NAME` class, a different campus.
+ */
+export const E2E_SECOND_CAMPUS_NAME = "North Campus";
+export const E2E_SECOND_CAMPUS_SECTION_NAME = "B";
+
+/**
  * Mirrors seed_e2e_data.py's academics baseline.
  *
  * The employee number is the *addressable* half of the seeded teacher: `Staff` ids are

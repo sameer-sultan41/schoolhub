@@ -60,8 +60,32 @@ export function buildStudent(overrides: Partial<Student> = {}): Student {
   };
 }
 
+/** The `StudentEnrollmentSerializer`-shaped record `:enroll`/`:change-section` return. */
+export interface MockEnrollmentResult {
+  id: string;
+  student_id: string;
+  academic_session_id: string;
+  class_id: string;
+  section_id: string;
+  roll_number: string | null;
+  enrollment_date: string;
+  end_date: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface StudentOptions {
   students?: Student[];
+  /** Called after a mocked `:enroll`/`:change-section` succeeds. `enrollmentModule` owns
+   * `GET /students/{id}/history` as its own, separate module with no shared state — a spec
+   * that registers both and wants a just-created enrollment to show up in the history
+   * timeline wires this callback to push a matching event into the same object it passed to
+   * `enrollmentModule`. */
+  onEnrollmentAction?: (
+    action: "enroll" | "change-section",
+    enrollment: MockEnrollmentResult,
+  ) => void;
 }
 
 /**
@@ -133,15 +157,43 @@ export function studentsModule(options: StudentOptions = {}): MockModule {
     api.post("/students/:studentAction", (request) => {
       const [studentId, action] = (request.params["studentAction"] ?? "").split(":");
       const match = students.find((s) => s.id === studentId);
-      if (action !== "withdraw" || !match) return fail(404, "Not found.");
-      if (match.status !== "active") {
-        return fail(422, `Student is ${match.status}, not active.`, {
-          code: "domain_rule_violation",
-          details: [{ field: "non_field", issue: `Student is ${match.status}, not active.` }],
-        });
+      if (!match) return fail(404, "Not found.");
+
+      if (action === "withdraw") {
+        if (match.status !== "active") {
+          return fail(422, `Student is ${match.status}, not active.`, {
+            code: "domain_rule_violation",
+            details: [{ field: "non_field", issue: `Student is ${match.status}, not active.` }],
+          });
+        }
+        Object.assign(match, { status: "withdrawn", updated_at: "2026-09-02T00:00:00Z" });
+        return ok(match);
       }
-      Object.assign(match, { status: "withdrawn", updated_at: "2026-09-02T00:00:00Z" });
-      return ok(match);
+
+      // `enroll`/`change-section` both return the enrollment record
+      // (`StudentEnrollmentSerializer`), not the student — this mock's job is proving the
+      // dashboard's own request/response wiring, not re-implementing enroll_student's
+      // real validation (capacity, prerequisites, etc. — that belongs to the live lane).
+      if (action === "enroll" || action === "change-section") {
+        const body = (request.json() as Record<string, string> | null) ?? {};
+        const enrollment: MockEnrollmentResult = {
+          id: id("enrollment"),
+          student_id: match.id,
+          academic_session_id: body["academic_session_id"] ?? "session-e2e",
+          class_id: body["class_id"] ?? "class-e2e",
+          section_id: body["section_id"] ?? "section-e2e",
+          roll_number: body["roll_number"] ?? null,
+          enrollment_date: body["enrollment_date"] ?? "2026-04-05",
+          end_date: null,
+          status: "active",
+          created_at: "2026-04-05T00:00:00Z",
+          updated_at: "2026-04-05T00:00:00Z",
+        };
+        options.onEnrollmentAction?.(action, enrollment);
+        return ok(enrollment, { status: action === "enroll" ? 201 : 200 });
+      }
+
+      return fail(404, "Not found.");
     });
   };
 }

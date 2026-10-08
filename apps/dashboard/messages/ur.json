@@ -439,12 +439,16 @@
     "transfers": {
       "title": "منتقلیاں",
       "empty": "کوئی منتقلی ریکارڈ میں نہیں۔",
+      "loadError": "اس طالب علم کی منتقلیاں لوڈ نہیں ہو سکیں۔",
       "request": "منتقلی کی درخواست",
-      "requestDescription": "بین کیمپس، بیرونی، یا آنے والی منتقلی کی درخواست کریں۔",
+      "requestDescription": "بین کیمپس یا بیرونی منتقلی کی درخواست کریں۔",
       "approve": "منظور کریں",
+      "approveDescription": "منتقلی کی درخواست کو منظور کرتا ہے۔",
       "reject": "مسترد کریں",
+      "rejectDescription": "منتقلی کی درخواست کو مسترد کرتا ہے۔",
       "complete": "مکمل کریں",
       "completeDescription": "منظور شدہ منتقلی کو نافذ کرتا ہے۔",
+      "completeNoActiveEnrollmentDescription": "اس طالب علم کا کوئی فعال اندراج نہیں ہے — صرف کیمپس اپ ڈیٹ ہوگا۔",
       "type": {
         "inter_campus": "بین کیمپس",
         "outgoing": "بیرونی",

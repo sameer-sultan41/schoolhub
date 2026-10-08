@@ -1,4 +1,4 @@
-import { collectPages, fetchPage } from "@schoolhub/api-client";
+import { fetchPage } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 
@@ -53,18 +53,6 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
     fetchTotal(endpoints.dashboard.campuses),
   ]);
   return { students, staff, classes, sections, subjects, campuses };
-}
-
-export interface AcademicSessionSummary {
-  id: string;
-  name: string;
-  status: string;
-  is_current: boolean;
-}
-
-/** Every academic session — callers resolve the current one from this list. */
-export async function fetchAcademicSessions(): Promise<AcademicSessionSummary[]> {
-  return collectPages<AcademicSessionSummary>(apiClient, endpoints.dashboard.academicSessions);
 }
 
 export interface TeacherLoadSummaryRow {

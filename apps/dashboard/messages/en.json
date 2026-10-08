@@ -439,12 +439,16 @@
     "transfers": {
       "title": "Transfers",
       "empty": "No transfers on record.",
+      "loadError": "Couldn't load this student's transfers.",
       "request": "Request transfer",
-      "requestDescription": "Request an inter-campus, outgoing, or incoming transfer.",
+      "requestDescription": "Request an inter-campus or outgoing transfer.",
       "approve": "Approve",
+      "approveDescription": "Approves the transfer request.",
       "reject": "Reject",
+      "rejectDescription": "Rejects the transfer request.",
       "complete": "Complete",
       "completeDescription": "Executes the approved transfer.",
+      "completeNoActiveEnrollmentDescription": "This student has no active enrollment — only the campus will be updated.",
       "type": {
         "inter_campus": "Inter-campus",
         "outgoing": "Outgoing",

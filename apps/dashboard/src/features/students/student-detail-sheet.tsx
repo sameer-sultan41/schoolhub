@@ -11,9 +11,7 @@ import {
   FileText,
   Hash,
   Home,
-  Pencil,
   School,
-  UserMinus,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
@@ -23,7 +21,6 @@ import {
   AvatarImage,
   Badge,
   BadgeDot,
-  Button,
   Skeleton,
   Tabs,
   TabsContent,
@@ -35,7 +32,6 @@ import {
   ResponsiveSheet,
   ResponsiveSheetBody,
   ResponsiveSheetContent,
-  ResponsiveSheetFooter,
   ResponsiveSheetTitle,
 } from "@/components/responsive-dialog";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -44,12 +40,13 @@ import { getInitials } from "@/lib/helpers";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
-import { STUDENT_WITHDRAWABLE_STATUS } from "@/services/modules/students/students-constant";
 import { formatLastUpdated } from "@/services/modules/students/students-helper";
 import type { StudentRow } from "@/services/modules/students/students-type";
 import { statusVariant } from "./student-columns";
+import { StudentDetailFooter } from "./student-detail-footer";
 import { StudentDocumentsTab } from "./student-documents-tab";
 import { StudentEmergencyContactsTab } from "./student-emergency-contacts-tab";
+import { StudentEnrollmentTab } from "./student-enrollment-tab";
 import { StudentGuardiansTab } from "./student-guardians-tab";
 
 export interface StudentDetailSheetProps {
@@ -141,6 +138,17 @@ export function StudentDetailSheet({
   const canViewGuardians = hasPermission(currentUser, "students.guardian.view");
   const canViewEmergencyContacts = hasPermission(currentUser, "students.student.view");
   const canViewDocuments = hasPermission(currentUser, "students.document.view");
+  // No dedicated students.enrollment.view/students.transfer.view key exists — both reuse
+  // students.student.view, confirmed against the real permission registry.
+  const canViewEnrollment = hasPermission(currentUser, "students.student.view");
+  const enrollmentPermissions = {
+    canEnroll: hasPermission(currentUser, "students.enrollment.enroll"),
+    canChangeSection: hasPermission(currentUser, "students.enrollment.update"),
+    canOverrideCapacity: hasPermission(currentUser, "students.student.update"),
+    canRequestTransfer: hasPermission(currentUser, "students.transfer.create"),
+    canDecide: hasPermission(currentUser, "students.transfer.approve"),
+    canComplete: hasPermission(currentUser, "students.transfer.create"),
+  };
 
   const detailQuery = useQuery({
     queryKey: queryKeys.detail("students", "students", row?.id ?? ""),
@@ -261,6 +269,9 @@ export function StudentDetailSheet({
                 {canViewDocuments && (
                   <TabsTrigger value="documents">{t("tabs.documents")}</TabsTrigger>
                 )}
+                {canViewEnrollment && (
+                  <TabsTrigger value="enrollment">{t("tabs.history")}</TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="profile" className="flex min-h-0 flex-1 flex-col">
@@ -329,9 +340,21 @@ export function StudentDetailSheet({
                   </ResponsiveSheetBody>
                 </TabsContent>
               )}
+
+              {canViewEnrollment && data && (
+                <TabsContent value="enrollment" className="flex min-h-0 flex-1 flex-col">
+                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
+                    <StudentEnrollmentTab
+                      studentId={row.id}
+                      campusId={data.campus_id}
+                      permissions={enrollmentPermissions}
+                    />
+                  </ResponsiveSheetBody>
+                </TabsContent>
+              )}
             </Tabs>
 
-            <DetailFooter
+            <StudentDetailFooter
               row={row}
               canUpdate={canUpdate}
               canWithdraw={canWithdraw}
@@ -343,83 +366,5 @@ export function StudentDetailSheet({
         )}
       </ResponsiveSheetContent>
     </ResponsiveSheet>
-  );
-}
-
-function DetailFooter({
-  row,
-  canUpdate,
-  canWithdraw,
-  isDrawer,
-  onEdit,
-  onWithdraw,
-}: {
-  row: StudentRow;
-  canUpdate: boolean;
-  canWithdraw: boolean;
-  isDrawer: boolean;
-  onEdit: (id: string) => void;
-  onWithdraw: (id: string, name: string) => void;
-}) {
-  const t = useTranslations("students");
-  const tCommon = useTranslations("common");
-  const showWithdraw = canWithdraw && row.status === STUDENT_WITHDRAWABLE_STATUS;
-
-  if (isDrawer) {
-    return (
-      <ResponsiveSheetFooter className="flex-row justify-end gap-2.5 border-t border-border px-4 py-3">
-        {canUpdate && (
-          <Button
-            variant="outline-primary"
-            mode="icon"
-            shape="circle"
-            aria-label={tCommon("edit")}
-            onClick={() => {
-              onEdit(row.id);
-            }}
-          >
-            <Pencil className="size-4" aria-hidden="true" />
-          </Button>
-        )}
-        {showWithdraw && (
-          <Button
-            variant="destructive"
-            mode="icon"
-            shape="circle"
-            aria-label={`${t("actions.withdraw")} ${row.name}`}
-            onClick={() => {
-              onWithdraw(row.id, row.name);
-            }}
-          >
-            <UserMinus className="size-4" aria-hidden="true" />
-          </Button>
-        )}
-      </ResponsiveSheetFooter>
-    );
-  }
-
-  return (
-    <ResponsiveSheetFooter className="border-t border-border px-6 py-4">
-      {canUpdate && (
-        <Button
-          variant="outline-primary"
-          onClick={() => {
-            onEdit(row.id);
-          }}
-        >
-          <Pencil className="size-4" aria-hidden="true" /> {tCommon("edit")}
-        </Button>
-      )}
-      {showWithdraw && (
-        <Button
-          variant="destructive"
-          onClick={() => {
-            onWithdraw(row.id, row.name);
-          }}
-        >
-          <UserMinus className="size-4" aria-hidden="true" /> {t("actions.withdraw")}
-        </Button>
-      )}
-    </ResponsiveSheetFooter>
   );
 }

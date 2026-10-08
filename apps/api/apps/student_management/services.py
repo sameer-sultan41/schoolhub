@@ -857,24 +857,29 @@ def complete_transfer(
     # reset that status back to `transferred`, undoing the withdrawal.
     assert_student_active(student)
     if transfer.transfer_type == TransferType.INTER_CAMPUS:
-        if section is None:
-            raise DomainRuleViolation(
-                {
-                    "section_id": (
-                        "A destination section is required to complete an inter-campus transfer."
-                    )
-                }
-            )
-        if section.campus_id != transfer.to_campus_id:
-            raise DomainRuleViolation(
-                {"section_id": "Section does not belong to the destination campus."}
-            )
         # assert_transfer_campus_fields guarantees to_campus is set for every
         # inter-campus transfer at creation time; this is the type checker's
         # window into that runtime invariant.
         assert transfer.to_campus is not None
         enrollment = active_enrollment(student)
+        # A destination section is only required when there's an active enrollment to
+        # reassign — requiring it unconditionally (the original, buggy ordering) made the
+        # no-active-enrollment path, which the dashboard's own dialog omits section_id
+        # for, always 422 even though there's nothing here for a section to apply to.
         if enrollment is not None:
+            if section is None:
+                raise DomainRuleViolation(
+                    {
+                        "section_id": (
+                            "A destination section is required to complete an "
+                            "inter-campus transfer."
+                        )
+                    }
+                )
+            if section.campus_id != transfer.to_campus_id:
+                raise DomainRuleViolation(
+                    {"section_id": "Section does not belong to the destination campus."}
+                )
             assert_section_belongs_to_class(section=section, school_class=enrollment.school_class)
             _assert_capacity(
                 section=section,

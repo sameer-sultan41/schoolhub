@@ -5,7 +5,8 @@ import { EarningsChart } from "../earnings-chart";
 
 jest.mock("@/services", () => ({
   Services: {
-    dashboard: { fetchAcademicSessions: jest.fn(), fetchTeacherLoadSummary: jest.fn() },
+    dashboard: { fetchTeacherLoadSummary: jest.fn() },
+    schoolOrganization: { fetchAcademicSessions: jest.fn() },
   },
 }));
 
@@ -19,8 +20,9 @@ jest.mock("react-apexcharts", () => ({
   },
 }));
 
-const mockFetchAcademicSessions = Services.dashboard.fetchAcademicSessions as jest.MockedFunction<
-  typeof Services.dashboard.fetchAcademicSessions
+const mockFetchAcademicSessions = Services.schoolOrganization
+  .fetchAcademicSessions as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchAcademicSessions
 >;
 const mockFetchTeacherLoadSummary = Services.dashboard
   .fetchTeacherLoadSummary as jest.MockedFunction<

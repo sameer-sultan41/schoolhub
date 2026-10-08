@@ -19,6 +19,9 @@ export interface StudentsPageQuery {
   status?: string;
   campusId?: string;
   houseId?: string;
+  academicSessionId?: string;
+  classId?: string;
+  sectionId?: string;
 }
 
 /** camelCase, matching every other service input type in this codebase. Nullable
@@ -46,6 +49,32 @@ export type UpdateStudentInput = Partial<CreateStudentInput>;
 export interface WithdrawStudentInput {
   reason: string;
   effectiveDate: string;
+}
+
+/** `enroll`'s response, and `change-section`'s — both return the enrollment record
+ * (`StudentEnrollmentSerializer`), not the student. */
+export type StudentEnrollmentRecord = ApiSchemas["StudentEnrollment"];
+
+/** The `/students/{id}/history` timeline — a discriminated union of enrollment and
+ * transfer events, matching the server's own polymorphic response. */
+export type StudentHistoryEvent = ApiSchemas["StudentHistoryEvent"];
+
+/** `change_section` accepts no `class_id` — the class is implied by the chosen
+ * section, never submitted directly (confirmed against
+ * `ChangeSectionRequestSerializer`). */
+export interface EnrollStudentInput {
+  academicSessionId: string;
+  classId: string;
+  sectionId: string;
+  enrollmentDate: string;
+  rollNumber?: string;
+  capacityOverrideReason?: string;
+}
+
+export interface ChangeStudentSectionInput {
+  sectionId: string;
+  rollNumber?: string;
+  capacityOverrideReason?: string;
 }
 
 export type EmergencyContactRecord = ApiSchemas["EmergencyContact"];

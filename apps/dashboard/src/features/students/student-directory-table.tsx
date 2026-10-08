@@ -67,6 +67,9 @@ export function StudentDirectoryTable() {
   const [statusFilter, setStatusFilter] = useState(STUDENT_WITHDRAWABLE_STATUS);
   const [campusId, setCampusId] = useState("");
   const [houseId, setHouseId] = useState("");
+  const [academicSessionId, setAcademicSessionId] = useState("");
+  const [classId, setClassId] = useState("");
+  const [sectionId, setSectionId] = useState("");
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
@@ -84,11 +87,14 @@ export function StudentDirectoryTable() {
     search !== "" ||
     statusFilter !== STUDENT_WITHDRAWABLE_STATUS ||
     campusId !== "" ||
-    houseId !== "";
+    houseId !== "" ||
+    academicSessionId !== "" ||
+    classId !== "" ||
+    sectionId !== "";
 
   useEffect(() => {
     setPagination((p) => ({ ...p, pageIndex: 0 }));
-  }, [search, sorting, statusFilter, campusId, houseId]);
+  }, [search, sorting, statusFilter, campusId, houseId, academicSessionId, classId, sectionId]);
 
   const ordering = sorting[0]
     ? `${sorting[0].desc ? "-" : ""}${SORT_FIELD[sorting[0].id] ?? sorting[0].id}`
@@ -105,6 +111,9 @@ export function StudentDirectoryTable() {
       statusFilter,
       campusId,
       houseId,
+      academicSessionId,
+      classId,
+      sectionId,
     }),
     queryFn: () =>
       Services.students.fetchStudentsPage({
@@ -115,6 +124,9 @@ export function StudentDirectoryTable() {
         status: statusFilter === STUDENT_FILTER_ALL ? undefined : statusFilter,
         campusId: campusId || undefined,
         houseId: houseId || undefined,
+        academicSessionId: academicSessionId || undefined,
+        classId: classId || undefined,
+        sectionId: sectionId || undefined,
       }),
     placeholderData: keepPreviousData,
   });
@@ -233,6 +245,12 @@ export function StudentDirectoryTable() {
                     onCampusIdChange={setCampusId}
                     houseId={houseId}
                     onHouseIdChange={setHouseId}
+                    academicSessionId={academicSessionId}
+                    onAcademicSessionIdChange={setAcademicSessionId}
+                    classId={classId}
+                    onClassIdChange={setClassId}
+                    sectionId={sectionId}
+                    onSectionIdChange={setSectionId}
                   />
                 </div>
               </CardHeading>

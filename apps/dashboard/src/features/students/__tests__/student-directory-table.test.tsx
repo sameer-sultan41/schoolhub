@@ -23,9 +23,16 @@ jest.mock("@/services", () => ({
       fetchStudentsPage: jest.fn(),
       fetchStudentById: jest.fn(),
       withdrawStudent: jest.fn(),
+      fetchStudentHistory: jest.fn().mockResolvedValue([]),
     },
     dashboard: { fetchCampuses: jest.fn().mockResolvedValue([]) },
-    schoolOrganization: { fetchHouses: jest.fn().mockResolvedValue([]) },
+    schoolOrganization: {
+      fetchHouses: jest.fn().mockResolvedValue([]),
+      fetchClasses: jest.fn().mockResolvedValue([]),
+      fetchSections: jest.fn().mockResolvedValue([]),
+      fetchAcademicSessions: jest.fn().mockResolvedValue([]),
+    },
+    studentTransfers: { fetchStudentTransfers: jest.fn().mockResolvedValue([]) },
   },
 }));
 

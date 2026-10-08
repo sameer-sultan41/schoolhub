@@ -52,6 +52,33 @@ describe("students-service", () => {
     );
   });
 
+  it("fetchStudentsPage includes academic_session_id/class_id/section_id when given", async () => {
+    const { fetchStudentsPage } = await import("../students-service");
+    mockGet.mockResolvedValue({
+      data: [],
+      meta: { pagination: { page: 1, page_size: 10, total_count: 0, total_pages: 0 } },
+    });
+
+    await fetchStudentsPage({
+      page: 1,
+      pageSize: 10,
+      academicSessionId: "sess-1",
+      classId: "c1",
+      sectionId: "sec1",
+    });
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/students",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          academic_session_id: "sess-1",
+          class_id: "c1",
+          section_id: "sec1",
+        }),
+      }),
+    );
+  });
+
   it("fetchStudentById requests the single-student endpoint and returns its data", async () => {
     const { fetchStudentById } = await import("../students-service");
     mockGet.mockResolvedValue({ data: { id: "s1", first_name: "Ali" } });
@@ -126,6 +153,86 @@ describe("students-service", () => {
       { reason: "Relocated", effective_date: "2026-02-01", waive_clearance: false },
       expect.objectContaining({ idempotencyKey: "key-abc" }),
     );
+  });
+
+  it("enrollStudent posts the mapped snake_case body with an Idempotency-Key", async () => {
+    const { enrollStudent } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { id: "e1", status: "active" } });
+
+    await enrollStudent(
+      "s1",
+      {
+        academicSessionId: "sess-1",
+        classId: "c1",
+        sectionId: "sec1",
+        enrollmentDate: "2026-04-05",
+      },
+      "key-enroll",
+    );
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/students/s1:enroll",
+      {
+        academic_session_id: "sess-1",
+        class_id: "c1",
+        section_id: "sec1",
+        enrollment_date: "2026-04-05",
+      },
+      expect.objectContaining({ idempotencyKey: "key-enroll" }),
+    );
+  });
+
+  it("enrollStudent includes roll_number and capacity_override_reason only when given", async () => {
+    const { enrollStudent } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { id: "e1" } });
+
+    await enrollStudent(
+      "s1",
+      {
+        academicSessionId: "sess-1",
+        classId: "c1",
+        sectionId: "sec1",
+        enrollmentDate: "2026-04-05",
+        rollNumber: "12",
+        capacityOverrideReason: "Sibling already enrolled",
+      },
+      "key-enroll-2",
+    );
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/students/s1:enroll",
+      expect.objectContaining({
+        roll_number: "12",
+        capacity_override_reason: "Sibling already enrolled",
+      }),
+      expect.objectContaining({ idempotencyKey: "key-enroll-2" }),
+    );
+  });
+
+  it("changeStudentSection posts section_id only — never class_id", async () => {
+    const { changeStudentSection } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { id: "e1" } });
+
+    await changeStudentSection("s1", { sectionId: "sec2" }, "key-change");
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/students/s1:change-section",
+      { section_id: "sec2" },
+      expect.objectContaining({ idempotencyKey: "key-change" }),
+    );
+    const [, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body).not.toHaveProperty("class_id");
+  });
+
+  it("fetchStudentHistory returns the timeline for a student", async () => {
+    const { fetchStudentHistory } = await import("../students-service");
+    const events = [{ type: "enrollment", id: "e1", date: "2026-04-05", status: "active" }];
+    mockGet.mockResolvedValue({ data: events });
+
+    const result = await fetchStudentHistory("s1");
+
+    expect(mockGet).toHaveBeenCalledWith("/students/s1/history");
+    expect(result).toEqual(events);
   });
 });
 

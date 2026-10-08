@@ -16,6 +16,10 @@ from apps.school_organization.tests.factories import (
     TenantFactory,
 )
 from apps.student_management.models import StudentEnrollment, StudentStatus
+from apps.student_management.serializers import (
+    EnrollmentHistoryEventSerializer,
+    TransferHistoryEventSerializer,
+)
 from apps.student_management.tests.factories import (
     EmergencyContactFactory,
     GuardianFactory,
@@ -248,12 +252,64 @@ class EnrollmentTests(StudentManagementAPITestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["type"], "enrollment")
 
+    def test_history_response_matches_serializer_fields_exactly(self) -> None:
+        self.allow(
+            "students.enrollment.enroll", "students.transfer.create", "students.student.view"
+        )
+        self._satisfy_prerequisites()
+        with tenant_context(self.tenant.id):
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                school_class=self.school_class,
+                section=self.section,
+            )
+            StudentTransferFactory(
+                tenant=self.tenant, student=self.student, from_campus=self.campus
+            )
+
+        response = self.client.get(f"/api/v1/students/{self.student.pk}/history")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        events = response.json()["data"]
+        self.assertEqual(len(events), 2)
+        for event in events:
+            if event["type"] == "enrollment":
+                self.assertEqual(
+                    set(event.keys()), set(EnrollmentHistoryEventSerializer().fields.keys())
+                )
+            elif event["type"] == "transfer":
+                self.assertEqual(
+                    set(event.keys()), set(TransferHistoryEventSerializer().fields.keys())
+                )
+            else:
+                self.fail(f"unexpected event type: {event['type']!r}")
+
 
 class TransferTests(StudentManagementAPITestCase):
     def setUp(self) -> None:
         super().setUp()
         with tenant_context(self.tenant.id):
             self.to_campus = CampusFactory(tenant=self.tenant)
+
+    def test_filters_transfers_by_student_id(self) -> None:
+        self.allow("students.student.view")
+        with tenant_context(self.tenant.id):
+            other_student = StudentFactory(tenant=self.tenant, campus=self.campus)
+            other_transfer = StudentTransferFactory(
+                tenant=self.tenant, student=other_student, from_campus=self.campus
+            )
+            own_transfer = StudentTransferFactory(
+                tenant=self.tenant, student=self.student, from_campus=self.campus
+            )
+
+        response = self.client.get(f"/api/v1/student-transfers?student_id={self.student.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        returned_ids = {row["id"] for row in response.json()["data"]}
+        self.assertEqual(returned_ids, {str(own_transfer.pk)})
+        self.assertNotIn(str(other_transfer.pk), returned_ids)
 
     def test_inter_campus_transfer_requires_both_campuses(self) -> None:
         self.allow("students.transfer.create")
@@ -395,6 +451,103 @@ class TransferTests(StudentManagementAPITestCase):
         self.assertEqual(self.student.status, StudentStatus.WITHDRAWN)
         self.assertEqual(self.student.campus_id, self.campus.pk)
 
+    def test_complete_with_active_enrollment_reassigns_section_and_moves_campus(self) -> None:
+        self.allow("students.transfer.create", "students.transfer.approve")
+        with tenant_context(self.tenant.id):
+            session = AcademicSessionFactory(tenant=self.tenant)
+            school_class = ClassFactory(tenant=self.tenant)
+            origin_section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.campus
+            )
+            destination_section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.to_campus, capacity=5
+            )
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=session,
+                school_class=school_class,
+                section=origin_section,
+            )
+            transfer = StudentTransferFactory(
+                tenant=self.tenant,
+                student=self.student,
+                from_campus=self.campus,
+                to_campus=self.to_campus,
+                created_by=None,
+            )
+        approve = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:approve")
+        self.assertEqual(approve.status_code, status.HTTP_200_OK, approve.json())
+
+        complete = self.client.post(
+            f"/api/v1/student-transfers/{transfer.pk}:complete",
+            {"section_id": str(destination_section.pk)},
+            format="json",
+        )
+
+        self.assertEqual(complete.status_code, status.HTTP_200_OK, complete.json())
+        with tenant_context(self.tenant.id):
+            self.student.refresh_from_db()
+            enrollment = StudentEnrollment.objects.get(student=self.student)
+        self.assertEqual(self.student.campus_id, self.to_campus.pk)
+        self.assertEqual(enrollment.section_id, destination_section.pk)
+
+    def test_complete_with_active_enrollment_still_requires_a_section(self) -> None:
+        self.allow("students.transfer.create", "students.transfer.approve")
+        with tenant_context(self.tenant.id):
+            session = AcademicSessionFactory(tenant=self.tenant)
+            school_class = ClassFactory(tenant=self.tenant)
+            origin_section = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=self.campus
+            )
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=session,
+                school_class=school_class,
+                section=origin_section,
+            )
+            transfer = StudentTransferFactory(
+                tenant=self.tenant,
+                student=self.student,
+                from_campus=self.campus,
+                to_campus=self.to_campus,
+                created_by=None,
+            )
+        self.client.post(f"/api/v1/student-transfers/{transfer.pk}:approve")
+
+        complete = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:complete")
+
+        self.assertEqual(
+            complete.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, complete.json()
+        )
+
+    def test_complete_without_active_enrollment_skips_section_and_still_moves_campus(
+        self,
+    ) -> None:
+        # self.student (StudentManagementAPITestCase) has no enrollment at all — the same
+        # "completing a transfer before the student was ever enrolled, or after their
+        # enrollment ended some other way" case `complete-transfer-dialog.tsx` builds a
+        # confirm-only, no-section-picker path for.
+        self.allow("students.transfer.create", "students.transfer.approve")
+        with tenant_context(self.tenant.id):
+            transfer = StudentTransferFactory(
+                tenant=self.tenant,
+                student=self.student,
+                from_campus=self.campus,
+                to_campus=self.to_campus,
+                created_by=None,
+            )
+        approve = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:approve")
+        self.assertEqual(approve.status_code, status.HTTP_200_OK, approve.json())
+
+        complete = self.client.post(f"/api/v1/student-transfers/{transfer.pk}:complete")
+
+        self.assertEqual(complete.status_code, status.HTTP_200_OK, complete.json())
+        with tenant_context(self.tenant.id):
+            self.student.refresh_from_db()
+        self.assertEqual(self.student.campus_id, self.to_campus.pk)
+
     def test_complete_before_approval_is_a_conflict(self) -> None:
         self.allow("students.transfer.create")
         with tenant_context(self.tenant.id):
@@ -446,3 +599,18 @@ class CrossTenantEnrollmentTests(StudentManagementAPITestCase):
         response = self.client.get(f"/api/v1/student-transfers/{foreign_transfer.pk}")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_transfer_list_filtered_by_foreign_student_id_returns_empty(self) -> None:
+        self.allow("students.student.view")
+        other_tenant = TenantFactory()
+        with tenant_context(other_tenant.id):
+            foreign_campus = CampusFactory(tenant=other_tenant)
+            foreign_student = StudentFactory(tenant=other_tenant, campus=foreign_campus)
+            StudentTransferFactory(
+                tenant=other_tenant, student=foreign_student, from_campus=foreign_campus
+            )
+
+        response = self.client.get(f"/api/v1/student-transfers?student_id={foreign_student.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"], [])

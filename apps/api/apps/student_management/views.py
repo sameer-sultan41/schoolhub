@@ -14,15 +14,15 @@ from typing import TYPE_CHECKING
 from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import mixins, viewsets
+from drf_spectacular.utils import OpenApiResponse, PolymorphicProxySerializer, extend_schema
+from rest_framework import mixins, serializers, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
 
-from apps.student_management.filters import StudentFilterSet
+from apps.student_management.filters import StudentFilterSet, StudentTransferFilterSet
 from apps.student_management.models import (
     EmergencyContact,
     Guardian,
@@ -35,6 +35,7 @@ from apps.student_management.serializers import (
     ChangeSectionRequestSerializer,
     DocumentVerifyRequestSerializer,
     EmergencyContactSerializer,
+    EnrollmentHistoryEventSerializer,
     EnrollRequestSerializer,
     GuardianSerializer,
     IdCardGenerateRequestSerializer,
@@ -45,6 +46,7 @@ from apps.student_management.serializers import (
     StudentSerializer,
     StudentTransferSerializer,
     TransferCompleteRequestSerializer,
+    TransferHistoryEventSerializer,
     WithdrawRequestSerializer,
 )
 from apps.student_management.services import (
@@ -76,6 +78,15 @@ from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedVi
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import attach_celery_task_id, create_job
 from core.rbac.permissions import has_permission_key
+
+# PolymorphicProxySerializer is annotation-only (no real to_representation) —
+# the actual runtime dispatch for `history` below is this plain dict lookup. Explicitly
+# typed: an untyped dict literal of two different serializer classes widens the value type
+# enough that mypy loses `.data` on the instance built from it.
+_HISTORY_EVENT_SERIALIZERS: dict[str, type[serializers.Serializer]] = {
+    "enrollment": EnrollmentHistoryEventSerializer,
+    "transfer": TransferHistoryEventSerializer,
+}
 
 
 class StudentViewSet(TenantModelViewSet):
@@ -325,11 +336,18 @@ class StudentViewSet(TenantModelViewSet):
 
     @extend_schema(
         summary="Assemble a student's chronological history",
-        responses={200: OpenApiResponse(description="Timeline of enrollment and transfer events")},
+        responses=PolymorphicProxySerializer(
+            component_name="StudentHistoryEvent",
+            serializers=_HISTORY_EVENT_SERIALIZERS,
+            resource_type_field_name="type",
+            many=True,
+        ),
     )
     def history(self, request, pk=None) -> Response:
         student = self.get_object()
-        return ActionResponse.ok(build_history(student))
+        events = build_history(student)
+        serialized = [_HISTORY_EVENT_SERIALIZERS[event["type"]](event).data for event in events]
+        return ActionResponse.ok(serialized)
 
 
 class GuardianViewSet(
@@ -696,6 +714,7 @@ class StudentTransferViewSet(
 
     queryset = StudentTransfer.objects
     serializer_class = StudentTransferSerializer
+    filterset_class = StudentTransferFilterSet
     required_feature = "module.students"
     # A transfer is read by its state and its date, which is what a person deciding on
     # one sorts by. No related-field sorts: nothing renders the student's name here yet.

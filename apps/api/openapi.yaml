@@ -11471,6 +11471,11 @@ paths:
         description: A search term.
         schema:
           type: string
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
       tags:
       - student-transfers
       security:
@@ -11840,7 +11845,7 @@ paths:
           description: No response body
   /api/v1/students/{id}/history:
     get:
-      operationId: students_history_retrieve
+      operationId: students_history_list
       description: Student master records (module doc §5.1-2).
       summary: Assemble a student's chronological history
       parameters:
@@ -11856,7 +11861,13 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: Timeline of enrollment and transfer events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StudentHistoryEvent'
+          description: ''
   /api/v1/students/{id}/ledger:
     get:
       operationId: students_ledger_retrieve
@@ -15008,6 +15019,59 @@ components:
       - class_id
       - enrollment_date
       - section_id
+    EnrollmentHistoryEvent:
+      type: object
+      description: |-
+        Documents one ``build_history`` enrollment-event dict exactly — the
+
+        fields here are not derived from a model, they mirror that function's own
+        dict construction field-for-field so the two can never silently drift.
+      properties:
+        type:
+          $ref: '#/components/schemas/EnrollmentHistoryEventTypeEnum'
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/StudentEnrollmentStatusEnum'
+        academic_session_id:
+          type: string
+          format: uuid
+        academic_session_name:
+          type: string
+        class_id:
+          type: string
+          format: uuid
+        class_name:
+          type: string
+        section_id:
+          type: string
+          format: uuid
+        section_name:
+          type: string
+        roll_number:
+          type: string
+          nullable: true
+      required:
+      - academic_session_id
+      - academic_session_name
+      - class_id
+      - class_name
+      - date
+      - id
+      - roll_number
+      - section_id
+      - section_name
+      - status
+      - type
+    EnrollmentHistoryEventTypeEnum:
+      enum:
+      - enrollment
+      type: string
+      description: '* `enrollment` - enrollment'
     Exam:
       type: object
       description: '`exams` — an examination event (§5.1).'
@@ -22957,6 +23021,15 @@ components:
       - relationship
       - student_id
       - updated_at
+    StudentHistoryEvent:
+      oneOf:
+      - $ref: '#/components/schemas/EnrollmentHistoryEvent'
+      - $ref: '#/components/schemas/TransferHistoryEvent'
+      discriminator:
+        propertyName: type
+        mapping:
+          enrollment: '#/components/schemas/EnrollmentHistoryEvent'
+          transfer: '#/components/schemas/TransferHistoryEvent'
     StudentImportRequest:
       type: object
       description: |-
@@ -23404,16 +23477,72 @@ components:
     TransferCompleteRequest:
       type: object
       description: |-
-        `section_id` is required only for an inter-campus transfer — see
+        `section_id` is required only for an inter-campus transfer whose student still has
 
-        services.complete_transfer, which raises a field-specific error when it is
-        missing for that type rather than this serializer guessing at a
-        conditional-required rule.
+        an active enrollment to reassign — see services.complete_transfer, which raises a
+        field-specific error when it is missing in that case, rather than this serializer
+        guessing at a conditional-required rule.
       properties:
         section_id:
           type: string
           format: uuid
           nullable: true
+    TransferHistoryEvent:
+      type: object
+      description: |-
+        Documents one ``build_history`` transfer-event dict exactly — see
+
+        EnrollmentHistoryEventSerializer's docstring for why this mirrors the
+        function's dict construction rather than a model.
+      properties:
+        type:
+          $ref: '#/components/schemas/TransferHistoryEventTypeEnum'
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/StudentTransferStatusEnum'
+        transfer_type:
+          type: string
+        from_campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        from_campus_name:
+          type: string
+          nullable: true
+        to_campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        to_campus_name:
+          type: string
+          nullable: true
+        external_school_name:
+          type: string
+          nullable: true
+        reason:
+          type: string
+      required:
+      - date
+      - external_school_name
+      - from_campus_id
+      - from_campus_name
+      - id
+      - reason
+      - status
+      - to_campus_id
+      - to_campus_name
+      - transfer_type
+      - type
+    TransferHistoryEventTypeEnum:
+      enum:
+      - transfer
+      type: string
+      description: '* `transfer` - transfer'
     TransferTypeEnum:
       enum:
       - inter_campus

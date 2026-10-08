@@ -20,12 +20,14 @@ from apps.school_organization.models import AcademicSession, Campus, Class, Hous
 from apps.student_management import services, uploads
 from apps.student_management.models import (
     EmergencyContact,
+    EnrollmentStatus,
     Guardian,
     Student,
     StudentDocument,
     StudentEnrollment,
     StudentGuardian,
     StudentTransfer,
+    TransferStatus,
 )
 from core.files.models import File
 from core.files.serializers import SignedFileURLField
@@ -387,12 +389,52 @@ class StudentTransferSerializer(serializers.ModelSerializer):
         )
 
 
-class TransferCompleteRequestSerializer(serializers.Serializer):
-    """`section_id` is required only for an inter-campus transfer — see
+class EnrollmentHistoryEventSerializer(serializers.Serializer):
+    """Documents one ``build_history`` enrollment-event dict exactly — the
 
-    services.complete_transfer, which raises a field-specific error when it is
-    missing for that type rather than this serializer guessing at a
-    conditional-required rule.
+    fields here are not derived from a model, they mirror that function's own
+    dict construction field-for-field so the two can never silently drift.
+    """
+
+    type = serializers.ChoiceField(choices=["enrollment"])
+    id = serializers.UUIDField()
+    date = serializers.DateField()
+    status = serializers.ChoiceField(choices=EnrollmentStatus.choices)
+    academic_session_id = serializers.UUIDField()
+    academic_session_name = serializers.CharField()
+    class_id = serializers.UUIDField()
+    class_name = serializers.CharField()
+    section_id = serializers.UUIDField()
+    section_name = serializers.CharField()
+    roll_number = serializers.CharField(allow_null=True)
+
+
+class TransferHistoryEventSerializer(serializers.Serializer):
+    """Documents one ``build_history`` transfer-event dict exactly — see
+
+    EnrollmentHistoryEventSerializer's docstring for why this mirrors the
+    function's dict construction rather than a model.
+    """
+
+    type = serializers.ChoiceField(choices=["transfer"])
+    id = serializers.UUIDField()
+    date = serializers.DateField()
+    status = serializers.ChoiceField(choices=TransferStatus.choices)
+    transfer_type = serializers.CharField()
+    from_campus_id = serializers.UUIDField(allow_null=True)
+    from_campus_name = serializers.CharField(allow_null=True)
+    to_campus_id = serializers.UUIDField(allow_null=True)
+    to_campus_name = serializers.CharField(allow_null=True)
+    external_school_name = serializers.CharField(allow_null=True)
+    reason = serializers.CharField()
+
+
+class TransferCompleteRequestSerializer(serializers.Serializer):
+    """`section_id` is required only for an inter-campus transfer whose student still has
+
+    an active enrollment to reassign — see services.complete_transfer, which raises a
+    field-specific error when it is missing in that case, rather than this serializer
+    guessing at a conditional-required rule.
     """
 
     section_id = _fk(Section, source="section", required=False, allow_null=True)
