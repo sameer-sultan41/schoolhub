@@ -2,8 +2,10 @@ import type { Locator } from "@playwright/test";
 import { BasePage } from "../../base.page";
 
 /**
- * `/students/{id}` — see `apps/dashboard/src/features/students/student-detail.tsx`,
- * `guardians-panel.tsx`, `emergency-contacts-panel.tsx`, `enrollment-panel.tsx`.
+ * `/students/{id}` — see `apps/dashboard/src/features/students/student-detail-sheet.tsx`,
+ * `student-guardians-tab.tsx`, `student-emergency-contacts-tab.tsx`,
+ * `student-enrollment-tab.tsx` (shipped as the "History" tab — `tabs.history` in the
+ * messages catalogue, not a separate "Enrollment" label).
  *
  * Every dialog's trigger button and its in-dialog submit button share the same
  * accessible name (e.g. "Link guardian" labels both the `DialogTrigger` and the
@@ -40,8 +42,12 @@ export class StudentDetailPage extends BasePage {
     return this.page.getByText(value, { exact: true });
   }
 
-  tab(name: "Guardians" | "Emergency contacts"): Locator {
+  tab(name: "Guardians" | "Emergency contacts" | "Documents" | "History"): Locator {
     return this.page.getByRole("tab", { name, exact: true });
+  }
+
+  private get alertDialog(): Locator {
+    return this.page.getByRole("alertdialog");
   }
 
   // --- Guardians ---
@@ -170,5 +176,79 @@ export class StudentDetailPage extends BasePage {
    */
   get notEnrolledMessage(): Locator {
     return this.page.getByText("Not enrolled in an active session.", { exact: true });
+  }
+
+  // --- Change section ---
+
+  get changeSectionTrigger(): Locator {
+    return this.page.getByRole("button", { name: "Change section", exact: true });
+  }
+
+  get submitChangeSection(): Locator {
+    return this.dialog.getByRole("button", { name: "Change section", exact: true });
+  }
+
+  async changeSection(values: { sectionName: string | RegExp }): Promise<void> {
+    await this.changeSectionTrigger.click();
+    await this.chooseOption("Section", values.sectionName);
+    await this.submitChangeSection.click();
+    await this.waitForDialogClosed();
+  }
+
+  // --- Transfers ---
+
+  get requestTransferTrigger(): Locator {
+    return this.page.getByRole("button", { name: "Request transfer", exact: true });
+  }
+
+  get submitRequestTransfer(): Locator {
+    return this.dialog.getByRole("button", { name: "Request transfer", exact: true });
+  }
+
+  async requestInterCampusTransfer(values: {
+    toCampusName: string | RegExp;
+    reason: string;
+    effectiveDate: string;
+  }): Promise<void> {
+    await this.requestTransferTrigger.click();
+    // "Inter-campus" is this dialog's default transfer type — no radio click needed
+    // unless a future caller wants the "outgoing" branch instead.
+    await this.chooseOption("To campus", values.toCampusName);
+    await this.dialog.getByLabel("Reason", { exact: true }).fill(values.reason);
+    await this.dialog.getByLabel("Effective date", { exact: true }).fill(values.effectiveDate);
+    await this.submitRequestTransfer.click();
+    await this.waitForDialogClosed();
+  }
+
+  /** `name` is "Approve"/"Reject" — both buttons carry this exact accessible name,
+   * confirmed in `student-enrollment-tab.tsx`. */
+  async decideTransfer(name: "Approve" | "Reject"): Promise<void> {
+    await this.page.getByRole("button", { name, exact: true }).click();
+    await this.alertDialog.getByRole("button", { name, exact: true }).click();
+    await this.alertDialog.waitFor({ state: "hidden" });
+  }
+
+  get completeTransferTrigger(): Locator {
+    return this.page.getByRole("button", { name: "Complete", exact: true });
+  }
+
+  get submitCompleteTransfer(): Locator {
+    return this.dialog.getByRole("button", { name: "Complete", exact: true });
+  }
+
+  /** The destination-section picker only renders when the student has an active
+   * enrollment to reallocate (`complete-transfer-dialog.tsx`'s own branch) — a caller
+   * completing a transfer for a student with none omits `sectionName`, and this clicks
+   * the alert-dialog's plain confirm instead. */
+  async completeTransfer(values: { sectionName?: string | RegExp } = {}): Promise<void> {
+    await this.completeTransferTrigger.click();
+    if (values.sectionName) {
+      await this.chooseOption("Section", values.sectionName);
+      await this.submitCompleteTransfer.click();
+      await this.waitForDialogClosed();
+    } else {
+      await this.alertDialog.getByRole("button", { name: "Complete", exact: true }).click();
+      await this.alertDialog.waitFor({ state: "hidden" });
+    }
   }
 }

@@ -70,6 +70,16 @@ E2E_CAMPUS_CODE = "MAIN"
 E2E_CLASS_NAME = "Grade 1"
 E2E_SECTION_NAME = "A"
 E2E_SESSION_NAME = "E2E Baseline"
+# Phase 3's inter-campus transfer-completion journey needs a genuine second campus with
+# a section in the same class — the destination the completed transfer reallocates the
+# student into. Capacity is deliberately generous (not the baseline section's 30): the
+# live lane re-runs this seed against a shared backing database, and a tightly-capped
+# section would accumulate enrollments across repeated runs and eventually fail the
+# happy path on capacity alone, not on a real bug.
+E2E_SECOND_CAMPUS_CODE = "NORTH"
+E2E_SECOND_CAMPUS_NAME = "North Campus"
+E2E_SECOND_CAMPUS_SECTION_NAME = "B"
+E2E_SECOND_CAMPUS_SECTION_CAPACITY = 500
 
 # Academics baseline (academics.md §5.1/§5.3): one subject, one curriculum row mapping it
 # to the baseline class for the baseline session, and one active *teaching* staff member.
@@ -178,6 +188,11 @@ E2E_SCHOOL_ADMIN_PERMISSIONS = [
     "students.student.create",
     "students.student.update",
     "students.enrollment.enroll",
+    "students.enrollment.update",
+    # Phase 3 (student-management): request + complete a transfer — `complete` reuses
+    # this same key (an operational step for the requesting role, not a second decision;
+    # confirmed from StudentTransferViewSet.required_permission_map).
+    "students.transfer.create",
     "students.guardian.view",
     "students.guardian.create",
     "students.document.view",
@@ -270,6 +285,10 @@ E2E_PRINCIPAL_PERMISSIONS = [
     "academics.curriculum.view",
     "academics.teacher-allocation.view",
     "students.student.view",
+    # Phase 3's own segregation-of-duties decision: the requester (school_admin, above)
+    # may not also decide their own transfer (services.approve_transfer/reject_transfer),
+    # the same shape as academics.promotion.approve just above.
+    "students.transfer.approve",
     "school.campus.view",
     "school.academic-session.view",
     "school.class.view",
@@ -400,6 +419,7 @@ class Command(BaseCommand):
             TenantSettings.all_tenants.get_or_create(tenant=tenant)
             campus = self._ensure_campus(tenant)
             school_class, section = self._ensure_class_and_section(tenant, campus)
+            self._ensure_second_campus_section(tenant, school_class)
             session = self._ensure_baseline_session(tenant)
             self._ensure_students_module_enabled(tenant)
             self._ensure_students(tenant, campus, student_user_id=student_user.id)
@@ -754,6 +774,24 @@ class Command(BaseCommand):
             defaults={"capacity": 30, "is_active": True},
         )
         return school_class, section
+
+    def _ensure_second_campus_section(self, tenant: Tenant, school_class: Class) -> Section:
+        """A second campus plus a same-class section — the inter-campus transfer
+        journey's destination. See `E2E_SECOND_CAMPUS_SECTION_CAPACITY`'s own comment for
+        why the capacity is generous rather than the baseline section's 30."""
+        campus, _ = Campus.objects.get_or_create(
+            tenant=tenant,
+            code=E2E_SECOND_CAMPUS_CODE,
+            defaults={"name": E2E_SECOND_CAMPUS_NAME, "is_primary": False, "is_active": True},
+        )
+        section, _ = Section.objects.get_or_create(
+            tenant=tenant,
+            school_class=school_class,
+            campus=campus,
+            name=E2E_SECOND_CAMPUS_SECTION_NAME,
+            defaults={"capacity": E2E_SECOND_CAMPUS_SECTION_CAPACITY, "is_active": True},
+        )
+        return section
 
     def _ensure_baseline_session(self, tenant: Tenant) -> AcademicSession:
         """Returns the session — the curriculum row is session-scoped, so the academics

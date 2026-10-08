@@ -46,6 +46,9 @@ export interface SecondIdentity {
   page: Page;
   dashboardPage: DashboardPage;
   promotionBatchPage: PromotionBatchPage;
+  /** Phase 3's own two-actor journey: a `principal` identity approving/rejecting a
+   * transfer the `school_admin` requested — same shape as `promotionBatchPage` above. */
+  studentDetailPage: StudentDetailPage;
 }
 
 export interface E2EFixtures {
@@ -212,6 +215,7 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
         page,
         dashboardPage: new DashboardPage(page),
         promotionBatchPage: new PromotionBatchPage(page),
+        studentDetailPage: new StudentDetailPage(page),
       };
     });
 

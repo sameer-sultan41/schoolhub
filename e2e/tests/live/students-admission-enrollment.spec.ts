@@ -6,7 +6,10 @@ import {
   E2E_BASELINE_CLASS_NAME,
   E2E_BASELINE_SECTION_NAME,
   E2E_BASELINE_SESSION_NAME,
+  E2E_PRINCIPAL_EMAIL,
   E2E_SCHOOL_ADMIN_EMAIL,
+  E2E_SECOND_CAMPUS_NAME,
+  E2E_SECOND_CAMPUS_SECTION_NAME,
 } from "@/lib/seed-constants";
 import type { DashboardPage, LoginPage } from "@/pages";
 
@@ -111,6 +114,7 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     dashboardPage,
     studentFormPage,
     studentDetailPage,
+    signInAsSecondIdentity,
   }) => {
     const tag = Date.now().toString(36);
     const firstName = "E2E";
@@ -151,6 +155,7 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     await expect(studentDetailPage.addContactTrigger).toBeVisible();
 
     // 4. Enroll into the seeded baseline session/class/section.
+    await studentDetailPage.tab("History").click();
     await studentDetailPage.enroll({
       sessionName: E2E_BASELINE_SESSION_NAME,
       className: E2E_BASELINE_CLASS_NAME,
@@ -158,6 +163,56 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
       enrollmentDate: today(),
     });
     await expect(studentDetailPage.notEnrolledMessage).not.toBeVisible();
+
+    // 5. Change section — same baseline section is the only one seeded, but the action
+    // itself (not a real reallocation) is what this proves: the request round-trips and
+    // the dialog closes on success.
+    await studentDetailPage.changeSection({ sectionName: E2E_BASELINE_SECTION_NAME });
+
+    // 6. Request an inter-campus transfer to the seeded second campus. `incoming` is
+    // never offered — Phase 3's own scope decision — confirmed structurally by this
+    // dialog's radio group having exactly two options (`request-transfer-dialog.tsx`),
+    // not asserted again here to avoid a third, redundant locator query in the live lane.
+    await studentDetailPage.requestInterCampusTransfer({
+      toCampusName: E2E_SECOND_CAMPUS_NAME,
+      reason: "E2E transfer journey",
+      effectiveDate: today(),
+    });
+    await expect(page.getByText(/requested/i)).toBeVisible();
+
+    // 7. The approver: `principal`, a different person — segregation of duties
+    // (services.approve_transfer refuses a self-decision), same two-actor shape as the
+    // academics promotion journey.
+    const approver = await signInAsSecondIdentity({
+      identifier: E2E_PRINCIPAL_EMAIL,
+      password: env.LIVE_ADMIN_PASSWORD,
+    });
+    await expect(approver.page).toHaveURL("/dashboard");
+    await expect(approver.dashboardPage.heading).toBeVisible();
+
+    await approver.studentDetailPage.goto({ path: new URL(page.url()).pathname });
+    await approver.studentDetailPage.tab("History").click();
+    await approver.studentDetailPage.decideTransfer("Approve");
+    await expect(approver.page.getByText(/^approved$/i)).toBeVisible();
+
+    // 8. Back in the original session: the request is now decided, and this identity
+    // (not the approver) completes it — `complete` reuses `students.transfer.create`,
+    // the requester's own key, confirmed against the real permission map.
+    await page.reload();
+    await studentDetailPage.tab("History").click();
+    await expect(page.getByText(/^approved$/i)).toBeVisible();
+    await studentDetailPage.completeTransfer({ sectionName: E2E_SECOND_CAMPUS_SECTION_NAME });
+    await expect(page.getByText(/^completed$/i)).toBeVisible();
+
+    // 9. The directory's own class/section/session filters, against real data: filtering
+    // by the baseline session the student was enrolled in before transferring still
+    // finds them (a past, no-longer-current enrollment row is still a real match — the
+    // filter-correctness fix's own scope decision), proving the fix end to end against
+    // the real database, not a stub.
+    await dashboardPage.navLink("Students").click();
+    await page.getByRole("combobox", { name: /academic session/i }).click();
+    await page.getByRole("option", { name: E2E_BASELINE_SESSION_NAME }).click();
+    await expect(page.getByText(lastName)).toBeVisible();
   });
 
   /**
