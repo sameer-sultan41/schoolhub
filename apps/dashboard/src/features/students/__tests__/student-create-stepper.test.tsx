@@ -1,9 +1,13 @@
-import { screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
 
 import { Services } from "@/services";
 import { renderWithProviders } from "@/test-utils";
 import { StudentCreateStepper } from "../student-create-stepper";
+import messages from "../../../../messages/en.json";
 
 jest.mock("@/hooks/use-current-user", () => ({
   useCurrentUser: jest.fn(),
@@ -21,6 +25,10 @@ jest.mock("@/services", () => ({
       createStudent: jest.fn(),
       fetchStudentHistory: jest.fn().mockResolvedValue([]),
     },
+    // Without this, `StudentGuardiansTab`'s own `linksQuery` throws on
+    // `Services.guardians.fetchGuardianLinks` being undefined and the tab renders its
+    // error state instead of "Link guardian" — confirmed on CI, not assumed.
+    guardians: { fetchGuardianLinks: jest.fn().mockResolvedValue([]) },
     studentTransfers: { fetchStudentTransfers: jest.fn().mockResolvedValue([]) },
   },
 }));
@@ -106,10 +114,13 @@ describe("StudentCreateStepper", () => {
 
     // Moving forward again is a plain step change, not a resubmit. Profile
     // itself is never unmounted (its own entered values have to survive a
-    // trip back to it) — just hidden via CSS — so this checks visibility,
-    // not DOM presence.
+    // trip back to it) — just hidden via a CSS class (`toBeVisible()` can't
+    // see that in jsdom, which never loads the real stylesheet, so this
+    // checks for Guardians' own content instead — remounted fresh on this
+    // jump, same as "lets a step's own tab jump straight to it" below, hence
+    // `findByRole`). A resubmit would be a second `createStudent` call.
     await userEvent.click(screen.getByRole("button", { name: /^next$/i }));
-    expect(screen.getByLabelText(/first name/i)).not.toBeVisible();
+    expect(await screen.findByRole("button", { name: /link guardian/i })).toBeInTheDocument();
     expect(mockCreateStudent).toHaveBeenCalledTimes(1);
   });
 
@@ -183,9 +194,24 @@ describe("StudentCreateStepper", () => {
       userWith(["students.student.create", "students.guardian.create"]),
     );
     const onOpenChange = jest.fn();
-    const { rerender } = renderWithProviders(
-      <StudentCreateStepper open onOpenChange={onOpenChange} />,
-    );
+    // Deliberately not `renderWithProviders`: its `rerender` swaps the ENTIRE tree for
+    // whatever element it's given, providers included, so `rerender(<StudentCreateStepper
+    // open={false} />)` would silently drop the `QueryClientProvider`/
+    // `NextIntlClientProvider` and throw the moment `useTranslations`/`useQuery` ran again
+    // — confirmed on CI. A local `wrapper` (RTL's own option) is what makes `rerender`
+    // re-apply the providers on every call, matching `staff-form-dialog.test.tsx`'s and
+    // `staff-import-dialog.test.tsx`'s own identical regression tests.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        </NextIntlClientProvider>
+      );
+    }
+    const { rerender } = render(<StudentCreateStepper open onOpenChange={onOpenChange} />, {
+      wrapper: Wrapper,
+    });
 
     await fillAndSubmitProfile();
     expect(await screen.findByText(/ayesha khan/i)).toBeInTheDocument();
