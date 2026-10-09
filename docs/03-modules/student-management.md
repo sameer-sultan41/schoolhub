@@ -292,3 +292,21 @@ complete pickers, which show only the active/open set). A new shared `Responsive
 dialogs; the two pre-existing dialogs on the wrong breakpoint hook (`exit-staff-dialog.tsx`,
 `student-documents-tab.tsx`) were not migrated onto the new shared component in this phase — see
 `deferred-work.md`.
+
+**Dashboard, creation stepper (as shipped).** `/students`' "Add Student" entry point
+(`student-toolbar.tsx`) now opens `StudentCreateStepper`, a guided Profile → Guardians →
+Emergency Contacts → Documents → Enrollment wizard, replacing the single-page
+`StudentFormDialog` create flow — implementing §7.1's admission sequence as one guided
+journey instead of a create dialog followed by separately opening the detail sheet's
+tabs. Edit mode is untouched (`StudentFormDialog` still owns it; its directory-table
+`"create"` call site was already dead code before this change). There is no atomic
+batch-create endpoint, so the Profile step creates the real student the moment it's
+submitted — every later step operates on an already-real record, and closing the wizard
+at any point is a supported exit, not an abandoned operation (a banner names the created
+student once Profile succeeds). A step is omitted entirely, not shown disabled, when the
+viewer lacks its permission; once Profile succeeds, Back can never return to it. Steps
+2-5 reuse `StudentGuardiansTab`/`StudentEmergencyContactsTab`/`StudentDocumentsTab`/
+`StudentEnrollmentTab` unmodified — the same components the detail sheet's own tabs
+render. The `Stepper` presentational primitive (`packages/ui/src/components/stepper.tsx`)
+is a new Metronic port, used here as a non-interactive progress indicator (Back/Next own
+navigation).
