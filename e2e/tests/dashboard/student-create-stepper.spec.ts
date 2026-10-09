@@ -26,6 +26,16 @@ test.describe("student creation stepper", () => {
     authUser: buildUser({
       permissions: [
         ...SCHOOL_ADMIN_PERMISSIONS,
+        // `SCHOOL_ADMIN_PERMISSIONS` (e2e/src/data/factories.ts) holds only
+        // `students.student.view` — every step this test walks through (New
+        // student, Guardians, Emergency Contacts, Documents) is gated on its own
+        // create/update key (`student-create-stepper.tsx`'s own
+        // `canViewGuardians`/`canViewEmergencyContacts`/`canViewDocuments`), so each
+        // is granted explicitly here rather than assumed from the admin preset.
+        "students.student.create",
+        "students.guardian.create",
+        "students.student.update",
+        "students.document.create",
         "students.enrollment.enroll",
         "students.enrollment.update",
       ],
@@ -108,7 +118,8 @@ test.describe("student creation stepper — view-only permissions", () => {
     await page.getByLabel(/date of birth/i).fill("2013-02-02");
     await page.getByLabel(/admission date/i).fill("2026-01-10");
     await page.getByRole("combobox", { name: /gender/i }).click();
-    await page.getByRole("option", { name: /male/i }).click();
+    // Anchored — an unanchored `/male/i` also matches "Female".
+    await page.getByRole("option", { name: /^male$/i }).click();
     await page.getByRole("combobox", { name: /^campus$/i }).click();
     await page.getByRole("option", { name: "Main Campus" }).click();
     await page.getByRole("button", { name: /^next$/i }).click();

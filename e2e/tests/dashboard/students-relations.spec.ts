@@ -138,6 +138,7 @@ test.describe("student detail sheet — relations tabs", () => {
     signedIn: _signedIn,
     mockApi,
     studentsPage,
+    studentDetailPage,
   }) => {
     mockApi.use(
       schoolOrganizationModule({ campuses, houses: [] }),
@@ -168,7 +169,7 @@ test.describe("student detail sheet — relations tabs", () => {
     });
     await studentsPage.goto();
     await studentsPage.row("Ayesha Khan").click();
-    await page.getByRole("tab", { name: /^documents$/i }).click();
+    await studentDetailPage.openTab("Documents");
     await page.getByRole("button", { name: /upload document/i }).click();
 
     await page.getByLabel(/^file$/i).setInputFiles({
@@ -202,6 +203,7 @@ test.describe("student detail sheet — relations tabs", () => {
     signedIn: _signedIn,
     mockApi,
     studentsPage,
+    studentDetailPage,
   }) => {
     const document = buildStudentDocument({
       id: "document-0001",
@@ -216,7 +218,7 @@ test.describe("student detail sheet — relations tabs", () => {
     );
     await studentsPage.goto();
     await studentsPage.row("Ayesha Khan").click();
-    await page.getByRole("tab", { name: /^documents$/i }).click();
+    await studentDetailPage.openTab("Documents");
     // Prefix-anchored — the row's own button carries a row-specific accessible name
     // ("Delete — <document title>", WCAG 2.4.6), not plain "Delete".
     await page.getByRole("button", { name: /^delete/i }).click();
@@ -253,6 +255,7 @@ test.describe("student detail sheet — relations tabs, view-only permissions", 
     signedIn: _signedIn,
     mockApi,
     studentsPage,
+    studentDetailPage,
   }) => {
     const contact = buildEmergencyContact({ student_id: "student-0001", name: "Hamza Raza" });
     mockApi.use(
@@ -270,7 +273,7 @@ test.describe("student detail sheet — relations tabs, view-only permissions", 
     await page.getByRole("tab", { name: /emergency contacts/i }).click();
     await expect(page.getByRole("button", { name: /add contact/i })).toHaveCount(0);
 
-    await page.getByRole("tab", { name: /^documents$/i }).click();
+    await studentDetailPage.openTab("Documents");
     await expect(page.getByRole("button", { name: /upload document/i })).toHaveCount(0);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -100,6 +100,15 @@ export function StudentCreateProfileStep({
   const { data: currentUser } = useCurrentUser();
 
   const submitGuard = useSubmitGuard();
+  // Create mode only: set synchronously inside `mutation`'s own `onSuccess`, which
+  // TanStack Query runs before the per-call `onSettled` that releases `submitGuard`
+  // (`use-submit-guard.ts`'s own ordering) — so this is already `true` by the time the
+  // guard reopens, even though the parent's `locked` prop (driven by React state set in
+  // that same `onSuccess`) hasn't re-rendered down into this component yet. Without it,
+  // a second click landing in that render gap hits the still-mounted, still-enabled
+  // Profile submit button and creates a second student from the same form values —
+  // confirmed on PR #104's CI (two "Student added." toasts, two POSTs, two rows).
+  const hasCreatedRef = useRef(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
   const [populatedStudentId, setPopulatedStudentId] = useState<string | null>(null);
@@ -158,6 +167,7 @@ export function StudentCreateProfileStep({
         ? Services.students.createStudent(buildStudentInput(values, "create"))
         : Services.students.updateStudent(studentId as string, buildStudentInput(values, "edit")),
     onSuccess: (student) => {
+      if (mode === "create") hasCreatedRef.current = true;
       void queryClient.invalidateQueries({ queryKey: queryKeys.module("students") });
       void queryClient.invalidateQueries({ queryKey: queryKeys.module("dashboard") });
       // The stepper itself gives create mode its own banner once this fires, but
@@ -210,8 +220,12 @@ export function StudentCreateProfileStep({
   const onSubmit = useGuardedSubmit(form, submitGuard, (values) => {
     // Belt-and-braces alongside the disabled `<fieldset>`: a locked form has
     // no real submit button rendered externally, but refuses an in-flight
-    // submit here too rather than trusting that alone.
-    if (locked) return Promise.resolve();
+    // submit here too rather than trusting that alone. `hasCreatedRef` catches
+    // the render-timing gap `locked` alone cannot: it flips synchronously inside
+    // `mutation`'s own `onSuccess`, before `submitGuard` reopens in `onSettled`,
+    // while `locked` only reopens the DOM once the parent's state update (set in
+    // that same `onSuccess`) has actually re-rendered this component.
+    if (locked || hasCreatedRef.current) return Promise.resolve();
     return new Promise<void>((resolve) => {
       mutation.mutate(values, {
         onSettled: () => {
