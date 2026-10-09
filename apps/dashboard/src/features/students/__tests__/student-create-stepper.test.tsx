@@ -23,6 +23,8 @@ jest.mock("@/services", () => ({
     },
     students: {
       createStudent: jest.fn(),
+      updateStudent: jest.fn(),
+      fetchStudentById: jest.fn(),
       fetchStudentHistory: jest.fn().mockResolvedValue([]),
     },
     // Without this, `StudentGuardiansTab`'s own `linksQuery` throws on
@@ -38,6 +40,13 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 const mockUseCurrentUser = useCurrentUser as jest.MockedFunction<typeof useCurrentUser>;
 const mockCreateStudent = Services.students.createStudent as jest.MockedFunction<
   typeof Services.students.createStudent
+>;
+
+const mockUpdateStudent = Services.students.updateStudent as jest.MockedFunction<
+  typeof Services.students.updateStudent
+>;
+const mockFetchStudentById = Services.students.fetchStudentById as jest.MockedFunction<
+  typeof Services.students.fetchStudentById
 >;
 
 function userWith(permissions: string[]) {
@@ -229,5 +238,163 @@ describe("StudentCreateStepper", () => {
     expect(firstName).toBeVisible();
     expect(firstName).toHaveValue("");
     expect(firstName).toBeEnabled();
+  });
+
+  it("finishes from a locked Profile revisit without resubmitting", async () => {
+    mockUseCurrentUser.mockReturnValue(
+      userWith(["students.student.create", "students.guardian.create", "students.student.update"]),
+    );
+    const onOpenChange = jest.fn();
+    renderWithProviders(<StudentCreateStepper open onOpenChange={onOpenChange} />);
+
+    await fillAndSubmitProfile();
+    await userEvent.click(screen.getByRole("button", { name: /^previous$/i }));
+    // Locked Profile offers a plain Finish alongside Next — neither resubmits.
+    await userEvent.click(screen.getByRole("button", { name: /^finish$/i }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(mockCreateStudent).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes from the last step's own Finish button", async () => {
+    mockUseCurrentUser.mockReturnValue(
+      userWith(["students.student.create", "students.guardian.create"]),
+    );
+    const onOpenChange = jest.fn();
+    renderWithProviders(<StudentCreateStepper open onOpenChange={onOpenChange} />);
+
+    await fillAndSubmitProfile();
+    // Guardians is the last step for this viewer: only one Finish, which closes.
+    await userEvent.click(await screen.findByRole("button", { name: /^finish$/i }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("closes right after create when Profile is the viewer's only step", async () => {
+    mockUseCurrentUser.mockReturnValue(userWith(["students.student.create"]));
+    const onOpenChange = jest.fn();
+    renderWithProviders(<StudentCreateStepper open onOpenChange={onOpenChange} />);
+
+    await fillAndSubmitProfile();
+
+    // A Profile-only viewer's create closes the wizard immediately.
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+});
+
+describe("StudentCreateStepper — edit mode", () => {
+  const record = {
+    id: "stu-1",
+    admission_number: "2026-0050",
+    first_name: "Aisha",
+    last_name: "Khan",
+    preferred_name: "Ash",
+    date_of_birth: "2015-03-12",
+    gender: "female",
+    photo_file_id: null,
+    photo_url: null,
+    campus_id: "campus-1",
+    campus_name: "Main",
+    house_id: null,
+    house_name: null,
+    status: "active",
+    admission_date: "2026-01-10",
+    blood_group: null,
+    nationality: null,
+    religion: null,
+    previous_school: null,
+    medical_notes: null,
+    address: null,
+    custom_fields: null,
+    created_at: "2026-01-10T00:00:00Z",
+    updated_at: "2026-09-20T00:00:00Z",
+  } as never;
+
+  beforeEach(() => {
+    mockFetchStudentById.mockReset();
+    mockUpdateStudent.mockReset();
+    mockFetchStudentById.mockResolvedValue(record);
+    mockUpdateStudent.mockResolvedValue(record);
+  });
+
+  it("opens on the requested step with every step reachable and no created-student banner", async () => {
+    mockUseCurrentUser.mockReturnValue(
+      userWith(["students.student.update", "students.guardian.create"]),
+    );
+    renderWithProviders(
+      <StudentCreateStepper
+        open
+        onOpenChange={jest.fn()}
+        mode="edit"
+        studentId="stu-1"
+        initialStepKey="guardians"
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: /link guardian/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /emergency contacts/i })).toBeEnabled();
+    expect(screen.queryByText(/has been created/i)).not.toBeInTheDocument();
+    expect(mockCreateStudent).not.toHaveBeenCalled();
+  });
+
+  it("lands on Profile when the requested step is not available to the viewer", async () => {
+    mockUseCurrentUser.mockReturnValue(userWith(["students.student.update"]));
+    renderWithProviders(
+      <StudentCreateStepper
+        open
+        onOpenChange={jest.fn()}
+        mode="edit"
+        studentId="stu-1"
+        initialStepKey="documents"
+      />,
+    );
+
+    expect(await screen.findByDisplayValue("Aisha")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
+  });
+
+  it("saves Profile via updateStudent without advancing or closing", async () => {
+    mockUseCurrentUser.mockReturnValue(
+      userWith(["students.student.update", "students.guardian.create"]),
+    );
+    const onOpenChange = jest.fn();
+    renderWithProviders(
+      <StudentCreateStepper open onOpenChange={onOpenChange} mode="edit" studentId="stu-1" />,
+    );
+
+    await screen.findByDisplayValue("Aisha");
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateStudent).toHaveBeenCalledWith("stu-1", expect.any(Object));
+    });
+    expect(mockCreateStudent).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/first name/i)).toBeEnabled();
+  });
+
+  it("does not reset the wizard's state when closed in edit mode", async () => {
+    mockUseCurrentUser.mockReturnValue(
+      userWith(["students.student.update", "students.guardian.create"]),
+    );
+    const onOpenChange = jest.fn();
+    renderWithProviders(
+      <StudentCreateStepper
+        open
+        onOpenChange={onOpenChange}
+        mode="edit"
+        studentId="stu-1"
+        initialStepKey="guardians"
+      />,
+    );
+
+    await screen.findByRole("button", { name: /link guardian/i });
+    await userEvent.click(screen.getByRole("button", { name: /^finish$/i }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    // Still on Guardians: edit mode has no persisted create-state to clear.
+    expect(screen.getByRole("button", { name: /link guardian/i })).toBeInTheDocument();
   });
 });

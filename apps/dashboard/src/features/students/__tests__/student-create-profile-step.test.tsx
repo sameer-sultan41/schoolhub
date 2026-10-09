@@ -4,12 +4,14 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 
-import { Services, type StudentRecord } from "@/services";
+import { ApiError, Services, type StudentRecord } from "@/services";
 import { renderWithProviders } from "@/test-utils";
 import { StudentCreateProfileStep } from "../student-create-profile-step";
 import messages from "../../../../messages/en.json";
 
 jest.mock("@/services", () => ({
+  // The real class: the component `instanceof`-checks it in `onError`.
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     dashboard: { fetchCampuses: jest.fn().mockResolvedValue([{ id: "campus-1", name: "Main" }]) },
     schoolOrganization: {
@@ -219,6 +221,77 @@ describe("StudentCreateProfileStep — create mode", () => {
       expect(mockCreateStudent).not.toHaveBeenCalled();
     });
     expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("maps a server field error onto its own field and does not call onSaved", async () => {
+    mockCreateStudent.mockRejectedValue(
+      new ApiError({
+        code: "validation_error",
+        message: "Invalid input.",
+        status: 400,
+        url: "/students",
+        details: [{ field: "first_name", issue: "First name is already taken." }],
+      }),
+    );
+    const onSaved = jest.fn();
+    renderWithProviders(
+      <StudentCreateProfileStep
+        mode="create"
+        onSaved={onSaved}
+        onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
+      />,
+    );
+
+    await fillRequiredFields();
+    submitProfileForm();
+
+    expect(await screen.findByText("First name is already taken.")).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("shows the API's own message in a form-level alert when no field matches", async () => {
+    mockCreateStudent.mockRejectedValue(
+      new ApiError({
+        code: "some_unmapped_code",
+        message: "The server could not create this student.",
+        status: 409,
+        url: "/students",
+        details: [{ field: "not_a_form_field", issue: "Unrelated issue." }],
+      }),
+    );
+    renderWithProviders(
+      <StudentCreateProfileStep
+        mode="create"
+        onSaved={jest.fn()}
+        onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
+      />,
+    );
+
+    await fillRequiredFields();
+    submitProfileForm();
+
+    expect(
+      await screen.findByText("The server could not create this student."),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to the generic message for a non-API failure", async () => {
+    mockCreateStudent.mockRejectedValue(new TypeError("network down"));
+    renderWithProviders(
+      <StudentCreateProfileStep
+        mode="create"
+        onSaved={jest.fn()}
+        onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
+      />,
+    );
+
+    await fillRequiredFields();
+    submitProfileForm();
+
+    expect(await screen.findByText(messages.students.form.submitFailed)).toBeInTheDocument();
   });
 });
 
