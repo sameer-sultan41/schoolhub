@@ -51,6 +51,11 @@ export interface StudentCreateProfileStepProps {
   /** Passthrough of `StudentPhotoField`'s own upload-in-flight state, so the
    * stepper's external Next button can disable itself during an upload. */
   onUploadingChange: (uploading: boolean) => void;
+  /** True once the stepper has already created this student and the user has
+   * navigated back to Profile — the form stays mounted (so its entered values
+   * survive) but every field is disabled: resubmitting would call `createStudent`
+   * a second time and create a duplicate student. */
+  locked?: boolean;
 }
 
 /**
@@ -64,6 +69,7 @@ export interface StudentCreateProfileStepProps {
 export function StudentCreateProfileStep({
   onCreated,
   onUploadingChange,
+  locked = false,
 }: StudentCreateProfileStepProps) {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
@@ -135,7 +141,10 @@ export function StudentCreateProfileStep({
   }
 
   function onSubmit(event: SyntheticEvent) {
-    if (isSubmittingRef.current) return;
+    // Belt-and-braces alongside the disabled `<fieldset>`: a locked form has no
+    // real submit button rendered externally, but refuses an in-flight submit
+    // here too rather than trusting that alone.
+    if (locked || isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     form
       .handleSubmit(
@@ -164,134 +173,140 @@ export function StudentCreateProfileStep({
             {formError}
           </Alert>
         )}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <StudentTextFieldList form={form} fields={NAME_FIELDS} namespace="fields" />
-          <FormField
-            control={form.control}
-            name="date_of_birth"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("fields.dateOfBirth")}</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="gender"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("fields.gender")}</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
+        {/* `display: contents` keeps every child a direct grid item of the grid
+            below, so locking never changes layout — only `disabled` cascades down
+            to every native input/select/button inside, the standard HTML fieldset
+            behavior, with no per-field prop threading needed. */}
+        <fieldset disabled={locked} className="contents">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <StudentTextFieldList form={form} fields={NAME_FIELDS} namespace="fields" />
+            <FormField
+              control={form.control}
+              name="date_of_birth"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("fields.dateOfBirth")}</FormLabel>
                   <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("fields.selectGender")} />
-                    </SelectTrigger>
+                    <Input type="date" {...field} />
                   </FormControl>
-                  <SelectContent>
-                    {GENDER_VALUES.map((g) => (
-                      <SelectItem key={g} value={g}>
-                        {t(`gender.${g}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="campus_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("fields.campus")}</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          campusesQuery.isPending ? tCommon("loading") : t("fields.selectCampus")
-                        }
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {(campusesQuery.data ?? []).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="house_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("fields.house")}</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          housesQuery.isPending ? tCommon("loading") : t("fields.selectHouse")
-                        }
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={UNSET_VALUE}>{t("fields.none")}</SelectItem>
-                    {(housesQuery.data ?? []).map((h) => (
-                      <SelectItem key={h.id} value={h.id}>
-                        {h.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="admission_date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("fields.admissionDate")}</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <StudentProfileTextFields
-            form={form}
-            showMedicalNotes={hasPermission(currentUser, "students.student.update")}
-          />
-          <div className="sm:col-span-2">
-            <StudentPhotoField
-              form={form}
-              savedRecord={undefined}
-              onUploadStart={captureUploadSession}
-              onUploadingChange={setIsPhotoUploading}
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <p className="text-sm font-medium text-foreground">{t("address.title")}</p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <StudentAddressFields form={form} />
+            <FormField
+              control={form.control}
+              name="gender"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("fields.gender")}</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("fields.selectGender")} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {GENDER_VALUES.map((g) => (
+                        <SelectItem key={g} value={g}>
+                          {t(`gender.${g}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="campus_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("fields.campus")}</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            campusesQuery.isPending ? tCommon("loading") : t("fields.selectCampus")
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {(campusesQuery.data ?? []).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="house_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("fields.house")}</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            housesQuery.isPending ? tCommon("loading") : t("fields.selectHouse")
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={UNSET_VALUE}>{t("fields.none")}</SelectItem>
+                      {(housesQuery.data ?? []).map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          {h.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="admission_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("fields.admissionDate")}</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <StudentProfileTextFields
+              form={form}
+              showMedicalNotes={hasPermission(currentUser, "students.student.update")}
+            />
+            <div className="sm:col-span-2">
+              <StudentPhotoField
+                form={form}
+                savedRecord={undefined}
+                onUploadStart={captureUploadSession}
+                onUploadingChange={setIsPhotoUploading}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <p className="text-sm font-medium text-foreground">{t("address.title")}</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <StudentAddressFields form={form} />
+              </div>
             </div>
           </div>
-        </div>
+        </fieldset>
         {/* No footer here — `StudentCreateStepper` renders the shared Back/Next
             footer outside this step and submits this form via its `id` attribute
             above, the same way a dialog footer button outside a `<form>` submits it

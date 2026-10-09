@@ -87,22 +87,48 @@ describe("StudentCreateStepper", () => {
     expect(await screen.findByText(/ayesha khan/i)).toBeInTheDocument();
   });
 
-  it("never shows a Back button that returns to Profile", async () => {
+  it("lets Back return all the way to Profile, locked for review rather than resubmission", async () => {
     mockUseCurrentUser.mockReturnValue(
       userWith(["students.student.create", "students.guardian.create", "students.student.update"]),
     );
     renderWithProviders(<StudentCreateStepper open onOpenChange={jest.fn()} />);
 
     await fillAndSubmitProfile();
-    // Now on Guardians (step 2) — Back should not be offered yet (only from step 3 on).
-    expect(screen.queryByRole("button", { name: /^previous$/i })).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: /^next$/i }));
-    // Now on Emergency Contacts (step 3) — Back is offered, and going back must land
-    // on Guardians, never Profile.
+    // Now on Guardians (step 2) — Back is offered here too, unlike before.
     await userEvent.click(screen.getByRole("button", { name: /^previous$/i }));
 
+    // Back on Profile: the entered values survived (the form never unmounted),
+    // and every field is disabled — a revisit can't resubmit and create a
+    // second student.
+    expect(screen.getByLabelText(/first name/i)).toHaveValue("Ayesha");
+    expect(screen.getByLabelText(/first name/i)).toBeDisabled();
+    expect(mockCreateStudent).toHaveBeenCalledTimes(1);
+
+    // Moving forward again is a plain step change, not a resubmit.
+    await userEvent.click(screen.getByRole("button", { name: /^next$/i }));
     expect(screen.queryByLabelText(/first name/i)).not.toBeInTheDocument();
+    expect(mockCreateStudent).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a step's own tab jump straight to it, once already visited", async () => {
+    mockUseCurrentUser.mockReturnValue(
+      userWith(["students.student.create", "students.guardian.create", "students.student.update"]),
+    );
+    renderWithProviders(<StudentCreateStepper open onOpenChange={jest.fn()} />);
+
+    await fillAndSubmitProfile();
+    // Now on Guardians (step 2). Emergency Contacts' own tab (step 3) isn't
+    // reachable yet — it's never been visited.
+    expect(screen.getByRole("tab", { name: /emergency contacts/i })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: /^next$/i }));
+    // Now on Emergency Contacts — Guardians' tab is behind us but still visited,
+    // so it's enabled; clicking it jumps straight back.
+    const guardiansTab = screen.getByRole("tab", { name: /guardians/i });
+    expect(guardiansTab).toBeEnabled();
+    await userEvent.click(guardiansTab);
+
+    expect(screen.getByRole("button", { name: /link guardian/i })).toBeInTheDocument();
   });
 
   it("lets the user finish right from Profile, skipping every later step", async () => {
@@ -156,11 +182,18 @@ describe("StudentCreateStepper", () => {
     await fillAndSubmitProfile();
     expect(await screen.findByText(/ayesha khan/i)).toBeInTheDocument();
 
+    // The real close path: Profile stays mounted (just hidden) once past it, so
+    // merely finding the field in the DOM proves nothing on its own — the actual
+    // reset happens inside `handleClose`, which only runs from a real close
+    // (the dialog's own Close button here), not from toggling the `open` prop by
+    // itself (the mocked `onOpenChange` never would).
+    await userEvent.click(screen.getByRole("button", { name: /^close$/i }));
     rerender(<StudentCreateStepper open={false} onOpenChange={onOpenChange} />);
     rerender(<StudentCreateStepper open onOpenChange={onOpenChange} />);
 
-    await waitFor(() => {
-      expect(screen.getByLabelText(/first name/i)).toBeInTheDocument();
-    });
+    const firstName = screen.getByLabelText(/first name/i);
+    expect(firstName).toBeVisible();
+    expect(firstName).toHaveValue("");
+    expect(firstName).toBeEnabled();
   });
 });

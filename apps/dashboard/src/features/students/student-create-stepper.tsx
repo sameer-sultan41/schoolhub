@@ -58,6 +58,10 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
   const { data: currentUser } = useCurrentUser();
 
   const [activeStep, setActiveStep] = useState(1);
+  // The highest step ever reached this wizard session — lets the step tabs and
+  // Back/Next jump to any already-visited step, not just the immediately
+  // adjacent one. Profile (1) is always reachable since it's the start.
+  const [maxStepReached, setMaxStepReached] = useState(1);
   const [created, setCreated] = useState<CreatedStudent | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
   // Both Profile footer buttons are `type="submit"` targeting the same external
@@ -67,6 +71,11 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
   // A ref, not state: it's read once, synchronously, inside `onCreated`'s own
   // callback after the mutation resolves, not during a render.
   const profileFinishIntentRef = useRef(false);
+
+  function goToStep(step: number) {
+    setActiveStep(step);
+    setMaxStepReached((max) => Math.max(max, step));
+  }
 
   const canViewGuardians = hasPermission(currentUser, "students.guardian.create");
   const canViewEmergencyContacts = hasPermission(currentUser, "students.student.update");
@@ -94,6 +103,7 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
       // Fresh instance per open (`WithdrawStudentDialog`'s own convention): never
       // resume a half-finished wizard on reopen.
       setActiveStep(1);
+      setMaxStepReached(1);
       setCreated(null);
       setIsPhotoUploading(false);
     }
@@ -101,13 +111,11 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
   }
 
   function goNext() {
-    if (activeStep < lastStepNumber) setActiveStep(activeStep + 1);
+    if (activeStep < lastStepNumber) goToStep(activeStep + 1);
     else handleClose(false);
   }
   function goBack() {
-    // Back never returns to Profile (step 1) once the student is created —
-    // Profile is a one-way door, per the spec.
-    if (activeStep > 2) setActiveStep(activeStep - 1);
+    if (activeStep > 1) goToStep(activeStep - 1);
   }
 
   return (
@@ -121,22 +129,26 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
             isMobile ? "space-y-4 overflow-y-auto" : "max-h-[65vh] space-y-4 overflow-y-auto pe-1"
           }
         >
-          {/* `Stepper` is purely a progress indicator here — Back/Next (the footer
-              below) are the only navigation, per the spec, so every trigger is
-              permanently non-interactive (`StepperItem`'s own `disabled` prop sets
-              `StepperTrigger`'s `isDisabled` via context; `StepperTrigger` must NOT
-              also receive a literal `disabled` prop itself — that prop lands in its
-              own `...props` spread, which runs *after* the context-driven
+          {/* Each step's trigger is reachable up to `maxStepReached` — the highest
+              step this wizard session has gotten to — so the tabs double as Back/
+              Next's own shortcut, jumping straight to any already-visited step
+              (`StepperItem`'s own `disabled` prop sets `StepperTrigger`'s
+              `isDisabled` via context; `StepperTrigger` must NOT also receive a
+              literal `disabled` prop itself — that prop lands in its own
+              `...props` spread, which runs *after* the context-driven
               `disabled={isDisabled}` in its render and would silently force every
-              trigger permanently disabled regardless of the real step index. One or
-              the other, never both.) `onValueChange` is omitted (it's optional) since
-              nothing here ever calls it. */}
-          <Stepper value={activeStep}>
+              trigger permanently disabled regardless of the real step index. One
+              or the other, never both.) */}
+          <Stepper value={activeStep} onValueChange={goToStep}>
             <StepperNav className="mb-4 gap-2">
               {steps.map((step, index) => {
                 const stepNumber = index + 1;
                 return (
-                  <StepperItem key={step.key} step={stepNumber} disabled>
+                  <StepperItem
+                    key={step.key}
+                    step={stepNumber}
+                    disabled={stepNumber > maxStepReached}
+                  >
                     <StepperTrigger>
                       <StepperIndicator>
                         {stepNumber < activeStep ? (
@@ -159,7 +171,13 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
             </p>
           )}
 
-          {currentKey === "profile" && (
+          {/* Always mounted, never conditionally unmounted like the other steps
+              below: hidden (not removed) once the user moves past it, so its
+              entered values survive a trip back to it via Back or its own tab —
+              `student-form-schema`'s own RHF state would otherwise reset to blank
+              on every remount. `locked` takes over once `created` exists, so a
+              revisit can never resubmit and create a second student. */}
+          <div className={currentKey === "profile" ? undefined : "hidden"}>
             <StudentCreateProfileStep
               onCreated={(student) => {
                 setCreated(student);
@@ -170,12 +188,13 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
                   profileFinishIntentRef.current = false;
                   handleClose(false);
                 } else {
-                  setActiveStep(2);
+                  goToStep(2);
                 }
               }}
               onUploadingChange={setIsPhotoUploading}
+              locked={created !== null}
             />
-          )}
+          </div>
           {currentKey === "guardians" && created && (
             <StudentGuardiansTab
               studentId={created.id}
@@ -213,12 +232,15 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
           )}
         </ResponsiveDialogBody>
         <ResponsiveDialogFooter>
-          {activeStep > 2 && (
+          {/* Back reaches every earlier step, Profile included — once the student
+              exists, Profile re-renders locked (read-only), so going back to it
+              never risks a second `createStudent` call. */}
+          {activeStep > 1 && (
             <Button type="button" variant="outline" onClick={goBack}>
               {tCommon("previous")}
             </Button>
           )}
-          {currentKey === "profile" ? (
+          {currentKey === "profile" && !created ? (
             <>
               {/* Same reasoning as the Finish button on every later step (below):
                   there's no reason to force a click through Guardians just to stop
@@ -248,6 +270,12 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
                 {lastStepNumber >= 2 ? tCommon("next") : tCommon("finish")}
               </Button>
             </>
+          ) : currentKey === "profile" ? (
+            // Revisited after creation: Profile is locked, so this is a plain
+            // step-forward click, never a resubmit.
+            <Button type="button" onClick={goNext}>
+              {activeStep >= lastStepNumber ? tCommon("finish") : tCommon("next")}
+            </Button>
           ) : (
             <>
               {/* Once Profile has created the real student, every later step is
