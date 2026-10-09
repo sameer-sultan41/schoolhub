@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
@@ -15,14 +15,7 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  Badge,
-  BadgeDot,
-  Skeleton,
-} from "@schoolhub/ui";
+import { Avatar, AvatarFallback, AvatarImage, Badge, BadgeDot, Skeleton } from "@schoolhub/ui";
 
 import {
   ResponsiveSheet,
@@ -40,13 +33,17 @@ import type { StudentRow } from "@/services/modules/students/students-type";
 import { statusVariant } from "./student-columns";
 import { StudentDetailFooter } from "./student-detail-footer";
 import { StudentDetailTabs } from "./student-detail-tabs";
+import type { StepKey } from "./student-create-stepper";
 
 export interface StudentDetailSheetProps {
   row: StudentRow | null;
   canUpdate: boolean;
   canWithdraw: boolean;
   onOpenChange: (open: boolean) => void;
-  onEdit: (id: string) => void;
+  /** `initialStepKey` is whichever tab this sheet was showing when Edit was
+   * clicked — `StudentCreateStepper` (edit mode) opens landed on that same
+   * step instead of always starting at Profile. */
+  onEdit: (id: string, initialStepKey: StepKey) => void;
   onWithdraw: (id: string, name: string) => void;
 }
 
@@ -63,10 +60,7 @@ function FieldRow({
 }) {
   return (
     <div className="flex min-w-0 items-start gap-2.5">
-      <Icon
-        className="mt-0.5 size-4 shrink-0 text-primary/70"
-        aria-hidden="true"
-      />
+      <Icon className="mt-0.5 size-4 shrink-0 text-primary/70" aria-hidden="true" />
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-xs text-muted-foreground">{label}</span>
         {isPending ? (
@@ -76,10 +70,7 @@ function FieldRow({
           // is wired up anywhere in this app yet, so this is the zero-dependency fix
           // rather than new app-wide infrastructure for one field. Matters most for
           // `medical_notes`, which can run well past what a ~190px grid cell shows.
-          <span
-            className="truncate text-sm font-medium text-foreground"
-            title={value || undefined}
-          >
+          <span className="truncate text-sm font-medium text-foreground" title={value || undefined}>
             {value || "—"}
           </span>
         )}
@@ -93,13 +84,7 @@ function FieldRow({
  * once, so `findByText` keeps finding a single match. Defined once so the two call
  * sites can't drift on variant/appearance/shape/children independently of each other;
  * only `className` (position-specific) varies per call. */
-function StatusBadge({
-  status,
-  className,
-}: {
-  status: string;
-  className?: string;
-}) {
+function StatusBadge({ status, className }: { status: string; className?: string }) {
   const t = useTranslations("students");
   return (
     <Badge
@@ -115,13 +100,7 @@ function StatusBadge({
   );
 }
 
-function FieldSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function FieldSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -144,12 +123,18 @@ export function StudentDetailSheet({
   // context, which doesn't exist yet at this call site: this component is what RENDERS the
   // `ResponsiveSheet` below, so it sits outside that context, not inside it.
   const isDesktop = useIsDesktopShell();
+  // Lifted out of `StudentDetailTabs` (which now takes it as a controlled prop) so the
+  // Edit button below can read which tab is showing. `key={row.id}` on
+  // `StudentDetailTabs` no longer resets this on its own since the state itself lives up
+  // here now — this effect does that job instead.
+  const [activeTab, setActiveTab] = useState("profile");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveTab("profile");
+  }, [row?.id]);
   const { data: currentUser } = useCurrentUser();
   const canViewGuardians = hasPermission(currentUser, "students.guardian.view");
-  const canViewEmergencyContacts = hasPermission(
-    currentUser,
-    "students.student.view",
-  );
+  const canViewEmergencyContacts = hasPermission(currentUser, "students.student.view");
   const canViewDocuments = hasPermission(currentUser, "students.document.view");
   // No dedicated students.enrollment.view/students.transfer.view key exists — both reuse
   // students.student.view, confirmed against the real permission registry.
@@ -183,78 +168,40 @@ export function StudentDetailSheet({
   // that's how the sheet renders its three headings.
   const sections: {
     title: string;
-    fields: {
-      icon: LucideIcon;
-      label: string;
-      value: string | null | undefined;
-    }[];
+    fields: { icon: LucideIcon; label: string; value: string | null | undefined }[];
   }[] = [
     {
       title: t("detail.personal"),
       fields: [
-        {
-          icon: Hash,
-          label: t("fields.admissionNumber"),
-          value: data?.admission_number,
-        },
-        {
-          icon: UserRound,
-          label: t("fields.preferredName"),
-          value: data?.preferred_name,
-        },
-        {
-          icon: Calendar,
-          label: t("fields.dateOfBirth"),
-          value: data?.date_of_birth,
-        },
+        { icon: Hash, label: t("fields.admissionNumber"), value: data?.admission_number },
+        { icon: UserRound, label: t("fields.preferredName"), value: data?.preferred_name },
+        { icon: Calendar, label: t("fields.dateOfBirth"), value: data?.date_of_birth },
         {
           icon: UserRound,
           label: t("fields.gender"),
           value: data ? t(`gender.${data.gender}`) : undefined,
         },
-        {
-          icon: Building2,
-          label: t("fields.nationality"),
-          value: data?.nationality,
-        },
+        { icon: Building2, label: t("fields.nationality"), value: data?.nationality },
         { icon: BookOpen, label: t("fields.religion"), value: data?.religion },
       ],
     },
     {
       title: t("detail.academic"),
       fields: [
-        {
-          icon: Building2,
-          label: t("fields.campus"),
-          value: data?.campus_name,
-        },
+        { icon: Building2, label: t("fields.campus"), value: data?.campus_name },
         { icon: Home, label: t("fields.house"), value: data?.house_name },
-        {
-          icon: Calendar,
-          label: t("fields.admissionDate"),
-          value: data?.admission_date,
-        },
-        {
-          icon: School,
-          label: t("fields.previousSchool"),
-          value: data?.previous_school,
-        },
+        { icon: Calendar, label: t("fields.admissionDate"), value: data?.admission_date },
+        { icon: School, label: t("fields.previousSchool"), value: data?.previous_school },
       ],
     },
     {
       title: t("detail.medical"),
       fields: [
-        {
-          icon: Droplet,
-          label: t("fields.bloodGroup"),
-          value: data?.blood_group,
-        },
+        { icon: Droplet, label: t("fields.bloodGroup"), value: data?.blood_group },
         {
           icon: FileText,
           label: t("fields.medicalNotes"),
-          value: hasMedicalNotesField
-            ? data.medical_notes
-            : t("fields.medicalNotesRestricted"),
+          value: hasMedicalNotesField ? data.medical_notes : t("fields.medicalNotesRestricted"),
         },
       ],
     },
@@ -279,9 +226,7 @@ export function StudentDetailSheet({
       ))}
       {data ? (
         <span className="text-xs text-muted-foreground">
-          {t("detail.lastUpdated", {
-            when: formatLastUpdated(data.updated_at),
-          })}
+          {t("detail.lastUpdated", { when: formatLastUpdated(data.updated_at) })}
         </span>
       ) : (
         <Skeleton className="h-3 w-32" />
@@ -296,9 +241,7 @@ export function StudentDetailSheet({
         className="gap-0 p-0 sm:w-[440px] sm:max-w-none [&_[data-slot=sheet-close]]:end-5 [&_[data-slot=sheet-close]]:top-5"
       >
         <ResponsiveSheetTitle className="sr-only">
-          {row
-            ? t("detail.title", { name: row.name })
-            : t("detail.titleFallback")}
+          {row ? t("detail.title", { name: row.name }) : t("detail.titleFallback")}
         </ResponsiveSheetTitle>
         {row && (
           <>
@@ -317,11 +260,7 @@ export function StudentDetailSheet({
                 }
               >
                 <AvatarImage src={row.signedPhotoUrl} alt="" />
-                <AvatarFallback
-                  className={
-                    isDesktop ? "text-lg font-semibold" : "font-semibold"
-                  }
-                >
+                <AvatarFallback className={isDesktop ? "text-lg font-semibold" : "font-semibold"}>
                   {getInitials(row.name)}
                 </AvatarFallback>
               </Avatar>
@@ -330,19 +269,12 @@ export function StudentDetailSheet({
                   <span className="text-mono truncate text-lg leading-none font-semibold text-foreground">
                     {row.name}
                   </span>
-                  {!isDesktop && (
-                    <StatusBadge
-                      status={row.status}
-                      className="w-fit shrink-0"
-                    />
-                  )}
+                  {!isDesktop && <StatusBadge status={row.status} className="w-fit shrink-0" />}
                 </div>
                 <span className="truncate text-sm text-muted-foreground">
                   {row.admissionNumber}
                 </span>
-                {isDesktop && (
-                  <StatusBadge status={row.status} className="mt-1 w-fit" />
-                )}
+                {isDesktop && <StatusBadge status={row.status} className="mt-1 w-fit" />}
               </div>
             </div>
 
@@ -357,6 +289,8 @@ export function StudentDetailSheet({
               canViewEnrollment={canViewEnrollment}
               enrollmentPermissions={enrollmentPermissions}
               campusId={data?.campus_id}
+              activeTab={activeTab}
+              onActiveTabChange={setActiveTab}
             />
 
             <StudentDetailFooter
@@ -364,7 +298,13 @@ export function StudentDetailSheet({
               canUpdate={canUpdate}
               canWithdraw={canWithdraw}
               isDrawer={!isDesktop}
-              onEdit={onEdit}
+              onEdit={() => {
+                // `activeTab`'s value only ever comes from the literal tab keys
+                // `StudentDetailTabs` registers, which are exactly `StepKey`'s
+                // members — safe to assert, not safe to widen `onEdit`'s own
+                // signature to plain `string` just to avoid it.
+                onEdit(row.id, activeTab as StepKey);
+              }}
               onWithdraw={onWithdraw}
             />
           </>

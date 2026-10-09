@@ -20,7 +20,7 @@ jest.mock("@/services", () => ({
     dashboard: { fetchCampuses: jest.fn().mockResolvedValue([]) },
     schoolOrganization: { fetchHouses: jest.fn().mockResolvedValue([]) },
   },
-  // The real class: `StudentFormDialog` `instanceof`-checks it.
+  // The real class: `StudentCreateProfileStep` `instanceof`-checks it.
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
 }));
 

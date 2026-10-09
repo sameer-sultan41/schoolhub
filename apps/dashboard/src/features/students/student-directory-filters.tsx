@@ -44,8 +44,8 @@ export interface StudentDirectoryFiltersProps {
 
 /**
  * The directory's search box plus its three `Select` filters. Built with
- * `@schoolhub/ui`'s `Select` primitive — the same one `StudentFormDialog` already uses
- * for Campus/House — rather than a hand-rolled listbox, so these stay genuinely
+ * `@schoolhub/ui`'s `Select` primitive — the same one `StudentCreateProfileStep` already
+ * uses for Campus/House — rather than a hand-rolled listbox, so these stay genuinely
  * keyboard-operable (Radix wires arrow-key navigation, typeahead and `Escape` for free).
  * Each `SelectTrigger` carries its own `aria-label` since none of these three have a
  * visible `<label>` of their own the way a form field does.

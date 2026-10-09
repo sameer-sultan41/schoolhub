@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 import {
@@ -23,15 +24,30 @@ import {
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 import { hasPermission } from "@/lib/permissions";
+import { queryKeys } from "@/lib/query-client";
+import { Services } from "@/services";
 import { StudentCreateProfileStep } from "./student-create-profile-step";
 import { StudentDocumentsTab } from "./student-documents-tab";
 import { StudentEmergencyContactsTab } from "./student-emergency-contacts-tab";
 import { StudentEnrollmentTab } from "./student-enrollment-tab";
 import { StudentGuardiansTab } from "./student-guardians-tab";
 
+export type StepKey = "profile" | "guardians" | "emergencyContacts" | "documents" | "enrollment";
+
 export interface StudentCreateStepperProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Defaults to `"create"`. In `"edit"` mode `studentId` is required: the
+   * wizard opens on an already-real student (fetched here) instead of
+   * creating a new one, every step is reachable immediately rather than
+   * gated by progress, and Profile saves (`updateStudent`) instead of
+   * creating, never locking against resubmission the way create mode does. */
+  mode?: "create" | "edit";
+  studentId?: string;
+  /** Edit mode only: which step to land on — e.g. the tab the detail sheet
+   * was showing when its Edit button was clicked. Defaults to `"profile"`.
+   * Create mode always starts at Profile regardless. */
+  initialStepKey?: StepKey;
 }
 
 interface CreatedStudent {
@@ -41,35 +57,55 @@ interface CreatedStudent {
 }
 
 /**
- * Replaces `<StudentFormDialog mode="create">` as the dashboard's "Add Student"
- * entry point (`student-toolbar.tsx`, Task 4). Edit mode is untouched —
- * `StudentFormDialog` still owns it.
+ * Replaces `<StudentFormDialog>` as the dashboard's "Add Student" entry point
+ * (`student-toolbar.tsx`) and, in edit mode, its edit entry point too (the
+ * detail sheet's Edit button, `student-directory-table.tsx`) — one wizard UI
+ * for both, landing on whichever step makes sense for the caller.
  *
- * Step 1 (Profile) creates the real student record the moment it succeeds — there
- * is no atomic batch-create endpoint (spec's Context section), so every step from
- * Guardians onward operates on an already-real student, and closing this wizard
- * after Profile is a supported exit, not an abandoned operation. The banner below
- * makes that explicit rather than leaving it an implicit surprise.
+ * Create mode: step 1 (Profile) creates the real student record the moment it
+ * succeeds — there is no atomic batch-create endpoint (spec's Context
+ * section), so every step from Guardians onward operates on an already-real
+ * student, and closing this wizard after Profile is a supported exit, not an
+ * abandoned operation. The banner below makes that explicit. Edit mode skips
+ * all of this: the student already exists, so every step is reachable from
+ * the moment its own detail fetch resolves.
+ *
+ * Mounting contract: like `WithdrawStudentDialog`, an edit-mode instance is
+ * meant to be conditionally rendered by its caller (`{editTarget && <...>}`),
+ * a fresh instance per edit session — it carries no reset-on-reopen logic for
+ * `studentId`/`initialStepKey` changing under an already-mounted instance, by
+ * design. Create mode instead relies on `handleClose` below, since
+ * `student-toolbar.tsx` keeps one persistent instance toggling `open`.
  */
-export function StudentCreateStepper({ open, onOpenChange }: StudentCreateStepperProps) {
+export function StudentCreateStepper({
+  open,
+  onOpenChange,
+  mode = "create",
+  studentId,
+  initialStepKey,
+}: StudentCreateStepperProps) {
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
   const isMobile = !useIsDesktopShell();
   const { data: currentUser } = useCurrentUser();
+  const isEdit = mode === "edit";
 
   const [activeStep, setActiveStep] = useState(1);
   // The highest step ever reached this wizard session — lets the step tabs and
   // Back/Next jump to any already-visited step, not just the immediately
-  // adjacent one. Profile (1) is always reachable since it's the start.
+  // adjacent one. Profile (1) is always reachable since it's the start. Edit
+  // mode jumps this straight to the last step once the record loads (below) —
+  // every step is reachable immediately there, not gated by progress.
   const [maxStepReached, setMaxStepReached] = useState(1);
   const [created, setCreated] = useState<CreatedStudent | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
   // Both Profile footer buttons are `type="submit"` targeting the same external
   // `form="student-create-profile-step"` (Profile's own footer lives outside its
   // `<form>`, submitted by id) — this records which one was actually clicked so
-  // `onCreated` below knows whether to advance to Guardians or finish immediately.
-  // A ref, not state: it's read once, synchronously, inside `onCreated`'s own
-  // callback after the mutation resolves, not during a render.
+  // `onSaved` below knows whether to advance to Guardians or finish immediately.
+  // A ref, not state: it's read once, synchronously, inside `onSaved`'s own
+  // callback after the mutation resolves, not during a render. Create mode only
+  // — edit mode's Profile step never sets it.
   const profileFinishIntentRef = useRef(false);
 
   function goToStep(step: number) {
@@ -82,10 +118,7 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
   const canViewDocuments = hasPermission(currentUser, "students.document.create");
   const canViewEnrollment = hasPermission(currentUser, "students.enrollment.enroll");
 
-  type Step = {
-    key: "profile" | "guardians" | "emergencyContacts" | "documents" | "enrollment";
-    label: string;
-  };
+  type Step = { key: StepKey; label: string };
   const steps: Step[] = [
     { key: "profile", label: t("tabs.profile") },
     ...(canViewGuardians ? [{ key: "guardians" as const, label: t("tabs.guardians") }] : []),
@@ -98,10 +131,44 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
   const lastStepNumber = steps.length;
   const currentKey = steps[activeStep - 1]?.key;
 
+  // Edit mode's own seed: the record already exists, so there's no "create"
+  // event to hang `created`/step-unlocking off of — this fetch (deduped
+  // against `StudentCreateProfileStep`'s own identical query by query key, so
+  // it costs no extra request) is that event instead.
+  const editDetailQuery = useQuery({
+    queryKey: queryKeys.detail("students", "students", studentId ?? ""),
+    queryFn: () => Services.students.fetchStudentById(studentId as string),
+    enabled: isEdit && !!studentId,
+  });
+  useEffect(() => {
+    if (!isEdit || !editDetailQuery.data || created !== null) return;
+    const record = editDetailQuery.data;
+    // Seeds `created`/unlocks every step the moment the existing record loads —
+    // the one-time `created !== null` guard above is what keeps this from
+    // looping, the same justification `student-form-dialog.tsx`'s own
+    // identical-shaped effect uses for its own disable of this rule.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCreated({
+      id: record.id,
+      campusId: record.campus_id,
+      name: `${record.first_name} ${record.last_name}`.trim(),
+    });
+    setMaxStepReached(lastStepNumber);
+    const wantedIndex = steps.findIndex((step) => step.key === (initialStepKey ?? "profile"));
+    setActiveStep(wantedIndex === -1 ? 1 : wantedIndex + 1);
+    // `steps`/`lastStepNumber` are recomputed from permissions every render (a
+    // new array each time) — including them would re-run this effect on every
+    // render for no benefit, since the `created !== null` guard above already
+    // makes it fire exactly once, the first time the record's own data arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, editDetailQuery.data, created, initialStepKey]);
+
   function handleClose(nextOpen: boolean) {
-    if (!nextOpen) {
+    if (!nextOpen && !isEdit) {
       // Fresh instance per open (`WithdrawStudentDialog`'s own convention): never
-      // resume a half-finished wizard on reopen.
+      // resume a half-finished wizard on reopen. Edit mode skips this — its own
+      // mounting contract (above) already gives every open a fresh instance, so
+      // there is no persisted state here to reset.
       setActiveStep(1);
       setMaxStepReached(1);
       setCreated(null);
@@ -122,7 +189,9 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
     <ResponsiveDialog open={open} onOpenChange={handleClose}>
       <ResponsiveDialogContent className="max-w-2xl" closeLabel={tCommon("close")}>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>{t("form.createTitle")}</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>
+            {isEdit ? t("form.editTitle") : t("form.createTitle")}
+          </ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <ResponsiveDialogBody
           className={
@@ -165,7 +234,7 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
             </StepperNav>
           </Stepper>
 
-          {created && currentKey !== "profile" && (
+          {!isEdit && created && currentKey !== "profile" && (
             <p className="rounded-md bg-primary/5 px-3 py-2 text-sm text-foreground">
               {t("stepper.studentCreated", { name: created.name })}
             </p>
@@ -179,8 +248,14 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
               revisit can never resubmit and create a second student. */}
           <div className={currentKey === "profile" ? undefined : "hidden"}>
             <StudentCreateProfileStep
-              onCreated={(student) => {
+              mode={mode}
+              studentId={studentId}
+              onSaved={(student) => {
                 setCreated(student);
+                // Edit mode: saving Profile never navigates — the record already
+                // existed before this save, so there's nothing to "advance" into
+                // that wasn't already reachable. Create mode: see the branch below.
+                if (isEdit) return;
                 // A viewer with only `students.student.create` has no step past
                 // Profile either way — `lastStepNumber < 2` covers that case the
                 // same as an explicit Finish click.
@@ -192,7 +267,7 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
                 }
               }}
               onUploadingChange={setIsPhotoUploading}
-              locked={created !== null}
+              locked={!isEdit && created !== null}
             />
           </div>
           {currentKey === "guardians" && created && (
@@ -232,15 +307,29 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
           )}
         </ResponsiveDialogBody>
         <ResponsiveDialogFooter>
-          {/* Back reaches every earlier step, Profile included — once the student
-              exists, Profile re-renders locked (read-only), so going back to it
-              never risks a second `createStudent` call. */}
+          {/* Back reaches every earlier step, Profile included. Create mode:
+              once the student exists, Profile re-renders locked (read-only),
+              so going back to it never risks a second `createStudent` call.
+              Edit mode: Profile is never locked — resaving there is the whole
+              point. */}
           {activeStep > 1 && (
             <Button type="button" variant="outline" onClick={goBack}>
               {tCommon("previous")}
             </Button>
           )}
-          {currentKey === "profile" && !created ? (
+          {currentKey === "profile" && isEdit ? (
+            // Edit mode: the record already exists and is never locked —
+            // resaving is the whole point — so this is always a plain save,
+            // never gated by `created`/finish-intent the way create mode is.
+            <Button
+              type="submit"
+              form="student-create-profile-step"
+              disabled={isPhotoUploading || editDetailQuery.isPending}
+              loadingLabel={t("form.submitting")}
+            >
+              {tCommon("save")}
+            </Button>
+          ) : currentKey === "profile" && !created ? (
             <>
               {/* Same reasoning as the Finish button on every later step (below):
                   there's no reason to force a click through Guardians just to stop
@@ -296,7 +385,7 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
               )}
               <Button type="button" onClick={goNext}>
                 {/* `>=`, not `===`: a viewer with only `students.student.create`
-                    has no step past Profile, so `onCreated` advances `activeStep`
+                    has no step past Profile, so `onSaved` advances `activeStep`
                     to 2 with `lastStepNumber` still 1 — this button is the only
                     one rendered then, and must read "Finish", not "Next". */}
                 {activeStep >= lastStepNumber ? tCommon("finish") : tCommon("next")}

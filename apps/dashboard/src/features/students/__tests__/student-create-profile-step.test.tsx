@@ -1,21 +1,66 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { Services } from "@/services";
+import { Services, type StudentRecord } from "@/services";
 import { renderWithProviders } from "@/test-utils";
 import { StudentCreateProfileStep } from "../student-create-profile-step";
 
 jest.mock("@/services", () => ({
   Services: {
     dashboard: { fetchCampuses: jest.fn().mockResolvedValue([{ id: "campus-1", name: "Main" }]) },
-    schoolOrganization: { fetchHouses: jest.fn().mockResolvedValue([]) },
-    students: { createStudent: jest.fn() },
+    schoolOrganization: {
+      fetchHouses: jest.fn().mockResolvedValue([{ id: "house-1", name: "Blue House" }]),
+    },
+    students: {
+      createStudent: jest.fn(),
+      updateStudent: jest.fn(),
+      fetchStudentById: jest.fn(),
+    },
   },
 }));
 
 const mockCreateStudent = Services.students.createStudent as jest.MockedFunction<
   typeof Services.students.createStudent
 >;
+const mockUpdateStudent = Services.students.updateStudent as jest.MockedFunction<
+  typeof Services.students.updateStudent
+>;
+const mockFetchStudentById = Services.students.fetchStudentById as jest.MockedFunction<
+  typeof Services.students.fetchStudentById
+>;
+
+/** Same shape as `student-directory-table.test.tsx`'s own `studentRecord` fixture —
+ * every nullable field defaults to a real, non-null value so an override only ever
+ * changes the field a given test actually cares about. */
+function studentRecord(overrides: Partial<StudentRecord> = {}): StudentRecord {
+  return {
+    id: "stu-1",
+    admission_number: "2026-0050",
+    first_name: "Aisha",
+    last_name: "Khan",
+    preferred_name: "Ash",
+    date_of_birth: "2015-03-12",
+    gender: "female",
+    photo_file_id: null,
+    photo_url: null,
+    campus_id: "campus-1",
+    campus_name: "Main",
+    house_id: "house-1",
+    house_name: "Blue House",
+    status: "active",
+    admission_date: "2026-01-10",
+    blood_group: "O+",
+    nationality: "Pakistani",
+    religion: "Islam",
+    previous_school: "City Grammar School",
+    medical_notes: "No known allergies.",
+    address: null,
+    custom_fields: null,
+    created_at: "2026-01-10T00:00:00Z",
+    updated_at: "2026-09-20T00:00:00Z",
+    ...overrides,
+  };
+}
 
 async function fillRequiredFields() {
   await userEvent.type(screen.getByLabelText(/first name/i), "Ayesha");
@@ -33,28 +78,28 @@ function submitProfileForm() {
   form.requestSubmit();
 }
 
-describe("StudentCreateProfileStep", () => {
+describe("StudentCreateProfileStep — create mode", () => {
   beforeEach(() => {
     mockCreateStudent.mockReset();
   });
 
-  it("calls onCreated with the new student's id, campus and name on success", async () => {
+  it("calls onSaved with the new student's id, campus and name on success", async () => {
     mockCreateStudent.mockResolvedValue({
       id: "student-1",
       campus_id: "campus-1",
       first_name: "Ayesha",
       last_name: "Khan",
     } as never);
-    const onCreated = jest.fn();
+    const onSaved = jest.fn();
     renderWithProviders(
-      <StudentCreateProfileStep onCreated={onCreated} onUploadingChange={jest.fn()} />,
+      <StudentCreateProfileStep mode="create" onSaved={onSaved} onUploadingChange={jest.fn()} />,
     );
 
     await fillRequiredFields();
     submitProfileForm();
 
     await waitFor(() => {
-      expect(onCreated).toHaveBeenCalledWith({
+      expect(onSaved).toHaveBeenCalledWith({
         id: "student-1",
         campusId: "campus-1",
         name: "Ayesha Khan",
@@ -72,7 +117,7 @@ describe("StudentCreateProfileStep", () => {
         }),
     );
     renderWithProviders(
-      <StudentCreateProfileStep onCreated={jest.fn()} onUploadingChange={jest.fn()} />,
+      <StudentCreateProfileStep mode="create" onSaved={jest.fn()} onUploadingChange={jest.fn()} />,
     );
 
     await fillRequiredFields();
@@ -82,5 +127,93 @@ describe("StudentCreateProfileStep", () => {
     await waitFor(() => {
       expect(mockCreateStudent).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe("StudentCreateProfileStep — edit mode", () => {
+  beforeEach(() => {
+    mockUpdateStudent.mockReset();
+    mockFetchStudentById.mockReset();
+  });
+
+  it("pre-fills from fetchStudentById and submits updateStudent against that student's id", async () => {
+    mockFetchStudentById.mockResolvedValue(studentRecord());
+    mockUpdateStudent.mockResolvedValue(
+      studentRecord({ first_name: "Aisha", last_name: "Khan-Updated" }),
+    );
+    const onSaved = jest.fn();
+    renderWithProviders(
+      <StudentCreateProfileStep
+        mode="edit"
+        studentId="stu-1"
+        onSaved={onSaved}
+        onUploadingChange={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByDisplayValue("Aisha")).toBeInTheDocument();
+
+    const form = document.getElementById("student-create-profile-step") as HTMLFormElement;
+    form.requestSubmit();
+
+    await waitFor(() => {
+      expect(mockUpdateStudent).toHaveBeenCalledWith("stu-1", expect.any(Object));
+    });
+    expect(onSaved).toHaveBeenCalledWith({
+      id: "stu-1",
+      campusId: "campus-1",
+      name: "Aisha Khan-Updated",
+    });
+  });
+
+  it("does not call updateStudent twice for two rapid submits", async () => {
+    mockFetchStudentById.mockResolvedValue(studentRecord());
+    mockUpdateStudent.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve(studentRecord());
+          }, 50);
+        }),
+    );
+    renderWithProviders(
+      <StudentCreateProfileStep
+        mode="edit"
+        studentId="stu-1"
+        onSaved={jest.fn()}
+        onUploadingChange={jest.fn()}
+      />,
+    );
+
+    await screen.findByDisplayValue("Aisha");
+    const form = document.getElementById("student-create-profile-step") as HTMLFormElement;
+    form.requestSubmit();
+    form.requestSubmit();
+
+    await waitFor(() => {
+      expect(mockUpdateStudent).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("never calls createStudent in edit mode", async () => {
+    mockFetchStudentById.mockResolvedValue(studentRecord());
+    mockUpdateStudent.mockResolvedValue(studentRecord());
+    renderWithProviders(
+      <StudentCreateProfileStep
+        mode="edit"
+        studentId="stu-1"
+        onSaved={jest.fn()}
+        onUploadingChange={jest.fn()}
+      />,
+    );
+
+    await screen.findByDisplayValue("Aisha");
+    const form = document.getElementById("student-create-profile-step") as HTMLFormElement;
+    form.requestSubmit();
+
+    await waitFor(() => {
+      expect(mockUpdateStudent).toHaveBeenCalledTimes(1);
+    });
+    expect(mockCreateStudent).not.toHaveBeenCalled();
   });
 });

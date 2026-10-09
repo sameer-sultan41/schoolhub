@@ -40,7 +40,7 @@ import {
 } from "@/services/modules/students/students-constant";
 import { toStudentRow } from "@/services/modules/students/students-helper";
 import type { StudentRow } from "@/services/modules/students/students-type";
-import { StudentFormDialog } from "./student-form-dialog";
+import { StudentCreateStepper, type StepKey } from "./student-create-stepper";
 import { StudentDetailSheet } from "./student-detail-sheet";
 import { WithdrawStudentDialog } from "./withdraw-student-dialog";
 import { StudentDirectoryFilters } from "./student-directory-filters";
@@ -48,15 +48,16 @@ import { useStudentColumns } from "./student-columns";
 
 /**
  * The `/students` route's directory table — server-paginated/sorted/searched via
- * `Services.students.fetchStudentsPage`, wiring together the create/edit form dialog
- * (Task 5), the detail sheet (Task 6) and the withdraw dialog (Task 7).
+ * `Services.students.fetchStudentsPage`, wiring together the edit stepper, the detail
+ * sheet and the withdraw dialog.
  *
- * `formDialog`/`withdrawDialog` are conditionally RENDERED (`{formDialog && <... />}`),
+ * `editTarget`/`withdrawDialog` are conditionally RENDERED (`{editTarget && <... />}`),
  * not kept mounted with `open` merely toggling — deliberately, so each dialog gets a
- * fresh mount per open. For `WithdrawStudentDialog` this is a hard requirement, not a
- * preference: it has no reset-on-reopen logic at all (see its own mounting-contract
- * comment), so an always-mounted version here would reopen showing a previous
- * withdrawal's stale failures, targets and idempotency keys for a different selection.
+ * fresh mount per open (`StudentCreateStepper`'s own edit-mode mounting contract). For
+ * `WithdrawStudentDialog` this is a hard requirement, not a preference: it has no
+ * reset-on-reopen logic at all (see its own mounting-contract comment), so an
+ * always-mounted version here would reopen showing a previous withdrawal's stale
+ * failures, targets and idempotency keys for a different selection.
  */
 export function StudentDirectoryTable() {
   const t = useTranslations("students");
@@ -73,9 +74,10 @@ export function StudentDirectoryTable() {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
-  const [formDialog, setFormDialog] = useState<
-    { mode: "create" } | { mode: "edit"; studentId: string } | null
-  >(null);
+  const [editTarget, setEditTarget] = useState<{
+    studentId: string;
+    initialStepKey?: StepKey;
+  } | null>(null);
   const [withdrawDialog, setWithdrawDialog] = useState<{ ids: string[]; names: string[] } | null>(
     null,
   );
@@ -156,7 +158,10 @@ export function StudentDirectoryTable() {
   // both bodies only call `useState` setters, which React guarantees are themselves
   // stable, so there is nothing from an outer scope these need to close over freshly.
   const handleEdit = useCallback((id: string) => {
-    setFormDialog({ mode: "edit", studentId: id });
+    // The row's own Edit action has no tab context to carry — unlike the detail
+    // sheet's Edit button below, it never had a tab open in the first place —
+    // so this always lands the stepper on Profile.
+    setEditTarget({ studentId: id });
   }, []);
   const handleWithdraw = useCallback((id: string, name: string) => {
     setWithdrawDialog({ ids: [id], names: [name] });
@@ -291,14 +296,15 @@ export function StudentDirectoryTable() {
           </Card>
         </m.div>
       </DataGrid>
-      {formDialog && (
-        <StudentFormDialog
+      {editTarget && (
+        <StudentCreateStepper
           open
           onOpenChange={(open) => {
-            if (!open) setFormDialog(null);
+            if (!open) setEditTarget(null);
           }}
-          mode={formDialog.mode}
-          studentId={formDialog.mode === "edit" ? formDialog.studentId : undefined}
+          mode="edit"
+          studentId={editTarget.studentId}
+          initialStepKey={editTarget.initialStepKey}
         />
       )}
       {withdrawDialog && (
@@ -318,9 +324,9 @@ export function StudentDirectoryTable() {
         onOpenChange={(open) => {
           if (!open) setDetailRow(null);
         }}
-        onEdit={(id) => {
+        onEdit={(id, initialStepKey) => {
           setDetailRow(null);
-          setFormDialog({ mode: "edit", studentId: id });
+          setEditTarget({ studentId: id, initialStepKey });
         }}
         onWithdraw={(id, name) => {
           setDetailRow(null);
