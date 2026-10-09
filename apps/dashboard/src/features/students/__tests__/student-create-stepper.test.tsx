@@ -47,7 +47,12 @@ async function fillAndSubmitProfile() {
   await userEvent.click(await screen.findByRole("option", { name: /female/i }));
   await userEvent.click(screen.getByRole("combobox", { name: /^campus$/i }));
   await userEvent.click(await screen.findByRole("option", { name: "Main" }));
-  await userEvent.click(screen.getByRole("button", { name: /^next$/i }));
+  // The Profile step's primary submit button reads "Next" when a later step
+  // exists, "Finish" otherwise (a viewer with only `students.student.create`) —
+  // Profile also offers a separate outline "Finish" button once a later step
+  // exists, so prefer "Next" and fall back to "Finish" rather than matching both.
+  const nextButton = screen.queryByRole("button", { name: /^next$/i });
+  await userEvent.click(nextButton ?? screen.getByRole("button", { name: /^finish$/i }));
 }
 
 describe("StudentCreateStepper", () => {
@@ -98,6 +103,30 @@ describe("StudentCreateStepper", () => {
     await userEvent.click(screen.getByRole("button", { name: /^previous$/i }));
 
     expect(screen.queryByLabelText(/first name/i)).not.toBeInTheDocument();
+  });
+
+  it("lets the user finish right from Profile, skipping every later step", async () => {
+    mockUseCurrentUser.mockReturnValue(
+      userWith(["students.student.create", "students.guardian.create", "students.student.update"]),
+    );
+    const onOpenChange = jest.fn();
+    renderWithProviders(<StudentCreateStepper open onOpenChange={onOpenChange} />);
+
+    await userEvent.type(screen.getByLabelText(/first name/i), "Ayesha");
+    await userEvent.type(screen.getByLabelText(/last name/i), "Khan");
+    await userEvent.type(screen.getByLabelText(/date of birth/i), "2012-05-01");
+    await userEvent.type(screen.getByLabelText(/admission date/i), "2026-01-10");
+    await userEvent.click(screen.getByRole("combobox", { name: /gender/i }));
+    await userEvent.click(await screen.findByRole("option", { name: /female/i }));
+    await userEvent.click(screen.getByRole("combobox", { name: /^campus$/i }));
+    await userEvent.click(await screen.findByRole("option", { name: "Main" }));
+
+    await userEvent.click(screen.getByRole("button", { name: /^finish$/i }));
+
+    await waitFor(() => {
+      expect(mockCreateStudent).toHaveBeenCalledTimes(1);
+    });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("lets the user finish immediately from a middle step instead of clicking Next through the rest", async () => {

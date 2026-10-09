@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 import {
@@ -60,6 +60,13 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
   const [activeStep, setActiveStep] = useState(1);
   const [created, setCreated] = useState<CreatedStudent | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
+  // Both Profile footer buttons are `type="submit"` targeting the same external
+  // `form="student-create-profile-step"` (Profile's own footer lives outside its
+  // `<form>`, submitted by id) — this records which one was actually clicked so
+  // `onCreated` below knows whether to advance to Guardians or finish immediately.
+  // A ref, not state: it's read once, synchronously, inside `onCreated`'s own
+  // callback after the mutation resolves, not during a render.
+  const profileFinishIntentRef = useRef(false);
 
   const canViewGuardians = hasPermission(currentUser, "students.guardian.create");
   const canViewEmergencyContacts = hasPermission(currentUser, "students.student.update");
@@ -156,7 +163,15 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
             <StudentCreateProfileStep
               onCreated={(student) => {
                 setCreated(student);
-                setActiveStep(2);
+                // A viewer with only `students.student.create` has no step past
+                // Profile either way — `lastStepNumber < 2` covers that case the
+                // same as an explicit Finish click.
+                if (profileFinishIntentRef.current || lastStepNumber < 2) {
+                  profileFinishIntentRef.current = false;
+                  handleClose(false);
+                } else {
+                  setActiveStep(2);
+                }
               }}
               onUploadingChange={setIsPhotoUploading}
             />
@@ -204,14 +219,35 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
             </Button>
           )}
           {currentKey === "profile" ? (
-            <Button
-              type="submit"
-              form="student-create-profile-step"
-              disabled={isPhotoUploading}
-              loadingLabel={t("form.submitting")}
-            >
-              {tCommon("next")}
-            </Button>
+            <>
+              {/* Same reasoning as the Finish button on every later step (below):
+                  there's no reason to force a click through Guardians just to stop
+                  — creating the student is already a complete, supported exit. */}
+              {lastStepNumber >= 2 && (
+                <Button
+                  type="submit"
+                  form="student-create-profile-step"
+                  variant="outline"
+                  disabled={isPhotoUploading}
+                  onClick={() => {
+                    profileFinishIntentRef.current = true;
+                  }}
+                >
+                  {tCommon("finish")}
+                </Button>
+              )}
+              <Button
+                type="submit"
+                form="student-create-profile-step"
+                disabled={isPhotoUploading}
+                loadingLabel={t("form.submitting")}
+                onClick={() => {
+                  profileFinishIntentRef.current = false;
+                }}
+              >
+                {lastStepNumber >= 2 ? tCommon("next") : tCommon("finish")}
+              </Button>
+            </>
           ) : (
             <>
               {/* Once Profile has created the real student, every later step is
