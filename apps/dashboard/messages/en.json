@@ -507,6 +507,10 @@
       "failed": "ID-card generation failed.",
       "download": "Download PDF",
       "dismiss": "Dismiss"
+    },
+    "stepper": {
+      "enrollment": "Enrollment",
+      "studentCreated": "{name} has been created. You can close this wizard at any time — the changes you've made so far are saved."
     }
   },
   "staff": {
@@ -1204,7 +1208,8 @@
       "uploading": "Uploading photo…",
       "onFile": "Photo on file",
       "uploadFailed": "The photo could not be uploaded."
-    }
+    },
+    "finish": "Finish"
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",
