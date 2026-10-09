@@ -3,15 +3,26 @@ import { cn } from "../lib/cn";
 import { cva, type VariantProps } from "class-variance-authority";
 
 // Define input size variants
+//
+// The `[&[type=date]::-webkit-calendar-picker-indicator]:*` classes below fix a
+// real UI bug: the browser's own default calendar icon is small, flush against
+// the typed value with no padding, and doesn't fill the input's clickable area
+// — `ms-auto` pushes it flush to the far end, `h-full`/`w-8` give it a real
+// tap/click target the height of the field, and the opacity classes make it
+// read as an icon button rather than a stray glyph. WebKit-prefixed because
+// Firefox doesn't expose this pseudo-element at all; it falls back to its own
+// native picker affordance there, which is acceptable since there's nothing to
+// style on an element that doesn't exist.
 const inputVariants = cva(
   `
-    flex w-full bg-background border border-input shadow-xs shadow-black/5 transition-[color,box-shadow] text-foreground placeholder:text-muted-foreground/80 
-    focus-visible:ring-ring/30  focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px]     
-    disabled:cursor-not-allowed disabled:opacity-60 
+    flex w-full bg-background border border-input shadow-xs shadow-black/5 transition-[color,box-shadow] text-foreground placeholder:text-muted-foreground/80
+    focus-visible:ring-ring/30  focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px]
+    disabled:cursor-not-allowed disabled:opacity-60
     [&[readonly]]:bg-muted/80 [&[readonly]]:cursor-not-allowed
-    file:h-full [&[type=file]]:py-0 file:border-solid file:border-input file:bg-transparent 
+    file:h-full [&[type=file]]:py-0 file:border-solid file:border-input file:bg-transparent
     file:font-medium file:not-italic file:text-foreground file:p-0 file:border-0 file:border-e
     aria-invalid:border-destructive/60 aria-invalid:ring-destructive/10 dark:aria-invalid:border-destructive dark:aria-invalid:ring-destructive/20
+    [&[type=date]::-webkit-calendar-picker-indicator]:ms-auto [&[type=date]::-webkit-calendar-picker-indicator]:h-full [&[type=date]::-webkit-calendar-picker-indicator]:w-8 [&[type=date]::-webkit-calendar-picker-indicator]:shrink-0 [&[type=date]::-webkit-calendar-picker-indicator]:cursor-pointer [&[type=date]::-webkit-calendar-picker-indicator]:bg-[length:1rem] [&[type=date]::-webkit-calendar-picker-indicator]:bg-center [&[type=date]::-webkit-calendar-picker-indicator]:bg-no-repeat [&[type=date]::-webkit-calendar-picker-indicator]:opacity-60 [&[type=date]::-webkit-calendar-picker-indicator]:hover:opacity-100
   `,
   {
     variants: {

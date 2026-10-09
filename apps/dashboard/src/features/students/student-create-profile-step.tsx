@@ -236,8 +236,13 @@ export function StudentCreateProfileStep({
         {/* `display: contents` keeps every child a direct grid item of the grid
             below, so locking never changes layout — only `disabled` cascades down
             to every native input/select/button inside, the standard HTML fieldset
-            behavior, with no per-field prop threading needed. */}
-        <fieldset disabled={locked} className="contents">
+            behavior, with no per-field prop threading needed. `min-w-0` works
+            around a real, long-documented browser quirk: `<fieldset>` imposes an
+            implicit `min-width: min-content` on itself that survives `display:
+            contents` in Chromium/WebKit, which was overflowing this grid and
+            clipping the right column's fields instead of letting them wrap —
+            confirmed against the real rendered UI, not a guess. */}
+        <fieldset disabled={locked} className="contents min-w-0">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <StudentTextFieldList form={form} fields={NAME_FIELDS} namespace="fields" />
             <FormField
