@@ -1,9 +1,13 @@
-import { screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
 
 import { Services, type StudentRecord } from "@/services";
 import { renderWithProviders } from "@/test-utils";
 import { StudentCreateProfileStep } from "../student-create-profile-step";
+import messages from "../../../../messages/en.json";
 
 jest.mock("@/services", () => ({
   Services: {
@@ -168,6 +172,53 @@ describe("StudentCreateProfileStep — create mode", () => {
     await waitFor(() => {
       expect(mockCreateStudent).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("never calls createStudent while locked, even with already-entered valid values", async () => {
+    // `locked` is the parent's own render-driven gate (true once the real
+    // `StudentCreateStepper` has already created this student and the user revisited
+    // Profile) — no test here ever set it, so this is its first direct coverage. The
+    // fieldset only disables once `locked` flips, so the fields are filled first
+    // (not locked yet) and `locked` is applied via `rerender` after — matching how
+    // the real stepper actually reaches this state (fill, submit succeeds, revisit).
+    // `renderWithProviders`'s own `rerender` drops providers on a bare re-render
+    // (same issue `student-create-stepper.test.tsx` hit), so this uses a local
+    // `wrapper` instead, same as that file's own fix.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        </NextIntlClientProvider>
+      );
+    }
+    const onSaved = jest.fn();
+    const { rerender } = render(
+      <StudentCreateProfileStep
+        mode="create"
+        onSaved={onSaved}
+        onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
+      />,
+      { wrapper: Wrapper },
+    );
+
+    await fillRequiredFields();
+    rerender(
+      <StudentCreateProfileStep
+        mode="create"
+        onSaved={onSaved}
+        onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
+        locked
+      />,
+    );
+    submitProfileForm();
+
+    await waitFor(() => {
+      expect(mockCreateStudent).not.toHaveBeenCalled();
+    });
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });
 
