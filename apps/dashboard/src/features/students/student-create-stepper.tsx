@@ -99,6 +99,7 @@ export function StudentCreateStepper({
   const [maxStepReached, setMaxStepReached] = useState(1);
   const [created, setCreated] = useState<CreatedStudent | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   // Both Profile footer buttons are `type="submit"` targeting the same external
   // `form="student-create-profile-step"` (Profile's own footer lives outside its
   // `<form>`, submitted by id) — this records which one was actually clicked so
@@ -267,6 +268,7 @@ export function StudentCreateStepper({
                 }
               }}
               onUploadingChange={setIsPhotoUploading}
+              onSavingChange={setIsSaving}
               locked={!isEdit && created !== null}
             />
           </div>
@@ -325,6 +327,7 @@ export function StudentCreateStepper({
               type="submit"
               form="student-create-profile-step"
               disabled={isPhotoUploading || editDetailQuery.isPending}
+              isLoading={isSaving}
               loadingLabel={t("form.submitting")}
             >
               {tCommon("save")}
@@ -351,6 +354,7 @@ export function StudentCreateStepper({
                 type="submit"
                 form="student-create-profile-step"
                 disabled={isPhotoUploading}
+                isLoading={isSaving}
                 loadingLabel={t("form.submitting")}
                 onClick={() => {
                   profileFinishIntentRef.current = false;

@@ -62,7 +62,7 @@ describe("Stepper", () => {
     const onValueChange = jest.fn();
     render(<ThreeStepStepper value={2} onValueChange={onValueChange} />);
 
-    await userEvent.click(screen.getAllByRole("tab")[0]);
+    await userEvent.click(screen.getAllByRole("tab")[0] as HTMLElement);
 
     expect(onValueChange).toHaveBeenCalledWith(1);
   });

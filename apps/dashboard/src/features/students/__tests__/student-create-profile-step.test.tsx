@@ -92,7 +92,12 @@ describe("StudentCreateProfileStep — create mode", () => {
     } as never);
     const onSaved = jest.fn();
     renderWithProviders(
-      <StudentCreateProfileStep mode="create" onSaved={onSaved} onUploadingChange={jest.fn()} />,
+      <StudentCreateProfileStep
+        mode="create"
+        onSaved={onSaved}
+        onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
+      />,
     );
 
     await fillRequiredFields();
@@ -117,7 +122,12 @@ describe("StudentCreateProfileStep — create mode", () => {
         }),
     );
     renderWithProviders(
-      <StudentCreateProfileStep mode="create" onSaved={jest.fn()} onUploadingChange={jest.fn()} />,
+      <StudentCreateProfileStep
+        mode="create"
+        onSaved={jest.fn()}
+        onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
+      />,
     );
 
     await fillRequiredFields();
@@ -148,6 +158,7 @@ describe("StudentCreateProfileStep — edit mode", () => {
         studentId="stu-1"
         onSaved={onSaved}
         onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
       />,
     );
 
@@ -182,6 +193,7 @@ describe("StudentCreateProfileStep — edit mode", () => {
         studentId="stu-1"
         onSaved={jest.fn()}
         onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
       />,
     );
 
@@ -204,6 +216,7 @@ describe("StudentCreateProfileStep — edit mode", () => {
         studentId="stu-1"
         onSaved={jest.fn()}
         onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
       />,
     );
 

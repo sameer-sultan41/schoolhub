@@ -58,6 +58,11 @@ export interface StudentCreateProfileStepProps {
   /** Passthrough of `StudentPhotoField`'s own upload-in-flight state, so the
    * stepper's external Next/Save button can disable itself during an upload. */
   onUploadingChange: (uploading: boolean) => void;
+  /** Passthrough of the create/update mutation's own `isPending`, so the
+   * stepper's external submit buttons can show a loading spinner — this
+   * component's own `<form>` has no footer of its own (see the form's closing
+   * comment), so the external buttons need the signal relayed to them. */
+  onSavingChange: (saving: boolean) => void;
   /** Create mode only: true once the stepper has already created this student
    * and the user has navigated back to Profile — the form stays mounted (so
    * its entered values survive) but every field is disabled: resubmitting
@@ -83,6 +88,7 @@ export function StudentCreateProfileStep({
   studentId,
   onSaved,
   onUploadingChange,
+  onSavingChange,
   locked = false,
 }: StudentCreateProfileStepProps) {
   const t = useTranslations("students");
@@ -169,6 +175,9 @@ export function StudentCreateProfileStep({
       }
     },
   });
+  useEffect(() => {
+    onSavingChange(mutation.isPending);
+  }, [mutation.isPending, onSavingChange]);
 
   // `StudentPhotoField` calls this as an upload starts. No stale-identity race to guard
   // against in either mode: both the create wizard and an edit session are mounted fresh
