@@ -122,14 +122,13 @@ test.describe("student creation stepper — view-only permissions", () => {
     await page.getByRole("option", { name: /^male$/i }).click();
     await page.getByRole("combobox", { name: /^campus$/i }).click();
     await page.getByRole("option", { name: "Main Campus" }).click();
-    await page.getByRole("button", { name: /^next$/i }).click();
-
-    await expect(page.getByRole("button", { name: /^finish$/i })).toBeVisible();
-    await expect(page.getByText(/guardians/i)).toHaveCount(0);
-
-    // Review Focus #2: closing right after Profile (no later step ever touched)
-    // still leaves the student created and visible in the directory.
+    // This permission set has no step past Profile, so its own submit button already
+    // reads "Finish" (not "Next") — there's no later step to advance into, and
+    // `onSaved` closes the wizard directly once this single submit succeeds (Review
+    // Focus #2: closing right after Profile, no later step ever touched, still
+    // leaves the student created and visible in the directory).
     await page.getByRole("button", { name: /^finish$/i }).click();
+
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByText("Bilal Ahmed")).toBeVisible();
   });

@@ -1,6 +1,12 @@
 import { expect, test } from "@/fixtures";
 import { buildUser, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
-import { buildCampus, buildStudent, schoolOrganizationModule, studentsModule } from "@/mocks";
+import {
+  buildCampus,
+  buildStudent,
+  schoolOrganizationModule,
+  studentRelationsModule,
+  studentsModule,
+} from "@/mocks";
 
 /**
  * The `/students` directory's add / withdraw journeys, plus a permission-gating check,
@@ -32,6 +38,11 @@ test.describe("students directory", () => {
       studentsModule({
         students: [buildStudent({ id: "student-0001", first_name: "Ayesha", last_name: "Khan" })],
       }),
+      // This permission set grants `students.student.update`, so the creation stepper
+      // advances past Profile to Emergency Contacts, which fetches this student's
+      // existing contacts — without this, that request reaches no stub and the
+      // `mockApi` fixture's own teardown check fails the test (confirmed on CI).
+      studentRelationsModule({}),
     );
     await studentsPage.goto();
   });
