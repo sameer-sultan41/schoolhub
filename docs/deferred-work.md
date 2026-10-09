@@ -750,14 +750,53 @@ either this file or `project-status.md`.
     other nine `core` packages join the override as they are typed (generate-baselines reports which).
   - Coverage floors to raise toward the 90% target: `apps/fees_finance` 85, `core/rbac` 80.
 
-- ~~**`e2e/tests/live/students-admission-enrollment.spec.ts` needs a rewrite...**~~ **Closed by
-  students Phase 3** (`docs/superpowers/plans/2026-10-07-students-phase3-enrollment.md`). The
-  spec now drives the real, shipped dashboard UI end to end: create student → link guardian →
-  add emergency contact → enroll → change section → request an inter-campus transfer → a
-  second, `principal` identity approves it → completes it → filters the live directory by the
-  transferred-from session, plus the real duplicate-admission rejection. `StudentDetailPage`
-  gained `changeSection`/`requestInterCampusTransfer`/`decideTransfer`/`completeTransfer`, and
-  `signInAsSecondIdentity`'s `SecondIdentity` return type gained `studentDetailPage`.
+- **The "Closed by students Phase 3" note this entry used to carry was itself stale, and
+  the real scope is bigger than that note implied — found while wiring the student
+  creation stepper's Task 7 ("drive the live admission journey through the creation
+  stepper"), left unfixed here because fixing it is a rewrite of its own, not a stepper
+  task.** `e2e/tests/live/students-admission-enrollment.spec.ts` is broken from its very
+  first step, not just at the detail-page navigation the old note called out:
+  - `openNewStudentForm()` clicks `page.getByRole("link", { name: "New student" })` — but
+    "New student" is a **button** that opens an in-page dialog (`StudentToolbar`,
+    confirmed against `apps/dashboard/src/features/students/student-toolbar.tsx` and
+    against `e2e/tests/dashboard/students.spec.ts`'s own working
+    `studentsPage.addStudentButton.click()`), not a link to a `/students/new` route. The
+    role query won't match anything.
+  - Even past that, the spec asserts `await expect(page).toHaveURL(/\/students\/
+    [0-9a-f-]{36}$/)` right after submitting, and its second identity reaches the same
+    record via `approver.studentDetailPage.goto({ path: new URL(page.url()).pathname })`
+    — both assume a routed `/students/{id}` page. That route does not exist:
+    `apps/dashboard/src/app/(app)/students/` has only a flat `page.tsx`, no `[id]`
+    segment, and nothing in `features/students/` ever calls `router.push`/renders an
+    `href` to such a path. The create dialog's (now `StudentCreateStepper`'s) success
+    handler just closes itself — it never navigates. The detail view
+    (`student-detail-sheet.tsx`) is a client-side `ResponsiveSheet` opened by clicking a
+    directory row, with no URL of its own.
+
+  `e2e/src/pages/dashboard/students.page.ts`'s own header comment already flags the
+  second half of this ("those two stay only for the live-lane
+  `students-admission-enrollment.spec.ts`, pending its own rewrite") — the deferred-work
+  entry was simply never updated to match when the dashboard moved off routed student
+  pages, so it read as closed when the underlying UI had already moved on, and nobody
+  had re-run this nightly-only spec since to notice.
+
+  Because the spec can't even open the creation form today, the student creation
+  stepper plan's Task 7 did **not** edit it — doing so would have meant rewriting the
+  whole journey (entry point, every `studentDetailPage.tab()` call, the second
+  identity's record access) with no live stack to verify any of it against, which is a
+  dedicated rewrite project of its own, not a one-task edit. What a rewrite needs: (1)
+  `openNewStudentForm()` replaced with a button click (`studentsPage.addStudentButton`,
+  same pattern the mocked lane already uses); (2) the post-create assertion pointed at
+  the stepper's `stepper.studentCreated` banner instead of a URL; (3) every
+  `studentDetailPage.tab("X").click()` that happens while the wizard is still open
+  (Guardians, Emergency Contacts, the Documents step the wizard always inserts before
+  Enrollment) replaced with the wizard's own Next button — change-section and
+  request-transfer need no extra navigation, since the wizard's Enrollment step renders
+  the same `StudentEnrollmentTab` the sheet does; (4) `StudentDetailPage`'s
+  `goto({path})` retired in favor of `StudentsPage.row(name).click()` for any
+  re-access after the wizard closes, including the second identity's — which needs
+  `SecondIdentity` (`src/fixtures/index.ts`) extended with a `studentsPage` of its own,
+  since it currently has none.
 
 - **A 422 duplicate-admission create response has no field for the override reason its own
   message promises.** `student_management`'s duplicate-admission check (same name + DOB)
