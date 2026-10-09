@@ -104,9 +104,12 @@ describe("StudentCreateStepper", () => {
     expect(screen.getByLabelText(/first name/i)).toBeDisabled();
     expect(mockCreateStudent).toHaveBeenCalledTimes(1);
 
-    // Moving forward again is a plain step change, not a resubmit.
+    // Moving forward again is a plain step change, not a resubmit. Profile
+    // itself is never unmounted (its own entered values have to survive a
+    // trip back to it) — just hidden via CSS — so this checks visibility,
+    // not DOM presence.
     await userEvent.click(screen.getByRole("button", { name: /^next$/i }));
-    expect(screen.queryByLabelText(/first name/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/first name/i)).not.toBeVisible();
     expect(mockCreateStudent).toHaveBeenCalledTimes(1);
   });
 
@@ -128,7 +131,12 @@ describe("StudentCreateStepper", () => {
     expect(guardiansTab).toBeEnabled();
     await userEvent.click(guardiansTab);
 
-    expect(screen.getByRole("button", { name: /link guardian/i })).toBeInTheDocument();
+    // Jumping back via the tab remounts `StudentGuardiansTab` fresh (its own
+    // conditional render unmounted it on advancing to Emergency Contacts) — its
+    // own data query needs a tick to resolve even when TanStack Query serves it
+    // from cache, unlike the synchronous assertions elsewhere in this file that
+    // never left and remounted this tab.
+    expect(await screen.findByRole("button", { name: /link guardian/i })).toBeInTheDocument();
   });
 
   it("lets the user finish right from Profile, skipping every later step", async () => {

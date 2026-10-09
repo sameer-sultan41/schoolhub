@@ -346,7 +346,9 @@ describe("StudentDetailSheet", () => {
 
     await userEvent.setup().click(await screen.findByRole("button", { name: /^edit$/i }));
 
-    expect(onEdit).toHaveBeenCalledWith("stu-9");
+    // Second argument is the tab the sheet was showing when Edit was clicked —
+    // "profile", the default, since this test never switches tabs.
+    expect(onEdit).toHaveBeenCalledWith("stu-9", "profile");
   });
 
   it("calls onWithdraw with the row's id and name when the footer's Withdraw button is clicked", async () => {
@@ -509,7 +511,7 @@ describe("StudentDetailSheet — mobile drawer", () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Edit" }));
-    expect(onEdit).toHaveBeenCalledWith("stu-9");
+    expect(onEdit).toHaveBeenCalledWith("stu-9", "profile");
 
     await user.click(screen.getByRole("button", { name: "Withdraw Ayesha Khan" }));
     expect(onWithdraw).toHaveBeenCalledWith("stu-9", "Ayesha Khan");
