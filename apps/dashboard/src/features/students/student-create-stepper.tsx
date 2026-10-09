@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Check } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Save } from "lucide-react";
 import {
   Button,
   Stepper,
@@ -127,7 +127,12 @@ export function StudentCreateStepper({
       ? [{ key: "emergencyContacts" as const, label: t("tabs.emergencyContacts") }]
       : []),
     ...(canViewDocuments ? [{ key: "documents" as const, label: t("tabs.documents") }] : []),
-    ...(canViewEnrollment ? [{ key: "enrollment" as const, label: t("stepper.enrollment") }] : []),
+    // `tabs.history`, not a separate `stepper.enrollment` string — this step
+    // renders the exact same `StudentEnrollmentTab` the detail sheet's own
+    // "History" tab does, and the sheet's Edit button can land a viewer on
+    // this same step from that same tab (`initialStepKey`), so the two must
+    // show one label, not two different ones for what's otherwise identical.
+    ...(canViewEnrollment ? [{ key: "enrollment" as const, label: t("tabs.history") }] : []),
   ];
   const lastStepNumber = steps.length;
   const currentKey = steps[activeStep - 1]?.key;
@@ -142,7 +147,15 @@ export function StudentCreateStepper({
     enabled: isEdit && !!studentId,
   });
   useEffect(() => {
-    if (!isEdit || !editDetailQuery.data || created !== null) return;
+    // `currentUser === undefined` also blocks seeding, not just `editDetailQuery.data`
+    // — `steps` (and so `lastStepNumber`/the landing index) depends on
+    // `hasPermission(currentUser, ...)`, and this effect only ever runs once
+    // (the `created !== null` guard below), so seeding before permissions have
+    // actually loaded would permanently lock in a `steps` array computed as if
+    // the viewer held none of them. `currentUser` is listed below so a render
+    // where it arrives *after* `editDetailQuery.data` already did still
+    // retries, rather than staying stuck on the unresolved early return here.
+    if (!isEdit || !editDetailQuery.data || currentUser === undefined || created !== null) return;
     const record = editDetailQuery.data;
     // Seeds `created`/unlocks every step the moment the existing record loads —
     // the one-time `created !== null` guard above is what keeps this from
@@ -157,12 +170,13 @@ export function StudentCreateStepper({
     setMaxStepReached(lastStepNumber);
     const wantedIndex = steps.findIndex((step) => step.key === (initialStepKey ?? "profile"));
     setActiveStep(wantedIndex === -1 ? 1 : wantedIndex + 1);
-    // `steps`/`lastStepNumber` are recomputed from permissions every render (a
-    // new array each time) — including them would re-run this effect on every
-    // render for no benefit, since the `created !== null` guard above already
-    // makes it fire exactly once, the first time the record's own data arrives.
+    // `steps`/`lastStepNumber` are themselves derived from `currentUser` (a new
+    // array each render) — listing `currentUser` above is what lets this retry
+    // once permissions load; listing the derived array too would just re-run
+    // this effect every render for no benefit, since the `created !== null`
+    // guard already makes it fire exactly once a real attempt succeeds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, editDetailQuery.data, created, initialStepKey]);
+  }, [isEdit, editDetailQuery.data, currentUser, created, initialStepKey]);
 
   function handleClose(nextOpen: boolean) {
     if (!nextOpen && !isEdit) {
@@ -316,6 +330,7 @@ export function StudentCreateStepper({
               point. */}
           {activeStep > 1 && (
             <Button type="button" variant="outline" onClick={goBack}>
+              <ChevronLeft className="size-4" aria-hidden="true" />
               {tCommon("previous")}
             </Button>
           )}
@@ -330,10 +345,40 @@ export function StudentCreateStepper({
               isLoading={isSaving}
               loadingLabel={t("form.submitting")}
             >
+              <Save className="size-4" aria-hidden="true" />
               {tCommon("save")}
             </Button>
           ) : currentKey === "profile" && !created ? (
             <>
+              {/* Both buttons target the same form by id, so a browser's implicit
+                  submission (pressing Enter in any text field) activates whichever
+                  one is FIRST in DOM order, regardless of visual position — the
+                  primary "Next"/"Finish" button renders first here for exactly
+                  that reason, with `order-*` restoring the intended visual order
+                  (secondary on the left, primary on the right) independently. */}
+              <Button
+                type="submit"
+                form="student-create-profile-step"
+                className="order-2"
+                disabled={isPhotoUploading}
+                isLoading={isSaving}
+                loadingLabel={t("form.submitting")}
+                onClick={() => {
+                  profileFinishIntentRef.current = false;
+                }}
+              >
+                {lastStepNumber >= 2 ? (
+                  <>
+                    {tCommon("next")}
+                    <ChevronRight className="size-4" aria-hidden="true" />
+                  </>
+                ) : (
+                  <>
+                    <Check className="size-4" aria-hidden="true" />
+                    {tCommon("finish")}
+                  </>
+                )}
+              </Button>
               {/* Same reasoning as the Finish button on every later step (below):
                   there's no reason to force a click through Guardians just to stop
                   — creating the student is already a complete, supported exit. */}
@@ -342,33 +387,49 @@ export function StudentCreateStepper({
                   type="submit"
                   form="student-create-profile-step"
                   variant="outline"
+                  className="order-1"
                   disabled={isPhotoUploading}
                   onClick={() => {
                     profileFinishIntentRef.current = true;
                   }}
                 >
+                  <Check className="size-4" aria-hidden="true" />
                   {tCommon("finish")}
                 </Button>
               )}
-              <Button
-                type="submit"
-                form="student-create-profile-step"
-                disabled={isPhotoUploading}
-                isLoading={isSaving}
-                loadingLabel={t("form.submitting")}
-                onClick={() => {
-                  profileFinishIntentRef.current = false;
-                }}
-              >
-                {lastStepNumber >= 2 ? tCommon("next") : tCommon("finish")}
-              </Button>
             </>
           ) : currentKey === "profile" ? (
-            // Revisited after creation: Profile is locked, so this is a plain
-            // step-forward click, never a resubmit.
-            <Button type="button" onClick={goNext}>
-              {activeStep >= lastStepNumber ? tCommon("finish") : tCommon("next")}
-            </Button>
+            <>
+              {/* Revisited after creation: Profile is locked, so both buttons
+                  below are plain step changes, never a resubmit — same shortcut
+                  every later step offers (below), which a locked revisit of
+                  Profile was missing before. */}
+              {activeStep < lastStepNumber && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    handleClose(false);
+                  }}
+                >
+                  <Check className="size-4" aria-hidden="true" />
+                  {tCommon("finish")}
+                </Button>
+              )}
+              <Button type="button" onClick={goNext}>
+                {activeStep >= lastStepNumber ? (
+                  <>
+                    <Check className="size-4" aria-hidden="true" />
+                    {tCommon("finish")}
+                  </>
+                ) : (
+                  <>
+                    {tCommon("next")}
+                    <ChevronRight className="size-4" aria-hidden="true" />
+                  </>
+                )}
+              </Button>
+            </>
           ) : (
             <>
               {/* Once Profile has created the real student, every later step is
@@ -384,6 +445,7 @@ export function StudentCreateStepper({
                     handleClose(false);
                   }}
                 >
+                  <Check className="size-4" aria-hidden="true" />
                   {tCommon("finish")}
                 </Button>
               )}
@@ -392,7 +454,17 @@ export function StudentCreateStepper({
                     has no step past Profile, so `onSaved` advances `activeStep`
                     to 2 with `lastStepNumber` still 1 — this button is the only
                     one rendered then, and must read "Finish", not "Next". */}
-                {activeStep >= lastStepNumber ? tCommon("finish") : tCommon("next")}
+                {activeStep >= lastStepNumber ? (
+                  <>
+                    <Check className="size-4" aria-hidden="true" />
+                    {tCommon("finish")}
+                  </>
+                ) : (
+                  <>
+                    {tCommon("next")}
+                    <ChevronRight className="size-4" aria-hidden="true" />
+                  </>
+                )}
               </Button>
             </>
           )}

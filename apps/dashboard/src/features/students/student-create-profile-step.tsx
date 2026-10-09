@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import {
   Alert,
   Form,
@@ -23,6 +24,7 @@ import {
 import { GENDER_VALUES } from "@schoolhub/types";
 
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useGuardedSubmit, useSubmitGuard } from "@/hooks/use-submit-guard";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
@@ -97,7 +99,7 @@ export function StudentCreateProfileStep({
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
-  const isSubmittingRef = useRef(false);
+  const submitGuard = useSubmitGuard();
   const [formError, setFormError] = useState<string | null>(null);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
   const [populatedStudentId, setPopulatedStudentId] = useState<string | null>(null);
@@ -119,6 +121,13 @@ export function StudentCreateProfileStep({
     queryFn: () => Services.schoolOrganization.fetchHouses(),
   });
 
+  // Same query key/fn as `StudentCreateStepper`'s own `editDetailQuery` (which
+  // needs this record too, to seed `created`/unlock every step) — TanStack
+  // Query dedupes identical keys into one shared cache entry and one
+  // in-flight request, so this never costs a second network call. Kept as its
+  // own `useQuery` here, rather than threading the parent's result down as a
+  // prop, so this component stays independently testable/usable without a
+  // `StudentCreateStepper` parent (its own test file renders it standalone).
   const detailQuery = useQuery({
     queryKey: queryKeys.detail("students", "students", studentId ?? ""),
     queryFn: () => Services.students.fetchStudentById(studentId as string),
@@ -151,6 +160,10 @@ export function StudentCreateProfileStep({
     onSuccess: (student) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.module("students") });
       void queryClient.invalidateQueries({ queryKey: queryKeys.module("dashboard") });
+      // The stepper itself gives create mode its own banner once this fires, but
+      // edit mode has no such feedback otherwise — without this, a successful
+      // Save looks identical to a silently-ignored click.
+      toast.success(mode === "create" ? t("form.createdToast") : t("form.updatedToast"));
       onSaved({
         id: student.id,
         campusId: student.campus_id,
@@ -189,30 +202,24 @@ export function StudentCreateProfileStep({
     return () => true;
   }
 
-  function onSubmit(event: SyntheticEvent) {
-    // Belt-and-braces alongside the disabled `<fieldset>`: a locked form has no
-    // real submit button rendered externally, but refuses an in-flight submit
-    // here too rather than trusting that alone.
-    if (locked || isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-    form
-      .handleSubmit(
-        (values) => {
-          mutation.mutate(values, {
-            onSettled: () => {
-              isSubmittingRef.current = false;
-            },
-          });
+  // `useGuardedSubmit` is this repo's own extracted double-submit guard
+  // (`use-submit-guard.ts`'s own doc comment: pulled out after four sibling
+  // dialogs each hand-wrote this ~20-line pattern). `onValid` resolves once
+  // `mutate`'s `onSettled` fires, success or failure alike, matching every
+  // other caller's own convention.
+  const onSubmit = useGuardedSubmit(form, submitGuard, (values) => {
+    // Belt-and-braces alongside the disabled `<fieldset>`: a locked form has
+    // no real submit button rendered externally, but refuses an in-flight
+    // submit here too rather than trusting that alone.
+    if (locked) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      mutation.mutate(values, {
+        onSettled: () => {
+          resolve();
         },
-        () => {
-          isSubmittingRef.current = false;
-        },
-      )(event)
-      .catch((error: unknown) => {
-        isSubmittingRef.current = false;
-        console.error(error);
       });
-  }
+    });
+  });
 
   if (isDetailLoading) {
     return <p className="text-sm text-muted-foreground">{tCommon("loading")}</p>;

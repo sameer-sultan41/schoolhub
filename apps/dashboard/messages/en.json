@@ -280,7 +280,6 @@
       "more": "More"
     },
     "stepper": {
-      "enrollment": "Enrollment",
       "studentCreated": "{name} has been created. You can close this wizard at any time — the changes you've made so far are saved."
     },
     "detail": {

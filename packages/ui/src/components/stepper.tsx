@@ -25,11 +25,19 @@
  *   `focusLast`/`indicators` removed — all four are non-optional in
  *   `StepperContextValue`, so the guards were always-true no-ops
  *   (`no-unnecessary-condition`).
+ * - `StepperTrigger` composes this package's own `Button` instead of a raw
+ *   `<button>` — the vendor source hand-rolls one, which violates this
+ *   package's own "never drop to a raw native element" rule. `variant="ghost"`
+ *   plus a `className` override resets `Button`'s own size-driven box model
+ *   (fixed height/padding, a background on hover) back to the vendor's bare,
+ *   content-sized trigger, since the trigger's visual shape comes entirely
+ *   from `StepperIndicator`'s own circle.
  */
 
 import * as React from "react";
 import { createContext, useContext } from "react";
 import { cn } from "../lib/cn";
+import { Button } from "./button";
 
 type StepperOrientation = "horizontal" | "vertical";
 type StepState = "active" | "completed" | "inactive" | "loading";
@@ -298,8 +306,10 @@ function StepperTrigger({
   }
 
   return (
-    <button
+    <Button
       ref={setBtnRef}
+      type="button"
+      variant="ghost"
       role="tab"
       id={id}
       aria-selected={isSelected}
@@ -309,7 +319,11 @@ function StepperTrigger({
       data-state={state}
       data-loading={isLoading}
       className={cn(
-        "inline-flex cursor-pointer items-center gap-3 rounded-full outline-none focus-visible:z-10 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60",
+        // Resets Button's own `size="md"` box model (fixed height/padding, a
+        // rounded-md background on hover) back to the vendor's original bare,
+        // content-sized trigger — the visual shape here comes entirely from
+        // `StepperIndicator`'s own circle, not from the trigger itself.
+        "h-auto w-auto justify-start gap-3 rounded-full bg-transparent p-0 hover:bg-transparent focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-ring/50",
         className,
       )}
       onClick={() => {
@@ -320,7 +334,7 @@ function StepperTrigger({
       {...props}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

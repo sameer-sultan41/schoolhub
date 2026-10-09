@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Tabs, TabsContent } from "@schoolhub/ui";
 
@@ -63,15 +63,22 @@ export function StudentDetailTabs({
 }: StudentDetailTabsProps) {
   const t = useTranslations("students");
 
-  const items: ResponsiveTabItem[] = [
-    { value: "profile", label: t("tabs.profile") },
-    ...(canViewGuardians ? [{ value: "guardians", label: t("tabs.guardians") }] : []),
-    ...(canViewEmergencyContacts
-      ? [{ value: "emergencyContacts", label: t("tabs.emergencyContacts") }]
-      : []),
-    ...(canViewDocuments ? [{ value: "documents", label: t("tabs.documents") }] : []),
-    ...(canViewEnrollment ? [{ value: "enrollment", label: t("tabs.history") }] : []),
-  ];
+  // Memoized: `ResponsiveTabsList`'s own measurement effect depends on `items`
+  // by reference, and remounting its `ResizeObserver` on every render (a new
+  // array literal each time) is wasted work for a list that only actually
+  // changes when the permission flags themselves do.
+  const items: ResponsiveTabItem[] = useMemo(
+    () => [
+      { value: "profile", label: t("tabs.profile") },
+      ...(canViewGuardians ? [{ value: "guardians", label: t("tabs.guardians") }] : []),
+      ...(canViewEmergencyContacts
+        ? [{ value: "emergencyContacts", label: t("tabs.emergencyContacts") }]
+        : []),
+      ...(canViewDocuments ? [{ value: "documents", label: t("tabs.documents") }] : []),
+      ...(canViewEnrollment ? [{ value: "enrollment", label: t("tabs.history") }] : []),
+    ],
+    [t, canViewGuardians, canViewEmergencyContacts, canViewDocuments, canViewEnrollment],
+  );
 
   return (
     <Tabs
