@@ -1,6 +1,12 @@
 import { expect, test } from "@/fixtures";
 import { buildUser, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
-import { buildCampus, buildStudent, schoolOrganizationModule, studentsModule } from "@/mocks";
+import {
+  buildCampus,
+  buildStudent,
+  schoolOrganizationModule,
+  studentRelationsModule,
+  studentsModule,
+} from "@/mocks";
 
 /**
  * The `/students` directory's add / withdraw journeys, plus a permission-gating check,
@@ -32,11 +38,16 @@ test.describe("students directory", () => {
       studentsModule({
         students: [buildStudent({ id: "student-0001", first_name: "Ayesha", last_name: "Khan" })],
       }),
+      // This permission set grants `students.student.update`, so the creation stepper
+      // advances past Profile to Emergency Contacts, which fetches this student's
+      // existing contacts — without this, that request reaches no stub and the
+      // `mockApi` fixture's own teardown check fails the test (confirmed on CI).
+      studentRelationsModule({}),
     );
     await studentsPage.goto();
   });
 
-  test("adds a student", async ({ page, studentsPage }) => {
+  test("adds a student through the creation stepper", async ({ page, studentsPage }) => {
     await studentsPage.addStudentButton.click();
     await page.getByLabel(/first name/i).fill("Bilal");
     await page.getByLabel(/last name/i).fill("Ahmed");
@@ -50,10 +61,10 @@ test.describe("students directory", () => {
     const request = page.waitForRequest(
       (r) => r.url().includes("/students") && r.method() === "POST",
     );
-    // Scoped to the open dialog, not a page-level `getByRole` — `StudentFormDialog`'s
-    // submit button shares its accessible name ("New student") with the toolbar's own
-    // trigger in create mode.
-    await studentsPage.formDialog.getByRole("button", { name: /new student/i }).click();
+    // This permission set grants Profile + Emergency Contacts only (no guardian/
+    // document/enrollment create permission) — Profile's own submit button reads
+    // "Next" since a later step exists.
+    await page.getByRole("button", { name: /^next$/i }).click();
 
     expect((await request).postDataJSON()).toMatchObject({
       first_name: "Bilal",
@@ -63,6 +74,10 @@ test.describe("students directory", () => {
       campus_id: "campus-0001",
       admission_date: "2026-03-01",
     });
+
+    // Now on Emergency Contacts, the wizard's last step for this permission set —
+    // closing here is a supported exit, not an abandoned operation.
+    await page.getByRole("button", { name: /^finish$/i }).click();
     await expect(studentsPage.row("Bilal Ahmed")).toBeVisible();
   });
 

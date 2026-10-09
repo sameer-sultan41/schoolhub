@@ -276,7 +276,11 @@
       "guardians": "Guardians",
       "emergencyContacts": "Emergency contacts",
       "documents": "Documents",
-      "history": "History"
+      "history": "History",
+      "more": "More"
+    },
+    "stepper": {
+      "studentCreated": "{name} has been created. You can close this wizard at any time — the changes you've made so far are saved."
     },
     "detail": {
       "title": "{name} — student details",
@@ -1171,6 +1175,7 @@
     "close": "Close",
     "next": "Next",
     "previous": "Previous",
+    "finish": "Finish",
     "noResults": "No records found.",
     "requiredField": "This field is required.",
     "details": "Details",

@@ -13,7 +13,7 @@ import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import { STUDENT_WITHDRAWABLE_STATUS } from "@/services/modules/students/students-constant";
-import { StudentFormDialog } from "./student-form-dialog";
+import { StudentCreateStepper } from "./student-create-stepper";
 
 type StatChipState =
   { status: "loading" } | { status: "unavailable" } | { status: "ready"; value: string };
@@ -146,7 +146,7 @@ export function StudentToolbar() {
           </span>
         </ToolbarActions>
       </Toolbar>
-      <StudentFormDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} mode="create" />
+      <StudentCreateStepper open={addDialogOpen} onOpenChange={setAddDialogOpen} />
     </>
   );
 }

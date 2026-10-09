@@ -226,8 +226,9 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 ## 20. Implementation notes
 
 **Dashboard, Phase 1 (as shipped).** `/students` ships a directory (`DataGrid`, search +
-status/campus/house filters), create/edit (`StudentFormDialog`, including the address
-fields), a flat read-only profile detail view (`StudentDetailSheet`: Personal, Academic and
+status/campus/house filters), create/edit (then `StudentFormDialog`, including the address
+fields — superseded by the creation stepper below, which also absorbed edit mode), a flat
+read-only profile detail view (`StudentDetailSheet`: Personal, Academic and
 Medical sections, the read-only admission number, and no address section yet), and
 withdrawal (`WithdrawStudentDialog`, single or bulk, offered only for `active` students and
 honoring `Idempotency-Key`). `photo_url` was added to `StudentSerializer`, mirroring
@@ -292,3 +293,33 @@ complete pickers, which show only the active/open set). A new shared `Responsive
 dialogs; the two pre-existing dialogs on the wrong breakpoint hook (`exit-staff-dialog.tsx`,
 `student-documents-tab.tsx`) were not migrated onto the new shared component in this phase — see
 `deferred-work.md`.
+
+**Dashboard, creation stepper (as shipped).** `/students`' "Add Student" entry point
+(`student-toolbar.tsx`) now opens `StudentCreateStepper`, a guided Profile → Guardians →
+Emergency Contacts → Documents → Enrollment wizard, replacing the single-page
+`StudentFormDialog` create flow entirely (deleted, along with its test file — its
+directory-table `"create"` call site was already dead code before this change) —
+implementing §7.1's admission sequence as one guided journey instead of a create dialog
+followed by separately opening the detail sheet's tabs. There is no atomic batch-create
+endpoint, so the Profile step creates the real student the moment it's submitted — every
+later step operates on an already-real record, and closing the wizard at any point is a
+supported exit, not an abandoned operation (a banner names the created student once
+Profile succeeds, create mode only). A step is omitted entirely, not shown disabled, when
+the viewer lacks its permission. Both Back and each step's own tab reach any
+already-visited step, Profile included — a `maxStepReached` high-water mark (not just the
+current step) tracks what's reachable so stepping back never shrinks it. Steps 2-5 reuse
+`StudentGuardiansTab`/`StudentEmergencyContactsTab`/`StudentDocumentsTab`/
+`StudentEnrollmentTab` unmodified — the same components the detail sheet's own tabs
+render. The `Stepper` presentational primitive (`packages/ui/src/components/stepper.tsx`)
+is a new Metronic port; each step's own trigger is clickable once reached, alongside
+Back/Next.
+
+**Dashboard, creation stepper also absorbs edit (as shipped).** `StudentCreateStepper`
+takes an optional `mode`/`studentId`/`initialStepKey`: in `"edit"` mode it opens on an
+already-real student instead of creating one — both the detail sheet's Edit button
+(landed on whichever tab the sheet was showing) and the directory row's own Edit action
+(always Profile) now open it this way, and `StudentFormDialog` is gone. Every step is
+reachable immediately in edit mode (no progress gating), Profile is never locked (resaving
+is the point, not a hazard the way a second `createStudent` call would be), and its save
+button reads "Save" rather than "Next"/"Finish". `StudentDetailTabs`' own tab state moved
+up into `student-detail-sheet.tsx` so its Edit button can read which tab is showing.

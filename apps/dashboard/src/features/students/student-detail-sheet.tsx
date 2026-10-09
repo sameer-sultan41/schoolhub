@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
@@ -15,22 +15,10 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  Badge,
-  BadgeDot,
-  Skeleton,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@schoolhub/ui";
+import { Avatar, AvatarFallback, AvatarImage, Badge, BadgeDot, Skeleton } from "@schoolhub/ui";
 
 import {
   ResponsiveSheet,
-  ResponsiveSheetBody,
   ResponsiveSheetContent,
   ResponsiveSheetTitle,
 } from "@/components/responsive-dialog";
@@ -44,17 +32,18 @@ import { formatLastUpdated } from "@/services/modules/students/students-helper";
 import type { StudentRow } from "@/services/modules/students/students-type";
 import { statusVariant } from "./student-columns";
 import { StudentDetailFooter } from "./student-detail-footer";
-import { StudentDocumentsTab } from "./student-documents-tab";
-import { StudentEmergencyContactsTab } from "./student-emergency-contacts-tab";
-import { StudentEnrollmentTab } from "./student-enrollment-tab";
-import { StudentGuardiansTab } from "./student-guardians-tab";
+import { StudentDetailTabs } from "./student-detail-tabs";
+import type { StepKey } from "./student-create-stepper";
 
 export interface StudentDetailSheetProps {
   row: StudentRow | null;
   canUpdate: boolean;
   canWithdraw: boolean;
   onOpenChange: (open: boolean) => void;
-  onEdit: (id: string) => void;
+  /** `initialStepKey` is whichever tab this sheet was showing when Edit was
+   * clicked — `StudentCreateStepper` (edit mode) opens landed on that same
+   * step instead of always starting at Profile. */
+  onEdit: (id: string, initialStepKey: StepKey) => void;
   onWithdraw: (id: string, name: string) => void;
 }
 
@@ -134,6 +123,15 @@ export function StudentDetailSheet({
   // context, which doesn't exist yet at this call site: this component is what RENDERS the
   // `ResponsiveSheet` below, so it sits outside that context, not inside it.
   const isDesktop = useIsDesktopShell();
+  // Lifted out of `StudentDetailTabs` (which now takes it as a controlled prop) so the
+  // Edit button below can read which tab is showing. `key={row.id}` on
+  // `StudentDetailTabs` no longer resets this on its own since the state itself lives up
+  // here now — this effect does that job instead.
+  const [activeTab, setActiveTab] = useState("profile");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveTab("profile");
+  }, [row?.id]);
   const { data: currentUser } = useCurrentUser();
   const canViewGuardians = hasPermission(currentUser, "students.guardian.view");
   const canViewEmergencyContacts = hasPermission(currentUser, "students.student.view");
@@ -209,6 +207,33 @@ export function StudentDetailSheet({
     },
   ];
 
+  const profileContent = detailQuery.isError ? (
+    <p className="text-sm text-muted-foreground">{t("detail.loadError")}</p>
+  ) : (
+    <>
+      {sections.map((section) => (
+        <FieldSection key={section.title} title={section.title}>
+          {section.fields.map((field) => (
+            <FieldRow
+              key={field.label}
+              icon={field.icon}
+              label={field.label}
+              value={field.value}
+              isPending={isPending}
+            />
+          ))}
+        </FieldSection>
+      ))}
+      {data ? (
+        <span className="text-xs text-muted-foreground">
+          {t("detail.lastUpdated", { when: formatLastUpdated(data.updated_at) })}
+        </span>
+      ) : (
+        <Skeleton className="h-3 w-32" />
+      )}
+    </>
+  );
+
   return (
     <ResponsiveSheet open={row !== null} onOpenChange={onOpenChange}>
       <ResponsiveSheetContent
@@ -253,113 +278,33 @@ export function StudentDetailSheet({
               </div>
             </div>
 
-            <Tabs defaultValue="profile" key={row.id} className="flex min-h-0 flex-1 flex-col">
-              {/* Four labels (worse in Urdu) risk overflowing a 375px mobile drawer —
-               * `overflow-x-auto` lets the list scroll horizontally rather than wrap or
-               * clip instead of silently assuming they always fit on one line. Verify
-               * visually at 375px in both locales during implementation. */}
-              <TabsList variant="line" className="shrink-0 overflow-x-auto px-6">
-                <TabsTrigger value="profile">{t("tabs.profile")}</TabsTrigger>
-                {canViewGuardians && (
-                  <TabsTrigger value="guardians">{t("tabs.guardians")}</TabsTrigger>
-                )}
-                {canViewEmergencyContacts && (
-                  <TabsTrigger value="emergencyContacts">{t("tabs.emergencyContacts")}</TabsTrigger>
-                )}
-                {canViewDocuments && (
-                  <TabsTrigger value="documents">{t("tabs.documents")}</TabsTrigger>
-                )}
-                {canViewEnrollment && (
-                  <TabsTrigger value="enrollment">{t("tabs.history")}</TabsTrigger>
-                )}
-              </TabsList>
-
-              <TabsContent value="profile" className="flex min-h-0 flex-1 flex-col">
-                <ResponsiveSheetBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
-                  {detailQuery.isError ? (
-                    <p className="text-sm text-muted-foreground">{t("detail.loadError")}</p>
-                  ) : (
-                    <>
-                      {sections.map((section) => (
-                        <FieldSection key={section.title} title={section.title}>
-                          {section.fields.map((field) => (
-                            <FieldRow
-                              key={field.label}
-                              icon={field.icon}
-                              label={field.label}
-                              value={field.value}
-                              isPending={isPending}
-                            />
-                          ))}
-                        </FieldSection>
-                      ))}
-                      {data ? (
-                        <span className="text-xs text-muted-foreground">
-                          {t("detail.lastUpdated", { when: formatLastUpdated(data.updated_at) })}
-                        </span>
-                      ) : (
-                        <Skeleton className="h-3 w-32" />
-                      )}
-                    </>
-                  )}
-                </ResponsiveSheetBody>
-              </TabsContent>
-
-              {canViewGuardians && (
-                <TabsContent value="guardians" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                    <StudentGuardiansTab
-                      studentId={row.id}
-                      canCreate={hasPermission(currentUser, "students.guardian.create")}
-                      canUpdate={hasPermission(currentUser, "students.guardian.update")}
-                    />
-                  </ResponsiveSheetBody>
-                </TabsContent>
-              )}
-
-              {canViewEmergencyContacts && (
-                <TabsContent value="emergencyContacts" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                    <StudentEmergencyContactsTab
-                      studentId={row.id}
-                      canCreate={hasPermission(currentUser, "students.student.update")}
-                    />
-                  </ResponsiveSheetBody>
-                </TabsContent>
-              )}
-
-              {canViewDocuments && (
-                <TabsContent value="documents" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                    <StudentDocumentsTab
-                      studentId={row.id}
-                      canCreate={hasPermission(currentUser, "students.document.create")}
-                      canVerify={hasPermission(currentUser, "students.document.verify")}
-                      canDelete={hasPermission(currentUser, "students.document.delete")}
-                    />
-                  </ResponsiveSheetBody>
-                </TabsContent>
-              )}
-
-              {canViewEnrollment && data && (
-                <TabsContent value="enrollment" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                    <StudentEnrollmentTab
-                      studentId={row.id}
-                      campusId={data.campus_id}
-                      permissions={enrollmentPermissions}
-                    />
-                  </ResponsiveSheetBody>
-                </TabsContent>
-              )}
-            </Tabs>
+            <StudentDetailTabs
+              key={row.id}
+              studentId={row.id}
+              profileContent={profileContent}
+              currentUser={currentUser}
+              canViewGuardians={canViewGuardians}
+              canViewEmergencyContacts={canViewEmergencyContacts}
+              canViewDocuments={canViewDocuments}
+              canViewEnrollment={canViewEnrollment}
+              enrollmentPermissions={enrollmentPermissions}
+              campusId={data?.campus_id}
+              activeTab={activeTab}
+              onActiveTabChange={setActiveTab}
+            />
 
             <StudentDetailFooter
               row={row}
               canUpdate={canUpdate}
               canWithdraw={canWithdraw}
               isDrawer={!isDesktop}
-              onEdit={onEdit}
+              onEdit={() => {
+                // `activeTab`'s value only ever comes from the literal tab keys
+                // `StudentDetailTabs` registers, which are exactly `StepKey`'s
+                // members — safe to assert, not safe to widen `onEdit`'s own
+                // signature to plain `string` just to avoid it.
+                onEdit(row.id, activeTab as StepKey);
+              }}
               onWithdraw={onWithdraw}
             />
           </>

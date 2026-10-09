@@ -46,6 +46,23 @@ export class StudentDetailPage extends BasePage {
     return this.page.getByRole("tab", { name, exact: true });
   }
 
+  /**
+   * `ResponsiveTabsList` (`apps/dashboard/src/components/responsive-tabs-list.tsx`) moves
+   * whichever trailing tabs don't fit the sheet's width into a "More" dropdown — with
+   * every relation tab granted, Documents and History reliably land there at this
+   * sheet's width. Overflowed items render as `menuitem`s, not `tab`s, so `tab()` alone
+   * times out once that happens; this clicks whichever one is actually there.
+   */
+  async openTab(name: "Guardians" | "Emergency contacts" | "Documents" | "History"): Promise<void> {
+    const tab = this.tab(name);
+    if (await tab.count()) {
+      await tab.click();
+      return;
+    }
+    await this.page.getByRole("button", { name: /^more$/i }).click();
+    await this.page.getByRole("menuitem", { name, exact: true }).click();
+  }
+
   private get alertDialog(): Locator {
     return this.page.getByRole("alertdialog");
   }

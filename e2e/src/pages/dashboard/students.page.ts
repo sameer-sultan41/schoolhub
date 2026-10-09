@@ -43,14 +43,4 @@ export class StudentsPage extends BasePage {
   rowAction(rowName: string, action: "Edit" | "Withdraw"): Locator {
     return this.row(rowName).getByRole("button", { name: new RegExp(`^${action} `) });
   }
-
-  /**
-   * The open create/edit dialog. `StudentFormDialog`'s submit button shares its
-   * accessible name ("New student") with the toolbar's own trigger in create mode —
-   * scope through here rather than a page-level `getByRole`, same reasoning as
-   * `StudentDetailPage`'s dialog-scoped locators.
-   */
-  get formDialog(): Locator {
-    return this.page.getByRole("dialog");
-  }
 }

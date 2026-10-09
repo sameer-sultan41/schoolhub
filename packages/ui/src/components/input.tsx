@@ -116,10 +116,13 @@ const inputWrapperVariants = cva(
   },
 );
 
+const PICKER_INPUT_TYPES = new Set(["date", "time", "datetime-local", "month", "week"]);
+
 function Input({
   className,
   type,
   variant,
+  onClick,
   ...props
 }: React.ComponentProps<"input"> & VariantProps<typeof inputVariants>) {
   return (
@@ -127,6 +130,22 @@ function Input({
       data-slot="input"
       type={type}
       className={cn(inputVariants({ variant }), className)}
+      onClick={(event) => {
+        // A native date/time input only opens its picker when the click lands on
+        // its own small built-in icon — clicking anywhere else in the field just
+        // places a text cursor, unlike every other input here, which responds to
+        // a click across its whole box. `showPicker()` (Baseline 2023) opens it
+        // from anywhere in the field instead, matching that expectation.
+        if (type && PICKER_INPUT_TYPES.has(type)) {
+          try {
+            event.currentTarget.showPicker();
+          } catch {
+            // Unsupported browser, or the picker is already open — either way,
+            // falling back to the native per-icon click behavior is harmless.
+          }
+        }
+        onClick?.(event);
+      }}
       {...props}
     />
   );

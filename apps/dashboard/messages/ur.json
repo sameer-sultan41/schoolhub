@@ -276,7 +276,11 @@
       "guardians": "سرپرست",
       "emergencyContacts": "ہنگامی رابطے",
       "documents": "دستاویزات",
-      "history": "تاریخچہ"
+      "history": "تاریخچہ",
+      "more": "مزید"
+    },
+    "stepper": {
+      "studentCreated": "{name} بن چکا ہے۔ آپ کسی بھی وقت یہ ونزرڈ بند کر سکتے ہیں — اب تک کی تبدیلیاں محفوظ ہو چکی ہیں۔"
     },
     "detail": {
       "title": "{name} — طالب علم کی تفصیلات",
@@ -1171,6 +1175,7 @@
     "close": "بند کریں",
     "next": "اگلا",
     "previous": "پچھلا",
+    "finish": "مکمل کریں",
     "noResults": "کوئی ریکارڈ نہیں ملا۔",
     "requiredField": "یہ خانہ ضروری ہے۔",
     "details": "تفصیلات",

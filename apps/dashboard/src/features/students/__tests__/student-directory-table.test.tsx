@@ -9,9 +9,9 @@ import { renderWithProviders } from "@/test-utils";
 
 import { StudentDirectoryTable } from "../student-directory-table";
 
-// `StudentFormDialog`, `StudentDetailSheet` and `WithdrawStudentDialog` all render from
-// this table and each fires its own (`enabled`-gated, in the detail sheet's and form
-// dialog's case) queries/mutations the instant they're opened — the mock object itself
+// `StudentCreateStepper` (edit mode), `StudentDetailSheet` and `WithdrawStudentDialog` all
+// render from this table and each fires its own (`enabled`-gated, in the detail sheet's and
+// edit stepper's case) queries/mutations the instant they're opened — the mock object itself
 // needs every one of these present (resolved to a sane default) or a test crashes with
 // "not a function" the moment a dialog opens, same reasoning as
 // `staff-directory-table.test.tsx`'s own mock.

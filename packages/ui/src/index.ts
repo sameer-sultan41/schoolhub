@@ -329,6 +329,26 @@ export {
 export { StatCard } from "./components/stat-card";
 export type { StatCardProps } from "./components/stat-card";
 
+export {
+  Stepper,
+  StepperContent,
+  StepperIndicator,
+  StepperItem,
+  StepperNav,
+  StepperPanel,
+  StepperSeparator,
+  StepperTitle,
+  StepperTrigger,
+  useStepItem,
+  useStepper,
+} from "./components/stepper";
+export type {
+  StepperContentProps,
+  StepperItemProps,
+  StepperProps,
+  StepperTriggerProps,
+} from "./components/stepper";
+
 export { Switch, SwitchIndicator, SwitchWrapper } from "./components/switch";
 
 // Toaster is NOT re-exported here — see @schoolhub/ui/toaster. sonner runs a
