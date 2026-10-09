@@ -100,6 +100,21 @@ describe("StudentCreateStepper", () => {
     expect(screen.queryByLabelText(/first name/i)).not.toBeInTheDocument();
   });
 
+  it("lets the user finish immediately from a middle step instead of clicking Next through the rest", async () => {
+    mockUseCurrentUser.mockReturnValue(
+      userWith(["students.student.create", "students.guardian.create", "students.student.update"]),
+    );
+    const onOpenChange = jest.fn();
+    renderWithProviders(<StudentCreateStepper open onOpenChange={onOpenChange} />);
+
+    await fillAndSubmitProfile();
+    // Now on Guardians (step 2 of 3) — a Finish button should be offered alongside
+    // Next, since every step past Profile is optional.
+    await userEvent.click(await screen.findByRole("button", { name: /^finish$/i }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it("resets to a fresh wizard on reopen (Review Focus #4)", async () => {
     mockUseCurrentUser.mockReturnValue(
       userWith(["students.student.create", "students.guardian.create"]),

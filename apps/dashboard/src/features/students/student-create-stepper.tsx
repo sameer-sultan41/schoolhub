@@ -213,9 +213,31 @@ export function StudentCreateStepper({ open, onOpenChange }: StudentCreateSteppe
               {tCommon("next")}
             </Button>
           ) : (
-            <Button type="button" onClick={goNext}>
-              {activeStep === lastStepNumber ? tCommon("finish") : tCommon("next")}
-            </Button>
+            <>
+              {/* Once Profile has created the real student, every later step is
+                  optional (Global Constraints) — a user who's done filling in
+                  whatever they wanted shouldn't have to click Next through the
+                  remaining steps just to close. Omitted on the last step, where
+                  the Next button below already finishes directly. */}
+              {activeStep < lastStepNumber && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    handleClose(false);
+                  }}
+                >
+                  {tCommon("finish")}
+                </Button>
+              )}
+              <Button type="button" onClick={goNext}>
+                {/* `>=`, not `===`: a viewer with only `students.student.create`
+                    has no step past Profile, so `onCreated` advances `activeStep`
+                    to 2 with `lastStepNumber` still 1 — this button is the only
+                    one rendered then, and must read "Finish", not "Next". */}
+                {activeStep >= lastStepNumber ? tCommon("finish") : tCommon("next")}
+              </Button>
+            </>
           )}
         </ResponsiveDialogFooter>
       </ResponsiveDialogContent>
