@@ -138,6 +138,37 @@ describe("StudentCreateProfileStep — create mode", () => {
       expect(mockCreateStudent).toHaveBeenCalledTimes(1);
     });
   });
+
+  it("does not call createStudent again from a submit landing right after success (Review Focus #1, render-timing gap)", async () => {
+    // Distinct from the rapid-double-click test above: that one covers two submits
+    // while the first is still *pending* (`submitGuard`'s own in-flight check). This
+    // one covers a submit landing *after* the first has already settled — the window
+    // `hasCreatedRef` exists for, since the parent's `locked` prop (not rendered by
+    // this standalone test at all) only reopens that door once a re-render the real
+    // `StudentCreateStepper` triggers from this same `onSuccess` has actually run.
+    mockCreateStudent.mockResolvedValue({ id: "s1", campus_id: "c1" } as never);
+    const onSaved = jest.fn();
+    renderWithProviders(
+      <StudentCreateProfileStep
+        mode="create"
+        onSaved={onSaved}
+        onUploadingChange={jest.fn()}
+        onSavingChange={jest.fn()}
+      />,
+    );
+
+    await fillRequiredFields();
+    submitProfileForm();
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+
+    submitProfileForm();
+
+    await waitFor(() => {
+      expect(mockCreateStudent).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe("StudentCreateProfileStep — edit mode", () => {
