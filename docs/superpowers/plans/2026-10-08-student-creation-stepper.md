@@ -19,6 +19,11 @@ id/campus back. A new `StudentCreateStepper` orchestrator owns step state and re
 
 **Spec:** `docs/superpowers/specs/2026-10-08-student-creation-stepper-design.md`
 
+**Work tier:** 2
+
+**Review:** waived by user — see the spec's own `**Review:**` line and this plan's
+"Outcome" section for the self-review that stood in for a `plan-reviewer` pass.
+
 ## Global Constraints
 
 - Edit mode is untouched — `student-form-dialog.tsx` is never modified by this plan.

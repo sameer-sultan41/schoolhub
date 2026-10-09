@@ -9,6 +9,12 @@
 
 **Work tier:** 2
 
+**Review:** waived by user — the user's explicit instruction for this phase was to
+compress brainstorming → spec → plan into a single cycle and proceed straight to
+implementation, with no `plan-reviewer` pass or further review rounds. See the
+spec's own "Independent review" section below and the plan's "Outcome" section for
+what stood in for it (self-review against this spec's own checklist).
+
 ## Context
 
 Today, creating a student (`StudentFormDialog`, `mode="create"`) captures only
