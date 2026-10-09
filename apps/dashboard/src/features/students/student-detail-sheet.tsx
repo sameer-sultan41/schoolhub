@@ -22,15 +22,10 @@ import {
   Badge,
   BadgeDot,
   Skeleton,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
 } from "@schoolhub/ui";
 
 import {
   ResponsiveSheet,
-  ResponsiveSheetBody,
   ResponsiveSheetContent,
   ResponsiveSheetTitle,
 } from "@/components/responsive-dialog";
@@ -44,10 +39,7 @@ import { formatLastUpdated } from "@/services/modules/students/students-helper";
 import type { StudentRow } from "@/services/modules/students/students-type";
 import { statusVariant } from "./student-columns";
 import { StudentDetailFooter } from "./student-detail-footer";
-import { StudentDocumentsTab } from "./student-documents-tab";
-import { StudentEmergencyContactsTab } from "./student-emergency-contacts-tab";
-import { StudentEnrollmentTab } from "./student-enrollment-tab";
-import { StudentGuardiansTab } from "./student-guardians-tab";
+import { StudentDetailTabs } from "./student-detail-tabs";
 
 export interface StudentDetailSheetProps {
   row: StudentRow | null;
@@ -71,7 +63,10 @@ function FieldRow({
 }) {
   return (
     <div className="flex min-w-0 items-start gap-2.5">
-      <Icon className="mt-0.5 size-4 shrink-0 text-primary/70" aria-hidden="true" />
+      <Icon
+        className="mt-0.5 size-4 shrink-0 text-primary/70"
+        aria-hidden="true"
+      />
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-xs text-muted-foreground">{label}</span>
         {isPending ? (
@@ -81,7 +76,10 @@ function FieldRow({
           // is wired up anywhere in this app yet, so this is the zero-dependency fix
           // rather than new app-wide infrastructure for one field. Matters most for
           // `medical_notes`, which can run well past what a ~190px grid cell shows.
-          <span className="truncate text-sm font-medium text-foreground" title={value || undefined}>
+          <span
+            className="truncate text-sm font-medium text-foreground"
+            title={value || undefined}
+          >
             {value || "—"}
           </span>
         )}
@@ -95,7 +93,13 @@ function FieldRow({
  * once, so `findByText` keeps finding a single match. Defined once so the two call
  * sites can't drift on variant/appearance/shape/children independently of each other;
  * only `className` (position-specific) varies per call. */
-function StatusBadge({ status, className }: { status: string; className?: string }) {
+function StatusBadge({
+  status,
+  className,
+}: {
+  status: string;
+  className?: string;
+}) {
   const t = useTranslations("students");
   return (
     <Badge
@@ -111,7 +115,13 @@ function StatusBadge({ status, className }: { status: string; className?: string
   );
 }
 
-function FieldSection({ title, children }: { title: string; children: ReactNode }) {
+function FieldSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -136,7 +146,10 @@ export function StudentDetailSheet({
   const isDesktop = useIsDesktopShell();
   const { data: currentUser } = useCurrentUser();
   const canViewGuardians = hasPermission(currentUser, "students.guardian.view");
-  const canViewEmergencyContacts = hasPermission(currentUser, "students.student.view");
+  const canViewEmergencyContacts = hasPermission(
+    currentUser,
+    "students.student.view",
+  );
   const canViewDocuments = hasPermission(currentUser, "students.document.view");
   // No dedicated students.enrollment.view/students.transfer.view key exists — both reuse
   // students.student.view, confirmed against the real permission registry.
@@ -170,44 +183,111 @@ export function StudentDetailSheet({
   // that's how the sheet renders its three headings.
   const sections: {
     title: string;
-    fields: { icon: LucideIcon; label: string; value: string | null | undefined }[];
+    fields: {
+      icon: LucideIcon;
+      label: string;
+      value: string | null | undefined;
+    }[];
   }[] = [
     {
       title: t("detail.personal"),
       fields: [
-        { icon: Hash, label: t("fields.admissionNumber"), value: data?.admission_number },
-        { icon: UserRound, label: t("fields.preferredName"), value: data?.preferred_name },
-        { icon: Calendar, label: t("fields.dateOfBirth"), value: data?.date_of_birth },
+        {
+          icon: Hash,
+          label: t("fields.admissionNumber"),
+          value: data?.admission_number,
+        },
+        {
+          icon: UserRound,
+          label: t("fields.preferredName"),
+          value: data?.preferred_name,
+        },
+        {
+          icon: Calendar,
+          label: t("fields.dateOfBirth"),
+          value: data?.date_of_birth,
+        },
         {
           icon: UserRound,
           label: t("fields.gender"),
           value: data ? t(`gender.${data.gender}`) : undefined,
         },
-        { icon: Building2, label: t("fields.nationality"), value: data?.nationality },
+        {
+          icon: Building2,
+          label: t("fields.nationality"),
+          value: data?.nationality,
+        },
         { icon: BookOpen, label: t("fields.religion"), value: data?.religion },
       ],
     },
     {
       title: t("detail.academic"),
       fields: [
-        { icon: Building2, label: t("fields.campus"), value: data?.campus_name },
+        {
+          icon: Building2,
+          label: t("fields.campus"),
+          value: data?.campus_name,
+        },
         { icon: Home, label: t("fields.house"), value: data?.house_name },
-        { icon: Calendar, label: t("fields.admissionDate"), value: data?.admission_date },
-        { icon: School, label: t("fields.previousSchool"), value: data?.previous_school },
+        {
+          icon: Calendar,
+          label: t("fields.admissionDate"),
+          value: data?.admission_date,
+        },
+        {
+          icon: School,
+          label: t("fields.previousSchool"),
+          value: data?.previous_school,
+        },
       ],
     },
     {
       title: t("detail.medical"),
       fields: [
-        { icon: Droplet, label: t("fields.bloodGroup"), value: data?.blood_group },
+        {
+          icon: Droplet,
+          label: t("fields.bloodGroup"),
+          value: data?.blood_group,
+        },
         {
           icon: FileText,
           label: t("fields.medicalNotes"),
-          value: hasMedicalNotesField ? data.medical_notes : t("fields.medicalNotesRestricted"),
+          value: hasMedicalNotesField
+            ? data.medical_notes
+            : t("fields.medicalNotesRestricted"),
         },
       ],
     },
   ];
+
+  const profileContent = detailQuery.isError ? (
+    <p className="text-sm text-muted-foreground">{t("detail.loadError")}</p>
+  ) : (
+    <>
+      {sections.map((section) => (
+        <FieldSection key={section.title} title={section.title}>
+          {section.fields.map((field) => (
+            <FieldRow
+              key={field.label}
+              icon={field.icon}
+              label={field.label}
+              value={field.value}
+              isPending={isPending}
+            />
+          ))}
+        </FieldSection>
+      ))}
+      {data ? (
+        <span className="text-xs text-muted-foreground">
+          {t("detail.lastUpdated", {
+            when: formatLastUpdated(data.updated_at),
+          })}
+        </span>
+      ) : (
+        <Skeleton className="h-3 w-32" />
+      )}
+    </>
+  );
 
   return (
     <ResponsiveSheet open={row !== null} onOpenChange={onOpenChange}>
@@ -216,7 +296,9 @@ export function StudentDetailSheet({
         className="gap-0 p-0 sm:w-[440px] sm:max-w-none [&_[data-slot=sheet-close]]:end-5 [&_[data-slot=sheet-close]]:top-5"
       >
         <ResponsiveSheetTitle className="sr-only">
-          {row ? t("detail.title", { name: row.name }) : t("detail.titleFallback")}
+          {row
+            ? t("detail.title", { name: row.name })
+            : t("detail.titleFallback")}
         </ResponsiveSheetTitle>
         {row && (
           <>
@@ -235,7 +317,11 @@ export function StudentDetailSheet({
                 }
               >
                 <AvatarImage src={row.signedPhotoUrl} alt="" />
-                <AvatarFallback className={isDesktop ? "text-lg font-semibold" : "font-semibold"}>
+                <AvatarFallback
+                  className={
+                    isDesktop ? "text-lg font-semibold" : "font-semibold"
+                  }
+                >
                   {getInitials(row.name)}
                 </AvatarFallback>
               </Avatar>
@@ -244,115 +330,34 @@ export function StudentDetailSheet({
                   <span className="text-mono truncate text-lg leading-none font-semibold text-foreground">
                     {row.name}
                   </span>
-                  {!isDesktop && <StatusBadge status={row.status} className="w-fit shrink-0" />}
+                  {!isDesktop && (
+                    <StatusBadge
+                      status={row.status}
+                      className="w-fit shrink-0"
+                    />
+                  )}
                 </div>
                 <span className="truncate text-sm text-muted-foreground">
                   {row.admissionNumber}
                 </span>
-                {isDesktop && <StatusBadge status={row.status} className="mt-1 w-fit" />}
+                {isDesktop && (
+                  <StatusBadge status={row.status} className="mt-1 w-fit" />
+                )}
               </div>
             </div>
 
-            <Tabs defaultValue="profile" key={row.id} className="flex min-h-0 flex-1 flex-col">
-              {/* Four labels (worse in Urdu) risk overflowing a 375px mobile drawer —
-               * `overflow-x-auto` lets the list scroll horizontally rather than wrap or
-               * clip instead of silently assuming they always fit on one line. Verify
-               * visually at 375px in both locales during implementation. */}
-              <TabsList variant="line" className="shrink-0 overflow-x-auto px-6">
-                <TabsTrigger value="profile">{t("tabs.profile")}</TabsTrigger>
-                {canViewGuardians && (
-                  <TabsTrigger value="guardians">{t("tabs.guardians")}</TabsTrigger>
-                )}
-                {canViewEmergencyContacts && (
-                  <TabsTrigger value="emergencyContacts">{t("tabs.emergencyContacts")}</TabsTrigger>
-                )}
-                {canViewDocuments && (
-                  <TabsTrigger value="documents">{t("tabs.documents")}</TabsTrigger>
-                )}
-                {canViewEnrollment && (
-                  <TabsTrigger value="enrollment">{t("tabs.history")}</TabsTrigger>
-                )}
-              </TabsList>
-
-              <TabsContent value="profile" className="flex min-h-0 flex-1 flex-col">
-                <ResponsiveSheetBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
-                  {detailQuery.isError ? (
-                    <p className="text-sm text-muted-foreground">{t("detail.loadError")}</p>
-                  ) : (
-                    <>
-                      {sections.map((section) => (
-                        <FieldSection key={section.title} title={section.title}>
-                          {section.fields.map((field) => (
-                            <FieldRow
-                              key={field.label}
-                              icon={field.icon}
-                              label={field.label}
-                              value={field.value}
-                              isPending={isPending}
-                            />
-                          ))}
-                        </FieldSection>
-                      ))}
-                      {data ? (
-                        <span className="text-xs text-muted-foreground">
-                          {t("detail.lastUpdated", { when: formatLastUpdated(data.updated_at) })}
-                        </span>
-                      ) : (
-                        <Skeleton className="h-3 w-32" />
-                      )}
-                    </>
-                  )}
-                </ResponsiveSheetBody>
-              </TabsContent>
-
-              {canViewGuardians && (
-                <TabsContent value="guardians" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                    <StudentGuardiansTab
-                      studentId={row.id}
-                      canCreate={hasPermission(currentUser, "students.guardian.create")}
-                      canUpdate={hasPermission(currentUser, "students.guardian.update")}
-                    />
-                  </ResponsiveSheetBody>
-                </TabsContent>
-              )}
-
-              {canViewEmergencyContacts && (
-                <TabsContent value="emergencyContacts" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                    <StudentEmergencyContactsTab
-                      studentId={row.id}
-                      canCreate={hasPermission(currentUser, "students.student.update")}
-                    />
-                  </ResponsiveSheetBody>
-                </TabsContent>
-              )}
-
-              {canViewDocuments && (
-                <TabsContent value="documents" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                    <StudentDocumentsTab
-                      studentId={row.id}
-                      canCreate={hasPermission(currentUser, "students.document.create")}
-                      canVerify={hasPermission(currentUser, "students.document.verify")}
-                      canDelete={hasPermission(currentUser, "students.document.delete")}
-                    />
-                  </ResponsiveSheetBody>
-                </TabsContent>
-              )}
-
-              {canViewEnrollment && data && (
-                <TabsContent value="enrollment" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsiveSheetBody className="flex-1 overflow-y-auto px-6 py-5">
-                    <StudentEnrollmentTab
-                      studentId={row.id}
-                      campusId={data.campus_id}
-                      permissions={enrollmentPermissions}
-                    />
-                  </ResponsiveSheetBody>
-                </TabsContent>
-              )}
-            </Tabs>
+            <StudentDetailTabs
+              key={row.id}
+              studentId={row.id}
+              profileContent={profileContent}
+              currentUser={currentUser}
+              canViewGuardians={canViewGuardians}
+              canViewEmergencyContacts={canViewEmergencyContacts}
+              canViewDocuments={canViewDocuments}
+              canViewEnrollment={canViewEnrollment}
+              enrollmentPermissions={enrollmentPermissions}
+              campusId={data?.campus_id}
+            />
 
             <StudentDetailFooter
               row={row}
