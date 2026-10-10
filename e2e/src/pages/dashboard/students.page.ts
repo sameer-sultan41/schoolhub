@@ -2,10 +2,10 @@ import type { Locator } from "@playwright/test";
 import { BasePage } from "../base.page";
 
 /**
- * `/students` — the directory table plus its toolbar (stat cards, New student) and its
- * two dialogs: create/edit (`StudentFormDialog`) and withdraw confirmation
- * (`WithdrawStudentDialog`, behind each row's "Withdraw" action). See
- * `apps/dashboard/src/features/students/`.
+ * `/students` — the directory table plus its toolbar (stat cards, Export CSV, Import CSV,
+ * New student) and its dialogs: create/edit (`StudentCreateStepper`), withdraw confirmation
+ * (`WithdrawStudentDialog`, behind each row's "Withdraw" action) and the shared bulk
+ * import dialog (`BulkImportDialog`). See `apps/dashboard/src/features/students/`.
  *
  * Distinct from `StudentFormPage`/`StudentDetailPage` (`./students/`), which still drive
  * the earlier `/students/new` and `/students/{id}` routes this phase replaced with
@@ -42,5 +42,41 @@ export class StudentsPage extends BasePage {
    */
   rowAction(rowName: string, action: "Edit" | "Withdraw"): Locator {
     return this.row(rowName).getByRole("button", { name: new RegExp(`^${action} `) });
+  }
+
+  // ---- Bulk operations: toolbar Export/Import, the import dialog, and ID cards ----
+
+  get exportCsvButton(): Locator {
+    return this.page.getByRole("button", { name: "Export CSV" });
+  }
+
+  get importCsvButton(): Locator {
+    return this.page.getByRole("button", { name: "Import CSV" });
+  }
+
+  get importDialog(): Locator {
+    return this.page.getByRole("dialog", { name: "Import students" });
+  }
+
+  get importFileInput(): Locator {
+    return this.importDialog.getByLabel("File");
+  }
+
+  get importSubmit(): Locator {
+    return this.importDialog.getByRole("button", { name: "Upload" });
+  }
+
+  /** The row's selection checkbox, named "Select this student" on every row — hence the
+   * row scope. */
+  selectRow(name: string | RegExp): Locator {
+    return this.row(name).getByRole("checkbox", { name: "Select this student" });
+  }
+
+  /** One button whose label tracks the job: "Generate ID cards (n)", then "Generating —
+   * n%", then (after a timeout or a failed poll) "Check ID-card status". */
+  get idCardsButton(): Locator {
+    return this.page.getByRole("button", {
+      name: /Generate ID cards|Generating|Check ID-card status/,
+    });
   }
 }
