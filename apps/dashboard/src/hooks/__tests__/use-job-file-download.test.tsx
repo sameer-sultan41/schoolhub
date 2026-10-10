@@ -13,6 +13,7 @@ import { useJobFileDownload, type JobFileDownloadMessages } from "../use-job-fil
 
 jest.mock("@/services", () => ({
   Services: { jobs: { fetchJob: jest.fn(), fetchFileDownloadUrl: jest.fn() } },
+  ApiError: jest.requireActual("@schoolhub/api-client").ApiError,
 }));
 
 jest.mock("sonner", () => ({
@@ -208,9 +209,11 @@ describe("useJobFileDownload", () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
-  it("treats a failed poll as stalled too: toasts failed, then run() re-checks the same job", async () => {
+  it("treats a transient poll failure as stalled too: toasts failed, then run() re-checks the same job", async () => {
     mockFetchJob
-      .mockRejectedValueOnce(new Error("network error"))
+      .mockRejectedValueOnce(
+        new ApiError({ code: "network_error", message: "offline", status: 0, url: "/jobs/job-4" }),
+      )
       .mockResolvedValue(jobRecord("job-4", "running"));
     const start = startReturning("job-4");
     const { result } = renderDownload(start);
@@ -234,6 +237,35 @@ describe("useJobFileDownload", () => {
     expect(result.current.isStalled).toBe(false);
     expect(start).toHaveBeenCalledTimes(1);
     expect(mockFetchJob.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("drops a job whose poll the server refused: not stalled, and run() starts a new job", async () => {
+    mockFetchJob.mockRejectedValue(
+      new ApiError({ code: "not_found", message: "Not found.", status: 404, url: "/jobs/job-r1" }),
+    );
+    const start = jest
+      .fn<Promise<{ jobId: string }>, []>()
+      .mockResolvedValueOnce({ jobId: "job-r1" })
+      .mockResolvedValueOnce({ jobId: "job-r2" });
+    const { result } = renderDownload(start);
+
+    act(() => {
+      result.current.run();
+    });
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(MESSAGES.failed);
+    });
+    expect(result.current.isStalled).toBe(false);
+    expect(result.current.isBusy).toBe(false);
+
+    act(() => {
+      result.current.run();
+    });
+
+    await waitFor(() => {
+      expect(start).toHaveBeenCalledTimes(2);
+    });
+    expect(mockFetchJob).toHaveBeenCalledWith("job-r2");
   });
 
   it("toasts job.error once when the job fails, even if a re-render changes the messages", async () => {

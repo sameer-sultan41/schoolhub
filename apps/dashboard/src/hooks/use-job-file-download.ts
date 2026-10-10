@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useJobPolling } from "@/hooks/use-job-polling";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { downloadFile } from "@/lib/helpers";
-import { Services } from "@/services";
+import { ApiError, Services } from "@/services";
 import type { ExportJobResult } from "@/services/modules/jobs/jobs-service";
 
 export interface JobFileDownloadMessages {
@@ -29,7 +29,7 @@ export interface UseJobFileDownloadOptions<TArgs> {
 }
 
 export interface JobFileDownload<TArgs> {
-  /** Starts a job — or, while one is stalled (timed out / poll error), resumes watching it. */
+  /** Starts a job — or, while one is stalled (timed out / transient poll error), resumes it. */
   run: (args: TArgs) => void;
   isBusy: boolean;
   isStalled: boolean;
@@ -65,7 +65,7 @@ export function useJobFileDownload<TArgs = void>({
     },
   });
 
-  const { job, isTimedOut, isError, resume } = useJobPolling(module, jobId, {
+  const { job, isTimedOut, isError, error, resume } = useJobPolling(module, jobId, {
     onTimedOut: () => {
       toast.error(messages.timedOut);
     },
@@ -73,9 +73,15 @@ export function useJobFileDownload<TArgs = void>({
       toast.error(messages.failed);
     },
   });
+  // The server definitively refused the poll (a 404/403, not a network blip or 5xx that
+  // outlasted the retries): there is no job left to resume, so it is dropped — the button
+  // re-enables and the next `run` starts a new one. Mirrors `BulkImportDialog`.
+  const isPollRefused = isError && !(error instanceof ApiError && error.isTransient);
   // True until the job reaches a real terminal state — broader than polling, which also
-  // stops on a timeout or failed poll while the job may still be running server-side.
-  const hasActiveJob = jobId !== null && job?.status !== "succeeded" && job?.status !== "failed";
+  // stops on a timeout or transient poll failure while the job may still be running
+  // server-side.
+  const hasActiveJob =
+    jobId !== null && job?.status !== "succeeded" && job?.status !== "failed" && !isPollRefused;
   // Unfinished but no longer watched: `run` resumes this job, since a fresh trigger would
   // overwrite `jobId` and orphan it.
   const isStalled = hasActiveJob && (isTimedOut || isError);
