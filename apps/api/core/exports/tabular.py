@@ -93,13 +93,15 @@ def _cell(value: object) -> str:
 _FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
 
 
-def _spreadsheet_safe(text: str) -> str:
+def spreadsheet_safe(text: str) -> str:
     """Neutralise a value a spreadsheet would otherwise execute as a formula.
 
     `remarks` is free text a teacher types at the register, so a remark reading
     `=HYPERLINK("http://evil","Click")` executes the moment someone opens the
     export in Excel, Sheets or LibreOffice — a client-side execution vector that
-    starts inside our own data and needs no other flaw.
+    starts inside our own data and needs no other flaw. The same holds for the
+    student and staff roster exports, whose names are user-typed and which write
+    cells directly rather than through `render`, so they call this themselves.
 
     The leading apostrophe is the standard mitigation: every major spreadsheet
     reads it as "the rest is text" and hides it in the cell. It does show in a
@@ -124,7 +126,7 @@ def _csv(rows: list[dict]) -> bytes:
     writer = csv.DictWriter(buffer, fieldnames=_headers(rows))
     writer.writeheader()
     writer.writerows(
-        {key: _spreadsheet_safe(_cell(value)) for key, value in row.items()} for row in rows
+        {key: spreadsheet_safe(_cell(value)) for key, value in row.items()} for row in rows
     )
     return buffer.getvalue().encode()
 
@@ -157,7 +159,7 @@ def _xlsx(rows: list[dict], *, title: str) -> bytes:
         # openpyxl writes a string beginning `=` as a *formula*, so this is
         # not merely defence against the reader's spreadsheet — it is what
         # stops us writing one ourselves.
-        sheet.append([_spreadsheet_safe(_cell(row.get(header))) for header in headers])
+        sheet.append([spreadsheet_safe(_cell(row.get(header))) for header in headers])
 
     for index, header in enumerate(headers, start=1):
         widest = max((len(_cell(row.get(header))) for row in rows), default=0)

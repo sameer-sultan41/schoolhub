@@ -51,6 +51,7 @@ from apps.school_organization.models import (
     Term,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
@@ -1021,15 +1022,9 @@ _TRUTHY = frozenset({"1", "true", "yes", "y", "t"})
 def parse_marks_import(*, filename: str, data: bytes) -> list[dict[str, str]]:
     """Parse a CSV or .xlsx marks sheet into row dicts.
 
-    Delegates to `student_management`'s parser rather than growing a third copy:
-    it already handles the BOM Excel's "CSV UTF-8" adds and the
-    read-only/data-only workbook flags, both of which are silently wrong in a
-    reimplementation. `attendance.parse_attendance_import` delegates to the
-    same one.
+    Delegates to `core.imports.tabular`, the parser every importer shares.
     """
-    from apps.student_management.services import parse_import_rows
-
-    return parse_import_rows(filename=filename, data=data)
+    return parse_rows(filename=filename, data=data)
 
 
 def _import_decimal(raw: str, field: str) -> tuple[object, str | None]:

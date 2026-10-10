@@ -21,6 +21,7 @@ from django.utils import timezone
 
 from apps.attendance import notifications, services
 from apps.attendance.models import AttendanceStatus, StudentAttendance
+from core.imports.tabular import ROW_NUMBER_KEY
 from core.jobs.models import BackgroundJob
 from core.jobs.services import mark_failed, mark_running, mark_succeeded, update_progress
 from core.tenancy.maintenance import for_each_tenant
@@ -332,11 +333,10 @@ def import_attendance_task(self, *, tenant_id: str, job_id: str, actor_id: str) 
         total = len(rows) or 1
         for index, row in enumerate(rows, start=1):
             with tenant_atomic(uuid.UUID(tenant_id)):
-                # +1 for the header line, so the row numbers in the error report
-                # match what a spreadsheet editor shows.
+                # The parser's row number, not index + 1, which drifts after a blank row.
                 error = services.import_attendance_row(
                     row=row,
-                    row_number=index + 1,
+                    row_number=int(row[ROW_NUMBER_KEY]),
                     session=session,
                     tenant_id=uuid.UUID(tenant_id),
                     actor_id=uuid.UUID(actor_id),

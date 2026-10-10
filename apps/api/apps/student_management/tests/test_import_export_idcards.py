@@ -13,6 +13,7 @@ import datetime
 import io
 from unittest.mock import patch
 
+import openpyxl
 from django.db import connection
 from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
@@ -50,10 +51,23 @@ class StudentManagementJobsAPITestCase(APITestCase):
 
 
 class StudentImportTests(StudentManagementJobsAPITestCase):
-    def _upload(self, content: str, filename: str = "students.csv"):
-        upload = io.BytesIO(content.encode())
+    HEADER = "first_name,last_name,date_of_birth,gender,campus_code,admission_date\n"
+
+    def _upload(self, content: str | bytes, filename: str = "students.csv"):
+        upload = io.BytesIO(content.encode() if isinstance(content, str) else content)
         upload.name = filename
         return self.client.post("/api/v1/student-imports", {"file": upload}, format="multipart")
+
+    def _job(self, content: str | bytes, filename: str = "students.csv") -> BackgroundJob:
+        response = self._upload(content, filename)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        with tenant_context(self.tenant.id):
+            return BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+
+    def _result(self, content: str | bytes, filename: str = "students.csv") -> dict:
+        job = self._job(content, filename)
+        self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
+        return job.result
 
     def test_imports_a_valid_row(self) -> None:
         self.allow("students.student.import")
@@ -134,6 +148,69 @@ class StudentImportTests(StudentManagementJobsAPITestCase):
         response = self._upload("first_name,last_name\n")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_rejects_a_gender_outside_the_choices(self) -> None:
+        self.allow("students.student.import")
+        result = self._result(self.HEADER + "Amina,Khan,2015-06-01,f,MAIN,2026-04-01\n")
+        self.assertEqual(result["errors"][0]["field"], "gender")
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Student.objects.filter(first_name="Amina").exists())
+
+    def test_accepts_gender_case_insensitively_and_stores_it_lowercase(self) -> None:
+        self.allow("students.student.import")
+        self._result(self.HEADER + "Amina,Khan,2015-06-01,Female,MAIN,2026-04-01\n")
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Student.objects.get(first_name="Amina").gender, Gender.FEMALE)
+
+    def test_a_bad_admission_date_is_reported_against_admission_date(self) -> None:
+        self.allow("students.student.import")
+        result = self._result(self.HEADER + "Amina,Khan,2015-06-01,female,MAIN,01/04/2026\n")
+        self.assertEqual(result["errors"][0]["field"], "admission_date")
+
+    def test_an_over_length_value_fails_only_its_row(self) -> None:
+        self.allow("students.student.import")
+        result = self._result(
+            self.HEADER
+            + f"{'A' * 101},Khan,2015-06-01,female,MAIN,2026-04-01\n"
+            + "Bilal,Rahman,2014-01-15,male,MAIN,2026-04-01\n"
+        )
+        self.assertEqual((result["succeeded"], result["errors"][0]["field"]), (1, "first_name"))
+
+    def test_a_soft_deleted_campus_code_is_not_matched(self) -> None:
+        self.allow("students.student.import")
+        with tenant_context(self.tenant.id):
+            CampusFactory(tenant=self.tenant, code="OLD", deleted_at=timezone.now())
+        result = self._result(self.HEADER + "Amina,Khan,2015-06-01,female,OLD,2026-04-01\n")
+        self.assertEqual(result["errors"][0]["field"], "campus_code")
+
+    def test_row_numbers_match_the_file_after_a_blank_line(self) -> None:
+        self.allow("students.student.import")
+        result = self._result(
+            self.HEADER
+            + "Amina,Khan,2015-06-01,female,MAIN,2026-04-01\n\n"
+            + "Bilal,,2014-01-15,male,MAIN,2026-04-01\n"
+        )
+        self.assertEqual(result["errors"][0]["row"], "4")
+
+    def test_a_misspelled_header_fails_the_job_with_one_readable_error(self) -> None:
+        self.allow("students.student.import")
+        job = self._job(
+            self.HEADER.replace("first_name", "First Name")
+            + "Amina,Khan,2015-06-01,female,MAIN,2026-04-01\n"
+        )
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertIn("first_name", job.error)
+
+    def test_imports_an_xlsx_with_real_date_cells(self) -> None:
+        self.allow("students.student.import")
+        workbook = openpyxl.Workbook()
+        workbook.active.append(self.HEADER.strip().split(","))
+        born, admitted = datetime.date(2015, 6, 1), datetime.date(2026, 4, 1)
+        workbook.active.append(["Amina", "Khan", born, "female", "MAIN", admitted])
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        result = self._result(buffer.getvalue(), filename="students.xlsx")
+        self.assertEqual((result["succeeded"], result["failed"]), (1, 0), result["errors"])
 
 
 class StudentExportTests(StudentManagementJobsAPITestCase):
@@ -252,6 +329,17 @@ class StudentExportTests(StudentManagementJobsAPITestCase):
             services.build_student_export_csv(tenant_id=self.tenant.id)
 
         self.assertEqual(len(small.captured_queries), len(larger.captured_queries))
+
+    def test_a_formula_shaped_name_is_neutralised(self) -> None:
+        with tenant_context(self.tenant.id):
+            StudentFactory(
+                tenant=self.tenant, campus=self.campus, first_name='=HYPERLINK("http://x")'
+            )
+
+        csv_bytes = services.build_student_export_csv(tenant_id=self.tenant.id)
+
+        rows = list(csv.reader(io.StringIO(csv_bytes.decode("utf-8"))))
+        self.assertEqual(rows[1][1], '\'=HYPERLINK("http://x")')
 
 
 class StudentExportStandaloneTests(TransactionTestCase):

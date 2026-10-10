@@ -305,6 +305,17 @@ class ImportEndpointTests(AttendanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
+    def test_row_numbers_in_the_error_report_survive_a_blank_line(self) -> None:
+        from core.jobs.models import BackgroundJob
+
+        response = self.upload(
+            content=b"admission_number,attendance_date,status\n\nNOPE,2026-04-01,bogus\n"
+        )
+
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.data["data"]["job_id"])
+        self.assertEqual(job.result["errors"][0]["row"], "3")
+
 
 class ImportOverwriteGuardTests(HistoricalImportTests):
     """The import upserts, so it can land on a row a human has already settled."""

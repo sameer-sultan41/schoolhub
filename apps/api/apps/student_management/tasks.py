@@ -13,6 +13,7 @@ import uuid
 
 from celery import shared_task
 
+from core.imports.tabular import parse_rows
 from core.jobs.models import BackgroundJob
 from core.jobs.services import mark_failed, mark_running, mark_succeeded, update_progress
 from core.tenancy.context import tenant_atomic
@@ -21,7 +22,7 @@ from core.tenancy.tasks import TenantAwareTask
 
 @shared_task(base=TenantAwareTask, bind=True)
 def import_students_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
-    from apps.student_management.services import import_student_row, parse_import_rows
+    from apps.student_management.services import REQUIRED_IMPORT_COLUMNS, import_student_row
 
     with tenant_atomic(uuid.UUID(tenant_id)):
         job = BackgroundJob.objects.get(pk=job_id)
@@ -29,19 +30,14 @@ def import_students_task(self, *, tenant_id: str, job_id: str, actor_id: str) ->
     try:
         filename = job.payload["filename"]
         data = base64.b64decode(job.payload["content_base64"])
-        rows = parse_import_rows(filename=filename, data=data)
+        rows = parse_rows(filename=filename, data=data, required_columns=REQUIRED_IMPORT_COLUMNS)
 
         errors: list[dict[str, str]] = []
         succeeded = 0
         total = len(rows) or 1
         for index, row in enumerate(rows, start=1):
-            # +1 for the header line, so row numbers match what a spreadsheet
-            # editor shows.
             error = import_student_row(
-                row=row,
-                row_number=index + 1,
-                tenant_id=uuid.UUID(tenant_id),
-                actor_id=uuid.UUID(actor_id),
+                row=row, tenant_id=uuid.UUID(tenant_id), actor_id=uuid.UUID(actor_id)
             )
             if error:
                 errors.append(error)

@@ -1,7 +1,8 @@
-"""Bulk staff import: file parsing plus the per-row create (module doc §16).
+"""Bulk staff import: the per-row create (module doc §16).
 
-Mirrors student_management's importer exactly (same two formats, same
-header-driven contract, same one-transaction-per-row independence).
+Mirrors student_management's importer (same two formats, same
+header-driven contract, same one-transaction-per-row independence); the file
+itself is read by `core.imports.tabular`, the parser every importer shares.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from django.db import IntegrityError
 
 from apps.staff_management.staff.services.create import create_staff
 from core.api.exceptions import DomainRuleViolation
+from core.imports.tabular import ROW_NUMBER_KEY
 from core.tenancy.context import tenant_atomic
 
 # Column mapping for arbitrary legacy headers is not built (same gap as
@@ -40,66 +42,6 @@ REQUIRED_IMPORT_COLUMNS = (
 )
 
 
-def parse_import_rows(*, filename: str, data: bytes) -> list[dict[str, str]]:
-    """Parse a staff-import file (CSV or .xlsx) into row dicts keyed by
-
-    IMPORT_COLUMNS's header names — mirrors student_management's parser
-    exactly (same two formats, same header-driven contract).
-    """
-    if filename.lower().endswith(".xlsx"):
-        return _parse_import_xlsx(data)
-    return _parse_import_csv(data)
-
-
-def _parse_import_csv(data: bytes) -> list[dict[str, str]]:
-    import csv
-    import io
-
-    # utf-8-sig strips a BOM if Excel's "CSV UTF-8" added one.
-    text = data.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text))
-    rows: list[dict[str, str]] = []
-    for row in reader:
-        entry = {k: (v or "") for k, v in row.items()}
-        # DictReader silently skips a fully blank physical line (row == []), so a plain
-        # by-position index would drift from the real file row the moment one appears.
-        # reader.line_num already accounts for every line consumed, skipped or not.
-        entry["__row_number__"] = str(reader.line_num)
-        rows.append(entry)
-    return rows
-
-
-def _parse_import_xlsx(data: bytes) -> list[dict[str, str]]:
-    import io
-
-    import openpyxl
-
-    workbook = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-    sheet = workbook.active
-    rows_iter = sheet.iter_rows(values_only=True)
-    header = [str(cell).strip() if cell is not None else "" for cell in next(rows_iter)]
-
-    rows: list[dict[str, str]] = []
-    for sheet_row, values in enumerate(rows_iter, start=2):  # header occupies row 1
-        if all(value is None for value in values):
-            # Skipped, not appended — a plain by-position index into `rows` would
-            # otherwise drift from the real sheet row the moment one of these appears.
-            # __row_number__ below is what keeps every downstream error message correct.
-            continue
-        try:
-            entry = {
-                header[i]: ("" if values[i] is None else str(values[i])) for i in range(len(header))
-            }
-        except IndexError:
-            # A row with fewer trailing cells than the header — record it as a
-            # per-row error instead of failing the whole import (see
-            # import_staff_row's matching __parse_error__ check below).
-            entry = {"__parse_error__": f"Row {sheet_row} has fewer columns than the header row."}
-        entry["__row_number__"] = str(sheet_row)
-        rows.append(entry)
-    return rows
-
-
 def import_staff_row(
     *, row: dict[str, str], tenant_id: uuid.UUID, actor_id: uuid.UUID
 ) -> dict[str, str] | None:
@@ -107,21 +49,19 @@ def import_staff_row(
 
     Returns ``None`` on success, or ``{"row", "field", "issue"}`` on failure.
     Each row commits (or rolls back) independently — one bad row must not
-    abort the whole batch, mirroring import_student_row exactly.
+    abort the whole batch, as import_student_row does (which additionally checks gender,
+    each date and column lengths — see docs/deferred-work.md).
 
-    The reported row number comes from ``row["__row_number__"]`` (set by both
-    ``_parse_import_csv`` and ``_parse_import_xlsx``) rather than the row's position in
-    the parsed list — a blank physical row is silently dropped by both parsers, so a
+    The reported row number comes from ``row[ROW_NUMBER_KEY]`` (set by
+    ``core.imports.tabular`` for both CSV and .xlsx) rather than the row's position in
+    the parsed list — a blank physical row is silently dropped by the parser, so a
     by-position index would drift from the real file row after the first one.
     """
     import datetime
 
     from apps.school_organization.models import Campus
 
-    row_number = row["__row_number__"]
-
-    if "__parse_error__" in row:
-        return {"row": row_number, "field": "non_field", "issue": row["__parse_error__"]}
+    row_number = row[ROW_NUMBER_KEY]
 
     missing = [column for column in REQUIRED_IMPORT_COLUMNS if not row.get(column)]
     if missing:

@@ -99,7 +99,7 @@ ignore_errors = true
 # Every function must be typed (ENGINEERING_STANDARDS.md §2). A per-package ratchet: these are the
 # core packages that already pass (CI report, 2026-09-26); add a package the moment it does, never
 # remove one. generate-baselines.yml's Python job reports which packages are clean.
-module = ["core.common.*", "core.documents.*", "core.money.*"]
+module = ["core.common.*", "core.documents.*", "core.imports.*", "core.money.*"]
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]

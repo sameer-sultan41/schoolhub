@@ -108,6 +108,19 @@ class StaffImportTests(StaffManagementJobsAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_a_misspelled_header_fails_the_job_with_one_readable_error(self) -> None:
+        self.allow("staff.staff.import")
+        response = self._upload(
+            "First Name,last_name,staff_type,campus_code,joining_date,phone\n"
+            "Amina,Khan,teaching,MAIN,2026-04-01,+923001234567\n"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertIn("first_name", job.error)
+
 
 class StaffExportTests(StaffManagementJobsAPITestCase):
     def test_exports_staff_to_a_ready_file(self) -> None:
@@ -214,6 +227,15 @@ class StaffExportTests(StaffManagementJobsAPITestCase):
             build_staff_export_csv(tenant_id=self.tenant.id)
 
         self.assertEqual(len(small.captured_queries), len(larger.captured_queries))
+
+    def test_a_formula_shaped_name_is_neutralised(self) -> None:
+        with tenant_context(self.tenant.id):
+            StaffFactory(tenant=self.tenant, campus=self.campus, first_name="@SUM(A1)")
+
+        csv_bytes = build_staff_export_csv(tenant_id=self.tenant.id)
+
+        rows = list(csv.reader(io.StringIO(csv_bytes.decode("utf-8"))))
+        self.assertEqual(rows[1][1], "'@SUM(A1)")
 
 
 class StaffExportStandaloneTests(TransactionTestCase):

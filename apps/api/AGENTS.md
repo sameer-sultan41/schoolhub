@@ -26,6 +26,7 @@ core/api/          response envelope, error handler, pagination, throttling, bas
 core/files/        presigned uploads, signed download/display URLs, storage abstraction
 core/documents/    escape-by-default HTML helpers + the WeasyPrint PDF renderer
 core/exports/      exports (CSV, XLSX, PDF) behind the 202 + job lane
+core/imports/      bulk-import file parsing (CSV, XLSX), shared by every importer
 core/jobs/         the job resource for long-running operations (202 + polling)
 core/idempotency/  Idempotency-Key replay for mutating colon-actions (money, enrol, transfers, …)
 core/money/        money primitives shared by finance code

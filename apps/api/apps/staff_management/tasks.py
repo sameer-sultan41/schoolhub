@@ -12,6 +12,7 @@ import uuid
 
 from celery import shared_task
 
+from core.imports.tabular import parse_rows
 from core.jobs.models import BackgroundJob
 from core.jobs.services import mark_failed, mark_running, mark_succeeded, update_progress
 from core.tenancy.context import tenant_atomic
@@ -21,8 +22,8 @@ from core.tenancy.tasks import TenantAwareTask
 @shared_task(base=TenantAwareTask, bind=True)
 def import_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
     from apps.staff_management.staff.services.import_staff import (
+        REQUIRED_IMPORT_COLUMNS,
         import_staff_row,
-        parse_import_rows,
     )
 
     with tenant_atomic(uuid.UUID(tenant_id)):
@@ -31,7 +32,7 @@ def import_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
     try:
         filename = job.payload["filename"]
         data = base64.b64decode(job.payload["content_base64"])
-        rows = parse_import_rows(filename=filename, data=data)
+        rows = parse_rows(filename=filename, data=data, required_columns=REQUIRED_IMPORT_COLUMNS)
 
         errors: list[dict[str, str]] = []
         succeeded = 0
