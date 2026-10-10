@@ -563,7 +563,10 @@ class MarksImportTests(MarksTestCase):
     def test_a_misspelled_header_fails_the_job_with_one_readable_error(self) -> None:
         from core.jobs.models import BackgroundJob, JobStatus
 
-        response = self.upload(b"Admission Number,theory_marks\nX,60\n")
+        # The view queues the task with transaction.on_commit, which a rolled-back test only runs
+        # when the callbacks are captured and executed.
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.upload(b"Admission Number,theory_marks\nX,60\n")
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         with tenant_context(self.tenant.id):

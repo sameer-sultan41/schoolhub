@@ -262,10 +262,14 @@ describe("StudentToolbar", () => {
       data: userWith("students.student.export"),
       isError: false,
     });
+    const { ApiError } = jest.requireActual<{ ApiError: new (init: unknown) => Error }>(
+      "@schoolhub/api-client",
+    );
     resolveStats();
     mockTriggerStudentExport.mockResolvedValue({ jobId: "job-export-3" });
     mockFetchJob
-      .mockRejectedValueOnce(new Error("network error"))
+      // Status 0 is a transient network failure, so the job stays resumable (a 404/403 drops it).
+      .mockRejectedValueOnce(new ApiError({ code: "network_error", message: "x", status: 0 }))
       .mockResolvedValue(exportJob("job-export-3", "succeeded", "f3"));
     mockFetchFileDownloadUrl.mockResolvedValue("https://storage.test/students-export.csv");
     jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
