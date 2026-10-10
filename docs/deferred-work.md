@@ -702,17 +702,12 @@ either this file or `project-status.md`.
   via boto3's `upload_fileobj`) instead of `bytes`, which is a `core/files` change affecting every
   caller of `create_ready_file()`, not just these two exports — out of scope for that fix.
 
-- **CSV formula injection in the staff/student full-tenant exports.** `build_staff_export_csv`/
-  `build_student_export_csv` write `first_name`/`last_name` straight into `csv.writer` rows with no
-  escaping. `core.exports.tabular` already has a `_spreadsheet_safe` helper for exactly this (a
-  leading `=`/`+`/`-`/`@` in a cell opens it as a formula in Excel/Sheets), but these two builders
-  don't route through it. A staff/student record writable by one role (e.g. `school_admin` creating
-  a student) and exported by another (`hr_staff`/`it_admin`) lets a crafted name become a live
-  formula — e.g. a `HYPERLINK(...)` that exfiltrates neighboring rows' data — the moment the
-  exported file is opened. Fix: make `_spreadsheet_safe` (or an equivalent per-cell escape) public
-  and apply it to every written cell in both builders' loops, without routing through
-  `tabular.render` (which takes `list[dict]` and would re-materialize the whole export in memory).
-  Flagged by `fix/stream-bulk-exports`'s review as a pre-existing gap, not a regression it introduced.
+- ~~**CSV formula injection in the staff/student full-tenant exports**~~ **Closed by students
+  Phase 4.** `core.exports.tabular.spreadsheet_safe` is now public, and `build_staff_export_csv`/
+  `build_student_export_csv` pass every data cell through it inside their own row loops — not
+  through `tabular.render`, so the exports still stream instead of re-materializing as `list[dict]`.
+  A crafted `first_name`/`last_name` starting with `=`/`+`/`-`/`@` now exports as text, not a live
+  formula.
 
 - **Staff/student exports hold a pooled DB connection for the whole export.**
   `build_staff_export_csv`/`build_student_export_csv` keep one `tenant_atomic` transaction open
@@ -923,8 +918,9 @@ either this file or `project-status.md`.
   new object reference for an unchanged record, e.g. the photo URL's signature rotating)
   silently calls `form.reset()` over whatever the user is mid-typing, discarding unsaved
   edits. Not fixed here: this bug is pre-existing and unrelated to anything this PR changed
-  in `/staff` (unlike `staff-import-dialog.tsx`'s scroll-region fix, which addressed a real
-  regression this PR's own shared `DialogContent` change introduced). The fix is the same
+  in `/staff` (unlike the import dialog's scroll-region fix, which addressed a real
+  regression this PR's own shared `DialogContent` change introduced; that dialog is now the
+  shared `BulkImportDialog`). The fix is the same
   guard students' own version now has: add `populatedStaffId !== staffDetailQuery.data.id`
   to the `if`, and add `populatedStaffId` to the effect's dependency array.
 
@@ -960,7 +956,13 @@ either this file or `project-status.md`.
   for every document-bearing endpoint to carry its own permission key — `core/files`'
   generic routes do not yet). Closing this means adding an owning-permission check to
   `FileViewSet`'s list and download, keyed by each file's `purpose` — not something to
-  improvise inside one module's PR.
+  improvise inside one module's PR. The same gap covers whole-roster files: any staff role
+  holding `platform.file.view` can also list and download the `student.export`,
+  `student.id-card-batch` and `staff.export` purposes, which are whole-roster PII (every
+  student's or staff member's record in one file). Students Phase 4 adds the first dashboard
+  buttons that generate the two student ones but changes nothing in `core/files`; these
+  purposes need the same per-purpose permission check (`students.student.export`,
+  `students.id-card.generate`, `staff.staff.export`).
 
 - **The students Phase 2 branch's final pre-PR review (`change-reviewer`, round 8) found
   eleven gaps** — two Medium-severity bugs (`guardian-picker-dialog.tsx`'s retry-safety
@@ -1050,3 +1052,77 @@ either this file or `project-status.md`.
     formatting to next-intl's own `useFormatter().dateTime(...)`, which formats through
     `Intl` using the active locale directly — a larger change than this phase's scope.
 
+- **No import template download.** `BulkImportDialog` lists a module's required and optional
+  column names as badges and nothing more; a registrar still builds the header row by hand,
+  although module doc §8's migration journey starts from "downloads the import template". A
+  downloadable blank template is a small follow-up per importer, fed from the same column
+  lists the dialog already takes as props.
+
+- **Students import covers students only, not guardians or enrollment.** The importer
+  (`import_student_row`) creates `Student` rows only. Module doc §9 lists guardians and
+  enrollments as bulk-import inputs too, and §8's migration journey uploads "students +
+  guardians"; a school moving a whole register still adds those by hand. Both need a row format
+  that links several records (a guardian shared by siblings, a section chosen by code) — a
+  design of its own, not a column added to this one.
+
+- **ID cards print no photo, school name or logo.** `render_id_cards_pdf` renders the student's
+  name, admission number, campus name and a QR code only, although `uploads.py` describes the
+  student photo as "also printed on ID cards". Printing them needs the photo fetched from
+  storage per card and a per-tenant card header (school name, logo) that the renderer does not
+  read today.
+
+- **ID-card generation writes no audit record.** `StudentImportViewSet` and
+  `StudentExportViewSet` call `record_audit`; `IdCardGenerateViewSet` does not, although a batch
+  card run puts a roster's names and admission numbers into one downloadable PDF. Adding it
+  mirrors those two views: a `record_audit` call in `create`, carrying the job id and the
+  number of students requested.
+
+- **The `students.import-result` notification (§12) is not emitted.** The module doc lists
+  "Import completed/failed" to the importing user, in-app. Nothing calls `notify()` from
+  `import_students_task`, so the importer learns the outcome only by keeping the dialog (or its
+  background job) open — the dashboard's "Run in background" reconnects, but nothing pushes.
+
+- **The staff importer has no per-column length pre-check, `DataError` backstop or per-date
+  error field.** `import_student_row` now checks each text column against the model's
+  `max_length` and catches `DataError`, so an over-long value fails only its own row.
+  `import_staff_row` has neither: an over-long value raises a `DataError` that only the task's
+  blanket handler catches, so the job ends `failed` (rows already imported stay) instead of
+  reporting that one row. It also wraps both date parses in one `try` and reports a bad
+  `date_of_birth` as `joining_date` — the mislabel `import_student_row` no longer has.
+
+- **Attendance and examinations importers do not pass `required_columns` to `parse_rows`.** Only
+  the student and staff importers do (ADR-0023), so a misspelled header in an attendance or
+  marks sheet still yields one error per row instead of one readable sentence. Both already
+  declare their required columns (`REQUIRED_IMPORT_COLUMNS` in `attendance/services.py`,
+  `REQUIRED_MARKS_IMPORT_COLUMNS` in `examinations/services.py`); each only has to pass them
+  to `parse_rows`, plus a job-level test like the student one.
+
+- **No live-lane journey for import, export or ID cards.** Students Phase 4's coverage is
+  mocked Playwright (`e2e/tests/dashboard/students-bulk.spec.ts`) plus backend tests that run the
+  Celery tasks eagerly; nothing drives a real worker, real storage and a real download in the
+  compose stack. The path where a file lands in storage with its `Content-Disposition` and a
+  browser downloads it is exercised only by hand.
+
+- **The fees settlement CSV adapter numbers rows by position.** `GenericCsvAdapter.parse`
+  (`apps/api/apps/fees_finance/adapters/generic_csv.py`) keeps its own reader and numbers rows
+  with `enumerate(reader, start=2)`, so a blank line in a settlement file shifts every later
+  row number — the drift `core/imports` fixed for the four import tasks (ADR-0023). Fix: use
+  `reader.line_num` there, or move the adapter onto `core.imports.tabular`.
+
+- **`core/imports` reads CSV row numbers through a `DictReader` side effect.**
+  `_parse_csv` takes `reader.line_num` after each row; it is only right after a blank line
+  because the next `reader.fieldnames` access re-syncs it, which is an implementation detail
+  of CPython's `csv` module. `test_csv_row_numbers_survive_a_blank_line` pins it today.
+  Reading the underlying reader's counter (`reader.reader.line_num`) needs no side effect.
+
+- **A refused job poll leaves the export and ID-card buttons on "Check ... status".**
+  `use-job-file-download.ts` treats every poll error as a stall that `run()` resumes. If the job
+  is gone or not the caller's (404/403), the button resumes the same dead job until the page
+  reloads. `BulkImportDialog` already tells a refused poll (`isPollRefused`) from a transient
+  one; the hook could do the same and start a fresh job instead. It behaves like `/staff`'s
+  original export did, and `GET /jobs/{id}` is scoped to the creator, so it is rare.
+
+- **The ID-card button loses its job when the students directory query fails.**
+  `StudentIdCardsButton` keeps an in-flight job across selection changes and paging, but the
+  table returns its error card early when the directory query fails, which unmounts the button
+  and drops the pending download. It is the same per-mount job state as navigating away.
