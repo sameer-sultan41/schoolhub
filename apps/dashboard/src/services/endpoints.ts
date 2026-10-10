@@ -99,6 +99,16 @@ export const endpoints = {
     history: (id: string) => `/students/${id}/history`,
     emergencyContacts: (studentId: string) => `/students/${studentId}/emergency-contacts`,
     documents: (studentId: string) => `/students/${studentId}/documents`,
+    /** `POST /student-imports` (multipart)/`POST /student-exports` -> `202` + job
+     * (`apps/api/apps/student_management/urls.py`) — poll it via `jobs.detail` below. */
+    imports: "/student-imports",
+    exports: "/student-exports",
+  },
+  /** A colon-action on the collection, not a nested path — the real registered route is
+   * `POST /id-cards:generate` (`apps/api/apps/student_management/urls.py`) -> `202` + job
+   * whose result is one merged PDF. `POST` only. */
+  idCards: {
+    generate: "/id-cards:generate",
   },
   /** Top-level access to a single document — `DELETE` and the `:verify`/`:download`
    * colon-actions. Upload (create) always goes through the nested `students.documents`

@@ -42,6 +42,7 @@ import { toStudentRow } from "@/services/modules/students/students-helper";
 import type { StudentRow } from "@/services/modules/students/students-type";
 import { StudentCreateStepper, type StepKey } from "./student-create-stepper";
 import { StudentDetailSheet } from "./student-detail-sheet";
+import { StudentIdCardsButton } from "./student-id-cards-button";
 import { WithdrawStudentDialog } from "./withdraw-student-dialog";
 import { StudentDirectoryFilters } from "./student-directory-filters";
 import { useStudentColumns } from "./student-columns";
@@ -151,6 +152,7 @@ export function StudentDirectoryTable() {
   const { data: currentUser } = useCurrentUser();
   const canUpdate = hasPermission(currentUser, "students.student.update");
   const canWithdraw = hasPermission(currentUser, "students.student.withdraw");
+  const canGenerateIdCards = hasPermission(currentUser, "students.id-card.generate");
 
   // Referentially stable across renders (empty deps) so `useStudentColumns`'s own
   // `useMemo` actually skips recomputation on a parent re-render that doesn't touch
@@ -260,6 +262,11 @@ export function StudentDirectoryTable() {
                 </div>
               </CardHeading>
               <CardToolbar>
+                {/* Every selected row, unlike withdraw's active-only subset: the backend
+                    renders an ID card for any live student. */}
+                {canGenerateIdCards && (
+                  <StudentIdCardsButton studentIds={selected.map((s) => s.id)} />
+                )}
                 {selectedWithdrawable.length > 0 && canWithdraw && (
                   <m.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
                     <Button

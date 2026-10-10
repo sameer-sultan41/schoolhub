@@ -27,6 +27,12 @@ describe("endpoints", () => {
     expect(endpoints.dashboard.staffExit("staff-1")).toBe("/staff/staff-1:exit");
   });
 
+  it("declares the student bulk-operation paths, ID cards as a colon-action", () => {
+    expect(endpoints.students.imports).toBe("/student-imports");
+    expect(endpoints.students.exports).toBe("/student-exports");
+    expect(endpoints.idCards.generate).toBe("/id-cards:generate");
+  });
+
   it("builds the presigned-upload paths, confirm as a colon-action not a nested path", () => {
     expect(endpoints.files.create).toBe("/files");
     expect(endpoints.files.confirm("file-1")).toBe("/files/file-1:confirm");

@@ -92,15 +92,17 @@ export const EXIT_TYPE_OPTIONS = [
 
 export const EXIT_REASON_MAX_LENGTH = 300;
 
-export const ACCEPTED_EXTENSIONS = ".csv,.xlsx";
+/** The download-name hint for the staff CSV export (see `downloadFile`). */
+export const STAFF_EXPORT_FILENAME = "staff-export.csv";
+
 /** Per user as well as per tab: a different sign-in in the same tab never reconnects
  * to someone else's import. */
-export const ACTIVE_JOB_STORAGE_PREFIX = "schoolhub:staff-import-job:";
+export const STAFF_IMPORT_JOB_STORAGE_PREFIX = "schoolhub:staff-import-job:";
 /** Mirrors `REQUIRED_IMPORT_COLUMNS`/`IMPORT_COLUMNS`
  * (`apps/api/apps/staff_management/staff/services/import_staff.py`) verbatim — shown
  * so the person picking a file knows the header row's exact contract before they
  * upload it. */
-export const REQUIRED_COLUMNS = [
+export const STAFF_IMPORT_REQUIRED_COLUMNS = [
   "first_name",
   "last_name",
   "staff_type",
@@ -108,7 +110,7 @@ export const REQUIRED_COLUMNS = [
   "joining_date",
   "phone",
 ];
-export const OPTIONAL_COLUMNS = ["gender", "date_of_birth", "email", "national_id"];
+export const STAFF_IMPORT_OPTIONAL_COLUMNS = ["gender", "date_of_birth", "email", "national_id"];
 
 /**
  * Which predicate `toStaffBody` (`staff-helper.ts`) applies to a field's value before

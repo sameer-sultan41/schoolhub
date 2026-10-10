@@ -1,5 +1,5 @@
 import type { AuthenticatedUser } from "@schoolhub/types";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
@@ -38,6 +38,7 @@ jest.mock("@/services", () => ({
       fetchStaffTypeCount: jest.fn(),
       fetchStaffDirectory: jest.fn().mockResolvedValue([]),
       triggerStaffExport: jest.fn(),
+      triggerStaffImport: jest.fn(),
     },
     jobs: { fetchJob: jest.fn(), fetchFileDownloadUrl: jest.fn() },
   },
@@ -359,7 +360,10 @@ describe("StaffToolbar", () => {
     });
     await user.click(importButton);
 
-    expect(await screen.findByRole("dialog", { name: "Import staff" })).toBeInTheDocument();
+    // The staff column lists (not another module's) reach the shared dialog.
+    const dialog = await screen.findByRole("dialog", { name: "Import staff" });
+    expect(within(dialog).getByText("staff_type")).toBeInTheDocument();
+    expect(within(dialog).getByText("national_id")).toBeInTheDocument();
   });
 
   it('"Export CSV" shows a timeout toast when the export job never finishes', async () => {

@@ -1,4 +1,4 @@
-import { formatDate, stableSignedUrl } from "../helpers";
+import { downloadFile, formatDate, stableSignedUrl } from "../helpers";
 
 /** A SigV4-shaped link for `path`, signed at `signedAt` (UTC) and valid for `ttlSeconds`. */
 function signedLink(path: string, signedAt: string, ttlSeconds = 3600) {
@@ -51,6 +51,33 @@ describe("stableSignedUrl", () => {
 
     expect(stableSignedUrl(second, T0)).toBe(second);
     expect(stableSignedUrl(null, T0)).toBeNull();
+  });
+});
+
+describe("downloadFile", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("clicks a transient anchor pointing at the URL, with the filename hint", () => {
+    const click = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    downloadFile("https://storage.test/o/1", "students-export.csv");
+
+    // Jest records the receiver (`this`) in `mock.contexts`, not `mock.instances`.
+    const anchor = click.mock.contexts[0] as HTMLAnchorElement;
+    expect(anchor.href).toBe("https://storage.test/o/1");
+    expect(anchor.download).toBe("students-export.csv");
+  });
+
+  it("leaves the filename hint off when none is given", () => {
+    const click = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    downloadFile("https://storage.test/o/2");
+
+    const anchor = click.mock.contexts[0] as HTMLAnchorElement;
+    expect(anchor.href).toBe("https://storage.test/o/2");
+    expect(anchor.hasAttribute("download")).toBe(false);
   });
 });
 

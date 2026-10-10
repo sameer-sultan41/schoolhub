@@ -22,7 +22,8 @@ export function Toolbar({ children }: { children?: ReactNode }) {
 }
 
 export function ToolbarActions({ children }: { children?: ReactNode }) {
-  return <div className="flex items-center gap-2.5">{children}</div>;
+  // `flex-wrap`: three or more buttons (four labels in Urdu) overflow a 375px viewport.
+  return <div className="flex flex-wrap items-center gap-2.5">{children}</div>;
 }
 
 export function ToolbarHeading({ title = "", description, inline = false }: ToolbarHeadingProps) {

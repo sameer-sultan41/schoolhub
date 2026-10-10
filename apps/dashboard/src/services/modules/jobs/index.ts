@@ -10,5 +10,6 @@ export type {
   ExportJobResult,
   ImportJobResult,
   ImportRowError,
+  JobAccepted,
   JobStatus,
 } from "./jobs-service";

@@ -84,6 +84,9 @@ describe("Services", () => {
     expect(typeof Services.students.enrollStudent).toBe("function");
     expect(typeof Services.students.changeStudentSection).toBe("function");
     expect(typeof Services.students.fetchStudentHistory).toBe("function");
+    expect(typeof Services.students.triggerStudentImport).toBe("function");
+    expect(typeof Services.students.triggerStudentExport).toBe("function");
+    expect(typeof Services.students.generateIdCards).toBe("function");
 
     expect(typeof Services.studentTransfers.fetchStudentTransfers).toBe("function");
     expect(typeof Services.studentTransfers.requestTransfer).toBe("function");

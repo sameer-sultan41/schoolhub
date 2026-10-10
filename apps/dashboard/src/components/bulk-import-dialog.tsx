@@ -6,12 +6,6 @@ import {
   AlertDescription,
   Badge,
   Button,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Input,
   Label,
   Progress,
@@ -26,37 +20,55 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
+import {
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/responsive-dialog";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobPolling } from "@/hooks/use-job-polling";
 import { useSessionStorageState } from "@/hooks/use-session-storage-state";
+import { IMPORT_FILE_EXTENSIONS } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
-import { ApiError, Services } from "@/services";
+import { ApiError } from "@/services";
 import type { ImportJobResult } from "@/services/modules/jobs/jobs-service";
-import {
-  ACCEPTED_EXTENSIONS,
-  ACTIVE_JOB_STORAGE_PREFIX,
-  OPTIONAL_COLUMNS,
-  REQUIRED_COLUMNS,
-} from "@/services/modules/staff/staff-constant";
 
-export interface StaffImportDialogProps {
+export interface BulkImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Query-key root: the job watch's, and what a successful import invalidates (plus "dashboard"). */
+  module: string;
+  title: string;
+  description: string;
+  requiredColumns: readonly string[];
+  optionalColumns: readonly string[];
+  /** Per-module sessionStorage prefix; the signed-in user's id is appended. */
+  storageKeyPrefix: string;
+  start: (file: File) => Promise<{ jobId: string }>;
 }
 
 /**
- * File picker -> `POST /staff-imports` -> poll -> per-row result. Ported from this
- * app's own earlier `features/staff/import-wizard.tsx` (removed in the unrelated
- * shell-reset commit `9548054`) — same `useTranslations`/error-code-mapping/
- * columns-hint/Table-based result shape, adapted from a full page into a dialog and
- * onto the current `Services.staff`/`useJobPolling` API. Mirrors
- * `exit-staff-dialog.tsx`'s partial-success handling (a succeeded count and a failed
- * count are never mutually exclusive — `import_staff_task` commits each row
- * independently).
+ * File picker -> `start` (a `202 + job` import endpoint) -> poll -> per-row result, shared
+ * by every module's bulk import. Mirrors `exit-staff-dialog.tsx`'s partial-success handling
+ * (a succeeded count and a failed count are never mutually exclusive — the import task
+ * commits each row independently).
  */
-export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps) {
-  const t = useTranslations("staff");
+export function BulkImportDialog({
+  open,
+  onOpenChange,
+  module,
+  title,
+  description,
+  requiredColumns,
+  optionalColumns,
+  storageKeyPrefix,
+  start,
+}: BulkImportDialogProps) {
+  const t = useTranslations("bulkImport");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const fileInputId = useId();
@@ -70,7 +82,7 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
   const { data: currentUser } = useCurrentUser();
   const [mountJobId, setMountJobId] = useState<string | null>(null);
   const [storedJobId, setStoredJobId] = useSessionStorageState(
-    currentUser ? `${ACTIVE_JOB_STORAGE_PREFIX}${currentUser.id}` : null,
+    currentUser ? `${storageKeyPrefix}${currentUser.id}` : null,
   );
   const jobId = mountJobId ?? storedJobId;
   function setJobId(next: string | null) {
@@ -79,7 +91,7 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
   }
 
   const trigger = useMutation({
-    mutationFn: (selected: File) => Services.staff.triggerStaffImport(selected),
+    mutationFn: (selected: File) => start(selected),
     // Also fires if this component unmounted mid-upload (a `useMutation`-level
     // callback, not a `mutate()` one) — the server created the job either way, so it
     // is persisted for the next mount to reconnect to rather than silently lost.
@@ -91,13 +103,12 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
     },
     onError: (error: unknown) => {
       // A field-level detail (e.g. the size-cap check's `{"file": "Import file
-      // exceeds..."}`, a real `domain_rule_violation` — `apps/api/apps/
-      // staff_management/staff/viewset.py:236-239`) is the useful text; the code's
+      // exceeds..."}`, a real `domain_rule_violation`) is the useful text; the code's
       // own mapped message ("That action isn't allowed right now.") is deliberately
       // generic because that one code covers many unrelated business rules. Prefer
       // the field detail, then the code mapping, then the raw message — never invent
       // one (Hard Rule 4).
-      toast.error(resolveErrorMessage(error, tErrors, t("import.startFailed"), "file"));
+      toast.error(resolveErrorMessage(error, tErrors, t("startFailed"), "file"));
     },
   });
 
@@ -110,12 +121,12 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
     isTimedOut,
     isError,
     error: pollError,
-  } = useJobPolling("staff", open ? jobId : null, {
+  } = useJobPolling(module, open ? jobId : null, {
     onTimedOut: () => {
-      toast.error(t("import.timedOut"));
+      toast.error(t("timedOut"));
     },
     onError: () => {
-      toast.error(t("import.failed"));
+      toast.error(t("failed"));
     },
   });
   const result = job?.status === "succeeded" ? (job.result as ImportJobResult | null) : null;
@@ -134,7 +145,7 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
   const isPollRefused = isError && !(pollError instanceof ApiError && pollError.isTransient);
   const canReconnect = hasActiveJob && !isPollRefused;
 
-  // Depends only on `job` (plus the stable `queryClient`/`t`) — never on a value
+  // Depends only on `job` (plus the stable `queryClient`/`t`/`module`) — never on a value
   // derived from `job` inside the body — so `react-hooks/exhaustive-deps` is
   // satisfied without a disable comment. `job`'s reference changes on every poll
   // while running, so this re-runs on each tick, but the status checks below are
@@ -143,14 +154,14 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
     if (job?.status === "succeeded") {
       const succeededResult = job.result as ImportJobResult | null;
       if (succeededResult && succeededResult.succeeded > 0) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.module("staff") });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.module(module) });
         void queryClient.invalidateQueries({ queryKey: queryKeys.module("dashboard") });
       }
     }
     if (job?.status === "failed") {
-      toast.error(job.error ?? t("import.failed"));
+      toast.error(job.error ?? t("failed"));
     }
-  }, [job, queryClient, t]);
+  }, [job, queryClient, t, module]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     setFile(event.target.files?.[0] ?? null);
@@ -179,22 +190,22 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
   const isBusy = trigger.isPending || hasActiveJob;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent closeLabel={t("import.close")} showCloseButton={!trigger.isPending}>
-        <DialogHeader>
-          <DialogTitle>{t("import.title")}</DialogTitle>
-        </DialogHeader>
-        <DialogBody className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("import.description")}</p>
+    <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+      <ResponsiveDialogContent closeLabel={t("close")} showCloseButton={!trigger.isPending}>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{title}</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogBody className="space-y-4">
+          <p className="text-sm text-muted-foreground">{description}</p>
 
           <div className="space-y-1.5">
-            <p className="text-sm font-medium text-foreground">{t("import.templateTitle")}</p>
-            <p className="text-sm text-muted-foreground">{t("import.templateHint")}</p>
+            <p className="text-sm font-medium text-foreground">{t("templateTitle")}</p>
+            <p className="text-sm text-muted-foreground">{t("templateHint")}</p>
             <div className="flex flex-wrap gap-1.5">
-              {REQUIRED_COLUMNS.map((column) => (
+              {requiredColumns.map((column) => (
                 <Badge key={column}>{column}</Badge>
               ))}
-              {OPTIONAL_COLUMNS.map((column) => (
+              {optionalColumns.map((column) => (
                 <Badge key={column} variant="outline">
                   {column}
                 </Badge>
@@ -203,11 +214,11 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor={fileInputId}>{t("import.fields.file")}</Label>
+            <Label htmlFor={fileInputId}>{t("fields.file")}</Label>
             <Input
               id={fileInputId}
               type="file"
-              accept={ACCEPTED_EXTENSIONS}
+              accept={IMPORT_FILE_EXTENSIONS}
               onChange={handleFileChange}
               disabled={isBusy}
             />
@@ -217,7 +228,7 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
             <div className="space-y-1.5">
               <Progress value={job?.progress ?? 0} />
               <p className="text-xs text-muted-foreground">
-                {t("import.processing", { progress: job?.progress ?? 0 })}
+                {t("processing", { progress: job?.progress ?? 0 })}
               </p>
             </div>
           ) : null}
@@ -226,28 +237,27 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 <Badge variant="success">
-                  {t("import.summarySucceeded", { count: result.succeeded })}
+                  {t("summarySucceeded", { count: result.succeeded })}
                 </Badge>
                 {result.failed > 0 ? (
                   <Badge variant="destructive">
-                    {t("import.summaryFailed", { count: result.failed })}
+                    {t("summaryFailed", { count: result.failed })}
                   </Badge>
                 ) : null}
               </div>
               {result.errors.length > 0 ? (
-                // `max-h-[40vh] overflow-y-auto` alongside the existing horizontal scroll:
-                // a long error list (one row per bad import row) previously just grew the
-                // dialog's own height unbounded, with nothing to cap it — DialogContent now
-                // has a max-h-[90vh]/overflow-hidden safety net (PR #96 review), which would
-                // otherwise silently clip the tail of a long list instead of letting it grow.
-                // Bounding this table's own region keeps it scrollable regardless.
+                // `max-h-[40vh] overflow-y-auto` alongside the horizontal scroll: a long
+                // error list (one row per bad import row) would otherwise grow the dialog
+                // unbounded, and the dialog's max-h-[90vh]/overflow-hidden safety net would
+                // silently clip its tail. Bounding this table's own region keeps it
+                // scrollable regardless.
                 <div className="max-h-[40vh] overflow-x-auto overflow-y-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("import.errorTable.row")}</TableHead>
-                        <TableHead>{t("import.errorTable.field")}</TableHead>
-                        <TableHead>{t("import.errorTable.issue")}</TableHead>
+                        <TableHead>{t("errorTable.row")}</TableHead>
+                        <TableHead>{t("errorTable.field")}</TableHead>
+                        <TableHead>{t("errorTable.issue")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -267,7 +277,7 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
 
           {job?.status === "failed" ? (
             <Alert variant="destructive">
-              <AlertDescription>{job.error ?? t("import.failed")}</AlertDescription>
+              <AlertDescription>{job.error ?? t("failed")}</AlertDescription>
             </Alert>
           ) : null}
 
@@ -276,16 +286,16 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
               the reason the file input is still locked needs to stay visible too. */}
           {hasActiveJob && isError ? (
             <Alert variant="destructive">
-              <AlertDescription>{t("import.failed")}</AlertDescription>
+              <AlertDescription>{t("failed")}</AlertDescription>
             </Alert>
           ) : null}
           {hasActiveJob && isTimedOut ? (
             <Alert variant="warning">
-              <AlertDescription>{t("import.timedOut")}</AlertDescription>
+              <AlertDescription>{t("timedOut")}</AlertDescription>
             </Alert>
           ) : null}
-        </DialogBody>
-        <DialogFooter>
+        </ResponsiveDialogBody>
+        <ResponsiveDialogFooter>
           <Button
             variant="outline"
             onClick={() => {
@@ -300,23 +310,19 @@ export function StaffImportDialog({ open, onOpenChange }: StaffImportDialogProps
                 says what closing actually does: the job keeps running and reopening
                 picks it back up; "Close" once finished or refused, when closing really
                 does drop it. "Run in background" also keeps this button's accessible
-                name distinct from `DialogContent`'s own built-in X button
-                (`closeLabel={t("import.close")}` — same "Close" text) while a job is
-                active; both saying "Close" only once it's over is a harmless,
-                one-more-choice-later duplication, not a live ambiguity. */}
-            {jobId === null
-              ? tCommon("cancel")
-              : canReconnect
-                ? t("import.runInBackground")
-                : t("import.close")}
+                name distinct from the dialog's own built-in X button
+                (`closeLabel={t("close")}` — same "Close" text) while a job is active;
+                both saying "Close" only once it's over is a harmless duplication, not a
+                live ambiguity. */}
+            {jobId === null ? tCommon("cancel") : canReconnect ? t("runInBackground") : t("close")}
           </Button>
           {jobId === null ? (
             <Button onClick={handleImportClick} disabled={!file || trigger.isPending}>
-              {t("import.upload")}
+              {t("upload")}
             </Button>
           ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

@@ -10,6 +10,13 @@ import { endpoints } from "@/services/endpoints";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
 
+/** The `202` body every job-starting trigger (`POST /<module>-imports`, `-exports`, …)
+ * returns — a job to poll, not a result. */
+export interface JobAccepted {
+  job_id: string;
+  status: JobStatus;
+}
+
 /** The subset of `BackgroundJobSerializer`'s fields (`apps/api/core/jobs/serializers.py`)
  * every caller needs. `result`'s real shape is module-specific — narrow it with
  * `ImportJobResult`/`ExportJobResult` below once `status` is `"succeeded"`. */

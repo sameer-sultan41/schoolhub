@@ -1,6 +1,7 @@
 import { fetchPage, type Page } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import type { JobAccepted } from "@/services/modules/jobs/jobs-service";
 import { MAX_PAGE_SIZE } from "./staff-constant";
 import { toStaffCreateBody, toStaffQueryParams, toStaffUpdateBody } from "./staff-helper";
 import type {
@@ -116,9 +117,7 @@ export async function fetchStaffById(id: string): Promise<StaffDetailRecord> {
  * `result_file_id` to `Services.jobs.fetchFileDownloadUrl` for the actual download
  * URL. */
 export async function triggerStaffExport(): Promise<{ jobId: string }> {
-  const { data } = await apiClient.post<{ job_id: string; status: string }>(
-    endpoints.dashboard.staffExports,
-  );
+  const { data } = await apiClient.post<JobAccepted>(endpoints.dashboard.staffExports);
   return { jobId: data.job_id };
 }
 
@@ -126,15 +125,14 @@ export async function triggerStaffExport(): Promise<{ jobId: string }> {
  * `.xlsx`, capped server-side at 5 MB
  * (`apps/api/apps/staff_management/staff/viewset.py`) — a file outside those limits
  * comes back as a real `ApiError` from THIS call. A file that parses but whose rows
- * fail comes back as a `"failed"` job instead (see `ImportJobResult`) — the two
- * failure modes are genuinely different and are handled separately by
- * `StaffImportDialog`. */
+ * fail still comes back as a `"succeeded"` job whose `ImportJobResult` has
+ * `failed > 0` (rows commit independently) — the two failure modes are genuinely
+ * different and are handled separately by `BulkImportDialog`. A file that cannot be
+ * parsed at all (encoding, a missing required header column, an unreadable workbook)
+ * ends as a `"failed"` job whose `error` says how to fix the file. */
 export async function triggerStaffImport(file: File): Promise<{ jobId: string }> {
   const body = new FormData();
   body.append("file", file);
-  const { data } = await apiClient.post<{ job_id: string; status: string }>(
-    endpoints.dashboard.staffImports,
-    body,
-  );
+  const { data } = await apiClient.post<JobAccepted>(endpoints.dashboard.staffImports, body);
   return { jobId: data.job_id };
 }

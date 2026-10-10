@@ -64,6 +64,8 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Feature API calls (one file per domain, no hardcoded paths) | `src/services/endpoints.ts` + `src/services/modules/<domain>/`, aggregated as `Services` in `src/services/index.ts` |
 | Permission helpers | `src/lib/permissions.ts` → `canAccessModule(user, module)` (whole-module, used by the sidebar) and `hasPermission(user, key)` (per-action — `/staff`'s Export/Import buttons are its first user). A declarative `<Can>` JSX wrapper still does not exist; add one to `src/components/` on top of `hasPermission` when a screen wants that shape |
 | Background-job polling (`202 + job`, e.g. bulk import/export) | `src/hooks/use-job-polling.ts` |
+| Bulk import (a `start(file)` → `202 + job` endpoint, with a per-row result) | `BulkImportDialog` in `src/components/bulk-import-dialog.tsx` — takes the module's column lists and its service's start function; `/staff` and `/students` both use it, so reuse it rather than writing another import dialog |
+| A `202 + job` whose result is a file (an export, the ID-card PDF) | `useJobFileDownload` in `src/hooks/use-job-file-download.ts` — triggers, polls (via `use-job-polling.ts`), then downloads through `downloadFile` in `src/lib/helpers.ts`; a timed-out job is resumed, not re-started |
 | Debouncing a value (e.g. a search input) before it drives a query | `src/hooks/use-debounced-value.ts` — check `src/hooks/` for an existing hook before inlining a new `useState`+`useEffect`/`setTimeout` pair for a cross-cutting UI concern like this one |
 | TanStack Query client + key factory | `src/lib/query-client.ts` |
 | Validated public env | `src/lib/env.ts` |

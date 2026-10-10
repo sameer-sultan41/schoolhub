@@ -135,9 +135,8 @@ describe("StudentDocumentsTab", () => {
 
     // Clicked twice, asserting two real calls (not one cached result reused) is what
     // actually pins "fetched fresh per click" — a signed URL has a server-side TTL, so
-    // reusing one eventually hands out an expired link. The anchor-click mechanics are
-    // `staff-toolbar.tsx`'s own already-proven pattern, reused verbatim here, not
-    // re-tested per call site.
+    // reusing one eventually hands out an expired link. The anchor-click mechanics live in
+    // `downloadFile` (`lib/helpers.ts`) and are tested there, not per call site.
     await waitFor(() => {
       expect(mockGetDocumentDownloadUrl).toHaveBeenCalledTimes(2);
     });

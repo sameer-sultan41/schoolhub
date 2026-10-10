@@ -69,6 +69,34 @@ export const DOCUMENT_TYPES = [
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
+/** Mirror `REQUIRED_IMPORT_COLUMNS`/`IMPORT_COLUMNS`
+ * (`apps/api/apps/student_management/services.py`) verbatim — shown so the person picking a
+ * file knows the header row's exact contract before they upload it. `campus_code` (not an
+ * id) is what the importer resolves to a campus. */
+export const STUDENT_IMPORT_REQUIRED_COLUMNS = [
+  "first_name",
+  "last_name",
+  "date_of_birth",
+  "gender",
+  "campus_code",
+  "admission_date",
+] as const;
+export const STUDENT_IMPORT_OPTIONAL_COLUMNS = [
+  "preferred_name",
+  "blood_group",
+  "nationality",
+  "religion",
+  "previous_school",
+] as const;
+
+/** Per user as well as per tab: a different sign-in in the same tab never reconnects to
+ * someone else's import. */
+export const STUDENT_IMPORT_JOB_STORAGE_PREFIX = "schoolhub:students-import-job:";
+
+/** Download-name hints for the export CSV and the batch ID-card PDF (see `downloadFile`). */
+export const STUDENT_EXPORT_FILENAME = "students-export.csv";
+export const ID_CARDS_FILENAME = "id-cards.pdf";
+
 /** Nested under one student — a handful of rows, fetched in one page. Matches the real
  * `EmergencyContactLinkViewSet`/`StudentDocumentLinkViewSet` precedent: both are
  * nested-under-one-student lists with no independent pagination UI. */
