@@ -43,6 +43,7 @@ from __future__ import annotations
 import functools
 import uuid
 import zoneinfo
+from collections.abc import Iterable
 
 from django.db.models import QuerySet
 
@@ -56,6 +57,7 @@ from apps.school_organization.models import (
     Subject,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.tenancy.context import tenant_atomic
 
 # Sessions in these states reject every write from transactional modules (§11).
 # Shared with `academic_sessions/services/activate.py`, which checks the same
@@ -74,6 +76,18 @@ def _iana_timezones() -> frozenset[str]:
 def is_valid_timezone(name: str) -> bool:
     """True when ``name`` is an IANA identifier. No country is assumed (§11)."""
     return name in _iana_timezones()
+
+
+def campuses_by_code(codes: Iterable[str], *, tenant_id: uuid.UUID) -> dict[str, Campus]:
+    """The live campuses with these codes, keyed by code, in one query.
+
+    For bulk importers, which resolve a file's campuses once rather than per row. A
+    code with no live campus is simply absent from the result.
+    """
+    with tenant_atomic(tenant_id):
+        return {
+            campus.code: campus for campus in Campus.objects.alive().filter(code__in=set(codes))
+        }
 
 
 def assert_session_writable(session: AcademicSession) -> None:

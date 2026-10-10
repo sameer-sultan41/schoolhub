@@ -75,8 +75,16 @@ export interface MockEnrollmentResult {
   updated_at: string;
 }
 
+/** The job ids the bulk endpoints answer with. A spec feeds the same ids to `jobsModule`'s
+ * poll sequences, as `staff.ts`'s `STAFF_*_JOB_ID` do. */
+export const STUDENT_EXPORT_JOB_ID = "job-student-export";
+export const STUDENT_IMPORT_JOB_ID = "job-student-import";
+export const ID_CARDS_JOB_ID = "job-id-cards";
+
 export interface StudentOptions {
   students?: Student[];
+  /** Called with the `student_ids` a mocked `POST /id-cards:generate` received. */
+  onIdCardsRequested?: (ids: string[]) => void;
   /** Called after a mocked `:enroll`/`:change-section` succeeds. `enrollmentModule` owns
    * `GET /students/{id}/history` as its own, separate module with no shared state — a spec
    * that registers both and wants a just-created enrollment to show up in the history
@@ -91,7 +99,8 @@ export interface StudentOptions {
 /**
  * `/students` and friends — the directory list/detail/create/update, plus the
  * colon-action withdraw (`POST /students/{id}:withdraw`, the real registered route;
- * see `apps/dashboard/src/services/endpoints.ts`).
+ * see `apps/dashboard/src/services/endpoints.ts`), and the bulk export/import/ID-card
+ * endpoints, which only accept the job (`jobsModule` serves the job and its file).
  *
  * A spec opts in with `mockApi.use(studentsModule({ students }))`.
  */
@@ -194,6 +203,23 @@ export function studentsModule(options: StudentOptions = {}): MockModule {
       }
 
       return fail(404, "Not found.");
+    });
+
+    // The three bulk endpoints are all `202 + job`; `jobsModule` serves the job and its file.
+    api.post("/student-exports", () =>
+      ok({ job_id: STUDENT_EXPORT_JOB_ID, status: "queued" }, { status: 202 }),
+    );
+    api.post("/student-imports", () =>
+      ok({ job_id: STUDENT_IMPORT_JOB_ID, status: "queued" }, { status: 202 }),
+    );
+    // `POST /id-cards:generate` is a collection-level colon-action. `router.ts` reads `:name`
+    // as a param, so this compiles to `^/id-cards([^/]+)$` and captures ":generate" whole —
+    // the same split `/students/:studentAction` relies on for "{id}:withdraw".
+    api.post("/id-cards:cardAction", (request) => {
+      if (request.params["cardAction"] !== ":generate") return fail(404, "Not found.");
+      const body = (request.json() as { student_ids?: string[] } | null) ?? {};
+      options.onIdCardsRequested?.(body.student_ids ?? []);
+      return ok({ job_id: ID_CARDS_JOB_ID, status: "queued" }, { status: 202 });
     });
   };
 }

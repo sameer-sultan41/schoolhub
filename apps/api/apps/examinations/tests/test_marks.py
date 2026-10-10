@@ -560,6 +560,20 @@ class MarksImportTests(MarksTestCase):
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         self.assertIn("job_id", response.json()["data"])
 
+    def test_a_misspelled_header_fails_the_job_with_one_readable_error(self) -> None:
+        from core.jobs.models import BackgroundJob, JobStatus
+
+        # The view queues the task with transaction.on_commit, which a rolled-back test only runs
+        # when the callbacks are captured and executed.
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.upload(b"Admission Number,theory_marks\nX,60\n")
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertIn("admission_number", job.error)
+
     def test_a_bad_row_is_reported_and_the_good_rows_still_land(self) -> None:
         """The contrast with `:bulk-entry`, and the whole reason the import has
         its own path: §6 asks to re-import failed rows only, which needs a

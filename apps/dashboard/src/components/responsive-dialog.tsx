@@ -119,6 +119,7 @@ export function ResponsiveDialogContent({
   className,
   children,
   closeLabel,
+  showCloseButton = true,
 }: {
   /** Applied to `DialogContent` only — a desktop centered dialog's width/position
    * overrides (e.g. `max-w-2xl`) have no equivalent meaning on a full-bleed bottom
@@ -128,11 +129,18 @@ export function ResponsiveDialogContent({
   className?: string;
   children: ReactNode;
   closeLabel: string;
+  /** Hides only the built-in close button, on both branches (`DrawerContent` names this
+   * prop `close`). Escape and overlay clicks still call `onOpenChange(false)` on desktop,
+   * so a dialog that must not close mid-operation also ignores that in its own handler
+   * (see `BulkImportDialog`). */
+  showCloseButton?: boolean;
 }) {
   return useIsDrawer() ? (
-    <DrawerContent closeLabel={closeLabel}>{children}</DrawerContent>
+    <DrawerContent closeLabel={closeLabel} close={showCloseButton}>
+      {children}
+    </DrawerContent>
   ) : (
-    <DialogContent className={className} closeLabel={closeLabel}>
+    <DialogContent className={className} closeLabel={closeLabel} showCloseButton={showCloseButton}>
       {children}
     </DialogContent>
   );

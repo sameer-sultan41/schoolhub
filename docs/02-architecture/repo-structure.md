@@ -23,10 +23,10 @@ schoolhub/
 │   ├── api/                      # Django 6.1 + DRF, uv-managed (not a pnpm package)
 │   │   ├── config/               #   settings/{base,dev,prod,test}.py · api_v1.py · urls · celery · asgi/wsgi
 │   │   ├── core/                 #   cross-cutting platform code — imports no app
-│   │   │   ├── tenancy/ rbac/ audit/ api/     # RLS binding, permissions, audit log, envelope/pagination/exceptions
-│   │   │   ├── files/ documents/ exports/     # signed uploads/downloads, generated documents, tabular exports
-│   │   │   ├── jobs/ idempotency/ money/      # 202 + job resources, Idempotency-Key, money primitives
-│   │   │   └── notifications/ common/         # notify() + delivery, shared helpers
+│   │   │   ├── tenancy/ rbac/ audit/ api/          # RLS binding, permissions, audit log, envelope/pagination/exceptions
+│   │   │   ├── files/ documents/ exports/ imports/ # signed uploads/downloads, generated documents, tabular exports, bulk-import parsing
+│   │   │   ├── jobs/ idempotency/ money/           # 202 + job resources, Idempotency-Key, money primitives
+│   │   │   └── notifications/ common/              # notify() + delivery, shared helpers
 │   │   ├── apps/<module>/        #   one Django app per module doc (layout: ADR-0010)
 │   │   ├── tests/                #   repo-wide contract tests (RLS coverage, endpoint contracts, API contract)
 │   │   ├── scripts/              #   generate-openapi.sh, …
@@ -125,8 +125,9 @@ schoolhub/
 - **Backend sharing goes through `core/`.**
 - **Rule of three:** tolerate a second copy, and extract on the third. Beyond three copies
   is debt to record in [`../deferred-work.md`](../deferred-work.md), not a pattern to follow. The known cases
-  today are `_fk` serializer helpers in six apps and the staff and student import/document
-  pipelines.
+  today are `_fk` serializer helpers in six apps and the staff and student document pipelines.
+  Bulk-import parsing was a case too, until it moved to `core/imports/`
+  ([ADR-0023](../decisions/0023-shared-bulk-import-parser.md)).
 
 ## 6. Integration Between the Apps
 

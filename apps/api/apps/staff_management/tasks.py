@@ -12,8 +12,10 @@ import uuid
 
 from celery import shared_task
 
+from apps.school_organization.services import campuses_by_code
+from core.imports.tabular import parse_rows
 from core.jobs.models import BackgroundJob
-from core.jobs.services import mark_failed, mark_running, mark_succeeded, update_progress
+from core.jobs.services import mark_failed, mark_running, mark_succeeded, update_progress_if_due
 from core.tenancy.context import tenant_atomic
 from core.tenancy.tasks import TenantAwareTask
 
@@ -21,8 +23,8 @@ from core.tenancy.tasks import TenantAwareTask
 @shared_task(base=TenantAwareTask, bind=True)
 def import_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
     from apps.staff_management.staff.services.import_staff import (
+        REQUIRED_IMPORT_COLUMNS,
         import_staff_row,
-        parse_import_rows,
     )
 
     with tenant_atomic(uuid.UUID(tenant_id)):
@@ -31,22 +33,29 @@ def import_staff_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
     try:
         filename = job.payload["filename"]
         data = base64.b64decode(job.payload["content_base64"])
-        rows = parse_import_rows(filename=filename, data=data)
+        rows = parse_rows(filename=filename, data=data, required_columns=REQUIRED_IMPORT_COLUMNS)
 
+        campuses = campuses_by_code(
+            (row["campus_code"] for row in rows if row.get("campus_code")),
+            tenant_id=uuid.UUID(tenant_id),
+        )
         errors: list[dict[str, str]] = []
         succeeded = 0
-        total = len(rows) or 1
+        last_progress = 0
         for index, row in enumerate(rows, start=1):
             error = import_staff_row(
                 row=row,
                 tenant_id=uuid.UUID(tenant_id),
                 actor_id=uuid.UUID(actor_id),
+                campuses_by_code=campuses,
             )
             if error:
                 errors.append(error)
             else:
                 succeeded += 1
-            update_progress(job=job, progress=round(index / total * 100))
+            last_progress = update_progress_if_due(
+                job=job, done=index, total=len(rows), last_written=last_progress
+            )
 
         mark_succeeded(
             job=job,

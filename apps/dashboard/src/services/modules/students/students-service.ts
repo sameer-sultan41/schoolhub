@@ -2,6 +2,7 @@ import { fetchPage } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import type { JobAccepted } from "@/services/modules/jobs/jobs-service";
 import { RELATION_PAGE_SIZE } from "./students-constant";
 import { toStudentBody, toStudentsQueryParams } from "./students-helper";
 import type {
@@ -11,6 +12,7 @@ import type {
   DocumentVerificationDecision,
   EmergencyContactRecord,
   EnrollStudentInput,
+  IdCardGenerateBody,
   StudentDocumentRecord,
   StudentEnrollmentRecord,
   StudentHistoryEvent,
@@ -34,6 +36,8 @@ export type {
   DocumentVerificationDecision,
   EmergencyContactRecord,
   EnrollStudentInput,
+  IdCardGenerateBody,
+  IdCardJobResult,
   StudentDocumentRecord,
   StudentEnrollmentRecord,
   StudentHistoryEvent,
@@ -214,4 +218,32 @@ export async function getDocumentDownloadUrl(documentId: string): Promise<string
     endpoints.studentDocuments.download(documentId),
   );
   return data.download_url;
+}
+
+/** `POST /student-imports` (multipart) -> `202` + job. `file` must be `.csv` or `.xlsx`
+ * (size-capped server-side) — a file outside those limits comes back as a real `ApiError`
+ * from THIS call. Rows commit independently, so a parsed file with bad rows still comes
+ * back as a `"succeeded"` job whose `ImportJobResult` has `failed > 0`. A file that cannot
+ * be parsed at all (encoding, a missing required header column, an unreadable workbook)
+ * ends as a `"failed"` job whose `error` says how to fix the file. */
+export async function triggerStudentImport(file: File): Promise<{ jobId: string }> {
+  const body = new FormData();
+  body.append("file", file);
+  const { data } = await apiClient.post<JobAccepted>(endpoints.students.imports, body);
+  return { jobId: data.job_id };
+}
+
+/** `POST /student-exports` -> `202` + job. The job's `result` on success is
+ * `ExportJobResult` — pass its `result_file_id` to `Services.jobs.fetchFileDownloadUrl`. */
+export async function triggerStudentExport(): Promise<{ jobId: string }> {
+  const { data } = await apiClient.post<JobAccepted>(endpoints.students.exports);
+  return { jobId: data.job_id };
+}
+
+/** `POST /id-cards:generate` -> `202` + job. One merged PDF for `studentIds`; the job's
+ * `result` on success is `IdCardJobResult`. */
+export async function generateIdCards(studentIds: string[]): Promise<{ jobId: string }> {
+  const body: IdCardGenerateBody = { student_ids: studentIds };
+  const { data } = await apiClient.post<JobAccepted>(endpoints.idCards.generate, body);
+  return { jobId: data.job_id };
 }

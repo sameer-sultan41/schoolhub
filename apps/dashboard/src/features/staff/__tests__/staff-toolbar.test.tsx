@@ -1,5 +1,5 @@
 import type { AuthenticatedUser } from "@schoolhub/types";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
@@ -38,6 +38,7 @@ jest.mock("@/services", () => ({
       fetchStaffTypeCount: jest.fn(),
       fetchStaffDirectory: jest.fn().mockResolvedValue([]),
       triggerStaffExport: jest.fn(),
+      triggerStaffImport: jest.fn(),
     },
     jobs: { fetchJob: jest.fn(), fetchFileDownloadUrl: jest.fn() },
   },
@@ -359,7 +360,10 @@ describe("StaffToolbar", () => {
     });
     await user.click(importButton);
 
-    expect(await screen.findByRole("dialog", { name: "Import staff" })).toBeInTheDocument();
+    // The staff column lists (not another module's) reach the shared dialog.
+    const dialog = await screen.findByRole("dialog", { name: "Import staff" });
+    expect(within(dialog).getByText("staff_type")).toBeInTheDocument();
+    expect(within(dialog).getByText("national_id")).toBeInTheDocument();
   });
 
   it('"Export CSV" shows a timeout toast when the export job never finishes', async () => {
@@ -452,10 +456,14 @@ describe("StaffToolbar", () => {
   });
 
   it("after a failed poll, a second click re-checks the same export job instead of starting another", async () => {
+    const { ApiError } = jest.requireActual<{ ApiError: new (init: unknown) => Error }>(
+      "@schoolhub/api-client",
+    );
     resolveStatCounts();
     mockTriggerStaffExport.mockResolvedValue({ jobId: "job-export-7" });
     mockFetchJob
-      .mockRejectedValueOnce(new Error("network error"))
+      // Status 0 is a transient network failure, so the job stays resumable (a 404/403 drops it).
+      .mockRejectedValueOnce(new ApiError({ code: "network_error", message: "x", status: 0 }))
       .mockResolvedValue(exportJob("job-export-7", "succeeded", "file-7"));
     mockFetchFileDownloadUrl.mockResolvedValue("https://storage.test/staff-export.csv");
     const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});

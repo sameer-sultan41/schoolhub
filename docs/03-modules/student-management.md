@@ -66,7 +66,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 - **Registration:** duplicate detection on create/import (name + DOB + guardian phone fuzzy match) with override + reason; photo upload with size/type validation; sensitive-field visibility rules (medical notes limited to admins + class teacher) *(recommendation)*.
 - **Enrollment & ID:** one active enrollment per student per session; roll-number auto-assignment (alphabetical or manual) unique within section; admission-number sequence gaps never reused; batch ID-card generation as a background job producing a merged PDF.
 
-**Implementation note (as shipped):** the ID-card template carries a QR code only (encoding `{tenant_id}:{admission_number}`), no barcode — there is no verification endpoint yet to resolve either against, and api-architecture.md §17 does not mandate both appear on one card. `POST /student-imports` requires the exact template column headers (`first_name`, `last_name`, `date_of_birth`, `gender`, `campus_code`, `admission_date`, plus the optional fields) — mapping arbitrary legacy headers is not built. `POST /student-exports` is not record-scope-narrowed (it exports every tenant student); `students.student.export` is admin-only in practice, so this has not needed a per-caller filter yet.
+**Implementation note (as shipped):** the ID-card template carries a QR code only (encoding `{tenant_id}:{admission_number}`), no barcode — there is no verification endpoint yet to resolve either against, and api-architecture.md §17 does not mandate both appear on one card. `POST /student-imports` requires the exact template column headers (`first_name`, `last_name`, `date_of_birth`, `gender`, `campus_code`, `admission_date`, plus the optional fields) — mapping arbitrary legacy headers is not built; `gender` is matched case-insensitively against `male|female|other|unspecified`; each date and over-length column is reported against its own field. `POST /student-exports` is not record-scope-narrowed (it exports every tenant student); `students.student.export` is admin-only in practice, so this has not needed a per-caller filter yet.
 - **Transfers:** inter-campus keeps the student record, moves campus + section; outbound sets status `transferred` and feeds certificate issuance.
 - **Withdrawal:** clearance checklist aggregated cross-module (outstanding invoices, un-returned books, transport/asset assignments); refund handling delegated to fees-finance.
 - **Guardians:** one guardian may link to multiple children (and vice versa); per-link `relationship`, `is_primary`, `can_pick_up`, `is_fee_responsible`, `receives_communications`; guardian portal account optional; change-request flow via parent-portal.
@@ -323,3 +323,35 @@ reachable immediately in edit mode (no progress gating), Profile is never locked
 is the point, not a hazard the way a second `createStudent` call would be), and its save
 button reads "Save" rather than "Next"/"Finish". `StudentDetailTabs`' own tab state moved
 up into `student-detail-sheet.tsx` so its Edit button can read which tab is showing.
+
+**Dashboard, Phase 4 (as shipped).** `/students` gains bulk operations, and with them the
+original Roadmap is finished. The toolbar adds Export CSV (`POST /student-exports`, gated by
+`students.student.export`) and Import CSV (`students.student.import`); each is disabled, with a
+`title` saying why, while the viewer lacks the key or their permissions are still loading.
+Export is a `202 + job` watched by the shared `useJobFileDownload` hook
+(`apps/dashboard/src/hooks/use-job-file-download.ts`), which downloads the finished file, and a
+timed-out or failed poll resumes the same job instead of starting a second. Import opens the
+shared `BulkImportDialog` (`apps/dashboard/src/components/bulk-import-dialog.tsx`): a .csv/.xlsx
+picker, a required/optional column reference shown as badges (there is no template download —
+see `deferred-work.md`), polling, and a per-row result table of row, field and issue beside the
+imported and failed counts. It is a drawer on mobile, and "Run in background" keeps the job in a
+per-user `sessionStorage` entry so reopening reconnects to it. The directory's card toolbar adds
+a batch "Generate ID cards" action (`StudentIdCardsButton`, gated by `students.id-card.generate`)
+over the rows selected on the current page — every selected row, not only `active` ones, since
+the backend renders a card for any live student — sent as `POST /id-cards:generate` with
+`student_ids` and downloaded as one merged PDF. The button stays mounted while a job runs, so its
+progress survives the selection being cleared. `/staff` moved onto the same two components (its
+own import dialog is deleted), and `ToolbarActions` now wraps so the extra buttons fit a narrow
+screen. Backend changes behind this: the parser every importer reads its file with now lives in
+`core/imports/` ([ADR-0023](../decisions/0023-shared-bulk-import-parser.md)), shared by the
+student, staff, attendance and exam-marks importers — real row numbers that a blank line no
+longer shifts, Excel date cells read as ISO dates (a datetime cell keeps only its date), short xlsx
+rows padded like CSV, and a missing or misspelled required header failing the job with one readable
+sentence in all four importers; `import_student_row` and `import_staff_row` validate gender, each
+date, over-length values and the campus code per row, reporting each against its own field (the
+task resolves the file's campuses in one query, and writes job progress in 5-point steps rather
+than per row); and both roster exports pass every cell through
+`core.exports.tabular.spreadsheet_safe_row`, so a name starting with `=`, `+`, `-` or `@` (or
+with one of them behind leading spaces) no longer opens as a formula. Mocked Playwright coverage is
+`e2e/tests/dashboard/students-bulk.spec.ts`; what this phase deliberately left out is in
+`deferred-work.md`.

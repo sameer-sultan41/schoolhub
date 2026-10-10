@@ -46,6 +46,7 @@ from apps.school_organization.services import assert_session_writable
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
 from apps.student_management.services import assert_file_usable
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 from core.rbac.permissions import user_scopes
 from core.tenancy.models import TenantSettings
@@ -1401,14 +1402,10 @@ REQUIRED_IMPORT_COLUMNS = ("admission_number", "attendance_date", "status")
 def parse_attendance_import(*, filename: str, data: bytes) -> list[dict[str, str]]:
     """Parse a CSV or .xlsx register into row dicts keyed by IMPORT_COLUMNS.
 
-    Delegates to `student_management`'s parsers rather than growing a second
-    copy: they already handle the BOM Excel's "CSV UTF-8" adds and the
-    read-only/data-only workbook flags, and both are the kind of detail that is
-    silently wrong in a reimplementation.
+    Delegates to `core.imports.tabular`, the parser every importer shares; a file
+    missing a required header fails once, readably, rather than once per row.
     """
-    from apps.student_management.services import parse_import_rows
-
-    return parse_import_rows(filename=filename, data=data)
+    return parse_rows(filename=filename, data=data, required_columns=REQUIRED_IMPORT_COLUMNS)
 
 
 def import_attendance_row(

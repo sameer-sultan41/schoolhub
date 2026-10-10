@@ -148,3 +148,21 @@ class SpreadsheetInjectionTests(SimpleTestCase):
         data, _, _ = tabular.render(self.DANGEROUS, fmt="pdf", title="Register")
 
         self.assertTrue(data.startswith(b"%PDF"))
+
+
+class SpreadsheetSafeTests(SimpleTestCase):
+    def test_a_trigger_behind_leading_whitespace_is_neutralised(self) -> None:
+        for text in (" =1+1", "  @SUM(A1)", "\t=1", " \t+1", "\r-1"):
+            self.assertEqual(tabular.spreadsheet_safe(text), f"'{text}", repr(text))
+
+    def test_a_bare_trigger_is_neutralised(self) -> None:
+        self.assertEqual(tabular.spreadsheet_safe("=1+1"), "'=1+1")
+
+    def test_ordinary_text_is_left_alone(self) -> None:
+        for text in ("  plain", "Amina Khan", "O'Brien", "", "   "):
+            self.assertEqual(tabular.spreadsheet_safe(text), text, repr(text))
+
+    def test_the_row_helper_stringifies_and_neutralises_every_value(self) -> None:
+        row = tabular.spreadsheet_safe_row(["=1+1", 7, datetime.date(2026, 4, 1), " @x", "ok"])
+
+        self.assertEqual(row, ["'=1+1", "7", "2026-04-01", "' @x", "ok"])

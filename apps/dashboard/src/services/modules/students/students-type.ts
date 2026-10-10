@@ -1,5 +1,6 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import type { GenderValue } from "@schoolhub/types";
+import type { ExportJobResult } from "@/services/modules/jobs/jobs-service";
 
 /**
  * The students module's domain types — single source of truth, so a type isn't
@@ -82,6 +83,15 @@ export type StudentDocumentRecord = ApiSchemas["StudentDocument"];
 /** The generated enum (`schema.d.ts`'s `DocumentVerificationDecisionEnum`, already
  * `"verified" | "rejected"`) — aliased, not hand-written, per ADR-0017. */
 export type DocumentVerificationDecision = ApiSchemas["DocumentVerificationDecisionEnum"];
+
+/** `POST /id-cards:generate`'s request body. */
+export type IdCardGenerateBody = ApiSchemas["IdCardGenerateRequest"];
+
+/** A finished ID-card job's `result` — the merged PDF's file id plus how many cards it
+ * holds. */
+export interface IdCardJobResult extends ExportJobResult {
+  count: number;
+}
 
 export interface AddEmergencyContactInput {
   name: string;

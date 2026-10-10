@@ -5,16 +5,17 @@ import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import type { StudentRecord } from "@/services";
+import type { BackgroundJobRecord } from "@/services/modules/jobs/jobs-service";
 import { renderWithProviders } from "@/test-utils";
 
 import { StudentDirectoryTable } from "../student-directory-table";
 
-// `StudentCreateStepper` (edit mode), `StudentDetailSheet` and `WithdrawStudentDialog` all
-// render from this table and each fires its own (`enabled`-gated, in the detail sheet's and
-// edit stepper's case) queries/mutations the instant they're opened — the mock object itself
-// needs every one of these present (resolved to a sane default) or a test crashes with
-// "not a function" the moment a dialog opens, same reasoning as
-// `staff-directory-table.test.tsx`'s own mock.
+// `StudentCreateStepper` (edit mode), `StudentDetailSheet`, `WithdrawStudentDialog` and
+// `StudentIdCardsButton` (its job polling) all render from this table and each fires its own
+// (`enabled`-gated, in the detail sheet's and edit stepper's case) queries/mutations the
+// instant they're opened — the mock object itself needs every one of these present (resolved
+// to a sane default) or a test crashes with "not a function" the moment a dialog opens, same
+// reasoning as `staff-directory-table.test.tsx`'s own mock.
 jest.mock("@/services", () => ({
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
@@ -23,8 +24,10 @@ jest.mock("@/services", () => ({
       fetchStudentsPage: jest.fn(),
       fetchStudentById: jest.fn(),
       withdrawStudent: jest.fn(),
+      generateIdCards: jest.fn(),
       fetchStudentHistory: jest.fn().mockResolvedValue([]),
     },
+    jobs: { fetchJob: jest.fn(), fetchFileDownloadUrl: jest.fn() },
     dashboard: { fetchCampuses: jest.fn().mockResolvedValue([]) },
     schoolOrganization: {
       fetchHouses: jest.fn().mockResolvedValue([]),
@@ -51,6 +54,10 @@ const mockFetchStudentById = Services.students.fetchStudentById as jest.MockedFu
 const mockFetchHouses = Services.schoolOrganization.fetchHouses as jest.MockedFunction<
   typeof Services.schoolOrganization.fetchHouses
 >;
+const mockGenerateIdCards = Services.students.generateIdCards as jest.MockedFunction<
+  typeof Services.students.generateIdCards
+>;
+const mockFetchJob = Services.jobs.fetchJob as jest.MockedFunction<typeof Services.jobs.fetchJob>;
 
 // Every permission this table reads, granted — individual tests only care about row
 // data/filters/errors, not permission gating, so a full grant is the sane default; the
@@ -66,6 +73,11 @@ const PERMITTED_USER: AuthenticatedUser = {
   tenant_id: "tenant-1",
   roles: [],
   permissions: ["students.student.view", "students.student.update", "students.student.withdraw"],
+};
+
+const ID_CARD_USER: AuthenticatedUser = {
+  ...PERMITTED_USER,
+  permissions: [...PERMITTED_USER.permissions, "students.id-card.generate"],
 };
 
 /** Same shape as `withdraw-student-dialog.test.tsx`'s own `studentRecord` fixture —
@@ -106,6 +118,8 @@ describe("StudentDirectoryTable", () => {
     mockFetchStudentsPage.mockReset();
     mockFetchCurrentUser.mockReset().mockResolvedValue(PERMITTED_USER);
     mockFetchCampuses.mockReset().mockResolvedValue([]);
+    mockGenerateIdCards.mockReset();
+    mockFetchJob.mockReset();
   });
 
   it("filters by campus", async () => {
@@ -301,5 +315,96 @@ describe("StudentDirectoryTable", () => {
     await user.click(screen.getByRole("button", { name: /withdraw 2/i }));
 
     expect(await screen.findByText("Withdraw 2 students")).toBeInTheDocument();
+  });
+
+  it("offers no ID-card button without students.id-card.generate, even with rows selected", async () => {
+    mockFetchStudentsPage.mockResolvedValue({
+      items: [
+        studentRecord({ id: "stu-1", first_name: "Ayesha", last_name: "Khan", status: "active" }),
+        studentRecord({ id: "stu-2", first_name: "Bilal", last_name: "Ahmed", status: "active" }),
+      ],
+      pagination: { page: 1, page_size: 10, total_count: 2, total_pages: 1 },
+    });
+
+    renderWithProviders(<StudentDirectoryTable />);
+    const user = userEvent.setup();
+
+    // The Edit action renders only once the user's permissions have loaded, so past this
+    // point a missing ID-card button can't just be the permissions still being fetched.
+    await screen.findByRole("button", { name: /edit ayesha khan/i });
+    const rowCheckboxes = await screen.findAllByRole("checkbox", { name: /select this student/i });
+    await user.click(rowCheckboxes[0] as HTMLElement);
+    await user.click(rowCheckboxes[1] as HTMLElement);
+
+    // The bulk-withdraw button proves the selection took effect and the toolbar re-rendered.
+    expect(await screen.findByRole("button", { name: "Withdraw 2" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /generate id cards/i })).not.toBeInTheDocument();
+  });
+
+  it("shows Generate ID cards (2) once two rows are selected, for a user who may generate", async () => {
+    mockFetchCurrentUser.mockResolvedValue(ID_CARD_USER);
+    mockFetchStudentsPage.mockResolvedValue({
+      items: [
+        studentRecord({ id: "stu-1", first_name: "Ayesha", last_name: "Khan", status: "active" }),
+        studentRecord({ id: "stu-2", first_name: "Bilal", last_name: "Ahmed", status: "active" }),
+      ],
+      pagination: { page: 1, page_size: 10, total_count: 2, total_pages: 1 },
+    });
+
+    renderWithProviders(<StudentDirectoryTable />);
+    const user = userEvent.setup();
+
+    const rowCheckboxes = await screen.findAllByRole("checkbox", { name: /select this student/i });
+    await user.click(rowCheckboxes[0] as HTMLElement);
+    await user.click(rowCheckboxes[1] as HTMLElement);
+
+    expect(await screen.findByRole("button", { name: "Generate ID cards (2)" })).toBeEnabled();
+  });
+
+  it("generates ID cards for every selected row, not just the active ones bulk withdraw acts on", async () => {
+    mockFetchCurrentUser.mockResolvedValue(ID_CARD_USER);
+    mockFetchStudentsPage.mockResolvedValue({
+      items: [
+        studentRecord({ id: "stu-1", first_name: "Ayesha", last_name: "Khan", status: "active" }),
+        studentRecord({
+          id: "stu-2",
+          first_name: "Bilal",
+          last_name: "Ahmed",
+          status: "graduated",
+        }),
+      ],
+      pagination: { page: 1, page_size: 10, total_count: 2, total_pages: 1 },
+    });
+    mockGenerateIdCards.mockResolvedValue({ jobId: "job-1" });
+    const runningJob: BackgroundJobRecord = {
+      id: "job-1",
+      job_type: "id-cards.generate",
+      status: "running",
+      progress: 40,
+      result: null,
+      error: null,
+    };
+    mockFetchJob.mockResolvedValue(runningJob);
+
+    renderWithProviders(<StudentDirectoryTable />);
+    const user = userEvent.setup();
+
+    const rowCheckboxes = await screen.findAllByRole("checkbox", { name: /select this student/i });
+    await user.click(rowCheckboxes[0] as HTMLElement);
+    await user.click(rowCheckboxes[1] as HTMLElement);
+
+    // Only the active row is withdrawable; both rows get an ID card.
+    expect(await screen.findByRole("button", { name: "Withdraw 1" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Generate ID cards (2)" }));
+    await waitFor(() => {
+      expect(mockGenerateIdCards).toHaveBeenCalledWith(["stu-1", "stu-2"]);
+    });
+
+    // The job outlives the selection: clearing it must not unmount the progress button.
+    expect(await screen.findByRole("button", { name: "Generating — 40%" })).toBeDisabled();
+    for (const checkbox of screen.getAllByRole("checkbox", { name: /select this student/i })) {
+      await user.click(checkbox);
+    }
+    expect(screen.getByRole("button", { name: "Generating — 40%" })).toBeDisabled();
   });
 });

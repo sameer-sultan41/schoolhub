@@ -12,18 +12,20 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import date
 
-from django.db import IntegrityError, connection, transaction
+from django.db import DataError, IntegrityError, connection, transaction
+from django.db.models import Field
 from django.utils import timezone
 
-from apps.school_organization.models import Section
+from apps.school_organization.models import Campus, Section
 from apps.school_organization.services import assert_section_capacity, assert_session_writable
 from apps.student_management import uploads
 from apps.student_management.models import (
     EmergencyContact,
     EnrollmentStatus,
+    Gender,
     Guardian,
     Student,
     StudentDocument,
@@ -35,6 +37,8 @@ from apps.student_management.models import (
     TransferType,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.exports.tabular import spreadsheet_safe_row
+from core.imports.tabular import ROW_NUMBER_KEY
 from core.tenancy.context import tenant_atomic
 from core.tenancy.sequences import allocate_number
 
@@ -994,80 +998,71 @@ REQUIRED_IMPORT_COLUMNS = (
     "admission_date",
 )
 
-
-def parse_import_rows(*, filename: str, data: bytes) -> list[dict[str, str]]:
-    """Parse a student-import file (CSV or .xlsx) into row dicts keyed by
-
-    IMPORT_COLUMNS's header names.
-    """
-    if filename.lower().endswith(".xlsx"):
-        return _parse_import_xlsx(data)
-    return _parse_import_csv(data)
-
-
-def _parse_import_csv(data: bytes) -> list[dict[str, str]]:
-    import csv
-    import io
-
-    # utf-8-sig strips a BOM if Excel's "CSV UTF-8" export added one; a plain
-    # utf-8 decode would otherwise leave it stuck to the first header name.
-    text = data.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text))
-    return [{k: (v or "") for k, v in row.items()} for row in reader]
-
-
-def _parse_import_xlsx(data: bytes) -> list[dict[str, str]]:
-    import io
-
-    import openpyxl
-
-    workbook = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-    sheet = workbook.active
-    rows_iter = sheet.iter_rows(values_only=True)
-    header = [str(cell).strip() if cell is not None else "" for cell in next(rows_iter)]
-
-    rows: list[dict[str, str]] = []
-    for values in rows_iter:
-        if all(value is None for value in values):
-            continue
-        rows.append(
-            {header[i]: ("" if values[i] is None else str(values[i])) for i in range(len(header))}
-        )
-    return rows
+# The free-text Student columns an import row can overflow; checked against the model's
+# max_length so one long value fails its own row, not the whole job.
+_LENGTH_CHECKED_COLUMNS = (
+    "first_name",
+    "last_name",
+    "preferred_name",
+    "blood_group",
+    "nationality",
+    "religion",
+    "previous_school",
+)
 
 
 def import_student_row(
-    *, row: dict[str, str], row_number: int, tenant_id: uuid.UUID, actor_id: uuid.UUID
+    *,
+    row: dict[str, str],
+    tenant_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    campuses_by_code: Mapping[str, Campus],
 ) -> dict[str, str] | None:
     """Create one student from a parsed import row.
 
     Returns ``None`` on success, or ``{"row", "field", "issue"}`` on failure.
     Each row commits (or rolls back) independently — one bad row must not
     abort the whole batch (module doc §8's migration journey: "reviews the
-    row-level error report ... re-imports failed rows only").
+    row-level error report ... re-imports failed rows only"). The row number
+    comes from ``ROW_NUMBER_KEY`` (set by core.imports.tabular), never the row's
+    position, so it matches the user's file.
+
+    ``campuses_by_code`` is resolved once per file by the task, so a row costs no
+    campus query; a code missing from it is reported as unknown.
     """
     import datetime
 
-    from apps.school_organization.models import Campus
+    row_number = row[ROW_NUMBER_KEY]
+
+    def error(field: str, issue: str) -> dict[str, str]:
+        return {"row": row_number, "field": field, "issue": issue}
 
     missing = [column for column in REQUIRED_IMPORT_COLUMNS if not row.get(column)]
     if missing:
-        field = missing[0]
-        return {
-            "row": str(row_number),
-            "field": field,
-            "issue": f"Missing required value for '{field}'.",
-        }
+        return error(missing[0], f"Missing required value for '{missing[0]}'.")
 
-    try:
-        date_of_birth = datetime.date.fromisoformat(row["date_of_birth"])
-        admission_date = datetime.date.fromisoformat(row["admission_date"])
-    except ValueError:
-        return {
-            "row": str(row_number),
-            "field": "date_of_birth",
-            "issue": "Dates must be in YYYY-MM-DD format.",
-        }
+    # The column has no DB choice constraint, so an unchecked value would be stored as-is.
+    gender = row["gender"].strip().lower()
+    if gender not in Gender.values:
+        return error("gender", f"Must be one of: {', '.join(Gender.values)}.")
+
+    dates: dict[str, datetime.date] = {}
+    for column in ("date_of_birth", "admission_date"):
+        try:
+            dates[column] = datetime.date.fromisoformat(row[column].strip())
+        except ValueError:
+            return error(column, "Must be a date in YYYY-MM-DD format.")
+
+    for column in _LENGTH_CHECKED_COLUMNS:
+        model_field = Student._meta.get_field(column)
+        # get_field()'s return type also covers reverse relations, which have no max_length.
+        limit = model_field.max_length if isinstance(model_field, Field) else None
+        if limit is not None and len(row.get(column) or "") > limit:
+            return error(column, f"Must be at most {limit} characters.")
+
+    campus = campuses_by_code.get(row["campus_code"])
+    if campus is None:
+        return error("campus_code", f"No campus with code '{row['campus_code']}'.")
 
     # One transaction (with the tenant GUC re-applied for it — see
     # core.tenancy.context.tenant_atomic) for the whole row, not just the create:
@@ -1076,21 +1071,13 @@ def import_student_row(
     # transaction the caller happens to already have open.
     try:
         with tenant_atomic(tenant_id):
-            try:
-                campus = Campus.objects.get(code=row["campus_code"])
-            except Campus.DoesNotExist:
-                return {
-                    "row": str(row_number),
-                    "field": "campus_code",
-                    "issue": f"No campus with code '{row['campus_code']}'.",
-                }
             create_student(
                 campus=campus,
-                admission_date=admission_date,
-                date_of_birth=date_of_birth,
+                admission_date=dates["admission_date"],
+                date_of_birth=dates["date_of_birth"],
                 first_name=row["first_name"],
                 last_name=row["last_name"],
-                gender=row["gender"],
+                gender=gender,
                 preferred_name=row.get("preferred_name") or None,
                 blood_group=row.get("blood_group") or None,
                 nationality=row.get("nationality") or None,
@@ -1103,14 +1090,13 @@ def import_student_row(
         detail = exc.detail
         if isinstance(detail, dict) and detail:
             field, issue = next(iter(detail.items()))
-            return {"row": str(row_number), "field": str(field), "issue": str(issue)}
-        return {"row": str(row_number), "field": "non_field", "issue": str(detail)}
+            return error(str(field), str(issue))
+        return error("non_field", str(detail))
     except IntegrityError:
-        return {
-            "row": str(row_number),
-            "field": "non_field",
-            "issue": "This row conflicts with existing data.",
-        }
+        return error("non_field", "This row conflicts with existing data.")
+    except DataError:
+        # Backstop for a column the length check above doesn't cover.
+        return error("non_field", "A value in this row doesn't fit its column.")
     return None
 
 
@@ -1158,17 +1144,21 @@ def build_student_export_csv(*, tenant_id: uuid.UUID) -> bytes:
             .iterator()
         )
         for student in students:
+            # Every cell: names are user-typed, and the file opens in Excel
+            # (deferred-work "CSV formula injection").
             writer.writerow(
-                [
-                    student.admission_number,
-                    student.first_name,
-                    student.last_name,
-                    student.date_of_birth.isoformat(),
-                    student.gender,
-                    student.campus.code,
-                    student.status,
-                    student.admission_date.isoformat(),
-                ]
+                spreadsheet_safe_row(
+                    (
+                        student.admission_number,
+                        student.first_name,
+                        student.last_name,
+                        student.date_of_birth.isoformat(),
+                        student.gender,
+                        student.campus.code,
+                        student.status,
+                        student.admission_date.isoformat(),
+                    )
+                )
             )
     return buffer.getvalue().encode("utf-8")
 

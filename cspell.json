@@ -46,6 +46,7 @@
     "docs/superpowers/plans/2026-09-27-staff-bulk-export-import.md",
     "docs/superpowers/plans/2026-10-03-students-phase2-relations.md",
     "docs/superpowers/plans/2026-10-08-student-creation-stepper.md",
+    "docs/superpowers/plans/2026-10-10-students-phase4-bulk-operations.md",
     ".git/**",
     ".cspell/project-words.txt",
     "COMMENT: Metronic's own CSS, vendored verbatim as a reference source for the metronic colour preset — not this repo's own prose, and not to be edited to satisfy the spellchecker.",

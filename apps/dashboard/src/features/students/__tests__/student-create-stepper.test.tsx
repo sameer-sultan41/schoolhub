@@ -209,7 +209,7 @@ describe("StudentCreateStepper", () => {
     // `NextIntlClientProvider` and throw the moment `useTranslations`/`useQuery` ran again
     // — confirmed on CI. A local `wrapper` (RTL's own option) is what makes `rerender`
     // re-apply the providers on every call, matching `staff-form-dialog.test.tsx`'s and
-    // `staff-import-dialog.test.tsx`'s own identical regression tests.
+    // `bulk-import-dialog.test.tsx`'s own identical regression tests.
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     function Wrapper({ children }: { children: ReactNode }) {
       return (

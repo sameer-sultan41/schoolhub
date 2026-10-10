@@ -365,3 +365,43 @@ describe("students-service — emergency contacts and documents", () => {
     expect(result).toBe("https://files.example.com/x?sig=abc");
   });
 });
+
+describe("students-service — bulk import, export and ID cards", () => {
+  beforeEach(() => {
+    jest.resetModules();
+    mockPost.mockReset();
+    mockPost.mockResolvedValue({ data: { job_id: "job-1", status: "queued" } });
+  });
+
+  it("triggerStudentImport posts the file as multipart form data and maps job_id", async () => {
+    const { triggerStudentImport } = await import("../students-service");
+    const file = new File(["first_name\nAli"], "students.csv", { type: "text/csv" });
+
+    const result = await triggerStudentImport(file);
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [path, body] = mockPost.mock.calls[0] as [string, FormData];
+    expect(path).toBe("/student-imports");
+    expect(body).toBeInstanceOf(FormData);
+    expect((body.get("file") as File).name).toBe("students.csv");
+    expect(result).toEqual({ jobId: "job-1" });
+  });
+
+  it("triggerStudentExport posts with no body and maps job_id", async () => {
+    const { triggerStudentExport } = await import("../students-service");
+
+    const result = await triggerStudentExport();
+
+    expect(mockPost).toHaveBeenCalledWith("/student-exports");
+    expect(result).toEqual({ jobId: "job-1" });
+  });
+
+  it("generateIdCards posts the student ids to the colon-action and maps job_id", async () => {
+    const { generateIdCards } = await import("../students-service");
+
+    const result = await generateIdCards(["a", "b"]);
+
+    expect(mockPost).toHaveBeenCalledWith("/id-cards:generate", { student_ids: ["a", "b"] });
+    expect(result).toEqual({ jobId: "job-1" });
+  });
+});

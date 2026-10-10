@@ -27,5 +27,9 @@ export const TENANT_QUERY_STALE_TIME_MS = 10 * 60_000;
  */
 export const SEARCH_DEBOUNCE_MS = 300;
 
+/** File types every bulk-import dialog accepts — the `accept` value for its file input,
+ * matching what the importers parse server-side (`apps/api/core/imports/`). */
+export const IMPORT_FILE_EXTENSIONS = ".csv,.xlsx";
+
 /** A year: a language choice is not a session, and should outlive one. */
 export const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;

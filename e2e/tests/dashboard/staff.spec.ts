@@ -206,10 +206,8 @@ test.describe("staff directory", () => {
               { status: "succeeded", progress: 100, result: { result_file_id: "file-export-1" } },
             ],
           },
-          // An opaque, storage-key-shaped name — deliberately NOT "staff-export.csv":
-          // `ResponseContentDisposition` is deferred (docs/deferred-work.md), so the
-          // real suggested filename is whatever the storage key is, not a friendly
-          // name. This test asserts a download happens, not what it's named.
+          // An opaque, storage-key-shaped name, as the presigner returns it. This asserts a
+          // download happens, not its name — `Content-Disposition` names it in production.
           files: [
             {
               id: "file-export-1",

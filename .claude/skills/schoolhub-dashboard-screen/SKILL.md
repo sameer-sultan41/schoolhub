@@ -530,12 +530,15 @@ Real example: `e2e/tests/dashboard/students.spec.ts`, `e2e/src/mocks/domains/stu
   a student's own detail) — Phase 1's `StudentDetailSheet` is deliberately flat; wrapping
   it in `Tabs` with nested per-tab create/update/delete flows is Phase 2's own pattern, not
   yet shipped as a worked example.
-- **Bulk import/export.** `/staff`'s `StaffImportDialog`
-  (`apps/dashboard/src/app/(app)/staff/staff-import-dialog.tsx`) is the shipped reference
-  for a column-mapping-free CSV import against a fixed required/optional column set; its
-  toolbar Export button is the reference for a streamed CSV export. Students Phase 4 plans
-  to mirror both — until that lands, point at `/staff`'s source directly rather than
-  guessing at the shape.
+- **Bulk import/export.** Don't hand-roll either: both are shared. A column-mapping-free
+  CSV/.xlsx import against a fixed required/optional column set is the shared
+  `BulkImportDialog` (`apps/dashboard/src/components/bulk-import-dialog.tsx`), fed by a
+  service's `start(file)` and that module's column lists. An export (or any `202 + job`
+  whose result is a file, like the ID-card PDF) is the shared `useJobFileDownload` hook
+  (`apps/dashboard/src/hooks/use-job-file-download.ts`). `/staff`'s toolbar
+  (`apps/dashboard/src/features/staff/staff-toolbar.tsx`) and `/students`'
+  (`apps/dashboard/src/features/students/student-toolbar.tsx`) are the two worked examples,
+  and `student-id-cards-button.tsx` shows the hook with an argument.
 
 ## Related
 
@@ -545,9 +548,9 @@ Real example: `e2e/tests/dashboard/students.spec.ts`, `e2e/src/mocks/domains/stu
   rounds" section is the source of the review-round findings cited throughout.
 - [ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md) —
   generated wire types for a new domain.
-- `/staff`'s source (`apps/dashboard/src/app/(app)/staff/`) — the original reference
-  implementation this pattern was first established against, and still the only shipped
-  example of bulk import/export.
+- `/staff`'s source (`apps/dashboard/src/features/staff/`) — the original reference
+  implementation this pattern was first established against; its toolbar and `/students`'
+  are the two shipped examples of bulk import/export.
 - `schoolhub-api-services` — the services-layer skill this one assumes is already done.
 - `schoolhub-ui-port` — for when a screen needs a `packages/ui` primitive that doesn't
   exist yet, rather than composing existing ones.

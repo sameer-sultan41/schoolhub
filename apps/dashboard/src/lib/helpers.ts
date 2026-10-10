@@ -163,3 +163,18 @@ export function copyMappedFields<T extends object>(
     if (include(value)) to[snakeKey] = value;
   }
 }
+
+/**
+ * Starts a browser download of `url` by clicking a transient anchor.
+ *
+ * Not `window.open`: callers fetch a signed URL first, and that awaited request can outlive
+ * the short window after a click in which a browser still allows a popup, so the open would
+ * be blocked. `filename` is a same-origin hint only — for a cross-origin storage URL the
+ * browser ignores it and the file is named by `core/files`' `Content-Disposition` header.
+ */
+export function downloadFile(url: string, filename?: string): void {
+  const link = document.createElement("a");
+  link.href = url;
+  if (filename) link.download = filename;
+  link.click();
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from apps.staff_management.models import Staff
+from core.exports.tabular import spreadsheet_safe_row
 from core.tenancy.context import tenant_atomic
 
 
@@ -50,15 +51,19 @@ def build_staff_export_csv(*, tenant_id: uuid.UUID) -> bytes:
             .iterator()
         )
         for staff in staff_rows:
+            # Every cell: names are user-typed, and the file opens in Excel
+            # (deferred-work "CSV formula injection").
             writer.writerow(
-                [
-                    staff.employee_number,
-                    staff.first_name,
-                    staff.last_name,
-                    staff.staff_type,
-                    staff.campus.code,
-                    staff.employment_status,
-                    staff.joining_date.isoformat(),
-                ]
+                spreadsheet_safe_row(
+                    (
+                        staff.employee_number,
+                        staff.first_name,
+                        staff.last_name,
+                        staff.staff_type,
+                        staff.campus.code,
+                        staff.employment_status,
+                        staff.joining_date.isoformat(),
+                    )
+                )
             )
     return buffer.getvalue().encode("utf-8")

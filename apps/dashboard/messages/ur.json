@@ -484,33 +484,33 @@
       }
     },
     "import": {
+      "button": "CSV درآمد کریں",
+      "permissionTitle": "آپ کو طلبہ درآمد کرنے کی اجازت نہیں ہے۔",
       "title": "طلبہ درآمد کریں",
-      "description": "CSV یا .xlsx فائل سے بلک میں طلبہ بنائیں۔",
-      "templateTitle": "درکار کالم",
-      "templateHint": "فائل کی ہیڈر لائن میں یہی درست نام ہونے چاہئیں۔ اختیاری کالم نمایاں ہیں۔",
-      "fields": {
-        "file": "فائل"
-      },
-      "upload": "اپ لوڈ کریں",
-      "processing": "درآمد ہو رہا ہے — {progress}%",
-      "failed": "درآمد ناکام ہو گئی۔",
-      "summarySucceeded": "{count} درآمد ہوئے",
-      "summaryFailed": "{count} ناکام ہوئے",
-      "importAnother": "دوسری فائل درآمد کریں",
-      "errorTable": {
-        "row": "قطار",
-        "field": "فیلڈ",
-        "issue": "مسئلہ"
-      }
+      "description": "CSV یا .xlsx فائل سے بلک میں طلبہ بنائیں۔"
+    },
+    "export": {
+      "button": "CSV برآمد کریں",
+      "exporting": "برآمد ہو رہا ہے…",
+      "checkStatus": "برآمد کی صورتحال چیک کریں",
+      "permissionTitle": "آپ کو طلبہ برآمد کرنے کی اجازت نہیں ہے۔",
+      "success": "طلبہ کی فہرست برآمد ہو گئی",
+      "startFailed": "برآمد شروع نہیں ہو سکا۔",
+      "downloadFailed": "برآمد شدہ فائل ڈاؤن لوڈ نہیں ہو سکی۔",
+      "timedOut": "برآمد میں معمول سے زیادہ وقت لگ رہا ہے۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔",
+      "failed": "برآمد ناکام ہو گئی۔"
     },
     "idCards": {
       "selectAll": "اس صفحے کے تمام طلبہ منتخب کریں",
       "selectRow": "اس طالب علم کو منتخب کریں",
       "generate": "شناختی کارڈ بنائیں ({count})",
       "generating": "بن رہا ہے — {progress}%",
-      "failed": "شناختی کارڈ بنانے میں ناکامی۔",
-      "download": "PDF ڈاؤن لوڈ کریں",
-      "dismiss": "خارج کریں"
+      "checkStatus": "شناختی کارڈ کی صورتحال دیکھیں",
+      "success": "شناختی کارڈ تیار ہیں ({count})",
+      "startFailed": "شناختی کارڈ بنانا شروع نہیں ہو سکا۔",
+      "downloadFailed": "شناختی کارڈ کی PDF ڈاؤن لوڈ نہیں ہو سکی۔",
+      "timedOut": "شناختی کارڈ بننے میں توقع سے زیادہ وقت لگ رہا ہے — تھوڑی دیر بعد دوبارہ دیکھیں۔",
+      "failed": "شناختی کارڈ بنانے میں ناکامی۔"
     }
   },
   "staff": {
@@ -676,27 +676,7 @@
       "button": "CSV درآمد کریں",
       "permissionTitle": "آپ کو عملہ درآمد کرنے کی اجازت نہیں ہے۔",
       "title": "عملہ درآمد کریں",
-      "description": "CSV یا .xlsx فائل سے بلک میں عملہ بنائیں۔",
-      "templateTitle": "درکار کالم",
-      "templateHint": "فائل کی ہیڈر لائن میں یہی درست نام ہونے چاہئیں۔ اختیاری کالم نمایاں ہیں۔",
-      "fields": {
-        "file": "فائل"
-      },
-      "upload": "اپ لوڈ کریں",
-      "processing": "درآمد ہو رہا ہے — {progress}%",
-      "failed": "درآمد ناکام ہو گئی۔",
-      "summarySucceeded": "{count} درآمد ہوئے",
-      "summaryFailed": "{count} ناکام ہوئے",
-      "importAnother": "دوسری فائل درآمد کریں",
-      "startFailed": "درآمد شروع نہیں ہو سکا۔",
-      "timedOut": "پس منظر میں چل رہا ہے — کچھ دیر بعد دوبارہ چیک کریں۔",
-      "close": "بند کریں",
-      "runInBackground": "پس منظر میں چلنے دیں",
-      "errorTable": {
-        "row": "قطار",
-        "field": "فیلڈ",
-        "issue": "مسئلہ"
-      }
+      "description": "CSV یا .xlsx فائل سے بلک میں عملہ بنائیں۔"
     },
     "export": {
       "button": "CSV برآمد کریں",
@@ -1163,6 +1143,27 @@
       "substituted": "کور شدہ",
       "emptyTitle": "ابھی کوئی ٹائم ٹیبل شائع نہیں ہوا",
       "emptyDescription": "جب آپ کا اسکول ہفتہ شائع کرے گا، آپ کے پیریڈ یہاں نظر آئیں گے۔"
+    }
+  },
+  "bulkImport": {
+    "templateTitle": "درکار کالم",
+    "templateHint": "فائل کی ہیڈر لائن میں یہی درست نام ہونے چاہئیں۔ اختیاری کالم نمایاں ہیں۔",
+    "fields": {
+      "file": "فائل"
+    },
+    "upload": "اپ لوڈ کریں",
+    "processing": "درآمد ہو رہا ہے — {progress}%",
+    "failed": "درآمد ناکام ہو گئی۔",
+    "summarySucceeded": "{count} درآمد ہوئے",
+    "summaryFailed": "{count} ناکام ہوئے",
+    "startFailed": "درآمد شروع نہیں ہو سکا۔",
+    "timedOut": "پس منظر میں چل رہا ہے — کچھ دیر بعد دوبارہ چیک کریں۔",
+    "close": "بند کریں",
+    "runInBackground": "پس منظر میں چلنے دیں",
+    "errorTable": {
+      "row": "قطار",
+      "field": "فیلڈ",
+      "issue": "مسئلہ"
     }
   },
   "common": {

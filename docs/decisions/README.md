@@ -51,6 +51,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0020](0020-client-fan-out-for-unembedded-nested-ids.md) | A nested list carrying only a foreign id resolves it client-side, by fan-out | Accepted | review only — `change-reviewer` agent, `schoolhub-api-services` skill checklist |
 | [0021](0021-resource-scoped-download-actions-over-the-generic-files-endpoint.md) | A sensitive resource gets its own permission-gated `:download` action, not just the generic `core/files` endpoint | Accepted | review only — `change-reviewer` agent, `schoolhub-backend-module` skill checklist |
 | [0022](0022-polymorphic-history-response-via-dict-dispatch.md) | A polymorphic list response documents with `PolymorphicProxySerializer`, dispatches at runtime with a plain dict lookup | Accepted | review only — `change-reviewer` agent, `schoolhub-backend-module` skill checklist |
+| [0023](0023-shared-bulk-import-parser.md) | Every bulk importer reads its file through one shared parser in `core/imports/` | Accepted | `apps/api/core/imports/tests/test_tabular.py`, mypy `core.imports.*` ratchet; reuse by a new importer is review only |
 
 "Planned" items land in the stacked PRs described in
 [`../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md`](../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md);

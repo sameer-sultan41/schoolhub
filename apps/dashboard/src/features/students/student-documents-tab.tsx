@@ -25,7 +25,7 @@ import {
   useIsMobile,
 } from "@schoolhub/ui";
 
-import { formatDate } from "@/lib/helpers";
+import { downloadFile, formatDate } from "@/lib/helpers";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
@@ -133,16 +133,9 @@ export function StudentDocumentsTab({
     mutationFn: async ({ documentId }: { documentId: string; title: string }) => ({
       url: await Services.students.getDocumentDownloadUrl(documentId),
     }),
+    // `title` is only a same-origin filename hint (see `downloadFile`).
     onSuccess: ({ url }, { title }) => {
-      // The anchor-click pattern `/staff`'s export download already uses — never
-      // `window.open`, which only succeeds within a short window of direct user
-      // interaction that the request in between can lose on a slow connection. The
-      // `download` attribute is a same-origin filename hint only; the actual forced
-      // download now comes from `core/files`' own `Content-Disposition` header (Task 1).
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = title;
-      link.click();
+      downloadFile(url, title);
     },
     onError: (error) => {
       toast.error(resolveErrorMessage(error, tErrors, t("documents.downloadFailed")));

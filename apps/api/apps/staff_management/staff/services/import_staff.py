@@ -1,18 +1,28 @@
-"""Bulk staff import: file parsing plus the per-row create (module doc §16).
+"""Bulk staff import: the per-row create (module doc §16).
 
-Mirrors student_management's importer exactly (same two formats, same
-header-driven contract, same one-transaction-per-row independence).
+Mirrors student_management's importer (same two formats, same
+header-driven contract, same one-transaction-per-row independence); the file
+itself is read by `core.imports.tabular`, the parser every importer shares.
 """
 
 from __future__ import annotations
 
+import datetime
 import uuid
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
-from django.db import IntegrityError
+from django.db import DataError, IntegrityError
+from django.db.models import Field
 
+from apps.staff_management.models import Gender, Staff
 from apps.staff_management.staff.services.create import create_staff
 from core.api.exceptions import DomainRuleViolation
+from core.imports.tabular import ROW_NUMBER_KEY
 from core.tenancy.context import tenant_atomic
+
+if TYPE_CHECKING:
+    from apps.school_organization.models import Campus
 
 # Column mapping for arbitrary legacy headers is not built (same gap as
 # student_management's importer) — the template's exact header names are
@@ -40,132 +50,79 @@ REQUIRED_IMPORT_COLUMNS = (
 )
 
 
-def parse_import_rows(*, filename: str, data: bytes) -> list[dict[str, str]]:
-    """Parse a staff-import file (CSV or .xlsx) into row dicts keyed by
-
-    IMPORT_COLUMNS's header names — mirrors student_management's parser
-    exactly (same two formats, same header-driven contract).
-    """
-    if filename.lower().endswith(".xlsx"):
-        return _parse_import_xlsx(data)
-    return _parse_import_csv(data)
-
-
-def _parse_import_csv(data: bytes) -> list[dict[str, str]]:
-    import csv
-    import io
-
-    # utf-8-sig strips a BOM if Excel's "CSV UTF-8" added one.
-    text = data.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text))
-    rows: list[dict[str, str]] = []
-    for row in reader:
-        entry = {k: (v or "") for k, v in row.items()}
-        # DictReader silently skips a fully blank physical line (row == []), so a plain
-        # by-position index would drift from the real file row the moment one appears.
-        # reader.line_num already accounts for every line consumed, skipped or not.
-        entry["__row_number__"] = str(reader.line_num)
-        rows.append(entry)
-    return rows
-
-
-def _parse_import_xlsx(data: bytes) -> list[dict[str, str]]:
-    import io
-
-    import openpyxl
-
-    workbook = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-    sheet = workbook.active
-    rows_iter = sheet.iter_rows(values_only=True)
-    header = [str(cell).strip() if cell is not None else "" for cell in next(rows_iter)]
-
-    rows: list[dict[str, str]] = []
-    for sheet_row, values in enumerate(rows_iter, start=2):  # header occupies row 1
-        if all(value is None for value in values):
-            # Skipped, not appended — a plain by-position index into `rows` would
-            # otherwise drift from the real sheet row the moment one of these appears.
-            # __row_number__ below is what keeps every downstream error message correct.
-            continue
-        try:
-            entry = {
-                header[i]: ("" if values[i] is None else str(values[i])) for i in range(len(header))
-            }
-        except IndexError:
-            # A row with fewer trailing cells than the header — record it as a
-            # per-row error instead of failing the whole import (see
-            # import_staff_row's matching __parse_error__ check below).
-            entry = {"__parse_error__": f"Row {sheet_row} has fewer columns than the header row."}
-        entry["__row_number__"] = str(sheet_row)
-        rows.append(entry)
-    return rows
+# The free-text Staff columns an import row can overflow; checked against the model's
+# max_length so one long value fails its own row, not the whole job.
+_LENGTH_CHECKED_COLUMNS = (
+    "first_name",
+    "last_name",
+    "phone",
+    "email",
+    "national_id",
+)
 
 
 def import_staff_row(
-    *, row: dict[str, str], tenant_id: uuid.UUID, actor_id: uuid.UUID
+    *,
+    row: dict[str, str],
+    tenant_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    campuses_by_code: Mapping[str, Campus],
 ) -> dict[str, str] | None:
     """Create one staff record from a parsed import row.
 
     Returns ``None`` on success, or ``{"row", "field", "issue"}`` on failure.
     Each row commits (or rolls back) independently — one bad row must not
-    abort the whole batch, mirroring import_student_row exactly.
+    abort the whole batch. Like import_student_row it checks gender, each date
+    (reported against its own column) and text-column lengths before the insert.
 
-    The reported row number comes from ``row["__row_number__"]`` (set by both
-    ``_parse_import_csv`` and ``_parse_import_xlsx``) rather than the row's position in
-    the parsed list — a blank physical row is silently dropped by both parsers, so a
+    ``campuses_by_code`` is resolved once per file by the task, so a row costs no
+    campus query; a code missing from it is reported as unknown.
+
+    The reported row number comes from ``row[ROW_NUMBER_KEY]`` (set by
+    ``core.imports.tabular`` for both CSV and .xlsx) rather than the row's position in
+    the parsed list — a blank physical row is silently dropped by the parser, so a
     by-position index would drift from the real file row after the first one.
     """
-    import datetime
+    row_number = row[ROW_NUMBER_KEY]
 
-    from apps.school_organization.models import Campus
-
-    row_number = row["__row_number__"]
-
-    if "__parse_error__" in row:
-        return {"row": row_number, "field": "non_field", "issue": row["__parse_error__"]}
+    def error(field: str, issue: str) -> dict[str, str]:
+        return {"row": row_number, "field": field, "issue": issue}
 
     missing = [column for column in REQUIRED_IMPORT_COLUMNS if not row.get(column)]
     if missing:
-        field = missing[0]
-        return {
-            "row": row_number,
-            "field": field,
-            "issue": f"Missing required value for '{field}'.",
-        }
+        return error(missing[0], f"Missing required value for '{missing[0]}'.")
 
-    try:
-        joining_date = datetime.date.fromisoformat(row["joining_date"])
-        date_of_birth = (
-            datetime.date.fromisoformat(row["date_of_birth"]) if row.get("date_of_birth") else None
-        )
-    except ValueError:
-        return {
-            "row": row_number,
-            "field": "joining_date",
-            "issue": "Dates must be in YYYY-MM-DD format.",
-        }
+    # Optional; blank falls back to the model default. The column's choices are not
+    # enforced by the database, so an unchecked value would be stored as-is.
+    gender = (row.get("gender") or "").strip().lower() or None
+    if gender is not None and gender not in Gender.values:
+        return error("gender", f"Must be one of: {', '.join(Gender.values)}.")
+
+    dates: dict[str, datetime.date | None] = {}
+    for column in ("joining_date", "date_of_birth"):
+        text = (row.get(column) or "").strip()
+        try:
+            dates[column] = datetime.date.fromisoformat(text) if text else None
+        except ValueError:
+            return error(column, "Must be a date in YYYY-MM-DD format.")
+    joining_date = dates["joining_date"]
+    assert joining_date is not None  # joining_date is required, so it is never blank here
+
+    for column in _LENGTH_CHECKED_COLUMNS:
+        model_field = Staff._meta.get_field(column)
+        # get_field()'s return type also covers reverse relations, which have no max_length.
+        limit = model_field.max_length if isinstance(model_field, Field) else None
+        if limit is not None and len(row.get(column) or "") > limit:
+            return error(column, f"Must be at most {limit} characters.")
+
+    campus = campuses_by_code.get(row["campus_code"])
+    if campus is None:
+        return error("campus_code", f"No campus with code '{row['campus_code']}'.")
 
     # One transaction for the whole row (tenant GUC re-applied via
     # tenant_atomic) — this is what makes each row commit independently.
     try:
         with tenant_atomic(tenant_id):
-            try:
-                campus = Campus.objects.alive().get(code=row["campus_code"])
-            except Campus.DoesNotExist:
-                return {
-                    "row": str(row_number),
-                    "field": "campus_code",
-                    "issue": f"No campus with code '{row['campus_code']}'.",
-                }
-            except Campus.MultipleObjectsReturned:
-                # The campus-code uniqueness constraint is scoped to non-deleted rows
-                # only, so a code reused after a soft-delete can match more than one
-                # row here without .alive() — report it as an import error rather than
-                # letting the exception fail the whole batch.
-                return {
-                    "row": str(row_number),
-                    "field": "campus_code",
-                    "issue": f"More than one campus has code '{row['campus_code']}'.",
-                }
             create_staff(
                 campus=campus,
                 joining_date=joining_date,
@@ -173,8 +130,8 @@ def import_staff_row(
                 last_name=row["last_name"],
                 staff_type=row["staff_type"],
                 phone=row["phone"],
-                gender=row.get("gender") or None,
-                date_of_birth=date_of_birth,
+                gender=gender,
+                date_of_birth=dates["date_of_birth"],
                 email=row.get("email") or None,
                 national_id=row.get("national_id") or None,
                 actor_id=actor_id,
@@ -184,12 +141,11 @@ def import_staff_row(
         detail = exc.detail
         if isinstance(detail, dict) and detail:
             field, issue = next(iter(detail.items()))
-            return {"row": str(row_number), "field": str(field), "issue": str(issue)}
-        return {"row": str(row_number), "field": "non_field", "issue": str(detail)}
+            return error(str(field), str(issue))
+        return error("non_field", str(detail))
     except IntegrityError:
-        return {
-            "row": str(row_number),
-            "field": "non_field",
-            "issue": "This row conflicts with existing data.",
-        }
+        return error("non_field", "This row conflicts with existing data.")
+    except DataError:
+        # Backstop for a column the length check above doesn't cover.
+        return error("non_field", "A value in this row doesn't fit its column.")
     return None

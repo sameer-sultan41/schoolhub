@@ -7,12 +7,20 @@ import { Button, Skeleton } from "@schoolhub/ui";
 import { GraduationCap, Plus, Users, type LucideIcon } from "lucide-react";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
+import { BulkImportDialog } from "@/components/bulk-import-dialog";
 import { StatChip } from "@/components/stat-chip";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useJobFileDownload } from "@/hooks/use-job-file-download";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
-import { STUDENT_WITHDRAWABLE_STATUS } from "@/services/modules/students/students-constant";
+import {
+  STUDENT_EXPORT_FILENAME,
+  STUDENT_IMPORT_JOB_STORAGE_PREFIX,
+  STUDENT_IMPORT_OPTIONAL_COLUMNS,
+  STUDENT_IMPORT_REQUIRED_COLUMNS,
+  STUDENT_WITHDRAWABLE_STATUS,
+} from "@/services/modules/students/students-constant";
 import { StudentCreateStepper } from "./student-create-stepper";
 
 type StatChipState =
@@ -61,14 +69,15 @@ function StudentStatChip({
 }
 
 /**
- * The `/students` toolbar: two live headcounts (total, active) and the New Student
- * action. Each count is its own `useQuery` — `pageSize: 1` reads the server's reported
- * `total_count` without draining the list, same pattern as `/staff`'s own toolbar counts
- * — rather than reusing the directory table's own query, which reflects whatever filter
- * the viewer currently has active.
+ * The `/students` toolbar: two live headcounts (total, active), Export CSV, Import CSV and
+ * the New Student action. Each count is its own `useQuery` — `pageSize: 1` reads the
+ * server's reported `total_count` without draining the list, same pattern as `/staff`'s
+ * own toolbar counts — rather than reusing the directory table's own query, which reflects
+ * whatever filter the viewer currently has active.
  */
 export function StudentToolbar() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const t = useTranslations("students");
   const tCommon = useTranslations("common");
 
@@ -98,6 +107,8 @@ export function StudentToolbar() {
 
   const { data: currentUser, isError: isCurrentUserError } = useCurrentUser();
   const canCreate = hasPermission(currentUser, "students.student.create");
+  const canExport = hasPermission(currentUser, "students.student.export");
+  const canImport = hasPermission(currentUser, "students.student.import");
   // Fail closed, as the sidebar's own module gate does: the button stays disabled until
   // the user's permissions are actually known (the API enforces regardless), and the
   // `title` says why rather than leaving a dead button unexplained.
@@ -106,6 +117,23 @@ export function StudentToolbar() {
     : isCurrentUserError
       ? tCommon("permissionsLoadFailed")
       : tCommon("permissionsLoading");
+  const exportTitle =
+    permissionsUnknownTitle ?? (canExport ? undefined : t("export.permissionTitle"));
+  const importTitle =
+    permissionsUnknownTitle ?? (canImport ? undefined : t("import.permissionTitle"));
+
+  const exportJob = useJobFileDownload({
+    module: "students",
+    start: () => Services.students.triggerStudentExport(),
+    filename: STUDENT_EXPORT_FILENAME,
+    messages: {
+      startFailed: t("export.startFailed"),
+      downloadFailed: t("export.downloadFailed"),
+      timedOut: t("export.timedOut"),
+      failed: t("export.failed"),
+      success: () => t("export.success"),
+    },
+  });
 
   return (
     <>
@@ -131,6 +159,35 @@ export function StudentToolbar() {
           }
         />
         <ToolbarActions>
+          {/* On a wrapping `<span>`, not the `Button`: `buttonVariants` bakes
+              `disabled:pointer-events-none` into every variant, and a disabled button would
+              never receive the hover that shows its own `title`. */}
+          <span title={exportTitle}>
+            <Button
+              variant="outline"
+              disabled={!canExport || exportJob.isBusy}
+              onClick={() => {
+                exportJob.run();
+              }}
+            >
+              {exportJob.isBusy
+                ? t("export.exporting")
+                : exportJob.isStalled
+                  ? t("export.checkStatus")
+                  : t("export.button")}
+            </Button>
+          </span>
+          <span title={importTitle}>
+            <Button
+              variant="outline"
+              disabled={!canImport}
+              onClick={() => {
+                setImportOpen(true);
+              }}
+            >
+              {t("import.button")}
+            </Button>
+          </span>
           <span title={permissionsUnknownTitle}>
             <Button
               variant="primary"
@@ -147,6 +204,17 @@ export function StudentToolbar() {
         </ToolbarActions>
       </Toolbar>
       <StudentCreateStepper open={addDialogOpen} onOpenChange={setAddDialogOpen} />
+      <BulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        module="students"
+        title={t("import.title")}
+        description={t("import.description")}
+        requiredColumns={STUDENT_IMPORT_REQUIRED_COLUMNS}
+        optionalColumns={STUDENT_IMPORT_OPTIONAL_COLUMNS}
+        storageKeyPrefix={STUDENT_IMPORT_JOB_STORAGE_PREFIX}
+        start={Services.students.triggerStudentImport}
+      />
     </>
   );
 }

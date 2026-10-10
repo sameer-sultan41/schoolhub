@@ -1,10 +1,11 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type * as SchoolhubUi from "@schoolhub/ui";
 import { Drawer } from "@schoolhub/ui";
 
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
+  ResponsiveDialogTitle,
   useIsDrawer,
 } from "@/components/responsive-dialog";
 import { setMatchesMobile } from "@/test-utils";
@@ -79,6 +80,40 @@ describe("ResponsiveDialog", () => {
     expect(mobile.baseElement.querySelector('[data-slot="drawer-content"]')).not.toHaveClass(
       "max-w-2xl",
     );
+  });
+
+  // The close button's presence is the only difference between the two branches, so each
+  // case runs on the desktop Dialog and the mobile Drawer (they take differently named props).
+  it.each([
+    ["desktop dialog", false],
+    ["mobile drawer", true],
+  ])("shows the close button on the %s by default", (_label, mobile) => {
+    setMatchesMobile(mobile);
+    render(
+      <ResponsiveDialog open onOpenChange={jest.fn()}>
+        <ResponsiveDialogContent closeLabel="Close">
+          <ResponsiveDialogTitle>T</ResponsiveDialogTitle>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>,
+    );
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["desktop dialog", false],
+    ["mobile drawer", true],
+  ])("hides the close button on the %s when showCloseButton is false", (_label, mobile) => {
+    setMatchesMobile(mobile);
+    render(
+      <ResponsiveDialog open onOpenChange={jest.fn()}>
+        <ResponsiveDialogContent closeLabel="Close" showCloseButton={false}>
+          <ResponsiveDialogTitle>T</ResponsiveDialogTitle>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
   });
 
   it("useIsDrawer throws when called outside a ResponsiveDialog/ResponsiveSheet", () => {

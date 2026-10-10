@@ -23,6 +23,7 @@ from __future__ import annotations
 import csv
 import datetime
 import io
+from collections.abc import Iterable
 
 from core.documents import html as document_html
 from core.documents.pdf import render_pdf
@@ -93,13 +94,15 @@ def _cell(value: object) -> str:
 _FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
 
 
-def _spreadsheet_safe(text: str) -> str:
+def spreadsheet_safe(text: str) -> str:
     """Neutralise a value a spreadsheet would otherwise execute as a formula.
 
     `remarks` is free text a teacher types at the register, so a remark reading
     `=HYPERLINK("http://evil","Click")` executes the moment someone opens the
     export in Excel, Sheets or LibreOffice — a client-side execution vector that
-    starts inside our own data and needs no other flaw.
+    starts inside our own data and needs no other flaw. The same holds for the
+    student and staff roster exports, whose names are user-typed and which write
+    cells directly rather than through `render`, so they call this themselves.
 
     The leading apostrophe is the standard mitigation: every major spreadsheet
     reads it as "the rest is text" and hides it in the cell. It does show in a
@@ -109,8 +112,25 @@ def _spreadsheet_safe(text: str) -> str:
     **Not applied to the PDF**, which escapes HTML instead: there is no formula
     engine in a PDF, and a stray apostrophe in a printed register would be a
     defect with nothing to justify it.
+
+    A trigger behind leading spaces counts too: some spreadsheets skip leading
+    whitespace before deciding a cell is a formula, so ``" =1+1"`` is neutralised
+    just like ``"=1+1"``. The apostrophe always goes in front of the original text.
     """
-    return f"'{text}" if text.startswith(_FORMULA_TRIGGERS) else text
+    if text.startswith(_FORMULA_TRIGGERS) or text.lstrip().startswith(_FORMULA_TRIGGERS):
+        return f"'{text}"
+    return text
+
+
+def spreadsheet_safe_row(values: Iterable[object]) -> list[str]:
+    """One roster-export CSV row: every value as text, each neutralised.
+
+    For the streaming roster exports (students, staff), which write cells straight
+    to a `csv.writer` row by row. They deliberately do not go through `render()`,
+    which buffers every row as a dict and writes a "no rows matched" body for an
+    empty export — that would change both their memory profile and their output.
+    """
+    return [spreadsheet_safe(str(value)) for value in values]
 
 
 def _csv(rows: list[dict]) -> bytes:
@@ -124,7 +144,7 @@ def _csv(rows: list[dict]) -> bytes:
     writer = csv.DictWriter(buffer, fieldnames=_headers(rows))
     writer.writeheader()
     writer.writerows(
-        {key: _spreadsheet_safe(_cell(value)) for key, value in row.items()} for row in rows
+        {key: spreadsheet_safe(_cell(value)) for key, value in row.items()} for row in rows
     )
     return buffer.getvalue().encode()
 
@@ -157,7 +177,7 @@ def _xlsx(rows: list[dict], *, title: str) -> bytes:
         # openpyxl writes a string beginning `=` as a *formula*, so this is
         # not merely defence against the reader's spreadsheet — it is what
         # stops us writing one ourselves.
-        sheet.append([_spreadsheet_safe(_cell(row.get(header))) for header in headers])
+        sheet.append([spreadsheet_safe(_cell(row.get(header))) for header in headers])
 
     for index, header in enumerate(headers, start=1):
         widest = max((len(_cell(row.get(header))) for row in rows), default=0)
