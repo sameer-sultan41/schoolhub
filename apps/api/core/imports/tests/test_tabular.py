@@ -8,7 +8,7 @@ import io
 import openpyxl
 from django.test import SimpleTestCase
 
-from core.imports.tabular import ROW_NUMBER_KEY, ImportFileError, _xlsx_row, parse_rows
+from core.imports.tabular import ROW_NUMBER_KEY, ImportFileError, _cell_text, _xlsx_row, parse_rows
 
 
 def _xlsx(rows: list[list[object]]) -> bytes:
@@ -78,3 +78,25 @@ class ParseXlsxTests(SimpleTestCase):
     def test_a_corrupt_workbook_raises_a_readable_error(self) -> None:
         with self.assertRaisesMessage(ImportFileError, ".xlsx"):
             parse_rows(filename="s.xlsx", data=b"not a zip")
+
+
+class CellTextTests(SimpleTestCase):
+    def test_a_midnight_datetime_is_a_plain_date(self) -> None:
+        self.assertEqual(_cell_text(datetime.datetime(2026, 4, 1, 0, 0)), "2026-04-01")
+
+    def test_a_datetime_with_a_time_of_day_drops_the_time(self) -> None:
+        # Never an "...T08:30:00" string: date columns are read with date.fromisoformat.
+        self.assertEqual(_cell_text(datetime.datetime(2026, 4, 1, 8, 30)), "2026-04-01")
+
+    def test_a_time_cell_stays_a_clock_time(self) -> None:
+        self.assertEqual(_cell_text(datetime.time(8, 30)), "08:30:00")
+
+    def test_a_datetime_on_excels_epoch_is_a_time_only_cell(self) -> None:
+        self.assertEqual(_cell_text(datetime.datetime(1899, 12, 30, 8, 30)), "08:30:00")
+
+    def test_a_blank_cell_is_empty_text(self) -> None:
+        self.assertEqual(_cell_text(None), "")
+
+    def test_an_xlsx_time_cell_round_trips_through_the_parser(self) -> None:
+        data = _xlsx([["check_in"], [datetime.time(8, 30)]])
+        self.assertEqual(parse_rows(filename="s.xlsx", data=data)[0]["check_in"], "08:30:00")

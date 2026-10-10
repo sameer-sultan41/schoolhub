@@ -12,14 +12,14 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import date
 
 from django.db import DataError, IntegrityError, connection, transaction
 from django.db.models import Field
 from django.utils import timezone
 
-from apps.school_organization.models import Section
+from apps.school_organization.models import Campus, Section
 from apps.school_organization.services import assert_section_capacity, assert_session_writable
 from apps.student_management import uploads
 from apps.student_management.models import (
@@ -37,7 +37,7 @@ from apps.student_management.models import (
     TransferType,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
-from core.exports.tabular import spreadsheet_safe
+from core.exports.tabular import spreadsheet_safe_row
 from core.imports.tabular import ROW_NUMBER_KEY
 from core.tenancy.context import tenant_atomic
 from core.tenancy.sequences import allocate_number
@@ -1012,7 +1012,11 @@ _LENGTH_CHECKED_COLUMNS = (
 
 
 def import_student_row(
-    *, row: dict[str, str], tenant_id: uuid.UUID, actor_id: uuid.UUID
+    *,
+    row: dict[str, str],
+    tenant_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    campuses_by_code: Mapping[str, Campus],
 ) -> dict[str, str] | None:
     """Create one student from a parsed import row.
 
@@ -1022,10 +1026,11 @@ def import_student_row(
     row-level error report ... re-imports failed rows only"). The row number
     comes from ``ROW_NUMBER_KEY`` (set by core.imports.tabular), never the row's
     position, so it matches the user's file.
+
+    ``campuses_by_code`` is resolved once per file by the task, so a row costs no
+    campus query; a code missing from it is reported as unknown.
     """
     import datetime
-
-    from apps.school_organization.models import Campus
 
     row_number = row[ROW_NUMBER_KEY]
 
@@ -1055,6 +1060,10 @@ def import_student_row(
         if limit is not None and len(row.get(column) or "") > limit:
             return error(column, f"Must be at most {limit} characters.")
 
+    campus = campuses_by_code.get(row["campus_code"])
+    if campus is None:
+        return error("campus_code", f"No campus with code '{row['campus_code']}'.")
+
     # One transaction (with the tenant GUC re-applied for it — see
     # core.tenancy.context.tenant_atomic) for the whole row, not just the create:
     # this is what actually makes each row "commit independently" as the docstring
@@ -1062,14 +1071,6 @@ def import_student_row(
     # transaction the caller happens to already have open.
     try:
         with tenant_atomic(tenant_id):
-            try:
-                campus = Campus.objects.alive().get(code=row["campus_code"])
-            except Campus.DoesNotExist:
-                return error("campus_code", f"No campus with code '{row['campus_code']}'.")
-            except Campus.MultipleObjectsReturned:
-                return error(
-                    "campus_code", f"More than one campus has code '{row['campus_code']}'."
-                )
             create_student(
                 campus=campus,
                 admission_date=dates["admission_date"],
@@ -1146,9 +1147,8 @@ def build_student_export_csv(*, tenant_id: uuid.UUID) -> bytes:
             # Every cell: names are user-typed, and the file opens in Excel
             # (deferred-work "CSV formula injection").
             writer.writerow(
-                [
-                    spreadsheet_safe(str(value))
-                    for value in (
+                spreadsheet_safe_row(
+                    (
                         student.admission_number,
                         student.first_name,
                         student.last_name,
@@ -1158,7 +1158,7 @@ def build_student_export_csv(*, tenant_id: uuid.UUID) -> bytes:
                         student.status,
                         student.admission_date.isoformat(),
                     )
-                ]
+                )
             )
     return buffer.getvalue().encode("utf-8")
 

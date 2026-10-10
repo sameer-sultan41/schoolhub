@@ -1402,9 +1402,10 @@ REQUIRED_IMPORT_COLUMNS = ("admission_number", "attendance_date", "status")
 def parse_attendance_import(*, filename: str, data: bytes) -> list[dict[str, str]]:
     """Parse a CSV or .xlsx register into row dicts keyed by IMPORT_COLUMNS.
 
-    Delegates to `core.imports.tabular`, the parser every importer shares.
+    Delegates to `core.imports.tabular`, the parser every importer shares; a file
+    missing a required header fails once, readably, rather than once per row.
     """
-    return parse_rows(filename=filename, data=data)
+    return parse_rows(filename=filename, data=data, required_columns=REQUIRED_IMPORT_COLUMNS)
 
 
 def import_attendance_row(

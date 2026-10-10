@@ -38,9 +38,7 @@ imported. Each importer's own row function and column constants stay in its own 
 - Attendance and exams error reports now carry real row numbers instead of `index + 1`, which drifted
   after a blank row.
 - A misspelled or missing required header fails the whole job with one readable error, not one error
-  per row. That holds for the student and staff importers, which pass `required_columns`; attendance
-  and exam marks do not yet, so a misspelled header there still yields one error per row
-  ([`deferred-work.md`](../deferred-work.md)).
+  per row. All four importers (students, staff, attendance, exam marks) pass their `required_columns`.
 - A new importer calls `parse_rows` and reads `row[ROW_NUMBER_KEY]`; it does not parse files itself.
 - Known exception: `apps/api/apps/fees_finance/adapters/generic_csv.py` (payment-provider settlement
   files) keeps its own reader. Case-insensitive headers, and whole-file problems reported as row 0

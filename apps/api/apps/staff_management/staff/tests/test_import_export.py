@@ -12,6 +12,7 @@ from __future__ import annotations
 import csv
 import datetime
 import io
+from unittest import mock
 
 from django.db import connection
 from django.test import TransactionTestCase
@@ -27,7 +28,7 @@ from apps.school_organization.tests.factories import (
     authenticate,
     grant,
 )
-from apps.staff_management.models import EmploymentStatus, Staff, StaffType
+from apps.staff_management.models import EmploymentStatus, Gender, Staff, StaffType
 from apps.staff_management.staff.services.export_staff import build_staff_export_csv
 from apps.staff_management.tests.factories import StaffFactory, enable_feature
 from core.files.models import File
@@ -107,6 +108,93 @@ class StaffImportTests(StaffManagementJobsAPITestCase):
         response = self._upload("first_name,last_name\n")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    HEADER = "first_name,last_name,staff_type,campus_code,joining_date,phone,gender,date_of_birth\n"
+
+    def _result(self, content: str) -> dict:
+        response = self._upload(content)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+        self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
+        return job.result
+
+    def test_a_bad_date_of_birth_is_reported_against_date_of_birth(self) -> None:
+        self.allow("staff.staff.import")
+        result = self._result(
+            self.HEADER + "Amina,Khan,teaching,MAIN,2026-04-01,+923001234567,female,01/02/1990\n"
+        )
+        self.assertEqual(result["errors"][0]["field"], "date_of_birth")
+
+    def test_a_bad_joining_date_is_reported_against_joining_date(self) -> None:
+        self.allow("staff.staff.import")
+        result = self._result(
+            self.HEADER + "Amina,Khan,teaching,MAIN,01/04/2026,+923001234567,female,1990-02-01\n"
+        )
+        self.assertEqual(result["errors"][0]["field"], "joining_date")
+
+    def test_rejects_a_gender_outside_the_choices(self) -> None:
+        self.allow("staff.staff.import")
+        result = self._result(
+            self.HEADER + "Amina,Khan,teaching,MAIN,2026-04-01,+923001234567,f,1990-02-01\n"
+        )
+        self.assertEqual(result["errors"][0]["field"], "gender")
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Staff.objects.filter(first_name="Amina").exists())
+
+    def test_accepts_gender_case_insensitively_and_stores_it_lowercase(self) -> None:
+        self.allow("staff.staff.import")
+        self._result(
+            self.HEADER + "Amina,Khan,teaching,MAIN,2026-04-01,+923001234567,Female,1990-02-01\n"
+        )
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Staff.objects.get(first_name="Amina").gender, Gender.FEMALE)
+
+    def test_an_over_length_value_fails_only_its_row(self) -> None:
+        self.allow("staff.staff.import")
+        result = self._result(
+            self.HEADER
+            + f"{'A' * 101},Khan,teaching,MAIN,2026-04-01,+923001234567,female,1990-02-01\n"
+            + "Bilal,Rahman,teaching,MAIN,2026-04-01,+923001234568,male,1990-02-01\n"
+        )
+        self.assertEqual((result["succeeded"], result["errors"][0]["field"]), (1, "first_name"))
+
+    def test_an_unknown_campus_code_is_reported_without_aborting_the_batch(self) -> None:
+        self.allow("staff.staff.import")
+        result = self._result(
+            self.HEADER
+            + "Amina,Khan,teaching,NOPE,2026-04-01,+923001234567,female,1990-02-01\n"
+            + "Bilal,Rahman,teaching,MAIN,2026-04-01,+923001234568,male,1990-02-01\n"
+        )
+        self.assertEqual((result["succeeded"], result["errors"][0]["field"]), (1, "campus_code"))
+        self.assertIn("NOPE", result["errors"][0]["issue"])
+
+    def test_a_soft_deleted_campus_code_is_not_matched(self) -> None:
+        self.allow("staff.staff.import")
+        with tenant_context(self.tenant.id):
+            CampusFactory(tenant=self.tenant, code="OLD", deleted_at=timezone.now())
+        result = self._result(
+            self.HEADER + "Amina,Khan,teaching,OLD,2026-04-01,+923001234567,female,1990-02-01\n"
+        )
+        self.assertEqual(result["errors"][0]["field"], "campus_code")
+
+    def test_progress_is_written_in_steps_not_per_row_and_ends_at_100(self) -> None:
+        from core.jobs import services as job_services
+
+        self.allow("staff.staff.import")
+        rows = "".join(
+            f"Person{i},Khan,teaching,MAIN,2026-04-01,+9230012345{i:02d},female,1990-02-01\n"
+            for i in range(40)
+        )
+
+        with mock.patch.object(
+            job_services, "update_progress", wraps=job_services.update_progress
+        ) as spy:
+            result = self._result(self.HEADER + rows)
+
+        self.assertEqual(result["succeeded"], 40)
+        self.assertLess(spy.call_count, 40)
+        self.assertEqual(spy.call_args.kwargs["progress"], 100)
 
     def test_a_misspelled_header_fails_the_job_with_one_readable_error(self) -> None:
         self.allow("staff.staff.import")

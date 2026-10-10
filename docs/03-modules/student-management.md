@@ -345,11 +345,13 @@ own import dialog is deleted), and `ToolbarActions` now wraps so the extra butto
 screen. Backend changes behind this: the parser every importer reads its file with now lives in
 `core/imports/` ([ADR-0023](../decisions/0023-shared-bulk-import-parser.md)), shared by the
 student, staff, attendance and exam-marks importers — real row numbers that a blank line no
-longer shifts, Excel date cells read as ISO dates, short xlsx rows padded like CSV, and (student
-and staff only) a missing or misspelled required header failing the job with one readable
-sentence; `import_student_row` validates gender, each date, over-length values and the campus
-code per row, reporting each against its own field; and both roster exports pass every cell
-through `core.exports.tabular.spreadsheet_safe`, so a name starting with `=`, `+`, `-` or `@`
-no longer opens as a formula. Mocked Playwright coverage is
+longer shifts, Excel date cells read as ISO dates (a datetime cell keeps only its date), short xlsx
+rows padded like CSV, and a missing or misspelled required header failing the job with one readable
+sentence in all four importers; `import_student_row` and `import_staff_row` validate gender, each
+date, over-length values and the campus code per row, reporting each against its own field (the
+task resolves the file's campuses in one query, and writes job progress in 5-point steps rather
+than per row); and both roster exports pass every cell through
+`core.exports.tabular.spreadsheet_safe_row`, so a name starting with `=`, `+`, `-` or `@` (or
+with one of them behind leading spaces) no longer opens as a formula. Mocked Playwright coverage is
 `e2e/tests/dashboard/students-bulk.spec.ts`; what this phase deliberately left out is in
 `deferred-work.md`.

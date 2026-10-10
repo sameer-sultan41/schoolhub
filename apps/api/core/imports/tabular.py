@@ -103,12 +103,31 @@ def _xlsx_row(header: list[str], values: tuple[object, ...], *, sheet_row: int) 
     return entry
 
 
+# Excel stores a time-only cell as a day-fraction on its epoch; openpyxl normally hands
+# back datetime.time for it, but a cell with an unusual number format can arrive as a
+# datetime on one of these dates instead.
+_EXCEL_EPOCH_DATES = frozenset({datetime.date(1899, 12, 30), datetime.date(1900, 1, 1)})
+
+
 def _cell_text(value: object) -> str:
-    """A cell as the text a user would have typed — a date cell as YYYY-MM-DD."""
+    """A cell as the text a user would have typed.
+
+    - A datetime is a *date* cell: it becomes ``YYYY-MM-DD`` and any time of day is
+      dropped, since every importer reads a date column with ``date.fromisoformat``
+      and an ``...T08:30:00`` string would fail all of them. The one exception is a
+      datetime on Excel's epoch date, which is a time-only cell in disguise and
+      becomes ``HH:MM:SS`` so a time column (attendance check-in/out) still parses.
+    - A ``datetime.time`` cell stays ``HH:MM:SS`` (what ``time.fromisoformat`` reads).
+    - A ``datetime.date`` becomes ``YYYY-MM-DD``; everything else is ``str(value)``.
+    """
     if value is None:
         return ""
     if isinstance(value, datetime.datetime):
-        return value.date().isoformat() if value.time() == datetime.time() else value.isoformat()
+        if value.date() in _EXCEL_EPOCH_DATES:
+            return value.time().isoformat()
+        return value.date().isoformat()
     if isinstance(value, datetime.date):
+        return value.isoformat()
+    if isinstance(value, datetime.time):
         return value.isoformat()
     return str(value)

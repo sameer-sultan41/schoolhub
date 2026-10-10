@@ -1082,21 +1082,6 @@ either this file or `project-status.md`.
   `import_students_task`, so the importer learns the outcome only by keeping the dialog (or its
   background job) open — the dashboard's "Run in background" reconnects, but nothing pushes.
 
-- **The staff importer has no per-column length pre-check, `DataError` backstop or per-date
-  error field.** `import_student_row` now checks each text column against the model's
-  `max_length` and catches `DataError`, so an over-long value fails only its own row.
-  `import_staff_row` has neither: an over-long value raises a `DataError` that only the task's
-  blanket handler catches, so the job ends `failed` (rows already imported stay) instead of
-  reporting that one row. It also wraps both date parses in one `try` and reports a bad
-  `date_of_birth` as `joining_date` — the mislabel `import_student_row` no longer has.
-
-- **Attendance and examinations importers do not pass `required_columns` to `parse_rows`.** Only
-  the student and staff importers do (ADR-0023), so a misspelled header in an attendance or
-  marks sheet still yields one error per row instead of one readable sentence. Both already
-  declare their required columns (`REQUIRED_IMPORT_COLUMNS` in `attendance/services.py`,
-  `REQUIRED_MARKS_IMPORT_COLUMNS` in `examinations/services.py`); each only has to pass them
-  to `parse_rows`, plus a job-level test like the student one.
-
 - **No live-lane journey for import, export or ID cards.** Students Phase 4's coverage is
   mocked Playwright (`e2e/tests/dashboard/students-bulk.spec.ts`) plus backend tests that run the
   Celery tasks eagerly; nothing drives a real worker, real storage and a real download in the
@@ -1114,13 +1099,6 @@ either this file or `project-status.md`.
   because the next `reader.fieldnames` access re-syncs it, which is an implementation detail
   of CPython's `csv` module. `test_csv_row_numbers_survive_a_blank_line` pins it today.
   Reading the underlying reader's counter (`reader.reader.line_num`) needs no side effect.
-
-- **A refused job poll leaves the export and ID-card buttons on "Check ... status".**
-  `use-job-file-download.ts` treats every poll error as a stall that `run()` resumes. If the job
-  is gone or not the caller's (404/403), the button resumes the same dead job until the page
-  reloads. `BulkImportDialog` already tells a refused poll (`isPollRefused`) from a transient
-  one; the hook could do the same and start a fresh job instead. It behaves like `/staff`'s
-  original export did, and `GET /jobs/{id}` is scoped to the creator, so it is rare.
 
 - **The ID-card button loses its job when the students directory query fails.**
   `StudentIdCardsButton` keeps an in-flight job across selection changes and paging, but the

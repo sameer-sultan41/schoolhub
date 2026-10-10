@@ -23,6 +23,7 @@ from __future__ import annotations
 import csv
 import datetime
 import io
+from collections.abc import Iterable
 
 from core.documents import html as document_html
 from core.documents.pdf import render_pdf
@@ -111,8 +112,25 @@ def spreadsheet_safe(text: str) -> str:
     **Not applied to the PDF**, which escapes HTML instead: there is no formula
     engine in a PDF, and a stray apostrophe in a printed register would be a
     defect with nothing to justify it.
+
+    A trigger behind leading spaces counts too: some spreadsheets skip leading
+    whitespace before deciding a cell is a formula, so ``" =1+1"`` is neutralised
+    just like ``"=1+1"``. The apostrophe always goes in front of the original text.
     """
-    return f"'{text}" if text.startswith(_FORMULA_TRIGGERS) else text
+    if text.startswith(_FORMULA_TRIGGERS) or text.lstrip().startswith(_FORMULA_TRIGGERS):
+        return f"'{text}"
+    return text
+
+
+def spreadsheet_safe_row(values: Iterable[object]) -> list[str]:
+    """One roster-export CSV row: every value as text, each neutralised.
+
+    For the streaming roster exports (students, staff), which write cells straight
+    to a `csv.writer` row by row. They deliberately do not go through `render()`,
+    which buffers every row as a dict and writes a "no rows matched" body for an
+    empty export — that would change both their memory profile and their output.
+    """
+    return [spreadsheet_safe(str(value)) for value in values]
 
 
 def _csv(rows: list[dict]) -> bytes:

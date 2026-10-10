@@ -1022,9 +1022,10 @@ _TRUTHY = frozenset({"1", "true", "yes", "y", "t"})
 def parse_marks_import(*, filename: str, data: bytes) -> list[dict[str, str]]:
     """Parse a CSV or .xlsx marks sheet into row dicts.
 
-    Delegates to `core.imports.tabular`, the parser every importer shares.
+    Delegates to `core.imports.tabular`, the parser every importer shares; a file
+    missing a required header fails once, readably, rather than once per row.
     """
-    return parse_rows(filename=filename, data=data)
+    return parse_rows(filename=filename, data=data, required_columns=REQUIRED_MARKS_IMPORT_COLUMNS)
 
 
 def _import_decimal(raw: str, field: str) -> tuple[object, str | None]:

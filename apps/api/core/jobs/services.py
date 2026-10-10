@@ -60,6 +60,23 @@ def update_progress(*, job: BackgroundJob, progress: int) -> None:
         job.save(update_fields=["progress", "updated_at"])
 
 
+def update_progress_if_due(
+    *, job: BackgroundJob, done: int, total: int, last_written: int, min_step: int = 5
+) -> int:
+    """Write progress only when it moved ``min_step`` points (or the work is done).
+
+    A per-row write is one transaction per row on top of the row's own, which dwarfs
+    the work for a many-row import and tells a polling client nothing a 5-point step
+    does not. Returns the progress value now on the job, to pass back as
+    ``last_written`` on the next call.
+    """
+    progress = round(done / max(total, 1) * 100)
+    if done >= total or progress - last_written >= min_step:
+        update_progress(job=job, progress=progress)
+        return progress
+    return last_written
+
+
 def mark_succeeded(*, job: BackgroundJob, result: dict) -> BackgroundJob:
     with tenant_atomic(job.tenant_id):
         job.status = JobStatus.SUCCEEDED

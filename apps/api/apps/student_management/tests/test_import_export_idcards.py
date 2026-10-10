@@ -183,6 +183,21 @@ class StudentImportTests(StudentManagementJobsAPITestCase):
         result = self._result(self.HEADER + "Amina,Khan,2015-06-01,female,OLD,2026-04-01\n")
         self.assertEqual(result["errors"][0]["field"], "campus_code")
 
+    def test_progress_is_written_in_steps_not_per_row_and_ends_at_100(self) -> None:
+        from core.jobs import services as job_services
+
+        self.allow("students.student.import")
+        rows = "".join(f"Kid{i},Khan,2015-06-01,female,MAIN,2026-04-01\n" for i in range(40))
+
+        with patch.object(
+            job_services, "update_progress", wraps=job_services.update_progress
+        ) as spy:
+            result = self._result(self.HEADER + rows)
+
+        self.assertEqual(result["succeeded"], 40)
+        self.assertLess(spy.call_count, 40)
+        self.assertEqual(spy.call_args.kwargs["progress"], 100)
+
     def test_row_numbers_match_the_file_after_a_blank_line(self) -> None:
         self.allow("students.student.import")
         result = self._result(
