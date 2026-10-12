@@ -1,4 +1,4 @@
-import { downloadFile, formatDate, stableSignedUrl } from "../helpers";
+import { downloadFile, formatDate, isUuid, stableSignedUrl } from "../helpers";
 
 /** A SigV4-shaped link for `path`, signed at `signedAt` (UTC) and valid for `ttlSeconds`. */
 function signedLink(path: string, signedAt: string, ttlSeconds = 3600) {
@@ -110,5 +110,22 @@ describe("formatDate", () => {
     it("renders a date-only string as the same calendar date, not one day earlier", () => {
       expect(formatDate("2026-01-05")).toBe("January 5th, 2026");
     });
+  });
+});
+
+describe("isUuid", () => {
+  it("accepts a canonical UUID in either case", () => {
+    expect(isUuid("6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f7")).toBe(true);
+    expect(isUuid("6F1D2C3B-4A5E-4F60-8A71-92B3C4D5E6F7")).toBe(true);
+  });
+
+  it.each([
+    "",
+    "xyz",
+    "campus-0001",
+    "6f1d2c3b4a5e4f608a7192b3c4d5e6f7",
+    "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f7x",
+  ])("rejects %p", (value) => {
+    expect(isUuid(value)).toBe(false);
   });
 });

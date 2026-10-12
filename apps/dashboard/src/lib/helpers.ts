@@ -145,6 +145,12 @@ export function humanizeSnakeCase(value: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/** Whether `value` is a canonical UUID — how a filter read from the URL is checked before
+ * it is sent to the API as a record id. */
+export function isUuid(value: string): boolean {
+  return Regex.UUID.test(value);
+}
+
 /**
  * Copies `from[camelKey]` to `to[snakeKey]` for each pair in `fields`, when
  * `include(value)` says to — the shape a module's `to<Domain>Body`/
