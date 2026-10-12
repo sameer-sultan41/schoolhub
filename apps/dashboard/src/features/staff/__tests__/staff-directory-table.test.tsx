@@ -831,7 +831,7 @@ describe("StaffDirectoryTable", () => {
 
     it("lands on page 1 when a linked page no longer exists", async () => {
       setUrl("/staff?page=9");
-      mockFetchStaffPage.mockImplementation((query) =>
+      mockFetchStaffPage.mockImplementation((query = {}) =>
         query.page === 9 ? Promise.reject(pageNotFound()) : Promise.resolve(staffPage(1, 1)),
       );
 
@@ -847,7 +847,7 @@ describe("StaffDirectoryTable", () => {
     it("never shows the empty state while a stale page resets to page 1", async () => {
       setUrl("/staff?page=9");
       // Page 1 stays pending, so any empty state seen came from the reset itself.
-      mockFetchStaffPage.mockImplementation((query) =>
+      mockFetchStaffPage.mockImplementation((query = {}) =>
         query.page === 9
           ? Promise.reject(pageNotFound())
           : new Promise<ReturnType<typeof staffPage>>(() => undefined),
@@ -865,7 +865,7 @@ describe("StaffDirectoryTable", () => {
 
     it("clamps to the last page when the response shows the linked page is past the end", async () => {
       setUrl("/staff?page=3");
-      mockFetchStaffPage.mockImplementation((query) =>
+      mockFetchStaffPage.mockImplementation((query = {}) =>
         Promise.resolve(staffPage(query.page ?? 1, 2)),
       );
 
