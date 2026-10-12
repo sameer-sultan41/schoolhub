@@ -102,16 +102,22 @@ describe("StudentDirectoryFilters — academic session/class/section", () => {
     expect(mockFetchSections).toHaveBeenCalledWith({ classId: "class-1" });
   });
 
-  it("clears the chosen section when the class changes", async () => {
+  it("reports only the class change; the caller clears the section in the same write", async () => {
+    const onClassIdChange = jest.fn();
     const onSectionIdChange = jest.fn();
     renderWithProviders(
-      <StudentDirectoryFilters {...baseProps()} onSectionIdChange={onSectionIdChange} />,
+      <StudentDirectoryFilters
+        {...baseProps()}
+        onClassIdChange={onClassIdChange}
+        onSectionIdChange={onSectionIdChange}
+      />,
     );
 
     await userEvent.click(screen.getByRole("combobox", { name: /^class$/i }));
     await userEvent.click(await screen.findByRole("option", { name: "Grade 1" }));
 
-    expect(onSectionIdChange).toHaveBeenCalledWith("");
+    expect(onClassIdChange).toHaveBeenCalledTimes(1);
+    expect(onSectionIdChange).not.toHaveBeenCalled();
   });
 
   it("disables the section picker until a class is chosen", () => {
