@@ -251,3 +251,17 @@ and diffing against `main` — empty except one disclosed docstring-only
 `services.invite_staff`, updated to name its new location,
 `services/invite.py`). No endpoint, permission, or response shape changed
 anywhere in the module.
+
+**Dashboard, list state in the URL (as shipped).** The `/staff` directory keeps its search,
+status filter, sort, page, page size and hidden columns in the query string (`search`, `status`,
+`sort`, `page`, `page_size`, `hidden`) through the same `useDataGridUrlState` hook as `/students`
+([ADR-0024](../decisions/0024-list-state-in-the-url.md)), so a reload keeps the view and a link
+shares it. The defaults (`status=active`, the name sort ascending, page 1, 10 rows) are left out
+of the address. Because neither default is empty, two states carry a marker: `status=all` is the
+Active Users switch off (or the Status popover cleared) and sends no `employment_status`, and
+`sort=none` is a column header cycled to unsorted and sends no `ordering`. The Sort Order preset
+writes `sort=-joiningDate` (newest joiners) or `sort=joiningDate` (oldest). Search is trimmed
+before it is written and sent, as before. Each change replaces the address in place, so Back
+leaves the screen; a value outside the known set falls back to the default; a link to a page past
+the end gets the API's 404 and lands on page 1. Row selection, the dialogs, column order and
+pinning stay local. Mocked Playwright coverage is `e2e/tests/dashboard/list-url-state.spec.ts`.

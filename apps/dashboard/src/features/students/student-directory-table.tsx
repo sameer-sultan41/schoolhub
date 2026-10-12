@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { getCoreRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
+import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { m } from "motion/react";
 import {
   Button,
@@ -29,13 +29,15 @@ import { ApiError, Services } from "@/services";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
-import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import {
   SORT_FIELD,
+  STUDENT_DEFAULT_SORTING,
   STUDENT_FILTER_ALL,
+  STUDENT_SORTABLE_IDS,
+  STUDENT_URL_FILTERS,
   STUDENT_WITHDRAWABLE_STATUS,
 } from "@/services/modules/students/students-constant";
 import { toStudentRow } from "@/services/modules/students/students-helper";
@@ -64,16 +66,6 @@ export function StudentDirectoryTable() {
   const t = useTranslations("students");
   const tErrors = useTranslations("errors");
 
-  const [searchInput, setSearchInput] = useState("");
-  const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
-  const [statusFilter, setStatusFilter] = useState(STUDENT_WITHDRAWABLE_STATUS);
-  const [campusId, setCampusId] = useState("");
-  const [houseId, setHouseId] = useState("");
-  const [academicSessionId, setAcademicSessionId] = useState("");
-  const [classId, setClassId] = useState("");
-  const [sectionId, setSectionId] = useState("");
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
-  const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [editTarget, setEditTarget] = useState<{
     studentId: string;
@@ -83,6 +75,59 @@ export function StudentDirectoryTable() {
     null,
   );
   const [detailRow, setDetailRow] = useState<StudentRow | null>(null);
+
+  const { data: currentUser } = useCurrentUser();
+  const canUpdate = hasPermission(currentUser, "students.student.update");
+  const canWithdraw = hasPermission(currentUser, "students.student.withdraw");
+  const canGenerateIdCards = hasPermission(currentUser, "students.id-card.generate");
+
+  // Referentially stable across renders (empty deps) so `useStudentColumns`'s own
+  // `useMemo` actually skips recomputation on a parent re-render that doesn't touch
+  // these — a search-input keystroke before the debounce fires, for instance. Safe:
+  // both bodies only call `useState` setters, which React guarantees are themselves
+  // stable, so there is nothing from an outer scope these need to close over freshly.
+  const handleEdit = useCallback((id: string) => {
+    // The row's own Edit action has no tab context to carry — unlike the detail
+    // sheet's Edit button below, it never had a tab open in the first place —
+    // so this always lands the stepper on Profile.
+    setEditTarget({ studentId: id });
+  }, []);
+  const handleWithdraw = useCallback((id: string, name: string) => {
+    setWithdrawDialog({ ids: [id], names: [name] });
+  }, []);
+
+  const columns = useStudentColumns(canUpdate, canWithdraw, handleEdit, handleWithdraw);
+  const hideableIds = useMemo(() => hideableColumnIds(columns), [columns]);
+
+  // Search, filters, sort, page, page size and hidden columns live in the URL, so a
+  // reload keeps the view and a link shares it. Row selection and dialogs stay local.
+  const {
+    filters,
+    setFilters,
+    searchInput,
+    setSearchInput,
+    search,
+    sorting,
+    onSortingChange,
+    pagination,
+    onPaginationChange,
+    columnVisibility,
+    onColumnVisibilityChange,
+    setPageIndex,
+  } = useDataGridUrlState({
+    filters: STUDENT_URL_FILTERS,
+    sortableIds: STUDENT_SORTABLE_IDS,
+    defaultSorting: STUDENT_DEFAULT_SORTING,
+    hideableIds,
+    trimSearch: false,
+  });
+  const statusFilter = filters.status;
+  const campusId = filters.campus;
+  const houseId = filters.house;
+  const academicSessionId = filters.session;
+  const classId = filters.class;
+  // A section only exists under its class; one left in the URL without a class isn't sent.
+  const sectionId = classId === "" ? "" : filters.section;
 
   // Default: status filter starts at "active", not "all" — so the defaults themselves
   // never count as "the viewer applied a filter" (see `hasActiveFilter` below).
@@ -94,10 +139,6 @@ export function StudentDirectoryTable() {
     academicSessionId !== "" ||
     classId !== "" ||
     sectionId !== "";
-
-  useEffect(() => {
-    setPagination((p) => ({ ...p, pageIndex: 0 }));
-  }, [search, sorting, statusFilter, campusId, houseId, academicSessionId, classId, sectionId]);
 
   const ordering = sorting[0]
     ? `${sorting[0].desc ? "-" : ""}${SORT_FIELD[sorting[0].id] ?? sorting[0].id}`
@@ -141,43 +182,33 @@ export function StudentDirectoryTable() {
   const pageCount = pageMeta && isOffsetPagination(pageMeta) ? pageMeta.total_pages : 1;
   const totalCount = pageMeta && isOffsetPagination(pageMeta) ? pageMeta.total_count : 0;
 
+  // Only this page's own data can say the page is past the end (exiting the last rows
+  // on it, say): placeholder data is the previous request's, and a cold load has none.
+  const hasPageData = pageMeta !== undefined && !query.isPlaceholderData;
   useEffect(() => {
-    setPagination((p) =>
-      p.pageIndex >= pageCount && pageCount > 0 ? { ...p, pageIndex: pageCount - 1 } : p,
-    );
-  }, [pageCount]);
+    if (!hasPageData) return;
+    const lastPageIndex = Math.max(0, pageCount - 1);
+    if (pagination.pageIndex > lastPageIndex) setPageIndex(lastPageIndex);
+  }, [hasPageData, pageCount, pagination.pageIndex, setPageIndex]);
+
+  // A shared link to a page that no longer exists: the API answers 404, and the list
+  // goes back to page 1 rather than showing an error.
+  const isStalePage =
+    query.error instanceof ApiError && query.error.isNotFound && pagination.pageIndex > 0;
+  useEffect(() => {
+    if (isStalePage) setPageIndex(0);
+  }, [isStalePage, setPageIndex]);
 
   const rows = useMemo(() => (query.data?.items ?? []).map(toStudentRow), [query.data]);
-
-  const { data: currentUser } = useCurrentUser();
-  const canUpdate = hasPermission(currentUser, "students.student.update");
-  const canWithdraw = hasPermission(currentUser, "students.student.withdraw");
-  const canGenerateIdCards = hasPermission(currentUser, "students.id-card.generate");
-
-  // Referentially stable across renders (empty deps) so `useStudentColumns`'s own
-  // `useMemo` actually skips recomputation on a parent re-render that doesn't touch
-  // these — a search-input keystroke before the debounce fires, for instance. Safe:
-  // both bodies only call `useState` setters, which React guarantees are themselves
-  // stable, so there is nothing from an outer scope these need to close over freshly.
-  const handleEdit = useCallback((id: string) => {
-    // The row's own Edit action has no tab context to carry — unlike the detail
-    // sheet's Edit button below, it never had a tab open in the first place —
-    // so this always lands the stepper on Profile.
-    setEditTarget({ studentId: id });
-  }, []);
-  const handleWithdraw = useCallback((id: string, name: string) => {
-    setWithdrawDialog({ ids: [id], names: [name] });
-  }, []);
-
-  const columns = useStudentColumns(canUpdate, canWithdraw, handleEdit, handleWithdraw);
 
   const table = useReactTable({
     data: rows,
     columns,
     pageCount,
-    state: { pagination, sorting, rowSelection },
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
+    state: { pagination, sorting, rowSelection, columnVisibility },
+    onPaginationChange,
+    onSortingChange,
+    onColumnVisibilityChange,
     onRowSelectionChange: setRowSelection,
     manualPagination: true,
     manualSorting: true,
@@ -185,6 +216,14 @@ export function StudentDirectoryTable() {
     getRowId: (r) => r.id,
     getCoreRowModel: getCoreRowModel(),
   });
+
+  // Stable, so the filters' stale-section effect re-runs only when its inputs change.
+  const setSection = useCallback(
+    (section: string) => {
+      setFilters({ section });
+    },
+    [setFilters],
+  );
 
   const selected = table.getSelectedRowModel().rows.map((r) => r.original);
   // Bulk withdraw only ever offers/acts on the ACTIVE subset of what's selected,
@@ -195,7 +234,7 @@ export function StudentDirectoryTable() {
     if (withdrawDialog === null) setRowSelection({});
   }, [withdrawDialog]);
 
-  if (query.isError) {
+  if (query.isError && !isStalePage) {
     const isPermissionDenied = query.error instanceof ApiError && query.error.isPermissionDenied;
     // A non-ApiError (network failure, etc.) must not read as "forbidden" — that's a
     // distinct failure with no permission implication, so it gets its own fallback
@@ -216,7 +255,7 @@ export function StudentDirectoryTable() {
       <DataGrid
         table={table}
         recordCount={totalCount}
-        isLoading={query.isPending}
+        isLoading={query.isPending || isStalePage}
         onRowClick={setDetailRow}
         caption={t("list.caption")}
         tableLayout={{ cellBorder: true, columnsVisibility: true }}
@@ -247,17 +286,28 @@ export function StudentDirectoryTable() {
                     searchInput={searchInput}
                     onSearchInputChange={setSearchInput}
                     statusFilter={statusFilter}
-                    onStatusFilterChange={setStatusFilter}
+                    onStatusFilterChange={(status) => {
+                      setFilters({ status });
+                    }}
                     campusId={campusId}
-                    onCampusIdChange={setCampusId}
+                    onCampusIdChange={(campus) => {
+                      setFilters({ campus });
+                    }}
                     houseId={houseId}
-                    onHouseIdChange={setHouseId}
+                    onHouseIdChange={(house) => {
+                      setFilters({ house });
+                    }}
                     academicSessionId={academicSessionId}
-                    onAcademicSessionIdChange={setAcademicSessionId}
+                    onAcademicSessionIdChange={(session) => {
+                      setFilters({ session });
+                    }}
                     classId={classId}
-                    onClassIdChange={setClassId}
+                    // A class change clears the section in the same write.
+                    onClassIdChange={(schoolClass) => {
+                      setFilters({ class: schoolClass, section: "" });
+                    }}
                     sectionId={sectionId}
-                    onSectionIdChange={setSectionId}
+                    onSectionIdChange={setSection}
                   />
                 </div>
               </CardHeading>

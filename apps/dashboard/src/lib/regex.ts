@@ -14,4 +14,8 @@ export const Regex = {
   UNDERSCORE: /_/g,
   /** A signed-URL timestamp in `YYYYMMDDTHHMMSSZ` form (AWS SigV4's `X-Amz-Date`). */
   SIGNED_AT_TIMESTAMP: /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
+  /** A UUID in its canonical 8-4-4-4-12 hex form, any case — every record id the API uses. */
+  UUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /** A whole number from 1 up, with no sign, decimals or leading zeros — e.g. a page number. */
+  POSITIVE_INTEGER: /^[1-9]\d*$/,
 } as const;

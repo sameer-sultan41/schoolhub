@@ -355,3 +355,18 @@ than per row); and both roster exports pass every cell through
 with one of them behind leading spaces) no longer opens as a formula. Mocked Playwright coverage is
 `e2e/tests/dashboard/students-bulk.spec.ts`; what this phase deliberately left out is in
 `deferred-work.md`.
+
+**Dashboard, list state in the URL (as shipped).** The `/students` directory keeps its search,
+filters, sort, page, page size and hidden columns in the query string (`search`, `status`,
+`campus`, `house`, `session`, `class`, `section`, `sort`, `page`, `page_size`, `hidden`) through
+`useDataGridUrlState` ([ADR-0024](../decisions/0024-list-state-in-the-url.md)), so a reload keeps
+the view and a link shares it. A default is left out of the address (`status=active`, no sort,
+page 1, 10 rows); `status=all` means no status filter. Each change replaces the address in place,
+so Back leaves the screen rather than stepping through every filter. A value outside the known set
+(an id that is not a UUID, an unknown status, sort column or column id, a page size other than
+10/25/50/100) falls back to the default and is never sent. Changing the class clears the section in
+the same write; a section without a class is not sent, and one that is not among the class's
+sections is dropped once they load. Any change to search, a filter, the sort or the page size goes
+back to page 1, and a link to a page past the end gets the API's 404 and lands on page 1. Row
+selection, the dialogs and the detail sheet stay local, and the requests the directory sends are
+unchanged. Mocked Playwright coverage is `e2e/tests/dashboard/list-url-state.spec.ts`.

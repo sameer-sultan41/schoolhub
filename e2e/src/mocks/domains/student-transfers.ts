@@ -1,4 +1,4 @@
-import { id } from "@/data/factories";
+import { id, ORG_IDS } from "@/data/factories";
 import { fail, ok, paginated } from "../envelope";
 import type { MockModule } from "../router";
 
@@ -25,8 +25,8 @@ export function buildStudentTransfer(overrides: Partial<StudentTransfer> = {}): 
     id: id("transfer"),
     student_id: "",
     transfer_type: "inter_campus",
-    from_campus_id: "campus-0001",
-    to_campus_id: "campus-0002",
+    from_campus_id: ORG_IDS.mainCampus,
+    to_campus_id: ORG_IDS.northCampus,
     external_school_name: null,
     reason: "Family relocation",
     status: "requested",

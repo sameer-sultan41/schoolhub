@@ -38,7 +38,7 @@ apps/dashboard/src/features/<module>/
   <module>-row.ts                  # wire record -> table row shape
   <module>-columns.tsx             # useColumns() hook, DataGrid ColumnDef[]
   <module>-directory-filters.tsx   # search input + Select filters
-  <module>-directory-table.tsx     # the screen: owns all state, wires the above together
+  <module>-directory-table.tsx     # the screen: URL list state, wires the above together
   <module>-toolbar.tsx             # stat chips + "New <X>" action
   <lifecycle-action>-dialog.tsx    # e.g. withdraw-student-dialog.tsx — the destructive action
   __tests__/
@@ -138,10 +138,26 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
 - **Give the grid a translated `caption`** (`caption={t("list.caption")}`, the
   `<DataGrid>` call in `student-directory-table.tsx`) — a screen-reader-only `<caption>` naming what the
   table lists, same as `/staff`'s.
-- **Local debounced search**, not a query-level debounce: a local `searchInput` state
-  updates immediately for the input's own value, a separate `search` state (what the query
-  actually uses) updates after `SEARCH_DEBOUNCE_MS` (`apps/dashboard/src/lib/constants.ts`,
-  currently 300ms) via a `setTimeout` effect in `StudentDirectoryTable` (`student-directory-table.tsx`).
+- **List state lives in the URL, through `useDataGridUrlState`**
+  (`apps/dashboard/src/hooks/use-data-grid-url-state.ts`,
+  [ADR-0024](../../../docs/decisions/0024-list-state-in-the-url.md)), never a `useState` per
+  control. Search, filters, sort, page, page size and hidden columns go in the query string,
+  so a reload keeps the view and a link shares it. Row selection, dialogs, column order and
+  pinning stay local. Pass it module-level constants: a `<MODULE>_URL_FILTERS` map (URL key to
+  `{ default, isValid }`; every id filter is validated with `isUuid`, a status with its known
+  values or `FILTER_ALL`), the sortable ids (`Object.keys(SORT_FIELD)`), the default sort,
+  `hideableIds` from `hideableColumnIds(columns)`, and `trimSearch`. Pass what it returns
+  into `useReactTable` (`sorting`/`onSortingChange`, `pagination`/`onPaginationChange`,
+  `columnVisibility`/`onColumnVisibilityChange`). The search box is its `searchInput`
+  (local, so typing never waits on the URL); the query uses its `search`, written to the URL
+  after `SEARCH_DEBOUNCE_MS`. Wrap the table in `<Suspense>` in `page.tsx`, since it reads
+  `useSearchParams`. `student-directory-table.tsx` and `staff-directory-table.tsx` are the two
+  worked examples.
+- **Clamp the page only on real page data, and recover from a stale page's 404.** The clamp
+  effect runs when `pageMeta` is present and `!isPlaceholderData`, and calls `setPageIndex`.
+  A shared link to a page past the end gets a 404 from the API: while `ApiError.isNotFound`
+  holds on a page past the first, call `setPageIndex(0)` and don't show the error card
+  (`isStalePage` in both directory tables).
 - **Narrow pagination with `isOffsetPagination`/`isCursorPagination`** before touching
   `total_pages`/`total_count` — `Page<T>.pagination` is itself optional, and those fields
   exist only on the offset arm of the `Pagination` union:
@@ -493,10 +509,12 @@ Real example: `e2e/tests/dashboard/students.spec.ts`, `e2e/src/mocks/domains/stu
    uploading, the upload's own error text, one session guard for both outcomes.
 6. `<module>-columns.tsx`: `useMemo`'d `useColumns()` hook, `DataGridColumnHeader` +
    `createSelectColumn`, row actions gated on both permission and the record's own state.
-7. `<module>-directory-filters.tsx`: local debounced search via `SEARCH_DEBOUNCE_MS`,
-   `Select` filters with a `aria-label` on each trigger.
-8. `<module>-directory-table.tsx`: owns all state, a translated `DataGrid` `caption`,
-   `isOffsetPagination`/`isCursorPagination` narrowing, `useCallback`-wrapped row-action
+7. `<module>-directory-filters.tsx`: a controlled search box and `Select` filters, with an
+   `aria-label` on each trigger; the values and setters come from the table.
+8. `<module>-directory-table.tsx`: list state from `useDataGridUrlState` (URL filter specs,
+   sortable ids and default sort as module constants), the page clamp on real data only plus
+   the stale-page 404 reset, `<Suspense>` around it in `page.tsx`, a translated `DataGrid`
+   `caption`, `isOffsetPagination`/`isCursorPagination` narrowing, `useCallback`-wrapped row-action
    handlers passed into the columns hook, bulk selection filtered to the action's valid
    subset, and each dialog conditionally mounted (`{state && <Dialog open ... />}`).
 9. `<lifecycle-action>-dialog.tsx`: `idempotencyKey` per dialog instance (per target for
@@ -521,7 +539,10 @@ Real example: `e2e/tests/dashboard/students.spec.ts`, `e2e/src/mocks/domains/stu
     same-instance-across-rerender regression test; object-URL/image stubs for file fields.
 16. e2e: register the page object in `e2e/src/pages/index.ts` and the fixture in
     `e2e/src/fixtures/index.ts`; a `MockModule` in `e2e/src/mocks/domains/`; assert a
-    default-filtered screen's own view, not just that an action disappeared.
+    default-filtered screen's own view, not just that an action disappeared. Any fixture id
+    a directory filter can select is UUID-shaped (`uuid()`/`ORG_IDS` in
+    `e2e/src/data/factories.ts`), or the screen drops it; the list stub returns `fail(404)`
+    for a page past the end, as the real API does.
 17. Docs describe what shipped, checked against the components — not against the plan.
 
 ## What this does NOT cover
@@ -548,6 +569,8 @@ Real example: `e2e/tests/dashboard/students.spec.ts`, `e2e/src/mocks/domains/stu
   rounds" section is the source of the review-round findings cited throughout.
 - [ADR-0017](../../../docs/decisions/0017-generated-wire-types-for-new-domains.md) —
   generated wire types for a new domain.
+- [ADR-0024](../../../docs/decisions/0024-list-state-in-the-url.md) — a directory's list
+  state lives in the URL, and why it is written with `replaceState`.
 - `/staff`'s source (`apps/dashboard/src/features/staff/`) — the original reference
   implementation this pattern was first established against; its toolbar and `/students`'
   are the two shipped examples of bulk import/export.

@@ -1,4 +1,4 @@
-import { id } from "@/data/factories";
+import { id, uuid } from "@/data/factories";
 import { fail, ok, pagedList, paginated } from "../envelope";
 import type { MockModule } from "../router";
 
@@ -17,7 +17,7 @@ export interface Campus {
 
 export function buildCampus(overrides: Partial<Campus> = {}): Campus {
   return {
-    id: id("campus"),
+    id: uuid(),
     name: "Main Campus",
     code: "MAIN",
     address: "12 Jinnah Road, Karachi",
@@ -56,7 +56,7 @@ export interface House {
 
 export function buildHouse(overrides: Partial<House> = {}): House {
   return {
-    id: id("house"),
+    id: uuid(),
     name: "Red House",
     ...overrides,
   };
@@ -73,7 +73,7 @@ export interface SchoolClass {
 
 export function buildSchoolClass(overrides: Partial<SchoolClass> = {}): SchoolClass {
   return {
-    id: id("class"),
+    id: uuid(),
     name: "Grade 1",
     is_active: true,
     ...overrides,
@@ -90,7 +90,7 @@ export interface Section {
 
 export function buildSection(overrides: Partial<Section> = {}): Section {
   return {
-    id: id("section"),
+    id: uuid(),
     name: "A",
     class_id: "",
     campus_id: "",
@@ -108,7 +108,7 @@ export interface AcademicSession {
 
 export function buildAcademicSession(overrides: Partial<AcademicSession> = {}): AcademicSession {
   return {
-    id: id("session"),
+    id: uuid(),
     name: "2026-27",
     status: "active",
     is_current: true,
@@ -179,7 +179,7 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
         });
       }
       // id last: the server assigns it, so a client-supplied one must not win.
-      const created = buildCampus({ ...body, is_primary: false, id: id("campus") });
+      const created = buildCampus({ ...body, is_primary: false, id: uuid() });
       campuses.push(created);
       return ok(created, { status: 201 });
     });

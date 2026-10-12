@@ -8,10 +8,8 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
-  type PaginationState,
   type Row,
   type RowSelectionState,
-  type SortingState,
 } from "@tanstack/react-table";
 
 import {
@@ -50,8 +48,8 @@ import {
 } from "@schoolhub/ui";
 
 import { ApiError, Services } from "@/services";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
+import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
+import { FILTER_ALL } from "@/lib/constants";
 import { formatLastUpdated, getInitials } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
@@ -59,6 +57,9 @@ import {
   DEFAULT_SORTING,
   JOINING_DATE_SORT_ID,
   SORT_FIELD,
+  STAFF_DEFAULT_STATUS,
+  STAFF_SORTABLE_IDS,
+  STAFF_URL_FILTERS,
   STATUS_META,
 } from "@/services/modules/staff/staff-constant";
 import { statusMeta, toStaffRow } from "@/services/modules/staff/staff-helper";
@@ -125,14 +126,6 @@ function ActionsCell({
 }
 
 export function StaffDirectoryTable() {
-  const [searchInput, setSearchInput] = useState("");
-  const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS).trim();
-  // Defaults to "active" (not "no filter") to match the "Active Users" toggle below
-  // defaulting on — the toggle and the Status popover's own "Active" checkbox are the
-  // same piece of state, just two different controls for it.
-  const [statusFilter, setStatusFilter] = useState<string | undefined>("active");
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
-  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [formDialog, setFormDialog] = useState<
     { mode: "create" } | { mode: "edit"; staffId: string } | null
@@ -158,86 +151,6 @@ export function StaffDirectoryTable() {
     }
     previousExitDialogRef.current = exitDialog;
   }, [exitDialog]);
-
-  useEffect(() => {
-    setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [search, sorting, statusFilter]);
-
-  const sort = sorting[0];
-  // `sort.id` is always one of this table's own column ids (or the `joiningDate`
-  // sentinel) in practice, but nothing at the type level guarantees `SORT_FIELD` has an
-  // entry for it — guard the lookup so a miss produces `ordering: undefined` (sort
-  // param omitted) rather than a query string with the literal text "undefined"
-  // spliced into it.
-  const sortField = sort ? SORT_FIELD[sort.id] : undefined;
-  const ordering = sortField ? `${sort?.desc ? "-" : ""}${sortField}` : undefined;
-  const page = pagination.pageIndex + 1;
-  const pageSize = pagination.pageSize;
-
-  const { data, isPending, isFetching, isError, error } = useQuery({
-    queryKey: queryKeys.list("staff", "staff", { page, pageSize, search, ordering, statusFilter }),
-    queryFn: () =>
-      Services.staff.fetchStaffPage({
-        page,
-        pageSize,
-        search: search || undefined,
-        ordering,
-        employmentStatus: statusFilter,
-      }),
-    placeholderData: keepPreviousData,
-  });
-
-  const rows = useMemo<StaffRow[]>(() => (data?.items ?? []).map(toStaffRow), [data]);
-
-  // `data.pagination` is the `Pagination` union (`CursorPagination | OffsetPagination`);
-  // `total_pages` exists only on the `OffsetPagination` arm (`/staff` is page-number
-  // paginated, never cursor), so it must be narrowed before it's read — the same `in`
-  // guard `dashboard-service.ts`'s own `fetchTotal` already uses for `total_count`.
-  // `total_count` is on both arms (required on offset, optional on cursor), so it needs
-  // no such narrowing.
-  const pageMeta = data?.pagination;
-  const recordCount = pageMeta?.total_count ?? rows.length;
-  const pageCount = pageMeta && "total_pages" in pageMeta ? pageMeta.total_pages : 1;
-
-  // Exiting the last remaining row(s) on the current page can shrink pageCount below
-  // the page the viewer is still on — clamp back rather than showing an empty page.
-  // Independent of the filter/search/sort reset above: that one always jumps to page 0
-  // on ANY change to those inputs, this one only moves when the CURRENT page has
-  // actually become invalid, regardless of why the record count changed.
-  useEffect(() => {
-    setPagination((current) => {
-      const lastValidIndex = Math.max(0, pageCount - 1);
-      return current.pageIndex > lastValidIndex
-        ? { ...current, pageIndex: lastValidIndex }
-        : current;
-    });
-  }, [pageCount]);
-
-  function handleStatusToggle(checked: boolean, value: string) {
-    setStatusFilter(checked ? value : undefined);
-  }
-
-  // The Sort Order popover ("Newest joiners" / "Oldest joiners" -> `joining_date`) and
-  // clicking a column header both drive the SAME `sorting` state rather than two
-  // independent ones. That is a deliberate choice, not an oversight: `sorting` is what
-  // `DataGridColumnHeader` reads to draw each column's active-sort arrow, so if the
-  // popover wrote to a separate flag, a preset sort could be active while every column
-  // header still looked unsorted (or, worse, a stale header arrow could look active
-  // while the popover's preset was actually driving the query) — a visibly
-  // inconsistent header. Sharing one state slot makes the two mutually exclusive for
-  // free: picking a preset here sets `sorting` to the `joiningDate` sentinel id (which
-  // matches no real column, so no header highlights — correct, since no column is
-  // "being sorted by" in the preset case), and clicking any real column header calls
-  // `onSortingChange` with that column's id, which overwrites the sentinel and silently
-  // clears the preset. Selecting the already-active preset again resets `sorting` back
-  // to the table's own default (name, ascending), matching the Status popover's
-  // "select again to clear" behavior below for a consistent feel across both popovers.
-  function handleSortOrderToggle(checked: boolean, desc: boolean) {
-    setSorting(checked ? [{ id: JOINING_DATE_SORT_ID, desc }] : DEFAULT_SORTING);
-  }
-
-  const activeSortOrder =
-    sort?.id === JOINING_DATE_SORT_ID ? (sort.desc ? "newest" : "oldest") : undefined;
 
   const columns = useMemo<ColumnDef<StaffRow>[]>(
     () => [
@@ -359,18 +272,128 @@ export function StaffDirectoryTable() {
     ],
     [],
   );
+  const hideableIds = useMemo(() => hideableColumnIds(columns), [columns]);
+
+  // Search, status, sort, page, page size and hidden columns live in the URL, so a reload
+  // keeps the view and a link shares it. Column order and pinning stay local.
+  const {
+    filters,
+    setFilters,
+    searchInput,
+    setSearchInput,
+    search,
+    sorting,
+    onSortingChange,
+    pagination,
+    onPaginationChange,
+    columnVisibility,
+    onColumnVisibilityChange,
+    setPageIndex,
+  } = useDataGridUrlState({
+    filters: STAFF_URL_FILTERS,
+    sortableIds: STAFF_SORTABLE_IDS,
+    defaultSorting: DEFAULT_SORTING,
+    hideableIds,
+    trimSearch: true,
+  });
+  // Defaults to "active" (not "no filter") to match the "Active Users" toggle below
+  // defaulting on — the toggle and the Status popover's own "Active" checkbox are the
+  // same piece of state, just two different controls for it. "No filter" is `FILTER_ALL`
+  // in the URL and `undefined` here, so no `employment_status` is sent.
+  const statusFilter = filters.status === FILTER_ALL ? undefined : filters.status;
+
+  const sort = sorting[0];
+  // `sort.id` is always one of this table's own column ids (or the `joiningDate`
+  // sentinel) in practice, but nothing at the type level guarantees `SORT_FIELD` has an
+  // entry for it — guard the lookup so a miss produces `ordering: undefined` (sort
+  // param omitted) rather than a query string with the literal text "undefined"
+  // spliced into it.
+  const sortField = sort ? SORT_FIELD[sort.id] : undefined;
+  const ordering = sortField ? `${sort?.desc ? "-" : ""}${sortField}` : undefined;
+  const page = pagination.pageIndex + 1;
+  const pageSize = pagination.pageSize;
+
+  const { data, isPending, isFetching, isError, error, isPlaceholderData } = useQuery({
+    queryKey: queryKeys.list("staff", "staff", { page, pageSize, search, ordering, statusFilter }),
+    queryFn: () =>
+      Services.staff.fetchStaffPage({
+        page,
+        pageSize,
+        search: search || undefined,
+        ordering,
+        employmentStatus: statusFilter,
+      }),
+    placeholderData: keepPreviousData,
+  });
+
+  const rows = useMemo<StaffRow[]>(() => (data?.items ?? []).map(toStaffRow), [data]);
+
+  // `data.pagination` is the `Pagination` union (`CursorPagination | OffsetPagination`);
+  // `total_pages` exists only on the `OffsetPagination` arm (`/staff` is page-number
+  // paginated, never cursor), so it must be narrowed before it's read — the same `in`
+  // guard `dashboard-service.ts`'s own `fetchTotal` already uses for `total_count`.
+  // `total_count` is on both arms (required on offset, optional on cursor), so it needs
+  // no such narrowing.
+  const pageMeta = data?.pagination;
+  const recordCount = pageMeta?.total_count ?? rows.length;
+  const pageCount = pageMeta && "total_pages" in pageMeta ? pageMeta.total_pages : 1;
+
+  // Exiting the last remaining row(s) on the current page can shrink pageCount below
+  // the page the viewer is still on — clamp back rather than showing an empty page. Only
+  // this page's own data can say so: placeholder data is the previous request's, and a
+  // cold load has none.
+  const hasPageData = pageMeta !== undefined && !isPlaceholderData;
+  useEffect(() => {
+    if (!hasPageData) return;
+    const lastValidIndex = Math.max(0, pageCount - 1);
+    if (pagination.pageIndex > lastValidIndex) setPageIndex(lastValidIndex);
+  }, [hasPageData, pageCount, pagination.pageIndex, setPageIndex]);
+
+  // A shared link to a page that no longer exists: the API answers 404, and the list
+  // goes back to page 1 rather than showing an error.
+  const isStalePage = error instanceof ApiError && error.isNotFound && pagination.pageIndex > 0;
+  useEffect(() => {
+    if (isStalePage) setPageIndex(0);
+  }, [isStalePage, setPageIndex]);
+
+  function handleStatusToggle(checked: boolean, value: string) {
+    setFilters({ status: checked ? value : FILTER_ALL });
+  }
+
+  // The Sort Order popover ("Newest joiners" / "Oldest joiners" -> `joining_date`) and
+  // clicking a column header both drive the SAME `sorting` state rather than two
+  // independent ones. That is a deliberate choice, not an oversight: `sorting` is what
+  // `DataGridColumnHeader` reads to draw each column's active-sort arrow, so if the
+  // popover wrote to a separate flag, a preset sort could be active while every column
+  // header still looked unsorted (or, worse, a stale header arrow could look active
+  // while the popover's preset was actually driving the query) — a visibly
+  // inconsistent header. Sharing one state slot makes the two mutually exclusive for
+  // free: picking a preset here sets `sorting` to the `joiningDate` sentinel id (which
+  // matches no real column, so no header highlights — correct, since no column is
+  // "being sorted by" in the preset case), and clicking any real column header calls
+  // `onSortingChange` with that column's id, which overwrites the sentinel and silently
+  // clears the preset. Selecting the already-active preset again resets `sorting` back
+  // to the table's own default (name, ascending), matching the Status popover's
+  // "select again to clear" behavior below for a consistent feel across both popovers.
+  function handleSortOrderToggle(checked: boolean, desc: boolean) {
+    onSortingChange(checked ? [{ id: JOINING_DATE_SORT_ID, desc }] : DEFAULT_SORTING);
+  }
+
+  const activeSortOrder =
+    sort?.id === JOINING_DATE_SORT_ID ? (sort.desc ? "newest" : "oldest") : undefined;
 
   const table = useReactTable({
     columns,
     data: rows,
     pageCount,
     getRowId: (row) => row.id,
-    state: { pagination, sorting, rowSelection },
+    state: { pagination, sorting, rowSelection, columnVisibility },
     manualPagination: true,
     manualSorting: true,
     enableRowSelection: true,
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
+    onPaginationChange,
+    onSortingChange,
+    onColumnVisibilityChange,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
   });
@@ -387,7 +410,7 @@ export function StaffDirectoryTable() {
   const selectedIds = selectedRows.map((row) => row.original.id);
   const selectedNames = selectedRows.map((row) => row.original.name);
 
-  if (isError) {
+  if (isError && !isStalePage) {
     const isForbidden = error instanceof ApiError && error.isPermissionDenied;
     return (
       <Card>
@@ -409,7 +432,7 @@ export function StaffDirectoryTable() {
     <DataGrid
       table={table}
       recordCount={recordCount}
-      isLoading={isPending}
+      isLoading={isPending || isStalePage}
       onRowClick={setDetailRow}
       caption="Staff directory"
       tableLayout={{
@@ -561,9 +584,9 @@ export function StaffDirectoryTable() {
                 <Switch
                   id="active-users-toggle"
                   size="sm"
-                  checked={statusFilter === "active"}
+                  checked={statusFilter === STAFF_DEFAULT_STATUS}
                   onCheckedChange={(checked) => {
-                    setStatusFilter(checked ? "active" : undefined);
+                    setFilters({ status: checked ? STAFF_DEFAULT_STATUS : FILTER_ALL });
                   }}
                 />
               </div>

@@ -27,6 +27,25 @@ export const TENANT_QUERY_STALE_TIME_MS = 10 * 60_000;
  */
 export const SEARCH_DEBOUNCE_MS = 300;
 
+/** Query-string keys a directory list keeps its view in (`useDataGridUrlState`). Filter keys
+ * are per screen and live in that module's constants. */
+export const LIST_URL_KEYS = {
+  search: "search",
+  sort: "sort",
+  page: "page",
+  pageSize: "page_size",
+  hidden: "hidden",
+} as const;
+
+/** `sort` value for "explicitly unsorted", for a list whose default sort isn't empty. */
+export const SORT_NONE = "none";
+
+/** Filter value for "no filter", for a filter whose default is a real value (e.g. `active`). */
+export const FILTER_ALL = "all";
+
+/** Rows per page a list starts at; one of `DATA_GRID_PAGE_SIZES`. */
+export const DEFAULT_LIST_PAGE_SIZE = 10;
+
 /** File types every bulk-import dialog accepts — the `accept` value for its file input,
  * matching what the importers parse server-side (`apps/api/core/imports/`). */
 export const IMPORT_FILE_EXTENSIONS = ".csv,.xlsx";

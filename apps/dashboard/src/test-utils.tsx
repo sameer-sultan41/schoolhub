@@ -1,8 +1,81 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, type RenderOptions } from "@testing-library/react";
+import { act, render, type RenderOptions } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { ReactElement } from "react";
+import { useMemo, useSyncExternalStore, type ReactElement } from "react";
 import messages from "../messages/en.json";
+
+const URL_CHANGE_EVENT = "schoolhub:test-url-change";
+
+function subscribeToUrl(onChange: () => void) {
+  window.addEventListener(URL_CHANGE_EVENT, onChange);
+  window.addEventListener("popstate", onChange);
+  return () => {
+    window.removeEventListener(URL_CHANGE_EVENT, onChange);
+    window.removeEventListener("popstate", onChange);
+  };
+}
+
+function readSearch() {
+  return window.location.search;
+}
+
+function readPathname() {
+  return window.location.pathname;
+}
+
+function useMockSearchParams() {
+  const search = useSyncExternalStore(subscribeToUrl, readSearch, readSearch);
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
+function useMockPathname() {
+  return useSyncExternalStore(subscribeToUrl, readPathname, readPathname);
+}
+
+let replaceStateNotifies = false;
+
+/**
+ * An in-memory `next/navigation` for a component that reads or writes the URL. The URL is
+ * jsdom's own `window.location`: `useSearchParams`/`usePathname` re-render on every
+ * `window.history.replaceState`, as Next's do, and nothing else feeds them, so a hook that
+ * built a write from a stale render snapshot would lose data here exactly as in a browser.
+ *
+ * Install it per test file: a `jest.mock("next/navigation", ...)` factory that returns
+ * `createNavigationMock()` from `jest.requireActual("@/test-utils")` (see
+ * `hooks/__tests__/use-url-params.test.tsx`). Start each test from a known address with
+ * `setUrl`: jsdom keeps the URL from one test to the next.
+ */
+export function createNavigationMock() {
+  if (!replaceStateNotifies) {
+    const replaceState = window.history.replaceState.bind(window.history);
+    window.history.replaceState = (data: unknown, unused: string, url?: string | URL | null) => {
+      replaceState(data, unused, url);
+      window.dispatchEvent(new Event(URL_CHANGE_EVENT));
+    };
+    replaceStateNotifies = true;
+  }
+  const router = {
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+    refresh: jest.fn(),
+    prefetch: jest.fn(),
+  };
+  return {
+    useSearchParams: useMockSearchParams,
+    usePathname: useMockPathname,
+    useRouter: () => router,
+  };
+}
+
+/** Points the address bar at `url` (a path with an optional query, e.g. "/students?page=2"),
+ * as a reload, a shared link or an outside navigation would. */
+export function setUrl(url: string) {
+  act(() => {
+    window.history.replaceState(null, "", url);
+  });
+}
 
 /** Shared render wrapper: a retry-disabled QueryClient plus English messages for next-intl. */
 export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
@@ -13,6 +86,29 @@ export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
     </NextIntlClientProvider>,
     options,
   );
+}
+
+/** Watches the document for text that gets added to it, even for a single render that a
+ * later render replaces — what `findByText`/`queryByText` can't see once it is gone.
+ * Call `stop()` when done: it reports whether the text ever appeared. */
+export function watchForAddedText(pattern: RegExp) {
+  let seen = false;
+  const scan = (records: MutationRecord[]) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (pattern.test(node.textContent ?? "")) seen = true;
+      }
+    }
+  };
+  const observer = new MutationObserver(scan);
+  observer.observe(document.body, { childList: true, subtree: true });
+  return {
+    stop: () => {
+      scan(observer.takeRecords());
+      observer.disconnect();
+      return seen;
+    },
+  };
 }
 
 /** Answers one `matchMedia` query against a single simulated viewport width, so a

@@ -1,5 +1,5 @@
 import { expect, test } from "@/fixtures";
-import { buildUser, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
+import { buildUser, ORG_IDS, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
 import {
   buildCampus,
   buildStudent,
@@ -21,7 +21,7 @@ import {
  * whatever it was told to.
  */
 
-const campuses = [buildCampus({ id: "campus-0001", name: "Main Campus" })];
+const campuses = [buildCampus({ id: ORG_IDS.mainCampus, name: "Main Campus" })];
 
 function directory() {
   return [

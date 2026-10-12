@@ -1104,3 +1104,10 @@ either this file or `project-status.md`.
   `StudentIdCardsButton` keeps an in-flight job across selection changes and paging, but the
   table returns its error card early when the directory query fails, which unmounts the button
   and drops the pending download. It is the same per-mount job state as navigating away.
+
+- **A stale section is sent to the students API until the class's sections load.**
+  `/students?class=X&section=Y` where Y isn't in X's sections sends `section=Y` on the first
+  request. Once the sections list loads, the filters component clears the section and the
+  directory reloads without it, so the first result set can be filtered by an invalid
+  section. Fixing it needs the table to know the valid section ids before its own request;
+  a hand-edited URL is the only way to reach this.

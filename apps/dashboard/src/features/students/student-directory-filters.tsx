@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import {
   Badge,
@@ -92,6 +93,15 @@ export function StudentDirectoryFilters({
     queryFn: () => Services.schoolOrganization.fetchSections({ classId }),
     enabled: classId !== "",
   });
+
+  // A section from a link or an old URL that isn't one of this class's sections is
+  // dropped once the list loads, so it never filters the directory.
+  const sections = sectionsQuery.data;
+  const sectionIsStale =
+    sectionId !== "" && sections !== undefined && !sections.some((s) => s.id === sectionId);
+  useEffect(() => {
+    if (sectionIsStale) onSectionIdChange("");
+  }, [sectionIsStale, onSectionIdChange]);
 
   return (
     <>
@@ -252,9 +262,8 @@ export function StudentDirectoryFilters({
       <Select
         value={classId || ALL}
         onValueChange={(value) => {
-          const next = value === ALL ? "" : value;
-          onClassIdChange(next);
-          onSectionIdChange("");
+          // The caller clears the section in the same write (see student-directory-table).
+          onClassIdChange(value === ALL ? "" : value);
         }}
       >
         <SelectTrigger className="w-full sm:w-40" aria-label={t("enrollment.fields.class")}>
@@ -284,7 +293,7 @@ export function StudentDirectoryFilters({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-          {(sectionsQuery.data ?? []).map((section) => (
+          {(sections ?? []).map((section) => (
             <SelectItem key={section.id} value={section.id}>
               {section.name}
             </SelectItem>

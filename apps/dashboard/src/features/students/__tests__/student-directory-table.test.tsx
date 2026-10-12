@@ -1,14 +1,20 @@
 import { ApiError } from "@schoolhub/api-client";
 import type { AuthenticatedUser } from "@schoolhub/types";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import type { StudentRecord } from "@/services";
 import type { BackgroundJobRecord } from "@/services/modules/jobs/jobs-service";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setUrl, watchForAddedText } from "@/test-utils";
 
 import { StudentDirectoryTable } from "../student-directory-table";
+
+// Search, filters, sort, page and hidden columns live in the URL; this keeps one in memory.
+jest.mock("next/navigation", () => {
+  const testUtils = jest.requireActual<{ createNavigationMock: () => unknown }>("@/test-utils");
+  return testUtils.createNavigationMock();
+});
 
 // `StudentCreateStepper` (edit mode), `StudentDetailSheet`, `WithdrawStudentDialog` and
 // `StudentIdCardsButton` (its job polling) all render from this table and each fires its own
@@ -58,6 +64,56 @@ const mockGenerateIdCards = Services.students.generateIdCards as jest.MockedFunc
   typeof Services.students.generateIdCards
 >;
 const mockFetchJob = Services.jobs.fetchJob as jest.MockedFunction<typeof Services.jobs.fetchJob>;
+const mockFetchClasses = Services.schoolOrganization.fetchClasses as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchClasses
+>;
+const mockFetchSections = Services.schoolOrganization.fetchSections as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchSections
+>;
+
+// Filter ids are UUIDs: the URL drops any other value rather than sending it to the API.
+const CAMPUS_ID = "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f7";
+const HOUSE_ID = "0b6e4c2a-9d3f-4e1b-8c7a-5f2e1d0c9b8a";
+const CLASS_ID = "3a9c1e7d-2b4f-4a6e-9d8c-7b5a3f1e2d0c";
+const OTHER_CLASS_ID = "8e2d4f6a-1c3b-4d5e-a7f9-0b2c4d6e8f1a";
+const SECTION_ID = "5c7e9a1b-3d5f-4b7d-8e0a-2c4e6a8b0d1f";
+const OTHER_SECTION_ID = "9f1b3d5e-7a2c-4e6b-8d0f-1a3c5e7b9d2f";
+
+/** What the directory requests with nothing in the URL. */
+const DEFAULT_REQUEST = {
+  page: 1,
+  pageSize: 10,
+  search: undefined,
+  ordering: undefined,
+  status: "active",
+  campusId: undefined,
+  houseId: undefined,
+  academicSessionId: undefined,
+  classId: undefined,
+  sectionId: undefined,
+};
+
+function studentsPage(page: number, totalPages: number, items: StudentRecord[] = []) {
+  return {
+    items,
+    pagination: { page, page_size: 10, total_count: items.length, total_pages: totalPages },
+  };
+}
+
+/** What DRF's page-number pagination answers for a page past the end. */
+function pageNotFound() {
+  return new ApiError({
+    code: "not_found",
+    message: "Invalid page.",
+    status: 404,
+    url: "/students",
+  });
+}
+
+/** The address bar's current query, as key/value pairs. */
+function urlParams() {
+  return Object.fromEntries(new URLSearchParams(window.location.search));
+}
 
 // Every permission this table reads, granted — individual tests only care about row
 // data/filters/errors, not permission gating, so a full grant is the sane default; the
@@ -115,6 +171,9 @@ function studentRecord(overrides: Partial<StudentRecord> = {}): StudentRecord {
 
 describe("StudentDirectoryTable", () => {
   beforeEach(() => {
+    setUrl("/students");
+    mockFetchClasses.mockReset().mockResolvedValue([]);
+    mockFetchSections.mockReset().mockResolvedValue([]);
     mockFetchStudentsPage.mockReset();
     mockFetchCurrentUser.mockReset().mockResolvedValue(PERMITTED_USER);
     mockFetchCampuses.mockReset().mockResolvedValue([]);
@@ -127,7 +186,7 @@ describe("StudentDirectoryTable", () => {
       items: [],
       pagination: { page: 1, page_size: 10, total_count: 0, total_pages: 0 },
     });
-    mockFetchCampuses.mockResolvedValue([{ id: "c1", name: "Main Campus" }]);
+    mockFetchCampuses.mockResolvedValue([{ id: CAMPUS_ID, name: "Main Campus" }]);
 
     renderWithProviders(<StudentDirectoryTable />);
 
@@ -136,7 +195,7 @@ describe("StudentDirectoryTable", () => {
 
     await waitFor(() => {
       expect(mockFetchStudentsPage).toHaveBeenCalledWith(
-        expect.objectContaining({ campusId: "c1", page: 1 }),
+        expect.objectContaining({ campusId: CAMPUS_ID, page: 1 }),
       );
     });
   });
@@ -146,7 +205,7 @@ describe("StudentDirectoryTable", () => {
       items: [],
       pagination: { page: 1, page_size: 10, total_count: 0, total_pages: 0 },
     });
-    mockFetchHouses.mockResolvedValue([{ id: "h1", name: "Griffin" }]);
+    mockFetchHouses.mockResolvedValue([{ id: HOUSE_ID, name: "Griffin" }]);
 
     renderWithProviders(<StudentDirectoryTable />);
 
@@ -155,7 +214,7 @@ describe("StudentDirectoryTable", () => {
 
     await waitFor(() => {
       expect(mockFetchStudentsPage).toHaveBeenCalledWith(
-        expect.objectContaining({ houseId: "h1", page: 1 }),
+        expect.objectContaining({ houseId: HOUSE_ID, page: 1 }),
       );
     });
   });
@@ -195,6 +254,7 @@ describe("StudentDirectoryTable", () => {
     });
     expect(await screen.findByText(/no students match these filters/i)).toBeInTheDocument();
     expect(screen.queryByText(/don't have permission/i)).not.toBeInTheDocument();
+    expect(urlParams()).toEqual({ search: "nonexistent" });
   });
 
   it("hides the row-level Withdraw action for a graduated student", async () => {
@@ -406,5 +466,212 @@ describe("StudentDirectoryTable", () => {
       await user.click(checkbox);
     }
     expect(screen.getByRole("button", { name: "Generating — 40%" })).toBeDisabled();
+  });
+
+  describe("view state in the URL", () => {
+    it("opens a shared link with its filters, sort and page", async () => {
+      setUrl(`/students?status=all&campus=${CAMPUS_ID}&sort=-admissionDate&page=2`);
+      mockFetchCampuses.mockResolvedValue([{ id: CAMPUS_ID, name: "Main Campus" }]);
+      mockFetchStudentsPage.mockResolvedValue(studentsPage(2, 3, [studentRecord()]));
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenCalledWith({
+          ...DEFAULT_REQUEST,
+          page: 2,
+          ordering: "-admission_date",
+          status: undefined,
+          campusId: CAMPUS_ID,
+        });
+      });
+      expect(await screen.findByRole("button", { name: "Go to page 2" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      expect(urlParams()).toEqual({
+        status: "all",
+        campus: CAMPUS_ID,
+        sort: "-admissionDate",
+        page: "2",
+      });
+    });
+
+    it("writes a campus filter to the URL and goes back to page 1", async () => {
+      setUrl("/students?page=2");
+      mockFetchCampuses.mockResolvedValue([{ id: CAMPUS_ID, name: "Main Campus" }]);
+      mockFetchStudentsPage.mockResolvedValue(studentsPage(2, 3));
+      const user = userEvent.setup();
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await user.click(await screen.findByRole("combobox", { name: /campus/i }));
+      await user.click(await screen.findByRole("option", { name: "Main Campus" }));
+
+      expect(urlParams()).toEqual({ campus: CAMPUS_ID });
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenLastCalledWith({
+          ...DEFAULT_REQUEST,
+          campusId: CAMPUS_ID,
+        });
+      });
+    });
+
+    it("writes a hidden column to the URL", async () => {
+      mockFetchStudentsPage.mockResolvedValue(studentsPage(1, 1, [studentRecord()]));
+      const user = userEvent.setup();
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await user.click(await screen.findByRole("button", { name: "Columns" }));
+      await user.click(await screen.findByRole("menuitemcheckbox", { name: "Campus" }));
+
+      expect(urlParams()).toEqual({ hidden: "campus" });
+      expect(screen.getByRole("menuitemcheckbox", { name: "Campus" })).toHaveAttribute(
+        "aria-checked",
+        "false",
+      );
+    });
+
+    it("sends the default request for hand-edited garbage", async () => {
+      // A section is a valid id here, but means nothing without its class.
+      const garbage = "page=abc&page_size=999&sort=nope&hidden=foo&campus=xyz&status=bogus";
+      setUrl(`/students?${garbage}&section=${SECTION_ID}`);
+      mockFetchStudentsPage.mockResolvedValue(studentsPage(1, 0));
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      // Every value fell back to its default, so nothing reads as filtered.
+      expect(await screen.findByText(/no students yet/i)).toBeInTheDocument();
+      expect(mockFetchStudentsPage.mock.calls).toEqual([[DEFAULT_REQUEST]]);
+    });
+
+    it("lands on page 1 when a linked page no longer exists", async () => {
+      setUrl("/students?page=9");
+      mockFetchStudentsPage.mockImplementation((query) =>
+        query.page === 9 ? Promise.reject(pageNotFound()) : Promise.resolve(studentsPage(1, 0)),
+      );
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenLastCalledWith(DEFAULT_REQUEST);
+      });
+      expect(mockFetchStudentsPage).toHaveBeenCalledWith({ ...DEFAULT_REQUEST, page: 9 });
+      expect(urlParams()).toEqual({});
+      expect(await screen.findByText(/no students yet/i)).toBeInTheDocument();
+      expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
+    });
+
+    it("never shows the empty state while a stale page resets to page 1", async () => {
+      setUrl("/students?page=9");
+      // Page 1 stays pending, so any empty state seen came from the reset itself.
+      mockFetchStudentsPage.mockImplementation((query) =>
+        query.page === 9
+          ? Promise.reject(pageNotFound())
+          : new Promise<ReturnType<typeof studentsPage>>(() => undefined),
+      );
+      const watcher = watchForAddedText(/no students yet/i);
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenLastCalledWith(DEFAULT_REQUEST);
+      });
+      expect(urlParams()).toEqual({});
+      expect(watcher.stop()).toBe(false);
+    });
+
+    it("clamps to the last page when the response shows the linked page is past the end", async () => {
+      setUrl("/students?page=3");
+      mockFetchStudentsPage.mockImplementation((query) =>
+        Promise.resolve(studentsPage(query.page, 2, [studentRecord()])),
+      );
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await waitFor(() => {
+        expect(urlParams()).toEqual({ page: "2" });
+      });
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenLastCalledWith({ ...DEFAULT_REQUEST, page: 2 });
+      });
+    });
+
+    it("keeps a linked page while its first response is still loading", async () => {
+      setUrl("/students?page=2");
+      let resolvePage: (page: ReturnType<typeof studentsPage>) => void = () => undefined;
+      const firstResponse = new Promise<ReturnType<typeof studentsPage>>((resolve) => {
+        resolvePage = resolve;
+      });
+      mockFetchStudentsPage.mockReturnValue(firstResponse);
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenCalledWith({ ...DEFAULT_REQUEST, page: 2 });
+      });
+      expect(urlParams()).toEqual({ page: "2" });
+
+      act(() => {
+        resolvePage(studentsPage(2, 2, [studentRecord()]));
+      });
+
+      expect(await screen.findByRole("button", { name: "Go to page 2" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      expect(urlParams()).toEqual({ page: "2" });
+      expect(mockFetchStudentsPage).not.toHaveBeenCalledWith(expect.objectContaining({ page: 1 }));
+    });
+
+    it("clears the section in the same write when the class changes", async () => {
+      setUrl(`/students?class=${CLASS_ID}&section=${SECTION_ID}`);
+      mockFetchClasses.mockResolvedValue([
+        { id: CLASS_ID, name: "Grade 1" },
+        { id: OTHER_CLASS_ID, name: "Grade 2" },
+      ]);
+      mockFetchSections.mockResolvedValue([{ id: SECTION_ID, name: "A" }]);
+      mockFetchStudentsPage.mockResolvedValue(studentsPage(1, 0));
+      const user = userEvent.setup();
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenCalledWith({
+          ...DEFAULT_REQUEST,
+          classId: CLASS_ID,
+          sectionId: SECTION_ID,
+        });
+      });
+      await user.click(screen.getByRole("combobox", { name: /^class$/i }));
+      await user.click(await screen.findByRole("option", { name: "Grade 2" }));
+
+      expect(urlParams()).toEqual({ class: OTHER_CLASS_ID });
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenLastCalledWith({
+          ...DEFAULT_REQUEST,
+          classId: OTHER_CLASS_ID,
+        });
+      });
+    });
+
+    it("drops a section that isn't one of the class's sections once they load", async () => {
+      setUrl(`/students?class=${CLASS_ID}&section=${SECTION_ID}`);
+      mockFetchSections.mockResolvedValue([{ id: OTHER_SECTION_ID, name: "B" }]);
+      mockFetchStudentsPage.mockResolvedValue(studentsPage(1, 0));
+
+      renderWithProviders(<StudentDirectoryTable />);
+
+      await waitFor(() => {
+        expect(urlParams()).toEqual({ class: CLASS_ID });
+      });
+      await waitFor(() => {
+        expect(mockFetchStudentsPage).toHaveBeenLastCalledWith({
+          ...DEFAULT_REQUEST,
+          classId: CLASS_ID,
+        });
+      });
+    });
   });
 });
