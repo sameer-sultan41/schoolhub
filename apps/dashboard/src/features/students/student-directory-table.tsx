@@ -217,6 +217,14 @@ export function StudentDirectoryTable() {
     getCoreRowModel: getCoreRowModel(),
   });
 
+  // Stable, so the filters' stale-section effect re-runs only when its inputs change.
+  const setSection = useCallback(
+    (section: string) => {
+      setFilters({ section });
+    },
+    [setFilters],
+  );
+
   const selected = table.getSelectedRowModel().rows.map((r) => r.original);
   // Bulk withdraw only ever offers/acts on the ACTIVE subset of what's selected,
   // regardless of `canWithdraw` — a non-active row has nothing to withdraw from.
@@ -299,9 +307,7 @@ export function StudentDirectoryTable() {
                       setFilters({ class: schoolClass, section: "" });
                     }}
                     sectionId={sectionId}
-                    onSectionIdChange={(section) => {
-                      setFilters({ section });
-                    }}
+                    onSectionIdChange={setSection}
                   />
                 </div>
               </CardHeading>

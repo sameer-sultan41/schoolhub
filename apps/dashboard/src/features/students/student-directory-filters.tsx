@@ -97,11 +97,11 @@ export function StudentDirectoryFilters({
   // A section from a link or an old URL that isn't one of this class's sections is
   // dropped once the list loads, so it never filters the directory.
   const sections = sectionsQuery.data;
+  const sectionIsStale =
+    sectionId !== "" && sections !== undefined && !sections.some((s) => s.id === sectionId);
   useEffect(() => {
-    if (sectionId !== "" && sections && !sections.some((section) => section.id === sectionId)) {
-      onSectionIdChange("");
-    }
-  }, [sections, sectionId, onSectionIdChange]);
+    if (sectionIsStale) onSectionIdChange("");
+  }, [sectionIsStale, onSectionIdChange]);
 
   return (
     <>
@@ -262,9 +262,8 @@ export function StudentDirectoryFilters({
       <Select
         value={classId || ALL}
         onValueChange={(value) => {
-          const next = value === ALL ? "" : value;
-          onClassIdChange(next);
-          onSectionIdChange("");
+          // The caller clears the section in the same write (see student-directory-table).
+          onClassIdChange(value === ALL ? "" : value);
         }}
       >
         <SelectTrigger className="w-full sm:w-40" aria-label={t("enrollment.fields.class")}>
