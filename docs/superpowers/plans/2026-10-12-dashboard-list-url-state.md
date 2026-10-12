@@ -145,14 +145,14 @@ export function useDataGridUrlState<F extends string>(options: DataGridUrlStateO
 - **Test:** `apps/dashboard/src/features/students/__tests__/student-directory-table.test.tsx`
 
 - [ ] **Swap the state.** Replace the search, filter, pagination and sorting `useState`s with `useDataGridUrlState`, and pass `columnVisibility` / `onColumnVisibilityChange` to `useReactTable`. Delete the now-redundant page-reset effect.
-- [ ] **Clamp guard.** The clamp effect runs only on real page data (`pageMeta` present and `!query.isPlaceholderData`) and calls `setPageIndex`. When the query fails with `ApiError.isNotFound` and `page > 1`, delete `page`; the query refetches page 1.
+- [ ] **Clamp guard.** The clamp effect runs only on real page data (`pageMeta` present and `!query.isPlaceholderData`) and calls `setPageIndex`. When the query fails with `ApiError.isNotFound` and `page > 1`, delete `page`; the query reloads page 1.
 - [ ] **Class and section.** A class change clears section in one `setFilters` call, and a `section` that isn't in the loaded sections list is dropped. Keep `rowSelection`, the dialogs and the detail sheet local.
 - [ ] **Tests.** Install the navigation mock and keep every existing API-param assertion. Add these cases:
   - **Deep link:** `?status=all&campus=<uuid>&sort=-admissionDate&page=2` gives the matching `fetchStudentsPage` call and UI.
   - **Filter change:** changing the campus writes `campus` and drops `page`.
   - **Hidden columns:** hiding a column writes `hidden`.
   - **Bad values:** the garbage URL gives the default request.
-  - **Stale page:** a 404 on `page=9` deletes `page` and refetches page 1.
+  - **Stale page:** a 404 on `page=9` deletes `page` and reloads page 1.
   - **Cold load:** a cold load with `page=2` doesn't drop `page` before data arrives.
 
 ### Task 3: `/staff` directory on the URL
