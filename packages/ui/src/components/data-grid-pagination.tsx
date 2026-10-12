@@ -15,10 +15,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 
 export interface DataGridPaginationProps {
   /** Rows-per-page options. Omit the whole control by passing an empty array. */
-  sizes?: number[];
+  sizes?: readonly number[];
 }
 
-const DEFAULT_SIZES = [10, 25, 50, 100];
+/** The rows-per-page choices every grid offers by default. Exported so a screen that keeps
+ * its page size somewhere else (the URL) can check a stored value against the same list. */
+export const DATA_GRID_PAGE_SIZES = [10, 25, 50, 100] as const;
+
+const DEFAULT_SIZES: readonly number[] = DATA_GRID_PAGE_SIZES;
 
 export function DataGridPagination({ sizes = DEFAULT_SIZES }: DataGridPaginationProps) {
   const { table, recordCount, labels } = useDataGrid();

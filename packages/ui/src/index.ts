@@ -151,7 +151,7 @@ export {
 export { DataGridColumnHeader } from "./components/data-grid-column-header";
 export type { DataGridColumnHeaderProps } from "./components/data-grid-column-header";
 export { DataGridColumnVisibility } from "./components/data-grid-column-visibility";
-export { DataGridPagination } from "./components/data-grid-pagination";
+export { DataGridPagination, DATA_GRID_PAGE_SIZES } from "./components/data-grid-pagination";
 export type { DataGridPaginationProps } from "./components/data-grid-pagination";
 export { DataGridTableDnd } from "./components/data-grid-dnd";
 export { DataGridRowDragHandle, DataGridTableDndRows } from "./components/data-grid-dnd-rows";
