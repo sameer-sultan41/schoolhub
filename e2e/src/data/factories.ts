@@ -10,8 +10,8 @@ import type {
  * Deterministic builders for API-shaped test data.
  *
  * Every factory takes an overrides object and returns a complete, valid object, so a
- * test states only the field it cares about. Ids are stable strings rather than random
- * UUIDs — a failing trace should read the same on every run.
+ * test states only the field it cares about. Ids are stable rather than random — even
+ * the UUID-shaped ones (`uuid`, `ORG_IDS`) — so a failing trace reads the same on every run.
  */
 
 let sequence = 0;
@@ -20,6 +20,31 @@ export function id(prefix: string): string {
   sequence += 1;
   return `${prefix}-${String(sequence).padStart(4, "0")}`;
 }
+
+/**
+ * Stable-per-run UUID-shaped id, unique within a worker, for the school-structure records
+ * (campus, house, academic session, class, section) whose ids the dashboard reads back from
+ * its own URL: a directory filter accepts only a UUID there and drops anything else
+ * (`isUuid`, apps/dashboard/src/lib/helpers.ts). Shares `id`'s sequence, so the two never
+ * collide, and is just as deterministic.
+ */
+export function uuid(): string {
+  sequence += 1;
+  return `00000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`;
+}
+
+/**
+ * Fixed ids for the school-structure records specs name directly. UUID-shaped for the same
+ * reason as `uuid`; a different fourth group (`a000`), so they never meet a generated one.
+ */
+export const ORG_IDS = {
+  mainCampus: "00000000-0000-4000-a000-000000000001",
+  northCampus: "00000000-0000-4000-a000-000000000002",
+  grade1: "00000000-0000-4000-a000-000000000011",
+  sectionA: "00000000-0000-4000-a000-000000000021",
+  sectionB: "00000000-0000-4000-a000-000000000022",
+  currentSession: "00000000-0000-4000-a000-000000000031",
+} as const;
 
 export function buildRole(overrides: Partial<Role> = {}): Role {
   return {

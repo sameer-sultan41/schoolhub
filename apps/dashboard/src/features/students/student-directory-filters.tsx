@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import {
   Badge,
@@ -92,6 +93,15 @@ export function StudentDirectoryFilters({
     queryFn: () => Services.schoolOrganization.fetchSections({ classId }),
     enabled: classId !== "",
   });
+
+  // A section from a link or an old URL that isn't one of this class's sections is
+  // dropped once the list loads, so it never filters the directory.
+  const sections = sectionsQuery.data;
+  useEffect(() => {
+    if (sectionId !== "" && sections && !sections.some((section) => section.id === sectionId)) {
+      onSectionIdChange("");
+    }
+  }, [sections, sectionId, onSectionIdChange]);
 
   return (
     <>
@@ -284,7 +294,7 @@ export function StudentDirectoryFilters({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-          {(sectionsQuery.data ?? []).map((section) => (
+          {(sections ?? []).map((section) => (
             <SelectItem key={section.id} value={section.id}>
               {section.name}
             </SelectItem>

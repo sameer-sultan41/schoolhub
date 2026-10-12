@@ -1,3 +1,6 @@
+import { STUDENT_STATUS_VALUES } from "@schoolhub/types";
+import { FILTER_ALL } from "@/lib/constants";
+import { isUuid } from "@/lib/helpers";
 import type { StudentsPageQuery, UpdateStudentInput } from "./students-type";
 
 /** The students module's constants — collected here so every feature file under
@@ -8,8 +11,8 @@ import type { StudentsPageQuery, UpdateStudentInput } from "./students-type";
 export const STUDENT_WITHDRAWABLE_STATUS = "active";
 
 /** Sentinel for "no filter" in a directory `Select` — the actual query omits the param
- * entirely rather than sending this literal string. */
-export const STUDENT_FILTER_ALL = "all";
+ * entirely rather than sending this literal string. The same value the URL carries for it. */
+export const STUDENT_FILTER_ALL = FILTER_ALL;
 
 /** Sentinel for "no house selected" in the student form — mirrors `STUDENT_FILTER_ALL`'s
  * role but for the form's House field, which has no real `"unset"` API value. */
@@ -22,6 +25,32 @@ export const SORT_FIELD: Record<string, string> = {
   admissionDate: "admission_date",
   status: "status",
   campus: "campus_name",
+};
+
+/** Column ids the directory may be sorted by — `sort` values the URL is allowed to carry. */
+export const STUDENT_SORTABLE_IDS = Object.keys(SORT_FIELD);
+
+/** The directory's default sort: none, so the API's own order applies. */
+export const STUDENT_DEFAULT_SORTING: { id: string; desc: boolean }[] = [];
+
+/** Every value the status filter can hold: a real status, or "all". */
+const STUDENT_STATUS_FILTER_VALUES: readonly string[] = [
+  STUDENT_FILTER_ALL,
+  ...STUDENT_STATUS_VALUES,
+];
+
+/** The directory's URL filters (`useDataGridUrlState`): URL key -> default and validator.
+ * Every id filter must be a UUID, so a hand-edited value is never sent to the API. */
+export const STUDENT_URL_FILTERS = {
+  status: {
+    default: STUDENT_WITHDRAWABLE_STATUS,
+    isValid: (value: string) => STUDENT_STATUS_FILTER_VALUES.includes(value),
+  },
+  campus: { default: "", isValid: isUuid },
+  house: { default: "", isValid: isUuid },
+  session: { default: "", isValid: isUuid },
+  class: { default: "", isValid: isUuid },
+  section: { default: "", isValid: isUuid },
 };
 
 /** camelCase `UpdateStudentInput` key -> the API's snake_case body key. Drives

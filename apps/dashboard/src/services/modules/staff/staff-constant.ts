@@ -1,4 +1,5 @@
 import { GENDER_VALUES } from "@schoolhub/types";
+import { FILTER_ALL } from "@/lib/constants";
 import type { StaffDirectoryQuery, UpdateStaffInput } from "./staff-type";
 
 /**
@@ -29,6 +30,12 @@ export const SORT_FIELD: Record<string, string> = {
 export const DEFAULT_SORTING = [{ id: "name", desc: false }];
 export const JOINING_DATE_SORT_ID = "joiningDate";
 
+/** Column ids `sort` may name in the URL, the `joiningDate` preset included. */
+export const STAFF_SORTABLE_IDS = Object.keys(SORT_FIELD);
+
+/** The directory's default status filter, and what the Active Users switch turns on. */
+export const STAFF_DEFAULT_STATUS = "active";
+
 export type StatusVariant = "success" | "warning" | "destructive" | "secondary" | "info" | "rose";
 
 /** employment_status -> badge; mirrors EmploymentStatus in staff_management/models.py. */
@@ -39,6 +46,15 @@ export const STATUS_META: Record<string, { variant: StatusVariant; label: string
   resigned: { variant: "rose", label: "Resigned" },
   retired: { variant: "info", label: "Retired" },
   terminated: { variant: "destructive", label: "Terminated" },
+};
+
+/** The directory's URL filter (`useDataGridUrlState`): `status` is a known employment
+ * status, or `FILTER_ALL` for none (the Active Users switch off, or the popover cleared). */
+export const STAFF_URL_FILTERS = {
+  status: {
+    default: STAFF_DEFAULT_STATUS,
+    isValid: (value: string) => value === FILTER_ALL || Object.hasOwn(STATUS_META, value),
+  },
 };
 
 /**

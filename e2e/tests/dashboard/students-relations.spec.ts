@@ -1,5 +1,5 @@
 import { expect, test } from "@/fixtures";
-import { buildUser, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
+import { buildUser, ORG_IDS, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
 import { buildCampus, schoolOrganizationModule } from "@/mocks";
 import { buildStudent, studentsModule } from "@/mocks";
 import { buildGuardian, buildGuardianLink, guardiansModule } from "@/mocks";
@@ -8,7 +8,7 @@ import { filesModule, jobsModule } from "@/mocks";
 
 const UPLOAD_URL = "https://files.example.test/upload-target";
 
-const campuses = [buildCampus({ id: "campus-0001", name: "Main Campus" })];
+const campuses = [buildCampus({ id: ORG_IDS.mainCampus, name: "Main Campus" })];
 const student = buildStudent({ id: "student-0001", first_name: "Ayesha", last_name: "Khan" });
 
 test.describe("student detail sheet — relations tabs", () => {

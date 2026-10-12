@@ -1,11 +1,17 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { ApiError } from "@schoolhub/api-client";
 import { Services } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setUrl, watchForAddedText } from "@/test-utils";
 
 import { StaffDirectoryTable } from "../staff-directory-table";
+
+// Search, status, sort, page and hidden columns live in the URL; this keeps one in memory.
+jest.mock("next/navigation", () => {
+  const testUtils = jest.requireActual<{ createNavigationMock: () => unknown }>("@/test-utils");
+  return testUtils.createNavigationMock();
+});
 
 // `StaffFormDialog` (Edit) and `ExitStaffDialog` (Delete / bulk Exit selected) both render
 // from this table now, and each calls some of `fetchCampuses`/`fetchDepartments`/
@@ -134,8 +140,35 @@ function secondStaffRecord() {
   };
 }
 
+/** What the directory requests with nothing in the URL. */
+const DEFAULT_REQUEST = {
+  page: 1,
+  pageSize: 10,
+  search: undefined,
+  ordering: "last_name",
+  employmentStatus: "active",
+};
+
+function staffPage(page: number, totalPages: number) {
+  return {
+    items: [staffRecord()],
+    pagination: { page, page_size: 10, total_count: 1, total_pages: totalPages },
+  };
+}
+
+/** What DRF's page-number pagination answers for a page past the end. */
+function pageNotFound() {
+  return new ApiError({ code: "not_found", message: "Invalid page.", status: 404, url: "/staff" });
+}
+
+/** The address bar's current query, as key/value pairs. */
+function urlParams() {
+  return Object.fromEntries(new URLSearchParams(window.location.search));
+}
+
 describe("StaffDirectoryTable", () => {
   beforeEach(() => {
+    setUrl("/staff");
     mockFetchStaffPage.mockReset();
     mockExitStaff.mockReset();
   });
@@ -665,6 +698,209 @@ describe("StaffDirectoryTable", () => {
     // `selectedIds.length`.
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: /Exit selected/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("view state in the URL", () => {
+    it("opens a shared link with its search, status, sort and page", async () => {
+      setUrl("/staff?search=khan&status=on_leave&sort=-joiningDate&page=2");
+      mockFetchStaffPage.mockResolvedValue(staffPage(2, 3));
+
+      renderWithProviders(<StaffDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStaffPage).toHaveBeenCalledWith({
+          page: 2,
+          pageSize: 10,
+          search: "khan",
+          ordering: "-joining_date",
+          employmentStatus: "on_leave",
+        });
+      });
+      expect(screen.getByPlaceholderText("Search staff...")).toHaveValue("khan");
+      expect(screen.getByRole("button", { name: "Sort Order Newest joiners" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "Go to page 2" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    });
+
+    it("writes the Sort Order preset as sort=joiningDate", async () => {
+      mockFetchStaffPage.mockResolvedValue(staffPage(1, 1));
+      const user = userEvent.setup();
+
+      renderWithProviders(<StaffDirectoryTable />);
+      await screen.findByText("Ayesha Khan");
+
+      await user.click(screen.getByRole("button", { name: "Sort Order" }));
+      await user.click(screen.getByRole("checkbox", { name: "Oldest joiners" }));
+
+      expect(urlParams()).toEqual({ sort: "joiningDate" });
+    });
+
+    it("writes status=all with Active Users off, sends no status, and keeps it on reload", async () => {
+      setUrl("/staff?page=2");
+      mockFetchStaffPage.mockResolvedValue(staffPage(2, 3));
+      const user = userEvent.setup();
+
+      const { unmount } = renderWithProviders(<StaffDirectoryTable />);
+      await screen.findByText("Ayesha Khan");
+
+      await user.click(screen.getByRole("switch", { name: "Active Users" }));
+
+      expect(urlParams()).toEqual({ status: "all" });
+      await waitFor(() => {
+        expect(mockFetchStaffPage).toHaveBeenLastCalledWith({
+          ...DEFAULT_REQUEST,
+          employmentStatus: undefined,
+        });
+      });
+
+      unmount();
+      mockFetchStaffPage.mockClear();
+      renderWithProviders(<StaffDirectoryTable />);
+
+      expect(await screen.findByRole("switch", { name: "Active Users" })).not.toBeChecked();
+      await waitFor(() => {
+        expect(mockFetchStaffPage).toHaveBeenCalledWith({
+          ...DEFAULT_REQUEST,
+          employmentStatus: undefined,
+        });
+      });
+    });
+
+    it("writes sort=none for a header cycled to unsorted, sends no ordering, and keeps it on reload", async () => {
+      mockFetchStaffPage.mockResolvedValue(staffPage(1, 1));
+      const user = userEvent.setup();
+
+      const { unmount } = renderWithProviders(<StaffDirectoryTable />);
+      await screen.findByText("Ayesha Khan");
+
+      // "Member" is the default sort (ascending): one click makes it descending, the next
+      // clears it. Escape closes the column menu each click also opens.
+      await user.click(screen.getByRole("button", { name: "Member" }));
+      expect(urlParams()).toEqual({ sort: "-name" });
+      await user.keyboard("{Escape}");
+      await user.click(screen.getByRole("button", { name: "Member" }));
+      await user.keyboard("{Escape}");
+
+      expect(urlParams()).toEqual({ sort: "none" });
+      await waitFor(() => {
+        expect(mockFetchStaffPage).toHaveBeenLastCalledWith({
+          ...DEFAULT_REQUEST,
+          ordering: undefined,
+        });
+      });
+
+      unmount();
+      mockFetchStaffPage.mockClear();
+      renderWithProviders(<StaffDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStaffPage).toHaveBeenCalledWith({
+          ...DEFAULT_REQUEST,
+          ordering: undefined,
+        });
+      });
+    });
+
+    it("writes a hidden column to the URL", async () => {
+      mockFetchStaffPage.mockResolvedValue(staffPage(1, 1));
+      const user = userEvent.setup();
+
+      renderWithProviders(<StaffDirectoryTable />);
+      await screen.findByText("Ayesha Khan");
+
+      await user.click(screen.getByRole("button", { name: "Columns" }));
+      // No `headerTitle` on these columns, so the menu names each by its id.
+      await user.click(await screen.findByRole("menuitemcheckbox", { name: "role" }));
+
+      expect(urlParams()).toEqual({ hidden: "role" });
+    });
+
+    it("sends the default request for hand-edited garbage", async () => {
+      setUrl("/staff?page=abc&page_size=999&sort=nope&hidden=foo&status=bogus");
+      mockFetchStaffPage.mockResolvedValue(staffPage(1, 1));
+
+      renderWithProviders(<StaffDirectoryTable />);
+
+      await screen.findByText("Ayesha Khan");
+      expect(mockFetchStaffPage.mock.calls).toEqual([[DEFAULT_REQUEST]]);
+      expect(screen.getByRole("switch", { name: "Active Users" })).toBeChecked();
+    });
+
+    it("lands on page 1 when a linked page no longer exists", async () => {
+      setUrl("/staff?page=9");
+      mockFetchStaffPage.mockImplementation((query) =>
+        query.page === 9 ? Promise.reject(pageNotFound()) : Promise.resolve(staffPage(1, 1)),
+      );
+
+      renderWithProviders(<StaffDirectoryTable />);
+
+      expect(await screen.findByText("Ayesha Khan")).toBeInTheDocument();
+      expect(mockFetchStaffPage).toHaveBeenCalledWith({ ...DEFAULT_REQUEST, page: 9 });
+      expect(mockFetchStaffPage).toHaveBeenLastCalledWith(DEFAULT_REQUEST);
+      expect(urlParams()).toEqual({});
+      expect(screen.queryByText(/couldn't load the staff directory/i)).not.toBeInTheDocument();
+    });
+
+    it("never shows the empty state while a stale page resets to page 1", async () => {
+      setUrl("/staff?page=9");
+      // Page 1 stays pending, so any empty state seen came from the reset itself.
+      mockFetchStaffPage.mockImplementation((query) =>
+        query.page === 9
+          ? Promise.reject(pageNotFound())
+          : new Promise<ReturnType<typeof staffPage>>(() => undefined),
+      );
+      const watcher = watchForAddedText(/no staff found/i);
+
+      renderWithProviders(<StaffDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStaffPage).toHaveBeenLastCalledWith(DEFAULT_REQUEST);
+      });
+      expect(urlParams()).toEqual({});
+      expect(watcher.stop()).toBe(false);
+    });
+
+    it("clamps to the last page when the response shows the linked page is past the end", async () => {
+      setUrl("/staff?page=3");
+      mockFetchStaffPage.mockImplementation((query) =>
+        Promise.resolve(staffPage(query.page ?? 1, 2)),
+      );
+
+      renderWithProviders(<StaffDirectoryTable />);
+
+      await waitFor(() => {
+        expect(urlParams()).toEqual({ page: "2" });
+      });
+      await waitFor(() => {
+        expect(mockFetchStaffPage).toHaveBeenLastCalledWith({ ...DEFAULT_REQUEST, page: 2 });
+      });
+    });
+
+    it("keeps a linked page while its first response is still loading", async () => {
+      setUrl("/staff?page=2");
+      let resolvePage: (page: ReturnType<typeof staffPage>) => void = () => undefined;
+      const firstResponse = new Promise<ReturnType<typeof staffPage>>((resolve) => {
+        resolvePage = resolve;
+      });
+      mockFetchStaffPage.mockReturnValue(firstResponse);
+
+      renderWithProviders(<StaffDirectoryTable />);
+
+      await waitFor(() => {
+        expect(mockFetchStaffPage).toHaveBeenCalledWith({ ...DEFAULT_REQUEST, page: 2 });
+      });
+      expect(urlParams()).toEqual({ page: "2" });
+
+      act(() => {
+        resolvePage(staffPage(2, 2));
+      });
+
+      expect(await screen.findByText("Ayesha Khan")).toBeInTheDocument();
+      expect(urlParams()).toEqual({ page: "2" });
+      expect(mockFetchStaffPage).not.toHaveBeenCalledWith(expect.objectContaining({ page: 1 }));
     });
   });
 });

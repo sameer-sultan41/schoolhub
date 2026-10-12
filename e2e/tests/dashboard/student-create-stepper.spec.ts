@@ -1,5 +1,5 @@
 import { expect, test } from "@/fixtures";
-import { buildUser, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
+import { buildUser, ORG_IDS, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
 import {
   buildAcademicSession,
   buildCampus,
@@ -14,12 +14,17 @@ import { studentRelationsModule } from "@/mocks";
 import { enrollmentModule } from "@/mocks";
 import { studentTransfersModule } from "@/mocks";
 
-const campuses = [buildCampus({ id: "campus-0001", name: "Main Campus" })];
-const classes = [buildSchoolClass({ id: "class-0001", name: "Grade 1" })];
+const campuses = [buildCampus({ id: ORG_IDS.mainCampus, name: "Main Campus" })];
+const classes = [buildSchoolClass({ id: ORG_IDS.grade1, name: "Grade 1" })];
 const sections = [
-  buildSection({ id: "section-0001", name: "A", class_id: "class-0001", campus_id: "campus-0001" }),
+  buildSection({
+    id: ORG_IDS.sectionA,
+    name: "A",
+    class_id: ORG_IDS.grade1,
+    campus_id: ORG_IDS.mainCampus,
+  }),
 ];
-const sessions = [buildAcademicSession({ id: "session-0001", name: "2026-27" })];
+const sessions = [buildAcademicSession({ id: ORG_IDS.currentSession, name: "2026-27" })];
 
 test.describe("student creation stepper", () => {
   test.use({

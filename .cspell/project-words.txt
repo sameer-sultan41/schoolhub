@@ -153,6 +153,7 @@ NOTIF
 Noto
 notschoolhub
 nspname
+nuqs
 officedocument
 openxmlformats
 overdues

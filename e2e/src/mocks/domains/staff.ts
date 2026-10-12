@@ -1,4 +1,4 @@
-import { id } from "@/data/factories";
+import { id, ORG_IDS } from "@/data/factories";
 import { fail, ok, pagedList } from "../envelope";
 import type { MockModule } from "../router";
 
@@ -48,7 +48,7 @@ export function buildStaff(overrides: Partial<Staff> = {}): Staff {
     photo_file_id: null,
     photo_url: null,
     staff_type: "teaching",
-    campus_id: "campus-0001",
+    campus_id: ORG_IDS.mainCampus,
     campus_name: "Main Campus",
     department_id: null,
     department_name: null,
@@ -123,6 +123,11 @@ export function staffModule(options: StaffOptions = {}): MockModule {
       const matching = filterAndOrder(staff, request.searchParams);
       const pageSize = Number(request.searchParams.get("page_size") ?? matching.length) || 1;
       const page = Number(request.searchParams.get("page") ?? 1) || 1;
+      // DRF's `PageNumberPagination` answers a page past the last with 404 "Invalid page."
+      // (an empty list still has page 1), and the directory recovers from exactly that.
+      if (page > Math.max(1, Math.ceil(matching.length / pageSize))) {
+        return fail(404, "Invalid page.");
+      }
       const start = (page - 1) * pageSize;
       return pagedList(matching.slice(start, start + pageSize), {
         page,

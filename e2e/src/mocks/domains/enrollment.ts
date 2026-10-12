@@ -1,4 +1,4 @@
-import { id } from "@/data/factories";
+import { id, ORG_IDS } from "@/data/factories";
 import { ok } from "../envelope";
 import type { MockModule } from "../router";
 
@@ -42,11 +42,11 @@ export function buildEnrollmentHistoryEvent(
     id: id("history-enrollment"),
     date: "2026-04-05",
     status: "active",
-    academic_session_id: "session-0001",
+    academic_session_id: ORG_IDS.currentSession,
     academic_session_name: "2026-27",
-    class_id: "class-0001",
+    class_id: ORG_IDS.grade1,
     class_name: "Grade 1",
-    section_id: "section-0001",
+    section_id: ORG_IDS.sectionA,
     section_name: "A",
     roll_number: null,
     ...overrides,
@@ -62,9 +62,9 @@ export function buildTransferHistoryEvent(
     date: "2026-05-01",
     status: "requested",
     transfer_type: "inter_campus",
-    from_campus_id: "campus-0001",
+    from_campus_id: ORG_IDS.mainCampus,
     from_campus_name: "Main Campus",
-    to_campus_id: "campus-0002",
+    to_campus_id: ORG_IDS.northCampus,
     to_campus_name: "North Campus",
     external_school_name: null,
     reason: "Family relocation",

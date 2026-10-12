@@ -1,5 +1,5 @@
 import { expect, test } from "@/fixtures";
-import { buildUser, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
+import { buildUser, ORG_IDS, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
 import {
   buildAcademicSession,
   buildCampus,
@@ -14,27 +14,37 @@ import { buildEnrollmentHistoryEvent, enrollmentModule } from "@/mocks";
 import { buildStudentTransfer, studentTransfersModule } from "@/mocks";
 
 const campuses = [
-  buildCampus({ id: "campus-0001", name: "Main Campus" }),
-  buildCampus({ id: "campus-0002", name: "North Campus" }),
+  buildCampus({ id: ORG_IDS.mainCampus, name: "Main Campus" }),
+  buildCampus({ id: ORG_IDS.northCampus, name: "North Campus" }),
 ];
-const classes = [buildSchoolClass({ id: "class-0001", name: "Grade 1" })];
+const classes = [buildSchoolClass({ id: ORG_IDS.grade1, name: "Grade 1" })];
 const sections = [
-  buildSection({ id: "section-0001", name: "A", class_id: "class-0001", campus_id: "campus-0001" }),
-  buildSection({ id: "section-0002", name: "B", class_id: "class-0001", campus_id: "campus-0002" }),
+  buildSection({
+    id: ORG_IDS.sectionA,
+    name: "A",
+    class_id: ORG_IDS.grade1,
+    campus_id: ORG_IDS.mainCampus,
+  }),
+  buildSection({
+    id: ORG_IDS.sectionB,
+    name: "B",
+    class_id: ORG_IDS.grade1,
+    campus_id: ORG_IDS.northCampus,
+  }),
 ];
-const sessions = [buildAcademicSession({ id: "session-0001", name: "2026-27" })];
+const sessions = [buildAcademicSession({ id: ORG_IDS.currentSession, name: "2026-27" })];
 const student = buildStudent({
   id: "student-0001",
   first_name: "Ayesha",
   last_name: "Khan",
-  campus_id: "campus-0001",
+  campus_id: ORG_IDS.mainCampus,
 });
 const currentEnrollment = buildEnrollmentHistoryEvent({
-  academic_session_id: "session-0001",
+  academic_session_id: ORG_IDS.currentSession,
   academic_session_name: "2026-27",
-  class_id: "class-0001",
+  class_id: ORG_IDS.grade1,
   class_name: "Grade 1",
-  section_id: "section-0001",
+  section_id: ORG_IDS.sectionA,
   section_name: "A",
 });
 
@@ -160,7 +170,7 @@ test.describe("student transfers tab — decisions", () => {
       id: "transfer-0001",
       student_id: "student-0001",
       status: "approved",
-      to_campus_id: "campus-0002",
+      to_campus_id: ORG_IDS.northCampus,
     });
     mockApi.use(
       schoolOrganizationModule({ campuses, classes, sections, academicSessions: sessions }),

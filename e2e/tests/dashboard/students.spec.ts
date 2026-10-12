@@ -1,5 +1,5 @@
 import { expect, test } from "@/fixtures";
-import { buildUser, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
+import { buildUser, ORG_IDS, SCHOOL_ADMIN_PERMISSIONS } from "@/data/factories";
 import {
   buildCampus,
   buildStudent,
@@ -18,7 +18,7 @@ import {
  * here returns whatever it was told to.
  */
 
-const campuses = [buildCampus({ id: "campus-0001", name: "Main Campus" })];
+const campuses = [buildCampus({ id: ORG_IDS.mainCampus, name: "Main Campus" })];
 
 test.describe("students directory", () => {
   test.use({
@@ -71,7 +71,7 @@ test.describe("students directory", () => {
       last_name: "Ahmed",
       date_of_birth: "2013-02-14",
       gender: "male",
-      campus_id: "campus-0001",
+      campus_id: ORG_IDS.mainCampus,
       admission_date: "2026-03-01",
     });
 

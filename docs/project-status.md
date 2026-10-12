@@ -238,14 +238,17 @@ with its reasoning. Read the entry for the area you are about to touch before re
    now), every column backed by a real field is sortable, and the endpoints were widened
    to match — including
    `StableOrderingFilter`, which appends a unique tiebreaker so a cursor page
-   boundary can no longer land mid-tie and silently skip or repeat rows. Not
-   done, and each its own piece of work:
+   boundary can no longer land mid-tie and silently skip or repeat rows. Both
+   directories keep their search, filters, sort, page, page size and hidden columns in
+   the URL again, through `useDataGridUrlState` (`apps/dashboard/src/hooks/`,
+   [ADR-0024](decisions/0024-list-state-in-the-url.md)), so a reload keeps the view and
+   a link shares it. Not done, and each its own piece of work:
    - **Row actions.** No table has a trailing `…` menu; rows navigate on click.
      The reference kits put edit/delete/duplicate there, which needs a per-screen
      action inventory and a permission key each.
-   - **Responsive default column visibility.** Hidden columns live in the URL, so
-     a breakpoint-driven default has to decide what beats what — a reader's
-     explicit choice must survive a resize.
+   - **Responsive default column visibility.** Hidden columns live in the URL (the
+     `hidden` key), so a breakpoint-driven default has to decide what beats what — a
+     reader's explicit choice must survive a resize.
    - **`const EMPTY = "—"` is declared in eleven files.** It belongs in
      `lib/format.ts`; the sweep touches eleven screens and was not worth folding
      into this work.

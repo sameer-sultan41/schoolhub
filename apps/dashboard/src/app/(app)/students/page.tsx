@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Container } from "@/app/(app)/shell/partials/common/container";
 import { StudentDirectoryTable } from "@/features/students/student-directory-table";
 import { StudentToolbar } from "@/features/students/student-toolbar";
@@ -14,7 +15,11 @@ export default function StudentsPage() {
         <StudentToolbar />
       </Container>
       <Container>
-        <StudentDirectoryTable />
+        {/* The table reads the URL (`useSearchParams`); Next asks for a Suspense boundary
+            around that so the route never depends on the layout opting out of prerendering. */}
+        <Suspense>
+          <StudentDirectoryTable />
+        </Suspense>
       </Container>
     </>
   );

@@ -1,3 +1,4 @@
+import { ORG_IDS } from "@/data/factories";
 import { ok, pagedList, paginated } from "../envelope";
 import type { MockModule } from "../router";
 
@@ -40,14 +41,16 @@ export function dashboardHomeModule(options: DashboardHomeOptions = {}): MockMod
       pagedList([{ id: "staff-e2e" }], { page_size: 1, total_count: staffTotal }),
     );
     // Bounded reference lists the ChannelStats/Highlights widgets count in full.
-    api.get("/classes", () => pagedList([{ id: "class-e2e" }]));
-    api.get("/sections", () => pagedList([{ id: "section-e2e" }]));
+    api.get("/classes", () => pagedList([{ id: ORG_IDS.grade1 }]));
+    api.get("/sections", () => pagedList([{ id: ORG_IDS.sectionA }]));
     api.get("/subjects", () => pagedList([{ id: "subject-e2e" }]));
-    api.get("/campuses", () => pagedList([{ id: "campus-e2e" }]));
+    api.get("/campuses", () => pagedList([{ id: ORG_IDS.mainCampus }]));
     // Cursor-paginated, unlike the lists above — matches the real endpoint's own
     // envelope, confirmed directly against a running API.
     api.get("/academic-sessions", () =>
-      paginated([{ id: "session-e2e", name: "2026-27", status: "active", is_current: true }]),
+      paginated([
+        { id: ORG_IDS.currentSession, name: "2026-27", status: "active", is_current: true },
+      ]),
     );
     // EarningsChart's teacher-load aggregate for the resolved session.
     api.get("/teacher-subject-allocations/load-summary", () => ok([]));
@@ -56,7 +59,7 @@ export function dashboardHomeModule(options: DashboardHomeOptions = {}): MockMod
     api.get("/timetables/my", (request) =>
       ok([], {
         meta: {
-          academic_session_id: "session-e2e",
+          academic_session_id: ORG_IDS.currentSession,
           date: request.searchParams.get("date"),
           audience: "staff",
         },
