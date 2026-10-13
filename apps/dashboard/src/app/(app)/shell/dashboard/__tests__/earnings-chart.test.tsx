@@ -29,7 +29,13 @@ const mockFetchTeacherLoadSummary = Services.dashboard
   typeof Services.dashboard.fetchTeacherLoadSummary
 >;
 
-const CURRENT_SESSION = { id: "sess-1", name: "2026-27", status: "active", is_current: true };
+// `as const`: the generated session status is a union, which a widened `string` isn't.
+const CURRENT_SESSION = {
+  id: "sess-1",
+  name: "2026-27",
+  status: "active" as const,
+  is_current: true,
+};
 
 describe("EarningsChart", () => {
   beforeEach(() => {

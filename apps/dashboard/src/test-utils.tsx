@@ -1,3 +1,4 @@
+import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, type RenderOptions } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
@@ -86,6 +87,21 @@ export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
     </NextIntlClientProvider>,
     options,
   );
+}
+
+/** A signed-in user holding exactly `permissions`, for a screen or menu gated by them. */
+export function buildUser(permissions: PermissionKey[]): AuthenticatedUser {
+  return {
+    id: "user-1",
+    email: "user@example.com",
+    phone: null,
+    full_name: "Test User",
+    avatar_url: null,
+    locale: "en",
+    tenant_id: "tenant-1",
+    roles: [],
+    permissions,
+  };
 }
 
 /** Watches the document for text that gets added to it, even for a single render that a

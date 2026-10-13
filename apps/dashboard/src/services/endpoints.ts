@@ -84,7 +84,16 @@ export const endpoints = {
      */
     classes: "/classes",
     sections: "/sections",
+    subjects: "/subjects",
     academicSessions: "/academic-sessions",
+  },
+  /** Curriculum mapping (`class_subjects` in the database) is served at `/class-subjects`
+   * (`apps/api/apps/academics/curriculum/urls.py`). */
+  curriculum: {
+    list: "/class-subjects",
+    detail: (id: string) => `/class-subjects/${id}`,
+    /** Collection colon-action, synchronous 200 with `{created, skipped}`. */
+    clone: "/class-subjects:clone",
   },
   students: {
     list: "/students",

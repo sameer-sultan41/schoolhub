@@ -32,6 +32,7 @@ import { queryKeys } from "@/lib/query-client";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
+import { usePageClamp } from "@/hooks/use-page-clamp";
 import {
   SORT_FIELD,
   STUDENT_DEFAULT_SORTING,
@@ -175,29 +176,20 @@ export function StudentDirectoryTable() {
     placeholderData: keepPreviousData,
   });
 
-  // `Page<T>.pagination` is itself optional, and `total_pages` exists only on the
-  // `OffsetPagination` arm of the `Pagination` union — both need guarding before
-  // either field is read, never a single `?.` through to `total_pages`/`total_count`.
+  // `Page<T>.pagination` is itself optional, and `total_count` is required only on the
+  // `OffsetPagination` arm of the `Pagination` union — guard both before reading it,
+  // never a single `?.` straight through to `total_count`.
   const pageMeta = query.data?.pagination;
-  const pageCount = pageMeta && isOffsetPagination(pageMeta) ? pageMeta.total_pages : 1;
   const totalCount = pageMeta && isOffsetPagination(pageMeta) ? pageMeta.total_count : 0;
 
-  // Only this page's own data can say the page is past the end (exiting the last rows
-  // on it, say): placeholder data is the previous request's, and a cold load has none.
-  const hasPageData = pageMeta !== undefined && !query.isPlaceholderData;
-  useEffect(() => {
-    if (!hasPageData) return;
-    const lastPageIndex = Math.max(0, pageCount - 1);
-    if (pagination.pageIndex > lastPageIndex) setPageIndex(lastPageIndex);
-  }, [hasPageData, pageCount, pagination.pageIndex, setPageIndex]);
-
-  // A shared link to a page that no longer exists: the API answers 404, and the list
-  // goes back to page 1 rather than showing an error.
-  const isStalePage =
-    query.error instanceof ApiError && query.error.isNotFound && pagination.pageIndex > 0;
-  useEffect(() => {
-    if (isStalePage) setPageIndex(0);
-  }, [isStalePage, setPageIndex]);
+  // Clamps a page past the end back, and a shared link's 404 for one to page 1.
+  const { pageCount, isStalePage } = usePageClamp({
+    pageMeta,
+    isPlaceholderData: query.isPlaceholderData,
+    error: query.error,
+    pageIndex: pagination.pageIndex,
+    setPageIndex,
+  });
 
   const rows = useMemo(() => (query.data?.items ?? []).map(toStudentRow), [query.data]);
 

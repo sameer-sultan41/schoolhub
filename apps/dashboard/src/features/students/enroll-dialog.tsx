@@ -36,15 +36,12 @@ import { useGuardedSubmit, useSubmitGuard } from "@/hooks/use-submit-guard";
 import { applyServerFieldErrors } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { LOCKED_SESSION_STATUSES } from "@/services/modules/school-organization/school-organization-constant";
 import {
   enrollFormSchema,
   type EnrollFormValues,
 } from "@/services/modules/students/students.schema";
 import { ClassSectionFields } from "./class-section-fields";
-
-/** Sessions no longer open for new enrollments — excluded from the picker so a caller
- * can't choose a session the server will reject. */
-const CLOSED_SESSION_STATUSES = new Set(["closed", "archived"]);
 
 export interface EnrollDialogProps {
   studentId: string;
@@ -123,9 +120,12 @@ function EnrollBody({
     queryKey: queryKeys.list("school-organization", "academic-sessions"),
     queryFn: () => Services.schoolOrganization.fetchAcademicSessions(),
   });
+  // A locked session is left out of the picker: the server rejects an enrollment into it.
   const openSessions = useMemo(
     () =>
-      (sessionsQuery.data ?? []).filter((session) => !CLOSED_SESSION_STATUSES.has(session.status)),
+      (sessionsQuery.data ?? []).filter(
+        (session) => !LOCKED_SESSION_STATUSES.includes(session.status),
+      ),
     [sessionsQuery.data],
   );
 

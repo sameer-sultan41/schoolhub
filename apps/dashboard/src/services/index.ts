@@ -1,4 +1,5 @@
 import { AuthService } from "./modules/auth";
+import { CurriculumService } from "./modules/curriculum";
 import { DashboardService } from "./modules/dashboard";
 import { FilesService } from "./modules/files";
 import { GuardiansService } from "./modules/guardians";
@@ -24,6 +25,18 @@ export type {
   StudentDocumentRecord,
   StudentRecord,
 } from "./modules/students";
+
+export type {
+  CloneCurriculumResult,
+  CurriculumInput,
+  CurriculumPageQuery,
+  CurriculumRecord,
+} from "./modules/curriculum";
+
+export type {
+  AcademicSessionSummary,
+  SchoolOrganizationOption,
+} from "./modules/school-organization";
 
 /** `UpdateGuardianLinkInput` is re-exported here (not just from the guardians module
  * itself) because Task 7's `GuardianLinkFlagsDialog` imports it from `@/services`, not
@@ -53,6 +66,7 @@ export const Services = {
   files: FilesService,
   jobs: JobsService,
   schoolOrganization: SchoolOrganizationService,
+  curriculum: CurriculumService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,
