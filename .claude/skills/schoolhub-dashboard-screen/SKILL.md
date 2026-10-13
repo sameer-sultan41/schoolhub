@@ -157,7 +157,10 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   effect runs when `pageMeta` is present and `!isPlaceholderData`, and calls `setPageIndex`.
   A shared link to a page past the end gets a 404 from the API: while `ApiError.isNotFound`
   holds on a page past the first, call `setPageIndex(0)` and don't show the error card
-  (`isStalePage` in both directory tables).
+  (`isStalePage` in both directory tables). Don't hand-write either effect:
+  `usePageClamp({ pageMeta, isPlaceholderData, error, pageIndex, setPageIndex })`
+  (`apps/dashboard/src/hooks/use-page-clamp.ts`) does both and returns `pageCount` and
+  `isStalePage`, with `setPageIndex` from `useDataGridUrlState`.
 - **Narrow pagination with `isOffsetPagination`/`isCursorPagination`** before touching
   `total_pages`/`total_count` — `Page<T>.pagination` is itself optional, and those fields
   exist only on the offset arm of the `Pagination` union:
@@ -208,6 +211,54 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   never a fabricated number. Exact line numbers in this section are deliberately
   omitted: they rotted twice already as this screen kept changing after being written
   up — cite the function/symbol name instead and let the reader search for it.
+
+## 3a. A session-scoped list (the Academics screens)
+
+Real example: `features/academics/use-academic-session.ts`, `session-picker.tsx`, and
+`curriculum/curriculum-table.tsx` + `curriculum-toolbar.tsx`. A list that belongs to one
+academic session needs the session resolved before its own request, and says so when it can't:
+
+- **The session is a URL filter, resolved by `useAcademicSession(urlSessionId)`.** Put `session`
+  in the module's `<MODULE>_URL_FILTERS` (`{ default: "", isValid: isUuid }`; `""` means the
+  current session, so a link without it follows the school's year). The hook returns `sessions`,
+  the resolved `session` (the URL's, else the current one, else `null`), `isLocked` (closed or
+  archived), `isLoading`, `isError` and `refetch`. It shares the `academic-sessions` list's cache
+  entry, so using it in the table and the toolbar adds no request.
+- **Gate the list query on it.** The key and the call take `academicSessionId = session?.id ?? ""`
+  and the query is `enabled: session !== null`:
+  ```tsx
+  // curriculum-table.tsx, CurriculumTable (filters trimmed)
+  const {
+    session,
+    isLocked,
+    isLoading: isSessionLoading,
+    isError: isSessionError,
+    refetch: refetchSessions,
+  } = useAcademicSession(filters.session);
+  const academicSessionId = session?.id ?? "";
+  const query = useQuery({
+    queryKey: queryKeys.list("curriculum", "class-subjects", { page, pageSize, academicSessionId }),
+    queryFn: () => Services.curriculum.fetchCurriculumPage({ page, pageSize, academicSessionId }),
+    // Until a session resolves there is nothing to ask for.
+    enabled: session !== null,
+    placeholderData: keepPreviousData,
+  });
+  ```
+- **Render in this order, so each state says what is true.** (1) `isError` (the sessions fetch
+  failed and none are cached) is a retry card calling `refetch`, never the no-session state: "we
+  couldn't ask" is not "there is none". (2) `!isLoading && session === null` is the no-session
+  empty state: a `SessionPicker` plus an `EmptyState` (`academics.common.noSession*`), so the
+  viewer can still pick one from the sessions there are. (3) The list's own error card, unless
+  it is a stale page. (4) The grid, with an info `Alert` (`academics.common.lockedNotice`) above
+  it when `isLocked`.
+- **A locked session is read-only in the UI, and the API is what enforces it.** Hide the
+  toolbar's mutating buttons (`showActions = !isLocked && …`) and the actions column, by
+  overriding its visibility with `{ ...columnVisibility, [ACTIONS_COLUMN_ID]: showActions }`.
+  The column is `enableHiding: false`, so only the lock and the viewer's permissions ever hide it.
+- **The toolbar reads only `session`, through `useUrlParams`.** A second `useDataGridUrlState`
+  there would keep its own search state, forked from the table's. Moving the screen onto another
+  session (after a clone, say) is one `setParams({ session, page: null })`, with `session` as
+  `null` for the current session, which is the URL's default.
 
 ## 4. `ResponsiveDialog`/`ResponsiveSheet`
 
