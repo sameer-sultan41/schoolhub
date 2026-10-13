@@ -7,7 +7,9 @@ that app), several functions here are imported directly by other apps:
 - `assert_session_writable` — `apps/attendance/services.py`,
   `apps/academics/services.py`, `apps/student_management/services.py`,
   `apps/timetable/services.py`
-- `map_subject_to_class` — `apps/academics/views.py`
+- `map_subject_to_class` — `apps/academics/curriculum/viewset.py`
+- `assert_class_subject_mapping_valid` — `map_subject_to_class` and the curriculum PATCH path
+  in `apps/academics/curriculum/viewset.py`
 - `assert_section_capacity` (and its helpers `section_seats_remaining`,
   `assert_capacity_not_below_occupancy`, kept alongside it rather than split
   across files for the same capacity concern) — `apps/student_management/
@@ -126,6 +128,35 @@ def assert_capacity_not_below_occupancy(section: Section, *, occupied: int) -> N
         )
 
 
+def assert_class_subject_mapping_valid(
+    *,
+    session: AcademicSession,
+    school_class: Class,
+    subject: Subject,
+    campus: Campus | None,
+    exclude_pk: uuid.UUID | None = None,
+) -> None:
+    """§11 identity rules for a curriculum row, shared by create and PATCH.
+
+    Errors are keyed by field so a form can place them. `exclude_pk` lets a PATCH
+    check for a duplicate without colliding with the row being edited.
+    """
+    assert_session_writable(session)
+    if not school_class.is_active:
+        raise DomainRuleViolation({"class_id": f"Class '{school_class.name}' is inactive."})
+    if not subject.is_active:
+        raise DomainRuleViolation({"subject_id": f"Subject '{subject.name}' is inactive."})
+    duplicate = ClassSubject.objects.alive().filter(
+        academic_session=session, school_class=school_class, subject=subject, campus=campus
+    )
+    if exclude_pk is not None:
+        duplicate = duplicate.exclude(pk=exclude_pk)
+    if duplicate.exists():
+        raise Conflict(
+            f"'{subject.name}' is already mapped to '{school_class.name}' for this session."
+        )
+
+
 def map_subject_to_class(
     *,
     session: AcademicSession,
@@ -142,24 +173,13 @@ def map_subject_to_class(
     tenant_id: uuid.UUID,
 ) -> ClassSubject:
     """Add a subject to a class's curriculum for one session (§5.6)."""
-    assert_session_writable(session)
-
-    if not school_class.is_active:
-        raise DomainRuleViolation(f"Class '{school_class.name}' is inactive.")
-    if not subject.is_active:
-        raise DomainRuleViolation(f"Subject '{subject.name}' is inactive.")
+    assert_class_subject_mapping_valid(
+        session=session, school_class=school_class, subject=subject, campus=campus
+    )
     if weekly_periods < 1:
         raise DomainRuleViolation("weekly_periods must be at least 1.")
     if is_elective and not elective_group:
         raise DomainRuleViolation("elective_group is required for an elective mapping.")
-
-    duplicate = ClassSubject.objects.alive().filter(
-        academic_session=session, school_class=school_class, subject=subject, campus=campus
-    )
-    if duplicate.exists():
-        raise Conflict(
-            f"'{subject.name}' is already mapped to '{school_class.name}' for this session."
-        )
 
     return ClassSubject.objects.create(
         tenant_id=tenant_id,

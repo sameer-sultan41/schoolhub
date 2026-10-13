@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.db.models import F
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from rest_framework.response import Response
 
@@ -30,11 +30,15 @@ from apps.academics.curriculum import services
 from apps.academics.curriculum.filters import CurriculumFilterSet
 from apps.academics.curriculum.serializers import (
     CloneCurriculumRequestSerializer,
+    CloneCurriculumResultSerializer,
     CurriculumSerializer,
 )
 from apps.academics.views import FEATURE
 from apps.school_organization.models import ClassSubject
-from apps.school_organization.services import map_subject_to_class
+from apps.school_organization.services import (
+    assert_class_subject_mapping_valid,
+    map_subject_to_class,
+)
 from apps.school_organization.views import BlockingDestroyMixin
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse
@@ -141,27 +145,52 @@ class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
         record_audit(self.request, "create", instance, after=serializer.data)
 
     def perform_update(self, serializer) -> None:
-        """The same §11 elective rule the delete path has, for the edit path.
+        """The §11 session lock, identity rules and elective rule, for the edit path.
 
-        A PATCH can take a row out of a group just as surely as a DELETE can —
-        by renaming its `elective_group`, or by moving the row to another class
-        or session — and the group it leaves behind shrinks either way.
+        An update never reaches `map_subject_to_class`, so those rules are
+        re-applied here. The lock is checked on the row's *current* session; the
+        identity rules (target session writable, class/subject active, no duplicate)
+        run only when the PATCH changes one of the four fields that identify the
+        row, so an inactive class does not block editing an existing row's target.
 
-        Not in `CurriculumSerializer.validate()`: the rule is about the state the
-        *old* group is left in, which needs the row's identity and its siblings
-        rather than the payload, and a serializer that reached out for both would
-        be doing the viewset's job. Raising here rolls the update back, since
+        The elective rule: a PATCH can take a row out of a group just as surely as
+        a DELETE can — by renaming its `elective_group`, or by moving the row to
+        another class or session — and the group it leaves behind shrinks either way.
+
+        Not in `CurriculumSerializer.validate()`: each rule needs the row's identity
+        and its siblings, not the payload. Raising here rolls the update back, since
         `ATOMIC_REQUESTS` puts the whole request in one transaction.
         """
         instance = serializer.instance
         data = serializer.validated_data
+        services.assert_curriculum_writable(instance.academic_session)
+
+        session = data.get("academic_session", instance.academic_session)
+        school_class = data.get("school_class", instance.school_class)
+        subject = data.get("subject", instance.subject)
+        campus = data.get("campus", instance.campus)
+        identity_changed = (
+            instance.academic_session_id,
+            instance.school_class_id,
+            instance.subject_id,
+            instance.campus_id,
+        ) != (session.pk, school_class.pk, subject.pk, campus.pk if campus else None)
+        if identity_changed:
+            assert_class_subject_mapping_valid(
+                session=session,
+                school_class=school_class,
+                subject=subject,
+                campus=campus,
+                exclude_pk=instance.pk,
+            )
+
         moved_out_of = (
             instance.academic_session_id,
             instance.school_class_id,
             instance.elective_group,
         ) != (
-            data.get("academic_session", instance.academic_session).pk,
-            data.get("school_class", instance.school_class).pk,
+            session.pk,
+            school_class.pk,
             data.get("elective_group", instance.elective_group),
         )
         if instance.elective_group and moved_out_of:
@@ -174,7 +203,8 @@ class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
         super().perform_update(serializer)
 
     def perform_destroy(self, instance) -> None:
-        """An elective group must not be left with a single option (§11)."""
+        """A closed session is read-only, and an elective group keeps two options (§11)."""
+        services.assert_curriculum_writable(instance.academic_session)
         if instance.elective_group:
             services.assert_elective_group_has_options(
                 session=instance.academic_session,
@@ -193,7 +223,7 @@ class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
     @extend_schema(
         summary="Clone a session's curriculum into another session",
         request=CloneCurriculumRequestSerializer,
-        responses={200: OpenApiResponse(description="Row counts created and skipped.")},
+        responses={200: CloneCurriculumResultSerializer},
     )
     def clone(self, request: Request) -> Response:
         serializer = CloneCurriculumRequestSerializer(data=request.data)
@@ -206,7 +236,9 @@ class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
                 tenant_id=request.tenant.pk,
                 actor_id=request.user.pk,
             )
-            return ActionResponse.ok(summary, message="Curriculum cloned.")
+            return ActionResponse.ok(
+                CloneCurriculumResultSerializer(summary).data, message="Curriculum cloned."
+            )
 
         # Synchronous despite §16 calling it a background job: a clone is one
         # bulk_create over a single session's rows, and a school's whole

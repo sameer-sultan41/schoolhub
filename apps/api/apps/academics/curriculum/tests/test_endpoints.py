@@ -153,6 +153,35 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn(
+            "subject_id",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
+
+    def test_an_inactive_class_cannot_be_mapped(self) -> None:
+        """422 keyed on `class_id`, so the form can place it on the class field."""
+        self.allow("academics.curriculum.create")
+        with tenant_context(self.tenant.id):
+            self.school_class.is_active = False
+            self.school_class.save(update_fields=["is_active"])
+            other_subject = SubjectFactory(tenant=self.tenant)
+
+        response = self.client.post(
+            "/api/v1/class-subjects",
+            {
+                "academic_session_id": str(self.session.pk),
+                "class_id": str(self.school_class.pk),
+                "subject_id": str(other_subject.pk),
+                "weekly_periods": 4,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn(
+            "class_id",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
 
     def test_a_closed_session_is_read_only(self) -> None:
         """§11's session lock."""
@@ -192,6 +221,130 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def _closed(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.session.status = SessionStatus.CLOSED
+            self.session.save(update_fields=["status"])
+
+    def test_a_patch_on_a_closed_session_is_refused(self) -> None:
+        """§11 session lock — previously only create and clone were guarded."""
+        self.allow("academics.curriculum.update")
+        self._closed()
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{self.curriculum.pk}", {"weekly_periods": 6}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def test_a_delete_on_a_closed_session_is_refused(self) -> None:
+        self.allow("academics.curriculum.delete")
+        self._closed()
+        response = self.client.delete(f"/api/v1/class-subjects/{self.curriculum.pk}")
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def test_a_patch_may_not_move_a_row_into_a_closed_session(self) -> None:
+        self.allow("academics.curriculum.update")
+        with tenant_context(self.tenant.id):
+            self.next_session.status = SessionStatus.CLOSED
+            self.next_session.save(update_fields=["status"])
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{self.curriculum.pk}",
+            {"academic_session_id": str(self.next_session.pk)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def test_a_patch_to_an_inactive_subject_is_refused(self) -> None:
+        self.allow("academics.curriculum.update")
+        with tenant_context(self.tenant.id):
+            inactive = SubjectFactory(tenant=self.tenant, is_active=False)
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{self.curriculum.pk}",
+            {"subject_id": str(inactive.pk)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn(
+            "subject_id",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
+
+    def test_a_patch_onto_an_existing_mapping_is_a_conflict(self) -> None:
+        self.allow("academics.curriculum.update")
+        with tenant_context(self.tenant.id):
+            other = SubjectFactory(tenant=self.tenant)
+            twin = ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.school_class,
+                subject=other,
+            )
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{twin.pk}", {"subject_id": str(self.subject.pk)}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def test_a_patch_that_changes_nothing_identifying_skips_the_identity_checks(self) -> None:
+        """An inactive class must not block editing the weekly target of an existing row."""
+        self.allow("academics.curriculum.update")
+        with tenant_context(self.tenant.id):
+            self.school_class.is_active = False
+            self.school_class.save(update_fields=["is_active"])
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{self.curriculum.pk}", {"weekly_periods": 5}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_rows_carry_their_names(self) -> None:
+        self.allow("academics.curriculum.view")
+        row = self.client.get("/api/v1/class-subjects").json()["data"][0]
+        self.assertEqual(row["class_name"], self.school_class.name)
+        self.assertEqual(row["subject_name"], self.subject.name)
+        self.assertEqual(row["academic_session_name"], self.session.name)
+        self.assertIsNone(row["campus_name"])
+
+    def test_create_and_patch_responses_carry_names(self) -> None:
+        """Those instances never pass through get_queryset's annotations."""
+        self.allow("academics.curriculum.create", "academics.curriculum.update")
+        with tenant_context(self.tenant.id):
+            other = SubjectFactory(tenant=self.tenant)
+        created = self.client.post(
+            "/api/v1/class-subjects",
+            {
+                "academic_session_id": str(self.session.pk),
+                "class_id": str(self.school_class.pk),
+                "subject_id": str(other.pk),
+                "campus_id": str(self.campus.pk),
+            },
+            format="json",
+        ).json()["data"]
+        self.assertEqual(created["subject_name"], other.name)
+        self.assertEqual(created["campus_name"], self.campus.name)
+        patched = self.client.patch(
+            f"/api/v1/class-subjects/{created['id']}", {"weekly_periods": 3}, format="json"
+        ).json()["data"]
+        self.assertEqual(patched["class_name"], self.school_class.name)
+
+    def test_a_patch_response_keeps_a_null_campus_name(self) -> None:
+        """A partial update must not drop `campus_name` for a row with no campus."""
+        self.allow("academics.curriculum.update")
+        patched = self.client.patch(
+            f"/api/v1/class-subjects/{self.curriculum.pk}", {"weekly_periods": 3}, format="json"
+        ).json()["data"]
+        self.assertIn("campus_name", patched)
+        self.assertIsNone(patched["campus_name"])
+
+    def test_clone_returns_typed_counts(self) -> None:
+        self.allow("academics.curriculum.create")
+        body = self.client.post(
+            "/api/v1/class-subjects:clone",
+            {
+                "source_academic_session_id": str(self.session.pk),
+                "target_academic_session_id": str(self.next_session.pk),
+            },
+            format="json",
+        ).json()
+        self.assertEqual(body["data"], {"created": 1, "skipped": 0})
 
 
 class CurriculumElectiveGroupTests(AcademicsAPITestCase):

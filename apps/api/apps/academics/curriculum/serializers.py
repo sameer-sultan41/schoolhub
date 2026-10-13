@@ -24,15 +24,28 @@ class CurriculumSerializer(serializers.ModelSerializer):
     class_id = _fk(Class, source="school_class")
     subject_id = _fk(Subject, source="subject")
     campus_id = _fk(Campus, source="campus", required=False, allow_null=True)
+    # Read-only names so a list renders without a lookup per row in the client.
+    # `source=` over the FK, not the list's ordering annotations: create and PATCH
+    # return an instance that never went through `get_queryset`.
+    academic_session_name = serializers.CharField(source="academic_session.name", read_only=True)
+    class_name = serializers.CharField(source="school_class.name", read_only=True)
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
+    # `allow_null` and no `default`: a `default` is skipped on a partial update, which
+    # would drop the key from a PATCH response when the row has no campus.
+    campus_name = serializers.CharField(source="campus.name", read_only=True, allow_null=True)
 
     class Meta:
         model = ClassSubject
         fields = (
             "id",
             "academic_session_id",
+            "academic_session_name",
             "class_id",
+            "class_name",
             "subject_id",
+            "subject_name",
             "campus_id",
+            "campus_name",
             "is_elective",
             "elective_group",
             "weekly_periods",
@@ -61,9 +74,10 @@ class CurriculumSerializer(serializers.ModelSerializer):
         """Term plans, plus the two rules a PATCH would otherwise slip past.
 
         Session-writable, class/subject active and duplicate rejection all live
-        in `school_organization.services.map_subject_to_class`, which the viewset
-        delegates creation to — restating them here would mean two places to keep
-        in step, and each needs state the payload does not carry.
+        in `school_organization.services.assert_class_subject_mapping_valid`,
+        which the viewset runs on create (via `map_subject_to_class`) and on a
+        PATCH that changes the row's identity — restating them here would mean
+        two places to keep in step, and each needs state the payload does not carry.
 
         `elective_group` is different, for the same reason `weekly_periods` is:
         an **update never reaches that service**. Without this check a
@@ -95,3 +109,8 @@ class CurriculumSerializer(serializers.ModelSerializer):
 class CloneCurriculumRequestSerializer(serializers.Serializer):
     source_academic_session_id = _fk(AcademicSession, source="source_session")
     target_academic_session_id = _fk(AcademicSession, source="target_session")
+
+
+class CloneCurriculumResultSerializer(serializers.Serializer):
+    created = serializers.IntegerField()
+    skipped = serializers.IntegerField()
