@@ -117,6 +117,20 @@ export const ACADEMICS_ALLOCATION_PERMISSIONS: PermissionKey[] = [
   "academics.teacher-allocation.delete",
 ];
 
+/**
+ * Every key the promotion screens read (academics.md §4), kept apart from
+ * `SCHOOL_ADMIN_PERMISSIONS` for the same reason as `ACADEMICS_CURRICULUM_PERMISSIONS`. All of
+ * them are a `school_owner`'s set; a spec for a narrower role (an approver, who may not edit)
+ * picks the keys it needs.
+ */
+export const ACADEMICS_PROMOTION_PERMISSIONS: PermissionKey[] = [
+  "academics.promotion.view",
+  "academics.promotion.create",
+  "academics.promotion.update",
+  "academics.promotion.approve",
+  "academics.promotion.execute",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

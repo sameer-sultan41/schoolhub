@@ -14,3 +14,4 @@ export * from "./domains/enrollment";
 export * from "./domains/student-transfers";
 export * from "./domains/academics-curriculum";
 export * from "./domains/academics-allocations";
+export * from "./domains/academics-promotions";

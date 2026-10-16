@@ -1,5 +1,5 @@
 import type { Locator } from "@playwright/test";
-import { BasePage } from "../../base.page";
+import { AcademicsPage } from "./academics-base.page";
 
 /**
  * `/academics/curriculum` — one academic session's class-subject mappings: the table with its
@@ -9,7 +9,7 @@ import { BasePage } from "../../base.page";
  *
  * The Academics sidebar group is the shell's, so it is `DashboardPage.navGroup`.
  */
-export class CurriculumPage extends BasePage {
+export class CurriculumPage extends AcademicsPage {
   readonly path = "/academics/curriculum";
 
   /** The screen on a given session: `?session=` is the URL's only session carrier, and a
@@ -55,13 +55,6 @@ export class CurriculumPage extends BasePage {
       name: `${action} ${subject}, ${className}`,
       exact: true,
     });
-  }
-
-  /** Options render in a portal outside their dialog, hence the page-level lookup. Exact,
-   * so "2026-27" never also picks a longer name. */
-  async chooseOption(trigger: Locator, option: string): Promise<void> {
-    await trigger.click();
-    await this.page.getByRole("option", { name: option, exact: true }).click();
   }
 
   // ---- Add/Edit dialog ----
