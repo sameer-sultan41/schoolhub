@@ -27,6 +27,12 @@ class TeacherAllocationFilterSet(django_filters.FilterSet):
     section_id = django_filters.UUIDFilter(field_name="section_id")
     subject_id = django_filters.UUIDFilter(field_name="subject_id")
     staff_id = django_filters.UUIDFilter(field_name="staff_id")
+    # An allocation has no class or campus column of its own; both come through its section.
+    class_id = django_filters.UUIDFilter(field_name="section__school_class_id")
+    campus_id = django_filters.UUIDFilter(field_name="section__campus_id")
+    # `current=true` is no end date (includes allocations that haven't started), `false` the
+    # ended history (§6).
+    current = django_filters.BooleanFilter(field_name="effective_to", lookup_expr="isnull")
 
     class Meta:
         model = TeacherSubjectAllocation

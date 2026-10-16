@@ -22,7 +22,11 @@ urlpatterns = [
     # "load-summary" would be parsed as a primary key.
     path(
         "teacher-subject-allocations/load-summary",
-        TeacherAllocationViewSet.as_view({"get": "load_summary"}),
+        # A plain array, not a page: without these the viewset's pagination and filters
+        # would make drf-spectacular document a page wrapper and the list's query params.
+        TeacherAllocationViewSet.as_view(
+            {"get": "load_summary"}, pagination_class=None, filter_backends=[]
+        ),
         name="teacher-subject-allocations-load-summary",
     ),
     *router.urls,

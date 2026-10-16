@@ -6,11 +6,13 @@ viewset across the module's resource packages.
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING
 
 from django.db.models import F
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -21,7 +23,11 @@ if TYPE_CHECKING:
 from apps.academics.models import TeacherSubjectAllocation
 from apps.academics.teacher_allocations import services
 from apps.academics.teacher_allocations.filters import TeacherAllocationFilterSet
-from apps.academics.teacher_allocations.serializers import TeacherAllocationSerializer
+from apps.academics.teacher_allocations.serializers import (
+    LoadSummaryQuerySerializer,
+    TeacherAllocationSerializer,
+    TeacherLoadRowSerializer,
+)
 from apps.academics.views import FEATURE
 from apps.school_organization.models import AcademicSession
 from core.api.exceptions import DomainRuleViolation
@@ -44,6 +50,7 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = TeacherSubjectAllocation.objects
     serializer_class = TeacherAllocationSerializer
     filterset_class = TeacherAllocationFilterSet
+    search_fields = ["staff__first_name", "staff__last_name", "subject__name", "section__name"]
     # Everything the dashboard's allocation table renders.
     # `section_name`/`subject_name`/`staff_last_name` are the annotations from
     # `get_queryset`, never `section__name` and friends — and this is the viewset
@@ -100,7 +107,9 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return (
             super()
             .get_queryset()
-            .select_related("academic_session", "section", "subject", "staff")
+            .select_related(
+                "academic_session", "section", "section__school_class", "subject", "staff"
+            )
             .annotate(
                 section_name=F("section__name"),
                 subject_name=F("subject__name"),
@@ -137,16 +146,49 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # {"data", "meta"} dict through untouched and injects request_id.
         return Response({"data": body, "meta": {"warnings": warnings}}, status=201)
 
+    def update(self, request: Request, *args, **kwargs) -> Response:
+        """PATCH through the §11 rules (the generic mixin saved straight through)."""
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=kwargs.pop("partial", False)
+        )
+        serializer.is_valid(raise_exception=True)
+        changes = serializer.validated_data
+
+        before = self.get_serializer(instance).data
+        previous_staff_id = instance.staff_id
+        allocation = services.update_allocation(
+            allocation=instance, changes=changes, actor_id=request.user.pk
+        )
+        body = self.get_serializer(allocation).data
+        record_audit(request, "update", allocation, before=before, after=body)
+        if allocation.staff_id != previous_staff_id:
+            services.notify_allocation_changed(allocation=allocation, tenant_id=request.tenant.pk)
+
+        warnings = services.load_warnings(
+            staff=allocation.staff, session=allocation.academic_session
+        )
+        return Response({"data": body, "meta": {"warnings": warnings}})
+
+    def perform_destroy(self, instance) -> None:
+        """A closed session's allocations are history, not editable state (§11)."""
+        services.assert_allocation_deletable(instance)
+        super().perform_destroy(instance)
+
     @extend_schema(
         summary="Per-teacher weekly load against the tenant norm",
-        responses={200: OpenApiResponse(description="Aggregate load per teacher.")},
+        parameters=[OpenApiParameter("academic_session_id", OpenApiTypes.UUID, required=True)],
+        responses={200: TeacherLoadRowSerializer(many=True)},
     )
     def load_summary(self, request: Request) -> Response:
-        session_id = request.query_params.get("academic_session_id")
-        if not session_id:
-            raise DomainRuleViolation({"academic_session_id": "This query parameter is required."})
+        query = LoadSummaryQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            # 422, as a missing id always was here, not `raise_exception`'s 400.
+            raise DomainRuleViolation(query.errors)
 
-        session = get_object_or_404(AcademicSession.objects.alive(), pk=session_id)
+        session = get_object_or_404(
+            AcademicSession.objects.alive(), pk=query.validated_data["academic_session_id"]
+        )
         totals = services.weekly_load_by_staff(session=session)
 
         # The scoped queryset, not a fresh one: a teacher with `own` scope sees
@@ -157,19 +199,21 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             .select_related("staff")
         )
 
-        by_staff: dict[str, dict] = {}
+        by_staff: dict[uuid.UUID, dict] = {}
         for allocation in rows:
+            load = totals.get(allocation.staff_id, 0)
             entry = by_staff.setdefault(
-                str(allocation.staff_id),
+                allocation.staff_id,
                 {
-                    "staff_id": str(allocation.staff_id),
+                    "staff_id": allocation.staff_id,
                     "name": f"{allocation.staff.first_name} {allocation.staff.last_name}",
-                    "weekly_periods": totals.get(allocation.staff_id, 0),
+                    "weekly_periods": load,
                     "allocations": 0,
-                    "over_norm": totals.get(allocation.staff_id, 0)
-                    > services.DEFAULT_WEEKLY_PERIOD_NORM,
+                    "norm": services.DEFAULT_WEEKLY_PERIOD_NORM,
+                    "over_norm": load > services.DEFAULT_WEEKLY_PERIOD_NORM,
                 },
             )
             entry["allocations"] += 1
 
-        return ActionResponse.ok(sorted(by_staff.values(), key=lambda e: e["name"]))
+        ordered = sorted(by_staff.values(), key=lambda e: e["name"])
+        return ActionResponse.ok(TeacherLoadRowSerializer(ordered, many=True).data)
