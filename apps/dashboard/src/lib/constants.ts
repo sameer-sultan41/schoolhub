@@ -52,3 +52,7 @@ export const IMPORT_FILE_EXTENSIONS = ".csv,.xlsx";
 
 /** A year: a language choice is not a session, and should outlive one. */
 export const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+
+/** The status of a request that lost a race with another change (`ApiError.status`): e.g. a
+ * promotion batch that moved on while its screen was open. */
+export const HTTP_STATUS_CONFLICT = 409;

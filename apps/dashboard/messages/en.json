@@ -871,13 +871,24 @@
       "title": "Promotions",
       "summary": "Session-end promotion batches: propose, review, approve, then execute.",
       "sessionPair": "{from} → {to}",
+      "batchLabel": "{className}, {sessions}",
+      "created": "Promotion batch created with {students, plural, one {# student} other {# students}}.",
+      "studentLabel": "{name} ({admissionNumber})",
+      "searchStudents": "Search students",
+      "searchStudentsPlaceholder": "Search by name or admission number",
       "list": {
-        "caption": "Promotion decisions",
+        "caption": "Promotion batches",
         "emptyTitle": "No promotion batches yet",
-        "emptyDescription": "Start a batch to move a class into next session, then review each student's decision."
+        "emptyDescription": "Start a batch to move a class into next session, then review each student's decision.",
+        "noMatches": "No promotion batches match these filters",
+        "noMatchesDescription": "Clear a filter to see more batches.",
+        "loadError": "The promotion batches couldn't be loaded.",
+        "sessionsFailed": "The academic sessions couldn't be loaded, so a batch can't be created. Reload the page to try again."
+      },
+      "filters": {
+        "status": "Status"
       },
       "columns": {
-        "batch": "Batch",
         "student": "Student",
         "fromClass": "From class",
         "sessions": "Sessions",
@@ -894,8 +905,10 @@
         "toSection": "Target section",
         "toSectionHint": "Required before the batch can be executed, unless the student is graduating.",
         "overrideReason": "Override reason",
-        "overrideReasonHint": "Required wherever the decision differs from the proposed one.",
-        "remarks": "Remarks"
+        "overrideReasonHint": "Required wherever the decision or the target class differs from the proposal.",
+        "remarks": "Remarks",
+        "sectionNotSet": "Not set",
+        "none": "None"
       },
       "decisionValue": {
         "promoted": "Promoted",
@@ -917,23 +930,56 @@
         "reject": "Reject",
         "execute": "Execute",
         "revert": "Revert",
-        "editDecision": "Edit",
-        "backToList": "All batches"
+        "backToList": "All batches",
+        "editRow": "Edit decision for {student}"
       },
       "form": {
         "createTitle": "New promotion batch",
-        "description": "One batch per class per rollover. A decision is proposed for every actively enrolled student."
+        "description": "One batch per class per rollover. A decision is proposed for every actively enrolled student.",
+        "submit": "Create batch",
+        "submitting": "Creating batch"
       },
       "decision": {
         "title": "Edit decision",
-        "description": "Adjusting the draft decision for student {student}."
+        "description": "Adjusting the draft decision for student {student}.",
+        "submitting": "Saving decision",
+        "tooLong": "Keep this to {max} characters or fewer."
+      },
+      "transition": {
+        "submit": {
+          "title": "Submit this batch for approval?",
+          "description": "Once submitted, decisions can no longer be edited. Someone other than you must approve the batch."
+        },
+        "approve": {
+          "title": "Approve this batch?",
+          "description": "Approving clears every decision in the batch to be executed. You can't approve a batch you prepared."
+        },
+        "reject": {
+          "title": "Reject this batch?",
+          "description": "The batch goes back to draft, so its decisions can be corrected and submitted again."
+        },
+        "execute": {
+          "title": "Execute this batch?",
+          "description": "Every approved decision takes effect: students are enrolled in their next-session class and section, and graduating students leave. This runs in the background and the report appears here when it finishes."
+        },
+        "revert": {
+          "title": "Revert this batch?",
+          "description": "The batch is closed and its decisions no longer apply. If it has been executed and next-session enrollments exist, it can't be reverted."
+        }
       },
       "review": {
         "title": "Promotion batch",
-        "summary": "Review each student's decision, then submit the batch for approval.",
         "caption": "Per-student promotion decisions",
         "emptyTitle": "This batch has no decisions",
-        "emptyDescription": "Every student was left out of the batch. Create a new one to start again."
+        "emptyDescription": "Every student was left out of the batch. Create a new one to start again.",
+        "loadError": "The promotion batch couldn't be loaded.",
+        "notFoundTitle": "Promotion batch not found",
+        "notFoundDescription": "It may have been removed, or the link is wrong. Go back to the list to find the batch you need.",
+        "studentCount": "{count, plural, one {# student} other {# students}}",
+        "missingSections": "{count, plural, one {# student has} other {# students have}} no target section and will fail on execute",
+        "missingSectionsApproved": "{count, plural, one {# student has} other {# students have}} no target section and will fail on execute. Sections can no longer be set in this batch: revert it and create a new one.",
+        "noMatches": "No students match this search",
+        "noMatchesDescription": "Try a different name or admission number."
       },
       "report": {
         "title": "Execution report",
@@ -942,7 +988,11 @@
         "enrolled": "Enrolled in the next session: {count}",
         "graduated": "Graduated: {count}",
         "skipped": "Skipped: {count}",
-        "failed": "Failed: {count}"
+        "failed": "Failed: {count}",
+        "skippedStudent": "{student}: {reason}",
+        "failedStudent": "{student}: {error}",
+        "stalled": "We lost track of the execution. It may still be running.",
+        "resume": "Check again"
       }
     }
   },
