@@ -116,11 +116,13 @@ export async function seedPromotionBatch(client: ApiClient): Promise<PromotionBa
     // `graduated` (with a null target class) whenever nothing sits above this class on
     // the level ladder, and `PromotionDecisionSerializer.validate` refuses a graduating
     // row that carries a target class. Sending both together makes the row's shape
-    // independent of whatever other classes happen to exist in the tenant.
+    // independent of whatever other classes happen to exist in the tenant. The target is a
+    // random-level class, not the proposed next level, so submit demands an override reason.
     await client.patch(`/student-promotions/${batch.batch_id}/decisions/${row.student_id}`, {
       decision: "promoted",
       to_class_id: toClass.id,
       to_section_id: toSection.id,
+      override_reason: "E2E seed: explicit target class.",
     });
   }
 

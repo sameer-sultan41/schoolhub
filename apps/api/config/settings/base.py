@@ -228,6 +228,8 @@ SPECTACULAR_SETTINGS = {
     "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "ENUM_NAME_OVERRIDES": {
         "PromotionDecisionEnum": "apps.academics.models.PromotionDecision",
+        # One name for the batch summary's `status` and the decision rows' `status`.
+        "PromotionStatusEnum": "apps.academics.models.PromotionStatus",
         # A plain list of tuples, per drf-spectacular's own FAQ: the two document
         # `decision` fields declare their choices inline in
         # student_management/staff_management serializers, and neither module may
