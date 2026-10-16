@@ -11,7 +11,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.db.models import Count, Min
+from django.db.models import Count, F, Min
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -30,8 +30,11 @@ from apps.academics.promotions import services
 from apps.academics.promotions.filters import PromotionFilterSet
 from apps.academics.promotions.serializers import (
     CreatePromotionBatchSerializer,
+    PromotionBatchCreatedSerializer,
+    PromotionBatchDetailSerializer,
     PromotionBatchSerializer,
     PromotionDecisionSerializer,
+    PromotionTransitionResultSerializer,
 )
 from apps.academics.tasks import execute_promotion_batch_task
 from apps.academics.views import FEATURE
@@ -182,6 +185,9 @@ class PromotionBatchViewSet(
         with no `?ordering=` the filter backend returns nothing and leaves this
         `order_by` alone. `students` and `started_at` are the annotations
         `ordering_fields` above exposes.
+
+        The three `*_name` values join into the GROUP BY, which changes nothing: each is
+        determined by an id already grouped on, so a batch is still exactly one row.
         """
         return (
             super()
@@ -192,6 +198,9 @@ class PromotionBatchViewSet(
                 "to_academic_session_id",
                 "from_class_id",
                 "status",
+                from_class_name=F("from_class__name"),
+                from_academic_session_name=F("from_academic_session__name"),
+                to_academic_session_name=F("to_academic_session__name"),
             )
             .annotate(students=Count("id"), started_at=Min("created_at"))
             .order_by("-started_at")
@@ -199,38 +208,45 @@ class PromotionBatchViewSet(
 
     @extend_schema(
         summary="One batch and every decision in it",
-        responses={200: OpenApiResponse(description="The batch plus its per-student rows.")},
+        responses={200: PromotionBatchDetailSerializer},
     )
     def retrieve(self, request: Request, pk: str) -> Response:
         batch_id = _batch_uuid(pk)
         rows = list(
             self.filter_queryset(super().get_queryset())
             .filter(batch_id=batch_id)
-            .select_related("student", "from_class", "to_class")
+            .select_related(
+                "student",
+                "from_class",
+                "to_class",
+                "to_section",
+                "from_academic_session",
+                "to_academic_session",
+            )
         )
         if not rows:
             raise Http404("No such promotion batch.")
 
+        first = rows[0]
         summary = {
-            "batch_id": str(batch_id),
-            "from_academic_session_id": str(rows[0].from_academic_session_id),
-            "to_academic_session_id": str(rows[0].to_academic_session_id),
-            "from_class_id": str(rows[0].from_class_id),
-            "status": rows[0].status,
+            "batch_id": batch_id,
+            "from_academic_session_id": first.from_academic_session_id,
+            "from_academic_session_name": first.from_academic_session.name,
+            "to_academic_session_id": first.to_academic_session_id,
+            "to_academic_session_name": first.to_academic_session.name,
+            "from_class_id": first.from_class_id,
+            "from_class_name": first.from_class.name,
+            "status": first.status,
             "students": len(rows),
             "started_at": min(row.created_at for row in rows),
+            "decisions": rows,
         }
-        return ActionResponse.ok(
-            {
-                **PromotionBatchSerializer(summary).data,
-                "decisions": PromotionDecisionSerializer(rows, many=True).data,
-            }
-        )
+        return ActionResponse.ok(PromotionBatchDetailSerializer(summary).data)
 
     @extend_schema(
         summary="Create a promotion batch for one class",
         request=CreatePromotionBatchSerializer,
-        responses={201: OpenApiResponse(description="The new batch id and its row count.")},
+        responses={201: PromotionBatchCreatedSerializer},
     )
     def create_batch(self, request: Request) -> Response:
         serializer = CreatePromotionBatchSerializer(data=request.data)
@@ -245,30 +261,58 @@ class PromotionBatchViewSet(
             actor_id=request.user.pk,
         )
         return ActionResponse.ok(
-            {"batch_id": str(batch_id), "students": len(rows)},
+            PromotionBatchCreatedSerializer({"batch_id": batch_id, "students": len(rows)}).data,
             message="Promotion batch created.",
             status=201,
         )
 
-    @extend_schema(summary="Submit a draft batch for approval", request=None, responses={200: None})
+    @extend_schema(
+        summary="Submit a draft batch for approval",
+        request=None,
+        responses={200: PromotionTransitionResultSerializer},
+    )
     def submit(self, request: Request, pk: str) -> Response:
         count = services.submit_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
-        return ActionResponse.ok({"updated": count}, message="Batch submitted for approval.")
+        return ActionResponse.ok(
+            PromotionTransitionResultSerializer({"updated": count}).data,
+            message="Batch submitted for approval.",
+        )
 
-    @extend_schema(summary="Approve a batch (approver must differ from preparer)", request=None)
+    @extend_schema(
+        summary="Approve a batch (approver must differ from preparer)",
+        request=None,
+        responses={200: PromotionTransitionResultSerializer},
+    )
     def approve(self, request: Request, pk: str) -> Response:
         count = services.approve_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
-        return ActionResponse.ok({"updated": count}, message="Batch approved.")
+        return ActionResponse.ok(
+            PromotionTransitionResultSerializer({"updated": count}).data,
+            message="Batch approved.",
+        )
 
-    @extend_schema(summary="Send a batch back to draft", request=None)
+    @extend_schema(
+        summary="Send a batch back to draft",
+        request=None,
+        responses={200: PromotionTransitionResultSerializer},
+    )
     def reject(self, request: Request, pk: str) -> Response:
         count = services.reject_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
-        return ActionResponse.ok({"updated": count}, message="Batch returned to draft.")
+        return ActionResponse.ok(
+            PromotionTransitionResultSerializer({"updated": count}).data,
+            message="Batch returned to draft.",
+        )
 
-    @extend_schema(summary="Revert a batch before downstream activity exists", request=None)
+    @extend_schema(
+        summary="Revert a batch before downstream activity exists",
+        request=None,
+        responses={200: PromotionTransitionResultSerializer},
+    )
     def revert(self, request: Request, pk: str) -> Response:
         count = services.revert_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
-        return ActionResponse.ok({"updated": count}, message="Batch reverted.")
+        return ActionResponse.ok(
+            PromotionTransitionResultSerializer({"updated": count}).data,
+            message="Batch reverted.",
+        )
 
     @extend_schema(
         summary="Execute an approved batch, creating next-session enrollments",
