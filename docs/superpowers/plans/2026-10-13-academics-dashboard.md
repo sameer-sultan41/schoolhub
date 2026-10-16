@@ -1108,7 +1108,7 @@ export const ALLOCATION_URL_FILTERS = {
   - **Errors:** 422 field errors map to `staff_id`/`subject_id`/`section_id`, falling back to `non_field`.
   - **Invalidation:** `["teacher-allocations"]`, which also covers the load panel's key (`queryKeys.list("teacher-allocations", "load-summary", {sessionId})`).
 - **Edit dialog:** identity fields are shown read-only. The editable fields are primary, weekly periods (empty → `null`) and effective from. It shows the same warnings toast.
-- **End dialog** (`ResponsiveAlertDialog`, `allocations.end.*`): PATCH `effective_to` = today. A 400/422 shows inline. "Today" comes from a new `todayIsoDate()` in `src/lib/helpers.ts`: `format(new Date(), "yyyy-MM-dd")` with the date-fns `format` that file already imports, so it's the viewer's local date, not UTC's `toISOString`. It has its own test in `src/lib/__tests__/helpers.test.ts`.
+- **End dialog** (`ResponsiveAlertDialog`, `allocations.end.*`): PATCH `effective_to` = today. A 400/422 shows inline. "Today" comes from a new `todayIsoDate()` in `src/lib/helpers.ts`, and it is the **UTC** date: `new Date().toISOString().slice(0, 10)`. The server's `TIME_ZONE` is UTC, so `timezone.localdate()` (the end-date ceiling, the load summary's "current" window) is the UTC date. A viewer's local date east of UTC would be refused as "in the future" for part of every day. It has its own test in `src/lib/__tests__/helpers.test.ts` (fake timers, a time that differs between UTC and a non-UTC zone).
 - **Reinstate dialog** (`reinstate-allocation-dialog.tsx`, `ResponsiveAlertDialog`, `allocations.reinstate.*`): PATCH `effective_to: null`. The description says a reinstated primary replaces the current primary teacher.
 - **Invalidation** for every dialog: `queryKeys.module("teacher-allocations")` (the list and the load panel). Curriculum isn't affected.
 - **Delete dialog:** `allocations.delete.*` copy (for mistakes only), with a 422 inline.
@@ -1156,6 +1156,7 @@ export const ALLOCATION_URL_FILTERS = {
     - the per-row `norm`;
     - the malformed-id 422 on the load summary;
     - the §2.1 argument.
+  - `academics.md` §16 (the `/teacher-subject-allocations` line, ~:236): add the `class_id`, `campus_id` and `current` filters and `search` (teacher, subject and section name) to the filter list; PATCH returns `{data, meta:{warnings}}` like POST; `load-summary` requires `academic_session_id` and returns typed rows with `norm`. `effective_to` is the UTC date: the server runs on UTC, so the dashboard sends the UTC date.
   - `docs/05-database/entities/academics.md`: `teacher_subject_allocations.effective_to` is "set by End/Reinstate on PATCH, never on create; never in the future".
   - `deferred-work.md` gets the §9 drag-and-drop allocation grid, tenant-configured load norm (still `DEFAULT_WEEKLY_PERIOD_NORM = 30`), the "My allocations" teacher view, the coverage gap notification, and the `allocations` count that includes future-dated rows.
   - `project-status.md` gets the status update.
