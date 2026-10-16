@@ -8,6 +8,7 @@ import { createLiveSession } from "@/lib/live-api";
 import { E2E_OTHER_ADMIN_EMAIL } from "@/lib/seed-constants";
 import { MockApi, authModule, dashboardHomeModule, tenantModule } from "@/mocks";
 import {
+  AllocationsPage,
   CurriculumPage,
   DashboardPage,
   LoginPage,
@@ -69,6 +70,7 @@ export interface E2EFixtures {
   studentDetailPage: StudentDetailPage;
   promotionBatchPage: PromotionBatchPage;
   curriculumPage: CurriculumPage;
+  allocationsPage: AllocationsPage;
   weekGridPage: WeekGridPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
@@ -194,6 +196,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   curriculumPage: async ({ page }, use) => {
     await use(new CurriculumPage(page));
+  },
+
+  allocationsPage: async ({ page }, use) => {
+    await use(new AllocationsPage(page));
   },
 
   weekGridPage: async ({ page }, use) => {

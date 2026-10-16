@@ -106,6 +106,17 @@ export const ACADEMICS_CURRICULUM_PERMISSIONS: PermissionKey[] = [
   "academics.curriculum.delete",
 ];
 
+/**
+ * The four keys the teacher-allocation screen reads (academics.md §4), kept apart from
+ * `SCHOOL_ADMIN_PERMISSIONS` for the same reason as `ACADEMICS_CURRICULUM_PERMISSIONS`.
+ */
+export const ACADEMICS_ALLOCATION_PERMISSIONS: PermissionKey[] = [
+  "academics.teacher-allocation.view",
+  "academics.teacher-allocation.create",
+  "academics.teacher-allocation.update",
+  "academics.teacher-allocation.delete",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 
