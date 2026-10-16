@@ -31,6 +31,12 @@ export const ACADEMICS_SECTIONS = [
     menuTitle: "Teacher allocation",
     permission: "academics.teacher-allocation.view",
   },
+  {
+    href: Paths.ACADEMICS_PROMOTIONS,
+    labelKey: "nav.promotions",
+    menuTitle: "Promotions",
+    permission: "academics.promotion.view",
+  },
 ] as const satisfies readonly AcademicsSection[];
 
 /** The sections `user` may open, in tab order — empty while the user is still loading. */

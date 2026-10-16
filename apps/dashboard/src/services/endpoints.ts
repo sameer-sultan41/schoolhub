@@ -154,4 +154,19 @@ export const endpoints = {
     reject: (id: string) => `/student-transfers/${id}:reject`,
     complete: (id: string) => `/student-transfers/${id}:complete`,
   },
+  /** `/student-promotions` (`apps/api/apps/academics/promotions/urls.py`). Every `{id}` is a
+   * batch id; `POST` on `list` creates a batch. The colon-actions are the real registered
+   * routes, and `execute` answers `202` + a job, the rest `200` + `{updated}`. */
+  promotions: {
+    list: "/student-promotions",
+    detail: (batchId: string) => `/student-promotions/${batchId}`,
+    /** A decision is addressed by batch and student, not by its own row id. */
+    decision: (batchId: string, studentId: string) =>
+      `/student-promotions/${batchId}/decisions/${studentId}`,
+    submit: (id: string) => `/student-promotions/${id}:submit`,
+    approve: (id: string) => `/student-promotions/${id}:approve`,
+    reject: (id: string) => `/student-promotions/${id}:reject`,
+    execute: (id: string) => `/student-promotions/${id}:execute`,
+    revert: (id: string) => `/student-promotions/${id}:revert`,
+  },
 } as const;
