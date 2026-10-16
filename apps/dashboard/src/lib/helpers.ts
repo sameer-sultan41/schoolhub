@@ -1,3 +1,4 @@
+import type { SortingState } from "@tanstack/react-table";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { enUS } from "date-fns/locale";
 import type { Locale } from "date-fns";
@@ -151,6 +152,19 @@ export function isUuid(value: string): boolean {
   return Regex.UUID.test(value);
 }
 
+/** The first 10 characters of an ISO timestamp are its date. */
+const ISO_DATE_LENGTH = 10;
+
+/**
+ * Today's date as `YYYY-MM-DD`, in UTC. The server runs on UTC (`TIME_ZONE`), so its "today"
+ * (`timezone.localdate()`: the ceiling for an end date, the load summary's current window) is
+ * the UTC date. The viewer's local date, east of UTC, is ahead of it for part of every day and
+ * would be refused as "in the future".
+ */
+export function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, ISO_DATE_LENGTH);
+}
+
 /**
  * Copies `from[camelKey]` to `to[snakeKey]` for each pair in `fields`, when
  * `include(value)` says to — the shape a module's `to<Domain>Body`/
@@ -168,6 +182,22 @@ export function copyMappedFields<T extends object>(
     const value = from[camelKey];
     if (include(value)) to[snakeKey] = value;
   }
+}
+
+/**
+ * A grid's sort as the list endpoint's `?ordering=` value: the first sort's API field from
+ * `sortFieldMap` (column id -> field), with a `-` prefix when descending. `undefined` (the
+ * param is omitted) for no sort, or a column id the map has no field for, so the query never
+ * carries the literal text "undefined".
+ */
+export function toOrdering(
+  sorting: SortingState,
+  sortFieldMap: Readonly<Record<string, string>>,
+): string | undefined {
+  const sort = sorting[0];
+  if (!sort) return undefined;
+  const field = sortFieldMap[sort.id];
+  return field ? `${sort.desc ? "-" : ""}${field}` : undefined;
 }
 
 /**

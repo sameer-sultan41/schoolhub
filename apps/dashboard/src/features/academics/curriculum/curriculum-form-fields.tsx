@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import {
@@ -10,22 +9,13 @@ import {
   FormLabel,
   FormMessage,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Switch,
   Textarea,
 } from "@schoolhub/ui";
 
-import { queryKeys } from "@/lib/query-client";
-import {
-  Services,
-  type AcademicSessionSummary,
-  type CurriculumRecord,
-  type SchoolOrganizationOption,
-} from "@/services";
+import { FormSelectField } from "@/components/form-select-field";
+import { useCampuses, useClasses, useSubjects } from "@/hooks/use-reference-data";
+import type { AcademicSessionSummary, CurriculumRecord } from "@/services";
 import {
   CURRICULUM_ALL_CAMPUSES,
   CURRICULUM_ELECTIVE_GROUP_FIELD,
@@ -35,71 +25,6 @@ import {
 } from "@/services/modules/curriculum/curriculum-constant";
 import type { CurriculumFormValues } from "@/services/modules/curriculum/curriculum.schema";
 import { LOCKED_SESSION_STATUSES } from "@/services/modules/school-organization/school-organization-constant";
-
-type SelectFieldName = "academic_session_id" | "class_id" | "subject_id" | "campus_id";
-
-interface SelectFieldProps {
-  form: UseFormReturn<CurriculumFormValues>;
-  name: SelectFieldName;
-  label: string;
-  placeholder: string;
-  options: readonly SchoolOrganizationOption[];
-  /** An option standing in for the empty value (`""`), as a `SelectItem` can't be `""`. */
-  emptyLabel?: string;
-  disabled: boolean;
-}
-
-/** The `Select` value for a form value: an empty one is the empty option, when there is one. */
-function selectValue(value: string, hasEmptyOption: boolean): string {
-  return value === "" && hasEmptyOption ? CURRICULUM_ALL_CAMPUSES : value;
-}
-
-/** One of the four identity selects: session, class, subject and campus. */
-function SelectField({
-  form,
-  name,
-  label,
-  placeholder,
-  options,
-  emptyLabel,
-  disabled,
-}: SelectFieldProps) {
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <Select
-            value={selectValue(field.value, emptyLabel !== undefined)}
-            onValueChange={(value) => {
-              field.onChange(value === CURRICULUM_ALL_CAMPUSES ? "" : value);
-            }}
-            disabled={disabled}
-          >
-            <FormControl>
-              <SelectTrigger>
-                <SelectValue placeholder={placeholder} />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {emptyLabel !== undefined && (
-                <SelectItem value={CURRICULUM_ALL_CAMPUSES}>{emptyLabel}</SelectItem>
-              )}
-              {options.map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  {option.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-}
 
 export interface CurriculumFormFieldsProps {
   form: UseFormReturn<CurriculumFormValues>;
@@ -121,21 +46,9 @@ export function CurriculumFormFields({ form, record, sessions }: CurriculumFormF
   const isEdit = record !== undefined;
   const isElective = useWatch({ control: form.control, name: "is_elective" });
 
-  const classesQuery = useQuery({
-    queryKey: queryKeys.list("school-organization", "classes", { isActive: true }),
-    queryFn: () => Services.schoolOrganization.fetchClasses({ isActive: true }),
-    enabled: !isEdit,
-  });
-  const subjectsQuery = useQuery({
-    queryKey: queryKeys.list("school-organization", "subjects", { isActive: true }),
-    queryFn: () => Services.schoolOrganization.fetchSubjects({ isActive: true }),
-    enabled: !isEdit,
-  });
-  const campusesQuery = useQuery({
-    queryKey: queryKeys.list("school-organization", "campuses"),
-    queryFn: () => Services.dashboard.fetchCampuses(),
-    enabled: !isEdit,
-  });
+  const classesQuery = useClasses({ isActive: true, enabled: !isEdit });
+  const subjectsQuery = useSubjects({ isActive: true, enabled: !isEdit });
+  const campusesQuery = useCampuses({ enabled: !isEdit });
 
   const sessionOptions = record
     ? [{ id: record.academic_session_id, name: record.academic_session_name }]
@@ -155,7 +68,7 @@ export function CurriculumFormFields({ form, record, sessions }: CurriculumFormF
 
   return (
     <>
-      <SelectField
+      <FormSelectField
         form={form}
         name="academic_session_id"
         label={t("fields.academicSession")}
@@ -164,7 +77,7 @@ export function CurriculumFormFields({ form, record, sessions }: CurriculumFormF
         disabled={isEdit}
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <SelectField
+        <FormSelectField
           form={form}
           name="class_id"
           label={t("fields.class")}
@@ -172,7 +85,7 @@ export function CurriculumFormFields({ form, record, sessions }: CurriculumFormF
           options={classOptions}
           disabled={isEdit}
         />
-        <SelectField
+        <FormSelectField
           form={form}
           name="subject_id"
           label={t("fields.subject")}
@@ -180,13 +93,13 @@ export function CurriculumFormFields({ form, record, sessions }: CurriculumFormF
           options={subjectOptions}
           disabled={isEdit}
         />
-        <SelectField
+        <FormSelectField
           form={form}
           name="campus_id"
           label={t("fields.campus")}
           placeholder={t("fields.allCampuses")}
           options={campusOptions}
-          emptyLabel={t("fields.allCampuses")}
+          emptyOption={{ value: CURRICULUM_ALL_CAMPUSES, label: t("fields.allCampuses") }}
           disabled={isEdit}
         />
         <FormField

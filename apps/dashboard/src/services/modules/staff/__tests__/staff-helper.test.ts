@@ -1,6 +1,7 @@
 import {
   statusMeta,
   toStaffCreateBody,
+  toStaffOptions,
   toStaffQueryParams,
   toStaffRow,
   toStaffUpdateBody,
@@ -37,6 +38,24 @@ describe("toStaffRow", () => {
   it("falls back to the teaching-staff label when designation_name is absent", () => {
     const row = toStaffRow(staffRecord({ designation_name: null, staff_type: "teaching" }));
     expect(row.designation).toBe("Teaching staff");
+  });
+});
+
+describe("toStaffOptions", () => {
+  it("names each member 'First Last', keeping the order", () => {
+    const options = toStaffOptions([
+      staffRecord(),
+      staffRecord({ id: "st-2", first_name: "Bilal", last_name: "Ahmed" }),
+    ]);
+
+    expect(options).toEqual([
+      { id: "st-1", name: "Ayesha Khan" },
+      { id: "st-2", name: "Bilal Ahmed" },
+    ]);
+  });
+
+  it("is empty for no staff", () => {
+    expect(toStaffOptions([])).toEqual([]);
   });
 });
 
@@ -114,5 +133,10 @@ describe("toStaffQueryParams", () => {
   it("maps employmentStatus to employment_status", () => {
     const params = toStaffQueryParams({ page: 1, pageSize: 10, employmentStatus: "active" });
     expect(params).toEqual({ page: 1, page_size: 10, employment_status: "active" });
+  });
+
+  it("maps staffType to staff_type", () => {
+    const params = toStaffQueryParams({ staffType: "teaching", employmentStatus: "active" });
+    expect(params).toEqual({ staff_type: "teaching", employment_status: "active" });
   });
 });

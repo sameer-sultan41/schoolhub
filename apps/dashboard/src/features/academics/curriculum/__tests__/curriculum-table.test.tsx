@@ -5,18 +5,20 @@ import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import {
+  curriculumPage,
+  curriculumRecord,
+} from "@/services/modules/curriculum/__tests__/curriculum-fixtures";
+import {
   CAMPUS_ID,
   CLASS_ID,
   CLOSED_SESSION,
   CLOSED_SESSION_ID,
-  curriculumPage,
-  curriculumRecord,
   PLANNED_SESSION,
   PLANNED_SESSION_ID,
   SESSION_ID,
   SESSIONS,
   UNKNOWN_SESSION_ID,
-} from "@/services/modules/curriculum/__tests__/curriculum-fixtures";
+} from "@/test-fixtures/academics";
 import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
 import { CurriculumTable } from "../curriculum-table";

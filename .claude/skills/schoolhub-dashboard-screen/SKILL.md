@@ -153,6 +153,10 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
   after `SEARCH_DEBOUNCE_MS`. Wrap the table in `<Suspense>` in `page.tsx`, since it reads
   `useSearchParams`. `student-directory-table.tsx` and `staff-directory-table.tsx` are the two
   worked examples.
+- **The sort goes to the API through `toOrdering(sorting, SORT_FIELD)`** (`src/lib/helpers.ts`;
+  `SORT_FIELD` is the column id to API field map whose keys are the sortable ids). It gives
+  `-field` for a descending sort, and `undefined` (the param omitted) for no sort or a column
+  with no field. Don't hand-write the template string: three tables once carried their own copy.
 - **Clamp the page only on real page data, and recover from a stale page's 404.** The clamp
   effect runs when `pageMeta` is present and `!isPlaceholderData`, and calls `setPageIndex`.
   A shared link to a page past the end gets a 404 from the API: while `ApiError.isNotFound`
@@ -237,20 +241,28 @@ academic session needs the session resolved before its own request, and says so 
   } = useAcademicSession(filters.session);
   const academicSessionId = session?.id ?? "";
   const query = useQuery({
-    queryKey: queryKeys.list("curriculum", "class-subjects", { page, pageSize, academicSessionId }),
+    queryKey: queryKeys.list(CURRICULUM_QUERY_MODULE, CURRICULUM_LIST_RESOURCE, {
+      page,
+      pageSize,
+      academicSessionId,
+    }),
     queryFn: () => Services.curriculum.fetchCurriculumPage({ page, pageSize, academicSessionId }),
     // Until a session resolves there is nothing to ask for.
     enabled: session !== null,
     placeholderData: keepPreviousData,
   });
   ```
+  The key's module and resource are the module's constants (`CURRICULUM_QUERY_MODULE`,
+  `CURRICULUM_LIST_RESOURCE`, in `curriculum-constant.ts`), never string literals: the dialogs
+  invalidate by the same module key, so a typo in a literal would leave a list stale.
 - **Render in this order, so each state says what is true.** (1) `isError` (the sessions fetch
-  failed and none are cached) is a retry card calling `refetch`, never the no-session state: "we
-  couldn't ask" is not "there is none". (2) `!isLoading && session === null` is the no-session
-  empty state: a `SessionPicker` plus an `EmptyState` (`academics.common.noSession*`), so the
-  viewer can still pick one from the sessions there are. (3) The list's own error card, unless
-  it is a stale page. (4) The grid, with an info `Alert` (`academics.common.lockedNotice`) above
-  it when `isLocked`.
+  failed and none are cached) is a `LoadErrorCard` (`@/components/load-error-card`) calling
+  `refetch`, never the no-session state: "we couldn't ask" is not "there is none". (2)
+  `!isLoading && session === null` is `NoSessionCard`
+  (`features/academics/no-session-card.tsx`: a `SessionPicker` plus an `EmptyState`,
+  `academics.common.noSession*`), so the viewer can still pick one from the sessions there are.
+  (3) The list's own `LoadErrorCard`, unless it is a stale page. (4) The grid, with an info
+  `Alert` (`academics.common.lockedNotice`) above it when `isLocked`.
 - **A locked session is read-only in the UI, and the API is what enforces it.** Hide the
   toolbar's mutating buttons (`showActions = !isLocked && …`) and the actions column, by
   overriding its visibility with `{ ...columnVisibility, [ACTIONS_COLUMN_ID]: showActions }`.
@@ -505,6 +517,9 @@ key en.json has.
   If the component under test calls `useTranslations`, the wrapper needs
   `NextIntlClientProvider` too — a round-3 finding was a wrapper with only
   `QueryClientProvider`, which threw before the test reached its first assertion.
+- **Fixtures two modules' tests need live in `src/test-fixtures/`**, not in another module's
+  `__tests__/`: `academics.ts` has the sessions and the class, subject and campus ids. A module
+  keeps its own record builders (`curriculumRecord`) beside its tests.
 - **Anything that picks a file needs jsdom's gaps stubbed**: `stubObjectUrls` (jsdom has no
   `URL.createObjectURL`/`revokeObjectURL`) and, to assert on a preview `<img>`,
   `stubImageLoading` (Radix's `AvatarImage` otherwise waits forever for a load jsdom never
@@ -555,13 +570,22 @@ Real example: `e2e/tests/dashboard/students.spec.ts`, `e2e/src/mocks/domains/stu
    `Select`, an open-session counter for any async upload, `Object.entries(error.fieldErrors())`
    with a `"non_field"` fallback. Split sub-sections into their own files **before** 400
    lines, not after — check the real line count, don't trust the plan's file list. Every
-   field (split-out ones included) renders a `FormMessage`; every schema key has an input.
+   field (split-out ones included) renders a `FormMessage`; every schema key has an input. A
+   `Select` over `{ id, name }` options is `FormSelectField` (`@/components/form-select-field`),
+   not another `FormField` + `Select` block. The dialog around the form is `FormDialogLayout`
+   (`@/components/form-dialog-layout`) and its submit is `useFormDialogSubmit`
+   (`@/hooks/use-form-dialog-submit`: the guarded submit, a server error under the field it
+   names or folded into the form's message, cleared on the next attempt), not a copy of either.
 5. A file field is its own component: uploading/error state, preview, Save disabled while
    uploading, the upload's own error text, one session guard for both outcomes.
 6. `<module>-columns.tsx`: `useMemo`'d `useColumns()` hook, `DataGridColumnHeader` +
    `createSelectColumn`, row actions gated on both permission and the record's own state.
-7. `<module>-directory-filters.tsx`: a controlled search box and `Select` filters, with an
-   `aria-label` on each trigger; the values and setters come from the table.
+7. `<module>-directory-filters.tsx`: a `SearchInput` (`@/components/search-input`, with its clear
+   button) and `Select` filters, with an `aria-label` on each trigger (an id filter with an "All"
+   choice is `FilterSelect`, `@/components/filter-select`); the values and setters
+   come from the table. Campus, class, subject and section options come from `useCampuses`,
+   `useClasses`, `useSubjects` and `useSections` (`@/hooks/use-reference-data`), which share their
+   query keys a list is read under elsewhere (one cache entry), not a `useQuery` of the filter's own.
 8. `<module>-directory-table.tsx`: list state from `useDataGridUrlState` (URL filter specs,
    sortable ids and default sort as module constants), the page clamp on real data only plus
    the stale-page 404 reset, `<Suspense>` around it in `page.tsx`, a translated `DataGrid`
@@ -572,6 +596,9 @@ Real example: `e2e/tests/dashboard/students.spec.ts`, `e2e/src/mocks/domains/stu
    bulk), per-target outcome tracking with no index pairing, and a written mounting
    contract — conditionally mounted by its caller, no reset effect needed; add a reset
    only if a caller genuinely needs to keep it mounted.
+   A confirm-only action with no idempotency key or per-target outcome (remove, end,
+   reinstate) is `useConfirmAction` (`@/hooks/use-confirm-action`): one inline message, cleared
+   when tried again.
 10. `<module>-detail-sheet.tsx`: `ResponsiveSheet`, `useIsDrawer()` for its footer, a
     `"field" in data` check for any field with a visibility-vs-empty distinction, a
     loading gate on every data-derived line, and timestamps as relative time.

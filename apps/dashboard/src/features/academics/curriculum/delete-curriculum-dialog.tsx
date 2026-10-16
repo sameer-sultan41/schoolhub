@@ -1,14 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { ResponsiveAlertDialog } from "@/components/responsive-alert-dialog";
-import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
-import { queryKeys } from "@/lib/query-client";
+import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { Services, type CurriculumRecord } from "@/services";
+import { useInvalidateCurriculum } from "./use-invalidate-curriculum";
 
 export interface DeleteCurriculumDialogProps {
   record: CurriculumRecord;
@@ -30,28 +28,16 @@ export function DeleteCurriculumDialog({
   onOpenChange,
 }: DeleteCurriculumDialogProps) {
   const t = useTranslations("academics");
-  const tErrors = useTranslations("errors");
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const invalidateCurriculum = useInvalidateCurriculum();
 
-  const mutation = useMutation({
+  const { error, isPending, confirm } = useConfirmAction({
     mutationFn: () => Services.curriculum.deleteCurriculum(record.id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.module("curriculum") });
+      invalidateCurriculum();
       toast.success(t("curriculum.removed"));
       onOpenChange(false);
     },
-    onError: (mutationError) => {
-      // The refusal can name any field (an elective group, say), and this dialog has none.
-      setError(
-        resolveErrorMessage(
-          foldUnknownFieldErrors(mutationError),
-          tErrors,
-          t("common.submitFailed"),
-          NON_FIELD,
-        ),
-      );
-    },
+    fallbackMessage: t("common.submitFailed"),
   });
 
   return (
@@ -62,12 +48,9 @@ export function DeleteCurriculumDialog({
       description={t("curriculum.delete.description", { subject: record.subject_name })}
       confirmLabel={t("curriculum.actions.delete")}
       variant="destructive"
-      isPending={mutation.isPending}
+      isPending={isPending}
       error={error ?? undefined}
-      onConfirm={() => {
-        setError(null);
-        mutation.mutate();
-      }}
+      onConfirm={confirm}
     />
   );
 }

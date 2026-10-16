@@ -4,6 +4,12 @@ import type { CurriculumInput, CurriculumPageQuery } from "./curriculum-type";
 
 /** The curriculum module's constants. */
 
+/** The query-key module every curriculum read lives under: a curriculum write invalidates it,
+ * which also refreshes the allocate form's subject picker. */
+export const CURRICULUM_QUERY_MODULE = "curriculum";
+export const CURRICULUM_LIST_RESOURCE = "class-subjects";
+export const CURRICULUM_FOR_CLASS_RESOURCE = "for-class";
+
 /** Column id -> the `?ordering=` field the `/class-subjects` list accepts. */
 export const CURRICULUM_SORT_FIELD: Record<string, string> = {
   class: "class_name",

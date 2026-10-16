@@ -7,7 +7,6 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import {
   Alert,
   AlertDescription,
-  Button,
   Card,
   CardFooter,
   CardHeader,
@@ -24,16 +23,18 @@ import {
   ScrollArea,
   ScrollBar,
 } from "@schoolhub/ui";
-import { BookOpen, CalendarX } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { isOffsetPagination } from "@schoolhub/types";
 
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
-import { SessionPicker } from "@/features/academics/session-picker";
+import { LoadErrorCard } from "@/components/load-error-card";
+import { NoSessionCard } from "@/features/academics/no-session-card";
 import { useAcademicSession } from "@/features/academics/use-academic-session";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { usePageClamp } from "@/hooks/use-page-clamp";
 import { resolveErrorMessage } from "@/lib/error-message";
+import { toOrdering } from "@/lib/helpers";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services, type CurriculumRecord } from "@/services";
@@ -41,6 +42,8 @@ import {
   CURRICULUM_ACTIONS_COLUMN_ID,
   CURRICULUM_DEFAULT_SORTING,
   CURRICULUM_KIND,
+  CURRICULUM_LIST_RESOURCE,
+  CURRICULUM_QUERY_MODULE,
   CURRICULUM_SORT_FIELD,
   CURRICULUM_SORTABLE_IDS,
   CURRICULUM_URL_FILTERS,
@@ -50,21 +53,6 @@ import { useCurriculumColumns } from "./curriculum-columns";
 import { CurriculumFilters } from "./curriculum-filters";
 import { CurriculumFormDialog } from "./curriculum-form-dialog";
 import { DeleteCurriculumDialog } from "./delete-curriculum-dialog";
-
-function LoadErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
-  const tCommon = useTranslations("common");
-
-  return (
-    <Card>
-      <div className="flex flex-col items-start gap-3 p-6">
-        <p className="text-sm text-muted-foreground">{message}</p>
-        <Button variant="outline" onClick={onRetry}>
-          {tCommon("retry")}
-        </Button>
-      </div>
-    </Card>
-  );
-}
 
 /**
  * The `/academics/curriculum` list: one academic session's class-subject mappings, server
@@ -133,16 +121,14 @@ export function CurriculumTable() {
     filters.campus !== "" ||
     filters.kind !== CURRICULUM_KIND.all;
 
-  const ordering = sorting[0]
-    ? `${sorting[0].desc ? "-" : ""}${CURRICULUM_SORT_FIELD[sorting[0].id] ?? sorting[0].id}`
-    : undefined;
+  const ordering = toOrdering(sorting, CURRICULUM_SORT_FIELD);
   const page = pagination.pageIndex + 1;
   const pageSize = pagination.pageSize;
   const isElective = kindToIsElective(filters.kind);
   const academicSessionId = session?.id ?? "";
 
   const query = useQuery({
-    queryKey: queryKeys.list("curriculum", "class-subjects", {
+    queryKey: queryKeys.list(CURRICULUM_QUERY_MODULE, CURRICULUM_LIST_RESOURCE, {
       page,
       pageSize,
       search,
@@ -218,23 +204,12 @@ export function CurriculumTable() {
   // No current session (and none picked): the viewer can pick one from the sessions there are.
   if (!isSessionLoading && session === null) {
     return (
-      <Card>
-        <div className="flex flex-col gap-4 p-6">
-          <SessionPicker
-            sessions={sessions}
-            value=""
-            onChange={(sessionId) => {
-              setFilters({ session: sessionId });
-            }}
-            className="w-full sm:w-60"
-          />
-          <EmptyState
-            icon={CalendarX}
-            title={t("common.noSessionTitle")}
-            description={t("common.noSessionDescription")}
-          />
-        </div>
-      </Card>
+      <NoSessionCard
+        sessions={sessions}
+        onPick={(sessionId) => {
+          setFilters({ session: sessionId });
+        }}
+      />
     );
   }
 

@@ -27,6 +27,7 @@ import { isOffsetPagination } from "@schoolhub/types";
 
 import { ApiError, Services } from "@/services";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
+import { toOrdering } from "@/lib/helpers";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { resolveErrorMessage } from "@/lib/error-message";
@@ -141,9 +142,7 @@ export function StudentDirectoryTable() {
     classId !== "" ||
     sectionId !== "";
 
-  const ordering = sorting[0]
-    ? `${sorting[0].desc ? "-" : ""}${SORT_FIELD[sorting[0].id] ?? sorting[0].id}`
-    : undefined;
+  const ordering = toOrdering(sorting, SORT_FIELD);
   const page = pagination.pageIndex + 1;
   const pageSize = pagination.pageSize;
 

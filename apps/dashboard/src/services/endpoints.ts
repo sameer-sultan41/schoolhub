@@ -48,7 +48,6 @@ export const endpoints = {
     departments: "/departments",
     designations: "/designations",
     academicSessions: "/academic-sessions",
-    teacherLoadSummary: "/teacher-subject-allocations/load-summary",
     myTimetable: "/timetables/my",
   },
   /**
@@ -94,6 +93,12 @@ export const endpoints = {
     detail: (id: string) => `/class-subjects/${id}`,
     /** Collection colon-action, synchronous 200 with `{created, skipped}`. */
     clone: "/class-subjects:clone",
+  },
+  /** `/teacher-subject-allocations` (`apps/api/apps/academics/teacher_allocations/urls.py`). */
+  teacherAllocations: {
+    list: "/teacher-subject-allocations",
+    detail: (id: string) => `/teacher-subject-allocations/${id}`,
+    loadSummary: "/teacher-subject-allocations/load-summary",
   },
   students: {
     list: "/students",

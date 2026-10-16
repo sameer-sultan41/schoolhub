@@ -1,22 +1,13 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import {
-  Button,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@schoolhub/ui";
-import { Search, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@schoolhub/ui";
 
-import { FILTER_ALL as ALL } from "@/lib/constants";
-import { queryKeys } from "@/lib/query-client";
+import { FilterSelect } from "@/components/filter-select";
+import { SearchInput } from "@/components/search-input";
+import { useCampuses, useClasses } from "@/hooks/use-reference-data";
 import { SessionPicker } from "@/features/academics/session-picker";
-import { Services, type AcademicSessionSummary } from "@/services";
+import type { AcademicSessionSummary } from "@/services";
 import { CURRICULUM_KIND } from "@/services/modules/curriculum/curriculum-constant";
 
 export interface CurriculumFiltersProps {
@@ -56,88 +47,38 @@ export function CurriculumFilters({
   const t = useTranslations("academics");
   // Every class and campus, active or not: a past session's curriculum may name a class that
   // is no longer offered, and filtering by it is the point of looking at that session.
-  const classesQuery = useQuery({
-    queryKey: queryKeys.list("school-organization", "classes"),
-    queryFn: () => Services.schoolOrganization.fetchClasses(),
-  });
-  const campusesQuery = useQuery({
-    queryKey: queryKeys.list("school-organization", "campuses"),
-    queryFn: () => Services.dashboard.fetchCampuses(),
-  });
+  const classesQuery = useClasses();
+  const campusesQuery = useCampuses();
 
   return (
     <>
-      <div className="relative w-full sm:w-auto">
-        <Search
-          className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-primary"
-          aria-hidden="true"
-        />
-        <Input
-          aria-label={t("filters.search")}
-          placeholder={t("curriculum.list.searchPlaceholder")}
-          value={searchInput}
-          onChange={(event) => {
-            onSearchInputChange(event.target.value);
-          }}
-          // `pe-8` clears the trailing clear button, so long text never runs underneath it.
-          className="w-full ps-9 pe-8 sm:max-w-64"
-        />
-        {searchInput.length > 0 && (
-          <Button
-            mode="icon"
-            variant="ghost"
-            aria-label={t("filters.clearSearch")}
-            className="absolute end-1.5 top-1/2 h-6 w-6 -translate-y-1/2"
-            onClick={() => {
-              onSearchInputChange("");
-            }}
-          >
-            <X aria-hidden="true" />
-          </Button>
-        )}
-      </div>
+      <SearchInput
+        value={searchInput}
+        onChange={onSearchInputChange}
+        ariaLabel={t("filters.search")}
+        placeholder={t("curriculum.list.searchPlaceholder")}
+        clearLabel={t("filters.clearSearch")}
+      />
       <SessionPicker
         sessions={sessions}
         value={sessionId}
         onChange={onSessionChange}
         className="w-full sm:w-44"
       />
-      <Select
-        value={classId || ALL}
-        onValueChange={(value) => {
-          onClassIdChange(value === ALL ? "" : value);
-        }}
-      >
-        <SelectTrigger className="w-full sm:w-40" aria-label={t("fields.class")}>
-          <SelectValue placeholder={t("fields.class")} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-          {(classesQuery.data ?? []).map((schoolClass) => (
-            <SelectItem key={schoolClass.id} value={schoolClass.id}>
-              {schoolClass.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={campusId || ALL}
-        onValueChange={(value) => {
-          onCampusIdChange(value === ALL ? "" : value);
-        }}
-      >
-        <SelectTrigger className="w-full sm:w-40" aria-label={t("fields.campus")}>
-          <SelectValue placeholder={t("fields.campus")} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>{t("filters.all")}</SelectItem>
-          {(campusesQuery.data ?? []).map((campus) => (
-            <SelectItem key={campus.id} value={campus.id}>
-              {campus.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <FilterSelect
+        label={t("fields.class")}
+        allLabel={t("filters.all")}
+        value={classId}
+        onChange={onClassIdChange}
+        options={classesQuery.data ?? []}
+      />
+      <FilterSelect
+        label={t("fields.campus")}
+        allLabel={t("filters.all")}
+        value={campusId}
+        onChange={onCampusIdChange}
+        options={campusesQuery.data ?? []}
+      />
       <Select value={kind} onValueChange={onKindChange}>
         <SelectTrigger className="w-full sm:w-40" aria-label={t("curriculum.filters.kind")}>
           <SelectValue placeholder={t("curriculum.filters.kind")} />

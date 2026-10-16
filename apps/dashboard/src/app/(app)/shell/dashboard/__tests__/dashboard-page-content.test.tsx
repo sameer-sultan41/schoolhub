@@ -30,11 +30,11 @@ jest.mock("@/services", () => ({
     auth: { fetchCurrentUser: jest.fn() },
     dashboard: {
       fetchDashboardOverview: jest.fn(),
-      fetchTeacherLoadSummary: jest.fn(),
       fetchMyTimetable: jest.fn(),
     },
     schoolOrganization: { fetchAcademicSessions: jest.fn() },
     staff: { fetchStaffDirectory: jest.fn() },
+    teacherAllocations: { fetchLoadSummary: jest.fn() },
   },
 }));
 
@@ -48,9 +48,8 @@ const mockFetchAcademicSessions = Services.schoolOrganization
 const mockFetchDashboardOverview = Services.dashboard.fetchDashboardOverview as jest.MockedFunction<
   typeof Services.dashboard.fetchDashboardOverview
 >;
-const mockFetchTeacherLoadSummary = Services.dashboard
-  .fetchTeacherLoadSummary as jest.MockedFunction<
-  typeof Services.dashboard.fetchTeacherLoadSummary
+const mockFetchLoadSummary = Services.teacherAllocations.fetchLoadSummary as jest.MockedFunction<
+  typeof Services.teacherAllocations.fetchLoadSummary
 >;
 const mockFetchMyTimetable = Services.dashboard.fetchMyTimetable as jest.MockedFunction<
   typeof Services.dashboard.fetchMyTimetable
@@ -66,7 +65,7 @@ beforeEach(() => {
   mockFetchCurrentUser.mockImplementation(() => new Promise(() => {}));
   mockFetchAcademicSessions.mockImplementation(() => new Promise(() => {}));
   mockFetchDashboardOverview.mockImplementation(() => new Promise(() => {}));
-  mockFetchTeacherLoadSummary.mockImplementation(() => new Promise(() => {}));
+  mockFetchLoadSummary.mockImplementation(() => new Promise(() => {}));
   mockFetchMyTimetable.mockImplementation(() => new Promise(() => {}));
   mockFetchStaffDirectory.mockImplementation(() => new Promise(() => {}));
 });
