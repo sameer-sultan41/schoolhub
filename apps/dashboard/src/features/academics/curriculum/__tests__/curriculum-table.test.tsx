@@ -248,7 +248,9 @@ describe("CurriculumTable", () => {
 
       renderScreen();
 
-      await user.click(await screen.findByRole("combobox", { name: "Academic session" }));
+      // The empty state swaps in its own picker once the sessions load; open that one.
+      await screen.findByText("No current academic session");
+      await user.click(screen.getByRole("combobox", { name: "Academic session" }));
       await user.click(await screen.findByRole("option", { name: /2027-28/ }));
 
       expect(urlParams()).toEqual({ session: PLANNED_SESSION_ID });

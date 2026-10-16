@@ -32,6 +32,7 @@ describe("Services", () => {
   it("aggregates every domain, each action a real function", () => {
     expect(Object.keys(Services).sort()).toEqual([
       "auth",
+      "curriculum",
       "dashboard",
       "files",
       "guardians",
