@@ -43,6 +43,9 @@ area `AGENTS.md` for each directory touched.
    coverage floors may lose entries, never gain them.
 9. **Industry standard.** Where the implementation departs from the framework's documented
    pattern, cite the version-matched docs (Context7) and give the concrete alternative.
+10. **Known agent mistakes.** Read `docs/07-quality/agent-lessons.md` and test the diff against
+    each lesson's **Check** that applies to the files touched. Cite the lesson id (`L3`) in the
+    finding. A repeated lesson is at least Important, because the check was already written down.
 
 ## Security section — mandatory when the diff touches
 
