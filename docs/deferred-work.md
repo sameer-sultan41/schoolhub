@@ -1050,10 +1050,14 @@ either this file or `project-status.md`.
     supports `en` and `ur`, and both map to date-fns' `enUS` locale — so passing a locale
     changes nothing observable yet; Urdu-locale screens still render month names in
     English. This was already true of the pre-existing `formatLastUpdated`-style helpers
-    before this phase touched them. Closing this properly means either sourcing a real
+    before this phase touched them, and it holds for `formatLastUpdated` itself
+    (`lib/helpers.ts`): the promotion batch list's "Started" column uses it, so under `ur` its
+    relative times ("3 days ago") read in English, as the students and staff lists' do.
+    Closing this properly means either sourcing a real
     Urdu date-fns locale (if one exists and this repo wants to adopt it) or switching date
     formatting to next-intl's own `useFormatter().dateTime(...)`, which formats through
-    `Intl` using the active locale directly — a larger change than this phase's scope.
+    `Intl` using the active locale directly (relative times want `Intl.RelativeTimeFormat`,
+    in one pass over every caller) — a larger change than this phase's scope.
 
 - **No import template download.** `BulkImportDialog` lists a module's required and optional
   column names as badges and nothing more; a registrar still builds the header row by hand,
@@ -1249,8 +1253,8 @@ either this file or `project-status.md`.
   `QueryClient`.** `teacher-load-panel.test.tsx` and `earnings-chart.test.tsx` each read the
   shared `teacher-allocations` load-summary entry back out of the cache, and `renderWithProviders`
   (`apps/dashboard/src/test-utils.tsx`) builds its own client and returns none, so each wraps
-  `QueryClientProvider` by hand. Returning the client from `renderWithProviders` would remove
-  both copies.
+  `QueryClientProvider` by hand. `renderWithClient` in the same file now returns the client (the
+  promotions tests use it); moving these two onto it would remove both copies.
 
 - **The teacher allocation screen is a list and a dialog, not the §9 drag-and-drop grid.**
   [`academics.md`](03-modules/academics.md) §6, §8 and §9 describe an allocation grid: a section ×
@@ -1359,3 +1363,116 @@ either this file or `project-status.md`.
   still name them; `search` still finds those rows by name. Offering the teachers present in the
   session's own rows (or all employment statuses for the filter alone, keeping the allocate
   picker active-only) closes it.
+
+- **Promotion targets are set one student at a time.** A new batch proposes a class and no
+  section, and the decision dialog sets one student's section; there is no "assign this section
+  to every selected student" action. A class of forty with two sections is forty dialogs before
+  `:execute` can enrol everyone, and the review screen's advisory only counts the gap. A bulk
+  action needs a row selection on the decision table and a `PATCH` per selected student (the API
+  has no bulk decision endpoint), or one new endpoint taking a student list and a section.
+
+- **The promotion proposal is still level-only.** `create_promotion_batch` proposes `promoted`
+  one `level` up, or `graduated` at the top, and records `results_available: false` and
+  `attendance_available: false`. The examinations and attendance modules are done, but nothing
+  reads their published results or attendance percentages, so `retained` and `promoted_on_trial`
+  are never proposed, only chosen. The recorded `proposed_decision` and `proposed_to_class_id`
+  are where a rule engine's output would land, and the §11 override check already compares
+  against them, so building it needs no screen change.
+
+- **There are no per-tenant promotion rule templates.** academics.md §19 recommends a default
+  template (pass all core subjects, at least 75% attendance) that a tenant adjusts, and never
+  hard-coded criteria. Nothing stores or evaluates one; it is the settings home the results- and
+  attendance-based proposal above would read from.
+
+- **A class teacher cannot see only their own section's promotions.** §4 grants
+  `academics.promotion.view` to `class_teacher` for "own section", but the batch viewsets set no
+  `scope_own_field` (the allocations list does, as `staff__user_id`), so a holder of the key sees
+  every batch and every student in it, and the dashboard shows whatever the API sends. Narrowing
+  it needs a scope rule over the section each student was enrolled in, in the API first.
+
+- **Two promotion notifications are not sent.** `promotion-input-request` (§7.2 step D: asking the
+  class teacher for remarks and borderline flags) needs a task or inbox surface for teachers that
+  does not exist. The guardian-facing `promotion-outcome` (§12's per-student note) is not sent
+  either: the trigger that exists tells the preparer the approval decision, and nothing tells a
+  guardian that a student was promoted, retained or graduated once the batch executes, because
+  this module owns no rule for resolving a student's guardians. Both are noted in
+  `apps/academics/notifications.py`.
+
+- **A partly failed execute leaves a batch with no status.** A batch whose students did not all
+  succeed has mixed row statuses (the enrolled ones `executed`, the failed ones still `approved`)
+  and no status of its own, and `retrieve` reports the first row's (rows are ordered by
+  `student_id`). So the header reads Executed whenever the lowest-id student succeeded, and
+  Execute is never offered again; when that student failed it reads Approved, and the review
+  screen holds Execute disabled once a job has succeeded (`hasSucceeded`), which a reload undoes
+  only while that first row is still approved. A reload is therefore not a reliable way back to
+  §11's re-execute retry. The backend needs a defined status for a mixed batch (or per-row
+  state in the detail); the list already shows such a batch as one row per status.
+
+- **A student who fails execute for a missing section cannot be recovered inside the promotion
+  workflow.** Decision edits are draft-only (`viewset.py`), a partly executed batch cannot be
+  rejected (`reject_batch` needs every row `pending_approval`) or reverted once next-session
+  enrollments exist, and a new batch for the same class and sessions is refused while one is not
+  reverted, so the failed student's section can never be set and re-running execute cannot fix
+  them. The review screen says so in `approved` (sections can no longer be set; revert and
+  create a new batch), which is only possible before anyone was enrolled. It needs a design: a
+  per-row retry or edit after a partial execute, or enrolling the student directly in
+  student-management.
+
+- **Reloading mid-execute loses the job.** The job id lives in `usePromotionExecution`'s state, so
+  a reload (or opening the batch in another tab) while the run is in progress offers Execute
+  again. A second run is safe, but it reports most students as skipped ("already executed") and
+  hides the first run's report. Keeping the job id per batch in `sessionStorage`, and resuming the
+  poll on mount, would bring the report back.
+
+- **The execute report's `reason` and `error` are English in every locale.** `execute_batch`
+  now sends an API error's plain message (and a generic line for anything unexpected, logged
+  server-side), and a skipped row's `reason` is a plain server string too, but both are written
+  in English whatever the viewer's language. A backend that sends a code and a message per
+  failure would let the report translate the code and keep the message as detail.
+
+- **The promotion screens repeat a few things the allocation screens already have.**
+  `PROMOTION_EMPTY_CELL` and `EmptyCell` (`promotion-decision-columns.tsx`) duplicate
+  `ALLOCATION_EMPTY_CELL` and its markup in `allocation-columns.tsx`: one shared cell would serve
+  both. The `permissionsUnknownTitle` ternary in the toolbars is now in five copies (curriculum,
+  allocations, promotions, students, staff) and the Card, `ScrollArea` and `CardTable` shell around
+  a `DataGrid` in six. `HTTP_STATUS_CONFLICT` plus an `instanceof` check (`use-promotion-batch-cache.ts`)
+  could be an `isConflict` getter on `ApiError` beside `isNotFound`. Each moves onto its shared
+  piece the next time its file is touched.
+
+- **The promotion screens' Urdu strings were written without a native reader.** The
+  `academics.promotions.*` keys in `apps/dashboard/messages/ur.json` have been checked for parity
+  and ICU syntax, not for wording; the transition confirmations, the report lines and the
+  missing-section advisories (draft and approved) in particular need a review by a native
+  speaker.
+
+- **The job-poll "refused / stalled / active" logic is in three copies.** `isPollRefused` (a
+  non-transient poll error) and the active/stalled derivation sit in `use-promotion-execution.ts`,
+  `hooks/use-job-file-download.ts` and `components/bulk-import-dialog.tsx`. Hoist them into
+  `useJobPolling` so a fourth job screen does not copy them again.
+
+- **Three promotions test files are over 400 lines.** `promotion-batch-table.test.tsx`,
+  `promotions-helper.test.ts` and `promotion-batch-actions.test.tsx` want splitting at their
+  `describe` seams (rows, URL and filters, New batch for the table; one file per helper group
+  for the helpers; the matrix, the advisory and the execution report for the actions). Tests
+  are not size-linted, so it waits for a calmer moment than a review round.
+
+- **`GET /student-promotions/{id}` applies the list's filters.** `retrieve` runs the same
+  filterset as the list, so `?decision=retained` returns part of a batch with `students` set to
+  the filtered count (documented in `academics.md` §16). Nothing in the dashboard sends one;
+  dropping the filter backend from the detail route, or documenting it as intended, closes it.
+
+- **`next_class_for` steps over a deactivated level, and submit does not re-check a recorded
+  target.** The proposal is the next active class one `level` up, so a school that deactivates a
+  level is proposed past it with no flag, and `:submit` compares a row against the proposal
+  recorded at creation without checking that the recorded target class is still active: a class
+  deactivated between creation and execution is first caught when `:execute` fails that student.
+  The picker offers active classes only, so a reviewer cannot choose one, but a proposal can name
+  one.
+
+- **Reading a promotion batch costs a handful of small queries, unguarded.** The decision
+  `PATCH` (`/student-promotions/{id}/decisions/{student_id}`) answers the full decision row, which
+  lazy-loads about eight small relation reads for its name fields (one row, so not an N+1), and no
+  promotions test counts queries, so `retrieve`'s cost can grow unnoticed. The submit check's
+  legacy fallback costs two queries per distinct from-class for a draft created before the
+  proposal was recorded. A `select_related` on the PATCH queryset and an `assertNumQueries` on
+  `retrieve` close the first two; the fallback goes away with the last pre-recording draft.
