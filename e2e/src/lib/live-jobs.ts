@@ -13,6 +13,9 @@ export interface BackgroundJob<TResult = unknown> {
 
 const TERMINAL = new Set(["succeeded", "failed"]);
 
+/** A job's own poll budget in the live lane: `awaitJob`'s default, and a browser journey's wait. */
+export const LIVE_JOB_TIMEOUT_MS = 30_000;
+
 /**
  * Poll `GET /jobs/{id}` until it reaches a terminal status, then return it.
  *
@@ -29,7 +32,10 @@ const TERMINAL = new Set(["succeeded", "failed"]);
 export async function awaitJob<TResult>(
   liveApiClient: ApiClient,
   jobId: string,
-  { timeoutMs = 30_000, intervalMs = 500 }: { timeoutMs?: number; intervalMs?: number } = {},
+  {
+    timeoutMs = LIVE_JOB_TIMEOUT_MS,
+    intervalMs = 500,
+  }: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<BackgroundJob<TResult>> {
   const deadline = Date.now() + timeoutMs;
   let last: BackgroundJob<TResult> | undefined;

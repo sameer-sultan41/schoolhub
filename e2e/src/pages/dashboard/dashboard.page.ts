@@ -45,6 +45,16 @@ export class DashboardPage extends BasePage {
   }
 
   /**
+   * A tab of the bar above every Academics screen, e.g. `sectionTab("Promotions")`: only the
+   * sections the viewer holds the `.view` key for are in it.
+   */
+  sectionTab(name: string): Locator {
+    return this.page
+      .getByRole("navigation", { name: "Academics sections", exact: true })
+      .getByRole("link", { name, exact: true });
+  }
+
+  /**
    * The avatar trigger in the header; the account menu hangs off it.
    *
    * By testid, not role+name: the Avatar (user-dropdown-menu.tsx) carries no accessible
