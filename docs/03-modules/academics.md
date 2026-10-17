@@ -360,12 +360,17 @@ coverage-gap notification are in `deferred-work.md`.
 
 **Teacher allocation, backend rules shipped with it.**
 
-- **`PATCH` now runs the §11 rules `create` runs, on what changed.** A closed or archived session
-  is a `422` (on `DELETE` too); a non-teaching or inactive staff member is a `422` on `staff_id`;
-  a subject outside the class's curriculum is a `422` on `subject_id`. Making a co-teacher
-  primary, moving a primary to a slot that already has one, or reinstating a primary end-dates the
-  current primary instead of surfacing the one-primary constraint as a `409`. `PATCH` answers
-  `{data, meta: {warnings}}`, like `POST`.
+- **`PATCH` now runs the §11 rules `create` runs, on what changed — or on the row becoming
+  active, whichever is broader.** A closed or archived session is a `422` (on `DELETE` too); a
+  non-teaching or inactive staff member is a `422` on `staff_id`; a subject outside the class's
+  curriculum is a `422` on `subject_id`. The staff/curriculum checks re-run whenever `effective_to`
+  ends up `null` even if neither `staff` nor the slot is in the payload — a bare `{is_primary:
+  true}` or a Reinstate (`{effective_to: null}`) brings a row back to life just as surely as
+  changing who's on it, and a staff member who went inactive or a subject the curriculum dropped
+  since the row was last active must still be caught. Making a co-teacher primary, moving a
+  primary to a slot that already has one, or reinstating a primary end-dates the current primary
+  instead of surfacing the one-primary constraint as a `409`. `PATCH` answers `{data, meta:
+  {warnings}}`, like `POST`.
 - **`effective_to` has three behaviours, all on `PATCH`:**
 
   | Action | Request | Rule |

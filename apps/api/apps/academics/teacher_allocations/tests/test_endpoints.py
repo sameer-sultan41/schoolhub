@@ -300,6 +300,22 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
             old = TeacherSubjectAllocation.objects.get(pk=primary["id"])
         self.assertIsNotNone(old.effective_to)
 
+    def test_promoting_a_co_teacher_who_has_since_gone_inactive_is_refused(self) -> None:
+        """Neither `staff` nor the slot changes on a bare `{is_primary: true}` PATCH, so
+        the active-teacher re-check has to run off `becoming_active`, not the diff."""
+        self._allocate()
+        with tenant_context(self.tenant.id):
+            co = StaffFactory(tenant=self.tenant, campus=self.campus)
+        co_row = self._allocate(staff_id=str(co.pk), is_primary=False)
+        with tenant_context(self.tenant.id):
+            co.employment_status = EmploymentStatus.RESIGNED
+            co.save(update_fields=["employment_status"])
+
+        response = self._patch(co_row["id"], {"is_primary": True})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("staff_id", {d["field"] for d in response.json()["error"]["details"]})
+
     def test_moving_a_primary_onto_a_subject_with_a_primary_end_dates_that_primary(self) -> None:
         """slot_changed: the moved row takes the slot as on create, not a 409 on one-primary."""
         other_subject = self._add_curriculum_subject()
@@ -440,6 +456,33 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
         with tenant_context(self.tenant.id):
             self.assertIsNotNone(TeacherSubjectAllocation.objects.get(pk=second["id"]).effective_to)
             self.assertIsNone(TeacherSubjectAllocation.objects.get(pk=first["id"]).effective_to)
+
+    def test_reinstating_an_allocation_for_a_now_inactive_teacher_is_refused(self) -> None:
+        """`staff` doesn't change on `{effective_to: null}` either — same `becoming_active`
+        gap as the promote-to-primary case above, for the Reinstate path instead."""
+        row = self._allocate()
+        end_response = self._patch(row["id"], {"effective_to": timezone.localdate().isoformat()})
+        self.assertEqual(end_response.status_code, status.HTTP_200_OK, end_response.json())
+        with tenant_context(self.tenant.id):
+            self.teacher.employment_status = EmploymentStatus.RESIGNED
+            self.teacher.save(update_fields=["employment_status"])
+
+        response = self._patch(row["id"], {"effective_to": None})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("staff_id", {d["field"] for d in response.json()["error"]["details"]})
+
+    def test_reinstating_an_allocation_for_a_dropped_curriculum_subject_is_refused(self) -> None:
+        row = self._allocate()
+        end_response = self._patch(row["id"], {"effective_to": timezone.localdate().isoformat()})
+        self.assertEqual(end_response.status_code, status.HTTP_200_OK, end_response.json())
+        with tenant_context(self.tenant.id):
+            self.curriculum.delete()
+
+        response = self._patch(row["id"], {"effective_to": None})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("subject_id", {d["field"] for d in response.json()["error"]["details"]})
 
     def test_replacing_a_primary_that_starts_in_the_future_is_not_a_conflict(self) -> None:
         """The outgoing row is end-dated at its own start, never before it."""

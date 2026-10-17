@@ -188,19 +188,24 @@ def update_allocation(
     section = changes.get("section", allocation.section)
     subject = changes.get("subject", allocation.subject)
     staff = changes.get("staff", allocation.staff)
+    effective_to = changes.get("effective_to", allocation.effective_to)
     slot_changed = (session, section, subject) != (
         allocation.academic_session,
         allocation.section,
         allocation.subject,
     )
+    # Re-checked whenever the row ends up active, not only when staff/slot change: a
+    # Reinstate (effective_to -> null) or a promote-to-primary PATCH touches neither, but
+    # both can bring back a row whose staff has since gone inactive or whose subject has
+    # since left the curriculum — exactly what create_allocation would have rejected.
+    becoming_active = effective_to is None
     if session != allocation.academic_session:
         assert_session_writable(session)
-    if staff != allocation.staff:
+    if staff != allocation.staff or becoming_active:
         assert_staff_is_active_teacher(staff)
-    if slot_changed:
+    if slot_changed or becoming_active:
         assert_subject_in_class_curriculum(session=session, section=section, subject=subject)
 
-    effective_to = changes.get("effective_to", allocation.effective_to)
     assert_patch_dates_valid(
         changes=changes,
         current_from=allocation.effective_from,
