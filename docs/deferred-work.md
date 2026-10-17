@@ -1456,11 +1456,6 @@ either this file or `project-status.md`.
   for the helpers; the matrix, the advisory and the execution report for the actions). Tests
   are not size-linted, so it waits for a calmer moment than a review round.
 
-- **`GET /student-promotions/{id}` applies the list's filters.** `retrieve` runs the same
-  filterset as the list, so `?decision=retained` returns part of a batch with `students` set to
-  the filtered count (documented in `academics.md` §16). Nothing in the dashboard sends one;
-  dropping the filter backend from the detail route, or documenting it as intended, closes it.
-
 - **`next_class_for` steps over a deactivated level, and submit does not re-check a recorded
   target.** The proposal is the next active class one `level` up, so a school that deactivates a
   level is proposed past it with no flag, and `:submit` compares a row against the proposal
