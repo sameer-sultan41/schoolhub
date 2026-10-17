@@ -682,6 +682,26 @@ class ExecutionTests(PromotionTestCase):
         with tenant_context(self.tenant.id):
             self.assertEqual(BackgroundJob.objects.count(), 0, "nothing may have been queued")
 
+    def test_a_batch_level_failure_puts_only_a_safe_message_in_the_job_error(self) -> None:
+        batch_id = self._approved_batch()
+        failure = RuntimeError("secret detail")
+
+        with mock.patch.object(services, "execute_batch", side_effect=failure):
+            job = self._execute(batch_id)
+
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.error, services.GENERIC_FAILURE_MESSAGE)
+
+    def test_a_batch_level_api_error_keeps_its_own_message_in_the_job_error(self) -> None:
+        batch_id = self._approved_batch()
+        refusal = Conflict("Only an approved batch can be executed.")
+
+        with mock.patch.object(services, "execute_batch", side_effect=refusal):
+            job = self._execute(batch_id)
+
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.error, "Only an approved batch can be executed.")
+
     def test_a_student_whose_source_enrollment_ended_is_reported_failed_not_enrolled(self) -> None:
         """Closing the source would match nothing, and the student would be enrolled onward."""
         batch_id = self._approved_batch()
@@ -1045,7 +1065,7 @@ class FailureMessageTests(SimpleTestCase):
             {"to_section_id": "Assign a target section before executing this batch."}
         )
 
-        message = services._failure_message(exc)
+        message = services.failure_message(exc)
 
         self.assertEqual(message, "Assign a target section before executing this batch.")
         self.assertNotIn("ErrorDetail", message)
@@ -1054,23 +1074,23 @@ class FailureMessageTests(SimpleTestCase):
     def test_a_list_detail_joins_its_messages(self) -> None:
         exc = DomainRuleViolation(["First problem.", "Second problem."])
 
-        self.assertEqual(services._failure_message(exc), "First problem. Second problem.")
+        self.assertEqual(services.failure_message(exc), "First problem. Second problem.")
 
     def test_a_dict_of_lists_is_flattened(self) -> None:
         exc = DomainRuleViolation({"a": ["One.", "Two."], "b": "Three."})
 
-        self.assertEqual(services._failure_message(exc), "One. Two. Three.")
+        self.assertEqual(services.failure_message(exc), "One. Two. Three.")
 
     def test_a_plain_string_detail_is_kept(self) -> None:
         self.assertEqual(
-            services._failure_message(Conflict("A batch already exists.")),
+            services.failure_message(Conflict("A batch already exists.")),
             "A batch already exists.",
         )
 
     def test_a_non_api_exception_is_generic_and_leaks_nothing(self) -> None:
         exc = RuntimeError('relation "student_promotions" does not exist')
 
-        message = services._failure_message(exc)
+        message = services.failure_message(exc)
 
         self.assertEqual(message, services.GENERIC_FAILURE_MESSAGE)
         self.assertNotIn("student_promotions", message)

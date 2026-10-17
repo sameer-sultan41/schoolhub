@@ -15,6 +15,7 @@ finishes.
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from celery import shared_task
@@ -24,10 +25,12 @@ from core.jobs.services import mark_failed, mark_running, mark_succeeded, update
 from core.tenancy.context import tenant_atomic
 from core.tenancy.tasks import TenantAwareTask
 
+logger = logging.getLogger(__name__)
+
 
 @shared_task(base=TenantAwareTask, bind=True)
 def execute_promotion_batch_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> None:
-    from apps.academics.promotions.services import execute_batch
+    from apps.academics.promotions.services import execute_batch, failure_message
 
     with tenant_atomic(uuid.UUID(tenant_id)):
         job = BackgroundJob.objects.get(pk=job_id)
@@ -44,7 +47,9 @@ def execute_promotion_batch_task(self, *, tenant_id: str, job_id: str, actor_id:
         # guardian did the work it could. `failed` on the job itself is reserved
         # for the batch never having run — a bad id, a lost tenant context.
         mark_succeeded(job=job, result=report)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # Deliberately not re-raised — see
         # apps.student_management.tasks.import_students_task's identical comment.
-        mark_failed(job=job, error=str(exc))
+        # The job's error is user-visible, so only an API error's own message goes in it.
+        logger.exception("promotion batch execution failed for job %s", job_id)
+        mark_failed(job=job, error=failure_message(exc))
