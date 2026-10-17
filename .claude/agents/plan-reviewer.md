@@ -61,6 +61,11 @@ the directories the plan changes.
     justified here. Never hand-wave "best practice" without a source.
 11. **Decision record.** A Tier 2 plan must contain an "Alternatives considered (why not)"
     section. If it picks between real alternatives, it must name the ADR it will add.
+12. **Known agent mistakes.** Read `docs/07-quality/agent-lessons.md`. For each decision in the
+    plan that rests on a premise, check the premise is stated and verified end to end, including
+    what the user can do after a failure (L3, L4). Check that waits, mocks and generated files
+    follow L2, L5 and L6, and that every dispatch brief the plan describes carries the overrides
+    in L11. Cite the lesson id in the finding.
 
 ## Output
 
