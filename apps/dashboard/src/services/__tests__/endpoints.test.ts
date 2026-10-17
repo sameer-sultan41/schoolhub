@@ -16,15 +16,22 @@ describe("endpoints", () => {
     expect(endpoints.dashboard.departments).toBe("/departments");
     expect(endpoints.dashboard.designations).toBe("/designations");
     expect(endpoints.dashboard.academicSessions).toBe("/academic-sessions");
-    expect(endpoints.dashboard.teacherLoadSummary).toBe(
-      "/teacher-subject-allocations/load-summary",
-    );
     expect(endpoints.dashboard.myTimetable).toBe("/timetables/my");
   });
 
   it("builds the id-scoped staff paths, staffExit as a colon-action not a nested path", () => {
     expect(endpoints.dashboard.staffDetail("staff-1")).toBe("/staff/staff-1");
     expect(endpoints.dashboard.staffExit("staff-1")).toBe("/staff/staff-1:exit");
+  });
+
+  it("builds the teacher-allocation paths, the load summary a fixed path beside the detail", () => {
+    expect(endpoints.teacherAllocations.list).toBe("/teacher-subject-allocations");
+    expect(endpoints.teacherAllocations.detail("allocation-1")).toBe(
+      "/teacher-subject-allocations/allocation-1",
+    );
+    expect(endpoints.teacherAllocations.loadSummary).toBe(
+      "/teacher-subject-allocations/load-summary",
+    );
   });
 
   it("declares the student bulk-operation paths, ID cards as a colon-action", () => {

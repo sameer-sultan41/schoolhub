@@ -12,7 +12,8 @@ import uuid
 from datetime import date
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import DateField, F, Q, Value
+from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 
 from apps.academics import notifications
@@ -172,23 +173,135 @@ def create_allocation(
     )
 
 
+@transaction.atomic
+def update_allocation(
+    *, allocation: TeacherSubjectAllocation, changes: dict, actor_id: uuid.UUID
+) -> TeacherSubjectAllocation:
+    """§11 for PATCH — the same rules `create_allocation` applies, on what changed.
+
+    The generic mixin saved PATCHes straight through, so a closed session, a
+    non-teaching staff member, or a subject outside the curriculum all slipped
+    past, and promoting a co-teacher hit the one-primary constraint as a 409.
+    """
+    assert_session_writable(allocation.academic_session)
+    session = changes.get("academic_session", allocation.academic_session)
+    section = changes.get("section", allocation.section)
+    subject = changes.get("subject", allocation.subject)
+    staff = changes.get("staff", allocation.staff)
+    effective_to = changes.get("effective_to", allocation.effective_to)
+    slot_changed = (session, section, subject) != (
+        allocation.academic_session,
+        allocation.section,
+        allocation.subject,
+    )
+    # Re-checked whenever the row ends up active, not only when staff/slot change: a
+    # Reinstate (effective_to -> null) or a promote-to-primary PATCH touches neither, but
+    # both can bring back a row whose staff has since gone inactive or whose subject has
+    # since left the curriculum — exactly what create_allocation would have rejected.
+    becoming_active = effective_to is None
+    if session != allocation.academic_session:
+        assert_session_writable(session)
+    if staff != allocation.staff or becoming_active:
+        assert_staff_is_active_teacher(staff)
+    if slot_changed or becoming_active:
+        assert_subject_in_class_curriculum(session=session, section=section, subject=subject)
+
+    assert_patch_dates_valid(
+        changes=changes,
+        current_from=allocation.effective_from,
+        current_to=allocation.effective_to,
+    )
+
+    is_primary = changes.get("is_primary", allocation.is_primary)
+    becoming_current_primary = (
+        is_primary
+        and effective_to is None
+        and (not allocation.is_primary or allocation.effective_to is not None or slot_changed)
+    )
+    if becoming_current_primary:
+        _end_date_current_primary(
+            session=session,
+            section=section,
+            subject=subject,
+            actor_id=actor_id,
+            exclude_pk=allocation.pk,
+        )
+
+    for field, value in changes.items():
+        setattr(allocation, field, value)
+    allocation.updated_by = actor_id
+    # Only the changed columns, so a concurrent End or primary displacement isn't overwritten.
+    allocation.save(update_fields=[*changes, "updated_by", "updated_at"])
+    return allocation
+
+
+def assert_patch_dates_valid(
+    *, changes: dict, current_from: date | None, current_to: date | None
+) -> None:
+    """The date rules for a PATCH, shared by the serializer and `update_allocation`.
+
+    Ordering runs whenever either date is sent; the future ceiling only when `effective_to`
+    is, since a primary displaced from a future start already carries a future `effective_to`.
+    """
+    if "effective_from" not in changes and "effective_to" not in changes:
+        return
+    assert_end_date_valid(
+        effective_from=changes.get("effective_from", current_from),
+        effective_to=changes.get("effective_to", current_to),
+        check_future="effective_to" in changes,
+    )
+
+
+def assert_end_date_valid(
+    *, effective_from: date | None, effective_to: date | None, check_future: bool = True
+) -> None:
+    """An end date is never before the start, and (with `check_future`) never after today."""
+    if effective_to is None:
+        return
+    if check_future and effective_to > timezone.localdate():
+        raise DomainRuleViolation({"effective_to": "An allocation cannot be ended in the future."})
+    if effective_from and effective_to < effective_from:
+        raise DomainRuleViolation({"effective_to": "The end date cannot be before the start date."})
+
+
+def assert_allocation_deletable(allocation: TeacherSubjectAllocation) -> None:
+    """§11: a closed or archived session's allocations are read-only history."""
+    assert_session_writable(allocation.academic_session)
+
+
 def _end_date_current_primary(
-    *, session: AcademicSession, section: Section, subject: Subject, actor_id: uuid.UUID
+    *,
+    session: AcademicSession,
+    section: Section,
+    subject: Subject,
+    actor_id: uuid.UUID,
+    exclude_pk: uuid.UUID | None = None,
 ) -> None:
     """End-date the outgoing primary rather than deleting it (§6).
 
     "Reassignment mid-session preserves history (old allocation end-dated, not
     deleted)" — and it is also what keeps `tsa_one_primary_per_section_subject`
     satisfiable, since that constraint only counts allocations with no
-    `effective_to`.
+    `effective_to`. Shared by create and PATCH; `exclude_pk` is the row being edited.
     """
-    TeacherSubjectAllocation.objects.alive().filter(
+    today = timezone.localdate()
+    outgoing = TeacherSubjectAllocation.objects.alive().filter(
         academic_session=session,
         section=section,
         subject=subject,
         is_primary=True,
         effective_to__isnull=True,
-    ).update(effective_to=timezone.now().date(), updated_by=actor_id, updated_at=timezone.now())
+    )
+    if exclude_pk is not None:
+        outgoing = outgoing.exclude(pk=exclude_pk)
+    # A primary lined up to start later is ended at its own start: ending it
+    # "today" would put effective_to before effective_from (tsa_effective_range_ordered).
+    today_value = Value(today, output_field=DateField())
+    outgoing.update(
+        effective_to=Greatest(Coalesce(F("effective_from"), today_value), today_value),
+        updated_by=actor_id,
+        updated_at=timezone.now(),
+    )
 
 
 def notify_allocation_changed(

@@ -1214,3 +1214,148 @@ either this file or `project-status.md`.
   `openapi.yaml`. The schema now carries the shape, but nothing says what the counts mean (a
   skipped row is one the target already had). Restoring it is a description on the viewset
   action's `extend_schema` response, then a regenerate.
+
+- **The list-screen pieces hoisted out of the Academics screens are not yet used everywhere they
+  fit.** `toOrdering` (`apps/dashboard/src/lib/helpers.ts`) replaced the inline sort expression in
+  the students, staff, curriculum and allocations tables. `LoadErrorCard`, `SearchInput`,
+  `FilterSelect` and `FormSelectField` (`apps/dashboard/src/components/`) and the
+  `use-reference-data` hooks (`apps/dashboard/src/hooks/use-reference-data.ts`) are used by the
+  curriculum and allocations screens only. These places still repeat the inline version, each
+  moving onto its shared piece the next time its file is touched, with no change in behaviour:
+  the search box with its clear button in `student-directory-filters.tsx` and
+  `staff-directory-table.tsx` (the staff box also has fixed English text and a fixed width, so it
+  wants its translation pass at the same time); the five "`Select` with an All option" blocks in
+  `student-directory-filters.tsx`, which `FilterSelect` covers; the two `FormField` + `Select`
+  blocks in `class-section-fields.tsx`, which `FormSelectField` covers; the campus, class and
+  section queries in `student-directory-filters.tsx`, `class-section-fields.tsx`,
+  `student-enrollment-tab.tsx`, `request-transfer-dialog.tsx`, `student-create-profile-step.tsx`
+  and `staff-form-dialog.tsx` (campuses only in the last four; only `student-directory-filters.tsx`
+  and `class-section-fields.tsx` also query classes and sections), whose campus and class keys
+  already match the hooks' (the sections query in `class-section-fields.tsx` also takes
+  `campusId`, which `useSections` does not); and the inline retry blocks in the students module
+  (`guardian-picker-body.tsx`, `student-guardians-tab.tsx`, `student-documents-tab.tsx`,
+  `student-emergency-contacts-tab.tsx`, `student-enrollment-tab.tsx`).
+
+- **The students and staff dialogs still inline what the allocation dialogs share.**
+  `FormDialogLayout` (the dialog or drawer, scrolling body and Cancel/Save), `useFormDialogSubmit`
+  (the guarded submit and its inline server error) and `useConfirmAction` (the same for a dialog
+  with no inputs) cover the curriculum and allocation dialogs. These still write their own shell,
+  `useMutation` and error handling, and move onto the shared pieces the next time each is
+  touched: `staff-form-dialog.tsx`, `exit-staff-dialog.tsx`, and in `features/students/` the
+  `enroll`, `change-section`, `request-transfer`, `complete-transfer`, `transfer-decision`,
+  `withdraw-student`, `guardian-form`, `guardian-link-flags` and `document-upload` dialogs.
+
+- **The load-panel and earnings-chart tests hand-build a provider tree only to reach the
+  `QueryClient`.** `teacher-load-panel.test.tsx` and `earnings-chart.test.tsx` each read the
+  shared `teacher-allocations` load-summary entry back out of the cache, and `renderWithProviders`
+  (`apps/dashboard/src/test-utils.tsx`) builds its own client and returns none, so each wraps
+  `QueryClientProvider` by hand. Returning the client from `renderWithProviders` would remove
+  both copies.
+
+- **The teacher allocation screen is a list and a dialog, not the §9 drag-and-drop grid.**
+  [`academics.md`](03-modules/academics.md) §6, §8 and §9 describe an allocation grid: a section ×
+  subject matrix where a vice principal drags teachers onto cells while watching load counters, and
+  copies the previous session's allocations forward. `/academics/allocations` covers every rule
+  through Allocate, Edit, End, Reinstate and Remove, with the load panel above the list, so nothing
+  on the server is missing; what is missing is the matrix, the drag gesture and the copy-forward.
+  No backend change is needed: the grid would call the same `POST` and `PATCH`.
+
+- **The load norm is the constant 30, not a tenant setting.** §11 says load warnings fire "at
+  tenant-configured norm, hard cap optional", but the API uses
+  `DEFAULT_WEEKLY_PERIOD_NORM = 30` (`apps/api/apps/academics/teacher_allocations/services.py`),
+  so every `load-summary` row's `norm` is that constant and so is the `meta.warnings` ceiling. A
+  tenant-configured norm needs a settings home (and the optional hard cap), then `load_warnings`
+  and `load-summary` read it; the dashboard already shows the `norm` each row carries, so it needs
+  no change.
+
+- **There is no "My allocations" view for a teacher.** §8 has the `teacher` checking "My
+  Allocations". The API already narrows the list to the viewer's own rows for an `own`-scope role
+  (`scope_own_field = "staff__user_id"`), but the dashboard has only the management screen: it also
+  reads the teaching-staff and reference lists, which a teacher may not hold keys for. A read-only
+  self-view needs its own route and a sidebar entry for staff, and the §8 link on to the term plan
+  once those exist.
+
+- **Nothing warns that a curriculum subject has no teacher.** §12's `coverage-gap` (the T-7
+  sweep, "unallocated pairs at T-7 before session start") is already deferred backend-side in
+  `apps/academics/notifications.py`, and the allocations screen has no "unallocated" view either:
+  nothing lists the section and subject pairs the session's curriculum maps but no current
+  allocation covers. It is the allocation-side half of the coverage report in the curriculum
+  entries above, and needs the same sweep.
+
+- **`load-summary`'s `allocations` count includes allocations that have not started, its
+  `weekly_periods` does not.** `weekly_load_by_staff` adds a row's periods only while it is in
+  force today (`effective_from` null or on or before today, and no `effective_to`), but the
+  `allocations` count beside it (`load_summary` in `teacher_allocations/viewset.py`) is every
+  allocation with no end date, started or not. A teacher lined up for next term therefore reads
+  "1 allocation, 0 periods", within the norm. Either count only the in-force rows, matching the
+  periods, or return the not-yet-started ones as a figure of their own; both change the
+  `TeacherLoadRow` contract, so the dashboard changes in the same commit.
+
+- **The Effective column sorts by `effective_from`, but its cell shows the end date, "Starts …"
+  or "Current".** `ALLOCATION_SORT_FIELD` maps the column to `?ordering=effective_from` (the plan's
+  choice: a column has one sort key), so the order is not the order of the text it displays: an
+  ended row sorts by when it began and reads when it ended, and a row with no start date sorts as
+  null. The API also orders by `effective_to`. Sorting on what the cell shows needs an annotated
+  field (end date, else start date) on the API, or two columns (Starts, Ends).
+
+- **The icon-only row buttons have an accessible name but no tooltip.** Edit, End, Reinstate and
+  Remove on the allocations table (`allocation-columns.tsx`), and Edit and Remove on the
+  curriculum table (`curriculum-columns.tsx`), are glyphs with an `aria-label` such as "End Ayesha
+  Khan, English, Grade 1 · A"; a sighted user sees a bare pencil, calendar, arrow or bin with
+  nothing to hover for its meaning. A `Tooltip` showing the action's short name ("End", "Reinstate")
+  on each, shared by both tables, closes the gap without changing the accessible name.
+
+- **The teacher filter loads every teacher the moment the screen opens, and the allocate dialog
+  needs the same list.** `useTeachingStaffOptions()` runs in `AllocationFilters`, which is always
+  mounted, so every viewer of `/academics/allocations` walks up to 20 pages of `GET /staff`
+  (`STAFF_OPTIONS_MAX_PAGES`, 100 rows each) on load. A role without `staff.staff.view` gets a
+  silent `403` and an empty teacher filter, and the allocate dialog's teacher picker, which reads
+  the same cache entry, is empty for it too. Loading lazily on the first open of either control,
+  or a narrower endpoint that returns just `{id, name}` for active teachers and needs only the
+  allocation keys, fixes both.
+
+- **`fetchTeachingStaffOptions` hand-rolls a page-number loop.** It walks `GET /staff` by
+  `?page=` until `total_pages`, bounded by `STAFF_OPTIONS_MAX_PAGES = 20`
+  (`services/modules/staff/staff-service.ts`), because `collectPages` in `packages/api-client`
+  follows cursors only. A shared `collectNumberedPages` there would remove this copy and serve the
+  next picker that needs every row of a page-numbered list.
+
+- **`fetchCurriculumForClass` reads one page.** The allocate dialog's subject picker takes the
+  first `MAX_PAGE_SIZE` (100) rows of `GET /class-subjects` for the class and session, with no
+  loop, on the argument that one class's curriculum is never that long. A class with more than 100
+  mappings (one per subject per campus override) would silently offer only the first hundred
+  subjects; the limit is unchecked.
+
+- **A displaced future-start row reads "Ended <future date>".** A primary lined up to start next
+  term and then displaced by a newer one is end-dated at its own start, so its `effective_to` is in
+  the future. The Effective column (`allocation-columns.tsx`) shows any `effective_to` as "Ended …",
+  so the row says it ended on a date that has not arrived, sits under the Ended filter, and offers
+  Reinstate. It wants its own copy when `effective_to` is later than `todayIsoDate()` (for example
+  "Replaced before it started"), and probably its own place in the state filter.
+
+- **Displaced primaries leave no audit row.** `_end_date_current_primary`
+  (`teacher_allocations/services.py`) end-dates the outgoing primary with a queryset `.update()`,
+  which writes no audit entry for it, only for the row the request touched. That was already true
+  on create; PATCH now reaches it too (a co-teacher made primary, a slot move) and so does
+  Reinstate. Fetching the outgoing rows and recording each through `record_audit` closes it, at the
+  cost of a read before the write.
+
+- **A future-start replacement primary ends today's primary today.** Allocating, or reinstating, a
+  primary that starts next term end-dates the current primary immediately, so nobody is in force
+  between now and the start date. `tsa_one_primary_per_section_subject` only counts rows with
+  `effective_to IS NULL`, so the model cannot say "current until the new one starts". Expressing it
+  needs either a constraint over the date range (an exclusion constraint on the section and
+  subject with a date range) or holding the replacement in a pending state until its start.
+
+- **The generated `POST` schema for allocations still lists `effective_to`.** Create accepts only a
+  `null` there (a date is a `400`), but the request body is the same `TeacherAllocation` serializer
+  `PATCH` uses, so the contract shows the field as writable. A typed create-request serializer
+  named in `@extend_schema(request=...)` would let the schema say it is `PATCH` only, and the
+  generated client types follow.
+
+- **The teacher filter and the teacher picker list active teaching staff only.** Both read
+  `fetchTeachingStaffOptions`, which asks `GET /staff` for `employment_status=active`. A teacher
+  who has since left cannot be picked in the filter while looking at a closed session whose rows
+  still name them; `search` still finds those rows by name. Offering the teachers present in the
+  session's own rows (or all employment statuses for the filter alone, keeping the allocate
+  picker active-only) closes it.

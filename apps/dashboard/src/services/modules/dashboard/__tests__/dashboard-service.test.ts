@@ -108,29 +108,6 @@ describe("DashboardService", () => {
     });
   });
 
-  describe("fetchTeacherLoadSummary", () => {
-    it("passes the academic session id as a query parameter", async () => {
-      const { fetchTeacherLoadSummary } = await import("../dashboard-service");
-      const load = [
-        {
-          staff_id: "s1",
-          name: "Ayesha Khan",
-          weekly_periods: 18,
-          allocations: 4,
-          over_norm: false,
-        },
-      ];
-      mockGet.mockResolvedValue({ data: load });
-
-      const result = await fetchTeacherLoadSummary("sess-1");
-
-      expect(mockGet).toHaveBeenCalledWith("/teacher-subject-allocations/load-summary", {
-        query: { academic_session_id: "sess-1" },
-      });
-      expect(result).toEqual(load);
-    });
-  });
-
   describe("fetchMyTimetable", () => {
     it("returns the slot list directly — the endpoint's data IS the array, not {slots}", async () => {
       const { fetchMyTimetable } = await import("../dashboard-service");

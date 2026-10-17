@@ -38,6 +38,17 @@ describe("AcademicsLanding", () => {
     expect(mockReplace).toHaveBeenCalledTimes(1);
   });
 
+  it("sends a user who can open only a later section there, not to the first one", async () => {
+    mockFetchCurrentUser.mockResolvedValue(buildUser(["academics.teacher-allocation.view"]));
+
+    renderWithProviders(<AcademicsLanding />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/academics/allocations");
+    });
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the permission message, and goes nowhere, without any section key", async () => {
     // A key from another module, and a section's create key, neither opens a section.
     mockFetchCurrentUser.mockResolvedValue(

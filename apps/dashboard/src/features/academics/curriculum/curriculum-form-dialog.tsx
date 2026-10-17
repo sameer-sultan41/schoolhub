@@ -1,25 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Alert, Button, Form } from "@schoolhub/ui";
 
-import {
-  ResponsiveDialog,
-  ResponsiveDialogBody,
-  ResponsiveDialogContent,
-  ResponsiveDialogFooter,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/responsive-dialog";
-import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
-import { useGuardedSubmit, useSubmitGuard } from "@/hooks/use-submit-guard";
-import { applyServerFieldErrors, foldUnknownFieldErrors } from "@/lib/error-message";
-import { queryKeys } from "@/lib/query-client";
+import { FormDialogLayout } from "@/components/form-dialog-layout";
+import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { Services, type AcademicSessionSummary, type CurriculumRecord } from "@/services";
 import {
   buildCurriculumInput,
@@ -32,6 +20,7 @@ import {
   type CurriculumFormValues,
 } from "@/services/modules/curriculum/curriculum.schema";
 import { CurriculumFormFields } from "./curriculum-form-fields";
+import { useInvalidateCurriculum } from "./use-invalidate-curriculum";
 
 export interface CurriculumFormDialogProps {
   open: boolean;
@@ -61,49 +50,7 @@ export function CurriculumFormDialog({
 }: CurriculumFormDialogProps) {
   const t = useTranslations("academics");
   const tCommon = useTranslations("common");
-  const isMobile = !useIsDesktopShell();
-
-  return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent className="max-w-lg" closeLabel={tCommon("close")}>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>
-            {record ? t("curriculum.form.editTitle") : t("curriculum.form.createTitle")}
-          </ResponsiveDialogTitle>
-        </ResponsiveDialogHeader>
-        <CurriculumFormBody
-          record={record}
-          sessions={sessions}
-          sessionId={sessionId}
-          isMobile={isMobile}
-          onOpenChange={onOpenChange}
-        />
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
-  );
-}
-
-interface CurriculumFormBodyProps {
-  record?: CurriculumRecord;
-  sessions: AcademicSessionSummary[];
-  sessionId: string;
-  isMobile: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-function CurriculumFormBody({
-  record,
-  sessions,
-  sessionId,
-  isMobile,
-  onOpenChange,
-}: CurriculumFormBodyProps) {
-  const t = useTranslations("academics");
-  const tCommon = useTranslations("common");
-  const tErrors = useTranslations("errors");
-  const queryClient = useQueryClient();
-  const submitGuard = useSubmitGuard();
-  const [formError, setFormError] = useState<string | null>(null);
+  const invalidateCurriculum = useInvalidateCurriculum();
 
   // Zod can't reach next-intl, so the schema takes the translated messages.
   const schema = useMemo(
@@ -120,79 +67,36 @@ function CurriculumFormBody({
     defaultValues: record ? recordToFormValues(record) : defaultCurriculumFormValues(sessionId),
   });
 
-  const mutation = useMutation({
+  const { handleSubmit, formError, isPending } = useFormDialogSubmit({
+    form,
     mutationFn: (values: CurriculumFormValues) =>
       record
         ? Services.curriculum.updateCurriculum(record.id, buildCurriculumInput(values, "edit"))
         : Services.curriculum.createCurriculum(buildCurriculumInput(values, "create")),
+    // Read at error time: the group input is gone once the switch is off.
+    knownFields: () =>
+      curriculumErrorFields(record ? "edit" : "create", form.getValues("is_elective")),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.module("curriculum") });
+      invalidateCurriculum();
       toast.success(t("curriculum.saved"));
       onOpenChange(false);
     },
-    onError: (error) => {
-      // Read at error time: the group input is gone once the switch is off.
-      const knownFields = curriculumErrorFields(
-        record ? "edit" : "create",
-        form.getValues("is_elective"),
-      );
-      applyServerFieldErrors({
-        error: foldUnknownFieldErrors(error, knownFields),
-        form,
-        knownFields,
-        tErrors,
-        fallback: t("common.submitFailed"),
-        setFormError,
-      });
-    },
-  });
-
-  const handleSubmit = useGuardedSubmit(form, submitGuard, (values) => {
-    setFormError(null);
-    return new Promise<void>((resolve) => {
-      mutation.mutate(values, {
-        onSettled: () => {
-          resolve();
-        },
-      });
-    });
+    fallbackMessage: t("common.submitFailed"),
   });
 
   return (
-    <Form {...form}>
-      <form
-        noValidate
-        onSubmit={handleSubmit}
-        className={isMobile ? "flex min-h-0 grow flex-col" : undefined}
-      >
-        <ResponsiveDialogBody
-          className={
-            isMobile ? "space-y-4 overflow-y-auto" : "max-h-[65vh] space-y-4 overflow-y-auto pe-1"
-          }
-        >
-          <p className="text-sm text-muted-foreground">{t("curriculum.form.description")}</p>
-          {formError && <Alert variant="destructive">{formError}</Alert>}
-          <CurriculumFormFields form={form} record={record} sessions={sessions} />
-        </ResponsiveDialogBody>
-        <ResponsiveDialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              onOpenChange(false);
-            }}
-          >
-            {tCommon("cancel")}
-          </Button>
-          <Button
-            type="submit"
-            isLoading={mutation.isPending}
-            loadingLabel={t("curriculum.form.submitting")}
-          >
-            {tCommon("save")}
-          </Button>
-        </ResponsiveDialogFooter>
-      </form>
-    </Form>
+    <FormDialogLayout
+      open={open}
+      onOpenChange={onOpenChange}
+      title={record ? t("curriculum.form.editTitle") : t("curriculum.form.createTitle")}
+      description={t("curriculum.form.description")}
+      form={form}
+      onSubmit={handleSubmit}
+      formError={formError}
+      isPending={isPending}
+      submittingLabel={t("curriculum.form.submitting")}
+    >
+      <CurriculumFormFields form={form} record={record} sessions={sessions} />
+    </FormDialogLayout>
   );
 }

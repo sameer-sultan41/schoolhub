@@ -1,18 +1,15 @@
 import { ApiError } from "@schoolhub/api-client";
+import { QueryClient } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
 import { Services } from "@/services";
 import {
-  CAMPUS_ID,
-  CLASS_ID,
   curriculumRecord,
   RECORD_ID,
-  SESSION_ID,
-  SESSIONS,
-  SUBJECT_ID,
 } from "@/services/modules/curriculum/__tests__/curriculum-fixtures";
+import { CAMPUS_ID, CLASS_ID, SESSION_ID, SESSIONS, SUBJECT_ID } from "@/test-fixtures/academics";
 import { renderWithProviders } from "@/test-utils";
 
 import { CurriculumFormDialog } from "../curriculum-form-dialog";
@@ -112,6 +109,10 @@ describe("CurriculumFormDialog", () => {
     mockFetchCampuses.mockReset().mockResolvedValue([{ id: CAMPUS_ID, name: "Main Campus" }]);
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   describe("adding a subject", () => {
     it("offers active classes and subjects only", async () => {
       renderCreate();
@@ -136,6 +137,7 @@ describe("CurriculumFormDialog", () => {
     });
 
     it("sends campus_id null for All campuses, with the form's other values", async () => {
+      const invalidateSpy = jest.spyOn(QueryClient.prototype, "invalidateQueries");
       mockCreateCurriculum.mockResolvedValue(curriculumRecord());
       const { onOpenChange, user } = renderCreate();
 
@@ -161,6 +163,11 @@ describe("CurriculumFormDialog", () => {
         expect(onOpenChange).toHaveBeenCalledWith(false);
       });
       expect(mockToastSuccess).toHaveBeenCalledWith("Curriculum mapping saved.");
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["curriculum"] });
+      // The load panel's periods come from the curriculum, so its summary goes stale too.
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["teacher-allocations", "load-summary", "list", {}],
+      });
     });
 
     it("sends the campus when one is picked", async () => {

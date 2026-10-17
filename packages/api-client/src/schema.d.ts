@@ -5351,7 +5351,7 @@ export interface paths {
          * Per-teacher weekly load against the tenant norm
          * @description `teacher_subject_allocations` — who teaches what, to whom (§5.3).
          */
-        get: operations["teacher_subject_allocations_load_summary_retrieve"];
+        get: operations["teacher_subject_allocations_load_summary_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9480,7 +9480,13 @@ export interface components {
              * Format: date
              * @description Null = current. Set rather than deleted on reassignment.
              */
-            readonly effective_to?: string | null;
+            effective_to?: string | null;
+            /** Format: uuid */
+            readonly class_id?: string;
+            readonly class_name?: string;
+            readonly section_name?: string;
+            readonly subject_name?: string;
+            readonly staff_name?: string;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -10662,11 +10668,27 @@ export interface components {
              * Format: date
              * @description Null = current. Set rather than deleted on reassignment.
              */
-            readonly effective_to: string | null;
+            effective_to?: string | null;
+            /** Format: uuid */
+            readonly class_id: string;
+            readonly class_name: string;
+            readonly section_name: string;
+            readonly subject_name: string;
+            readonly staff_name: string;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /** @description One teacher's row in `load-summary`: current load against the norm. */
+        TeacherLoadRow: {
+            /** Format: uuid */
+            staff_id: string;
+            name: string;
+            weekly_periods: number;
+            allocations: number;
+            norm: number;
+            over_norm: boolean;
         };
         /**
          * @description `teacher_substitutions` — a dated override of one slot's teacher (§7.2).
@@ -19796,6 +19818,9 @@ export interface operations {
         parameters: {
             query?: {
                 academic_session_id?: string;
+                campus_id?: string;
+                class_id?: string;
+                current?: boolean;
                 is_primary?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
@@ -19921,21 +19946,24 @@ export interface operations {
             };
         };
     };
-    teacher_subject_allocations_load_summary_retrieve: {
+    teacher_subject_allocations_load_summary_list: {
         parameters: {
-            query?: never;
+            query: {
+                academic_session_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Aggregate load per teacher. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TeacherLoadRow"][];
+                };
             };
         };
     };

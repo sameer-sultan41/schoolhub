@@ -55,25 +55,6 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
   return { students, staff, classes, sections, subjects, campuses };
 }
 
-export interface TeacherLoadSummaryRow {
-  staff_id: string;
-  name: string;
-  weekly_periods: number;
-  allocations: number;
-  over_norm: boolean;
-}
-
-/** Weekly teaching load per teacher for one academic session. */
-export async function fetchTeacherLoadSummary(
-  academicSessionId: string,
-): Promise<TeacherLoadSummaryRow[]> {
-  const { data } = await apiClient.get<TeacherLoadSummaryRow[]>(
-    endpoints.dashboard.teacherLoadSummary,
-    { query: { academic_session_id: academicSessionId } },
-  );
-  return data;
-}
-
 export interface MyTimetableSlot {
   id: string;
   day_of_week: number;

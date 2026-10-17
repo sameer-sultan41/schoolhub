@@ -51,9 +51,18 @@ describe("AcademicsNav", () => {
     const links = within(nav).getAllByRole("link");
     const hrefs = links.map((link) => link.getAttribute("href"));
     expect(hrefs).toEqual(ACADEMICS_SECTIONS.map((section) => section.href));
-    // PR A ships the Curriculum section only; each later section adds its own tab here.
     expect(links[0]).toHaveTextContent("Curriculum");
     expect(links[0]).toHaveAttribute("href", "/academics/curriculum");
+    expect(links[1]).toHaveTextContent("Teacher allocation");
+    expect(links[1]).toHaveAttribute("href", "/academics/allocations");
+  });
+
+  it("renders only the tabs whose view key the user holds", async () => {
+    await renderNav(["academics.teacher-allocation.view"]);
+
+    const nav = screen.getByRole("navigation", { name: "Academics sections" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/academics/allocations"]);
   });
 
   it("renders no tab or landmark for a user holding no section's view key", async () => {

@@ -10,6 +10,14 @@ import type { StaffDirectoryQuery, UpdateStaffInput } from "./staff-type";
 /** `/staff`'s own hard page-size ceiling (api-architecture.md §2.4). */
 export const MAX_PAGE_SIZE = 100;
 
+/** The most pages `fetchTeachingStaffOptions` reads (2000 teachers at `MAX_PAGE_SIZE`): a
+ * bound against a runaway loop, not a target. */
+export const STAFF_OPTIONS_MAX_PAGES = 20;
+
+/** The query key (`queryKeys.list`) a teacher picker holds `fetchTeachingStaffOptions` under. */
+export const STAFF_QUERY_MODULE = "staff";
+export const TEACHING_OPTIONS_RESOURCE = "teaching-options";
+
 /**
  * Column id -> the real `?ordering=` field name confirmed against `StaffViewSet.
  * ordering_fields` (apps/api/apps/staff_management/views.py). `joiningDate` is not a
@@ -173,4 +181,5 @@ export const STAFF_QUERY_FIELDS: ReadonlyArray<readonly [keyof StaffDirectoryQue
   ["search", "search"],
   ["ordering", "ordering"],
   ["employmentStatus", "employment_status"],
+  ["staffType", "staff_type"],
 ];

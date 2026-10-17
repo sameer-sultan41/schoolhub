@@ -95,6 +95,7 @@ e2e/
 │   ├── pages/               page objects — locators and navigation, never assertions
 │   ├── mocks/
 │   │   ├── envelope.ts      typed {data,meta} / {error} builders
+│   │   ├── list.ts          what stateful list stubs share: paging, ordering, the closed-session 422
 │   │   ├── router.ts        MockApi — path matching, CORS, call recording
 │   │   └── domains/         one file per API domain, composed with `.use(...)`
 │   ├── data/

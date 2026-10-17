@@ -9,6 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, Skeleton } from "@schoolhub/u
 
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import {
+  ALLOCATION_LOAD_SUMMARY_RESOURCE,
+  ALLOCATION_QUERY_MODULE,
+} from "@/services/modules/teacher-allocations/teacher-allocations-constant";
 import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
 // apexcharts touches `window` at import time, so it's loaded client-only via
@@ -37,9 +41,13 @@ export function EarningsChart() {
     return current?.id ?? null;
   }, [sessions.data]);
 
+  // The allocations screen's load panel reads the same key, so one cache entry serves both and
+  // invalidating `teacher-allocations` refreshes this widget too.
   const load = useQuery({
-    queryKey: ["dashboard", "teacher-load-summary", sessionId],
-    queryFn: () => Services.dashboard.fetchTeacherLoadSummary(sessionId as string),
+    queryKey: queryKeys.list(ALLOCATION_QUERY_MODULE, ALLOCATION_LOAD_SUMMARY_RESOURCE, {
+      sessionId,
+    }),
+    queryFn: () => Services.teacherAllocations.fetchLoadSummary(sessionId as string),
     enabled: sessionId !== null,
   });
 

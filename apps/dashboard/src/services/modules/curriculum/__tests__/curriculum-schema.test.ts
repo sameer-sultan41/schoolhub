@@ -4,7 +4,7 @@ import {
   curriculumFormSchema,
   type CurriculumFormValues,
 } from "../curriculum.schema";
-import { CLASS_ID, SESSION_ID, SUBJECT_ID } from "./curriculum-fixtures";
+import { CLASS_ID, SESSION_ID, SUBJECT_ID } from "@/test-fixtures/academics";
 
 const VALID: CurriculumFormValues = {
   academic_session_id: SESSION_ID,

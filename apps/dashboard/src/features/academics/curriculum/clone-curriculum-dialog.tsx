@@ -1,93 +1,21 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useForm, useWatch, type UseFormReturn } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-import {
-  Alert,
-  Button,
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@schoolhub/ui";
 
-import {
-  ResponsiveDialog,
-  ResponsiveDialogBody,
-  ResponsiveDialogContent,
-  ResponsiveDialogFooter,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/responsive-dialog";
-import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
-import { useGuardedSubmit, useSubmitGuard } from "@/hooks/use-submit-guard";
-import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
-import { queryKeys } from "@/lib/query-client";
+import { FormDialogLayout } from "@/components/form-dialog-layout";
+import { FormSelectField } from "@/components/form-select-field";
+import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { Services, type AcademicSessionSummary } from "@/services";
 import {
   createCloneCurriculumFormSchema,
   type CloneCurriculumFormValues,
 } from "@/services/modules/curriculum/curriculum.schema";
 import { LOCKED_SESSION_STATUSES } from "@/services/modules/school-organization/school-organization-constant";
-
-type SessionFieldName = "source_academic_session_id" | "target_academic_session_id";
-
-interface SessionFieldProps {
-  form: UseFormReturn<CloneCurriculumFormValues>;
-  name: SessionFieldName;
-  label: string;
-  options: readonly AcademicSessionSummary[];
-  /** Runs after the pick is stored, for a change the other field must follow. */
-  onPick?: (sessionId: string) => void;
-}
-
-function SessionField({ form, name, label, options, onPick }: SessionFieldProps) {
-  const t = useTranslations("academics");
-
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <Select
-            value={field.value}
-            onValueChange={(sessionId) => {
-              field.onChange(sessionId);
-              onPick?.(sessionId);
-            }}
-          >
-            <FormControl>
-              <SelectTrigger>
-                <SelectValue placeholder={t("fields.selectSession")} />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {options.map((session) => (
-                <SelectItem key={session.id} value={session.id}>
-                  {session.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-}
+import { useInvalidateCurriculum } from "./use-invalidate-curriculum";
 
 export interface CloneCurriculumDialogProps {
   open: boolean;
@@ -118,11 +46,7 @@ export function CloneCurriculumDialog({
 }: CloneCurriculumDialogProps) {
   const t = useTranslations("academics");
   const tCommon = useTranslations("common");
-  const tErrors = useTranslations("errors");
-  const isMobile = !useIsDesktopShell();
-  const queryClient = useQueryClient();
-  const submitGuard = useSubmitGuard();
-  const [formError, setFormError] = useState<string | null>(null);
+  const invalidateCurriculum = useInvalidateCurriculum();
   const idempotencyKeys = useRef(new Map<string, string>());
 
   const schema = useMemo(
@@ -140,7 +64,8 @@ export function CloneCurriculumDialog({
   const targets = sessions.filter((session) => !LOCKED_SESSION_STATUSES.includes(session.status));
   const sources = sessions.filter((session) => session.id !== targetId);
 
-  const mutation = useMutation({
+  const { handleSubmit, formError, isPending } = useFormDialogSubmit({
+    form,
     mutationFn: (values: CloneCurriculumFormValues) => {
       const source = values.source_academic_session_id;
       const target = values.target_academic_session_id;
@@ -149,8 +74,10 @@ export function CloneCurriculumDialog({
       idempotencyKeys.current.set(pair, key);
       return Services.curriculum.cloneCurriculum(source, target, key);
     },
+    // A refusal can name a session field, and this form shows its error as one message.
+    knownFields: [],
     onSuccess: (result, values) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.module("curriculum") });
+      invalidateCurriculum();
       toast.success(
         t("curriculum.clone.result", { created: result.created, skipped: result.skipped }),
       );
@@ -159,91 +86,42 @@ export function CloneCurriculumDialog({
       }
       onOpenChange(false);
     },
-    onError: (error) => {
-      // A refusal can name a session field, and this form shows its error as one message.
-      setFormError(
-        resolveErrorMessage(
-          foldUnknownFieldErrors(error),
-          tErrors,
-          t("common.submitFailed"),
-          NON_FIELD,
-        ),
-      );
-    },
-  });
-
-  const handleSubmit = useGuardedSubmit(form, submitGuard, (values) => {
-    setFormError(null);
-    return new Promise<void>((resolve) => {
-      mutation.mutate(values, {
-        onSettled: () => {
-          resolve();
-        },
-      });
-    });
+    fallbackMessage: t("common.submitFailed"),
   });
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent className="max-w-lg" closeLabel={tCommon("close")}>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>{t("curriculum.clone.title")}</ResponsiveDialogTitle>
-        </ResponsiveDialogHeader>
-        <Form {...form}>
-          <form
-            noValidate
-            onSubmit={handleSubmit}
-            className={isMobile ? "flex min-h-0 grow flex-col" : undefined}
-          >
-            <ResponsiveDialogBody
-              className={
-                isMobile
-                  ? "space-y-4 overflow-y-auto"
-                  : "max-h-[65vh] space-y-4 overflow-y-auto pe-1"
-              }
-            >
-              <p className="text-sm text-muted-foreground">{t("curriculum.clone.description")}</p>
-              {formError && <Alert variant="destructive">{formError}</Alert>}
-              <SessionField
-                form={form}
-                name="source_academic_session_id"
-                label={t("curriculum.clone.sourceSession")}
-                options={sources}
-              />
-              <SessionField
-                form={form}
-                name="target_academic_session_id"
-                label={t("curriculum.clone.targetSession")}
-                options={targets}
-                // The source can't also be the target: clear it when the target moves onto it.
-                onPick={(sessionId) => {
-                  if (form.getValues("source_academic_session_id") === sessionId) {
-                    form.setValue("source_academic_session_id", "");
-                  }
-                }}
-              />
-            </ResponsiveDialogBody>
-            <ResponsiveDialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                }}
-              >
-                {tCommon("cancel")}
-              </Button>
-              <Button
-                type="submit"
-                isLoading={mutation.isPending}
-                loadingLabel={t("curriculum.clone.submitting")}
-              >
-                {t("curriculum.clone.confirm")}
-              </Button>
-            </ResponsiveDialogFooter>
-          </form>
-        </Form>
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
+    <FormDialogLayout
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("curriculum.clone.title")}
+      description={t("curriculum.clone.description")}
+      form={form}
+      onSubmit={handleSubmit}
+      formError={formError}
+      isPending={isPending}
+      submittingLabel={t("curriculum.clone.submitting")}
+      submitLabel={t("curriculum.clone.confirm")}
+    >
+      <FormSelectField
+        form={form}
+        name="source_academic_session_id"
+        label={t("curriculum.clone.sourceSession")}
+        placeholder={t("fields.selectSession")}
+        options={sources}
+      />
+      <FormSelectField
+        form={form}
+        name="target_academic_session_id"
+        label={t("curriculum.clone.targetSession")}
+        placeholder={t("fields.selectSession")}
+        options={targets}
+        // The source can't also be the target: clear it when the target moves onto it.
+        onPick={(sessionId) => {
+          if (form.getValues("source_academic_session_id") === sessionId) {
+            form.setValue("source_academic_session_id", "");
+          }
+        }}
+      />
+    </FormDialogLayout>
   );
 }
