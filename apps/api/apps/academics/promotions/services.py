@@ -26,7 +26,7 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 
 logger = logging.getLogger(__name__)
 
-# What a student's failure line says when the cause is not an API error (see `_failure_message`).
+# What a student's failure line says when the cause is not an API error (see `failure_message`).
 GENERIC_FAILURE_MESSAGE = "Unexpected error; see the server log."
 
 # §12's "promotion batch pending approval" goes to the `principal`; the key is
@@ -421,11 +421,10 @@ def assert_batch_executable(*, batch_id: uuid.UUID) -> None:
     `execute_batch` re-checks under the worker's own read — this is a courtesy,
     never the guarantee.
     """
-    _assert_executable(set(batch_queryset(batch_id).values_list("status", flat=True)))
-    first = batch_queryset(batch_id).select_related("to_academic_session").first()
+    rows = list(batch_queryset(batch_id).select_related("to_academic_session"))
+    _assert_executable({row.status for row in rows})
     # A closed target session would fail every student in the job; say so up front instead.
-    if first is not None:
-        assert_session_writable(first.to_academic_session)
+    assert_session_writable(rows[0].to_academic_session)
 
 
 def execute_batch(
@@ -482,7 +481,7 @@ def execute_batch(
                 else:
                     logger.exception("promotion execution failed for student %s", row.student_id)
                 report["failed"].append(
-                    {"student_id": str(row.student_id), "error": _failure_message(exc)}
+                    {"student_id": str(row.student_id), "error": failure_message(exc)}
                 )
         if on_progress is not None:
             on_progress(round(index / len(rows) * 100))
@@ -499,7 +498,7 @@ def _detail_messages(detail) -> list[str]:
     return [str(detail)]
 
 
-def _failure_message(exc: Exception) -> str:
+def failure_message(exc: Exception) -> str:
     """A failed student's report line: an API error's own message, and nothing else.
 
     Any other exception (a database error, a bug) can carry SQL or row data, which must not
