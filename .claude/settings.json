@@ -5,7 +5,10 @@
       "Agent(lu-quality-reviewer)",
       "Agent(lu-security-reviewer)",
       "Agent(lu-implementer)",
-      "Agent(lu-qa)"
+      "Agent(lu-qa)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh * pr merge*)",
+      "Bash(gh api *merge*)"
     ]
   },
   "skillOverrides": {

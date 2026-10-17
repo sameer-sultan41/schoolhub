@@ -129,7 +129,8 @@ commit has a `Root cause:` line (the commit-msg hook and CI check it — ADR-001
 - **`main` only moves through a reviewed, CI-green pull request.** Branch (`feat/…`, `fix/…`,
   `chore/…`, `refactor/…`), push, `gh pr create --base main`. The **human** merges, with a merge
   commit ([ADR-0006](docs/decisions/0006-merge-commits.md)); an agent stops at "PR open, CI
-  green". Never commit or push without the user's go-ahead.
+  green" — `.claude/settings.json` denies `gh pr merge` and merge calls through `gh api` to
+  enforce it. Never commit or push without the user's go-ahead.
 - **CI is the source of truth** ([ADR-0007](docs/decisions/0007-ci-source-of-truth.md)). Agents
   never run test suites, linters or typechecks by hand: commit, push, and read
   `gh pr checks <n> --watch` / `gh run view <id> --log-failed`. Git hooks run automatically as
