@@ -24,7 +24,14 @@ export const Paths = {
   DASHBOARD: "/dashboard",
   STUDENTS: "/students",
   STAFF: "/staff",
+  ACADEMICS: "/academics",
+  ACADEMICS_CURRICULUM: "/academics/curriculum",
+  ACADEMICS_ALLOCATIONS: "/academics/allocations",
+  ACADEMICS_PROMOTIONS: "/academics/promotions",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
 } as const;
+
+/** One promotion batch's review page, under the promotions list. */
+export const promotionBatchPath = (batchId: string) => `${Paths.ACADEMICS_PROMOTIONS}/${batchId}`;

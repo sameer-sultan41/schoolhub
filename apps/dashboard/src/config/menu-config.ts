@@ -1,5 +1,6 @@
 import {
   Bolt,
+  BookOpen,
   GraduationCap,
   IdCard,
   LayoutGrid,
@@ -15,6 +16,8 @@ import {
 
 import type { MenuConfig } from "@schoolhub/ui";
 
+import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
+
 import { Paths } from "./paths";
 
 // Ported from Metronic's own config/menu.config.tsx + config/types.ts (the full
@@ -27,7 +30,7 @@ import { Paths } from "./paths";
 // here renders them. MenuItem/MenuConfig themselves live in @schoolhub/ui —
 // a generic tree-menu shape, not specific to this app's own nav data below.
 //
-// Only entries with a real backing page use `Paths` (dashboard/students/staff/
+// Only entries with a real backing page use `Paths` (dashboard/students/staff/academics/
 // reset-password) — everything else below is inert vendor demo content with no
 // route behind it (no app/(app)/signin, app/(app)/public-profile, etc. exist),
 // so centralizing those literals would just be a second, unused copy of a
@@ -45,6 +48,17 @@ export const MENU_SIDEBAR: MenuConfig = [
   { heading: "School" },
   { title: "Students", icon: GraduationCap, path: Paths.STUDENTS, module: "students" },
   { title: "Staff", icon: IdCard, path: Paths.STAFF, module: "staff" },
+  {
+    title: "Academics",
+    icon: BookOpen,
+    module: "academics",
+    // Shared with the Academics tabs and landing; each child is gated on its own `.view` key.
+    children: ACADEMICS_SECTIONS.map((section) => ({
+      title: section.menuTitle,
+      path: section.href,
+      permission: section.permission,
+    })),
+  },
   { heading: "User" },
   {
     title: "Public Profile",

@@ -1507,7 +1507,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: Row counts created and skipped.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloneCurriculumResult'
+          description: ''
   /api/v1/classes:
     get:
       operationId: classes_list
@@ -14392,6 +14396,16 @@ components:
       required:
       - source_academic_session_id
       - target_academic_session_id
+    CloneCurriculumResult:
+      type: object
+      properties:
+        created:
+          type: integer
+        skipped:
+          type: integer
+      required:
+      - created
+      - skipped
     CommunicationAudienceTypeEnum:
       enum:
       - all
@@ -14454,15 +14468,28 @@ components:
         academic_session_id:
           type: string
           format: uuid
+        academic_session_name:
+          type: string
+          readOnly: true
         class_id:
           type: string
           format: uuid
+        class_name:
+          type: string
+          readOnly: true
         subject_id:
           type: string
           format: uuid
+        subject_name:
+          type: string
+          readOnly: true
         campus_id:
           type: string
           format: uuid
+          nullable: true
+        campus_name:
+          type: string
+          readOnly: true
           nullable: true
         is_elective:
           type: boolean
@@ -14499,10 +14526,14 @@ components:
           readOnly: true
       required:
       - academic_session_id
+      - academic_session_name
+      - campus_name
       - class_id
+      - class_name
       - created_at
       - id
       - subject_id
+      - subject_name
       - updated_at
     DayPartEnum:
       enum:
@@ -18960,15 +18991,28 @@ components:
         academic_session_id:
           type: string
           format: uuid
+        academic_session_name:
+          type: string
+          readOnly: true
         class_id:
           type: string
           format: uuid
+        class_name:
+          type: string
+          readOnly: true
         subject_id:
           type: string
           format: uuid
+        subject_name:
+          type: string
+          readOnly: true
         campus_id:
           type: string
           format: uuid
+          nullable: true
+        campus_name:
+          type: string
+          readOnly: true
           nullable: true
         is_elective:
           type: boolean

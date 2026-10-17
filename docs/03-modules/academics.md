@@ -187,6 +187,24 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 >   to classes lives in academics.md") always intended. Creation delegates to
 >   `school_organization.services.map_subject_to_class`, so the API, the wizard
 >   and the importer share one set of rules.
+> - **Edits honour the same rules.** `PATCH` and `DELETE` refuse a closed
+>   session (§11 session lock), as a plain non-field `422`. A `PATCH` that
+>   changes the session, class, subject or campus re-runs the identity checks
+>   through `school_organization.services.assert_class_subject_mapping_valid` —
+>   the one function create runs too — whose `422` errors are keyed by field
+>   (`class_id` / `subject_id`) so a form can place them; a duplicate is a
+>   `409`. A `PATCH` that leaves those four fields alone skips the identity
+>   checks, so an inactive class never blocks editing a row's periods or notes.
+>   Rows also carry read-only `academic_session_name`, `class_name`,
+>   `subject_name` and `campus_name`, so a list renders with no lookup per row,
+>   and `:clone` answers a typed `{created, skipped}` (`CloneCurriculumResult`
+>   in the contract) rather than a `200` with no schema. None of this is a `v2`
+>   event under [`api-architecture.md`](../02-architecture/api-architecture.md)
+>   §2.1: the name fields and the typed result are additive, and the lock and
+>   identity checks tighten rules this section and §11 already declared, which
+>   the endpoint used to accept writes against; a client that followed the
+>   contract is unaffected, and the dashboard in this repo (regenerated in the
+>   same commit) is its only consumer.
 > - **`:clone` is synchronous, not a background job.** A clone is one
 >   `bulk_create` over a single session's rows — hundreds, not thousands. It
 >   honours `Idempotency-Key`, and the service skips rows the target already
@@ -214,7 +232,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 >   sweep that belongs with the coverage report.
 
 - `GET/POST /api/v1/class-subjects` · `GET/PATCH/DELETE /api/v1/class-subjects/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `subject_id`, `is_elective`.
-- `POST /api/v1/class-subjects:clone` — clone curriculum between sessions (background job).
+- `POST /api/v1/class-subjects:clone` — clone curriculum between sessions: synchronous `200` with `{created, skipped}`, `Idempotency-Key` supported (see the implementation notes above).
 - `GET/POST /api/v1/teacher-subject-allocations` · `PATCH/DELETE /api/v1/teacher-subject-allocations/{id}` — filters: `academic_session_id`, `section_id`, `subject_id`, `staff_id`; `GET /api/v1/teacher-subject-allocations/load-summary` (per-teacher aggregates).
 - `GET/POST /api/v1/student-promotions` (batches) · `GET /api/v1/student-promotions/{id}` (batch with per-student decisions) · `PATCH /api/v1/student-promotions/{id}/decisions/{student_id}`.
 - `POST /api/v1/student-promotions/{id}:submit` · `:approve` · `:reject` · `:execute` (colon-actions; execute returns `202` + job, `Idempotency-Key` supported) · `:revert`.
@@ -222,7 +240,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 ## 17. Integration Requirements
 
-- **Internal:** background jobs (clone, batch execution, imports), file storage (syllabus documents), notification service, audit log, AI gateway (`AI-ACA-*`), feature flags (elective support, per-campus curriculum are plan-gated).
+- **Internal:** background jobs (batch execution, imports), file storage (syllabus documents), notification service, audit log, AI gateway (`AI-ACA-*`), feature flags (elective support, per-campus curriculum are plan-gated).
 - **External:** none required; curriculum-standard imports (e.g. national curriculum templates) are a future marketplace integration per scope §21.
 
 ## 18. Dependencies on Other Modules
@@ -278,3 +296,37 @@ Pure reorganization: `openapi.yaml`/`schema.d.ts` are **byte-identical** to
 updating to name the new package paths — none of that prose reaches the
 API contract. No
 endpoint, permission, or response shape changed anywhere in the module.
+
+**Dashboard, curriculum (as shipped).** `/academics/curriculum` is the first Academics screen: one
+academic session's class-subject mappings in a server-paginated `DataGrid` (class, subject, campus,
+core or elective, weekly periods), with search over the elective group and notes, and filters for
+session, class, campus and kind. The dashboard's Academics screens were built once and removed by
+the shell reset; they are being rebuilt as three PRs, this one the curriculum, then teacher
+allocations and load, then promotions. The sidebar gains an "Academics" group, its children
+the sections the viewer holds the `.view` key for (`MenuItem.permission`, applied by
+`filterMenuByAccess`; a group with no permitted child is dropped). The same list drives a tab bar
+over every Academics route, and `/academics` itself has no page: it sends the viewer to the first
+section they may open, or says why there is none. The session is the `session` URL value (a UUID;
+absent means the current session), so a link shows the same session, and the list is not requested
+until one resolves; no current session shows a picker and an empty state, and a failed sessions
+fetch a retry rather than "no session". The other list state (search, filters, sort, page, page
+size, hidden columns) is in the URL too ([ADR-0024](../decisions/0024-list-state-in-the-url.md)).
+A closed or archived session is read-only: the screen says so and hides Add subject, Clone and the
+row actions, the API's session lock being what actually refuses. "Add subject" sends the whole
+mapping (session, class, subject, campus or none for every campus, elective flag and group,
+weekly periods, notes) and offers only live options: active classes and subjects, writable
+sessions. An edit shows the four fields that identify the mapping read-only and sends only the
+four it may change (`is_elective`, `elective_group`, `weekly_periods`, `notes`); the API's
+field-keyed `422` lands under the matching input; a duplicate (`409`) and any other reason show as
+the form's own message. Remove is a confirm dialog that shows the server's refusal (a group left with one option,
+a closed session) inline and stays open. "Clone from another session" picks a source and a writable
+target, sends one `Idempotency-Key` per open dialog, reports the synchronous `{created, skipped}`
+result in a toast, and moves the screen onto the target session when that is not the one being
+viewed. Add and clone need `academics.curriculum.create`, and the row buttons `.update` and
+`.delete`; the toolbar buttons stay disabled until the viewer's permissions are known. Reusable
+pieces: `useAcademicSession` (the session-scoped screen's one source of truth) and `usePageClamp`
+(the stale-page guard every server-paginated list shares, now also used by `/students` and
+`/staff`).
+Mocked Playwright coverage is `e2e/tests/dashboard/academics-curriculum.spec.ts`; what this PR
+deliberately left out (term plans, syllabus attachment, import and export, approval, coverage
+reports, per-campus override editing beyond the campus select) is in `deferred-work.md`.

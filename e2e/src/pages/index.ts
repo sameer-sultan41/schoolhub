@@ -1,4 +1,5 @@
 export * from "./base.page";
+export * from "./dashboard/academics/curriculum.page";
 export * from "./dashboard/academics/promotion-batch.page";
 export * from "./dashboard/dashboard.page";
 export * from "./dashboard/login.page";

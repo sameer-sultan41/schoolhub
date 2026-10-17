@@ -1003,7 +1003,10 @@ either this file or `project-status.md`.
     on a field outside a dialog's own `knownFields` (e.g. `file_id`, `guardian_id`) falls
     through to the generic "Please correct the highlighted fields" copy even though
     nothing is actually highlighted, rather than surfacing that specific unmatched
-    field's real server message.
+    field's real server message. `foldUnknownFieldErrors` (`lib/error-message.ts`) now
+    fixes this for the curriculum dialogs only, by re-keying such a field as `non_field`
+    before the helper runs; every other dialog still has the gap. Its sibling, the
+    "known and unknown" entry under the curriculum items below, is not fixed by it.
   - **Tenants can extend the set of valid document types**
     (`TenantSettings.academic["student_document_types"]`, read by
     `_document_type_allowed` in `apps/api/apps/student_management/services.py:443-447`),
@@ -1111,3 +1114,103 @@ either this file or `project-status.md`.
   directory reloads without it, so the first result set can be filtered by an invalid
   section. Fixing it needs the table to know the valid section ids before its own request;
   a hand-edited URL is the only way to reach this.
+
+- **The curriculum screen has no term-plan editor.** `class_subjects.term_plans` (a per-term
+  topic list, academics.md §5 "Academic planning") is in the contract and the API validates it,
+  but the dashboard neither shows nor edits it: an edit sends only `is_elective`,
+  `elective_group`, `weekly_periods` and `notes`, so an existing plan is never touched. An
+  editor needs a term picker for the session (school-organization owns terms), a topic list
+  per term, and §11's "terms of the same session" rule shown as a field error. The teacher-side
+  coverage ticks §5 recommends build on it.
+
+- **No syllabus attachment on a curriculum row.** `class_subjects.syllabus_file_id` and the
+  `academics.syllabus` upload purpose (`apps/academics/uploads.py`: PDF or .docx, 20 MB) exist,
+  but the screen has no upload or download control. It is api-architecture.md §2.8's two-step
+  upload plus a per-row link; the students Documents tab already does both.
+
+- **No curriculum import or export.** academics.md §9 and §16 declare `POST /curriculum-imports`,
+  and `academics.curriculum.import` / `.export` are registered keys, but the module doc's §16
+  notes record the endpoint as not built and nothing serves an export. The screen therefore has
+  no Import or Export button; when they land they should reuse `BulkImportDialog` and
+  `useJobFileDownload` as `/students` and `/staff` do.
+
+- **Curriculum approval has a key and no workflow.** `academics.curriculum.approve` is
+  registered (and marked a recommendation in §4), but there is no approve endpoint and no
+  pending state on a session's curriculum, so nothing fires §12's
+  `academics.curriculum-approved` notification and the dashboard shows no sign-off control.
+  Small schools may want the gate off, so it also needs the workflow configuration §19
+  mentions.
+
+- **No coverage or completeness reports.** §13's class × subject coverage matrix per
+  session and campus, with syllabus and plan completeness, and the `coverage-gap` sweep
+  (already deferred backend-side in `apps/academics/notifications.py`), have no endpoint and
+  no screen. Both depend on the term-plan editor and syllabus attachment above to have
+  anything to measure.
+
+- **Per-campus curriculum overrides are only editable through the campus select.** A row can be
+  created for one campus or for all campuses, and the list filters by campus, but there is no
+  view that shows a class's tenant-wide row beside its campus overrides, no warning that adding
+  an override leaves the tenant-wide row in place, and the identity fields (campus included) are
+  read-only on edit, so moving a row between campuses means removing and re-adding it.
+  academics.md §19 still lists whether per-campus differences are a real requirement as open.
+
+- **The Academics sidebar group stays collapsed after the `/academics` redirect on a hard load.**
+  `AccordionMenu` (`packages/ui`) reads which group is open from the route once, on mount, and
+  `/academics` sends the viewer on to `/academics/curriculum` after that read, so loading
+  `/academics` directly leaves the group closed with its child highlighted out of sight. The
+  sidebar remounts once the user loads (a permission-gated group is not in the first render),
+  which covers `/academics/curriculum` itself but not the redirect. Fixing it means making the
+  menu's nested open state follow the route, which is a `packages/ui` change, not an
+  Academics one.
+
+- **The sidebar's titles are untranslated English.** The Academics group and its child read
+  `menuTitle` in `features/academics/academics-sections.ts` and the group title in
+  `config/menu-config.ts`, as every other sidebar entry does; the tab bar and the screens are
+  translated (`academics.nav.*`), so under `ur` the sidebar and the tabs disagree. It is the
+  same gap as the rest of `MENU_SIDEBAR`, whose titles are all literals, so it wants one pass
+  over the menu, not a per-section fix.
+
+- **`applyServerFieldErrors` drops a reason it cannot place when a known field also errors.**
+  A 422 naming an unknown or hidden field (the elective group while the switch is off, say)
+  is folded to a form-level message only when no known field matched; if the same response also
+  names a known field, that field's error shows and the other reason is silently dropped. The
+  curriculum form can reach it (say, an elective-group refusal beside a periods error);
+  showing the form-level message whenever any reason found no input fixes it for every form
+  dialog that uses the helper.
+  `foldUnknownFieldErrors` (see the "fallback swallows a genuinely new server message" entry
+  above) does not reach this case: it re-keys the unknown field as `non_field`, but the helper
+  still skips `non_field` once a known field matched, so that reason is dropped all the same.
+
+- **Six call sites in the students module pass the literal `"non_field"`** to
+  `resolveErrorMessage` (or compare a field against it) instead of the exported `NON_FIELD`
+  from `lib/error-message.ts`: `guardian-picker-body.tsx`, `transfer-decision-dialog.tsx`,
+  `student-create-profile-step.tsx` (two), `withdraw-student-dialog.tsx` and
+  `complete-transfer-dialog.tsx`. The curriculum dialogs use the constant; the students ones
+  predate it, and a rename of the API's key would miss them.
+
+- **`academics.curriculum.view` is also granted to `student` and `guardian` by default, but the
+  curriculum screen needs lists those roles cannot read.** The screen loads the session, class
+  and campus lists next to the rows; a viewer holding only the curriculum key is refused those
+  and so sees a permanent load-error card instead of the table. Low impact: students and
+  guardians use the parent portal, not the dashboard. Fixing it means either not granting the
+  key to those roles by default or letting the screen degrade when a reference list is refused.
+
+- **The curriculum search box matches only the elective group and the notes.** The list's
+  `search_fields` (`apps/api/apps/academics/curriculum/viewset.py`) are `elective_group` and
+  `notes`, so typing a subject or class name finds nothing, though the box sits above a table
+  of exactly those names. Matching the related subject and class names needs those joined
+  fields added to `search_fields`.
+
+- **The clone toast reads "1 mappings created".** `academics.curriculum.clone.result` is
+  `"{created} mappings created, {skipped} already present."` in both locales, with no plural
+  form, so a count of one is ungrammatical in English. It needs an ICU `plural` for each count
+  in `en.json` and `ur.json`, and the e2e assertion on "1 mappings created, 1 already present."
+  (`e2e/tests/dashboard/academics-curriculum.spec.ts`) updated with it.
+
+- **The clone endpoint's OpenAPI response lost its prose description.** When
+  `POST /class-subjects:clone` gained a typed serializer for its `{created, skipped}` result
+  (`CloneCurriculumResultSerializer`, `apps/api/apps/academics/curriculum/serializers.py`), the `200`
+  response's description went from "Row counts created and skipped." to an empty string in
+  `openapi.yaml`. The schema now carries the shape, but nothing says what the counts mean (a
+  skipped row is one the target already had). Restoring it is a description on the viewset
+  action's `extend_schema` response, then a regenerate.

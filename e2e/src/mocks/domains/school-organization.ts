@@ -99,6 +99,22 @@ export function buildSection(overrides: Partial<Section> = {}): Section {
   };
 }
 
+/** Trimmed to the fields the curriculum form's subject select reads. */
+export interface Subject {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+export function buildSubject(overrides: Partial<Subject> = {}): Subject {
+  return {
+    id: uuid(),
+    name: "Mathematics",
+    is_active: true,
+    ...overrides,
+  };
+}
+
 export interface AcademicSession {
   id: string;
   name: string;
@@ -122,6 +138,7 @@ export interface SchoolOrganizationOptions {
   houses?: House[];
   classes?: SchoolClass[];
   sections?: Section[];
+  subjects?: Subject[];
   academicSessions?: AcademicSession[];
 }
 
@@ -138,6 +155,7 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     const houses = [...(options.houses ?? [buildHouse()])];
     const classes = [...(options.classes ?? [])];
     const sections = [...(options.sections ?? [])];
+    const subjects = [...(options.subjects ?? [])];
     const academicSessions = [...(options.academicSessions ?? [])];
 
     api.get("/classes", (request) => {
@@ -157,6 +175,13 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
           (!campusId || s.campus_id === campusId) &&
           (isActive === null || String(s.is_active) === isActive),
       );
+      return pagedList(rows);
+    });
+
+    api.get("/subjects", (request) => {
+      const isActive = request.searchParams.get("is_active");
+      const rows =
+        isActive === null ? subjects : subjects.filter((s) => String(s.is_active) === isActive);
       return pagedList(rows);
     });
 

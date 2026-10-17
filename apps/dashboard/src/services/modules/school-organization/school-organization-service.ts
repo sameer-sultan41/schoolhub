@@ -1,6 +1,7 @@
-import { collectPages, fetchPage, MAX_PAGE_SIZE, type ApiSchemas } from "@schoolhub/api-client";
+import { collectPages, fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import type { AcademicSessionSummary, SchoolOrganizationOption } from "./school-organization-type";
 
 /**
  * The school-organization domain's reference-data calls. Every consumer reaches these
@@ -8,18 +9,23 @@ import { endpoints } from "@/services/endpoints";
  * file directly and never by importing `@schoolhub/api-client` directly.
  */
 
-/** The slice of the generated `House` schema a reference-data select/filter reads — derived
- * from the contract, not hand-written, per ADR-0017. */
-export type SchoolOrganizationOption = Pick<ApiSchemas["House"], "id" | "name">;
+/** One page of a reference-data list, narrowed by `is_active` only when `isActive` is given. */
+async function fetchOptions(
+  path: string,
+  params: { isActive?: boolean } = {},
+): Promise<SchoolOrganizationOption[]> {
+  const { items } = await fetchPage<SchoolOrganizationOption>(apiClient, path, {
+    query: {
+      page_size: MAX_PAGE_SIZE,
+      ...(params.isActive !== undefined ? { is_active: params.isActive } : {}),
+    },
+  });
+  return items;
+}
 
 /** `GET /houses` — every house, for a reference-data select/filter. */
 export async function fetchHouses(): Promise<SchoolOrganizationOption[]> {
-  const { items } = await fetchPage<SchoolOrganizationOption>(
-    apiClient,
-    endpoints.schoolOrganization.houses,
-    { query: { page_size: MAX_PAGE_SIZE } },
-  );
-  return items;
+  return fetchOptions(endpoints.schoolOrganization.houses);
 }
 
 /**
@@ -30,17 +36,15 @@ export async function fetchHouses(): Promise<SchoolOrganizationOption[]> {
 export async function fetchClasses(
   params: { isActive?: boolean } = {},
 ): Promise<SchoolOrganizationOption[]> {
-  const { items } = await fetchPage<SchoolOrganizationOption>(
-    apiClient,
-    endpoints.schoolOrganization.classes,
-    {
-      query: {
-        page_size: MAX_PAGE_SIZE,
-        ...(params.isActive !== undefined ? { is_active: params.isActive } : {}),
-      },
-    },
-  );
-  return items;
+  return fetchOptions(endpoints.schoolOrganization.classes, params);
+}
+
+/** `GET /subjects`. Same `isActive` convention as `fetchClasses` above: omitted to filter a
+ * list by any subject, `true` for a picker that may only offer live ones. */
+export async function fetchSubjects(
+  params: { isActive?: boolean } = {},
+): Promise<SchoolOrganizationOption[]> {
+  return fetchOptions(endpoints.schoolOrganization.subjects, params);
 }
 
 /**
@@ -71,13 +75,6 @@ export async function fetchSections(params: {
  * fetchers belong in this domain, not the dashboard-home screen's own service file; see
  * Phase 1's Roadmap, which already queues moving `fetchCampuses` out of there for the same
  * reason). `earnings-chart.tsx` is the one existing consumer, updated in the same change. */
-export interface AcademicSessionSummary {
-  id: string;
-  name: string;
-  status: string;
-  is_current: boolean;
-}
-
 export async function fetchAcademicSessions(): Promise<AcademicSessionSummary[]> {
   return collectPages<AcademicSessionSummary>(
     apiClient,

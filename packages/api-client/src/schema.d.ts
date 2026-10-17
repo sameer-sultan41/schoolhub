@@ -6215,6 +6215,10 @@ export interface components {
             /** Format: uuid */
             target_academic_session_id: string;
         };
+        CloneCurriculumResult: {
+            created: number;
+            skipped: number;
+        };
         /**
          * @description * `all` - All
          *     * `staff` - Staff
@@ -6255,12 +6259,16 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             academic_session_id: string;
+            readonly academic_session_name: string;
             /** Format: uuid */
             class_id: string;
+            readonly class_name: string;
             /** Format: uuid */
             subject_id: string;
+            readonly subject_name: string;
             /** Format: uuid */
             campus_id?: string | null;
+            readonly campus_name: string | null;
             is_elective?: boolean;
             /** @description Options sharing a group are mutually choosable ("choose 1 of N"). */
             elective_group?: string | null;
@@ -8472,12 +8480,16 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             academic_session_id?: string;
+            readonly academic_session_name?: string;
             /** Format: uuid */
             class_id?: string;
+            readonly class_name?: string;
             /** Format: uuid */
             subject_id?: string;
+            readonly subject_name?: string;
             /** Format: uuid */
             campus_id?: string | null;
+            readonly campus_name?: string | null;
             is_elective?: boolean;
             /** @description Options sharing a group are mutually choosable ("choose 1 of N"). */
             elective_group?: string | null;
@@ -12063,12 +12075,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Row counts created and skipped. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CloneCurriculumResult"];
+                };
             };
         };
     };

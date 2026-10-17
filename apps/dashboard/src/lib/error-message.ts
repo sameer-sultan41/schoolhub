@@ -24,6 +24,37 @@ export function resolveErrorMessage(
   return fieldIssue ?? (tErrors.has(error.code) ? tErrors(error.code) : error.message);
 }
 
+/** The field key the API gives an error that belongs to no single input. */
+export const NON_FIELD = "non_field";
+
+/**
+ * Re-keys every field detail outside `knownFields` as `non_field`, so a dialog-level message
+ * (`resolveErrorMessage(..., "non_field")`, or `applyServerFieldErrors`' fallback) shows the
+ * server's own reason for a field the dialog has no input for, instead of the code's generic
+ * text. With no `knownFields`, every field detail folds: for a confirm dialog with no inputs.
+ * Anything that isn't an `ApiError`, or has nothing to re-key, comes back as it was.
+ */
+export function foldUnknownFieldErrors(
+  error: unknown,
+  knownFields: readonly string[] = [],
+): unknown {
+  if (!(error instanceof ApiError)) return error;
+  const isUnknown = (field: string | undefined) =>
+    field !== undefined && field !== NON_FIELD && !knownFields.includes(field);
+  if (!error.details.some((detail) => isUnknown(detail.field))) return error;
+  return new ApiError({
+    code: error.code,
+    message: error.message,
+    status: error.status,
+    url: error.url,
+    details: error.details.map((detail) =>
+      isUnknown(detail.field) ? { ...detail, field: NON_FIELD } : detail,
+    ),
+    requestId: error.requestId,
+    meta: error.meta,
+  });
+}
+
 /**
  * Maps a failed mutation's server field errors onto a react-hook-form instance, falling
  * back to a dialog-level message when nothing matches a known field — the one mapping
@@ -52,12 +83,12 @@ export function applyServerFieldErrors<TValues extends FieldValues>({
   }
   let matchedAField = false;
   for (const [field, issue] of Object.entries(error.fieldErrors())) {
-    if (field !== "non_field" && knownFields.includes(field)) {
+    if (field !== NON_FIELD && knownFields.includes(field)) {
       form.setError(field as Path<TValues>, { type: "server", message: issue });
       matchedAField = true;
     }
   }
   if (!matchedAField) {
-    setFormError(resolveErrorMessage(error, tErrors, fallback, "non_field"));
+    setFormError(resolveErrorMessage(error, tErrors, fallback, NON_FIELD));
   }
 }

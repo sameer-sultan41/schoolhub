@@ -21,19 +21,17 @@ import {
 
 import { MENU_SIDEBAR } from "@/config/menu-config";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { canAccessModule } from "@/lib/permissions";
+import { filterMenuByAccess } from "./menu-access";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/sidebar-menu.tsx —
 // real nested Metronic nav, built on this repo's own AccordionMenu port.
 export function SidebarMenu() {
   const pathname = usePathname();
   // Same query as UserDropdownMenu/EntryCallout (one cache entry, one request). Only a
-  // handful of MENU_SIDEBAR entries carry a `module` key at all — every vendor-demo item
-  // without one renders exactly as before, permission check or not.
+  // handful of MENU_SIDEBAR entries carry a `module` or `permission` key at all — every
+  // vendor-demo item without one renders exactly as before, permission check or not.
   const { data: user } = useCurrentUser();
-  const visibleMenu = MENU_SIDEBAR.filter(
-    (item) => !item.module || canAccessModule(user, item.module),
-  );
+  const visibleMenu = filterMenuByAccess(MENU_SIDEBAR, user);
 
   const matchPath = useCallback(
     (path: string): boolean => path === pathname || (path.length > 1 && pathname.startsWith(path)),
@@ -190,6 +188,9 @@ export function SidebarMenu() {
   return (
     <div className="kt-scrollable-y-hover flex shrink-0 grow px-5 py-5 lg:max-h-[calc(100vh-5.5rem)]">
       <AccordionMenu
+        // The open group is read from the route on mount only, and a permission-gated group
+        // isn't in the first render, so remount once the user has loaded.
+        key={user ? "ready" : "pending"}
         selectedValue={pathname}
         matchPath={matchPath}
         type="single"

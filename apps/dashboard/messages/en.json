@@ -698,10 +698,18 @@
       "promotions": "Promotions"
     },
     "common": {
-      "close": "Close"
+      "close": "Close",
+      "currentSession": "Current",
+      "locked": "Closed",
+      "lockedNotice": "{session} is closed, so its records are read-only.",
+      "noSessionTitle": "No current academic session",
+      "noSessionDescription": "Pick a session to see its records, or set one as current under school setup.",
+      "submitFailed": "Something went wrong. Please try again."
     },
     "filters": {
-      "all": "All"
+      "all": "All",
+      "search": "Search",
+      "clearSearch": "Clear search"
     },
     "fields": {
       "academicSession": "Academic session",
@@ -731,10 +739,19 @@
       "core": "Core",
       "elective": "Elective",
       "electiveWithGroup": "Elective · {group}",
+      "saved": "Curriculum mapping saved.",
+      "removed": "Subject removed from the curriculum.",
       "list": {
         "caption": "Curriculum mappings",
         "emptyTitle": "No subjects mapped yet",
-        "emptyDescription": "Add a subject to a class, or clone last session's curriculum."
+        "emptyDescription": "Add a subject to a class, or clone last session's curriculum.",
+        "searchPlaceholder": "Search by elective group or notes",
+        "noMatches": "No subjects match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter.",
+        "loadError": "The curriculum couldn't be loaded."
+      },
+      "filters": {
+        "kind": "Subject type"
       },
       "columns": {
         "kind": "Type",
@@ -744,18 +761,25 @@
         "create": "Add subject",
         "edit": "Edit",
         "delete": "Remove",
-        "clone": "Clone from another session"
+        "clone": "Clone from another session",
+        "editRow": "Edit {subject}, {className}",
+        "deleteRow": "Remove {subject}, {className}"
       },
       "form": {
         "createTitle": "Add a subject to a class",
         "editTitle": "Edit curriculum mapping",
-        "description": "The session, class and subject together identify the mapping and cannot be changed afterwards."
+        "description": "The session, class, subject and campus together identify the mapping and cannot be changed afterwards.",
+        "electiveGroupRequired": "Enter a group name for an elective subject.",
+        "weeklyPeriodsInvalid": "Enter a whole number of at least 1.",
+        "submitting": "Saving"
       },
       "clone": {
         "title": "Clone curriculum",
         "description": "Copies every mapping from one session into another. Rows the target already has are skipped, so this is safe to run twice.",
         "sourceSession": "Copy from",
         "targetSession": "Copy into",
+        "confirm": "Clone",
+        "submitting": "Cloning",
         "result": "{created} mappings created, {skipped} already present."
       },
       "delete": {

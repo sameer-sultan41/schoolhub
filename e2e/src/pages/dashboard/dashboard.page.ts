@@ -35,6 +35,16 @@ export class DashboardPage extends BasePage {
   }
 
   /**
+   * A collapsible navigation group by its visible label, e.g. `navGroup("Academics")`.
+   *
+   * A button, not a link: it has no route of its own and only opens its children, which stay
+   * out of the DOM until it does — so click it before looking for a child with `navLink`.
+   */
+  navGroup(name: string): Locator {
+    return this.nav.getByRole("button", { name, exact: true });
+  }
+
+  /**
    * The avatar trigger in the header; the account menu hangs off it.
    *
    * By testid, not role+name: the Avatar (user-dropdown-menu.tsx) carries no accessible

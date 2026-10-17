@@ -49,6 +49,7 @@ import {
 
 import { ApiError, Services } from "@/services";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
+import { usePageClamp } from "@/hooks/use-page-clamp";
 import { FILTER_ALL } from "@/lib/constants";
 import { formatLastUpdated, getInitials } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
@@ -328,33 +329,22 @@ export function StaffDirectoryTable() {
 
   const rows = useMemo<StaffRow[]>(() => (data?.items ?? []).map(toStaffRow), [data]);
 
-  // `data.pagination` is the `Pagination` union (`CursorPagination | OffsetPagination`);
-  // `total_pages` exists only on the `OffsetPagination` arm (`/staff` is page-number
-  // paginated, never cursor), so it must be narrowed before it's read — the same `in`
-  // guard `dashboard-service.ts`'s own `fetchTotal` already uses for `total_count`.
+  // `data.pagination` is the `Pagination` union (`CursorPagination | OffsetPagination`).
   // `total_count` is on both arms (required on offset, optional on cursor), so it needs
-  // no such narrowing.
+  // no narrowing; the page count, which exists only on the offset arm, comes from the hook.
   const pageMeta = data?.pagination;
   const recordCount = pageMeta?.total_count ?? rows.length;
-  const pageCount = pageMeta && "total_pages" in pageMeta ? pageMeta.total_pages : 1;
 
-  // Exiting the last remaining row(s) on the current page can shrink pageCount below
-  // the page the viewer is still on — clamp back rather than showing an empty page. Only
-  // this page's own data can say so: placeholder data is the previous request's, and a
-  // cold load has none.
-  const hasPageData = pageMeta !== undefined && !isPlaceholderData;
-  useEffect(() => {
-    if (!hasPageData) return;
-    const lastValidIndex = Math.max(0, pageCount - 1);
-    if (pagination.pageIndex > lastValidIndex) setPageIndex(lastValidIndex);
-  }, [hasPageData, pageCount, pagination.pageIndex, setPageIndex]);
-
-  // A shared link to a page that no longer exists: the API answers 404, and the list
-  // goes back to page 1 rather than showing an error.
-  const isStalePage = error instanceof ApiError && error.isNotFound && pagination.pageIndex > 0;
-  useEffect(() => {
-    if (isStalePage) setPageIndex(0);
-  }, [isStalePage, setPageIndex]);
+  // Exiting the last remaining row(s) on the current page can shrink the page count below
+  // the page the viewer is still on: clamp back rather than showing an empty page, and send
+  // a shared link's 404 for a page past the end to page 1.
+  const { pageCount, isStalePage } = usePageClamp({
+    pageMeta,
+    isPlaceholderData,
+    error,
+    pageIndex: pagination.pageIndex,
+    setPageIndex,
+  });
 
   function handleStatusToggle(checked: boolean, value: string) {
     setFilters({ status: checked ? value : FILTER_ALL });

@@ -64,6 +64,35 @@ describe("school-organization-service", () => {
     });
   });
 
+  describe("fetchSubjects", () => {
+    it("returns id/name pairs from /subjects, sending no is_active by default", async () => {
+      const { fetchSubjects } = await import("../school-organization-service");
+      mockGet.mockResolvedValue({ data: [{ id: "sub1", name: "Mathematics" }], meta: {} });
+
+      const result = await fetchSubjects();
+
+      expect(mockGet).toHaveBeenCalledWith(
+        "/subjects",
+        expect.objectContaining({ query: { page_size: expect.any(Number) } }),
+      );
+      const [, options] = mockGet.mock.calls[0] as [string, { query: Record<string, unknown> }];
+      expect(options.query).not.toHaveProperty("is_active");
+      expect(result).toEqual([{ id: "sub1", name: "Mathematics" }]);
+    });
+
+    it("sends is_active when requested, including false", async () => {
+      const { fetchSubjects } = await import("../school-organization-service");
+      mockGet.mockResolvedValue({ data: [], meta: {} });
+
+      await fetchSubjects({ isActive: true });
+      await fetchSubjects({ isActive: false });
+
+      const [first, second] = mockGet.mock.calls as [string, { query: Record<string, unknown> }][];
+      expect(first?.[1].query.is_active).toBe(true);
+      expect(second?.[1].query.is_active).toBe(false);
+    });
+  });
+
   describe("fetchSections", () => {
     it("scopes by classId and campusId, sending is_active when requested", async () => {
       const { fetchSections } = await import("../school-organization-service");

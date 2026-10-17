@@ -12,3 +12,4 @@ export * from "./domains/student-relations";
 export * from "./domains/files";
 export * from "./domains/enrollment";
 export * from "./domains/student-transfers";
+export * from "./domains/academics-curriculum";

@@ -2,6 +2,7 @@ import { ApiError } from "@schoolhub/api-client";
 
 import {
   applyServerFieldErrors,
+  foldUnknownFieldErrors,
   resolveErrorMessage,
   type ErrorCodeTranslator,
 } from "../error-message";
@@ -121,5 +122,71 @@ describe("applyServerFieldErrors", () => {
     expect(form.clearErrors).toHaveBeenCalled();
     expect(form.setError).not.toHaveBeenCalled();
     expect(setFormError).toHaveBeenCalledWith("Something went wrong.");
+  });
+});
+
+describe("foldUnknownFieldErrors", () => {
+  it("re-keys a field the dialog has no input for as non_field, so its own reason shows", () => {
+    const error = apiError("domain_rule_violation", [
+      { field: "elective_group", issue: "Removing this leaves the group with no options." },
+    ]);
+
+    const folded = foldUnknownFieldErrors(error);
+
+    expect(folded).toBeInstanceOf(ApiError);
+    expect(resolveErrorMessage(folded, tErrors, "fallback", "non_field")).toBe(
+      "Removing this leaves the group with no options.",
+    );
+    // The original is untouched, and the rest of the envelope carries over.
+    expect(error.fieldErrors()).toEqual({
+      elective_group: "Removing this leaves the group with no options.",
+    });
+    expect(folded).toMatchObject({ code: "domain_rule_violation", status: 422, url: "/x" });
+  });
+
+  it("keeps the known fields and re-keys only the others", () => {
+    const error = apiError("unprocessable", [
+      { field: "weekly_periods", issue: "Too few." },
+      { field: "academic_session_id", issue: "Session is closed." },
+    ]);
+
+    const folded = foldUnknownFieldErrors(error, ["weekly_periods"]);
+
+    expect((folded as ApiError).fieldErrors()).toEqual({
+      weekly_periods: "Too few.",
+      non_field: "Session is closed.",
+    });
+  });
+
+  it("returns the same error when nothing is unknown, and anything that isn't an ApiError", () => {
+    const known = apiError("unprocessable", [
+      { field: "weekly_periods", issue: "Too few." },
+      { field: "non_field", issue: "Already mapped." },
+    ]);
+    const plain = new Error("boom");
+
+    expect(foldUnknownFieldErrors(known, ["weekly_periods"])).toBe(known);
+    expect(foldUnknownFieldErrors(plain)).toBe(plain);
+    expect(foldUnknownFieldErrors("nope")).toBe("nope");
+  });
+
+  it("lets applyServerFieldErrors' fallback show the folded reason", () => {
+    const form = { setError: jest.fn(), clearErrors: jest.fn() };
+    const setFormError = jest.fn();
+    const error = apiError("domain_rule_violation", [
+      { field: "academic_session_id", issue: "Session is closed." },
+    ]);
+
+    applyServerFieldErrors({
+      error: foldUnknownFieldErrors(error, ["weekly_periods"]),
+      form,
+      knownFields: ["weekly_periods"],
+      tErrors,
+      fallback: "fallback",
+      setFormError,
+    });
+
+    expect(form.setError).not.toHaveBeenCalled();
+    expect(setFormError).toHaveBeenLastCalledWith("Session is closed.");
   });
 });

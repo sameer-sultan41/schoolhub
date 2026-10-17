@@ -94,6 +94,18 @@ export const SCHOOL_ADMIN_PERMISSIONS: PermissionKey[] = [
   "staff.staff.view",
 ];
 
+/**
+ * The four keys the curriculum screen reads (academics.md §4), kept apart from
+ * `SCHOOL_ADMIN_PERMISSIONS` so a spec that wants the Academics sidebar group (or its
+ * absence) opts in, and the default admin still has none.
+ */
+export const ACADEMICS_CURRICULUM_PERMISSIONS: PermissionKey[] = [
+  "academics.curriculum.view",
+  "academics.curriculum.create",
+  "academics.curriculum.update",
+  "academics.curriculum.delete",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 
