@@ -75,6 +75,10 @@ vendor has an opinion on), then the vendor skills below, then generic guidance.
 
 6. **graphify.** If `graphify-out/graph.json` exists, `CLAUDE.md`'s graphify rules apply —
    prefer the graph over grep for cross-module questions.
+7. **Check the lessons before you hand work back.**
+   [`docs/07-quality/agent-lessons.md`](docs/07-quality/agent-lessons.md) lists mistakes agents
+   already made here, each with the check that prevents it; its §2 is a ten-line checklist.
+   Briefing a subagent? Its dispatch carries these rules too (lesson L11).
 
 ## Invariants
 
@@ -125,7 +129,8 @@ commit has a `Root cause:` line (the commit-msg hook and CI check it — ADR-001
 - **`main` only moves through a reviewed, CI-green pull request.** Branch (`feat/…`, `fix/…`,
   `chore/…`, `refactor/…`), push, `gh pr create --base main`. The **human** merges, with a merge
   commit ([ADR-0006](docs/decisions/0006-merge-commits.md)); an agent stops at "PR open, CI
-  green". Never commit or push without the user's go-ahead.
+  green" — `.claude/settings.json` denies `gh pr merge` and merge calls through `gh api` to
+  enforce it. Never commit or push without the user's go-ahead.
 - **CI is the source of truth** ([ADR-0007](docs/decisions/0007-ci-source-of-truth.md)). Agents
   never run test suites, linters or typechecks by hand: commit, push, and read
   `gh pr checks <n> --watch` / `gh run view <id> --log-failed`. Git hooks run automatically as
@@ -146,6 +151,9 @@ commit has a `Root cause:` line (the commit-msg hook and CI check it — ADR-001
   `e2e-live` runs nightly and on manual dispatch, not on PRs.
 - **A repeated multi-step task becomes a skill**, not muscle memory: a scoped
   `.claude/skills/<name>/SKILL.md` with the exact commands, paths and gotchas (see `CLAUDE.md`).
+- **A mistake a reviewer, CI or the user catches becomes a lesson.** Add it to
+  [`docs/07-quality/agent-lessons.md`](docs/07-quality/agent-lessons.md) in the same PR as the
+  fix (format in its §4), so the next agent starts with the check.
 
 ## Toolchains
 

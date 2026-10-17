@@ -38,6 +38,7 @@ Paths are relative to the repo root. **Always** also load `AGENTS.md`.
 | --------- | ---------------- |
 | **Pick up in-flight work / check what exists** | `docs/project-status.md` — the per-module implementation matrix and "Start here next session"; `docs/deferred-work.md` for what was deliberately left out and why |
 | **Planning any non-trivial change** | root `AGENTS.md` "Working Method" (tiers, stop rules) · `docs/decisions/0015-independent-plan-review.md` — Tier 2 plans go through the `plan-reviewer` agent (`/review-plan <path>` for spec files) |
+| **Handing back any change / reviewing one / briefing a subagent** | `docs/07-quality/agent-lessons.md` — mistakes agents already made here, each with its check; §2 is the pre-handoff checklist |
 | **"Why is it built like this?" / before changing a convention** | `docs/decisions/README.md` → the relevant ADR · `docs/02-architecture/repo-structure.md` (where new code goes) |
 | **Shared UI primitives / design system** | `packages/ui/AGENTS.md` · `DESIGN.md` · `docs/decisions/0009-ported-ui-primitives.md` (skill: `schoolhub-ui-port`) |
 | **Hooks, formatting, spelling, CI plumbing** | `docs/07-quality/tooling.md` · `docs/decisions/0007-ci-source-of-truth.md` |
