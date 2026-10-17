@@ -5,6 +5,7 @@ import {
   ORG_IDS,
   SCHOOL_ADMIN_PERMISSIONS,
 } from "@/data/factories";
+import { isApiCall } from "@/lib/request-matchers";
 import {
   academicsCurriculumModule,
   buildAcademicSession,
@@ -54,15 +55,6 @@ const schoolAdmin = buildUser({
 const COLLECTION_PATH = /\/class-subjects$/;
 const ROW_PATH = /\/class-subjects\/[^/]+$/;
 const CLONE_PATH = /\/class-subjects:clone$/;
-
-/** Whether `request` is a `method` call to a `/class-subjects` path matching `path`. */
-function isCurriculumCall(
-  request: { method(): string; url(): string },
-  method: string,
-  path: RegExp,
-): boolean {
-  return request.method() === method && path.test(new URL(request.url()).pathname);
-}
 
 /** Fresh rows per test: a PATCH mutates the row objects the stub holds. */
 function buildRows() {
@@ -160,7 +152,7 @@ test.describe("curriculum screen", () => {
     await curriculumPage.chooseOption(curriculumPage.formSelect("Subject"), "Science");
     await curriculumPage.weeklyPeriodsInput.fill("4");
 
-    const request = page.waitForRequest((r) => isCurriculumCall(r, "POST", COLLECTION_PATH));
+    const request = page.waitForRequest((r) => isApiCall(r, "POST", COLLECTION_PATH));
     await curriculumPage.saveButton.click();
 
     // The session is the screen's, and Campus is left on "All campuses", which goes as null.
@@ -191,7 +183,7 @@ test.describe("curriculum screen", () => {
     await expect(curriculumPage.weeklyPeriodsInput).toHaveValue("5");
     await curriculumPage.weeklyPeriodsInput.fill("6");
 
-    const request = page.waitForRequest((r) => isCurriculumCall(r, "PATCH", ROW_PATH));
+    const request = page.waitForRequest((r) => isApiCall(r, "PATCH", ROW_PATH));
     await curriculumPage.saveButton.click();
 
     expect((await request).postDataJSON()).toEqual({
@@ -212,7 +204,7 @@ test.describe("curriculum screen", () => {
     await expect(curriculumPage.removeDialog).toHaveAccessibleName("Remove this subject");
     await expect(curriculumPage.removeDialog).toContainText("English will no longer be part of");
 
-    const request = page.waitForRequest((r) => isCurriculumCall(r, "DELETE", ROW_PATH));
+    const request = page.waitForRequest((r) => isApiCall(r, "DELETE", ROW_PATH));
     await curriculumPage.confirmRemove.click();
     await request;
 
@@ -231,7 +223,7 @@ test.describe("curriculum screen", () => {
     await curriculumPage.chooseOption(curriculumPage.cloneSelect("Copy into"), "2027-28");
     await curriculumPage.chooseOption(curriculumPage.cloneSelect("Copy from"), "2026-27");
 
-    const request = page.waitForRequest((r) => isCurriculumCall(r, "POST", CLONE_PATH));
+    const request = page.waitForRequest((r) => isApiCall(r, "POST", CLONE_PATH));
     await curriculumPage.cloneSubmit.click();
 
     expect((await request).postDataJSON()).toEqual({

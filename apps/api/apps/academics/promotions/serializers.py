@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.academics.models import PromotionDecision, StudentPromotion
+from apps.academics.models import PromotionDecision, PromotionStatus, StudentPromotion
 from apps.academics.promotions import services
 from apps.academics.serializers import READ_ONLY_FIELDS, _fk
 from apps.school_organization.models import AcademicSession, Class, Section
@@ -32,6 +32,12 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
     admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     to_class_id = _fk(Class, source="to_class", required=False, allow_null=True)
     to_section_id = _fk(Section, source="to_section", required=False, allow_null=True)
+    # Read-only names; the target ones are null until a reviewer picks one.
+    from_class_name = serializers.CharField(source="from_class.name", read_only=True)
+    to_class_name = serializers.CharField(source="to_class.name", read_only=True, allow_null=True)
+    to_section_name = serializers.CharField(
+        source="to_section.name", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = StudentPromotion
@@ -45,8 +51,11 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
             "from_academic_session_id",
             "to_academic_session_id",
             "from_class_id",
+            "from_class_name",
             "to_class_id",
+            "to_class_name",
             "to_section_id",
+            "to_section_name",
             "decision",
             "decision_basis",
             "override_reason",
@@ -68,6 +77,9 @@ class PromotionDecisionSerializer(serializers.ModelSerializer):
             "from_academic_session_id",
             "to_academic_session_id",
             "from_class_id",
+            "from_class_name",
+            "to_class_name",
+            "to_section_name",
             "decision_basis",
             # The batch state machine and its approval trail move only through
             # :submit / :approve / :reject / :execute / :revert.
@@ -117,22 +129,46 @@ class PromotionBatchSerializer(serializers.Serializer):
     consequences of its rows rather than a parent record that can drift out of
     sync with them.
 
-    `status` is grouped on rather than picked from a row. If a batch ever
-    contained mixed statuses it would surface here as two entries for one
-    `batch_id`, which is the honest rendering of a corrupt batch rather than a
+    `status` is grouped on rather than picked from a row. A partly executed batch
+    has mixed statuses (the enrolled rows executed, the failed ones still approved),
+    so it surfaces here as one entry per status for one `batch_id`, rather than a
     silently chosen winner.
     """
 
     batch_id = serializers.UUIDField()
     from_academic_session_id = serializers.UUIDField()
+    from_academic_session_name = serializers.CharField()
     to_academic_session_id = serializers.UUIDField()
+    to_academic_session_name = serializers.CharField()
     from_class_id = serializers.UUIDField()
-    status = serializers.CharField()
+    from_class_name = serializers.CharField()
+    # A `ChoiceField`, not a `CharField`, so the schema carries the enum
+    # (`PromotionStatusEnum`, named in `ENUM_NAME_OVERRIDES`).
+    status = serializers.ChoiceField(choices=PromotionStatus.choices)
     students = serializers.IntegerField()
     started_at = serializers.DateTimeField()
+
+
+class PromotionBatchDetailSerializer(PromotionBatchSerializer):
+    """`GET /student-promotions/{id}`: the batch summary plus every decision row."""
+
+    decisions = PromotionDecisionSerializer(many=True)
 
 
 class CreatePromotionBatchSerializer(serializers.Serializer):
     from_academic_session_id = _fk(AcademicSession, source="from_session")
     to_academic_session_id = _fk(AcademicSession, source="to_session")
     class_id = _fk(Class, source="school_class")
+
+
+class PromotionBatchCreatedSerializer(serializers.Serializer):
+    """`POST /student-promotions` (201): the new batch's id and row count."""
+
+    batch_id = serializers.UUIDField()
+    students = serializers.IntegerField()
+
+
+class PromotionTransitionResultSerializer(serializers.Serializer):
+    """`:submit`, `:approve`, `:reject` and `:revert`: how many rows moved."""
+
+    updated = serializers.IntegerField()

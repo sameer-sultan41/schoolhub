@@ -90,6 +90,10 @@ Read the app's own `AGENTS.md` first (`apps/dashboard/AGENTS.md` §"Hard Rules" 
    rendered tenant content needs `e2e/tests/live`.
 6. **Never test the access token going into `localStorage` or a readable cookie** — if a
    test needs that to pass, the code under test is the bug, not the test.
+7. **Render a dashboard screen through `src/test-utils.tsx`**: `renderWithProviders` for the
+   app's providers, `renderWithClient` when the test must spy on the `QueryClient` (what a
+   component invalidates), `renderHookWithClient` for a hook — rather than hand-building a
+   provider tree.
 
 ## Browser E2E — `e2e/`
 
@@ -120,6 +124,9 @@ follow them, especially the login-throttle section if the spec touches `live`.
 8. **Never add a `live` spec to the PR gate** — the gate runs
    `--project=dashboard --project=website` only; `live` needs the compose stack and runs
    opt-in / nightly.
+9. **A confirm button that repeats its trigger's name** (the dialog's "Approve" over the
+   page's own) must be scoped through `getByRole("alertdialog")`, or strict mode fails on
+   two matches — as `PromotionBatchPage.confirm()` does.
 
 ## Related
 

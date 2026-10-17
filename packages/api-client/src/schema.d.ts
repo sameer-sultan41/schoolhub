@@ -9104,17 +9104,20 @@ export interface components {
             readonly to_academic_session_id?: string;
             /** Format: uuid */
             readonly from_class_id?: string;
+            readonly from_class_name?: string;
             /** Format: uuid */
             to_class_id?: string | null;
+            readonly to_class_name?: string | null;
             /** Format: uuid */
             to_section_id?: string | null;
+            readonly to_section_name?: string | null;
             decision?: components["schemas"]["PromotionDecisionEnum"];
             /** @description Snapshot of result aggregates, attendance %, rule evaluation at proposal time. */
             readonly decision_basis?: unknown;
             /** @description Required when the decision deviates from the rule proposal. */
             override_reason?: string | null;
             remarks?: string | null;
-            readonly status?: components["schemas"]["PromotionDecisionStatusEnum"];
+            readonly status?: components["schemas"]["PromotionStatusEnum"];
             /**
              * Format: uuid
              * @description users(id) — must differ from the preparer.
@@ -9641,9 +9644,9 @@ export interface components {
          *     consequences of its rows rather than a parent record that can drift out of
          *     sync with them.
          *
-         *     `status` is grouped on rather than picked from a row. If a batch ever
-         *     contained mixed statuses it would surface here as two entries for one
-         *     `batch_id`, which is the honest rendering of a corrupt batch rather than a
+         *     `status` is grouped on rather than picked from a row. A partly executed batch
+         *     has mixed statuses (the enrolled rows executed, the failed ones still approved),
+         *     so it surfaces here as one entry per status for one `batch_id`, rather than a
          *     silently chosen winner.
          */
         PromotionBatch: {
@@ -9651,14 +9654,42 @@ export interface components {
             batch_id: string;
             /** Format: uuid */
             from_academic_session_id: string;
+            from_academic_session_name: string;
             /** Format: uuid */
             to_academic_session_id: string;
+            to_academic_session_name: string;
             /** Format: uuid */
             from_class_id: string;
-            status: string;
+            from_class_name: string;
+            status: components["schemas"]["PromotionStatusEnum"];
             students: number;
             /** Format: date-time */
             started_at: string;
+        };
+        /** @description `POST /student-promotions` (201): the new batch's id and row count. */
+        PromotionBatchCreated: {
+            /** Format: uuid */
+            batch_id: string;
+            students: number;
+        };
+        /** @description `GET /student-promotions/{id}`: the batch summary plus every decision row. */
+        PromotionBatchDetail: {
+            /** Format: uuid */
+            batch_id: string;
+            /** Format: uuid */
+            from_academic_session_id: string;
+            from_academic_session_name: string;
+            /** Format: uuid */
+            to_academic_session_id: string;
+            to_academic_session_name: string;
+            /** Format: uuid */
+            from_class_id: string;
+            from_class_name: string;
+            status: components["schemas"]["PromotionStatusEnum"];
+            students: number;
+            /** Format: date-time */
+            started_at: string;
+            decisions: components["schemas"]["PromotionDecision"][];
         };
         /**
          * @description A single student's row inside a batch.
@@ -9686,17 +9717,20 @@ export interface components {
             readonly to_academic_session_id: string;
             /** Format: uuid */
             readonly from_class_id: string;
+            readonly from_class_name: string;
             /** Format: uuid */
             to_class_id?: string | null;
+            readonly to_class_name: string | null;
             /** Format: uuid */
             to_section_id?: string | null;
+            readonly to_section_name: string | null;
             decision: components["schemas"]["PromotionDecisionEnum"];
             /** @description Snapshot of result aggregates, attendance %, rule evaluation at proposal time. */
             readonly decision_basis: unknown;
             /** @description Required when the decision deviates from the rule proposal. */
             override_reason?: string | null;
             remarks?: string | null;
-            readonly status: components["schemas"]["PromotionDecisionStatusEnum"];
+            readonly status: components["schemas"]["PromotionStatusEnum"];
             /**
              * Format: uuid
              * @description users(id) — must differ from the preparer.
@@ -9727,7 +9761,11 @@ export interface components {
          *     * `reverted` - Reverted
          * @enum {string}
          */
-        PromotionDecisionStatusEnum: "draft" | "pending_approval" | "approved" | "executed" | "reverted";
+        PromotionStatusEnum: "draft" | "pending_approval" | "approved" | "executed" | "reverted";
+        /** @description `:submit`, `:approve`, `:reject` and `:revert`: how many rows moved. */
+        PromotionTransitionResult: {
+            updated: number;
+        };
         /**
          * @description * `degree` - Degree
          *     * `diploma` - Diploma
@@ -18898,12 +18936,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The new batch id and its row count. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PromotionBatchCreated"];
+                };
             };
         };
     };
@@ -18946,12 +18985,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The batch plus its per-student rows. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PromotionBatchDetail"];
+                };
             };
         };
     };
@@ -18971,7 +19011,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PromotionBatch"];
+                    "application/json": components["schemas"]["PromotionTransitionResult"];
                 };
             };
         };
@@ -19012,7 +19052,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PromotionBatch"];
+                    "application/json": components["schemas"]["PromotionTransitionResult"];
                 };
             };
         };
@@ -19033,7 +19073,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PromotionBatch"];
+                    "application/json": components["schemas"]["PromotionTransitionResult"];
                 };
             };
         };
@@ -19049,12 +19089,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PromotionTransitionResult"];
+                };
             };
         };
     };

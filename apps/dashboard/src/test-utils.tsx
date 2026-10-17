@@ -1,8 +1,14 @@
 import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, type RenderOptions } from "@testing-library/react";
+import {
+  act,
+  render,
+  renderHook,
+  type RenderHookOptions,
+  type RenderOptions,
+} from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { useMemo, useSyncExternalStore, type ReactElement } from "react";
+import { useMemo, useSyncExternalStore, type ReactElement, type ReactNode } from "react";
 import messages from "../messages/en.json";
 
 const URL_CHANGE_EVENT = "schoolhub:test-url-change";
@@ -87,6 +93,37 @@ export function renderWithProviders(ui: ReactElement, options?: RenderOptions) {
     </NextIntlClientProvider>,
     options,
   );
+}
+
+/** A fresh retry-disabled `QueryClient` and the provider tree (English messages) around it. */
+function createClientWrapper() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </NextIntlClientProvider>
+    );
+  }
+  return { queryClient, Wrapper };
+}
+
+/**
+ * `renderWithProviders`, but through a `wrapper`, so `rerender(ui)` keeps the providers, and
+ * handing back the `QueryClient`: spy on its `invalidateQueries` to see what a component refreshes.
+ */
+export function renderWithClient(ui: ReactElement, options?: Omit<RenderOptions, "wrapper">) {
+  const { queryClient, Wrapper } = createClientWrapper();
+  return { ...render(ui, { ...options, wrapper: Wrapper }), queryClient };
+}
+
+/** `renderWithClient` for a hook: the same providers, and the `QueryClient` handed back. */
+export function renderHookWithClient<Result, Props>(
+  callback: (props: Props) => Result,
+  options?: Omit<RenderHookOptions<Props>, "wrapper">,
+) {
+  const { queryClient, Wrapper } = createClientWrapper();
+  return { ...renderHook(callback, { ...options, wrapper: Wrapper }), queryClient };
 }
 
 /** A signed-in user holding exactly `permissions`, for a screen or menu gated by them. */

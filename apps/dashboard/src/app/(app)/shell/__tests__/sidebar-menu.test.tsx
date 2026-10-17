@@ -32,11 +32,23 @@ describe("SidebarMenu — Academics group", () => {
     expect(screen.getByText("Academics")).toBeInTheDocument();
   });
 
+  it("shows the Promotions child to a user who holds only its view key", async () => {
+    mockUsePathname.mockReturnValue("/academics/promotions");
+    mockFetchCurrentUser.mockResolvedValue(buildUser(["academics.promotion.view"]));
+
+    renderWithProviders(<SidebarMenu />);
+
+    const link = await screen.findByRole("link", { name: "Promotions" });
+    expect(link).toHaveAttribute("href", "/academics/promotions");
+    expect(screen.queryByRole("link", { name: "Curriculum" })).not.toBeInTheDocument();
+  });
+
   it("hides the whole group from a user who holds no academics child key", async () => {
     mockUsePathname.mockReturnValue("/staff");
     // "staff.staff.view" makes the Staff link appear, which is how the test knows the user loaded.
+    // The create keys are not a section's `.view` key, so neither opens a child.
     mockFetchCurrentUser.mockResolvedValue(
-      buildUser(["staff.staff.view", "academics.promotion.view"]),
+      buildUser(["staff.staff.view", "academics.promotion.create", "academics.curriculum.create"]),
     );
 
     renderWithProviders(<SidebarMenu />);

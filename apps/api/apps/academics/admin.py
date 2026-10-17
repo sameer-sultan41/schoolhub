@@ -21,3 +21,7 @@ class TeacherSubjectAllocationAdmin(TenantOwnedAdmin):
 class StudentPromotionAdmin(TenantOwnedAdmin):
     list_display = ("id", "batch_id", "student", "decision", "status")
     list_filter = ("status", "decision")
+
+    def get_readonly_fields(self, request, obj=None):
+        # The recorded proposal is never edited, here or through the API.
+        return (*super().get_readonly_fields(request, obj), "decision_basis")

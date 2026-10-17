@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { expect, test } from "@/fixtures";
+import { LIVE_JOB_TIMEOUT_MS } from "@/lib/live-jobs";
 import { seedPromotionBatch } from "@/lib/live-promotion-batch";
 import { E2E_PRINCIPAL_EMAIL, E2E_SCHOOL_ADMIN_EMAIL } from "@/lib/seed-constants";
 
@@ -21,9 +22,12 @@ import { E2E_PRINCIPAL_EMAIL, E2E_SCHOOL_ADMIN_EMAIL } from "@/lib/seed-constant
  * bolted on. What the browser proves here is the part only the browser can: the approval
  * gate is real in the product, not just in the API.
  *
- * **The screens are unbuilt.** The academics dashboard is being written in parallel, so
- * every locator comes from `PromotionBatchPage`, whose header explains where each
- * accessible name is derived from and what to reconcile once the real screen lands.
+ * **Every transition is two clicks.** Submit, Approve and Execute each open a confirm
+ * dialog whose button is named like the trigger, so the journey goes through
+ * `PromotionBatchPage`'s `...AndConfirm` methods, which scope the second click to the dialog.
+ * `tests/dashboard/academics-promotion-review.spec.ts` drives the same methods against a stubbed
+ * API, so the PR gate covers the flow this lane depends on. The page-level triggers stay what the
+ * permission assertions count.
  *
  * Auth budget (`AuthEndpointThrottle`: 10 requests/minute per IP across
  * login/refresh/logout — e2e/AGENTS.md): 2 browser logins and 3 refreshes, plus the
@@ -45,6 +49,8 @@ test.describe("promotion approval journey (real API, two identities)", () => {
     liveApiClient,
     signInAsSecondIdentity,
   }) => {
+    // Two logins, three batch loads and a job's wait can pass the 30 s test default.
+    test.slow();
     const batch = await seedPromotionBatch(liveApiClient);
 
     // --- 1. The preparer: `school_admin` submits the draft batch for approval. ---
@@ -60,7 +66,7 @@ test.describe("promotion approval journey (real API, two identities)", () => {
 
     await promotionBatchPage.gotoBatch(batch.batchId);
     await expect(promotionBatchPage.statusBadge("Draft")).toBeVisible();
-    await promotionBatchPage.submitForApproval.click();
+    await promotionBatchPage.submitForApprovalAndConfirm();
     await expect(promotionBatchPage.statusBadge("Pending approval")).toBeVisible();
 
     // Segregation of duties, as the user meets it: this identity holds every academics
@@ -81,7 +87,7 @@ test.describe("promotion approval journey (real API, two identities)", () => {
 
     await approver.promotionBatchPage.gotoBatch(batch.batchId);
     await expect(approver.promotionBatchPage.statusBadge("Pending approval")).toBeVisible();
-    await approver.promotionBatchPage.approve.click();
+    await approver.promotionBatchPage.approveAndConfirm();
     await expect(approver.promotionBatchPage.statusBadge("Approved")).toBeVisible();
 
     // --- 3. The preparer executes. §4 gives `.execute` to `school_admin`, and the
@@ -93,10 +99,15 @@ test.describe("promotion approval journey (real API, two identities)", () => {
     // the batch to see the approval that happened elsewhere.
     await page.reload();
     await expect(promotionBatchPage.statusBadge("Approved")).toBeVisible();
-    await promotionBatchPage.execute.click();
+    await promotionBatchPage.executeAndConfirm();
 
+    // Executing is a job: the screen polls it (about every 2 s) and reloads the batch when it
+    // ends, so the badge turns after the poll's cadence plus the worker's pickup. The wait is the
+    // job's own budget, as the API lane gives the same job, not the 5 s default.
     // Executed is terminal for a batch that produced enrollments: `revert_batch` refuses
     // once the next-session enrollments exist, which is exactly what just happened.
-    await expect(promotionBatchPage.statusBadge("Executed")).toBeVisible();
+    await expect(promotionBatchPage.statusBadge("Executed")).toBeVisible({
+      timeout: LIVE_JOB_TIMEOUT_MS,
+    });
   });
 });

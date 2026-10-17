@@ -37,6 +37,7 @@ describe("Services", () => {
       "files",
       "guardians",
       "jobs",
+      "promotions",
       "schoolOrganization",
       "staff",
       "studentTransfers",
@@ -104,5 +105,12 @@ describe("Services", () => {
     expect(typeof Services.teacherAllocations.reinstateAllocation).toBe("function");
     expect(typeof Services.teacherAllocations.deleteAllocation).toBe("function");
     expect(typeof Services.teacherAllocations.fetchLoadSummary).toBe("function");
+
+    expect(typeof Services.promotions.fetchPromotionBatches).toBe("function");
+    expect(typeof Services.promotions.fetchPromotionBatch).toBe("function");
+    expect(typeof Services.promotions.createPromotionBatch).toBe("function");
+    expect(typeof Services.promotions.updateDecision).toBe("function");
+    expect(typeof Services.promotions.transitionBatch).toBe("function");
+    expect(typeof Services.promotions.executeBatch).toBe("function");
   });
 });

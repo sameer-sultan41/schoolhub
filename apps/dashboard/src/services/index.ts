@@ -4,6 +4,7 @@ import { DashboardService } from "./modules/dashboard";
 import { FilesService } from "./modules/files";
 import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
+import { PromotionsService } from "./modules/promotions";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
 import { StudentsService } from "./modules/students";
@@ -33,6 +34,23 @@ export type {
   CurriculumPageQuery,
   CurriculumRecord,
 } from "./modules/curriculum";
+
+export type {
+  CreatePromotionBatchInput,
+  PromotionAction,
+  PromotionBatchCreated,
+  PromotionBatchDetail,
+  PromotionBatchesQuery,
+  PromotionBatchRecord,
+  PromotionDecisionRecord,
+  PromotionDecisionValue,
+  PromotionExecutionReport,
+  PromotionProposal,
+  PromotionStatus,
+  PromotionTransition,
+  PromotionTransitionResult,
+  UpdateDecisionInput,
+} from "./modules/promotions";
 
 export type {
   AcademicSessionSummary,
@@ -79,6 +97,7 @@ export const Services = {
   schoolOrganization: SchoolOrganizationService,
   curriculum: CurriculumService,
   teacherAllocations: TeacherAllocationsService,
+  promotions: PromotionsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

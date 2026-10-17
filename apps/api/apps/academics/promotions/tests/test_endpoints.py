@@ -10,7 +10,12 @@ from rest_framework import status
 
 from apps.academics.models import PromotionStatus, StudentPromotion
 from apps.academics.tests.base import AcademicsAPITestCase
-from apps.academics.tests.factories import StudentPromotionFactory
+from apps.academics.tests.factories import (
+    AcademicSessionFactory,
+    ClassFactory,
+    SectionFactory,
+    StudentPromotionFactory,
+)
 from apps.student_management.tests.factories import StudentEnrollmentFactory, StudentFactory
 from core.tenancy.context import tenant_context
 
@@ -44,13 +49,30 @@ class PromotionBatchOrderingTests(AcademicsAPITestCase):
             PromotionStatus.DRAFT, students=2, started_at=now - datetime.timedelta(days=1)
         )
 
-    def _batch(self, batch_status: str, *, students: int, started_at) -> str:
+    def _batch(
+        self,
+        batch_status: str,
+        *,
+        students: int,
+        started_at,
+        school_class=None,
+        section=None,
+        to_class=None,
+        from_session=None,
+        to_session=None,
+    ) -> str:
         """One batch of `students` rows, written through the factories.
 
         Not through `POST /student-promotions`: that service builds a batch from
         whatever the class currently enrolls, and these tests need a specific
-        row count, status and age per batch.
+        row count, status and age per batch. Class and sessions default to the
+        shared fixture's; a test that needs a batch with different names passes its own.
         """
+        school_class = school_class or self.school_class
+        section = section or self.section
+        to_class = to_class or self.next_class
+        from_session = from_session or self.session
+        to_session = to_session or self.next_session
         batch_id = uuid.uuid4()
         with tenant_context(self.tenant.id):
             for _ in range(students):
@@ -58,19 +80,19 @@ class PromotionBatchOrderingTests(AcademicsAPITestCase):
                 enrollment = StudentEnrollmentFactory(
                     tenant=self.tenant,
                     student=student,
-                    academic_session=self.session,
-                    school_class=self.school_class,
-                    section=self.section,
+                    academic_session=from_session,
+                    school_class=school_class,
+                    section=section,
                 )
                 StudentPromotionFactory(
                     tenant=self.tenant,
                     batch_id=batch_id,
                     student=student,
                     from_enrollment=enrollment,
-                    from_academic_session=self.session,
-                    to_academic_session=self.next_session,
-                    from_class=self.school_class,
-                    to_class=self.next_class,
+                    from_academic_session=from_session,
+                    to_academic_session=to_session,
+                    from_class=school_class,
+                    to_class=to_class,
                     status=batch_status,
                 )
             # `created_at` is auto_now_add, so it can only be moved after the fact;
@@ -173,3 +195,84 @@ class PromotionBatchOrderingTests(AcademicsAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertEqual(response.json()["data"]["students"], 3)
+
+    def _batch_with_its_own_names(self) -> tuple[str, dict[str, str]]:
+        """A fourth batch whose class and both sessions differ from the other three.
+
+        With one shared class and session pair, a name could be right by accident of
+        being the only one. Here each batch's names are only correct if they are
+        joined from that batch's own ids.
+        """
+        with tenant_context(self.tenant.id):
+            grade_five = ClassFactory(tenant=self.tenant, level=5)
+            grade_five_section = SectionFactory(
+                tenant=self.tenant, school_class=grade_five, campus=self.campus
+            )
+            earlier = AcademicSessionFactory(tenant=self.tenant)
+            later = AcademicSessionFactory(tenant=self.tenant)
+        # Four students, so the batch has a count no other batch shares and an ordering by
+        # `students` is total rather than decided by the batch-id tiebreaker.
+        batch_id = self._batch(
+            PromotionStatus.DRAFT,
+            students=4,
+            started_at=timezone.now() - datetime.timedelta(days=4),
+            school_class=grade_five,
+            section=grade_five_section,
+            to_class=self.school_class,
+            from_session=earlier,
+            to_session=later,
+        )
+        return batch_id, {
+            "from_class_name": grade_five.name,
+            "from_academic_session_name": earlier.name,
+            "to_academic_session_name": later.name,
+        }
+
+    def _list_by_batch(self, query: str = "") -> dict[str, dict]:
+        response = self.client.get(f"/api/v1/student-promotions{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        rows = response.json()["data"]
+        by_batch = {row["batch_id"]: row for row in rows}
+        self.assertEqual(len(by_batch), len(rows), "a batch must not appear as two rows")
+        return by_batch
+
+    def test_batch_list_carries_names_and_still_groups_one_row_per_batch(self) -> None:
+        """The names join into the `values()` set that the GROUP BY is built from.
+
+        Four batches must stay four rows, each with its own student count and the names
+        of *its* class and sessions, not the first batch's.
+        """
+        self.allow("academics.promotion.view")
+        other, other_names = self._batch_with_its_own_names()
+
+        rows = self._list_by_batch()
+
+        self.assertEqual(len(rows), 4)
+        counts = {batch: row["students"] for batch, row in rows.items()}
+        self.assertEqual(counts, {self.approved: 3, self.pending: 1, self.draft: 2, other: 4})
+        for batch_id in (self.approved, self.pending, self.draft):
+            self.assertEqual(
+                {name: rows[batch_id][name] for name in other_names},
+                {
+                    "from_class_name": self.school_class.name,
+                    "from_academic_session_name": self.session.name,
+                    "to_academic_session_name": self.next_session.name,
+                },
+            )
+        self.assertEqual({name: rows[other][name] for name in other_names}, other_names)
+
+    def test_ordering_by_students_still_groups_one_row_per_batch(self) -> None:
+        """An ordered list is where an extra GROUP BY column would silently un-group it."""
+        self.allow("academics.promotion.view")
+        other, other_names = self._batch_with_its_own_names()
+
+        response = self.client.get("/api/v1/student-promotions?ordering=students")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        rows = response.json()["data"]
+        self.assertEqual(
+            [(row["batch_id"], row["students"]) for row in rows],
+            [(self.pending, 1), (self.draft, 2), (self.approved, 3), (other, 4)],
+        )
+        by_batch = {row["batch_id"]: row for row in rows}
+        self.assertEqual({name: by_batch[other][name] for name in other_names}, other_names)

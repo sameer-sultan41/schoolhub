@@ -10,21 +10,30 @@ from __future__ import annotations
 import uuid
 from unittest import mock
 
+from django.contrib.admin import AdminSite
 from django.db import connection, transaction
+from django.test import SimpleTestCase
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
 from apps.academics import tasks
+from apps.academics.admin import StudentPromotionAdmin
 from apps.academics.models import PromotionDecision, PromotionStatus, StudentPromotion
 from apps.academics.promotions import services
-from apps.academics.promotions.serializers import PromotionDecisionSerializer
+from apps.academics.promotions.serializers import (
+    PromotionBatchCreatedSerializer,
+    PromotionBatchDetailSerializer,
+    PromotionDecisionSerializer,
+)
 from apps.academics.tests.base import AcademicsAPITestCase
 from apps.academics.tests.factories import (
+    ClassFactory,
     SectionFactory,
     UserFactory,
     authenticate,
     grant,
 )
+from apps.school_organization.models import Class, SessionStatus
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from apps.student_management.tests.factories import (
     EmergencyContactFactory,
@@ -33,7 +42,7 @@ from apps.student_management.tests.factories import (
     StudentFactory,
     StudentGuardianFactory,
 )
-from core.api.exceptions import Conflict
+from core.api.exceptions import Conflict, DomainRuleViolation
 from core.jobs.models import BackgroundJob, JobStatus
 from core.notifications.models import Notification
 from core.tenancy.context import tenant_context
@@ -63,24 +72,63 @@ class PromotionTestCase(AcademicsAPITestCase):
                 section=self.section,
             )
 
-    def create_batch(self) -> str:
+    def create_batch(self, school_class=None) -> str:
         response = self.client.post(
             "/api/v1/student-promotions",
             {
                 "from_academic_session_id": str(self.session.pk),
                 "to_academic_session_id": str(self.next_session.pk),
-                "class_id": str(self.school_class.pk),
+                "class_id": str((school_class or self.school_class).pk),
             },
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
         return response.json()["data"]["batch_id"]
 
+    def enroll_classmate(self, school_class=None, section=None):
+        """Another actively enrolled student, ready to be proposed in a batch."""
+        with tenant_context(self.tenant.id):
+            student = StudentFactory(tenant=self.tenant, campus=self.campus)
+            guardian = GuardianFactory(tenant=self.tenant)
+            StudentGuardianFactory(tenant=self.tenant, student=student, guardian=guardian)
+            EmergencyContactFactory(tenant=self.tenant, student=student)
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=student,
+                academic_session=self.session,
+                school_class=school_class or self.school_class,
+                section=section or self.section,
+            )
+        return student
+
+    def patch_decision(self, batch_id: str, payload: dict, student=None):
+        """The raw response, for tests that expect a refusal."""
+        return self.client.patch(
+            f"/api/v1/student-promotions/{batch_id}/decisions/{(student or self.student).pk}",
+            payload,
+            format="json",
+        )
+
+    def edit_decision(self, batch_id: str, payload: dict, student=None) -> dict:
+        response = self.patch_decision(batch_id, payload, student)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return response.json()["data"]
+
+    def transition(self, batch_id: str, action: str):
+        return self.client.post(
+            f"/api/v1/student-promotions/{batch_id}:{action}", {}, format="json"
+        )
+
     def second_user(self, *keys: str):
         """A distinct principal — segregation of duties needs two identities."""
         approver = UserFactory(tenant=self.tenant)
         grant(approver, *keys)
         return approver
+
+    def close_target_session(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.next_session.status = SessionStatus.CLOSED
+            self.next_session.save(update_fields=["status"])
 
     def _approved_batch(self, **decision_fields) -> str:
         """A batch sitting in `approved`, ready for `:execute`.
@@ -140,6 +188,52 @@ class CreateBatchTests(PromotionTestCase):
             row = StudentPromotion.objects.alive().get(batch_id=batch_id)
         self.assertFalse(row.decision_basis["results_available"])
         self.assertFalse(row.decision_basis["attendance_available"])
+
+    def test_the_proposal_is_recorded_at_creation(self) -> None:
+        self.allow(*PREPARE_KEYS)
+
+        batch_id = self.create_batch()
+
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.decision_basis["proposed_decision"], PromotionDecision.PROMOTED)
+        self.assertEqual(row.decision_basis["proposed_to_class_id"], str(self.next_class.pk))
+
+    def test_a_graduating_proposal_is_recorded_with_a_null_target(self) -> None:
+        """The key is present and null, which is what tells it from a pre-recording row."""
+        self.allow(*PREPARE_KEYS)
+        self.enroll_classmate(self.next_class, self.next_section)
+
+        batch_id = self.create_batch(self.next_class)
+
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.decision, PromotionDecision.GRADUATED)
+        self.assertEqual(row.decision_basis["proposed_decision"], PromotionDecision.GRADUATED)
+        self.assertIn("proposed_to_class_id", row.decision_basis)
+        self.assertIsNone(row.decision_basis["proposed_to_class_id"])
+
+    def test_creating_a_batch_returns_its_id_and_row_count(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        self.enroll_classmate()
+
+        response = self.client.post(
+            "/api/v1/student-promotions",
+            {
+                "from_academic_session_id": str(self.session.pk),
+                "to_academic_session_id": str(self.next_session.pk),
+                "class_id": str(self.school_class.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+        body = response.json()["data"]
+        self.assertEqual(set(body), set(PromotionBatchCreatedSerializer().fields))
+        self.assertEqual(body["students"], 2)
+        with tenant_context(self.tenant.id):
+            stored = StudentPromotion.objects.alive().filter(batch_id=body["batch_id"]).count()
+        self.assertEqual(stored, 2, "the id returned must be the id the rows were written under")
 
     def test_a_top_level_class_graduates_rather_than_promoting(self) -> None:
         self.allow(*PREPARE_KEYS)
@@ -224,6 +318,87 @@ class BatchResourceTests(PromotionTestCase):
         )
         self.assertEqual(body["decisions"][0]["admission_number"], self.student.admission_number)
 
+    def test_a_stray_list_filter_does_not_shrink_or_hide_a_batch(self) -> None:
+        """The list's filters belong to the list: a detail read is the whole batch or a 404."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+
+        response = self.client.get(
+            f"/api/v1/student-promotions/{batch_id}", {"decision": PromotionDecision.RETAINED}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["students"], 1)
+        self.assertEqual(len(response.json()["data"]["decisions"]), 1)
+
+    def test_the_admin_cannot_edit_the_recorded_proposal(self) -> None:
+        model_admin = StudentPromotionAdmin(StudentPromotion, AdminSite())
+
+        self.assertIn("decision_basis", model_admin.get_readonly_fields(mock.Mock()))
+
+    def test_batch_detail_matches_its_serializer(self) -> None:
+        """Keys come from the serializer, so a hand-built dict cannot drift from the schema."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+
+        body = self.client.get(f"/api/v1/student-promotions/{batch_id}").json()["data"]
+
+        self.assertEqual(set(body), set(PromotionBatchDetailSerializer().fields))
+        self.assertEqual(set(body["decisions"][0]), set(PromotionDecisionSerializer().fields))
+
+    def test_the_batch_and_its_decisions_carry_names_not_just_ids(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+
+        body = self.client.get(f"/api/v1/student-promotions/{batch_id}").json()["data"]
+
+        self.assertEqual(body["from_class_name"], self.school_class.name)
+        self.assertEqual(body["from_academic_session_name"], self.session.name)
+        self.assertEqual(body["to_academic_session_name"], self.next_session.name)
+        decision = body["decisions"][0]
+        self.assertEqual(decision["from_class_name"], self.school_class.name)
+        self.assertEqual(decision["to_class_name"], self.next_class.name)
+        self.assertIsNone(decision["to_section_name"], "no section has been chosen yet")
+
+    def test_decision_names_follow_an_edit(self) -> None:
+        """A PATCH answers with the edited row, so its names must be the new ones."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+
+        with_section = self.edit_decision(batch_id, {"to_section_id": str(self.next_section.pk)})
+        graduated = self.edit_decision(batch_id, {"decision": "graduated", "to_class_id": None})
+
+        self.assertEqual(with_section["to_section_name"], self.next_section.name)
+        self.assertEqual(with_section["to_class_name"], self.next_class.name)
+        self.assertIsNone(graduated["to_class_name"])
+
+    def test_a_decision_patch_cannot_rewrite_the_recorded_proposal(self) -> None:
+        """`proposed_*` is what submit compares an edit against, so an edit must not move it."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        with tenant_context(self.tenant.id):
+            recorded = StudentPromotion.objects.alive().get(batch_id=batch_id).decision_basis
+        self.assertEqual(recorded["proposed_decision"], PromotionDecision.PROMOTED)
+        self.assertEqual(recorded["proposed_to_class_id"], str(self.next_class.pk))
+
+        edited = self.edit_decision(
+            batch_id,
+            {
+                "decision": PromotionDecision.RETAINED,
+                "to_class_id": str(self.school_class.pk),
+                "decision_basis": {
+                    "proposed_decision": PromotionDecision.RETAINED,
+                    "proposed_to_class_id": str(self.school_class.pk),
+                },
+            },
+        )
+
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.decision, PromotionDecision.RETAINED, "the rest of the body applies")
+        self.assertEqual(row.decision_basis, recorded)
+        self.assertEqual(edited["decision_basis"], recorded)
+
     def test_retrieving_an_unknown_batch_is_404(self) -> None:
         self.allow(*PREPARE_KEYS)
         import uuid as _uuid
@@ -256,6 +431,32 @@ class ApprovalTests(PromotionTestCase):
             row = StudentPromotion.objects.alive().get(batch_id=batch_id)
         self.assertEqual(row.status, PromotionStatus.PENDING_APPROVAL)
 
+    def test_a_closed_target_session_refuses_submit(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.close_target_session()
+
+        response = self.transition(batch_id, "submit")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.status, PromotionStatus.DRAFT)
+
+    def test_a_closed_target_session_refuses_approve(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.transition(batch_id, "submit")
+        self.close_target_session()
+        authenticate(self.client, self.second_user("academics.promotion.approve"))
+
+        response = self.transition(batch_id, "approve")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.status, PromotionStatus.PENDING_APPROVAL)
+
     def test_a_different_user_can_approve(self) -> None:
         self.allow(*PREPARE_KEYS)
         batch_id = self.create_batch()
@@ -273,6 +474,28 @@ class ApprovalTests(PromotionTestCase):
         self.assertEqual(row.status, PromotionStatus.APPROVED)
         self.assertEqual(row.approved_by, approver.pk)
         self.assertIsNotNone(row.approved_at)
+
+    def test_transitions_return_the_updated_count(self) -> None:
+        """Two rows, so `updated` is a count of what moved and not a constant 1."""
+        self.allow(*PREPARE_KEYS)
+        self.enroll_classmate()
+        batch_id = self.create_batch()
+        approver = self.second_user("academics.promotion.approve")
+
+        def result(action: str) -> dict:
+            response = self.transition(batch_id, action)
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+            return response.json()["data"]
+
+        self.assertEqual(result("submit"), {"updated": 2})
+        authenticate(self.client, approver)
+        self.assertEqual(result("reject"), {"updated": 2})
+        authenticate(self.client, self.user)
+        self.assertEqual(result("submit"), {"updated": 2})
+        authenticate(self.client, approver)
+        self.assertEqual(result("approve"), {"updated": 2})
+        authenticate(self.client, self.user)
+        self.assertEqual(result("revert"), {"updated": 2})
 
     def test_approving_a_draft_batch_is_a_conflict(self) -> None:
         self.allow(*PREPARE_KEYS)
@@ -447,6 +670,63 @@ class ExecutionTests(PromotionTestCase):
         with tenant_context(self.tenant.id):
             self.assertEqual(BackgroundJob.objects.count(), 0, "nothing may have been queued")
 
+    def test_a_closed_target_session_refuses_execute_before_queueing(self) -> None:
+        batch_id = self._approved_batch()
+        self.close_target_session()
+
+        response = self.client.post(
+            f"/api/v1/student-promotions/{batch_id}:execute", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(BackgroundJob.objects.count(), 0, "nothing may have been queued")
+
+    def test_a_batch_level_failure_puts_only_a_safe_message_in_the_job_error(self) -> None:
+        batch_id = self._approved_batch()
+        failure = RuntimeError("secret detail")
+
+        with mock.patch.object(services, "execute_batch", side_effect=failure):
+            job = self._execute(batch_id)
+
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.error, services.GENERIC_FAILURE_MESSAGE)
+
+    def test_a_batch_level_api_error_keeps_its_own_message_in_the_job_error(self) -> None:
+        batch_id = self._approved_batch()
+        refusal = Conflict("Only an approved batch can be executed.")
+
+        with mock.patch.object(services, "execute_batch", side_effect=refusal):
+            job = self._execute(batch_id)
+
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.error, "Only an approved batch can be executed.")
+
+    def test_a_student_whose_source_enrollment_ended_is_reported_failed_not_enrolled(self) -> None:
+        """Closing the source would match nothing, and the student would be enrolled onward."""
+        batch_id = self._approved_batch()
+        with tenant_context(self.tenant.id):
+            StudentEnrollment.objects.filter(pk=self.enrollment.pk).update(
+                status=EnrollmentStatus.WITHDRAWN
+            )
+
+        job = self._execute(batch_id)
+
+        self.assertEqual(job.status, JobStatus.SUCCEEDED)
+        self.assertEqual(job.result["enrolled"], [])
+        self.assertEqual(len(job.result["failed"]), 1)
+        self.assertEqual(
+            job.result["failed"][0]["error"],
+            "The student's enrollment in the source class has ended.",
+        )
+        with tenant_context(self.tenant.id):
+            onward = StudentEnrollment.objects.alive().filter(
+                student=self.student, academic_session=self.next_session
+            )
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertFalse(onward.exists())
+        self.assertEqual(row.status, PromotionStatus.APPROVED)
+
     def test_execution_without_a_target_section_reports_a_per_student_failure(self) -> None:
         """One student's problem must not discard the rest of the batch."""
         self.allow(*PREPARE_KEYS, "academics.promotion.execute")
@@ -463,6 +743,9 @@ class ExecutionTests(PromotionTestCase):
         # failed run — the job itself only fails when the batch never ran at all.
         self.assertEqual(job.status, JobStatus.SUCCEEDED)
         self.assertEqual(len(job.result["failed"]), 1)
+        self.assertEqual(
+            job.result["failed"][0]["error"], "Assign a target section before executing this batch."
+        )
         self.assertEqual(job.result["enrolled"], [])
 
     def test_reverting_after_execution_is_blocked_by_the_new_enrollments(self) -> None:
@@ -546,18 +829,11 @@ class RetentionTests(PromotionTestCase):
     and the source enrollment closed as `retained` to match.
     """
 
-    def _patch(self, batch_id: str, payload: dict):
-        return self.client.patch(
-            f"/api/v1/student-promotions/{batch_id}/decisions/{self.student.pk}",
-            payload,
-            format="json",
-        )
-
     def test_retaining_a_student_into_another_class_is_a_field_error(self) -> None:
         self.allow(*PREPARE_KEYS)
         batch_id = self.create_batch()
 
-        response = self._patch(
+        response = self.patch_decision(
             batch_id,
             {"decision": PromotionDecision.RETAINED, "to_class_id": str(self.next_class.pk)},
         )
@@ -575,7 +851,7 @@ class RetentionTests(PromotionTestCase):
         self.allow(*PREPARE_KEYS)
         batch_id = self.create_batch()
 
-        response = self._patch(batch_id, {"decision": PromotionDecision.RETAINED})
+        response = self.patch_decision(batch_id, {"decision": PromotionDecision.RETAINED})
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -583,7 +859,7 @@ class RetentionTests(PromotionTestCase):
         self.allow(*PREPARE_KEYS)
         batch_id = self.create_batch()
 
-        response = self._patch(
+        response = self.patch_decision(
             batch_id,
             {"decision": PromotionDecision.RETAINED, "to_class_id": str(self.school_class.pk)},
         )
@@ -604,7 +880,10 @@ class RetentionTests(PromotionTestCase):
 
         self.assertEqual(job.result["enrolled"], [])
         self.assertEqual(len(job.result["failed"]), 1)
-        self.assertIn("same class", job.result["failed"][0]["error"])
+        self.assertEqual(
+            job.result["failed"][0]["error"],
+            "A retained student re-enrolls in the same class they were in.",
+        )
         with tenant_context(self.tenant.id):
             created = StudentEnrollment.objects.alive().filter(
                 student=self.student, academic_session=self.next_session
@@ -612,6 +891,210 @@ class RetentionTests(PromotionTestCase):
             row = StudentPromotion.objects.alive().get(batch_id=batch_id)
         self.assertFalse(created.exists(), "the wrong class must not have been enrolled into")
         self.assertEqual(row.status, PromotionStatus.APPROVED, "a refused row stays executable")
+
+
+class OverrideReasonTests(PromotionTestCase):
+    """§11: a decision or target class differing from the recorded proposal needs a reason."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            # Two levels above `school_class`: choosing it skips `next_class`.
+            self.skip_class = ClassFactory(tenant=self.tenant, level=8)
+
+    def assert_reason_required(self, response) -> None:
+        body = response.json()
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, body)
+        self.assertIn("override_reason", {row["field"] for row in body["error"]["details"]})
+
+    def assert_still_draft(self, batch_id: str) -> None:
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.status, PromotionStatus.DRAFT, "a refused submit must not move it")
+
+    def strip_the_recorded_proposal(self, batch_id: str) -> None:
+        """Make the rows look like a batch created before the proposal was recorded."""
+        with tenant_context(self.tenant.id):
+            StudentPromotion.objects.alive().filter(batch_id=batch_id).update(
+                decision_basis={"rule": "level+1"}
+            )
+
+    def test_submit_requires_a_reason_when_the_target_class_skips_a_level(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        # The decision stays `promoted`; only the class moves.
+        self.edit_decision(batch_id, {"to_class_id": str(self.skip_class.pk)})
+
+        self.assert_reason_required(self.transition(batch_id, "submit"))
+        self.assert_still_draft(batch_id)
+
+        self.edit_decision(batch_id, {"override_reason": "Placed two levels up after assessment."})
+        accepted = self.transition(batch_id, "submit")
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK, accepted.json())
+        self.assertEqual(accepted.json()["data"], {"updated": 1})
+
+    def test_choosing_the_proposed_class_explicitly_needs_no_reason(self) -> None:
+        """The control: only a class *other than* the proposal asks for a reason."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.edit_decision(batch_id, {"to_class_id": str(self.next_class.pk)})
+
+        response = self.transition(batch_id, "submit")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_a_different_decision_with_the_proposed_class_still_requires_a_reason(self) -> None:
+        """The decision half of the rule, which the class half must not have displaced."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.edit_decision(batch_id, {"decision": PromotionDecision.PROMOTED_ON_TRIAL})
+
+        self.assert_reason_required(self.transition(batch_id, "submit"))
+
+        self.edit_decision(batch_id, {"override_reason": "Promoted on trial pending results."})
+        self.assertEqual(self.transition(batch_id, "submit").status_code, status.HTTP_200_OK)
+
+    def test_clearing_the_target_class_does_not_move_the_proposal(self) -> None:
+        """The old derived proposal read the cleared `to_class_id` as "graduating" and passed."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.edit_decision(batch_id, {"decision": PromotionDecision.GRADUATED, "to_class_id": None})
+
+        self.assert_reason_required(self.transition(batch_id, "submit"))
+        self.assert_still_draft(batch_id)
+
+        self.edit_decision(batch_id, {"override_reason": "Completed the programme early."})
+        self.assertEqual(self.transition(batch_id, "submit").status_code, status.HTTP_200_OK)
+
+    def test_a_recorded_graduating_proposal_is_not_mistaken_for_a_legacy_row(self) -> None:
+        """A null `proposed_to_class_id` is a proposal, not a missing one.
+
+        The class above the top one comes into use only after the batch exists. Read as a
+        legacy row, the graduating decision would now deviate from "next level = that
+        class"; read as the recorded proposal (graduate, no target) it matches.
+        """
+        self.allow(*PREPARE_KEYS)
+        self.enroll_classmate(self.next_class, self.next_section)
+        with tenant_context(self.tenant.id):
+            Class.objects.filter(pk=self.skip_class.pk).update(is_active=False)
+        batch_id = self.create_batch(self.next_class)
+        with tenant_context(self.tenant.id):
+            Class.objects.filter(pk=self.skip_class.pk).update(is_active=True)
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.decision, PromotionDecision.GRADUATED, "the setup must graduate")
+
+        response = self.transition(batch_id, "submit")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_a_legacy_row_without_a_recorded_proposal_falls_back_to_the_next_level(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.strip_the_recorded_proposal(batch_id)
+        self.edit_decision(batch_id, {"to_class_id": str(self.skip_class.pk)})
+
+        self.assert_reason_required(self.transition(batch_id, "submit"))
+
+        # The control: back on the next level, the same legacy row passes without a reason.
+        self.edit_decision(batch_id, {"to_class_id": str(self.next_class.pk)})
+        self.assertEqual(self.transition(batch_id, "submit").status_code, status.HTTP_200_OK)
+
+    def test_a_legacy_row_cleared_to_graduated_still_needs_a_reason(self) -> None:
+        """The fallback derives its decision from the ladder, not from the cleared row."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.strip_the_recorded_proposal(batch_id)
+        self.edit_decision(batch_id, {"decision": PromotionDecision.GRADUATED, "to_class_id": None})
+
+        self.assert_reason_required(self.transition(batch_id, "submit"))
+
+    def test_a_legacy_batch_looks_up_the_next_class_once_per_class(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        self.enroll_classmate()
+        batch_id = self.create_batch()
+        self.strip_the_recorded_proposal(batch_id)
+
+        with mock.patch.object(
+            services, "next_class_for", wraps=services.next_class_for
+        ) as next_class_for:
+            response = self.transition(batch_id, "submit")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(next_class_for.call_count, 1, "two rows, one class, one lookup")
+
+    def test_a_recorded_proposal_never_consults_the_current_ladder(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        self.enroll_classmate()
+        batch_id = self.create_batch()
+
+        with mock.patch.object(
+            services, "next_class_for", wraps=services.next_class_for
+        ) as next_class_for:
+            response = self.transition(batch_id, "submit")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        next_class_for.assert_not_called()
+
+    def test_a_recorded_proposal_survives_a_later_change_to_the_ladder(self) -> None:
+        """The proposal is what was proposed, whatever the classes look like by submit."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        with tenant_context(self.tenant.id):
+            Class.objects.filter(pk=self.next_class.pk).update(is_active=False)
+
+        response = self.transition(batch_id, "submit")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_a_legacy_row_is_checked_against_the_current_ladder(self) -> None:
+        """The documented limit of the fallback, and the control for the test above."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.strip_the_recorded_proposal(batch_id)
+        with tenant_context(self.tenant.id):
+            Class.objects.filter(pk=self.next_class.pk).update(is_active=False)
+
+        self.assert_reason_required(self.transition(batch_id, "submit"))
+
+
+class FailureMessageTests(SimpleTestCase):
+    """A failed student's report line is an API error's plain text, never a repr or DB text."""
+
+    def test_a_dict_detail_gives_its_message_without_the_field_key_or_a_repr(self) -> None:
+        exc = DomainRuleViolation(
+            {"to_section_id": "Assign a target section before executing this batch."}
+        )
+
+        message = services.failure_message(exc)
+
+        self.assertEqual(message, "Assign a target section before executing this batch.")
+        self.assertNotIn("ErrorDetail", message)
+        self.assertNotIn("to_section_id", message)
+
+    def test_a_list_detail_joins_its_messages(self) -> None:
+        exc = DomainRuleViolation(["First problem.", "Second problem."])
+
+        self.assertEqual(services.failure_message(exc), "First problem. Second problem.")
+
+    def test_a_dict_of_lists_is_flattened(self) -> None:
+        exc = DomainRuleViolation({"a": ["One.", "Two."], "b": "Three."})
+
+        self.assertEqual(services.failure_message(exc), "One. Two. Three.")
+
+    def test_a_plain_string_detail_is_kept(self) -> None:
+        self.assertEqual(
+            services.failure_message(Conflict("A batch already exists.")),
+            "A batch already exists.",
+        )
+
+    def test_a_non_api_exception_is_generic_and_leaks_nothing(self) -> None:
+        exc = RuntimeError('relation "student_promotions" does not exist')
+
+        message = services.failure_message(exc)
+
+        self.assertEqual(message, services.GENERIC_FAILURE_MESSAGE)
+        self.assertNotIn("student_promotions", message)
+        self.assertNotIn("ErrorDetail", message)
 
 
 class BatchRaceTests(PromotionTestCase):

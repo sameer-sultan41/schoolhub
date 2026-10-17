@@ -13,6 +13,7 @@ import {
   DashboardPage,
   LoginPage,
   PromotionBatchPage,
+  PromotionsPage,
   PublicSitePage,
   StaffPage,
   StudentDetailPage,
@@ -69,6 +70,7 @@ export interface E2EFixtures {
   studentFormPage: StudentFormPage;
   studentDetailPage: StudentDetailPage;
   promotionBatchPage: PromotionBatchPage;
+  promotionsPage: PromotionsPage;
   curriculumPage: CurriculumPage;
   allocationsPage: AllocationsPage;
   weekGridPage: WeekGridPage;
@@ -192,6 +194,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   promotionBatchPage: async ({ page }, use) => {
     await use(new PromotionBatchPage(page));
+  },
+
+  promotionsPage: async ({ page }, use) => {
+    await use(new PromotionsPage(page));
   },
 
   curriculumPage: async ({ page }, use) => {
