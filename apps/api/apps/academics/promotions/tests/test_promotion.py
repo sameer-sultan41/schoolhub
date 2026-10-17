@@ -10,12 +10,14 @@ from __future__ import annotations
 import uuid
 from unittest import mock
 
+from django.contrib.admin import AdminSite
 from django.db import connection, transaction
 from django.test import SimpleTestCase
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
 from apps.academics import tasks
+from apps.academics.admin import StudentPromotionAdmin
 from apps.academics.models import PromotionDecision, PromotionStatus, StudentPromotion
 from apps.academics.promotions import services
 from apps.academics.promotions.serializers import (
@@ -31,7 +33,7 @@ from apps.academics.tests.factories import (
     authenticate,
     grant,
 )
-from apps.school_organization.models import Class
+from apps.school_organization.models import Class, SessionStatus
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from apps.student_management.tests.factories import (
     EmergencyContactFactory,
@@ -122,6 +124,11 @@ class PromotionTestCase(AcademicsAPITestCase):
         approver = UserFactory(tenant=self.tenant)
         grant(approver, *keys)
         return approver
+
+    def close_target_session(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.next_session.status = SessionStatus.CLOSED
+            self.next_session.save(update_fields=["status"])
 
     def _approved_batch(self, **decision_fields) -> str:
         """A batch sitting in `approved`, ready for `:execute`.
@@ -311,6 +318,24 @@ class BatchResourceTests(PromotionTestCase):
         )
         self.assertEqual(body["decisions"][0]["admission_number"], self.student.admission_number)
 
+    def test_a_stray_list_filter_does_not_shrink_or_hide_a_batch(self) -> None:
+        """The list's filters belong to the list: a detail read is the whole batch or a 404."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+
+        response = self.client.get(
+            f"/api/v1/student-promotions/{batch_id}", {"decision": PromotionDecision.RETAINED}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["students"], 1)
+        self.assertEqual(len(response.json()["data"]["decisions"]), 1)
+
+    def test_the_admin_cannot_edit_the_recorded_proposal(self) -> None:
+        model_admin = StudentPromotionAdmin(StudentPromotion, AdminSite())
+
+        self.assertIn("decision_basis", model_admin.get_readonly_fields(mock.Mock()))
+
     def test_batch_detail_matches_its_serializer(self) -> None:
         """Keys come from the serializer, so a hand-built dict cannot drift from the schema."""
         self.allow(*PREPARE_KEYS)
@@ -400,6 +425,32 @@ class ApprovalTests(PromotionTestCase):
         response = self.client.post(
             f"/api/v1/student-promotions/{batch_id}:approve", {}, format="json"
         )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.status, PromotionStatus.PENDING_APPROVAL)
+
+    def test_a_closed_target_session_refuses_submit(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.close_target_session()
+
+        response = self.transition(batch_id, "submit")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertEqual(row.status, PromotionStatus.DRAFT)
+
+    def test_a_closed_target_session_refuses_approve(self) -> None:
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.transition(batch_id, "submit")
+        self.close_target_session()
+        authenticate(self.client, self.second_user("academics.promotion.approve"))
+
+        response = self.transition(batch_id, "approve")
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         with tenant_context(self.tenant.id):
@@ -618,6 +669,43 @@ class ExecutionTests(PromotionTestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         with tenant_context(self.tenant.id):
             self.assertEqual(BackgroundJob.objects.count(), 0, "nothing may have been queued")
+
+    def test_a_closed_target_session_refuses_execute_before_queueing(self) -> None:
+        batch_id = self._approved_batch()
+        self.close_target_session()
+
+        response = self.client.post(
+            f"/api/v1/student-promotions/{batch_id}:execute", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(BackgroundJob.objects.count(), 0, "nothing may have been queued")
+
+    def test_a_student_whose_source_enrollment_ended_is_reported_failed_not_enrolled(self) -> None:
+        """Closing the source would match nothing, and the student would be enrolled onward."""
+        batch_id = self._approved_batch()
+        with tenant_context(self.tenant.id):
+            StudentEnrollment.objects.filter(pk=self.enrollment.pk).update(
+                status=EnrollmentStatus.WITHDRAWN
+            )
+
+        job = self._execute(batch_id)
+
+        self.assertEqual(job.status, JobStatus.SUCCEEDED)
+        self.assertEqual(job.result["enrolled"], [])
+        self.assertEqual(len(job.result["failed"]), 1)
+        self.assertEqual(
+            job.result["failed"][0]["error"],
+            "The student's enrollment in the source class has ended.",
+        )
+        with tenant_context(self.tenant.id):
+            onward = StudentEnrollment.objects.alive().filter(
+                student=self.student, academic_session=self.next_session
+            )
+            row = StudentPromotion.objects.alive().get(batch_id=batch_id)
+        self.assertFalse(onward.exists())
+        self.assertEqual(row.status, PromotionStatus.APPROVED)
 
     def test_execution_without_a_target_section_reports_a_per_student_failure(self) -> None:
         """One student's problem must not discard the rest of the batch."""

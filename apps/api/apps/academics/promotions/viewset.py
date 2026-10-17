@@ -212,8 +212,10 @@ class PromotionBatchViewSet(
     )
     def retrieve(self, request: Request, pk: str) -> Response:
         batch_id = _batch_uuid(pk)
+        # Not `filter_queryset`: the list's query params must not shrink or 404 a batch.
         rows = list(
-            self.filter_queryset(super().get_queryset())
+            super()
+            .get_queryset()
             .filter(batch_id=batch_id)
             .select_related(
                 "student",

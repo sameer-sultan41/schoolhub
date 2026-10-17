@@ -214,6 +214,7 @@ def _transition(
 @transaction.atomic
 def submit_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     rows = assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.DRAFT)
+    assert_session_writable(rows[0].to_academic_session)
     _assert_decisions_complete(rows)
     updated = _transition(
         batch_id,
@@ -319,6 +320,7 @@ def approve_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     and it cannot drift from the batch.
     """
     rows = assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.PENDING_APPROVAL)
+    assert_session_writable(rows[0].to_academic_session)
 
     preparers = {row.created_by for row in rows if row.created_by}
     if preparers == {actor_id}:
@@ -420,6 +422,10 @@ def assert_batch_executable(*, batch_id: uuid.UUID) -> None:
     never the guarantee.
     """
     _assert_executable(set(batch_queryset(batch_id).values_list("status", flat=True)))
+    first = batch_queryset(batch_id).select_related("to_academic_session").first()
+    # A closed target session would fail every student in the job; say so up front instead.
+    if first is not None:
+        assert_session_writable(first.to_academic_session)
 
 
 def execute_batch(
@@ -534,6 +540,20 @@ def _execute_one(*, row: StudentPromotion, tenant_id: uuid.UUID, actor_id: uuid.
                 }
             )
             return
+
+        # The enrollment can end after the batch was approved (a withdrawal or transfer);
+        # closing it would then match nothing, and the student would still be enrolled onward.
+        source_status = (
+            StudentEnrollment.objects.alive()
+            .select_for_update()
+            .filter(pk=row.from_enrollment_id)
+            .values_list("status", flat=True)
+            .first()
+        )
+        if source_status != EnrollmentStatus.ACTIVE:
+            raise DomainRuleViolation(
+                {"from_enrollment_id": "The student's enrollment in the source class has ended."}
+            )
 
         if row.decision == PromotionDecision.GRADUATED:
             _close_source_enrollment(row, EnrollmentStatus.GRADUATED, actor_id)
