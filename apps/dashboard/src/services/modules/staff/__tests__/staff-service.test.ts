@@ -136,6 +136,64 @@ describe("StaffService", () => {
     });
   });
 
+  describe("fetchTeachingStaffOptions", () => {
+    const teacher = (id: string) => ({ id, first_name: "Ayesha", staff_type: "teaching" });
+    const offsetMeta = (page: number, totalPages: number) => ({
+      pagination: { page, page_size: 100, total_count: 120, total_pages: totalPages },
+    });
+
+    it("lists only active teaching staff from /staff, a full-size page at a time", async () => {
+      const { fetchTeachingStaffOptions } = await import("../staff-service");
+      const teachers = [teacher("st-1"), teacher("st-2")];
+      mockGet.mockResolvedValue({ data: teachers, meta: offsetMeta(1, 1) });
+
+      const result = await fetchTeachingStaffOptions();
+
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(mockGet).toHaveBeenCalledWith("/staff", {
+        query: { staff_type: "teaching", employment_status: "active", page_size: 100, page: 1 },
+      });
+      expect(result).toEqual(teachers);
+    });
+
+    it("walks every page by number and concatenates them", async () => {
+      const { fetchTeachingStaffOptions } = await import("../staff-service");
+      mockGet
+        .mockResolvedValueOnce({ data: [teacher("st-1"), teacher("st-2")], meta: offsetMeta(1, 2) })
+        .mockResolvedValueOnce({ data: [teacher("st-3")], meta: offsetMeta(2, 2) });
+
+      const result = await fetchTeachingStaffOptions();
+
+      const pagesRequested = mockGet.mock.calls.map(
+        ([path, options]: [string, { query: { page: number } }]) => [path, options.query.page],
+      );
+      expect(pagesRequested).toEqual([
+        ["/staff", 1],
+        ["/staff", 2],
+      ]);
+      expect(result).toEqual([teacher("st-1"), teacher("st-2"), teacher("st-3")]);
+    });
+
+    it("stops after the first page when the response carries no page count", async () => {
+      const { fetchTeachingStaffOptions } = await import("../staff-service");
+      mockGet.mockResolvedValue({ data: [teacher("st-1")], meta: {} });
+
+      const result = await fetchTeachingStaffOptions();
+
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([teacher("st-1")]);
+    });
+
+    it("never reads more than STAFF_OPTIONS_MAX_PAGES pages", async () => {
+      const { fetchTeachingStaffOptions } = await import("../staff-service");
+      mockGet.mockResolvedValue({ data: [teacher("st-1")], meta: offsetMeta(1, 1000) });
+
+      await fetchTeachingStaffOptions();
+
+      expect(mockGet).toHaveBeenCalledTimes(20);
+    });
+  });
+
   describe("createStaff", () => {
     it("posts to /staff with a snake_cased body containing only the given optional fields", async () => {
       const { createStaff } = await import("../staff-service");

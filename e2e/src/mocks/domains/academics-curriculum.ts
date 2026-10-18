@@ -1,5 +1,6 @@
 import { id, ORG_IDS, uuid } from "@/data/factories";
-import { fail, noContent, ok, pagedList } from "../envelope";
+import { fail, noContent, ok } from "../envelope";
+import { compareValues, lockedSessionResponse, nameOf, pageOf, type Named } from "../list";
 import type { MockModule } from "../router";
 import type { AcademicSession } from "./school-organization";
 
@@ -45,13 +46,6 @@ export function buildCurriculum(overrides: Partial<Curriculum> = {}): Curriculum
   };
 }
 
-/** Anything with an id and a name: the classes, subjects and campuses a created row's names
- * are looked up in. */
-interface Named {
-  id: string;
-  name: string;
-}
-
 export interface AcademicsCurriculumOptions {
   rows?: Curriculum[];
   /** The sessions `schoolOrganizationModule` serves: the source of a created row's session
@@ -79,9 +73,6 @@ interface CloneBody {
   target_academic_session_id: string;
 }
 
-/** Mirrors `LOCKED_SESSION_STATES` (`apps/api/apps/school_organization/services.py`). */
-const LOCKED_STATUSES: readonly string[] = ["closed", "archived"];
-
 /**
  * `/class-subjects` — the curriculum list, create, update and delete, plus the collection
  * colon-action `POST /class-subjects:clone` (a synchronous 200 with `{created, skipped}`).
@@ -99,33 +90,11 @@ export function academicsCurriculumModule(options: AcademicsCurriculumOptions = 
     const subjects = options.subjects ?? [];
     const campuses = options.campuses ?? [];
 
-    // 422 for a write into a closed or archived session, as `assert_session_writable` does.
-    const lockedResponse = (sessionId: string) => {
-      const session = sessions.find((candidate) => candidate.id === sessionId);
-      if (!session || !LOCKED_STATUSES.includes(session.status)) return undefined;
-      const message = `Academic session '${session.name}' is ${session.status} and cannot be modified.`;
-      return fail(422, message, {
-        code: "domain_rule_violation",
-        details: [{ field: "non_field", issue: message }],
-      });
-    };
+    const lockedResponse = (sessionId: string) => lockedSessionResponse(sessions, sessionId);
 
-    api.get("/class-subjects", (request) => {
-      const matching = filterAndOrder(rows, request.searchParams);
-      const pageSize = Number(request.searchParams.get("page_size") ?? matching.length) || 1;
-      const page = Number(request.searchParams.get("page") ?? 1) || 1;
-      // DRF's `PageNumberPagination` answers a page past the last with 404 "Invalid page."
-      // (an empty list still has page 1), and the list recovers from exactly that.
-      if (page > Math.max(1, Math.ceil(matching.length / pageSize))) {
-        return fail(404, "Invalid page.");
-      }
-      const start = (page - 1) * pageSize;
-      return pagedList(matching.slice(start, start + pageSize), {
-        page,
-        page_size: pageSize,
-        total_count: matching.length,
-      });
-    });
+    api.get("/class-subjects", (request) =>
+      pageOf(filterAndOrder(rows, request.searchParams), request.searchParams),
+    );
 
     api.post("/class-subjects", (request) => {
       const body = request.json() as CurriculumBody | null;
@@ -210,10 +179,6 @@ export function academicsCurriculumModule(options: AcademicsCurriculumOptions = 
   };
 }
 
-function nameOf(list: Named[], itemId: string | null | undefined): string | null {
-  return list.find((item) => item.id === itemId)?.name ?? null;
-}
-
 /** Whether `sessionId` already maps `candidate`'s class and subject (and campus). */
 function hasMapping(rows: Curriculum[], sessionId: string, candidate: Curriculum): boolean {
   return rows.some(
@@ -227,19 +192,6 @@ function hasMapping(rows: Curriculum[], sessionId: string, candidate: Curriculum
 
 function matchesSearch(row: Curriculum, search: string): boolean {
   return `${row.elective_group ?? ""} ${row.notes ?? ""}`.toLowerCase().includes(search);
-}
-
-function sortKey(value: unknown): number | string {
-  if (typeof value === "number") return value;
-  if (typeof value === "boolean") return Number(value);
-  return typeof value === "string" ? value : "";
-}
-
-function compareValues(a: unknown, b: unknown): number {
-  const x = sortKey(a);
-  const y = sortKey(b);
-  if (typeof x === "number" && typeof y === "number") return x - y;
-  return String(x).localeCompare(String(y));
 }
 
 function filterAndOrder(rows: Curriculum[], params: URLSearchParams): Curriculum[] {

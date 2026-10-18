@@ -12464,6 +12464,20 @@ paths:
           type: string
           format: uuid
       - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: current
+        schema:
+          type: boolean
+      - in: query
         name: is_primary
         schema:
           type: boolean
@@ -12619,16 +12633,29 @@ paths:
           description: No response body
   /api/v1/teacher-subject-allocations/load-summary:
     get:
-      operationId: teacher_subject_allocations_load_summary_retrieve
+      operationId: teacher_subject_allocations_load_summary_list
       description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
       summary: Per-teacher weekly load against the tenant norm
+      parameters:
+      - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - teacher-subject-allocations
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: Aggregate load per teacher.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeacherLoadRow'
+          description: ''
   /api/v1/teacher-substitutions:
     get:
       operationId: teacher_substitutions_list
@@ -20884,9 +20911,24 @@ components:
         effective_to:
           type: string
           format: date
-          readOnly: true
           nullable: true
           description: Null = current. Set rather than deleted on reassignment.
+        class_id:
+          type: string
+          format: uuid
+          readOnly: true
+        class_name:
+          type: string
+          readOnly: true
+        section_name:
+          type: string
+          readOnly: true
+        subject_name:
+          type: string
+          readOnly: true
+        staff_name:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -23273,9 +23315,24 @@ components:
         effective_to:
           type: string
           format: date
-          readOnly: true
           nullable: true
           description: Null = current. Set rather than deleted on reassignment.
+        class_id:
+          type: string
+          format: uuid
+          readOnly: true
+        class_name:
+          type: string
+          readOnly: true
+        section_name:
+          type: string
+          readOnly: true
+        subject_name:
+          type: string
+          readOnly: true
+        staff_name:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -23286,13 +23343,42 @@ components:
           readOnly: true
       required:
       - academic_session_id
+      - class_id
+      - class_name
       - created_at
-      - effective_to
       - id
       - section_id
+      - section_name
       - staff_id
+      - staff_name
       - subject_id
+      - subject_name
       - updated_at
+    TeacherLoadRow:
+      type: object
+      description: 'One teacher''s row in `load-summary`: current load against the
+        norm.'
+      properties:
+        staff_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        weekly_periods:
+          type: integer
+        allocations:
+          type: integer
+        norm:
+          type: integer
+        over_norm:
+          type: boolean
+      required:
+      - allocations
+      - name
+      - norm
+      - over_norm
+      - staff_id
+      - weekly_periods
     TeacherSubstitution:
       type: object
       description: |-

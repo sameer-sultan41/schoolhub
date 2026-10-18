@@ -191,7 +191,7 @@ Assignment of a teacher to teach a subject to a section within a session; suppor
 | is_primary | boolean | no | `true` | One primary per (section, subject); others are co-teachers |
 | weekly_periods | smallint | yes | null | Override of class_subjects.weekly_periods for load math |
 | effective_from | date | yes | null | Mid-session reassignment history |
-| effective_to | date | yes | null | Null = current |
+| effective_to | date | yes | null | Null = current. Set by End/Reinstate on PATCH (an End date is today or earlier); a non-null value is refused on create. The one future value is a future-start primary displaced by a newer one, end-dated at its own (future) start |
 
 Indexes: unique (tenant_id, academic_session_id, section_id, subject_id, staff_id); unique (tenant_id, academic_session_id, section_id, subject_id) where is_primary = true and effective_to is null; (tenant_id, staff_id, academic_session_id).
 Relationships: N:1 → academic_sessions, sections, subjects, staff; consumed by timetable_slots and marks entry rights (see `examinations.md`).

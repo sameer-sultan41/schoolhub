@@ -35,6 +35,7 @@ export interface StaffDirectoryQuery {
   search?: string;
   ordering?: string;
   employmentStatus?: string;
+  staffType?: "teaching" | "non_teaching";
 }
 
 /**

@@ -10,7 +10,7 @@ import {
   PLANNED_SESSION_ID,
   SESSION_ID,
   SESSIONS,
-} from "@/services/modules/curriculum/__tests__/curriculum-fixtures";
+} from "@/test-fixtures/academics";
 import { renderWithProviders } from "@/test-utils";
 
 import { CloneCurriculumDialog, type CloneCurriculumDialogProps } from "../clone-curriculum-dialog";
@@ -213,6 +213,10 @@ describe("CloneCurriculumDialog", () => {
       expect.any(String),
     );
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["curriculum"] });
+    // The load panel's periods come from the curriculum, so its summary goes stale too.
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["teacher-allocations", "load-summary", "list", {}],
+    });
     expect(onSwitchSession).toHaveBeenCalledWith(PLANNED_SESSION_ID);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

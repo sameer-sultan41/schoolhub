@@ -51,7 +51,7 @@ import { ApiError, Services } from "@/services";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { usePageClamp } from "@/hooks/use-page-clamp";
 import { FILTER_ALL } from "@/lib/constants";
-import { formatLastUpdated, getInitials } from "@/lib/helpers";
+import { formatLastUpdated, getInitials, toOrdering } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import {
@@ -304,13 +304,7 @@ export function StaffDirectoryTable() {
   const statusFilter = filters.status === FILTER_ALL ? undefined : filters.status;
 
   const sort = sorting[0];
-  // `sort.id` is always one of this table's own column ids (or the `joiningDate`
-  // sentinel) in practice, but nothing at the type level guarantees `SORT_FIELD` has an
-  // entry for it — guard the lookup so a miss produces `ordering: undefined` (sort
-  // param omitted) rather than a query string with the literal text "undefined"
-  // spliced into it.
-  const sortField = sort ? SORT_FIELD[sort.id] : undefined;
-  const ordering = sortField ? `${sort?.desc ? "-" : ""}${sortField}` : undefined;
+  const ordering = toOrdering(sorting, SORT_FIELD);
   const page = pagination.pageIndex + 1;
   const pageSize = pagination.pageSize;
 

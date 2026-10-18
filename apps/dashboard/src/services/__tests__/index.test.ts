@@ -41,6 +41,7 @@ describe("Services", () => {
       "staff",
       "studentTransfers",
       "students",
+      "teacherAllocations",
       "tenant",
     ]);
 
@@ -66,6 +67,7 @@ describe("Services", () => {
     expect(typeof Services.staff.fetchStaffById).toBe("function");
     expect(typeof Services.staff.triggerStaffExport).toBe("function");
     expect(typeof Services.staff.triggerStaffImport).toBe("function");
+    expect(typeof Services.staff.fetchTeachingStaffOptions).toBe("function");
 
     expect(typeof Services.schoolOrganization.fetchHouses).toBe("function");
 
@@ -94,5 +96,13 @@ describe("Services", () => {
     expect(typeof Services.studentTransfers.approveTransfer).toBe("function");
     expect(typeof Services.studentTransfers.rejectTransfer).toBe("function");
     expect(typeof Services.studentTransfers.completeTransfer).toBe("function");
+
+    expect(typeof Services.teacherAllocations.fetchAllocationsPage).toBe("function");
+    expect(typeof Services.teacherAllocations.allocateTeacher).toBe("function");
+    expect(typeof Services.teacherAllocations.updateAllocation).toBe("function");
+    expect(typeof Services.teacherAllocations.endAllocation).toBe("function");
+    expect(typeof Services.teacherAllocations.reinstateAllocation).toBe("function");
+    expect(typeof Services.teacherAllocations.deleteAllocation).toBe("function");
+    expect(typeof Services.teacherAllocations.fetchLoadSummary).toBe("function");
   });
 });

@@ -71,6 +71,16 @@ class AcademicsCrossTenantTests(AcademicsAPITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_load_summary_for_another_tenants_session_is_404(self) -> None:
+        url = "/api/v1/teacher-subject-allocations/load-summary"
+
+        # Positive control: the caller's own session resolves on the same route.
+        own = self.client.get(url, {"academic_session_id": str(self.session.pk)})
+        self.assertEqual(own.status_code, status.HTTP_200_OK)
+
+        foreign = self.client.get(url, {"academic_session_id": str(self.other_session.pk)})
+        self.assertEqual(foreign.status_code, status.HTTP_404_NOT_FOUND)
+
     # ---- list leakage -----------------------------------------------------
 
     def test_lists_never_contain_another_tenants_rows(self) -> None:
@@ -97,6 +107,33 @@ class AcademicsCrossTenantTests(AcademicsAPITestCase):
         )
 
         self.assertEqual(response.json()["data"], [])
+
+    def test_filtering_allocations_by_another_tenants_class_or_campus_returns_nothing(self) -> None:
+        with tenant_context(self.tenant.id):
+            own = TeacherAllocationFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.section,
+                subject=self.subject,
+                staff=self.teacher,
+            )
+
+        for param, own_id, foreign_id in (
+            ("class_id", self.section.school_class_id, self.other_section.school_class_id),
+            ("campus_id", self.section.campus_id, self.other_section.campus_id),
+        ):
+            with self.subTest(filter=param):
+                url = "/api/v1/teacher-subject-allocations"
+
+                # Positive control: the caller's own id finds their row, so [] below is not vacuous.
+                mine = self.client.get(url, {param: str(own_id)})
+                self.assertEqual(mine.status_code, status.HTTP_200_OK)
+                self.assertEqual([row["id"] for row in mine.json()["data"]], [str(own.pk)])
+
+                response = self.client.get(url, {param: str(foreign_id)})
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.json()["data"], [])
 
     # ---- writes with a smuggled foreign id --------------------------------
 
@@ -137,6 +174,34 @@ class AcademicsCrossTenantTests(AcademicsAPITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_patching_another_tenants_allocation_is_404(self) -> None:
+        response = self.client.patch(
+            f"/api/v1/teacher-subject-allocations/{self.other_allocation.pk}",
+            {"weekly_periods": 9},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_patching_an_allocation_to_a_foreign_teacher_is_rejected(self) -> None:
+        with tenant_context(self.tenant.id):
+            own = TeacherAllocationFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.section,
+                subject=self.subject,
+                staff=self.teacher,
+            )
+        url = f"/api/v1/teacher-subject-allocations/{own.pk}"
+
+        # Positive control: the same route works for the caller's own row.
+        ok = self.client.patch(url, {"weekly_periods": 2}, format="json")
+        self.assertEqual(ok.status_code, status.HTTP_200_OK)
+
+        response = self.client.patch(url, {"staff_id": str(self.other_staff.pk)}, format="json")
+
+        # 400, as on create: the tenant-scoped queryset cannot resolve the id.
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_deleting_another_tenants_allocation_is_404(self) -> None:
         response = self.client.delete(

@@ -730,8 +730,7 @@
       "selectTeacher": "Select a teacher",
       "teacherHint": "Only active teaching staff can be allocated.",
       "isPrimary": "Primary teacher",
-      "effectiveFrom": "Effective from",
-      "effectiveTo": "Effective to"
+      "effectiveFrom": "Effective from"
     },
     "curriculum": {
       "title": "Curriculum",
@@ -793,32 +792,60 @@
       "primary": "Primary",
       "coTeacher": "Co-teacher",
       "current": "Current",
+      "startsOn": "Starts {date}",
       "endedOn": "Ended {date}",
+      "curriculumDefault": "Curriculum default",
+      "sectionLabel": "{className} · {sectionName}",
+      "saved": "Allocation saved.",
+      "ended": "Allocation ended.",
+      "reinstated": "Allocation reinstated.",
+      "removed": "Allocation removed.",
       "overNormWarning": "This teacher is now allocated {periods} periods a week, above the norm of {norm}. The allocation was saved.",
       "list": {
         "caption": "Teacher allocations",
         "emptyTitle": "No teachers allocated yet",
-        "emptyDescription": "Give a section's subject a teacher, and their weekly load starts counting here."
+        "emptyDescription": "Give a section's subject a teacher, and their weekly load starts counting here.",
+        "searchPlaceholder": "Search by teacher, subject or section",
+        "noMatches": "No allocations match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter.",
+        "loadError": "The teacher allocations couldn't be loaded."
+      },
+      "filters": {
+        "state": "Status",
+        "current": "Current",
+        "ended": "Ended"
       },
       "columns": {
         "role": "Role",
-        "effective": "Effective",
-        "actions": "Actions"
+        "effective": "Effective"
       },
       "actions": {
         "create": "Allocate a teacher",
         "end": "End",
-        "delete": "Remove"
+        "reinstate": "Reinstate",
+        "delete": "Remove",
+        "editRow": "Edit {teacher}, {subject}, {section}",
+        "endRow": "End {teacher}, {subject}, {section}",
+        "reinstateRow": "Reinstate {teacher}, {subject}, {section}",
+        "deleteRow": "Remove {teacher}, {subject}, {section}"
       },
       "form": {
         "createTitle": "Allocate a teacher",
+        "editTitle": "Edit allocation",
         "description": "The subject must already be part of the section's class curriculum for this session.",
+        "noCurriculumSubjects": "This class has no curriculum for the session yet. Add its subjects under Curriculum first.",
         "weeklyPeriodsHint": "Leave blank to use the curriculum's own weekly period target.",
-        "isPrimaryHint": "One primary teacher per section and subject at a time; others are co-teachers."
+        "weeklyPeriodsInvalid": "Enter a whole number of at least 1.",
+        "isPrimaryHint": "One primary teacher per section and subject at a time; others are co-teachers.",
+        "submitting": "Saving"
       },
       "end": {
         "title": "End this allocation",
-        "description": "End-dating preserves the history and frees the primary slot for a replacement."
+        "description": "The allocation ends today and stays in the history. If it is the primary teacher, that slot is free for a replacement."
+      },
+      "reinstate": {
+        "title": "Reinstate this allocation",
+        "description": "The allocation becomes current again. If it is the primary teacher, it replaces the section's current primary teacher for this subject."
       },
       "delete": {
         "title": "Remove this allocation",
@@ -827,11 +854,11 @@
     },
     "loadSummary": {
       "title": "Teacher load",
+      "loadError": "The teacher load couldn't be loaded.",
+      "loading": "Loading the teacher load",
       "normHint": "Weekly periods per teacher for the selected session, against a norm of {norm}.",
       "overNorm": "Over norm",
       "withinNorm": "Within norm",
-      "pickSession": "Choose a single academic session to see per-teacher load.",
-      "pickSessionTitle": "Pick a session",
       "columns": {
         "allocations": "Allocations",
         "weeklyPeriods": "Weekly periods",

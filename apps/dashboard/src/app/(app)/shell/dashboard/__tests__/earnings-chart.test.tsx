@@ -1,12 +1,14 @@
-import { screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen } from "@testing-library/react";
+import { queryKeys } from "@/lib/query-client";
 import { renderWithProviders } from "@/test-utils";
 import { Services } from "@/services";
 import { EarningsChart } from "../earnings-chart";
 
 jest.mock("@/services", () => ({
   Services: {
-    dashboard: { fetchTeacherLoadSummary: jest.fn() },
     schoolOrganization: { fetchAcademicSessions: jest.fn() },
+    teacherAllocations: { fetchLoadSummary: jest.fn() },
   },
 }));
 
@@ -24,9 +26,8 @@ const mockFetchAcademicSessions = Services.schoolOrganization
   .fetchAcademicSessions as jest.MockedFunction<
   typeof Services.schoolOrganization.fetchAcademicSessions
 >;
-const mockFetchTeacherLoadSummary = Services.dashboard
-  .fetchTeacherLoadSummary as jest.MockedFunction<
-  typeof Services.dashboard.fetchTeacherLoadSummary
+const mockFetchLoadSummary = Services.teacherAllocations.fetchLoadSummary as jest.MockedFunction<
+  typeof Services.teacherAllocations.fetchLoadSummary
 >;
 
 // `as const`: the generated session status is a union, which a widened `string` isn't.
@@ -40,7 +41,7 @@ const CURRENT_SESSION = {
 describe("EarningsChart", () => {
   beforeEach(() => {
     mockFetchAcademicSessions.mockReset();
-    mockFetchTeacherLoadSummary.mockReset();
+    mockFetchLoadSummary.mockReset();
   });
 
   it("shows a skeleton while the session/load queries are in flight", () => {
@@ -53,20 +54,65 @@ describe("EarningsChart", () => {
 
   it("resolves the current session, then charts the load sorted heaviest first", async () => {
     mockFetchAcademicSessions.mockResolvedValue([CURRENT_SESSION]);
-    mockFetchTeacherLoadSummary.mockResolvedValue([
-      { staff_id: "a", name: "Ayesha Khan", weekly_periods: 18, allocations: 4, over_norm: false },
-      { staff_id: "b", name: "Bilal Ahmed", weekly_periods: 26, allocations: 5, over_norm: true },
+    mockFetchLoadSummary.mockResolvedValue([
+      {
+        staff_id: "a",
+        name: "Ayesha Khan",
+        weekly_periods: 18,
+        allocations: 4,
+        norm: 30,
+        over_norm: false,
+      },
+      {
+        staff_id: "b",
+        name: "Bilal Ahmed",
+        weekly_periods: 36,
+        allocations: 5,
+        norm: 30,
+        over_norm: true,
+      },
     ]);
 
     renderWithProviders(<EarningsChart />);
 
-    expect(await screen.findByTestId("apex-chart")).toHaveTextContent("[26,18]");
-    expect(mockFetchTeacherLoadSummary).toHaveBeenCalledWith("sess-1");
+    expect(await screen.findByTestId("apex-chart")).toHaveTextContent("[36,18]");
+    expect(mockFetchLoadSummary).toHaveBeenCalledWith("sess-1");
+  });
+
+  // The allocations screen's load panel reads this same key, so its invalidation of
+  // `teacher-allocations` refreshes the widget.
+  it("holds its load under the key the allocations screen shares", async () => {
+    const rows = [
+      {
+        staff_id: "a",
+        name: "Ayesha Khan",
+        weekly_periods: 18,
+        allocations: 4,
+        norm: 30,
+        over_norm: false,
+      },
+    ];
+    mockFetchAcademicSessions.mockResolvedValue([CURRENT_SESSION]);
+    mockFetchLoadSummary.mockResolvedValue(rows);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <EarningsChart />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByTestId("apex-chart")).toBeInTheDocument();
+    expect(
+      queryClient.getQueryData(
+        queryKeys.list("teacher-allocations", "load-summary", { sessionId: CURRENT_SESSION.id }),
+      ),
+    ).toEqual(rows);
   });
 
   it("says no load is recorded rather than rendering an empty chart", async () => {
     mockFetchAcademicSessions.mockResolvedValue([CURRENT_SESSION]);
-    mockFetchTeacherLoadSummary.mockResolvedValue([]);
+    mockFetchLoadSummary.mockResolvedValue([]);
 
     renderWithProviders(<EarningsChart />);
 

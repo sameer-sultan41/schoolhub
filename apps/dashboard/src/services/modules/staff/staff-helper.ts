@@ -38,6 +38,16 @@ export function toStaffRow(staff: StaffDirectoryRecord): StaffRow {
   };
 }
 
+/** Staff -> `{ id, name }` picker options, named "First Last". */
+export function toStaffOptions(
+  staff: readonly StaffDirectoryRecord[],
+): { id: string; name: string }[] {
+  return staff.map((member) => ({
+    id: member.id,
+    name: `${member.first_name} ${member.last_name}`,
+  }));
+}
+
 export function statusMeta(status: string): { variant: StatusVariant; label: string } {
   return STATUS_META[status] ?? { variant: "secondary", label: humanizeSnakeCase(status) };
 }

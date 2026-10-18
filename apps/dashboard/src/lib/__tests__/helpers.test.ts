@@ -1,4 +1,11 @@
-import { downloadFile, formatDate, isUuid, stableSignedUrl } from "../helpers";
+import {
+  downloadFile,
+  formatDate,
+  isUuid,
+  stableSignedUrl,
+  todayIsoDate,
+  toOrdering,
+} from "../helpers";
 
 /** A SigV4-shaped link for `path`, signed at `signedAt` (UTC) and valid for `ttlSeconds`. */
 function signedLink(path: string, signedAt: string, ttlSeconds = 3600) {
@@ -127,5 +134,56 @@ describe("isUuid", () => {
     "6f1d2c3b-4a5e-4f60-8a71-92b3c4d5e6f7x",
   ])("rejects %p", (value) => {
     expect(isUuid(value)).toBe(false);
+  });
+});
+
+describe("toOrdering", () => {
+  const FIELDS = { name: "last_name", joiningDate: "joining_date" };
+
+  it("maps the sorted column to its API field, ascending", () => {
+    expect(toOrdering([{ id: "name", desc: false }], FIELDS)).toBe("last_name");
+  });
+
+  it("prefixes a descending sort with a minus", () => {
+    expect(toOrdering([{ id: "joiningDate", desc: true }], FIELDS)).toBe("-joining_date");
+  });
+
+  it("is undefined with no sort, so the param is omitted", () => {
+    expect(toOrdering([], FIELDS)).toBeUndefined();
+  });
+
+  // Not the literal text "undefined" spliced into the query string.
+  it("is undefined for a column the map has no field for", () => {
+    expect(toOrdering([{ id: "updatedAt", desc: true }], FIELDS)).toBeUndefined();
+  });
+
+  it("reads only the first sort", () => {
+    const sorting = [
+      { id: "name", desc: true },
+      { id: "joiningDate", desc: false },
+    ];
+
+    expect(toOrdering(sorting, FIELDS)).toBe("-last_name");
+  });
+});
+
+describe("todayIsoDate", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // The server's "today" is the UTC date. The suite runs under America/New_York
+  // (`jest.global-setup.ts`), where 02:30Z is still the evening of the day before.
+  it("is the UTC date, not the viewer's local one", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-01-06T02:30:00Z"));
+
+    expect(new Date().getDate()).toBe(5);
+    expect(todayIsoDate()).toBe("2026-01-06");
+  });
+
+  it("is a zero-padded YYYY-MM-DD date", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-03-04T23:59:59Z"));
+
+    expect(todayIsoDate()).toBe("2026-03-04");
   });
 });

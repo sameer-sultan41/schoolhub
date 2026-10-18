@@ -8,7 +8,8 @@ import {
   toCurriculumBody,
   toCurriculumQueryParams,
 } from "../curriculum-helper";
-import { CLASS_ID, curriculumRecord, SESSION_ID, SUBJECT_ID } from "./curriculum-fixtures";
+import { CLASS_ID, SESSION_ID, SUBJECT_ID } from "@/test-fixtures/academics";
+import { curriculumRecord } from "./curriculum-fixtures";
 
 describe("toCurriculumBody", () => {
   it("maps every camelCase field to its snake_case key", () => {

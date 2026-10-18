@@ -233,7 +233,8 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 - `GET/POST /api/v1/class-subjects` · `GET/PATCH/DELETE /api/v1/class-subjects/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `subject_id`, `is_elective`.
 - `POST /api/v1/class-subjects:clone` — clone curriculum between sessions: synchronous `200` with `{created, skipped}`, `Idempotency-Key` supported (see the implementation notes above).
-- `GET/POST /api/v1/teacher-subject-allocations` · `PATCH/DELETE /api/v1/teacher-subject-allocations/{id}` — filters: `academic_session_id`, `section_id`, `subject_id`, `staff_id`; `GET /api/v1/teacher-subject-allocations/load-summary` (per-teacher aggregates).
+- `GET/POST /api/v1/teacher-subject-allocations` · `PATCH/DELETE /api/v1/teacher-subject-allocations/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `section_id`, `subject_id`, `staff_id`, `current` (`true`: no end date, `false`: ended, absent: both); `search` over the teacher's first and last name, the subject's name and the section's name. POST and PATCH answer `{data, meta: {warnings}}` (the over-norm warning rides in `meta`, never a `422`). `effective_to` is the UTC date: the server runs on UTC, so the dashboard sends the UTC date. The rules behind PATCH, End and Reinstate are in §20.
+- `GET /api/v1/teacher-subject-allocations/load-summary` — per-teacher aggregates; `academic_session_id` is required and returns typed rows `{staff_id, name, weekly_periods, allocations, norm, over_norm}`.
 - `GET/POST /api/v1/student-promotions` (batches) · `GET /api/v1/student-promotions/{id}` (batch with per-student decisions) · `PATCH /api/v1/student-promotions/{id}/decisions/{student_id}`.
 - `POST /api/v1/student-promotions/{id}:submit` · `:approve` · `:reject` · `:execute` (colon-actions; execute returns `202` + job, `Idempotency-Key` supported) · `:revert`.
 - `POST /api/v1/curriculum-imports` → `202` + job.
@@ -330,3 +331,78 @@ pieces: `useAcademicSession` (the session-scoped screen's one source of truth) a
 Mocked Playwright coverage is `e2e/tests/dashboard/academics-curriculum.spec.ts`; what this PR
 deliberately left out (term plans, syllabus attachment, import and export, approval, coverage
 reports, per-campus override editing beyond the campus select) is in `deferred-work.md`.
+
+**Dashboard, teacher allocation (as shipped).** `/academics/allocations` is the second Academics
+screen: one academic session's teacher allocations in a server-paginated `DataGrid` (section,
+subject, teacher, role, weekly periods, effective), with search over teacher, subject and section
+names, and filters for session, class, section, subject, teacher and state (Current by default,
+Ended, or All). It shares `useAcademicSession`, the `session` URL value and the closed-session
+read-only rule with the curriculum screen: a closed or archived session shows the notice and hides
+Allocate and the row buttons. Above the grid, a teacher-load panel lists each teacher's allocation
+count and weekly periods against the `norm` the API reports on every row, over-norm teachers first.
+It reads `load-summary` under the same `teacher-allocations` query key as the dashboard's
+teacher-load widget, so any allocation write refreshes both. "Allocate a teacher" picks a class,
+then one of its active sections, one of the subjects in that class's curriculum for the session
+(with none, a hint points to Curriculum) and an active teacher, and sends the whole allocation:
+session, section, subject, teacher, the primary flag, the optional weekly-period override and the
+optional start date, never an `effective_to`. Edit shows the section, subject and teacher
+read-only and sends only the fields that changed (`is_primary`, `weekly_periods`,
+`effective_from`); an edit that changes nothing sends nothing. End and Reinstate are confirm
+dialogs (semantics below) and Remove deletes an allocation entered by mistake. A save that leaves
+the teacher over the norm still stands: the API answers `meta.warnings` and the dashboard shows a
+warning toast naming the periods and the norm. Allocate needs `academics.teacher-allocation.create`,
+and the row buttons `.update` (Edit, End, Reinstate) and `.delete` (Remove). The list state
+(search, filters, sort, page, page size, hidden columns) is in the URL
+([ADR-0024](../decisions/0024-list-state-in-the-url.md)), so a reload or a shared link keeps the
+view. Mocked Playwright coverage is `e2e/tests/dashboard/academics-allocations.spec.ts`; the §9
+drag-and-drop grid, a tenant-configured norm, a "My allocations" view for teachers and the
+coverage-gap notification are in `deferred-work.md`.
+
+**Teacher allocation, backend rules shipped with it.**
+
+- **`PATCH` now runs the §11 rules `create` runs, on what changed — or on the row becoming
+  active, whichever is broader.** A closed or archived session is a `422` (on `DELETE` too); a
+  non-teaching or inactive staff member is a `422` on `staff_id`; a subject outside the class's
+  curriculum is a `422` on `subject_id`. The staff/curriculum checks re-run whenever `effective_to`
+  ends up `null` even if neither `staff` nor the slot is in the payload — a bare `{is_primary:
+  true}` or a Reinstate (`{effective_to: null}`) brings a row back to life just as surely as
+  changing who's on it, and a staff member who went inactive or a subject the curriculum dropped
+  since the row was last active must still be caught. Making a co-teacher primary, moving a
+  primary to a slot that already has one, or reinstating a primary end-dates the current primary
+  instead of surfacing the one-primary constraint as a `409`. `PATCH` answers `{data, meta:
+  {warnings}}`, like `POST`.
+- **`effective_to` has three behaviours, all on `PATCH`:**
+
+  | Action | Request | Rule |
+  | ------ | ------- | ---- |
+  | End | `effective_to` set to a date | On or before today and on or after `effective_from`. A future end date is refused (`400` on `effective_to`), since today's load summary would drop the row early. A row that has not started has nothing to end, so the dashboard offers Remove instead. |
+  | Reinstate | `effective_to: null` on an ended row | How the same teacher gets the same section and subject back: `tsa_unique_allocation` (session, section, subject, staff) ignores `effective_to`, so a fresh `POST` is a `409`. Reinstating a primary end-dates whoever is the current primary (§6 history). Reinstating, and promoting a co-teacher to primary, re-check that the teacher is still an active teacher and the subject is still in the class's curriculum; an edit that leaves an active row active does not. |
+  | Future-start primary displaced | a new or reinstated primary displaces one whose `effective_from` is in the future | The displaced row is end-dated at `max(today, effective_from)`: ending it "today" would put `effective_to` before `effective_from` (`tsa_effective_range_ordered`). This also fixes the same latent bug in the create path. |
+
+  `effective_to` used to be read-only on the whole serializer, so a `PATCH` naming it was ignored
+  and an allocation could only be ended by a new primary displacing it; it is now writable on
+  `PATCH` only: on create a non-null `effective_to` is refused (`400`) rather than dropped
+  silently, and an explicit `null` is accepted as a no-op. A displaced future-start row can carry
+  a future `effective_to`, so the future ceiling runs only when `effective_to` is itself in the
+  payload; the ordering check (the end is not before the start) runs whenever either date is, so
+  moving only the start of such a row works until it passes the end. The dashboard's edit sends
+  only the fields that changed.
+- **"Today" is the UTC date.** The server runs `TIME_ZONE = UTC`, so `timezone.localdate()` (the
+  end-date ceiling and the load summary's "current" window) is the UTC date. The dashboard's End
+  therefore sends `todayIsoDate()`, the UTC date: a viewer's local date, east of UTC, would be
+  refused as "in the future" for part of each day. A per-tenant timezone would revisit this.
+- **Reads.** Rows carry the read-only `class_id`, `class_name`, `section_name`, `subject_name` and
+  `staff_name`. The list filters are `class_id`, `campus_id` and `current` (`true`: no end date,
+  `false`: ended, absent: both), besides the existing `academic_session_id`, `section_id`,
+  `subject_id` and `staff_id`; `search` matches the teacher's first or last name, the subject's
+  name or the section's name. `load-summary` requires `academic_session_id` (a missing or
+  malformed id is a `422`, an unknown or other-tenant session a `404`) and returns typed
+  `TeacherLoadRow`s `{staff_id, name, weekly_periods, allocations, norm, over_norm}`.
+- **Not a `v2` event under [`api-architecture.md`](../02-architecture/api-architecture.md) §2.1.**
+  The closed-session lock and the allocation rules on `PATCH`, the refusal of a non-null
+  `effective_to` on create and the `422` on a malformed `load-summary` id (it was a server error)
+  tighten rules §11 and this section already declared, which the endpoints used to accept writes
+  against or answer loosely. Refusing a non-null `effective_to` on create is the one change to a
+  rule no doc declared: it was a serializer comment, and a silent drop becomes a `400`. The row names, the filters,
+  `search`, `norm` and the typed `load-summary` rows are additive. A client that followed the contract is unaffected, and the dashboard and e2e suite in
+  this repo, regenerated and changed in the same PR, are its only consumers.

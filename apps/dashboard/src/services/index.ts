@@ -8,6 +8,7 @@ import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
 import { StudentsService } from "./modules/students";
 import { StudentTransfersService } from "./modules/student-transfers";
+import { TeacherAllocationsService } from "./modules/teacher-allocations";
 import { TenantService } from "./modules/tenant";
 
 /**
@@ -38,6 +39,16 @@ export type {
   SchoolOrganizationOption,
 } from "./modules/school-organization";
 
+export type {
+  AllocateTeacherInput,
+  AllocationSaveResult,
+  TeacherAllocationPageQuery,
+  TeacherAllocationRecord,
+  TeacherLoadRow,
+  TeacherLoadWarning,
+  UpdateAllocationInput,
+} from "./modules/teacher-allocations";
+
 /** `UpdateGuardianLinkInput` is re-exported here (not just from the guardians module
  * itself) because Task 7's `GuardianLinkFlagsDialog` imports it from `@/services`, not
  * from the guardians module directly (ADR-0011: feature code imports only `@/services`,
@@ -67,6 +78,7 @@ export const Services = {
   jobs: JobsService,
   schoolOrganization: SchoolOrganizationService,
   curriculum: CurriculumService,
+  teacherAllocations: TeacherAllocationsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

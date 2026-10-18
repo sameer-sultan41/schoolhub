@@ -76,6 +76,10 @@ describe("DeleteCurriculumDialog", () => {
     });
     expect(mockDeleteCurriculum).toHaveBeenCalledWith(RECORD_ID);
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["curriculum"] });
+    // The load panel's periods come from the curriculum, so its summary goes stale too.
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["teacher-allocations", "load-summary", "list", {}],
+    });
     expect(mockToastSuccess).toHaveBeenCalledWith("Subject removed from the curriculum.");
   });
 
