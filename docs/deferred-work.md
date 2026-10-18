@@ -1412,7 +1412,8 @@ either this file or `project-status.md`.
 
 - **A future-start replacement primary ends today's primary today.** Allocating, or reinstating, a
   primary that starts next term end-dates the current primary immediately, so nobody is in force
-  between now and the start date. `tsa_one_primary_per_section_subject` only counts rows with
+  between now and the start date. A reassignment (changing a current primary's teacher) does not
+  have this gap: it takes effect at once and refuses a later start. `tsa_one_primary_per_section_subject` only counts rows with
   `effective_to IS NULL`, so the model cannot say "current until the new one starts". Expressing it
   needs either a constraint over the date range (an exclusion constraint on the section and
   subject with a date range) or holding the replacement in a pending state until its start.

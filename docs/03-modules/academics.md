@@ -422,9 +422,9 @@ coverage-gap notification are in `deferred-work.md`.
   as when a new primary displaces it, and a new primary row for the new teacher is created in the
   same section and subject, after the checks `POST` runs for that teacher (active teaching staff,
   the subject in the curriculum, a writable session). The new row starts the day the old one ends,
-  so the two never overlap in the history; a `PATCH` that sends a later `effective_from` starts it
-  then, and one that sends an earlier date is refused (`422` on `effective_from`, naming the end
-  date). `weekly_periods` carries over unless the same `PATCH` sets it. The response is the
+  so the two never overlap in the history and the slot is never left without a primary. A `PATCH`
+  may name that day as `effective_from`, but an earlier or a later date is refused (`422` on
+  `effective_from`, naming the day). `weekly_periods` carries over unless the same `PATCH` sets it. The response is the
   **new** row, so its `id` is not the one in the URL; the audit log records the old row as an
   `update` (before and after) and the new row as a `create`, and the new teacher is the one
   notified and the one the load warning is for. If the new teacher already holds a row for that

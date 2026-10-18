@@ -261,9 +261,9 @@ def _reassign_primary(
     """A new primary for the slot in place of `allocation`, which is end-dated and kept (§6).
 
     It is `create_allocation` for `staff`, so the same checks run for the new teacher and the
-    old row is end-dated by the same rule. The new row starts when the old one ends (or later,
-    if the PATCH says so), so the two never overlap; `weekly_periods` carries over unless the
-    PATCH sets it.
+    old row is end-dated by the same rule. The new row starts the day the old one ends, so the two
+    never overlap and the slot is never left without a primary; the PATCH may name that day but no
+    other. `weekly_periods` carries over unless the PATCH sets it.
     """
     existing = (
         TeacherSubjectAllocation.objects.alive()
@@ -297,6 +297,15 @@ def _reassign_primary(
                 "effective_from": (
                     "The new teacher cannot start before the previous teacher's allocation "
                     f"ends on {ends_on.isoformat()}."
+                )
+            }
+        )
+    if effective_from > ends_on:
+        raise DomainRuleViolation(
+            {
+                "effective_from": (
+                    "A reassignment takes effect straight away, so the new teacher cannot "
+                    f"start after {ends_on.isoformat()}."
                 )
             }
         )
