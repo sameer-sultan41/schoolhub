@@ -182,6 +182,14 @@ def assert_batch_in_status(*, batch_id: uuid.UUID, expected: str) -> list[Studen
     return rows
 
 
+def _assert_target_session_writable(rows: list[StudentPromotion]) -> None:
+    """A closed or archived target session takes no new work: submit, approve and execute refuse it.
+
+    Reject and revert only release or undo rows, so they do not call this.
+    """
+    assert_session_writable(rows[0].to_academic_session)
+
+
 def _transition(
     batch_id: uuid.UUID,
     *,
@@ -214,7 +222,7 @@ def _transition(
 @transaction.atomic
 def submit_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     rows = assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.DRAFT)
-    assert_session_writable(rows[0].to_academic_session)
+    _assert_target_session_writable(rows)
     _assert_decisions_complete(rows)
     updated = _transition(
         batch_id,
@@ -320,7 +328,7 @@ def approve_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     and it cannot drift from the batch.
     """
     rows = assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.PENDING_APPROVAL)
-    assert_session_writable(rows[0].to_academic_session)
+    _assert_target_session_writable(rows)
 
     preparers = {row.created_by for row in rows if row.created_by}
     if preparers == {actor_id}:
@@ -424,7 +432,7 @@ def assert_batch_executable(*, batch_id: uuid.UUID) -> None:
     rows = list(batch_queryset(batch_id).select_related("to_academic_session"))
     _assert_executable({row.status for row in rows})
     # A closed target session would fail every student in the job; say so up front instead.
-    assert_session_writable(rows[0].to_academic_session)
+    _assert_target_session_writable(rows)
 
 
 def execute_batch(
