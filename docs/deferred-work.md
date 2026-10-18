@@ -1471,3 +1471,10 @@ either this file or `project-status.md`.
   legacy fallback costs two queries per distinct from-class for a draft created before the
   proposal was recorded. A `select_related` on the PATCH queryset and an `assertNumQueries` on
   `retrieve` close the first two; the fallback goes away with the last pre-recording draft.
+
+- **Nothing pins that a whole sidebar row is clickable.** Jest runs in jsdom, which has no layout,
+  so it cannot measure a click area; the child-row fix (the link stretches over its row) was
+  checked in a browser only. A Playwright spec that clicks the empty end of a child row, such as
+  the space beside "Curriculum", and expects the route to change would pin it. Top-level items
+  (Students, Staff) grow their link but leave the row's side padding as a dead strip of a few
+  pixels; the same stretched link would close it.

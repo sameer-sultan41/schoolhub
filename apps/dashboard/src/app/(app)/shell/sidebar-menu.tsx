@@ -156,8 +156,12 @@ export function SidebarMenu() {
       );
     }
     return (
-      <AccordionMenuItem key={index} value={item.path || ""} className="text-[13px]">
-        <Link href={item.path || "#"}>{item.title}</Link>
+      <AccordionMenuItem key={index} value={item.path || ""} className="relative text-[13px]">
+        {/* The link stretches over the whole row: it only wraps the title, so a click on the
+            rest of the highlighted row used to do nothing. */}
+        <Link href={item.path || "#"} className="after:absolute after:inset-0">
+          {item.title}
+        </Link>
       </AccordionMenuItem>
     );
   };
