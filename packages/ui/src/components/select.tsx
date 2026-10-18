@@ -117,12 +117,20 @@ function SelectScrollDownButton({
   );
 }
 
+/**
+ * Departure from the vendor source: `emptyMessage`. In popper mode the viewport is sized to
+ * the trigger, so a list with no items opened as a blank white box. When the caller gives a
+ * message and there are no items, that is shown instead. No English default: this package
+ * has no i18n, so the caller passes the translated text.
+ */
 function SelectContent({
   className,
   children,
   position = "popper",
+  emptyMessage,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: React.ComponentProps<typeof SelectPrimitive.Content> & { emptyMessage?: ReactNode }) {
+  const isEmpty = emptyMessage !== undefined && React.Children.toArray(children).length === 0;
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
@@ -144,7 +152,17 @@ function SelectContent({
               "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
           )}
         >
-          {children}
+          {isEmpty ? (
+            <div
+              data-slot="select-empty"
+              role="status"
+              className="px-2 py-1.5 text-sm text-muted-foreground"
+            >
+              {emptyMessage}
+            </div>
+          ) : (
+            children
+          )}
         </SelectPrimitive.Viewport>
         <SelectScrollDownButton />
       </SelectPrimitive.Content>

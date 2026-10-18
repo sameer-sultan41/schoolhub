@@ -246,7 +246,7 @@ function RequestTransferBody({
                         <SelectValue placeholder={t("enrollment.fields.selectCampus")} />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent emptyMessage={tCommon("noOptions")}>
                       {destinationCampuses.map((campus) => (
                         <SelectItem key={campus.id} value={campus.id}>
                           {campus.name}
