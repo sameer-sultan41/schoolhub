@@ -1472,6 +1472,13 @@ either this file or `project-status.md`.
   proposal was recorded. A `select_related` on the PATCH queryset and an `assertNumQueries` on
   `retrieve` close the first two; the fallback goes away with the last pre-recording draft.
 
+- **Nothing pins that a whole sidebar row is clickable.** Jest runs in jsdom, which has no layout,
+  so it cannot measure a click area; the child-row fix (the link stretches over its row) was
+  checked in a browser only. A Playwright spec that clicks the empty end of a child row, such as
+  the space beside "Curriculum", and expects the route to change would pin it. Top-level items
+  (Students, Staff) grow their link but leave the row's side padding as a dead strip of a few
+  pixels; the same stretched link would close it.
+
 - **Two dropdowns still open blank when their list is empty.** `SelectContent` now takes an
   `emptyMessage` (translated by the caller; `packages/ui` has no i18n), and the form select field,
   the session picker and the student enroll, class and section, transfer and create-profile
