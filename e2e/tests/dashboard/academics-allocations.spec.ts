@@ -6,6 +6,7 @@ import {
   SCHOOL_ADMIN_PERMISSIONS,
   uuid,
 } from "@/data/factories";
+import { isApiCall, type RequestLike } from "@/lib/request-matchers";
 import {
   academicsAllocationsModule,
   academicsCurriculumModule,
@@ -94,21 +95,10 @@ const COLLECTION_PATH = /\/teacher-subject-allocations$/;
 const ROW_PATH = /\/teacher-subject-allocations\/[^/]+$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** What the helpers below read off a Playwright `Request`, which a spec may not import. */
-interface RequestLike {
-  method(): string;
-  url(): string;
-}
-
-/** Whether `request` is a `method` call to an allocations path matching `path`. */
-function isAllocationCall(request: RequestLike, method: string, path: RegExp): boolean {
-  return request.method() === method && path.test(new URL(request.url()).pathname);
-}
-
 /** The allocations list read, with the `current` flag it was asked for (`null`: not asked). */
 function isListCall(request: RequestLike, current: string | null): boolean {
   return (
-    isAllocationCall(request, "GET", COLLECTION_PATH) &&
+    isApiCall(request, "GET", COLLECTION_PATH) &&
     new URL(request.url()).searchParams.get("current") === current
   );
 }
@@ -243,24 +233,26 @@ test.describe("academics sidebar group, teacher allocation", () => {
   });
 
   test.describe("with only the promotion view key", () => {
-    // The module key is held, but neither section's `.view` is; with no child left, the group
-    // goes. (PR C adds the Promotions landing assertion.)
+    // Promotions' `.view` is held, but neither Curriculum's nor Teacher allocation's: the group
+    // shows with Promotions as its only child. (`academics-promotions.spec.ts` covers where
+    // `/academics` sends this viewer.)
     test.use({
       authUser: buildUser({
         permissions: [...SCHOOL_ADMIN_PERMISSIONS, "academics.promotion.view"],
       }),
     });
 
-    test("shows no Academics group, Curriculum or Teacher allocation link", async ({
+    test("lists Promotions without Curriculum or Teacher allocation", async ({
       dashboardPage,
       signedIn: _signedIn,
     }) => {
       await dashboardPage.goto();
 
       // A link the user does hold, so the menu is known to be filtered for the loaded user
-      // before the group's absence is asserted.
+      // before the group's contents are asserted.
       await expect(dashboardPage.navLink("Students")).toBeVisible();
-      await expect(dashboardPage.navGroup("Academics")).toHaveCount(0);
+      await dashboardPage.navGroup("Academics").click();
+      await expect(dashboardPage.navLink("Promotions")).toBeVisible();
       await expect(dashboardPage.navLink("Curriculum")).toHaveCount(0);
       await expect(dashboardPage.navLink("Teacher allocation")).toHaveCount(0);
     });
@@ -303,7 +295,7 @@ test.describe("teacher allocation screen", () => {
     await allocationsPage.chooseOption(allocationsPage.formSelect("Teacher"), "Ayesha Khan");
     await allocationsPage.weeklyPeriodsInput.fill("14");
 
-    const request = page.waitForRequest((r) => isAllocationCall(r, "POST", COLLECTION_PATH));
+    const request = page.waitForRequest((r) => isApiCall(r, "POST", COLLECTION_PATH));
     await allocationsPage.saveButton.click();
 
     // The session is the screen's, the class only drove the pickers, and there is no
@@ -340,7 +332,7 @@ test.describe("teacher allocation screen", () => {
     await expect(allocationsPage.weeklyPeriodsInput).toHaveValue("20");
     await allocationsPage.weeklyPeriodsInput.fill("16");
 
-    const request = page.waitForRequest((r) => isAllocationCall(r, "PATCH", ROW_PATH));
+    const request = page.waitForRequest((r) => isApiCall(r, "PATCH", ROW_PATH));
     await allocationsPage.saveButton.click();
 
     // Neither the unchanged role and start date nor `effective_to` (End and Reinstate own it).
@@ -357,7 +349,7 @@ test.describe("teacher allocation screen", () => {
     await allocationsPage.rowAction("End", AYESHA_ENGLISH_A).click();
     await expect(allocationsPage.confirmDialog).toHaveAccessibleName("End this allocation");
 
-    const ended = page.waitForRequest((r) => isAllocationCall(r, "PATCH", ROW_PATH));
+    const ended = page.waitForRequest((r) => isApiCall(r, "PATCH", ROW_PATH));
     await allocationsPage.confirm("End").click();
 
     // Only the date, and the UTC one (the server counts "today" in UTC).
@@ -373,7 +365,7 @@ test.describe("teacher allocation screen", () => {
     await allocationsPage.chooseOption(allocationsPage.filter("Status"), "Ended");
     await expect(allocationsPage.row("Ayesha Khan", "English")).toContainText(/Ended/);
 
-    const reinstated = page.waitForRequest((r) => isAllocationCall(r, "PATCH", ROW_PATH));
+    const reinstated = page.waitForRequest((r) => isApiCall(r, "PATCH", ROW_PATH));
     await allocationsPage.rowAction("Reinstate", AYESHA_ENGLISH_A).click();
     await expect(allocationsPage.confirmDialog).toHaveAccessibleName("Reinstate this allocation");
     await allocationsPage.confirm("Reinstate").click();
@@ -391,7 +383,7 @@ test.describe("teacher allocation screen", () => {
     await allocationsPage.rowAction("Remove", BILAL_ENGLISH_B).click();
     await expect(allocationsPage.confirmDialog).toHaveAccessibleName("Remove this allocation");
 
-    const request = page.waitForRequest((r) => isAllocationCall(r, "DELETE", ROW_PATH));
+    const request = page.waitForRequest((r) => isApiCall(r, "DELETE", ROW_PATH));
     await allocationsPage.confirm("Remove").click();
     await request;
 

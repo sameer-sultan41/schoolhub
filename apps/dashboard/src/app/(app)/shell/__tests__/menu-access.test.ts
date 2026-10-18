@@ -62,7 +62,7 @@ describe("filterMenuByAccess", () => {
   });
 
   it("hides the parent when the user holds the module's keys but none for its children", () => {
-    const visible = filterMenuByAccess(MENU, buildUser(["academics.promotion.view"]));
+    const visible = filterMenuByAccess(MENU, buildUser(["academics.promotion.create"]));
 
     expect(titles(visible)).not.toContain("Academics");
   });

@@ -11199,7 +11199,11 @@ paths:
       - jwtAuth: []
       responses:
         '201':
-          description: The new batch id and its row count.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionBatchCreated'
+          description: ''
   /api/v1/student-promotions/{batch_pk}/decisions/{student_pk}:
     patch:
       operationId: student_promotions_decisions_partial_update
@@ -11273,7 +11277,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: The batch plus its per-student rows.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionBatchDetail'
+          description: ''
   /api/v1/student-promotions/{id}:approve:
     post:
       operationId: student_promotions_:approve_create
@@ -11306,7 +11314,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionBatch'
+                $ref: '#/components/schemas/PromotionTransitionResult'
           description: ''
   /api/v1/student-promotions/{id}:execute:
     post:
@@ -11372,7 +11380,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionBatch'
+                $ref: '#/components/schemas/PromotionTransitionResult'
           description: ''
   /api/v1/student-promotions/{id}:revert:
     post:
@@ -11406,7 +11414,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PromotionBatch'
+                $ref: '#/components/schemas/PromotionTransitionResult'
           description: ''
   /api/v1/student-promotions/{id}:submit:
     post:
@@ -11437,7 +11445,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionTransitionResult'
+          description: ''
   /api/v1/student-transfers:
     get:
       operationId: student_transfers_list
@@ -20166,13 +20178,24 @@ components:
           type: string
           format: uuid
           readOnly: true
+        from_class_name:
+          type: string
+          readOnly: true
         to_class_id:
           type: string
           format: uuid
           nullable: true
+        to_class_name:
+          type: string
+          readOnly: true
+          nullable: true
         to_section_id:
           type: string
           format: uuid
+          nullable: true
+        to_section_name:
+          type: string
+          readOnly: true
           nullable: true
         decision:
           $ref: '#/components/schemas/PromotionDecisionEnum'
@@ -20192,7 +20215,7 @@ components:
           maxLength: 500
         status:
           allOf:
-          - $ref: '#/components/schemas/PromotionDecisionStatusEnum'
+          - $ref: '#/components/schemas/PromotionStatusEnum'
           readOnly: true
         approved_by:
           type: string
@@ -21206,9 +21229,9 @@ components:
         consequences of its rows rather than a parent record that can drift out of
         sync with them.
 
-        `status` is grouped on rather than picked from a row. If a batch ever
-        contained mixed statuses it would surface here as two entries for one
-        `batch_id`, which is the honest rendering of a corrupt batch rather than a
+        `status` is grouped on rather than picked from a row. A partly executed batch
+        has mixed statuses (the enrolled rows executed, the failed ones still approved),
+        so it surfaces here as one entry per status for one `batch_id`, rather than a
         silently chosen winner.
       properties:
         batch_id:
@@ -21217,14 +21240,20 @@ components:
         from_academic_session_id:
           type: string
           format: uuid
+        from_academic_session_name:
+          type: string
         to_academic_session_id:
           type: string
           format: uuid
+        to_academic_session_name:
+          type: string
         from_class_id:
           type: string
           format: uuid
-        status:
+        from_class_name:
           type: string
+        status:
+          $ref: '#/components/schemas/PromotionStatusEnum'
         students:
           type: integer
         started_at:
@@ -21233,11 +21262,73 @@ components:
       required:
       - batch_id
       - from_academic_session_id
+      - from_academic_session_name
       - from_class_id
+      - from_class_name
       - started_at
       - status
       - students
       - to_academic_session_id
+      - to_academic_session_name
+    PromotionBatchCreated:
+      type: object
+      description: '`POST /student-promotions` (201): the new batch''s id and row
+        count.'
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        students:
+          type: integer
+      required:
+      - batch_id
+      - students
+    PromotionBatchDetail:
+      type: object
+      description: '`GET /student-promotions/{id}`: the batch summary plus every decision
+        row.'
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        from_academic_session_id:
+          type: string
+          format: uuid
+        from_academic_session_name:
+          type: string
+        to_academic_session_id:
+          type: string
+          format: uuid
+        to_academic_session_name:
+          type: string
+        from_class_id:
+          type: string
+          format: uuid
+        from_class_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/PromotionStatusEnum'
+        students:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionDecision'
+      required:
+      - batch_id
+      - decisions
+      - from_academic_session_id
+      - from_academic_session_name
+      - from_class_id
+      - from_class_name
+      - started_at
+      - status
+      - students
+      - to_academic_session_id
+      - to_academic_session_name
     PromotionDecision:
       type: object
       description: |-
@@ -21282,13 +21373,24 @@ components:
           type: string
           format: uuid
           readOnly: true
+        from_class_name:
+          type: string
+          readOnly: true
         to_class_id:
           type: string
           format: uuid
           nullable: true
+        to_class_name:
+          type: string
+          readOnly: true
+          nullable: true
         to_section_id:
           type: string
           format: uuid
+          nullable: true
+        to_section_name:
+          type: string
+          readOnly: true
           nullable: true
         decision:
           $ref: '#/components/schemas/PromotionDecisionEnum'
@@ -21308,7 +21410,7 @@ components:
           maxLength: 500
         status:
           allOf:
-          - $ref: '#/components/schemas/PromotionDecisionStatusEnum'
+          - $ref: '#/components/schemas/PromotionStatusEnum'
           readOnly: true
         approved_by:
           type: string
@@ -21345,12 +21447,15 @@ components:
       - executed_at
       - from_academic_session_id
       - from_class_id
+      - from_class_name
       - from_enrollment_id
       - id
       - status
       - student_id
       - student_name
       - to_academic_session_id
+      - to_class_name
+      - to_section_name
       - updated_at
     PromotionDecisionEnum:
       enum:
@@ -21364,7 +21469,7 @@ components:
         * `retained` - Retained
         * `promoted_on_trial` - Promoted on trial
         * `graduated` - Graduated
-    PromotionDecisionStatusEnum:
+    PromotionStatusEnum:
       enum:
       - draft
       - pending_approval
@@ -21378,6 +21483,15 @@ components:
         * `approved` - Approved
         * `executed` - Executed
         * `reverted` - Reverted
+    PromotionTransitionResult:
+      type: object
+      description: '`:submit`, `:approve`, `:reject` and `:revert`: how many rows
+        moved.'
+      properties:
+        updated:
+          type: integer
+      required:
+      - updated
     QualificationTypeEnum:
       enum:
       - degree

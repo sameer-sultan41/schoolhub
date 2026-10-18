@@ -1,5 +1,5 @@
 import type { Locator } from "@playwright/test";
-import { BasePage } from "../../base.page";
+import { AcademicsPage } from "./academics-base.page";
 
 /** A row's teacher, subject and section, as its action buttons name them. */
 export interface AllocationRowLabel {
@@ -18,7 +18,7 @@ export interface AllocationRowLabel {
  *
  * The Academics sidebar group is the shell's, so it is `DashboardPage.navGroup`.
  */
-export class AllocationsPage extends BasePage {
+export class AllocationsPage extends AcademicsPage {
   readonly path = "/academics/allocations";
 
   /** The screen on a given session: `?session=` is the URL's only session carrier, and a
@@ -102,13 +102,6 @@ export class AllocationsPage extends BasePage {
    * `aria-label`; "Status" is Current, Ended or All. */
   filter(label: "Class" | "Section" | "Subject" | "Teacher" | "Status"): Locator {
     return this.page.getByRole("combobox", { name: label, exact: true });
-  }
-
-  /** Options render in a portal outside their dialog, hence the page-level lookup. Exact, so
-   * "Current" never also picks a longer name. */
-  async chooseOption(trigger: Locator, option: string): Promise<void> {
-    await trigger.click();
-    await this.page.getByRole("option", { name: option, exact: true }).click();
   }
 
   // ---- Allocate / Edit dialog ----

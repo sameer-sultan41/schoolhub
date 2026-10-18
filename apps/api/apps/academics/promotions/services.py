@@ -15,6 +15,7 @@ from collections.abc import Callable
 from django.db import transaction
 from django.http import Http404
 from django.utils import timezone
+from rest_framework.exceptions import APIException
 
 from apps.academics import notifications
 from apps.academics.models import PromotionDecision, PromotionStatus, StudentPromotion
@@ -24,6 +25,9 @@ from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from core.api.exceptions import Conflict, DomainRuleViolation
 
 logger = logging.getLogger(__name__)
+
+# What a student's failure line says when the cause is not an API error (see `failure_message`).
+GENERIC_FAILURE_MESSAGE = "Unexpected error; see the server log."
 
 # §12's "promotion batch pending approval" goes to the `principal`; the key is
 # what the endpoint actually gates on, so it is what the fan-out resolves.
@@ -56,11 +60,11 @@ def create_promotion_batch(
     """Propose one decision per actively-enrolled student in `school_class`.
 
     The proposal is deliberately naive — everyone moves up a level, or graduates
-    at the top — because the inputs §7.2 wants (published final results,
-    attendance percentages) come from examinations and attendance, neither of
-    which exists. `decision_basis` records that explicitly rather than leaving a
-    reviewer to assume a rule ran. Reviewers then adjust drafts, which is the
-    step the workflow actually gates on.
+    at the top — because nothing reads the §7.2 inputs (published final results,
+    attendance percentages) yet: examinations and attendance have shipped, but
+    proposals do not use them. `decision_basis` records that explicitly rather
+    than leaving a reviewer to assume a rule ran. Reviewers then adjust drafts,
+    which is the step the workflow actually gates on.
     """
     if from_session.pk == to_session.pk:
         raise DomainRuleViolation(
@@ -100,6 +104,9 @@ def create_promotion_batch(
         raise Conflict("A promotion batch already exists for this class and session pair.")
 
     target = next_class_for(from_class=school_class, tenant_id=tenant_id)
+    proposed_decision = (
+        PromotionDecision.GRADUATED if target is None else PromotionDecision.PROMOTED
+    )
     batch_id = uuid.uuid4()
     basis = {
         "rule": "level+1",
@@ -109,6 +116,11 @@ def create_promotion_batch(
             "Proposed from class level alone. Result and attendance inputs "
             "(academics.md §7.2) arrive with the examinations and attendance modules."
         ),
+        # The proposal as made, which the row's own editable `decision`/`to_class_id`
+        # are later compared against at submit. `proposed_to_class_id` is always
+        # present, None when graduating, so a missing key means a pre-recording row.
+        "proposed_decision": proposed_decision,
+        "proposed_to_class_id": str(target.pk) if target is not None else None,
     }
 
     rows = [
@@ -121,9 +133,7 @@ def create_promotion_batch(
             to_academic_session=to_session,
             from_class=school_class,
             to_class=target,
-            decision=(
-                PromotionDecision.GRADUATED if target is None else PromotionDecision.PROMOTED
-            ),
+            decision=proposed_decision,
             decision_basis=basis,
             status=PromotionStatus.DRAFT,
             created_by=actor_id,
@@ -172,6 +182,14 @@ def assert_batch_in_status(*, batch_id: uuid.UUID, expected: str) -> list[Studen
     return rows
 
 
+def _assert_target_session_writable(rows: list[StudentPromotion]) -> None:
+    """A closed or archived target session takes no new work: submit, approve and execute refuse it.
+
+    Reject and revert only release or undo rows, so they do not call this.
+    """
+    assert_session_writable(rows[0].to_academic_session)
+
+
 def _transition(
     batch_id: uuid.UUID,
     *,
@@ -204,6 +222,7 @@ def _transition(
 @transaction.atomic
 def submit_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     rows = assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.DRAFT)
+    _assert_target_session_writable(rows)
     _assert_decisions_complete(rows)
     updated = _transition(
         batch_id,
@@ -216,32 +235,62 @@ def submit_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     return updated
 
 
+# from_class_id -> next-level class id (None when graduating), for rows with no recorded proposal.
+_LegacyTargets = dict[uuid.UUID, str | None]
+
+
 def _assert_decisions_complete(rows: list[StudentPromotion]) -> None:
-    """§11: a decision deviating from the proposal needs a reason.
+    """§11: a decision or target class deviating from the proposal needs a reason.
 
     Checked at submit rather than on every draft edit, so a reviewer can work
     through a batch in any order without the form fighting them.
     """
+    legacy_targets: _LegacyTargets = {}
     missing = [
         str(row.student_id)
         for row in rows
-        if row.decision != _proposed_decision(row) and not row.override_reason
+        if not row.override_reason and _deviates_from_proposal(row, legacy_targets)
     ]
     if missing:
         raise DomainRuleViolation(
             {
                 "override_reason": (
-                    "An override reason is required where the decision differs from the "
-                    f"proposal. Missing for {len(missing)} student(s)."
+                    "An override reason is required where the decision or the target class "
+                    f"differs from the proposal. Missing for {len(missing)} student(s)."
                 )
             }
         )
 
 
-def _proposed_decision(row: StudentPromotion) -> str:
+def _deviates_from_proposal(row: StudentPromotion, legacy_targets: _LegacyTargets) -> bool:
+    if row.decision != _proposed_decision(row, legacy_targets):
+        return True
+    current_target = str(row.to_class_id) if row.to_class_id is not None else None
+    return current_target != _proposed_to_class_id(row, legacy_targets)
+
+
+def _proposed_to_class_id(row: StudentPromotion, legacy_targets: _LegacyTargets) -> str | None:
+    """The recorded proposal, else today's next level for a legacy row (one lookup per class)."""
+    basis = row.decision_basis or {}
+    if "proposed_to_class_id" in basis:
+        return basis["proposed_to_class_id"]
+    if row.from_class_id not in legacy_targets:
+        target = next_class_for(from_class=row.from_class, tenant_id=row.tenant_id)
+        legacy_targets[row.from_class_id] = str(target.pk) if target is not None else None
+    return legacy_targets[row.from_class_id]
+
+
+def _proposed_decision(row: StudentPromotion, legacy_targets: _LegacyTargets) -> str:
+    """The decision proposed at creation, read from the record and not from the row.
+
+    Deriving it from the row's current `to_class_id` let a reviewer clear the target,
+    flip to `graduated`, and have that edit define the proposal it was checked against.
+    """
     basis = row.decision_basis or {}
     return basis.get("proposed_decision") or (
-        PromotionDecision.GRADUATED if row.to_class_id is None else PromotionDecision.PROMOTED
+        PromotionDecision.GRADUATED
+        if _proposed_to_class_id(row, legacy_targets) is None
+        else PromotionDecision.PROMOTED
     )
 
 
@@ -279,6 +328,7 @@ def approve_batch(*, batch_id: uuid.UUID, actor_id: uuid.UUID) -> int:
     and it cannot drift from the batch.
     """
     rows = assert_batch_in_status(batch_id=batch_id, expected=PromotionStatus.PENDING_APPROVAL)
+    _assert_target_session_writable(rows)
 
     preparers = {row.created_by for row in rows if row.created_by}
     if preparers == {actor_id}:
@@ -379,7 +429,10 @@ def assert_batch_executable(*, batch_id: uuid.UUID) -> None:
     `execute_batch` re-checks under the worker's own read — this is a courtesy,
     never the guarantee.
     """
-    _assert_executable(set(batch_queryset(batch_id).values_list("status", flat=True)))
+    rows = list(batch_queryset(batch_id).select_related("to_academic_session"))
+    _assert_executable({row.status for row in rows})
+    # A closed target session would fail every student in the job; say so up front instead.
+    _assert_target_session_writable(rows)
 
 
 def execute_batch(
@@ -429,13 +482,41 @@ def execute_batch(
         else:
             try:
                 _execute_one(row=row, tenant_id=tenant_id, actor_id=actor_id, report=report)
-            except Exception as exc:  # noqa: BLE001 — one student must not fail the batch
-                logger.warning("promotion execution failed for student %s", row.student_id)
-                report["failed"].append({"student_id": str(row.student_id), "error": str(exc)})
+            except Exception as exc:
+                # One student's failure must not fail the batch.
+                if isinstance(exc, APIException):
+                    logger.warning("promotion execution failed for student %s", row.student_id)
+                else:
+                    logger.exception("promotion execution failed for student %s", row.student_id)
+                report["failed"].append(
+                    {"student_id": str(row.student_id), "error": failure_message(exc)}
+                )
         if on_progress is not None:
             on_progress(round(index / len(rows) * 100))
 
     return report
+
+
+def _detail_messages(detail) -> list[str]:
+    """The plain messages in a DRF `detail`: a string, or a list or dict of them."""
+    if isinstance(detail, dict):
+        return [message for value in detail.values() for message in _detail_messages(value)]
+    if isinstance(detail, list | tuple):
+        return [message for item in detail for message in _detail_messages(item)]
+    return [str(detail)]
+
+
+def failure_message(exc: Exception) -> str:
+    """A failed student's report line: an API error's own message, and nothing else.
+
+    Any other exception (a database error, a bug) can carry SQL or row data, which must not
+    reach the user-facing job result, so it is replaced by a generic line and logged instead.
+    """
+    if isinstance(exc, APIException):
+        messages = _detail_messages(exc.detail)
+        if messages:
+            return " ".join(messages)
+    return GENERIC_FAILURE_MESSAGE
 
 
 def _execute_one(*, row: StudentPromotion, tenant_id: uuid.UUID, actor_id: uuid.UUID, report: dict):
@@ -466,6 +547,20 @@ def _execute_one(*, row: StudentPromotion, tenant_id: uuid.UUID, actor_id: uuid.
                 }
             )
             return
+
+        # The enrollment can end after the batch was approved (a withdrawal or transfer);
+        # closing it would then match nothing, and the student would still be enrolled onward.
+        source_status = (
+            StudentEnrollment.objects.alive()
+            .select_for_update()
+            .filter(pk=row.from_enrollment_id)
+            .values_list("status", flat=True)
+            .first()
+        )
+        if source_status != EnrollmentStatus.ACTIVE:
+            raise DomainRuleViolation(
+                {"from_enrollment_id": "The student's enrollment in the source class has ended."}
+            )
 
         if row.decision == PromotionDecision.GRADUATED:
             _close_source_enrollment(row, EnrollmentStatus.GRADUATED, actor_id)

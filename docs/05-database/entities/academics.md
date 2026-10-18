@@ -211,8 +211,8 @@ Per-student promotion decision within an approvable batch (batch = shared `batch
 | to_class_id | uuid | yes | null | FK → classes(id); null when decision = `graduated` |
 | to_section_id | uuid | yes | null | FK → sections(id); assigned at/before execution |
 | decision | varchar(30) | no | — | Enum: `promoted` \| `retained` \| `promoted_on_trial` \| `graduated` |
-| decision_basis | jsonb | yes | null | Snapshot: result aggregates, attendance %, rule evaluation |
-| override_reason | varchar(500) | yes | null | Required when decision deviates from rule proposal |
+| decision_basis | jsonb | yes | null | Snapshot: result aggregates, attendance %, rule evaluation. Also holds `proposed_decision` and `proposed_to_class_id`, the proposal as made, written at batch creation and never edited (read-only through the API). `proposed_to_class_id` is always present and null for a graduating proposal, so a missing key means a row from before they were recorded |
+| override_reason | varchar(500) | yes | null | Required, checked at submit, when the decision or the target class differs from the recorded proposal (`decision_basis`) |
 | remarks | varchar(500) | yes | null | Class-teacher input |
 | status | varchar(30) | no | `'draft'` | Enum: `draft` \| `pending_approval` \| `approved` \| `executed` \| `reverted` |
 | approved_by | uuid | yes | null | FK → users(id); ≠ preparer (service-enforced) |

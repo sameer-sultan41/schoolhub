@@ -125,7 +125,7 @@ Batch states: `draft → pending_approval → approved → executed` (plus `reve
 - `class_subjects` unique per (session, class, subject) — per campus where overrides are enabled; subjects/classes must be active tenant records.
 - Weekly period targets ≥ 1; elective groups require ≥ 2 options; term plans must reference terms of the same session.
 - Teacher allocation: teacher must be active teaching staff; duplicate (session, section, subject, teacher) rejected; load warnings at tenant-configured norm, hard cap optional; allocation to a section requires the subject to exist in that class's curriculum.
-- Promotion: batch only for the active session with published final results (cross-check with examinations); one decision per enrolled student per batch; target class must be the next `level` (override with reason for skips *(recommendation)*); execution only from `approved`; approver ≠ preparer; re-execution attempts are no-ops (idempotent).
+- Promotion: batch only for the active session with published final results (cross-check with examinations); one decision per enrolled student per batch; target class must be the next `level`, and a decision or target class that differs from the proposal recorded at batch creation needs an override reason, checked when the batch is submitted (a skipped level, a cleared target and a flip between graduated and promoted all count; `retained` and `promoted_on_trial` always do — see the implementation notes in §16); execution only from `approved`; approver ≠ preparer; re-execution attempts are no-ops (idempotent).
 - Session lock: curriculum and allocations in closed sessions are read-only.
 
 ## 12. Notifications
@@ -219,13 +219,58 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 >   executable at all is still decided synchronously, so a draft batch is a
 >   `409` rather than a job that fails out of band. `Idempotency-Key` replays
 >   the job id, and re-execution stays a per-row no-op beyond the 24h window.
+>   A student who fails is reported with the server's plain message in the
+>   report's `error` (the API error's own text, joined; an unexpected exception
+>   is logged and reported as a generic line, so database text never reaches the
+>   job result).
 > - **Not built yet:** `POST /curriculum-imports`.
 > - **The promotion proposal is level-based only.** §7.2 has it read published
->   final results and attendance percentages; neither module exists yet, so
->   `decision_basis` records `results_available: false` and
->   `attendance_available: false` rather than implying a judgement that was
->   never made. Reviewers adjusting drafts is the step the workflow gates on, so
->   the flow is usable — but the rule engine is a genuine gap, not a shortcut.
+>   final results and attendance percentages; the `examinations` and `attendance` modules
+>   have since shipped, but nothing reads them yet, so `decision_basis` records
+>   `results_available: false` and `attendance_available: false` rather than implying a
+>   judgement that was never made. Reviewers adjusting drafts is the step the workflow gates
+>   on, so the flow is usable — but the rule engine is a genuine gap, not a shortcut.
+> - **The override reason follows a proposal recorded at creation.**
+>   `create_promotion_batch` writes `proposed_decision` and `proposed_to_class_id` into each
+>   row's `decision_basis`; the class key is always present and is null for a graduating
+>   proposal, so a graduating proposal is not mistaken for a row from before the keys existed.
+>   `:submit` requires an `override_reason` when either the decision or the target class
+>   differs from that record: a skipped level, a cleared target and a flip between graduated and
+>   promoted all need one, and `retained` and `promoted_on_trial` always deviate, so they always
+>   do. The check used to compare only the decision, against a proposal re-derived from the
+>   row's own editable target class, so an edit defined the proposal it was checked against and
+>   the rule never fired. The record freezes the ladder at creation: for every batch created
+>   from now on, a class deactivated or re-levelled afterwards no longer changes what counts as
+>   a skip. A draft created before the keys existed has no record and falls back to
+>   `next_class_for(from_class)` on today's ladder, cached per from-class (two queries per
+>   distinct class); its only consequence is at most one extra "reason required" prompt on a
+>   batch that is still open. `:submit` does not check that the recorded target class is still
+>   active, which is listed in `deferred-work.md` with `next_class_for` stepping over a
+>   deactivated level. The `422` text changed with the rule ("…the decision or the target class
+>   differs from the proposal. Missing for N student(s)."), and the dashboard shows it verbatim.
+>   There is **no section-required-at-submit rule**: a batch starts without sections, the
+>   proposal names a class and not a section, the review screen shows an advisory count of the
+>   students without one, and `:execute` reports each of them as failed, by name. Not a `v2`
+>   event under [`api-architecture.md`](../02-architecture/api-architecture.md) §2.1: the
+>   reason requirement tightens a §11 rule the contract already declared ("a skip needs a
+>   reason") whose check never fired; `decision_basis` gains two keys, read-only through the API
+>   and additive; and the in-repo consumers (the dashboard's decision editor, the e2e seed, which
+>   now sends an `override_reason` with its explicit target class) changed in the same PR.
+> - **The promotion endpoints now have typed responses.** `GET /student-promotions/{id}` is
+>   `PromotionBatchDetail` (the batch plus its `decisions`), `POST /student-promotions` answers
+>   `PromotionBatchCreated` (`{batch_id, students}`) and the four transitions answer
+>   `PromotionTransitionResult` (`{updated}`), where they were untyped bodies. The rows carry
+>   read-only names so a screen never resolves an id: a batch has `from_class_name`,
+>   `from_academic_session_name` and `to_academic_session_name`; a decision has
+>   `from_class_name`, `to_class_name` and `to_section_name`, the last two null until a reviewer
+>   picks them. A batch's `status` is a typed enum, `PromotionStatusEnum` (it was an untyped
+>   string on `PromotionBatch`, and the decision rows' own enum had been auto-named
+>   `PromotionDecisionStatusEnum`, a name with two promotion usage sites; one
+>   `ENUM_NAME_OVERRIDES` entry now names the one choice set). All of this is additive, so the
+>   §2.1 argument above covers it. **Only `:execute` honours `Idempotency-Key`**: `:submit`,
+>   `:approve`, `:reject` and `:revert` ignore it, so a transition retried after a lost response
+>   runs against the state machine again and answers `409`, and the dashboard reloads the batch
+>   to show its real status instead of treating that as a failure.
 > - **Two §12 notifications are deferred**, and say so in
 >   `apps/academics/notifications.py`: `promotion-input-request` needs a
 >   task/inbox surface for class teachers, and `coverage-gap` is a scheduled T-7
@@ -235,8 +280,8 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `POST /api/v1/class-subjects:clone` — clone curriculum between sessions: synchronous `200` with `{created, skipped}`, `Idempotency-Key` supported (see the implementation notes above).
 - `GET/POST /api/v1/teacher-subject-allocations` · `PATCH/DELETE /api/v1/teacher-subject-allocations/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `section_id`, `subject_id`, `staff_id`, `current` (`true`: no end date, `false`: ended, absent: both); `search` over the teacher's first and last name, the subject's name and the section's name. POST and PATCH answer `{data, meta: {warnings}}` (the over-norm warning rides in `meta`, never a `422`). `effective_to` is the UTC date: the server runs on UTC, so the dashboard sends the UTC date. The rules behind PATCH, End and Reinstate are in §20.
 - `GET /api/v1/teacher-subject-allocations/load-summary` — per-teacher aggregates; `academic_session_id` is required and returns typed rows `{staff_id, name, weekly_periods, allocations, norm, over_norm}`.
-- `GET/POST /api/v1/student-promotions` (batches) · `GET /api/v1/student-promotions/{id}` (batch with per-student decisions) · `PATCH /api/v1/student-promotions/{id}/decisions/{student_id}`.
-- `POST /api/v1/student-promotions/{id}:submit` · `:approve` · `:reject` · `:execute` (colon-actions; execute returns `202` + job, `Idempotency-Key` supported) · `:revert`.
+- `GET/POST /api/v1/student-promotions` (batches) · `GET /api/v1/student-promotions/{id}` (batch with per-student decisions, unpaginated) · `PATCH /api/v1/student-promotions/{id}/decisions/{student_id}` — the list is page-number paginated, newest batch first, with filters `status`, `decision`, `batch_id`, `student_id`, `from_academic_session_id`, `to_academic_session_id` and `from_class_id` and ordering by `status`, `students` or `started_at`. `GET …/{id}` ignores them: a batch is returned whole, or is a `404`. Typed responses: `PromotionBatch` (a list row), `PromotionBatchDetail`, `PromotionBatchCreated` (`201`) and the decision row's `PromotionDecision`, with the name fields and the `PromotionStatusEnum` status described in the implementation notes above.
+- `POST /api/v1/student-promotions/{id}:submit` · `:approve` · `:reject` · `:revert` (colon-actions answering `PromotionTransitionResult` `{updated}`; they ignore `Idempotency-Key`, so a retry is a `409`) · `:execute` (`202` + job; the one that honours `Idempotency-Key`). `:submit`, `:approve` and `:execute` answer `422` when the target session is closed or archived (`:reject` and `:revert` only release or undo rows, so they do not); the job reports a student whose source enrollment ended after approval as failed, by name, and does not enrol them onward. A failure of the whole batch puts only an API error's own message in the job's `error`; anything else is logged and shows a generic line.
 - `POST /api/v1/curriculum-imports` → `202` + job.
 
 ## 17. Integration Requirements
@@ -406,3 +451,47 @@ coverage-gap notification are in `deferred-work.md`.
   rule no doc declared: it was a serializer comment, and a silent drop becomes a `400`. The row names, the filters,
   `search`, `norm` and the typed `load-summary` rows are additive. A client that followed the contract is unaffected, and the dashboard and e2e suite in
   this repo, regenerated and changed in the same PR, are its only consumers.
+
+**Dashboard, promotions (as shipped).** `/academics/promotions` is the third Academics screen: every
+promotion batch in a server-paginated `DataGrid` (from class, sessions, students, status, started),
+newest first, with filters for the session and class a batch moves from and for its status. The
+list is not scoped to a session, so the session filter has an "All" choice rather than a current
+session, and its state is in the URL ([ADR-0024](../decisions/0024-list-state-in-the-url.md)): a
+reload or a shared link keeps the view. The From class cell is the row's link to the batch, named
+by its sessions too, since one class can have several. "New batch" (`academics.promotion.create`)
+opens a dialog for the from-session (the current one by default), the to-session (never the
+from-session, and never a closed or archived one, which the API would refuse) and an active
+class; it sends those three ids and on `201` opens the new batch, while a refusal (a batch already
+exists for that class and sessions, no enrolled students, a locked target) stays in the dialog.
+`/academics/promotions/{batchId}` is the review page, a page and not a side sheet because
+promotion is a workflow: the live journey and an approver's link address a batch by its URL. A
+segment that is not a UUID is a `404`; a batch the API cannot find, or another school's, shows a
+not-found state with a way back. The header names the class, the two sessions and the student
+count, and carries the one status badge (the decision rows share the batch's status, so the table
+has no status column). Under it are the buttons the status offers that the viewer's keys allow:
+Draft offers Submit for approval and Revert (`.update`); Pending approval, Approve and Reject
+(`.approve`) and Revert; Approved, Execute (`.execute`) and Revert; Executed, Revert; Reverted,
+none. Each opens a confirm dialog whose button reads as the one that opened it; the server's
+refusal (the preparer approving their own batch, an override reason missing for some students)
+shows inline in the open dialog, and a `409` also reloads the batch so the page behind shows its
+real status. Execute queues the job, polls it (the progress shows, and a second run cannot start
+meanwhile) and, when it ends, reloads the batch and shows the report: a count per outcome, and
+each skipped or failed student by name with the server's plain message. In draft and approved an
+advisory counts the students with no target section; it never blocks, because the server decides
+what executes and execute reports each of them as failed. In approved it also says that sections
+can no longer be set in the batch (decision edits are draft-only), so the way out is Revert and a
+new batch. The API sends every decision at once, so the decision table is searched (name or
+admission number) and paged (ten a page) in the browser.
+While the batch is a draft, a viewer holding `.update` gets an Edit button on each row: a dialog
+for the decision, target class, target section, override reason and remarks that mirrors the
+server's rules (graduating clears the class and section, retaining fixes the class to the one the
+student is in, a new class clears the section, None takes a set one away, and the reason is
+marked required where the decision or class differs from the recorded proposal, or the decision
+is retained or promoted on trial for a row with no recorded proposal) and sends only what
+changed. Mocked Playwright coverage is `e2e/tests/dashboard/academics-promotions.spec.ts` (the
+list) and `academics-promotion-review.spec.ts` (a batch's screen); they drive the same page-object
+methods as the nightly `live` journey
+(`e2e/tests/live/academics-promotion-journey.spec.ts`), which now clicks through the confirm
+dialogs, so the PR gate exercises the flow that lane depends on. Results- and attendance-based
+proposals, a bulk "assign target section" action, the class teacher's own-section scope and the
+two promotion notifications are in `deferred-work.md`.

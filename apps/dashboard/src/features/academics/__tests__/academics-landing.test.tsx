@@ -49,10 +49,25 @@ describe("AcademicsLanding", () => {
     expect(mockReplace).toHaveBeenCalledTimes(1);
   });
 
+  it("sends a user who can open only Promotions to /academics/promotions", async () => {
+    mockFetchCurrentUser.mockResolvedValue(buildUser(["academics.promotion.view"]));
+
+    renderWithProviders(<AcademicsLanding />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/academics/promotions");
+    });
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the permission message, and goes nowhere, without any section key", async () => {
     // A key from another module, and a section's create key, neither opens a section.
     mockFetchCurrentUser.mockResolvedValue(
-      buildUser(["students.student.view", "academics.curriculum.create"]),
+      buildUser([
+        "students.student.view",
+        "academics.curriculum.create",
+        "academics.promotion.create",
+      ]),
     );
 
     renderWithProviders(<AcademicsLanding />);
