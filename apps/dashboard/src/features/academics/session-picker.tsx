@@ -26,6 +26,7 @@ export interface SessionPickerProps {
  * any whose records are read-only (closed or archived). */
 export function SessionPicker({ sessions, value, onChange, className }: SessionPickerProps) {
   const t = useTranslations("academics");
+  const tCommon = useTranslations("common");
 
   return (
     <Select
@@ -38,7 +39,7 @@ export function SessionPicker({ sessions, value, onChange, className }: SessionP
       <SelectTrigger className={className} aria-label={t("fields.academicSession")}>
         <SelectValue placeholder={t("fields.selectSession")} />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent emptyMessage={tCommon("noOptions")}>
         {(sessions ?? []).map((session) => (
           <SelectItem key={session.id} value={session.id}>
             <span className="flex items-center gap-2">

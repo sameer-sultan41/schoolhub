@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import {
   FormControl,
@@ -46,6 +47,8 @@ export function FormSelectField<TFieldValues extends FieldValues>({
   onPick,
   description,
 }: FormSelectFieldProps<TFieldValues>) {
+  const tCommon = useTranslations("common");
+
   return (
     <FormField
       control={form.control}
@@ -67,7 +70,7 @@ export function FormSelectField<TFieldValues extends FieldValues>({
                 <SelectValue placeholder={placeholder} />
               </SelectTrigger>
             </FormControl>
-            <SelectContent>
+            <SelectContent emptyMessage={tCommon("noOptions")}>
               {emptyOption && (
                 <SelectItem value={emptyOption.value}>{emptyOption.label}</SelectItem>
               )}

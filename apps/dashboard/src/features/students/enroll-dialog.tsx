@@ -221,7 +221,7 @@ function EnrollBody({
                       />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent>
+                  <SelectContent emptyMessage={tCommon("noOptions")}>
                     {openSessions.map((session) => (
                       <SelectItem key={session.id} value={session.id}>
                         {session.name}

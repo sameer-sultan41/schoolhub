@@ -1478,3 +1478,11 @@ either this file or `project-status.md`.
   the space beside "Curriculum", and expects the route to change would pin it. Top-level items
   (Students, Staff) grow their link but leave the row's side padding as a dead strip of a few
   pixels; the same stretched link would close it.
+
+- **Two dropdowns still open blank when their list is empty.** `SelectContent` now takes an
+  `emptyMessage` (translated by the caller; `packages/ui` has no i18n), and the form select field,
+  the session picker and the student enroll, class and section, transfer and create-profile
+  dropdowns pass `common.noOptions`. The guardian picker's search-result list and the campus
+  select in the staff form dialog do not yet: the staff dialog gets its text through a different
+  path than the others, so it needs its own wiring. Selects with a fixed list (gender, status)
+  can never be empty and need nothing.
