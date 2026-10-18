@@ -32,7 +32,9 @@ export const NON_FIELD = "non_field";
  * (`resolveErrorMessage(..., "non_field")`, or `applyServerFieldErrors`' fallback) shows the
  * server's own reason for a field the dialog has no input for, instead of the code's generic
  * text. With no `knownFields`, every field detail folds: for a confirm dialog with no inputs.
- * Anything that isn't an `ApiError`, or has nothing to re-key, comes back as it was.
+ * `ApiError.fieldErrors()` keeps one message per key, so the `non_field` details and the
+ * re-keyed ones become one detail, at the first one's place, joining their distinct reasons.
+ * Anything that isn't an `ApiError`, or has nothing to fold, comes back as it was.
  */
 export function foldUnknownFieldErrors(
   error: unknown,
@@ -41,15 +43,23 @@ export function foldUnknownFieldErrors(
   if (!(error instanceof ApiError)) return error;
   const isUnknown = (field: string | undefined) =>
     field !== undefined && field !== NON_FIELD && !knownFields.includes(field);
-  if (!error.details.some((detail) => isUnknown(detail.field))) return error;
+  const isFolded = (field: string | undefined) => field === NON_FIELD || isUnknown(field);
+  const folded = error.details.filter((detail) => isFolded(detail.field));
+  if (folded.length < 2 && !folded.some((detail) => isUnknown(detail.field))) return error;
+
+  const issues = [
+    ...folded.filter((detail) => detail.field === NON_FIELD),
+    ...folded.filter((detail) => isUnknown(detail.field)),
+  ].map((detail) => detail.issue);
+  const issue = [...new Set(issues)].join(" ");
   return new ApiError({
     code: error.code,
     message: error.message,
     status: error.status,
     url: error.url,
-    details: error.details.map((detail) =>
-      isUnknown(detail.field) ? { ...detail, field: NON_FIELD } : detail,
-    ),
+    details: error.details
+      .filter((detail) => !isFolded(detail.field) || detail === folded[0])
+      .map((detail) => (isFolded(detail.field) ? { ...detail, field: NON_FIELD, issue } : detail)),
     requestId: error.requestId,
     meta: error.meta,
   });
