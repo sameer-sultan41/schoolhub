@@ -376,7 +376,7 @@ coverage-gap notification are in `deferred-work.md`.
   | Action | Request | Rule |
   | ------ | ------- | ---- |
   | End | `effective_to` set to a date | On or before today and on or after `effective_from`. A future end date is refused (`400` on `effective_to`), since today's load summary would drop the row early. A row that has not started has nothing to end, so the dashboard offers Remove instead. |
-  | Reinstate | `effective_to: null` on an ended row | How the same teacher gets the same section and subject back: `tsa_unique_allocation` (session, section, subject, staff) ignores `effective_to`, so a fresh `POST` is a `409`. Reinstating a primary end-dates whoever is the current primary (§6 history). |
+  | Reinstate | `effective_to: null` on an ended row | How the same teacher gets the same section and subject back: `tsa_unique_allocation` (session, section, subject, staff) ignores `effective_to`, so a fresh `POST` is a `409`. Reinstating a primary end-dates whoever is the current primary (§6 history). Reinstating, and promoting a co-teacher to primary, re-check that the teacher is still an active teacher and the subject is still in the class's curriculum; an edit that leaves an active row active does not. |
   | Future-start primary displaced | a new or reinstated primary displaces one whose `effective_from` is in the future | The displaced row is end-dated at `max(today, effective_from)`: ending it "today" would put `effective_to` before `effective_from` (`tsa_effective_range_ordered`). This also fixes the same latent bug in the create path. |
 
   `effective_to` used to be read-only on the whole serializer, so a `PATCH` naming it was ignored

@@ -316,6 +316,31 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertIn("staff_id", {d["field"] for d in response.json()["error"]["details"]})
 
+    def test_editing_an_active_allocation_whose_teacher_has_since_gone_inactive_is_allowed(
+        self,
+    ) -> None:
+        """Only Reinstate and promote-to-primary re-check the teacher; an unrelated edit must
+        not fail on something that changed elsewhere."""
+        row = self._allocate()
+        with tenant_context(self.tenant.id):
+            self.teacher.employment_status = EmploymentStatus.RESIGNED
+            self.teacher.save(update_fields=["employment_status"])
+
+        response = self._patch(row["id"], {"weekly_periods": 3})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_editing_an_active_allocation_whose_subject_left_the_curriculum_is_allowed(
+        self,
+    ) -> None:
+        row = self._allocate()
+        with tenant_context(self.tenant.id):
+            self.curriculum.delete()
+
+        response = self._patch(row["id"], {"weekly_periods": 3})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
     def test_moving_a_primary_onto_a_subject_with_a_primary_end_dates_that_primary(self) -> None:
         """slot_changed: the moved row takes the slot as on create, not a 409 on one-primary."""
         other_subject = self._add_curriculum_subject()
