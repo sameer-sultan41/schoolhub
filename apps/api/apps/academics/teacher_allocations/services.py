@@ -12,13 +12,17 @@ import uuid
 from datetime import date
 
 from django.db import transaction
-from django.db.models import DateField, F, Q, Value
-from django.db.models.functions import Coalesce, Greatest
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.academics import notifications
 from apps.academics.models import TeacherSubjectAllocation
 from apps.academics.teacher_allocations.dates import assert_patch_dates_valid
+from apps.academics.teacher_allocations.succession import (
+    end_date_current_primary,
+    outgoing_end_date,
+    row_for_slot,
+)
 from apps.school_organization.models import AcademicSession, ClassSubject, Section, Subject
 from apps.school_organization.services import assert_session_writable
 from apps.staff_management.models import EmploymentStatus, Staff, StaffType
@@ -156,7 +160,7 @@ def create_allocation(
     assert_subject_in_class_curriculum(session=session, section=section, subject=subject)
 
     if is_primary:
-        _end_date_current_primary(
+        end_date_current_primary(
             session=session, section=section, subject=subject, actor_id=actor_id
         )
 
@@ -228,7 +232,23 @@ def update_allocation(
         current_to=allocation.effective_to,
     )
 
-    if current_primary and teacher_changed:
+    reassigning = current_primary and teacher_changed
+    if (teacher_changed or slot_changed) and not reassigning:
+        # In place, the database would refuse a second row for the teacher with a generic 409.
+        clash = row_for_slot(
+            session=session,
+            section=section,
+            subject=subject,
+            staff=staff,
+            exclude_pk=allocation.pk,
+        )
+        if clash is not None:
+            raise Conflict(
+                f"{staff_display_name(staff)} already has an allocation for this section and "
+                "subject. Edit or reinstate that allocation instead."
+            )
+
+    if reassigning:
         return _reassign_primary(
             allocation=allocation, staff=staff, changes=changes, actor_id=actor_id
         )
@@ -239,7 +259,7 @@ def update_allocation(
         and (not allocation.is_primary or allocation.effective_to is not None or slot_changed)
     )
     if becoming_current_primary:
-        _end_date_current_primary(
+        end_date_current_primary(
             session=session,
             section=section,
             subject=subject,
@@ -265,15 +285,11 @@ def _reassign_primary(
     never overlap and the slot is never left without a primary; the PATCH may name that day but no
     other. `weekly_periods` carries over unless the PATCH sets it.
     """
-    existing = (
-        TeacherSubjectAllocation.objects.alive()
-        .filter(
-            academic_session=allocation.academic_session,
-            section=allocation.section,
-            subject=allocation.subject,
-            staff=staff,
-        )
-        .first()
+    existing = row_for_slot(
+        session=allocation.academic_session,
+        section=allocation.section,
+        subject=allocation.subject,
+        staff=staff,
     )
     if existing is not None:
         # `tsa_unique_allocation` ignores `effective_to`, so a new row for this teacher would 409
@@ -289,7 +305,7 @@ def _reassign_primary(
             f"subject. {recourse} instead of reassigning this one."
         )
 
-    ends_on = _outgoing_end_date(allocation.effective_from)
+    ends_on = outgoing_end_date(allocation.effective_from)
     effective_from = changes.get("effective_from") or ends_on
     if effective_from < ends_on:
         raise DomainRuleViolation(
@@ -326,47 +342,6 @@ def _reassign_primary(
 def assert_allocation_deletable(allocation: TeacherSubjectAllocation) -> None:
     """§11: a closed or archived session's allocations are read-only history."""
     assert_session_writable(allocation.academic_session)
-
-
-def _outgoing_end_date(effective_from: date | None) -> date:
-    """The end date `_end_date_current_primary` gives a primary that starts on `effective_from`."""
-    today = timezone.localdate()
-    return max(effective_from or today, today)
-
-
-def _end_date_current_primary(
-    *,
-    session: AcademicSession,
-    section: Section,
-    subject: Subject,
-    actor_id: uuid.UUID,
-    exclude_pk: uuid.UUID | None = None,
-) -> None:
-    """End-date the outgoing primary rather than deleting it (§6).
-
-    "Reassignment mid-session preserves history (old allocation end-dated, not
-    deleted)" — and it is also what keeps `tsa_one_primary_per_section_subject`
-    satisfiable, since that constraint only counts allocations with no
-    `effective_to`. Shared by create and PATCH; `exclude_pk` is the row being edited.
-    """
-    today = timezone.localdate()
-    outgoing = TeacherSubjectAllocation.objects.alive().filter(
-        academic_session=session,
-        section=section,
-        subject=subject,
-        is_primary=True,
-        effective_to__isnull=True,
-    )
-    if exclude_pk is not None:
-        outgoing = outgoing.exclude(pk=exclude_pk)
-    # A primary lined up to start later is ended at its own start: ending it
-    # "today" would put effective_to before effective_from (tsa_effective_range_ordered).
-    today_value = Value(today, output_field=DateField())
-    outgoing.update(
-        effective_to=Greatest(Coalesce(F("effective_from"), today_value), today_value),
-        updated_by=actor_id,
-        updated_at=timezone.now(),
-    )
 
 
 def notify_allocation_changed(

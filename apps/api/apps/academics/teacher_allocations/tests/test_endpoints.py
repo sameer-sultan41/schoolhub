@@ -635,6 +635,27 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
             old = TeacherSubjectAllocation.objects.get(pk=row["id"])
         self.assertEqual(old.effective_to, today)
 
+    def test_changing_a_co_teacher_onto_a_teacher_who_holds_a_row_names_the_way_out(self) -> None:
+        """In place the database would say only "conflicts with existing data"."""
+        self._allocate()
+        first_co = self._new_teacher()
+        second_co = self._new_teacher()
+        self._allocate(staff_id=str(first_co.pk), is_primary=False)
+        row = self._allocate(staff_id=str(second_co.pk), is_primary=False)
+
+        response = self._patch(row["id"], {"staff_id": str(first_co.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.json())
+        self.assertIn(
+            "already has an allocation for this section and subject. "
+            "Edit or reinstate that allocation instead.",
+            response.json()["error"]["message"],
+        )
+        with tenant_context(self.tenant.id):
+            self.assertEqual(
+                TeacherSubjectAllocation.objects.get(pk=row["id"]).staff_id, second_co.pk
+            )
+
     def test_a_reassignment_cannot_start_the_new_teacher_before_the_old_one_ends(self) -> None:
         today = timezone.localdate()
         row = self._allocate(effective_from=(today - datetime.timedelta(days=5)).isoformat())
