@@ -20,8 +20,8 @@
 5. Every wait and timeout is sized from the real path, using the existing named constant (L6).
 6. You searched other specs and PRs for behaviour your change alters (L7).
 7. Ids used as row or React keys are unique in the shape the API returns (L8).
-8. Test inputs are the exact values the code branches on (L9).
-9. A hook rejection was fixed at its cause, on the files it named (L10).
+8. Test inputs are the exact values the code branches on, and an unrelated edit still passes (L9, L14).
+9. A hook rejection was fixed at its cause, after reading its error, on the files it named (L10).
 10. Every brief to a subagent carries this repository's overrides (L11).
 
 ## 3. Lessons
@@ -75,7 +75,7 @@
 ### L10. Fix a hook rejection at its cause, on the files it names
 
 - **Mistake.** Hand-formatted code failed Prettier on several files; an old `noqa` was reported unused by ruff; cspell rejected two coined words in a comment and a doc.
-- **Check.** Apply the fix the hook prints, on exactly the files it lists. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment.
+- **Check.** Apply the fix the hook prints, on exactly the files it lists. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
 
 ### L11. Briefs to subagents must carry this repository's overrides
 
@@ -114,6 +114,26 @@
 
 - **Mistake.** `f7511d7` created the frontend `Dockerfile`s with `deps`/`builder`/`runner`, while compose kept building `target: dev`; the API `Dockerfile`'s own comment records the same break once before. `e2e-live` then failed all 50 recorded runs, and its first fix (MinIO, ADR-0025) only uncovered the next break: no PgBouncer userlist, migrations as the app role, env names the apps don't read, and then a `0600` userlist that a Linux bind mount hides from PgBouncer's uid 70 (macOS's Docker Desktop never showed it). The first plan said "no other change needed for CI", from a workflow that had never got past building images.
 - **Check.** When a `Dockerfile`'s stages or build args change, check every compose `target:` and `args:` that names them (`infra-compose`'s `images` job now builds them all). Before claiming a never-green workflow needs only one fix, read every step after the first failure as untested.
+
+### L14. A check added to an update path must name the transitions it guards
+
+- **Mistake.** A re-check of the teacher and curriculum was meant for Reinstate and promote-to-primary, but it was written as `effective_to is None`, which is true for every PATCH on an active row. Editing `weekly_periods` then failed whenever the teacher had gone inactive elsewhere.
+- **Check.** State the exact transitions the rule covers, build the condition from the before and after values, and add the negative test: an unrelated edit on the same row still succeeds.
+
+### L15. Quote a heredoc that contains backticks or dollar signs
+
+- **Mistake.** An unquoted `<<EOF` that wrote a docstring had the words it put in backticks run as shell commands, so the file was written with the words missing.
+- **Check.** Use `<<'EOF'` (or write the file with an editor tool) for any text with backticks, `$` or backslashes, and read the result back before committing.
+
+### L16. When you send the server "today", send the server's today
+
+- **Mistake.** A seed script ended an allocation with the local date. The server counts days in UTC, which was one day behind, so the date looked like the future and the call failed.
+- **Check.** Take dates for "today" from the server's clock (UTC) or the response's `Date` header, never from the machine's local date, and note it in the test.
+
+### L17. Another session may be using the same checkout
+
+- **Mistake.** The branch and HEAD changed between my commands because a second session worked in the same repository, so a branch I thought was checked out was not.
+- **Check.** Run `git branch --show-current` and `git status` before every git write. Do parallel work in a separate `git worktree`, but commit there only if the hooks can run: Prettier's Tailwind plugin and mypy failed in a worktree with a linked `node_modules`, so hook-sensitive commits belong in the main checkout.
 
 ## 4. Adding a lesson
 
