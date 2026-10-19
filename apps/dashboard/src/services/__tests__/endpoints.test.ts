@@ -41,6 +41,13 @@ describe("endpoints", () => {
     expect(endpoints.rooms.detail("room-1")).toBe("/rooms/room-1");
   });
 
+  it("builds the grid paths, validate and publish as colon-actions on a section", () => {
+    expect(endpoints.timetableSlots.list).toBe("/timetable-slots");
+    expect(endpoints.timetableSlots.detail("slot-1")).toBe("/timetable-slots/slot-1");
+    expect(endpoints.timetableSlots.validate("section-1")).toBe("/timetables/section-1:validate");
+    expect(endpoints.timetableSlots.publish("section-1")).toBe("/timetables/section-1:publish");
+  });
+
   it("declares the student bulk-operation paths, ID cards as a colon-action", () => {
     expect(endpoints.students.imports).toBe("/student-imports");
     expect(endpoints.students.exports).toBe("/student-exports");

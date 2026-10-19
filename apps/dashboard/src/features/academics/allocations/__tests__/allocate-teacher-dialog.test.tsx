@@ -101,7 +101,9 @@ describe("AllocateTeacherDialog", () => {
       { id: CLASS_ID, name: "Grade 1" },
       { id: OTHER_CLASS_ID, name: "Grade 2" },
     ]);
-    mockFetchSections.mockReset().mockResolvedValue([{ id: SECTION_ID, name: "A" }]);
+    mockFetchSections
+      .mockReset()
+      .mockResolvedValue([{ id: SECTION_ID, name: "A", campus_id: "campus-1" }]);
     mockFetchCurriculumForClass
       .mockReset()
       .mockResolvedValue([

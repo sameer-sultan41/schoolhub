@@ -38,6 +38,9 @@ class TimetableSlotFilterSet(django_filters.FilterSet):
     section_id = django_filters.UUIDFilter(field_name="section_id")
     room_id = django_filters.UUIDFilter(field_name="room_id")
     academic_session_id = django_filters.UUIDFilter(field_name="academic_session_id")
+    # The cells in force or waiting to be: drafts and live published rows, never the
+    # superseded history `:publish` end-dates. What a grid is drawn from.
+    current = django_filters.BooleanFilter(field_name="effective_to", lookup_expr="isnull")
 
     class Meta:
         model = TimetableSlot

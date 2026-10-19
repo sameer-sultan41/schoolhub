@@ -10,6 +10,13 @@ import { Paths } from "@/config/paths";
  */
 export const TIMETABLE_SECTIONS = [
   {
+    href: Paths.TIMETABLE_GRID,
+    labelKey: "nav.grid",
+    menuTitle: "Week grid",
+    // The draft key: the grid shows drafts, which never reach students or guardians (§5.7).
+    permission: "timetable.slot.view",
+  },
+  {
     href: Paths.TIMETABLE_PERIODS,
     labelKey: "nav.periods",
     menuTitle: "Periods",

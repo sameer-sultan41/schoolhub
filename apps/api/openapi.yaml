@@ -13065,6 +13065,10 @@ paths:
         schema:
           type: string
           format: uuid
+      - in: query
+        name: current
+        schema:
+          type: boolean
       - name: cursor
         required: false
         in: query
@@ -13166,7 +13170,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TimetableSlot'
-          description: The slot, plus `meta.conflicts` for the section (§16).
+          description: 'The slot, plus `meta.conflicts` for the section (§16): a list
+            of `TimetableConflict`.'
   /api/v1/timetable-slots/{id}:
     get:
       operationId: timetable_slots_retrieve
@@ -13312,9 +13317,14 @@ paths:
       - jwtAuth: []
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimetablePublishResult'
           description: Rows published and superseded, plus the accepted soft conflicts.
         '422':
-          description: A hard conflict, a locked session, or no draft to publish.
+          description: A hard conflict (the full list in `error.meta.conflicts`, each
+            a `TimetableConflict`), a locked session, or no draft to publish.
   /api/v1/timetables/{id}:validate:
     post:
       operationId: timetables_:validate_create
@@ -13351,6 +13361,10 @@ paths:
       - jwtAuth: []
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimetableValidation'
           description: '`conflicts` is the machine-readable list `{type, severity,
             slot_ids, message}` (§6); `has_hard_conflicts` says whether publish would
             be refused.'
@@ -21031,6 +21045,9 @@ components:
         section_id:
           type: string
           format: uuid
+        section_name:
+          type: string
+          readOnly: true
         day_of_week:
           type: integer
           maximum: 32767
@@ -21039,17 +21056,43 @@ components:
         period_id:
           type: string
           format: uuid
+        period_name:
+          type: string
+          readOnly: true
+        period_sequence:
+          type: integer
+          readOnly: true
+        start_time:
+          type: string
+          format: time
+          readOnly: true
+        end_time:
+          type: string
+          format: time
+          readOnly: true
         subject_id:
           type: string
           format: uuid
+          nullable: true
+        subject_name:
+          type: string
+          readOnly: true
           nullable: true
         staff_id:
           type: string
           format: uuid
           nullable: true
+        staff_name:
+          type: string
+          nullable: true
+          readOnly: true
         room_id:
           type: string
           format: uuid
+          nullable: true
+        room_name:
+          type: string
+          readOnly: true
           nullable: true
         status:
           allOf:
@@ -23647,6 +23690,63 @@ components:
       - sequence
       - start_date
       - updated_at
+    TimetableConflict:
+      type: object
+      description: |-
+        One finding of the conflict engine (§6): what `slots.conflicts.detect_conflicts`
+        returns, typed so the client reads `:validate`, `:publish` and every slot write's
+        `meta.conflicts` through one generated shape.
+      properties:
+        type:
+          type: string
+          description: e.g. `teacher_double_booked`; a client shows an unknown type
+            by `message`.
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/TimetableConflictSeverityEnum'
+          description: |-
+            Hard blocks publish; soft only warns.
+
+            * `hard` - hard
+            * `soft` - soft
+        slot_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        message:
+          type: string
+      required:
+      - message
+      - severity
+      - slot_ids
+      - type
+    TimetableConflictSeverityEnum:
+      enum:
+      - hard
+      - soft
+      type: string
+      description: |-
+        * `hard` - hard
+        * `soft` - soft
+    TimetablePublishResult:
+      type: object
+      description: |-
+        `:publish`'s answer: drafts made live, live cells they end-dated, and the soft
+        conflicts accepted along the way.
+      properties:
+        published:
+          type: integer
+        superseded:
+          type: integer
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableConflict'
+      required:
+      - conflicts
+      - published
+      - superseded
     TimetableSessionRequest:
       type: object
       description: |-
@@ -23682,6 +23782,9 @@ components:
         section_id:
           type: string
           format: uuid
+        section_name:
+          type: string
+          readOnly: true
         day_of_week:
           type: integer
           maximum: 32767
@@ -23690,17 +23793,43 @@ components:
         period_id:
           type: string
           format: uuid
+        period_name:
+          type: string
+          readOnly: true
+        period_sequence:
+          type: integer
+          readOnly: true
+        start_time:
+          type: string
+          format: time
+          readOnly: true
+        end_time:
+          type: string
+          format: time
+          readOnly: true
         subject_id:
           type: string
           format: uuid
+          nullable: true
+        subject_name:
+          type: string
+          readOnly: true
           nullable: true
         staff_id:
           type: string
           format: uuid
           nullable: true
+        staff_name:
+          type: string
+          nullable: true
+          readOnly: true
         room_id:
           type: string
           format: uuid
+          nullable: true
+        room_name:
+          type: string
+          readOnly: true
           nullable: true
         status:
           allOf:
@@ -23736,10 +23865,18 @@ components:
       - day_of_week
       - effective_from
       - effective_to
+      - end_time
       - id
       - period_id
+      - period_name
+      - period_sequence
+      - room_name
       - section_id
+      - section_name
+      - staff_name
+      - start_time
       - status
+      - subject_name
       - updated_at
     TimetableSlotStatusEnum:
       enum:
@@ -23749,6 +23886,27 @@ components:
       description: |-
         * `draft` - Draft
         * `published` - Published
+    TimetableValidation:
+      type: object
+      description: '`:validate`''s answer: the section''s full conflict list.'
+      properties:
+        section_id:
+          type: string
+          format: uuid
+        academic_session_id:
+          type: string
+          format: uuid
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableConflict'
+        has_hard_conflicts:
+          type: boolean
+      required:
+      - academic_session_id
+      - conflicts
+      - has_hard_conflicts
+      - section_id
     TransferCompleteRequest:
       type: object
       description: |-

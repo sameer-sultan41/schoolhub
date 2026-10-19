@@ -72,7 +72,7 @@ describe("ClassSectionFields", () => {
       { id: "grade-1", name: "Grade 1" },
       { id: "grade-2", name: "Grade 2" },
     ]);
-    mockFetchSections.mockResolvedValue([{ id: "section-a", name: "A" }]);
+    mockFetchSections.mockResolvedValue([{ id: "section-a", name: "A", campus_id: "campus-1" }]);
   });
 
   it("unlocked: fetches sections scoped to the chosen class and the given campusId, with isActive true", async () => {
@@ -109,8 +109,12 @@ describe("ClassSectionFields", () => {
   });
 
   it("resets the chosen section when the class changes in unlocked mode", async () => {
-    mockFetchSections.mockResolvedValueOnce([{ id: "section-a", name: "A" }]);
-    mockFetchSections.mockResolvedValueOnce([{ id: "section-b", name: "B" }]);
+    mockFetchSections.mockResolvedValueOnce([
+      { id: "section-a", name: "A", campus_id: "campus-1" },
+    ]);
+    mockFetchSections.mockResolvedValueOnce([
+      { id: "section-b", name: "B", campus_id: "campus-1" },
+    ]);
     renderWithProviders(<UnlockedHarness />);
 
     await userEvent.click(screen.getByRole("combobox", { name: /class/i }));

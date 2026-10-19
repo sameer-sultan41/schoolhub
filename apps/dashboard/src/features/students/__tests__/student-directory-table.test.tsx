@@ -631,7 +631,7 @@ describe("StudentDirectoryTable", () => {
         { id: CLASS_ID, name: "Grade 1" },
         { id: OTHER_CLASS_ID, name: "Grade 2" },
       ]);
-      mockFetchSections.mockResolvedValue([{ id: SECTION_ID, name: "A" }]);
+      mockFetchSections.mockResolvedValue([{ id: SECTION_ID, name: "A", campus_id: "campus-1" }]);
       mockFetchStudentsPage.mockResolvedValue(studentsPage(1, 0));
       const user = userEvent.setup();
 
@@ -658,7 +658,9 @@ describe("StudentDirectoryTable", () => {
 
     it("drops a section that isn't one of the class's sections once they load", async () => {
       setUrl(`/students?class=${CLASS_ID}&section=${SECTION_ID}`);
-      mockFetchSections.mockResolvedValue([{ id: OTHER_SECTION_ID, name: "B" }]);
+      mockFetchSections.mockResolvedValue([
+        { id: OTHER_SECTION_ID, name: "B", campus_id: "campus-1" },
+      ]);
       mockFetchStudentsPage.mockResolvedValue(studentsPage(1, 0));
 
       renderWithProviders(<StudentDirectoryTable />);

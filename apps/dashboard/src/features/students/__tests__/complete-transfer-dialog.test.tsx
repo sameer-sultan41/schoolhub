@@ -48,7 +48,7 @@ describe("CompleteTransferDialog", () => {
   beforeEach(() => {
     mockFetchSections.mockReset();
     mockCompleteTransfer.mockReset();
-    mockFetchSections.mockResolvedValue([{ id: "section-9", name: "C" }]);
+    mockFetchSections.mockResolvedValue([{ id: "section-9", name: "C", campus_id: "campus-1" }]);
   });
 
   it("inter_campus with an active enrollment: requires a section, scoped to the destination campus", async () => {
