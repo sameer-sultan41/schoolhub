@@ -59,7 +59,8 @@
 ### L7. A change can break a sibling PR's test
 
 - **Mistake.** Adding Promotions to the Academics sidebar made the allocations spec ("a user with only the promotion view key sees no Academics group") false, in a PR that was already open.
-- **Check.** When you change shared navigation, permissions, barrels or fixtures, grep the specs and tests on sibling branches and open PRs for the behaviour, and fix them in the PR that causes the change.
+- **Mistake (again, #119).** Registering `Services.periods`/`Services.rooms` broke `services/__tests__/index.test.ts`, which lists every domain; CI's coverage job caught it.
+- **Check.** When you change shared navigation, permissions, barrels or fixtures, grep the specs and tests on sibling branches and open PRs for the behaviour, and fix them in the PR that causes the change. A new `Services` domain also updates the aggregate test that enumerates them.
 
 ### L8. Row ids must be unique in the data the API returns
 
@@ -84,6 +85,7 @@
 ### L12. Keep comments and docs true to the change
 
 - **Mistake.** A docstring still said examinations and attendance do not exist after they shipped, and a comment said a row "can be fixed later" when it could not.
+  The timetable setup screens shipped delete copy ("a period in use cannot be removed") for a refusal the server never made: a soft delete never meets `on_delete=PROTECT` (#119, caught in change review).
 - **Check.** After a change, grep the nearby comments, docstrings and docs for the claim it makes false, and fix them in the same commit.
 
 ### L13. Check the machine before heavy work
