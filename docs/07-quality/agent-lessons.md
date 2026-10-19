@@ -93,6 +93,11 @@
 - **Mistake.** A full disk made shell calls fail mid-review, and the commit hooks write to disk too. A machine that sleeps also kills background agents.
 - **Check.** Run `df -h` before a long review wave or a commit. Have long-running agents write their report file early and keep it current.
 
+### L14. A drag handle is not the thing being dropped
+
+- **Mistake.** The timetable grid's keyboard drag measured collisions with `closestCenter` from a small drag handle in a cell's corner, so the "nearest cell" was often the neighbour or the source itself; the mocked E2E keyboard moves made no request (#120). Unit tests passed because they fed cell-sized boxes, not the handle-sized one dnd-kit actually measures.
+- **Check.** When the draggable node is a handle, decide collisions by what contains it (`pointerWithin` for a pointer, `rectIntersection` for keyboard), never by nearest centre, and give the pure helpers the handle-sized box the sensor really reports.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

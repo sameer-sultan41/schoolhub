@@ -2,11 +2,11 @@
 
 import { useMemo } from "react";
 import {
-  closestCenter,
   DndContext,
   KeyboardSensor,
   pointerWithin,
   PointerSensor,
+  rectIntersection,
   useSensor,
   useSensors,
   type Announcements,
@@ -36,13 +36,15 @@ import { SlotCell } from "./slot-cell";
 import { useCellLabel } from "./use-cell-label";
 
 /**
- * A pointer drop lands on the cell under the pointer, or nowhere (outside the grid it is no
- * drop at all). `closestCenter` alone always picks some cell, so a release over the toolbar
- * would move the class to whichever cell happened to be nearest. A keyboard drag has no
- * pointer: its box is moved onto a cell, and the closest centre is that cell.
+ * A drop lands on the cell the drag is inside, or nowhere. A pointer drop is the cell under
+ * the pointer (outside the grid, no drop at all). A keyboard drag has no pointer: the dragged
+ * box is the handle, which `keyboardStep` keeps inside one cell, so the cell it overlaps is
+ * the one. Not `closestCenter`: the handle sits in a corner of its cell, so the nearest cell
+ * *centre* is often the neighbour's, and an always-something answer moves a class the user
+ * never dropped.
  */
 const collisionDetection: CollisionDetection = (args) =>
-  args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
+  args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args);
 
 export interface WeekGridProps {
   periods: readonly PeriodRecord[];
