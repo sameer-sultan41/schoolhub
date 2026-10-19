@@ -4,8 +4,9 @@ import { screen, waitFor } from "@testing-library/react";
 import { Services } from "@/services";
 import { buildUser, renderWithProviders } from "@/test-utils";
 
-import { AcademicsLanding } from "../academics-landing";
-import { ACADEMICS_SECTIONS } from "../academics-sections";
+import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
+
+import { ModuleLanding } from "../module-landing";
 
 const mockReplace = jest.fn();
 const mockRouter = { replace: mockReplace };
@@ -21,7 +22,7 @@ const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFuncti
 
 const ALL_SECTION_KEYS: PermissionKey[] = ACADEMICS_SECTIONS.map((section) => section.permission);
 
-describe("AcademicsLanding", () => {
+describe("ModuleLanding", () => {
   beforeEach(() => {
     mockReplace.mockReset();
   });
@@ -30,7 +31,7 @@ describe("AcademicsLanding", () => {
     // Every section's key, so the first one in tab order is the destination.
     mockFetchCurrentUser.mockResolvedValue(buildUser(ALL_SECTION_KEYS));
 
-    renderWithProviders(<AcademicsLanding />);
+    renderWithProviders(<ModuleLanding sections={ACADEMICS_SECTIONS} />);
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/academics/curriculum");
@@ -41,7 +42,7 @@ describe("AcademicsLanding", () => {
   it("sends a user who can open only a later section there, not to the first one", async () => {
     mockFetchCurrentUser.mockResolvedValue(buildUser(["academics.teacher-allocation.view"]));
 
-    renderWithProviders(<AcademicsLanding />);
+    renderWithProviders(<ModuleLanding sections={ACADEMICS_SECTIONS} />);
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/academics/allocations");
@@ -52,7 +53,7 @@ describe("AcademicsLanding", () => {
   it("sends a user who can open only Promotions to /academics/promotions", async () => {
     mockFetchCurrentUser.mockResolvedValue(buildUser(["academics.promotion.view"]));
 
-    renderWithProviders(<AcademicsLanding />);
+    renderWithProviders(<ModuleLanding sections={ACADEMICS_SECTIONS} />);
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/academics/promotions");
@@ -70,7 +71,7 @@ describe("AcademicsLanding", () => {
       ]),
     );
 
-    renderWithProviders(<AcademicsLanding />);
+    renderWithProviders(<ModuleLanding sections={ACADEMICS_SECTIONS} />);
 
     expect(await screen.findByText("You do not have permission to do that.")).toBeInTheDocument();
     expect(mockReplace).not.toHaveBeenCalled();
@@ -79,7 +80,7 @@ describe("AcademicsLanding", () => {
   it("waits for the user, without redirecting, while permissions load", () => {
     mockFetchCurrentUser.mockReturnValue(new Promise(() => undefined));
 
-    renderWithProviders(<AcademicsLanding />);
+    renderWithProviders(<ModuleLanding sections={ACADEMICS_SECTIONS} />);
 
     expect(screen.getByText("Checking your permissions…")).toBeInTheDocument();
     expect(mockReplace).not.toHaveBeenCalled();
@@ -88,7 +89,7 @@ describe("AcademicsLanding", () => {
   it("says the permissions could not be loaded when the user query fails", async () => {
     mockFetchCurrentUser.mockRejectedValue(new Error("down"));
 
-    renderWithProviders(<AcademicsLanding />);
+    renderWithProviders(<ModuleLanding sections={ACADEMICS_SECTIONS} />);
 
     expect(await screen.findByText(/permissions couldn't be loaded/)).toBeInTheDocument();
     expect(mockReplace).not.toHaveBeenCalled();

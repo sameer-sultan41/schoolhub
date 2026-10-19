@@ -21,6 +21,7 @@ model before filtering. That is wrong here twice over:
 from __future__ import annotations
 
 import django_filters
+from django.db.models import Q
 
 from apps.timetable.models import Period
 
@@ -28,14 +29,21 @@ from apps.timetable.models import Period
 class PeriodFilterSet(django_filters.FilterSet):
     """`campus_id` here means "periods declared for this campus" and deliberately
     excludes the tenant-wide ones (`campus_id IS NULL`), which do also apply to
-    it — a caller building one campus's day template wants the union, and gets
-    it by simply not passing the filter.
+    it. A caller drawing one campus's day wants the union, and asks for it with
+    `for_campus`.
     """
 
     campus_id = django_filters.UUIDFilter(field_name="campus_id")
+    # The union `campus_id` leaves out: the periods that actually run at one campus,
+    # its own plus the tenant-wide ones. This is the row set a section's week grid is
+    # drawn on.
+    for_campus = django_filters.UUIDFilter(method="filter_for_campus")
 
     class Meta:
         model = Period
         fields = {
             "is_break": ["exact"],
         }
+
+    def filter_for_campus(self, queryset, name, value):
+        return queryset.filter(Q(campus_id=value) | Q(campus__isnull=True))

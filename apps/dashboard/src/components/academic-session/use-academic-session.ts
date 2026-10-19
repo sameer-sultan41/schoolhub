@@ -20,7 +20,7 @@ export interface AcademicSessionState {
 }
 
 /**
- * The academic session an Academics screen works on. `urlSessionId` is the screen's `session`
+ * The academic session a session-scoped screen (Academics, Timetable) works on. `urlSessionId` is the screen's `session`
  * URL value, where `""` (or an id that is no longer a session) means "the current session".
  * Shares its cache entry with every other academic-sessions list, so it adds no request.
  */

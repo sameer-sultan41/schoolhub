@@ -172,7 +172,14 @@ Referenced (owned elsewhere): `classes`, `sections`, `subjects`, `class_subjects
 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
-- `GET/POST/PATCH/DELETE /api/v1/periods` · `/api/v1/rooms`
+- `GET/POST/PATCH/DELETE /api/v1/periods` · `/api/v1/rooms`. Both carry a read-only
+  `campus_name` (null for a tenant-wide period). `/periods` filters: `campus_id` (that
+  campus's own periods only), `for_campus` (the periods that run at that campus: its own plus
+  the tenant-wide ones, the set a section's week grid is drawn on), `is_break`, `search`.
+  `/rooms` filters: `campus_id`, `room_type`, `is_active`, `search`. Both page by number.
+  `DELETE` on either is a 422 while a current grid cell (draft or live published) or upcoming
+  proposed/confirmed cover still uses the row; a room still in use is taken out of service
+  (`is_active: false`) instead.
 - `GET /api/v1/timetable-slots` — filters: `section_id`, `teacher_id`, `room_id`, `weekday`, `status`, `academic_session_id`; cursor pagination.
 - `POST/PATCH/DELETE /api/v1/timetable-slots` — per-edit conflict check in the response (`meta.conflicts`).
 - `POST /api/v1/timetables/{section_id}:validate` — full conflict run, returns conflict list.
@@ -214,7 +221,7 @@ the same layout already applied to `apps/communication`, `apps/
 school_organization`, and `apps/staff_management` (see those modules' own
 §20). `viewset.py` stays one file per resource, every action a plain method;
 `services.py` splits per package only where a resource has real business
-logic — `rooms/` has none at all (its fields need no service-level rule).
+logic — `rooms/` has only the delete guard (`assert_room_not_in_use`, added with the dashboard).
 
 The conflict-detection engine (`conflicts.py`) moved into `slots/` as a
 whole file, unchanged — it has no consumer outside the slot/timetable-grid
@@ -246,3 +253,21 @@ Pure reorganization: `openapi.yaml`/`schema.d.ts` differ from `main` by two
 disclosed docstring-only lines (a serializer's new ownership note, and an
 updated cross-reference to a function that moved). No endpoint, permission,
 or response shape changed anywhere in the module.
+
+**Dashboard (as shipped).** Being built in three PRs (setup, the week grid, cover); plan:
+`docs/superpowers/plans/2026-10-19-timetable-dashboard.md`.
+
+- **PR A, setup.** A Timetable sidebar group and a `/timetable` layout with a tab bar, both
+  drawn from one section list (`features/timetable/timetable-sections.ts`) through the shared
+  `components/module-sections/` kit Academics now also uses: `/timetable` sends the viewer to
+  the first section they may open. `/timetable/periods` is the bell schedule (sequence, name,
+  time, kind, weekdays, campus; search, a campus filter that uses `for_campus`, and a kind
+  filter, all in the URL), with add, edit and remove. The form picks weekdays with a toggle
+  group (none picked is `null`, the tenant's working days) and shows the server's overlap
+  error under the start time. `/timetable/rooms` lists rooms (code, name, type, capacity,
+  location, campus, in or out of service; campus, type and status filters in the URL), with
+  add, edit (including taking a room out of service) and remove. Removing either is refused
+  while the timetable still uses it (§16), and the dialog shows the server's reason. Periods and rooms have no
+  view key of their own (§4), so each tab is gated on its `.update` key: the
+  `timetable.timetable.view` every role holds would open the setup screens to everyone.
+

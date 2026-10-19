@@ -77,9 +77,6 @@ export const ALLOCATION_MIN_WEEKLY_PERIODS = 1;
 /** The model's own default for `is_primary`: a new allocation is the primary teacher. */
 export const ALLOCATION_DEFAULT_IS_PRIMARY = true;
 
-/** What the weekly-periods cell shows when the curriculum's own target applies. */
-export const ALLOCATION_EMPTY_CELL = "—";
-
 /** The fields a server error may name on each form, so it shows under its own input. Any other
  * field's error shows as the form's own message (`foldUnknownFieldErrors`): an edit leaves out
  * the identity fields, which it shows read-only. */

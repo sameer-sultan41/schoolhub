@@ -22,10 +22,10 @@ export interface SessionPickerProps {
   className?: string;
 }
 
-/** Picks the academic session an Academics screen works on. Marks the current session, and
+/** Picks the academic session a session-scoped screen (Academics, Timetable) works on. Marks the current session, and
  * any whose records are read-only (closed or archived). */
 export function SessionPicker({ sessions, value, onChange, className }: SessionPickerProps) {
-  const t = useTranslations("academics");
+  const t = useTranslations("academicSession");
   const tCommon = useTranslations("common");
 
   return (
@@ -36,8 +36,8 @@ export function SessionPicker({ sessions, value, onChange, className }: SessionP
         onChange(picked?.is_current ? "" : sessionId);
       }}
     >
-      <SelectTrigger className={className} aria-label={t("fields.academicSession")}>
-        <SelectValue placeholder={t("fields.selectSession")} />
+      <SelectTrigger className={className} aria-label={t("label")}>
+        <SelectValue placeholder={t("placeholder")} />
       </SelectTrigger>
       <SelectContent emptyMessage={tCommon("noOptions")}>
         {(sessions ?? []).map((session) => (
@@ -46,12 +46,12 @@ export function SessionPicker({ sessions, value, onChange, className }: SessionP
               {session.name}
               {session.is_current && (
                 <Badge size="sm" variant="primary" appearance="light">
-                  {t("common.currentSession")}
+                  {t("current")}
                 </Badge>
               )}
               {LOCKED_SESSION_STATUSES.includes(session.status) && (
                 <Badge size="sm" variant="secondary">
-                  {t("common.locked")}
+                  {t("locked")}
                 </Badge>
               )}
             </span>

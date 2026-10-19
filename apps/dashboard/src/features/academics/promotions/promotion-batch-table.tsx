@@ -28,7 +28,7 @@ import { isOffsetPagination } from "@schoolhub/types";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { LoadErrorCard } from "@/components/load-error-card";
 import { promotionBatchPath } from "@/config/paths";
-import { useAcademicSession } from "@/features/academics/use-academic-session";
+import { useAcademicSession } from "@/components/academic-session/use-academic-session";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { usePageClamp } from "@/hooks/use-page-clamp";
 import { resolveErrorMessage } from "@/lib/error-message";

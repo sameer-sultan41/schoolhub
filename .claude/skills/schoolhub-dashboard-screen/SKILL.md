@@ -218,8 +218,9 @@ Real example: `student-columns.tsx`, `student-directory-filters.tsx`,
 
 ## 3a. A session-scoped list (the Academics screens)
 
-Real example: `features/academics/use-academic-session.ts`, `session-picker.tsx`, and
-`curriculum/curriculum-table.tsx` + `curriculum-toolbar.tsx`. A list that belongs to one
+Real example: `components/academic-session/` (`use-academic-session.ts`, `session-picker.tsx`,
+`no-session-card.tsx`, shared by every session-scoped module) and
+`features/academics/curriculum/curriculum-table.tsx` + `curriculum-toolbar.tsx`. A list that belongs to one
 academic session needs the session resolved before its own request, and says so when it can't:
 
 - **The session is a URL filter, resolved by `useAcademicSession(urlSessionId)`.** Put `session`
@@ -259,10 +260,10 @@ academic session needs the session resolved before its own request, and says so 
   failed and none are cached) is a `LoadErrorCard` (`@/components/load-error-card`) calling
   `refetch`, never the no-session state: "we couldn't ask" is not "there is none". (2)
   `!isLoading && session === null` is `NoSessionCard`
-  (`features/academics/no-session-card.tsx`: a `SessionPicker` plus an `EmptyState`,
-  `academics.common.noSession*`), so the viewer can still pick one from the sessions there are.
+  (`components/academic-session/no-session-card.tsx`: a `SessionPicker` plus an `EmptyState`,
+  `academicSession.noSession*`), so the viewer can still pick one from the sessions there are.
   (3) The list's own `LoadErrorCard`, unless it is a stale page. (4) The grid, with an info
-  `Alert` (`academics.common.lockedNotice`) above it when `isLocked`.
+  `Alert` (`academicSession.lockedNotice`) above it when `isLocked`.
 - **A locked session is read-only in the UI, and the API is what enforces it.** Hide the
   toolbar's mutating buttons (`showActions = !isLocked && …`) and the actions column, by
   overriding its visibility with `{ ...columnVisibility, [ACTIONS_COLUMN_ID]: showActions }`.
