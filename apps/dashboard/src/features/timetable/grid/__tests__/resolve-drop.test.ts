@@ -99,6 +99,11 @@ describe("keyboardStep", () => {
     expect(keyboardStep(handle, overB, cells, "down")).toEqual({ left: 170, top: 52 });
   });
 
+  it("finds the handle's own cell when no cell is reported yet", () => {
+    // The first arrow press comes before dnd-kit has measured a collision.
+    expect(keyboardStep(handle, null, cells, "left")).toEqual({ left: 70, top: 2 });
+  });
+
   it("stops at the edge of the grid", () => {
     expect(keyboardStep(handle, overB, cells, "right")).toBeNull();
     expect(keyboardStep(handle, overB, cells, "up")).toBeNull();

@@ -99,8 +99,23 @@ export function keyboardStep<TId>(
   cells: ReadonlyArray<{ id: TId; box: Box }>,
   direction: GridDirection,
 ): { left: number; top: number } | null {
-  const origin = fromCell?.box ?? dragged;
-  const candidates = fromCell ? cells.filter((cell) => cell.id !== fromCell.id) : cells;
+  // Before the first collision is measured, dnd-kit reports no cell; the cell is then the one
+  // holding the handle's centre, never "nowhere" (which would find the handle's own cell
+  // ahead of it on the side it doesn't sit on).
+  const centreX = dragged.left + dragged.width / 2;
+  const centreY = dragged.top + dragged.height / 2;
+  const current =
+    fromCell ??
+    cells.find(
+      ({ box }) =>
+        centreX >= box.left &&
+        centreX <= box.left + box.width &&
+        centreY >= box.top &&
+        centreY <= box.top + box.height,
+    ) ??
+    null;
+  const origin = current?.box ?? dragged;
+  const candidates = current ? cells.filter((cell) => cell.id !== current.id) : cells;
   const next = nextCellInDirection(origin, candidates, direction);
   if (!next) return null;
   return {
