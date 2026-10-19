@@ -6,7 +6,7 @@ import { Button } from "@schoolhub/ui";
 import { CopyPlus, Plus } from "lucide-react";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
-import { useAcademicSession } from "@/features/academics/use-academic-session";
+import { useAcademicSession } from "@/components/academic-session/use-academic-session";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useUrlParams } from "@/hooks/use-url-params";
 import { LIST_URL_KEYS } from "@/lib/constants";

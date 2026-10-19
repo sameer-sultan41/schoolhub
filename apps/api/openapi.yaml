@@ -7555,6 +7555,11 @@ paths:
           type: string
           format: uuid
       - in: query
+        name: for_campus
+        schema:
+          type: string
+          format: uuid
+      - in: query
         name: is_break
         schema:
           type: boolean
@@ -20104,6 +20109,10 @@ components:
           type: string
           format: uuid
           nullable: true
+        campus_name:
+          type: string
+          readOnly: true
+          nullable: true
         name:
           type: string
           description: e.g. "Period 1", "Recess".
@@ -20124,6 +20133,11 @@ components:
           type: boolean
           description: Breaks are never schedulable (§5.1).
         weekdays:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
           nullable: true
           description: Applicable weekdays as 0-6; null = the tenant's working days.
         created_at:
@@ -20415,6 +20429,9 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         name:
           type: string
           maxLength: 80
@@ -21168,6 +21185,10 @@ components:
           type: string
           format: uuid
           nullable: true
+        campus_name:
+          type: string
+          readOnly: true
+          nullable: true
         name:
           type: string
           description: e.g. "Period 1", "Recess".
@@ -21188,6 +21209,11 @@ components:
           type: boolean
           description: Breaks are never schedulable (§5.1).
         weekdays:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
           nullable: true
           description: Applicable weekdays as 0-6; null = the tenant's working days.
         created_at:
@@ -21199,6 +21225,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - campus_name
       - created_at
       - end_time
       - id
@@ -22113,6 +22140,9 @@ components:
         campus_id:
           type: string
           format: uuid
+        campus_name:
+          type: string
+          readOnly: true
         name:
           type: string
           maxLength: 80
@@ -22146,6 +22176,7 @@ components:
           readOnly: true
       required:
       - campus_id
+      - campus_name
       - code
       - created_at
       - id

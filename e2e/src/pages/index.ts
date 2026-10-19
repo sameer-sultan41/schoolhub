@@ -9,5 +9,7 @@ export * from "./dashboard/staff.page";
 export * from "./dashboard/students.page";
 export * from "./dashboard/students/student-detail.page";
 export * from "./dashboard/students/student-form.page";
+export * from "./dashboard/timetable/periods.page";
+export * from "./dashboard/timetable/rooms.page";
 export * from "./dashboard/timetable/week-grid.page";
 export * from "./website/public-site.page";

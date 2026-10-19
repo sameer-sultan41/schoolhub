@@ -55,7 +55,7 @@ class TeacherAllocationSerializer(serializers.ModelSerializer):
         read_only_fields = READ_ONLY_FIELDS
 
     def get_staff_name(self, obj: TeacherSubjectAllocation) -> str:
-        return f"{obj.staff.first_name} {obj.staff.last_name}"
+        return obj.staff.full_name
 
     def validate_weekly_periods(self, value: int | None) -> int | None:
         if value is not None and value < 1:

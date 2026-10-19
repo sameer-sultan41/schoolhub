@@ -6,8 +6,10 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { Services } from "@/services";
 import { buildUser, renderWithProviders } from "@/test-utils";
 
-import { AcademicsNav } from "../academics-nav";
-import { ACADEMICS_SECTIONS } from "../academics-sections";
+import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
+
+import { ModuleSectionNav } from "../module-section-nav";
+import type { ModuleSection } from "../module-sections";
 
 jest.mock("next/navigation", () => ({ usePathname: jest.fn() }));
 
@@ -32,14 +34,14 @@ async function renderNav(permissions: PermissionKey[]) {
   mockFetchCurrentUser.mockResolvedValue(buildUser(permissions));
   renderWithProviders(
     <>
-      <AcademicsNav />
+      <ModuleSectionNav sections={ACADEMICS_SECTIONS} namespace="academics" />
       <UserLoaded />
     </>,
   );
   await screen.findByText("user loaded");
 }
 
-describe("AcademicsNav", () => {
+describe("ModuleSectionNav", () => {
   beforeEach(() => {
     mockUsePathname.mockReturnValue("/academics/curriculum");
   });
@@ -95,7 +97,7 @@ describe("AcademicsNav", () => {
   it("renders nothing while the user is still loading", () => {
     mockFetchCurrentUser.mockReturnValue(new Promise(() => undefined));
 
-    renderWithProviders(<AcademicsNav />);
+    renderWithProviders(<ModuleSectionNav sections={ACADEMICS_SECTIONS} namespace="academics" />);
 
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   });
@@ -133,5 +135,26 @@ describe("AcademicsNav", () => {
     for (const link of screen.getAllByRole("link")) {
       expect(link).not.toHaveAttribute("aria-current");
     }
+  });
+
+  it("shows a section gated on a list of keys to a holder of any one of them", async () => {
+    const sections: ModuleSection[] = [
+      {
+        href: "/timetable/substitutions",
+        labelKey: "nav.substitutions",
+        menuTitle: "Substitutions",
+        permission: ["timetable.substitution.create", "timetable.substitution.approve"],
+      },
+    ];
+    mockUsePathname.mockReturnValue("/timetable/substitutions");
+    mockFetchCurrentUser.mockResolvedValue(buildUser(["timetable.substitution.approve"]));
+
+    renderWithProviders(<ModuleSectionNav sections={sections} namespace="timetable" />);
+
+    const nav = await screen.findByRole("navigation", { name: "Timetable sections" });
+    expect(within(nav).getByRole("link", { name: "Substitutions" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 });

@@ -4,7 +4,9 @@ import { DashboardService } from "./modules/dashboard";
 import { FilesService } from "./modules/files";
 import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
+import { PeriodsService } from "./modules/periods";
 import { PromotionsService } from "./modules/promotions";
+import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
 import { StudentsService } from "./modules/students";
@@ -52,6 +54,10 @@ export type {
   UpdateDecisionInput,
 } from "./modules/promotions";
 
+export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
+
+export type { RoomInput, RoomPageQuery, RoomRecord, RoomType } from "./modules/rooms";
+
 export type {
   AcademicSessionSummary,
   SchoolOrganizationOption,
@@ -98,6 +104,8 @@ export const Services = {
   curriculum: CurriculumService,
   teacherAllocations: TeacherAllocationsService,
   promotions: PromotionsService,
+  periods: PeriodsService,
+  rooms: RoomsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

@@ -161,7 +161,8 @@ either this file or `project-status.md`.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
-  staff-management + timetable.** Fees, attendance, academics, examinations,
+  staff-management + academics + timetable's setup screens (periods, rooms).** Fees,
+  attendance, examinations,
   communication, parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
   Attendance is **deliberately** backend-only for now: its three PRs ship the API
@@ -217,6 +218,17 @@ either this file or `project-status.md`.
   families. `services._slot_weekday` is correct only while a tenant starts its
   week on Monday; the real conversion belongs with the tenant week-start
   setting, which does not exist yet.
+- **A teacher has no Timetable entry until PR C.** Timetable dashboard PR A ships only the
+  setup sections (gated on `timetable.period.update` / `timetable.room.update`), so a viewer
+  holding just `timetable.timetable.view` gets no sidebar group, and `/timetable` shows the
+  "no permission" landing. PR C adds My timetable, which every role reaches.
+- **The nightly build-and-publish CUJ is stale until the week grid ships.**
+  `e2e/tests/live/timetable-build-publish-journey.spec.ts` (and its page object,
+  `e2e/src/pages/dashboard/timetable/week-grid.page.ts`) drive a `/timetable` week grid the
+  shell reset deleted; the CUJ fails at its first sidebar click. Timetable dashboard PR A
+  (setup: periods and rooms) does not bring the grid back. PR B
+  (`docs/superpowers/plans/2026-10-19-timetable-dashboard.md`, Task 8) rebuilds the grid at
+  `/timetable/grid` and updates the page object and the CUJ with it.
 - **A published timetable cell cannot be removed.** `:publish` now supersedes
   cell by cell — a live row is end-dated only where a draft exists to replace
   it. Before, it end-dated every live row in the section, and since the builder

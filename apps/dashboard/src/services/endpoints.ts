@@ -100,6 +100,16 @@ export const endpoints = {
     detail: (id: string) => `/teacher-subject-allocations/${id}`,
     loadSummary: "/teacher-subject-allocations/load-summary",
   },
+  /** The bell schedule (`apps/api/apps/timetable/periods/urls.py`). */
+  periods: {
+    list: "/periods",
+    detail: (id: string) => `/periods/${id}`,
+  },
+  /** `apps/api/apps/timetable/rooms/urls.py`. */
+  rooms: {
+    list: "/rooms",
+    detail: (id: string) => `/rooms/${id}`,
+  },
   students: {
     list: "/students",
     detail: (id: string) => `/students/${id}`,

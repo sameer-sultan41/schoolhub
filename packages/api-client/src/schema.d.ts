@@ -9058,6 +9058,7 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             campus_id?: string | null;
+            readonly campus_name?: string | null;
             /** @description e.g. "Period 1", "Recess". */
             name?: string;
             /** @description Daily order, 1-based. */
@@ -9072,7 +9073,7 @@ export interface components {
             /** @description Breaks are never schedulable (§5.1). */
             is_break?: boolean;
             /** @description Applicable weekdays as 0-6; null = the tenant's working days. */
-            weekdays?: unknown;
+            weekdays?: number[] | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -9227,6 +9228,7 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             campus_id?: string;
+            readonly campus_name?: string;
             name?: string;
             code?: string;
             room_type?: components["schemas"]["RoomTypeEnum"];
@@ -9610,6 +9612,7 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             campus_id?: string | null;
+            readonly campus_name: string | null;
             /** @description e.g. "Period 1", "Recess". */
             name: string;
             /** @description Daily order, 1-based. */
@@ -9624,7 +9627,7 @@ export interface components {
             /** @description Breaks are never schedulable (§5.1). */
             is_break?: boolean;
             /** @description Applicable weekdays as 0-6; null = the tenant's working days. */
-            weekdays?: unknown;
+            weekdays?: number[] | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -10066,6 +10069,7 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             campus_id: string;
+            readonly campus_name: string;
             name: string;
             code: string;
             room_type?: components["schemas"]["RoomTypeEnum"];
@@ -16394,6 +16398,7 @@ export interface operations {
         parameters: {
             query?: {
                 campus_id?: string;
+                for_campus?: string;
                 is_break?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;

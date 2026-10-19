@@ -212,6 +212,11 @@ class Staff(TenantOwnedModel):
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name} ({self.employee_number})"
 
+    @property
+    def full_name(self) -> str:
+        """The display name every serializer shows — one format, not a copy per module."""
+        return f"{self.first_name} {self.last_name}"
+
     @classmethod
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope ``assigned`` (auth-and-rbac.md §2.3) for a department head.

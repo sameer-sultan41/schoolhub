@@ -14,11 +14,11 @@ export interface NoSessionCardProps {
 }
 
 /**
- * What an Academics list shows when no session resolves (no current one, none picked): a
+ * What a session-scoped list shows when no session resolves (no current one, none picked): a
  * `SessionPicker`, so the viewer can pick from the sessions there are, above an empty state.
  */
 export function NoSessionCard({ sessions, onPick }: NoSessionCardProps) {
-  const t = useTranslations("academics");
+  const t = useTranslations("academicSession");
 
   return (
     <Card>
@@ -26,8 +26,8 @@ export function NoSessionCard({ sessions, onPick }: NoSessionCardProps) {
         <SessionPicker sessions={sessions} value="" onChange={onPick} className="w-full sm:w-60" />
         <EmptyState
           icon={CalendarX}
-          title={t("common.noSessionTitle")}
-          description={t("common.noSessionDescription")}
+          title={t("noSessionTitle")}
+          description={t("noSessionDescription")}
         />
       </div>
     </Card>

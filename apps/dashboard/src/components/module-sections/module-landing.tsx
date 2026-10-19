@@ -6,20 +6,21 @@ import { useTranslations } from "next-intl";
 import { Card } from "@schoolhub/ui";
 
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { permittedAcademicsSections } from "./academics-sections";
+import { permittedSections, type ModuleSection } from "./module-sections";
 
 /**
- * `/academics` has no page of its own: it sends the viewer to the first section they hold
- * the `.view` key for, so a viewer who can open only a later section never lands on a 403.
- * Client-side because the session (an in-memory token) is invisible to a server `redirect`.
- * Shows a message only when there is nowhere to send them, or while that is still unknown.
+ * A module's root (`/academics`, `/timetable`) has no page of its own: it sends the viewer to
+ * the first section they may open, so a viewer who can open only a later section never lands
+ * on a 403. Client-side because the session (an in-memory token) is invisible to a server
+ * `redirect`. Shows a message only when there is nowhere to send them, or while that is
+ * still unknown.
  */
-export function AcademicsLanding() {
+export function ModuleLanding({ sections }: { sections: readonly ModuleSection[] }) {
   const router = useRouter();
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { data: user, isError } = useCurrentUser();
-  const href = permittedAcademicsSections(user)[0]?.href;
+  const href = permittedSections(sections, user)[0]?.href;
 
   useEffect(() => {
     if (href) router.replace(href);

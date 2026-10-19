@@ -24,6 +24,7 @@ from django.db.models import F
 from rest_framework import viewsets
 
 from apps.timetable.models import Period
+from apps.timetable.periods import services
 from apps.timetable.periods.filters import PeriodFilterSet
 from apps.timetable.periods.serializers import PeriodSerializer
 from apps.timetable.views import FEATURE, SCAFFOLDING_VIEW_KEY, STAFF_PERMISSIONS
@@ -76,6 +77,11 @@ class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "destroy": "timetable.period.delete",
     }
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def perform_destroy(self, instance):
+        """Refuse removing a period the timetable still uses (`assert_period_not_in_use`)."""
+        services.assert_period_not_in_use(instance)
+        super().perform_destroy(instance)
 
     def get_queryset(self):
         """Campus scoping must not hide the tenant-wide periods.

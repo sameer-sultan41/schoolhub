@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import datetime
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework import status
 
-from apps.timetable.models import Period
+from apps.timetable.models import Period, SlotStatus
 from apps.timetable.tests.base import TimetableAPITestCase
 from apps.timetable.tests.factories import (
     CampusFactory,
     PeriodFactory,
+    StaffFactory,
+    TeacherSubstitutionFactory,
     UserFactory,
     authenticate,
     grant,
@@ -262,3 +267,149 @@ class PeriodOrderingTests(TimetableAPITestCase):
             self.ids("ordering=weekdays"),
             [str(self.zoology.pk), str(self.algebra.pk), str(self.recess.pk)],
         )
+
+
+class PeriodCampusTests(TimetableAPITestCase):
+    """`campus_name` on the wire, and `?for_campus=`: the periods that run at one campus."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("timetable.timetable.view")
+        with tenant_context(self.tenant.id):
+            self.wing = CampusFactory(tenant=self.tenant, name="North Wing")
+            self.elsewhere = CampusFactory(tenant=self.tenant, name="South Wing")
+            self.wing_period = PeriodFactory(
+                tenant=self.tenant,
+                campus=self.wing,
+                sequence=21,
+                start_time=datetime.time(18, 0),
+                end_time=datetime.time(18, 30),
+            )
+            self.elsewhere_period = PeriodFactory(
+                tenant=self.tenant,
+                campus=self.elsewhere,
+                sequence=22,
+                start_time=datetime.time(18, 0),
+                end_time=datetime.time(18, 30),
+            )
+
+    def test_for_campus_is_the_campus_own_periods_plus_the_tenant_wide_ones(self) -> None:
+        response = self.client.get(f"/api/v1/periods?for_campus={self.wing.pk}&page_size=100")
+
+        ids = {row["id"] for row in response.json()["data"]}
+        expected = {str(period.pk) for period in self.periods} | {str(self.wing_period.pk)}
+        self.assertEqual(ids, expected)
+
+    def test_campus_id_keeps_its_exact_match_meaning(self) -> None:
+        response = self.client.get(f"/api/v1/periods?campus_id={self.wing.pk}")
+
+        ids = [row["id"] for row in response.json()["data"]]
+        self.assertEqual(ids, [str(self.wing_period.pk)])
+
+    def test_each_row_names_its_campus_and_a_tenant_wide_row_names_none(self) -> None:
+        rows = {
+            row["id"]: row["campus_name"]
+            for row in self.client.get(
+                f"/api/v1/periods?for_campus={self.wing.pk}&page_size=100"
+            ).json()["data"]
+        }
+
+        self.assertEqual(rows[str(self.wing_period.pk)], "North Wing")
+        self.assertIsNone(rows[str(self.period.pk)])
+
+    def test_a_create_response_names_the_campus_too(self) -> None:
+        """The create response serializes an instance the list's annotation never touched."""
+        self.allow("timetable.period.create")
+
+        response = self.client.post(
+            "/api/v1/periods",
+            {
+                "name": "Evening",
+                "sequence": 95,
+                "campus_id": str(self.wing.pk),
+                "start_time": "19:00",
+                "end_time": "19:30",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+        self.assertEqual(response.json()["data"]["campus_name"], "North Wing")
+
+    def test_the_list_query_count_does_not_grow_with_the_rows(self) -> None:
+        """`campus_name` reads through `select_related`, not a query per row."""
+
+        def queries() -> int:
+            with CaptureQueriesContext(connection) as captured:
+                self.client.get("/api/v1/periods?page_size=100")
+            return len(captured)
+
+        queries()  # warm any per-request caches (feature flag, permissions)
+        before = queries()
+        with tenant_context(self.tenant.id):
+            for offset in range(5):
+                PeriodFactory(
+                    tenant=self.tenant,
+                    campus=CampusFactory(tenant=self.tenant),
+                    sequence=30 + offset,
+                    start_time=datetime.time(20, offset * 10),
+                    end_time=datetime.time(20, offset * 10 + 5),
+                )
+
+        self.assertEqual(queries(), before)
+
+
+class PeriodDeleteGuardTests(TimetableAPITestCase):
+    """A removal is a soft delete, which `on_delete=PROTECT` never sees, so the
+    in-use rule lives in `services.assert_period_not_in_use`."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("timetable.period.delete")
+
+    def assert_still_alive(self, period) -> None:
+        with tenant_context(self.tenant.id):
+            self.assertTrue(Period.objects.alive().filter(pk=period.pk).exists())
+
+    def test_a_period_a_current_cell_runs_on_is_refused(self) -> None:
+        self.make_slot(period=self.period)
+
+        response = self.client.delete(f"/api/v1/periods/{self.period.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("still on a timetable", response.json()["error"]["message"])
+        self.assert_still_alive(self.period)
+
+    def test_a_period_only_superseded_cells_used_can_go(self) -> None:
+        self.make_slot(
+            period=self.period,
+            status=SlotStatus.PUBLISHED,
+            effective_from=datetime.date(2026, 4, 1),
+            effective_to=datetime.date(2026, 4, 2),
+        )
+
+        response = self.client.delete(f"/api/v1/periods/{self.period.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_a_period_upcoming_cover_runs_on_is_refused(self) -> None:
+        slot = self.make_slot(
+            period=self.period,
+            status=SlotStatus.PUBLISHED,
+            effective_from=datetime.date(2026, 4, 1),
+            effective_to=datetime.date(2026, 4, 2),
+        )
+        with tenant_context(self.tenant.id):
+            cover = StaffFactory(tenant=self.tenant, campus=self.campus)
+            TeacherSubstitutionFactory(
+                tenant=self.tenant,
+                timetable_slot=slot,
+                date=timezone.localdate() + datetime.timedelta(days=7),
+                absent_staff=self.teacher,
+                substitute_staff=cover,
+            )
+
+        response = self.client.delete(f"/api/v1/periods/{self.period.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assert_still_alive(self.period)

@@ -20,12 +20,17 @@ class RoomSerializer(serializers.ModelSerializer):
     """`rooms` — physical rooms, labs and halls (§5.4)."""
 
     campus_id = _fk(Campus, source="campus")
+    # Through the relation, not the viewset's `campus_name` annotation: a create or
+    # update response serializes an instance that was never annotated. The viewset's
+    # `select_related("campus")` keeps the list at one query.
+    campus_name = serializers.CharField(source="campus.name", read_only=True)
 
     class Meta:
         model = Room
         fields = (
             "id",
             "campus_id",
+            "campus_name",
             "name",
             "code",
             "room_type",

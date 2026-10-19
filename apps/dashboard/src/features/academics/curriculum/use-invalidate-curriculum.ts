@@ -2,6 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 
+import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { queryKeys } from "@/lib/query-client";
 import { CURRICULUM_QUERY_MODULE } from "@/services/modules/curriculum/curriculum-constant";
 import {
@@ -16,9 +17,10 @@ import {
  */
 export function useInvalidateCurriculum() {
   const queryClient = useQueryClient();
+  const invalidateCurriculumModule = useInvalidateModule(CURRICULUM_QUERY_MODULE);
 
   return () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.module(CURRICULUM_QUERY_MODULE) });
+    invalidateCurriculumModule();
     void queryClient.invalidateQueries({
       queryKey: queryKeys.list(ALLOCATION_QUERY_MODULE, ALLOCATION_LOAD_SUMMARY_RESOURCE),
     });
