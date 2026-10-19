@@ -131,8 +131,13 @@ export function buildSlotInput(
   cell: { academicSessionId: string; sectionId: string; dayOfWeek: number; periodId: string },
 ): SlotInput {
   const notes = values.notes.trim();
+  // Field by field, not `...cell`: a caller's cell context carries more than the write (a
+  // label, the class and campus), and none of it belongs in a slot's input.
   return {
-    ...cell,
+    academicSessionId: cell.academicSessionId,
+    sectionId: cell.sectionId,
+    dayOfWeek: cell.dayOfWeek,
+    periodId: cell.periodId,
     subjectId: values.subject_id || null,
     staffId: values.staff_id || null,
     roomId: values.room_id || null,
