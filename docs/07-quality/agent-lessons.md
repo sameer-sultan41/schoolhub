@@ -97,8 +97,13 @@
 
 - **Mistake.** The timetable grid's keyboard drag measured collisions with `closestCenter` from a small drag handle in a cell's corner, so the "nearest cell" was often the neighbour or the source itself; the mocked E2E keyboard moves made no request (#120). Unit tests passed because they fed cell-sized boxes, not the handle-sized one dnd-kit actually measures.
 - **Check.** When the draggable node is a handle, decide collisions by what contains it (`pointerWithin` for a pointer, `rectIntersection` for keyboard), never by nearest centre, and give the pure helpers the handle-sized box the sensor really reports.
-- **Mistake (again, twice).** Two code fixes later the keyboard E2E still made no request. The third fix blamed key timing (dnd-kit attaching its arrow-key listener a tick after Space) and only made the spec wait between keys; it still failed. The trace's DOM snapshots, read for the live region's text, showed the real cause: one ArrowRight announced "Over Wednesday". `keyboardStep` kept the handle's pixel offset from its cell's edge, and a filled Monday column is wider than an empty Tuesday, so a handle at Monday's far edge landed past Tuesday. The Jest cases used equal-width cells.
-- **Check.** Read the failing run's trace before writing any second fix, and read what the page *said* (live regions, error text in the snapshots), not just the screenshots. Give layout helpers unequal boxes in their unit tests, because real columns are never equal. Driving a keyboard drag one announced step at a time (`WeekGridPage.keyboardMove`) stays: it is what made the wrong cell visible.
+- **Mistake (again, three times).** The keyboard E2E kept failing because two causes overlapped, and each fix chased one.
+  - **Layout.** The trace's live-region text showed one ArrowRight announcing "Over Wednesday". `keyboardStep` kept the handle's pixel offset from its cell's edge, and a filled Monday column is wider than an empty Tuesday. The Jest cases used equal-width cells.
+  - **Timing.** dnd-kit's `KeyboardSensor.attach()` renders the drag (`aria-pressed`) and only then adds its keydown listener in a `setTimeout`. Chrome runs a queued key before a timer, so waiting for `aria-pressed` didn't help. A throwaway draft PR with logging passed outright, which showed the slowdown alone was enough; the sensor's source confirmed it.
+- **Check.**
+  - Read the failing run's trace before writing any second fix, including what the page *said* (live regions, error text in the snapshots).
+  - Give layout helpers unequal boxes in their unit tests.
+  - Read a library's source before deciding what a DOM signal proves. In a browser spec, put an ordering barrier (a `setTimeout(0)` of your own) behind a timer the library schedules, rather than a sleep (`WeekGridPage.keyboardMove`).
 
 ## 4. Adding a lesson
 

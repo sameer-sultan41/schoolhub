@@ -103,8 +103,12 @@ export class WeekGridPage extends BasePage {
    * `overCells` names the cell each step lands on ("Tuesday · Period 1").
    *
    * Waits for each step's live-region announcement before the next key, so a step that lands
-   * on the wrong cell fails on that step, naming it. The drag is live once the handle is
-   * `aria-pressed`.
+   * on the wrong cell fails on that step, naming it.
+   *
+   * `aria-pressed` alone doesn't mean arrow keys are heard: dnd-kit's `KeyboardSensor` renders
+   * the drag first and adds its keydown listener in a `setTimeout`, and Chrome runs a queued
+   * key before a timer. A `setTimeout(0)` of our own, queued after that one, fires only once
+   * the listener is in place.
    */
   async keyboardMove(
     weekday: string,
@@ -115,6 +119,12 @@ export class WeekGridPage extends BasePage {
     await handle.focus();
     await this.page.keyboard.press("Space");
     await this.page.locator('[aria-roledescription="draggable"][aria-pressed="true"]').waitFor();
+    await this.page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        }),
+    );
     for (const step of steps) {
       await this.page.keyboard.press(step.key);
       await this.page
