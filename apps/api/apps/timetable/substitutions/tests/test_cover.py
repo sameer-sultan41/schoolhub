@@ -285,7 +285,9 @@ class CandidatesTests(CoverTestCase):
             )
         # `teaching` has its own class in the slot's period; `covering` is covering that
         # class the same Monday, so both are busy then.
-        other_class = self.publish(self.make_slot(section=self.other_section, staff=teaching))
+        other_class = self.publish(
+            self.make_slot(section=self.other_section, staff=teaching, room=None)
+        )
         with tenant_context(self.tenant.id):
             TeacherSubstitutionFactory(
                 tenant=self.tenant,
