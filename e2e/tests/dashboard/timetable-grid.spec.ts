@@ -208,11 +208,10 @@ test.describe("week grid", () => {
 
     test("moves a draft by keyboard, one cell per arrow key", async ({ page, weekGridPage }) => {
       const request = page.waitForRequest((r) => isApiCall(r, "PATCH", SLOT_PATH));
-      await weekGridPage.moveHandle("Monday", "Period 1").focus();
-      await page.keyboard.press("Space");
-      await page.keyboard.press("ArrowRight");
-      await page.keyboard.press("ArrowRight");
-      await page.keyboard.press("Space");
+      await weekGridPage.keyboardMove("Monday", "Period 1", [
+        { key: "ArrowRight", over: "Tuesday · Period 1" },
+        { key: "ArrowRight", over: "Wednesday · Period 1" },
+      ]);
 
       expect((await request).postDataJSON()).toEqual({ day_of_week: 2, period_id: period1.id });
     });
@@ -261,10 +260,9 @@ test.describe("week grid", () => {
     await weekGridPage.goto({ path: GRID_URL });
 
     const request = page.waitForRequest((r) => isApiCall(r, "PATCH", SLOT_PATH));
-    await weekGridPage.moveHandle("Tuesday", "Period 1").focus();
-    await page.keyboard.press("Space");
-    await page.keyboard.press("ArrowLeft");
-    await page.keyboard.press("Space");
+    await weekGridPage.keyboardMove("Tuesday", "Period 1", [
+      { key: "ArrowLeft", over: "Monday · Period 1" },
+    ]);
 
     expect((await request).postDataJSON()).toEqual({ day_of_week: 0, period_id: period1.id });
   });

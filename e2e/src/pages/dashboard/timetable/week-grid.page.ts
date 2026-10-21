@@ -98,6 +98,34 @@ export class WeekGridPage extends BasePage {
 
   // --- The cell editor dialog ---
 
+  /**
+   * Moves a draft by keyboard: Space on its handle, one arrow key per step, Space to drop.
+   * `overCells` names the cell each step lands on ("Tuesday · Period 1").
+   *
+   * Waits between keys rather than pressing them back to back. dnd-kit's keyboard sensor
+   * starts listening for arrow keys a tick *after* Space starts the drag, and starting it
+   * re-measures every cell; a browser runs queued key presses before that timer, so a key
+   * sent in the same breath is silently lost. The drag is live once the handle is
+   * `aria-pressed`, and each step has landed once dnd-kit's live region announces it.
+   */
+  async keyboardMove(
+    weekday: string,
+    periodName: string,
+    steps: readonly { key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"; over: string }[],
+  ): Promise<void> {
+    const handle = this.moveHandle(weekday, periodName);
+    await handle.focus();
+    await this.page.keyboard.press("Space");
+    await this.page.locator('[aria-roledescription="draggable"][aria-pressed="true"]').waitFor();
+    for (const step of steps) {
+      await this.page.keyboard.press(step.key);
+      await this.page
+        .getByText(`Over ${step.over}.`, { exact: true })
+        .waitFor({ state: "attached" });
+    }
+    await this.page.keyboard.press("Space");
+  }
+
   get dialog(): Locator {
     return this.page.getByRole("dialog");
   }
