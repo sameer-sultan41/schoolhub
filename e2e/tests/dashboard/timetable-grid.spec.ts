@@ -239,7 +239,7 @@ test.describe("week grid", () => {
     await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 });
     await page.mouse.up();
 
-    await expect(page.getByText("Not moved: that period is a break.")).toBeVisible();
+    await expect(weekGridPage.refusedToast("Not moved: that period is a break.")).toBeVisible();
     expect(patches).toEqual([]);
   });
 

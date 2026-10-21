@@ -81,6 +81,12 @@ export class WeekGridPage extends BasePage {
     return this.page.getByText(`Published ${count} ${periods}.`, { exact: true });
   }
 
+  /** A refused drop's toast, for the sighted user. A toast is a list item; the same words in
+   * dnd-kit's screen-reader live region are not. */
+  refusedToast(message: string): Locator {
+    return this.page.getByRole("listitem").filter({ hasText: message });
+  }
+
   // --- Cells ---
 
   /** A pure draft's drag handle; a published cell, or a draft over one, has none. */
