@@ -61,7 +61,7 @@ class CoverTestCase(TimetableAPITestCase):
                 tenant=self.tenant,
                 campus=self.campus,
                 last_name="Baker",
-                user=UserFactory(tenant=self.tenant),
+                user_id=UserFactory(tenant=self.tenant).pk,
             )
 
     def open_cover(self, *, on: datetime.date, created_by=None, **overrides):
