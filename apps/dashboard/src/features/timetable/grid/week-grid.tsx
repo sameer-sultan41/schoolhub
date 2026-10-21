@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -43,8 +43,17 @@ import { useCellLabel } from "./use-cell-label";
  * *centre* is often the neighbour's, and an always-something answer moves a class the user
  * never dropped.
  */
-const collisionDetection: CollisionDetection = (args) =>
-  args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args);
+const collisionDetection: CollisionDetection = (args) => {
+  const found = args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args);
+  // DIAG: temporary, never merged.
+  const rect = args.collisionRect;
+  console.warn(
+    `DIAG collide t=${Math.round(performance.now())} pointer=${String(!!args.pointerCoordinates)} ` +
+      `rect=${Math.round(rect.left)},${Math.round(rect.top)},${Math.round(rect.width)},${Math.round(rect.height)} ` +
+      `found=${found.map((c) => String(c.id)).join(";")}`,
+  );
+  return found;
+};
 
 export interface WeekGridProps {
   periods: readonly PeriodRecord[];
@@ -70,6 +79,16 @@ export function WeekGrid(props: WeekGridProps) {
   const t = useTranslations("timetable");
   const cellLabel = useCellLabel();
   const { periods, weekdays, cells } = props;
+  useEffect(() => {
+    // DIAG: temporary, never merged.
+    const log = (event: KeyboardEvent) => {
+      console.warn(`DIAG keydown t=${Math.round(performance.now())} code=${event.code}`);
+    };
+    window.addEventListener("keydown", log, true);
+    return () => {
+      window.removeEventListener("keydown", log, true);
+    };
+  }, []);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_DISTANCE } }),
     useSensor(KeyboardSensor, { coordinateGetter: gridCoordinateGetter }),
@@ -127,6 +146,19 @@ export function WeekGrid(props: WeekGridProps) {
         screenReaderInstructions: { draggable: t("grid.dragInstructions") },
       }}
       onDragEnd={handleDragEnd}
+      onDragStart={({ active }) => {
+        console.warn(
+          `DIAG dragStart t=${Math.round(performance.now())} active=${String(active.id)}`,
+        );
+      }}
+      onDragOver={({ over }) => {
+        console.warn(`DIAG dragOver t=${Math.round(performance.now())} over=${String(over?.id)}`);
+      }}
+      onDragMove={({ delta, over }) => {
+        console.warn(
+          `DIAG dragMove t=${Math.round(performance.now())} delta=${Math.round(delta.x)},${Math.round(delta.y)} over=${String(over?.id)}`,
+        );
+      }}
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-3xl border-collapse text-sm">
