@@ -24,7 +24,7 @@ import { PublishDialog } from "./publish-dialog";
 import type { GridPosition } from "./resolve-drop";
 import { cellButtonId } from "./slot-cell";
 import { SlotFormDialog } from "./slot-form-dialog";
-import { useCellLabel } from "./use-cell-label";
+import { useCellLabel } from "@/features/timetable/use-cell-label";
 import { useWeekGrid } from "./use-week-grid";
 import { WeekGrid } from "./week-grid";
 

@@ -154,6 +154,22 @@ export function buildLiveStudent(overrides: Partial<{ first_name: string }> = {}
   };
 }
 
+/**
+ * A teaching staff member on `campusId`. Cover is offered and accepted only from the slot's
+ * own campus, and the seeded teachers sit on the seeded campus, not a spec's fresh one.
+ */
+export function buildLiveTeacher(campusId: string) {
+  const tag = uniqueTag();
+  return {
+    first_name: "E2E",
+    last_name: `Cover ${tag}`,
+    staff_type: "teaching",
+    campus_id: campusId,
+    joining_date: "2026-01-01",
+    phone: "+920000000000",
+  };
+}
+
 /** A guardian — `enroll_student` refuses a student with no guardian link (§11). */
 export function buildLiveGuardian() {
   const tag = uniqueTag();

@@ -16,7 +16,6 @@ describe("endpoints", () => {
     expect(endpoints.dashboard.departments).toBe("/departments");
     expect(endpoints.dashboard.designations).toBe("/designations");
     expect(endpoints.dashboard.academicSessions).toBe("/academic-sessions");
-    expect(endpoints.dashboard.myTimetable).toBe("/timetables/my");
   });
 
   it("builds the id-scoped staff paths, staffExit as a colon-action not a nested path", () => {
@@ -46,6 +45,15 @@ describe("endpoints", () => {
     expect(endpoints.timetableSlots.detail("slot-1")).toBe("/timetable-slots/slot-1");
     expect(endpoints.timetableSlots.validate("section-1")).toBe("/timetables/section-1:validate");
     expect(endpoints.timetableSlots.publish("section-1")).toBe("/timetables/section-1:publish");
+    expect(endpoints.timetableSlots.my).toBe("/timetables/my");
+  });
+
+  it("builds the cover paths, the lookup a fixed path and each action a colon-action", () => {
+    expect(endpoints.teacherSubstitutions.list).toBe("/teacher-substitutions");
+    expect(endpoints.teacherSubstitutions.candidates).toBe("/teacher-substitutions/candidates");
+    expect(endpoints.teacherSubstitutions.action("sub-1", "cancel")).toBe(
+      "/teacher-substitutions/sub-1:cancel",
+    );
   });
 
   it("declares the student bulk-operation paths, ID cards as a colon-action", () => {

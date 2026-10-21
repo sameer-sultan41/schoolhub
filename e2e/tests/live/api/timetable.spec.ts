@@ -1,16 +1,19 @@
 import { ApiError, type ApiClient } from "@schoolhub/api-client";
-import { buildLiveCampus, buildLivePeriod, buildLiveRoom } from "@/data/live-factories";
+import {
+  buildLiveCampus,
+  buildLivePeriod,
+  buildLiveRoom,
+  buildLiveTeacher,
+} from "@/data/live-factories";
 import { expect, test } from "@/fixtures";
 import { runCrudLifecycle } from "@/lib/live-crud-lifecycle";
 import {
-  findSeededStaff,
   seedTimetableGrid,
   seedTimetableScaffold,
   type TimetableGrid,
 } from "@/lib/live-timetable-grid";
 import {
   E2E_BASELINE_FIRST_PERIOD_NAME,
-  E2E_BASELINE_SUBSTITUTE_EMPLOYEE_NUMBER,
   E2E_BASELINE_SUBSTITUTION_REASON,
 } from "@/lib/seed-constants";
 
@@ -441,7 +444,9 @@ test.describe("teacher-substitutions (live API)", () => {
         periodId: period.id,
         subjectId: grid.allocatedSubjectId,
       }),
-      findSeededStaff(liveApiClient, E2E_BASELINE_SUBSTITUTE_EMPLOYEE_NUMBER),
+      liveApiClient
+        .post<{ id: string }>("/staff", buildLiveTeacher(grid.campusId))
+        .then((response) => response.data),
     ]);
 
     // Only a published slot can be covered: covering a draft cell would be covering a
@@ -503,6 +508,40 @@ test.describe("teacher-substitutions (live API)", () => {
       .catch((error: unknown) => error);
     expect(again).toBeInstanceOf(ApiError);
     expect((again as ApiError).status).toBe(409);
+
+    // The substitute now holds Monday's period, so they are not a candidate for it; the
+    // declined Tuesday holds nothing, so they are one there.
+    const mondayCandidates = await liveApiClient.get<{ staff_id: string }[]>(
+      "/teacher-substitutions/candidates",
+      { query: { timetable_slot_id: monday.data.id, date: mondayDate } },
+    );
+    expect(mondayCandidates.data.map((row) => row.staff_id)).not.toContain(substitute.id);
+    const tuesdayCandidates = await liveApiClient.get<{ staff_id: string }[]>(
+      "/teacher-substitutions/candidates",
+      { query: { timetable_slot_id: tuesday.data.id, date: tuesdayDate } },
+    );
+    expect(tuesdayCandidates.data.map((row) => row.staff_id)).toContain(substitute.id);
+
+    // A declined proposal holds nothing: Tuesday can be covered again that day.
+    const reproposed = await liveApiClient.post<Substitution>("/teacher-substitutions", {
+      timetable_slot_id: tuesday.data.id,
+      date: tuesdayDate,
+      absent_staff_id: grid.teacherId,
+      substitute_staff_id: substitute.id,
+    });
+    expect(reproposed.status).toBe(201);
+
+    // Releasing cover: the confirmed Monday is cancelled, and a second cancel is a 409.
+    const cancelled = await liveApiClient.post<Substitution>(
+      `/teacher-substitutions/${proposal.data.id}:cancel`,
+    );
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.data.status).toBe("cancelled");
+    const cancelledAgain = await liveApiClient
+      .post(`/teacher-substitutions/${proposal.data.id}:cancel`)
+      .catch((error: unknown) => error);
+    expect(cancelledAgain).toBeInstanceOf(ApiError);
+    expect((cancelledAgain as ApiError).status).toBe(409);
   });
 
   test("the seeded proposal is a real row, and 404 to another tenant's admin", async ({

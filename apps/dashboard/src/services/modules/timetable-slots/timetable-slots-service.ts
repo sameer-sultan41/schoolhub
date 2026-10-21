@@ -1,8 +1,10 @@
 import { collectPages, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import { SLOT_LIST_ORDERING, SLOT_STATUS_PUBLISHED } from "./timetable-slots-constant";
 import { conflictsFromMeta, toSlotBody } from "./timetable-slots-helper";
 import type {
+  EffectiveSlotRecord,
   SlotInput,
   SlotWriteResult,
   TimetablePublishResult,
@@ -29,7 +31,7 @@ export async function fetchSectionSlots(
       academic_session_id: academicSessionId,
       section_id: sectionId,
       current: true,
-      ordering: "period_sequence,day_of_week,created_at",
+      ordering: SLOT_LIST_ORDERING,
       page_size: MAX_PAGE_SIZE,
     },
   });
@@ -78,4 +80,36 @@ export async function publishSection(
     { academic_session_id: academicSessionId },
   );
   return data;
+}
+
+/**
+ * The viewer's own week: a teacher's classes (and cover they give), a student's or guardian's
+ * section. With a `date`, the version in force that day with confirmed cover applied; without
+ * one, the current week. One list, not paged: the API answers the week whole.
+ */
+export async function fetchMyTimetable(date?: string): Promise<EffectiveSlotRecord[]> {
+  const { data } = await apiClient.get<EffectiveSlotRecord[]>(endpoints.timetableSlots.my, {
+    query: date === undefined ? {} : { date },
+  });
+  return data;
+}
+
+/** One teacher's live published classes on a weekday in a session: what their absence leaves
+ * to cover. */
+export async function fetchTeacherClassesOn(
+  academicSessionId: string,
+  staffId: string,
+  dayOfWeek: number,
+): Promise<TimetableSlotRecord[]> {
+  return collectPages<TimetableSlotRecord>(apiClient, endpoints.timetableSlots.list, {
+    query: {
+      academic_session_id: academicSessionId,
+      teacher_id: staffId,
+      weekday: dayOfWeek,
+      status: SLOT_STATUS_PUBLISHED,
+      current: true,
+      ordering: SLOT_LIST_ORDERING,
+      page_size: MAX_PAGE_SIZE,
+    },
+  });
 }

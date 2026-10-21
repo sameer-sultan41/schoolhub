@@ -26,6 +26,7 @@ from django.utils import timezone
 from apps.staff_management.models import EmploymentStatus, Staff, StaffType
 from apps.timetable import notifications
 from apps.timetable.models import (
+    OPEN_SUBSTITUTION_STATUSES,
     Room,
     SlotStatus,
     SubstitutionStatus,
@@ -71,54 +72,83 @@ def _slot_weekday(slot: TimetableSlot) -> int:
     return slot.day_of_week
 
 
+def _teaching_in_cell(slot: TimetableSlot):
+    """The live published cells at `slot`'s weekday and period in its session: a teacher
+    holding one is teaching then."""
+    return TimetableSlot.objects.alive().filter(
+        academic_session=slot.academic_session,
+        day_of_week=slot.day_of_week,
+        period=slot.period,
+        status=SlotStatus.PUBLISHED,
+        effective_to__isnull=True,
+    )
+
+
+def _covering_in_cell(slot: TimetableSlot, on_date: date):
+    """Open cover in `slot`'s period on `on_date`: its substitute is busy then."""
+    return TeacherSubstitution.objects.alive().filter(
+        date=on_date, period=slot.period, status__in=OPEN_SUBSTITUTION_STATUSES
+    )
+
+
+def _staff_away_on(on_date: date) -> set[uuid.UUID]:
+    """Attendance's own reading of who is on leave or marked away. Imported here, not at
+    the top: attendance imports this module's `propose_substitutions_for_absence`."""
+    from apps.attendance.services import staff_away_on
+
+    return staff_away_on(on_date=on_date)
+
+
+def free_substitutes(*, slot: TimetableSlot, on_date: date, absent_staff: Staff):
+    """Every teacher who could cover `slot` on `on_date`, in one query plus attendance's two.
+
+    Active teaching staff **at the slot's own campus** (cover across sites is a teacher
+    assigned to a room they can't reach), not the absent teacher, not teaching or covering
+    in that period, and not away that day. The same rules `_assert_substitute_is_free`
+    checks one teacher against, so the lookup, a hand-made proposal and the automatic one
+    can't disagree about who is free.
+    """
+    return (
+        Staff.objects.alive()
+        .filter(
+            employment_status=EmploymentStatus.ACTIVE,
+            staff_type=StaffType.TEACHING,
+            campus_id=slot.section.campus_id,
+        )
+        .exclude(pk=absent_staff.pk)
+        .exclude(pk__in=_teaching_in_cell(slot).filter(staff__isnull=False).values("staff_id"))
+        .exclude(pk__in=_covering_in_cell(slot, on_date).values("substitute_staff_id"))
+        .exclude(pk__in=_staff_away_on(on_date))
+    )
+
+
 def _assert_substitute_is_free(
     *, slot: TimetableSlot, on_date: date, substitute_staff: Staff
 ) -> None:
-    """The substitute must be free at that (date, period) — §11.
+    """The substitute must be free at that (date, period) — §11 — and in school that day.
 
-    Two ways to be busy: their own published slot in that cell, or another
-    substitution already covering that cell on that date.
-
-    The second half is also `subs_substitute_one_per_period`, which is what
-    actually holds when two proposals race; this check is the friendly half,
-    naming the field and the reason instead of answering a bare 409. The first
-    half spans two tables and no index can express it, so a substitute whose own
-    class is published in that period is caught here or nowhere.
+    Built from `free_substitutes`' own predicates, one per message, so each refusal names
+    the reason. The covering half is also `subs_substitute_one_per_period`, which is what
+    holds when two proposals race; the teaching half spans two tables and is caught here
+    or nowhere.
     """
-    own_class = (
-        TimetableSlot.objects.alive()
-        .filter(
-            academic_session=slot.academic_session,
-            staff=substitute_staff,
-            day_of_week=slot.day_of_week,
-            period=slot.period,
-            status=SlotStatus.PUBLISHED,
-            effective_to__isnull=True,
-        )
-        .exists()
-    )
-    if own_class:
+    if substitute_staff.campus_id != slot.section.campus_id:
+        raise DomainRuleViolation({"substitute_staff_id": "This teacher works at another campus."})
+    if _teaching_in_cell(slot).filter(staff=substitute_staff).exists():
         raise DomainRuleViolation(
             {"substitute_staff_id": "This teacher already has a class in that period."}
         )
-
-    already_covering = (
-        TeacherSubstitution.objects.alive()
-        .filter(
-            substitute_staff=substitute_staff,
-            date=on_date,
-            period=slot.period,
-            status__in=(SubstitutionStatus.PROPOSED, SubstitutionStatus.CONFIRMED),
-        )
-        .exists()
-    )
-    if already_covering:
+    if _covering_in_cell(slot, on_date).filter(substitute_staff=substitute_staff).exists():
         raise DomainRuleViolation(
             {
                 "substitute_staff_id": (
                     "This teacher is already covering another class in that period."
                 )
             }
+        )
+    if substitute_staff.pk in _staff_away_on(on_date):
+        raise DomainRuleViolation(
+            {"substitute_staff_id": "This teacher is on leave or marked absent that day."}
         )
 
 
@@ -159,7 +189,7 @@ def _assert_room_is_free(*, slot: TimetableSlot, on_date: date, room: Room) -> N
             room=room,
             date=on_date,
             period=slot.period,
-            status__in=(SubstitutionStatus.PROPOSED, SubstitutionStatus.CONFIRMED),
+            status__in=OPEN_SUBSTITUTION_STATUSES,
         )
         .exclude(timetable_slot=slot)
         .exists()
@@ -276,6 +306,65 @@ def decide_substitution(
     return substitution
 
 
+@transaction.atomic
+def cancel_substitution(
+    *, substitution: TeacherSubstitution, actor_id: uuid.UUID, own_proposal_only: bool
+) -> TeacherSubstitution:
+    """Releases cover that is no longer wanted: `proposed` or `confirmed` → `cancelled`.
+
+    `own_proposal_only` is the proposer withdrawing their own proposal; an approver may
+    cancel any open cover. Who may do which is the view's to decide (it reads the keys);
+    this enforces what the row allows. Today or later only: past cover is history.
+
+    The same locked re-read and conditional UPDATE as `decide_substitution`, so a cancel
+    racing an approval can't both succeed. The slot and the substitute are free again
+    once this commits (the open-only constraints stop counting the row).
+    """
+    locked = TeacherSubstitution.objects.alive().select_for_update().get(pk=substitution.pk)
+    allowed = (SubstitutionStatus.PROPOSED,) if own_proposal_only else OPEN_SUBSTITUTION_STATUSES
+    if locked.status not in allowed:
+        raise Conflict(f"This substitution is {locked.status} and cannot be cancelled.")
+    if locked.date < timezone.localdate():
+        raise DomainRuleViolation({"date": "Past cover cannot be cancelled."})
+
+    cancelled = (
+        TeacherSubstitution.objects.alive()
+        .filter(pk=locked.pk, status=locked.status)
+        .update(status=SubstitutionStatus.CANCELLED, updated_by=actor_id, updated_at=timezone.now())
+    )
+    if not cancelled:
+        raise Conflict("This substitution changed while you were cancelling it.")
+
+    substitution.refresh_from_db()
+    _notify_cancelled(substitution=substitution)
+    return substitution
+
+
+def _notify_cancelled(*, substitution: TeacherSubstitution) -> None:
+    from core.notifications.services import Recipient, notify
+
+    user_id = substitution.substitute_staff.user_id
+    if not user_id:
+        return
+    try:
+        with transaction.atomic():
+            notify(
+                notifications.SUBSTITUTION_CANCELLED,
+                tenant_id=substitution.tenant_id,
+                recipients=[Recipient(user_id=user_id)],
+                context={
+                    "substitute.first_name": substitution.substitute_staff.first_name,
+                    "section.name": substitution.timetable_slot.section.name,
+                    "date": substitution.date.isoformat(),
+                    "period.name": substitution.timetable_slot.period.name,
+                },
+                source_type="teacher_substitution",
+                source_id=substitution.pk,
+            )
+    except Exception:
+        logger.exception("substitution-cancelled notification failed for %s", substitution.pk)
+
+
 def _notify_decision(*, substitution: TeacherSubstitution) -> None:
     from core.notifications.services import Recipient, notify
 
@@ -350,9 +439,11 @@ def propose_substitutions_for_absence(
     two occupancy constraints.
 
     **Proposals, never confirmations.** §7.2 has a human approve cover, so this
-    fills the queue rather than deciding it. A slot that already has a
-    substitution for the date is skipped — the unique constraint says one per
-    (slot, date), and re-marking an absence must not raise a second proposal.
+    fills the queue rather than deciding it. A slot that already has open cover
+    (proposed or confirmed) for the date is skipped — the unique constraint holds
+    one open cover per (slot, date), and re-marking an absence must not raise a
+    second proposal. A declined or cancelled one doesn't count: that slot still
+    needs cover.
 
     **A slot with no free substitute is skipped, not failed.** Every eligible
     teacher already teaching that period is an ordinary state in a small school,
@@ -362,7 +453,9 @@ def propose_substitutions_for_absence(
     proposed: list[TeacherSubstitution] = []
 
     for slot in slots_needing_cover(staff=staff, on_date=on_date):
-        already = TeacherSubstitution.objects.alive().filter(timetable_slot=slot, date=on_date)
+        already = TeacherSubstitution.objects.alive().filter(
+            timetable_slot=slot, date=on_date, status__in=OPEN_SUBSTITUTION_STATUSES
+        )
         if already.exists():
             continue
 
@@ -399,41 +492,15 @@ def propose_substitutions_for_absence(
 def _first_free_substitute(
     *, slot: TimetableSlot, on_date: date, absent_staff: Staff
 ) -> Staff | None:
-    """An active teacher **at the slot's own campus** who is free for its period.
+    """The first of `free_substitutes`, by `pk`.
 
-    The campus filter is not an optimisation. Without it a multi-campus tenant
-    proposed cover across sites — a teacher at the other end of the city assigned
-    to a period they cannot physically reach, and an approver with no reason to
-    notice, because the proposal looks exactly like a valid one. `sections` carry
-    a campus and `staff` carry a campus; nothing else in the conflict rules
-    compares them, because every other path starts from a grid a human built for
-    one campus.
-
-    Deliberately *first free*, not *best*: §14's AI-TTB-03 is the ranked
-    suggestion (workload balance, subject match) and it is Phase 3 work behind
-    the AI gateway that does not exist. Picking arbitrarily and letting a human
-    approve is honest; inventing a ranking here would be a worse version of a
-    feature the module doc already specifies properly.
-
-    Ordered by `pk` so the choice is at least stable across runs — an arbitrary
-    pick that changes between two identical calls is harder to reason about than
-    an arbitrary pick that does not.
+    Deliberately *first free*, not *best*: §6's ranking and §14's AI-TTB-03 are the
+    ranked suggestion (workload balance, subject match), and neither exists yet. Picking
+    arbitrarily and letting a human approve is honest. Ordered by `pk` so the choice is
+    at least stable across runs.
     """
-    candidates = (
-        Staff.objects.alive()
-        .filter(
-            employment_status=EmploymentStatus.ACTIVE,
-            staff_type=StaffType.TEACHING,
-            campus_id=slot.section.campus_id,
-        )
-        .exclude(pk=absent_staff.pk)
+    return (
+        free_substitutes(slot=slot, on_date=on_date, absent_staff=absent_staff)
         .order_by("pk")
+        .first()
     )
-
-    for candidate in candidates:
-        try:
-            _assert_substitute_is_free(slot=slot, on_date=on_date, substitute_staff=candidate)
-        except DomainRuleViolation:
-            continue
-        return candidate
-    return None

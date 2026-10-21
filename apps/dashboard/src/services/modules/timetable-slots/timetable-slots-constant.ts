@@ -6,6 +6,15 @@ import type { ConflictSeverity, SlotInput } from "./timetable-slots-type";
 /** The query-key module every grid read lives under; a slot write invalidates it. */
 export const TIMETABLE_SLOTS_QUERY_MODULE = "timetable-slots";
 export const TIMETABLE_GRID_RESOURCE = "grid";
+/** One teacher's classes on a weekday (the propose-cover form): a publish refreshes it too. */
+export const TEACHER_CLASSES_RESOURCE = "teacher-classes";
+
+/** A unique slot-list order: `period_sequence` ties across weekdays and between a draft and
+ * the published row it replaces, and a cursor over tied rows can skip or repeat one. */
+export const SLOT_LIST_ORDERING = "period_sequence,day_of_week,created_at";
+
+/** A live timetable cell's `status`. */
+export const SLOT_STATUS_PUBLISHED = "published";
 
 /** Monday (0) to Sunday (6), the API's `day_of_week`. */
 export const ALL_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;

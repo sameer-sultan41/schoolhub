@@ -11,11 +11,13 @@ import uuid
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.timetable.models import Period, SubstitutionStatus, TeacherSubstitution, TimetableSlot
+from apps.timetable.models import (
+    OPEN_SUBSTITUTION_STATUSES,
+    Period,
+    TeacherSubstitution,
+    TimetableSlot,
+)
 from core.api.exceptions import DomainRuleViolation
-
-#: Cover that is still going to happen: a period or room it names is in use.
-OPEN_SUBSTITUTION_STATUSES = (SubstitutionStatus.PROPOSED, SubstitutionStatus.CONFIRMED)
 
 # ---------------------------------------------------------------------------
 # Periods

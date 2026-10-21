@@ -28,10 +28,8 @@ jest.mock("@/lib/preferences/preferences-cookies.client", () => ({
 jest.mock("@/services", () => ({
   Services: {
     auth: { fetchCurrentUser: jest.fn() },
-    dashboard: {
-      fetchDashboardOverview: jest.fn(),
-      fetchMyTimetable: jest.fn(),
-    },
+    dashboard: { fetchDashboardOverview: jest.fn() },
+    timetableSlots: { fetchMyTimetable: jest.fn() },
     schoolOrganization: { fetchAcademicSessions: jest.fn() },
     staff: { fetchStaffDirectory: jest.fn() },
     teacherAllocations: { fetchLoadSummary: jest.fn() },
@@ -51,8 +49,8 @@ const mockFetchDashboardOverview = Services.dashboard.fetchDashboardOverview as 
 const mockFetchLoadSummary = Services.teacherAllocations.fetchLoadSummary as jest.MockedFunction<
   typeof Services.teacherAllocations.fetchLoadSummary
 >;
-const mockFetchMyTimetable = Services.dashboard.fetchMyTimetable as jest.MockedFunction<
-  typeof Services.dashboard.fetchMyTimetable
+const mockFetchMyTimetable = Services.timetableSlots.fetchMyTimetable as jest.MockedFunction<
+  typeof Services.timetableSlots.fetchMyTimetable
 >;
 const mockFetchStaffDirectory = Services.staff.fetchStaffDirectory as jest.MockedFunction<
   typeof Services.staff.fetchStaffDirectory

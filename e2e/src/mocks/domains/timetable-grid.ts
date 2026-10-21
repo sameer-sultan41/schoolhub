@@ -9,6 +9,7 @@ export interface Slot {
   academic_session_id: string;
   section_id: string;
   section_name: string;
+  campus_id: string;
   day_of_week: number;
   period_id: string;
   period_name: string;
@@ -42,6 +43,7 @@ export function buildSlot(overrides: Partial<Slot> = {}): Slot {
     academic_session_id: ORG_IDS.currentSession,
     section_id: ORG_IDS.sectionA,
     section_name: "A",
+    campus_id: ORG_IDS.mainCampus,
     day_of_week: 0,
     period_id: "",
     period_name: "Period 1",
@@ -144,12 +146,19 @@ export function timetableGridModule(options: TimetableGridOptions = {}): MockMod
       const sectionId = params.get("section_id");
       const sessionId = params.get("academic_session_id");
       const onlyCurrent = params.get("current") === "true";
+      // The cover dialog's "their classes that day" read.
+      const teacherId = params.get("teacher_id");
+      const weekday = params.get("weekday");
+      const status = params.get("status");
       return paginated(
         slots.filter(
           (slot) =>
             (!sectionId || slot.section_id === sectionId) &&
             (!sessionId || slot.academic_session_id === sessionId) &&
-            (!onlyCurrent || slot.effective_to === null),
+            (!onlyCurrent || slot.effective_to === null) &&
+            (!teacherId || slot.staff_id === teacherId) &&
+            (weekday === null || String(slot.day_of_week) === weekday) &&
+            (!status || slot.status === status),
         ),
       );
     });

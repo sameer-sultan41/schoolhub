@@ -105,6 +105,11 @@
   - Give layout helpers unequal boxes in their unit tests.
   - Read a library's source before deciding what a DOM signal proves. In a browser spec, put an ordering barrier (a `setTimeout(0)` of your own) behind a timer the library schedules, rather than a sleep (`WeekGridPage.keyboardMove`).
 
+### L15. A new rule breaks the specs that relied on the old one
+
+- **Mistake.** Timetable PR C opened "My timetable" to `timetable.timetable.view`, but PR A's spec still asserted a view-only user sees no Timetable group. It also made cover campus-bound, while the live cover journey's substitute sat on the seeded campus and its grid on a fresh one. Both would have failed CI or the nightly run, and the change review caught them, not the author.
+- **Check.** When a change widens or narrows who sees something, or what a rule accepts, grep the specs and live fixtures for the old behaviour: assertions of absence (`toHaveCount(0)`), fixtures built for the rule (campus, session dates, seeded staff), and wall-clock dates against fixed fixture windows. Fix them in the same PR.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

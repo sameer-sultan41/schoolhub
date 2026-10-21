@@ -194,7 +194,7 @@ either this file or `project-status.md`.
   rule 6), and that package does not exist — a 202 pointing at a job nothing
   runs would be worse than the omission. Also absent, each lacking a §16
   endpoint to hang it on: §13's five reports, §6's copy-from-previous-session
-  and bulk-clear, AI-TTB-03 substitute ranking, and PDF/Excel/iCal export —
+  and bulk-clear, and PDF/Excel/iCal export (substitute ranking has its own entry) —
   `timetable.timetable.export` is registered as §4 declares it but no route
   exercises it, the same deliberate shape as `staff.performance-review.*`.
   Two of §12's five notification triggers are deferred to the communication
@@ -202,10 +202,6 @@ either this file or `project-status.md`.
   families. `services._slot_weekday` is correct only while a tenant starts its
   week on Monday; the real conversion belongs with the tenant week-start
   setting, which does not exist yet.
-- **A teacher has no Timetable entry until PR C.** Timetable dashboard PR A ships only the
-  setup sections (gated on `timetable.period.update` / `timetable.room.update`), so a viewer
-  holding just `timetable.timetable.view` gets no sidebar group, and `/timetable` shows the
-  "no permission" landing. PR C adds My timetable, which every role reaches.
 - **The week grid's drag-and-drop moves pure drafts only, into empty cells.** A published
   cell, or a draft that replaces one, has no handle: moving it would leave the published class
   showing at the source, because a published cell can't be cleared (the entry below). A drop
@@ -235,19 +231,33 @@ either this file or `project-status.md`.
   this needs a decision about what removing a live cell means — a tombstone
   draft, an explicit whole-grid publish mode, or a `:clear-cell` action — not a
   filter change. No deletion flow was invented in the meantime.
-- **`SubstitutionStatus.completed` and `.cancelled` are reserved and
-  unreachable.** Both are in the locked entity map's enum;
-  `decide_substitution` only ever produces `confirmed` or `declined`, and §16
-  declares no endpoint that reaches either. `completed` waits on the attendance
-  module to signal that a covered period actually ran — nothing in `timetable`
-  knows a period happened. `cancelled` waits on a `:cancel` action for the case
-  §7.2's flowchart stops short of: the absent teacher returns and confirmed
-  cover has to be released. That one has a real cost — a confirmed substitution
-  holds `subs_substitute_one_per_period` for its (date, period), so the
-  substitute cannot be assigned elsewhere and nothing can let them go — but
-  building it means inventing an endpoint §16 does not list and a notification
-  §12 does not list, so it waits on the module doc rather than being
-  half-built. `models.py` carries the same note beside the enum.
+- **`SubstitutionStatus.completed` is reserved and unreachable.** It is in the
+  locked entity map's enum, but nothing in `timetable` knows a covered period
+  actually ran, so it waits on a signal from attendance. (`cancelled` is now
+  `:cancel`'s, timetable dashboard PR C, which added the endpoint to §16 and its
+  notification to §12; `models.py` carries the same note beside the enum.)
+- **Cover has no "uncovered periods today" view and no self-approval guard.**
+  The substitutions queue lists cover that exists; a view of the day's periods
+  whose teacher is away with nobody covering would need a read joining the
+  absence feed to the published grid. And an approver who also proposed cover
+  may approve their own proposal: §4 doesn't forbid it, and leave's
+  self-approval refusal (`attendance.md`) is the model if a school wants one.
+- **Proposing cover isn't campus-scoped for the slot.** `POST /teacher-substitutions`
+  resolves `timetable_slot_id` through the tenant-scoped manager, not the caller's campus
+  scope, so a campus-scoped proposer could post another campus's slot (with that campus's
+  teacher, which the campus check then allows). `candidates` already 404s such a slot; the
+  create serializer's slot field needs the same `scope_queryset`. It predates the
+  dashboard, which only offers the caller's own slots.
+- **Substitute candidates are unranked.** `GET /teacher-substitutions/candidates`
+  returns everyone free, by name. §6's ranking (subject qualification,
+  familiarity with the class, the day's free periods, weekly cover load) and
+  AI-TTB-03 on top of it are a spec gap: neither has an inputs-and-weights
+  definition to build against, and the staff qualifications they need are not
+  modelled.
+- **`/timetables/my`'s `meta` is described, not typed.** Its `audience`,
+  `academic_session_id` and `date` are in the endpoint's description only, the
+  same as every other endpoint's envelope `meta` in this schema; the dashboard
+  reads only `data`.
 - **`teacher_substitutions.room_id` was added to the locked entity map.**
   `timetable.md` §6 and §15 both promise "ad-hoc room change supported on the
   substitution" while `entities/academics.md`'s column list omitted the column.

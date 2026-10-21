@@ -19,6 +19,20 @@ router.register(
 )
 
 urlpatterns = [
+    # A fixed word under the collection, so it goes before the router's `<pk>` too. A bare
+    # list, so neither the viewset's paging nor its filters apply (or reach the schema).
+    path(
+        "teacher-substitutions/candidates",
+        TeacherSubstitutionViewSet.as_view(
+            {"get": "candidates"}, pagination_class=None, filter_backends=[]
+        ),
+        name="teacher-substitutions-candidates",
+    ),
+    path(
+        "teacher-substitutions/<uuid:pk>:cancel",
+        TeacherSubstitutionViewSet.as_view({"post": "cancel"}),
+        name="teacher-substitutions-cancel",
+    ),
     path(
         "teacher-substitutions/<uuid:pk>:approve",
         TeacherSubstitutionViewSet.as_view({"post": "approve"}),

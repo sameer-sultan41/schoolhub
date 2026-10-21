@@ -45,6 +45,7 @@ describe("Services", () => {
       "studentTransfers",
       "students",
       "teacherAllocations",
+      "teacherSubstitutions",
       "tenant",
       "timetableSlots",
     ]);
@@ -128,6 +129,13 @@ describe("Services", () => {
     expect(typeof Services.timetableSlots.deleteSlot).toBe("function");
     expect(typeof Services.timetableSlots.validateSection).toBe("function");
     expect(typeof Services.timetableSlots.publishSection).toBe("function");
+    expect(typeof Services.timetableSlots.fetchMyTimetable).toBe("function");
+    expect(typeof Services.timetableSlots.fetchTeacherClassesOn).toBe("function");
+
+    expect(typeof Services.teacherSubstitutions.fetchSubstitutionPage).toBe("function");
+    expect(typeof Services.teacherSubstitutions.proposeSubstitution).toBe("function");
+    expect(typeof Services.teacherSubstitutions.fetchCandidates).toBe("function");
+    expect(typeof Services.teacherSubstitutions.decideSubstitution).toBe("function");
 
     expect(typeof Services.promotions.fetchPromotionBatches).toBe("function");
     expect(typeof Services.promotions.fetchPromotionBatch).toBe("function");
