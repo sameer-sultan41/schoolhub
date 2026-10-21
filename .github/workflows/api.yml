@@ -95,11 +95,13 @@ jobs:
       # exercises real ID-card generation; every WeasyPrint import elsewhere in
       # the codebase is deliberately lazy (inside the function that needs it,
       # mirroring core.files.storage.S3Presigner's lazy `import boto3`) so no
-      # other job needs this step.
+      # other job needs this step. The list is WeasyPrint's documented one for
+      # Ubuntu wheels; it no longer uses gdk-pixbuf, whose old package name is
+      # gone from the 26.04 image.
       - name: Install WeasyPrint system libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0
+          sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0
 
       # infra/postgres/init/02-app-role.sql is the production shape and calls
       # itself "the most important file in this repository": RLS binds only to a
