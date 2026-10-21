@@ -90,8 +90,9 @@ export function nextCellInDirection<TId>(
 /**
  * Where a keyboard drag's dragged box moves on an arrow key: one cell on from the cell it is
  * over (`fromCell`), measured cell to cell rather than from the handle, which sits in a corner
- * of its cell and would otherwise find its own cell "ahead". The handle keeps its place inside
- * the cell, so the collision check lands on the new cell. `null` at the edge of the grid.
+ * of its cell and would otherwise find its own cell "ahead". The box is centred in the new
+ * cell rather than kept at its offset in the old one: columns differ in width, and a handle at
+ * a wide cell's far edge would otherwise land a cell further on. `null` at the edge of the grid.
  */
 export function keyboardStep<TId>(
   dragged: Box,
@@ -119,7 +120,7 @@ export function keyboardStep<TId>(
   const next = nextCellInDirection(origin, candidates, direction);
   if (!next) return null;
   return {
-    left: next.box.left + (dragged.left - origin.left),
-    top: next.box.top + (dragged.top - origin.top),
+    left: next.box.left + (next.box.width - dragged.width) / 2,
+    top: next.box.top + (next.box.height - dragged.height) / 2,
   };
 }

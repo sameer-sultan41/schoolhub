@@ -102,11 +102,9 @@ export class WeekGridPage extends BasePage {
    * Moves a draft by keyboard: Space on its handle, one arrow key per step, Space to drop.
    * `overCells` names the cell each step lands on ("Tuesday · Period 1").
    *
-   * Waits between keys rather than pressing them back to back. dnd-kit's keyboard sensor
-   * starts listening for arrow keys a tick *after* Space starts the drag, and starting it
-   * re-measures every cell; a browser runs queued key presses before that timer, so a key
-   * sent in the same breath is silently lost. The drag is live once the handle is
-   * `aria-pressed`, and each step has landed once dnd-kit's live region announces it.
+   * Waits for each step's live-region announcement before the next key, so a step that lands
+   * on the wrong cell fails on that step, naming it. The drag is live once the handle is
+   * `aria-pressed`.
    */
   async keyboardMove(
     weekday: string,

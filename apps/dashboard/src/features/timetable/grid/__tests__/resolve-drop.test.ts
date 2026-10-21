@@ -95,13 +95,30 @@ describe("keyboardStep", () => {
   const overB = { id: "b", box: box(100, 0) };
 
   it("measures from the cell, so Left and Down never land back on it", () => {
-    expect(keyboardStep(handle, overB, cells, "left")).toEqual({ left: 70, top: 2 });
-    expect(keyboardStep(handle, overB, cells, "down")).toEqual({ left: 170, top: 52 });
+    expect(keyboardStep(handle, overB, cells, "left")).toEqual({ left: 36, top: 11 });
+    expect(keyboardStep(handle, overB, cells, "down")).toEqual({ left: 136, top: 61 });
   });
 
   it("finds the handle's own cell when no cell is reported yet", () => {
     // The first arrow press comes before dnd-kit has measured a collision.
-    expect(keyboardStep(handle, null, cells, "left")).toEqual({ left: 70, top: 2 });
+    expect(keyboardStep(handle, null, cells, "left")).toEqual({ left: 36, top: 11 });
+  });
+
+  it("lands inside the next cell when the columns differ in width", () => {
+    // A filled Monday is wider than an empty Tuesday: the handle's offset from Monday's edge
+    // would carry it past Tuesday into Wednesday.
+    const week = [
+      { id: "mon", box: box(0, 0, 140) },
+      { id: "tue", box: box(140, 0, 85) },
+      { id: "wed", box: box(225, 0, 105) },
+    ];
+    const atMondayEnd = box(110, 2, 28, 28);
+
+    // Centred in Tuesday (140 to 225), clear of Wednesday.
+    expect(keyboardStep(atMondayEnd, week[0] ?? null, week, "right")).toEqual({
+      left: 168.5,
+      top: 11,
+    });
   });
 
   it("stops at the edge of the grid", () => {
