@@ -50,6 +50,8 @@ function stubCover(
   { substitutions = [buildSubstitution()], isApprover = true } = {},
 ) {
   const slot = buildSlot({
+    // A real UUID: the propose form only asks for candidates once the picked class's id is one.
+    id: uuid(),
     staff_id: amna.id,
     staff_name: "Amna Raza",
     status: "published",

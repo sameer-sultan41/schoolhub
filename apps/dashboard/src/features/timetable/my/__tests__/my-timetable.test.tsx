@@ -5,9 +5,15 @@ import {
   effectiveSlotRecord,
   PERIOD_2_ID,
 } from "@/services/modules/timetable-slots/__tests__/timetable-slots-fixtures";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setUrl } from "@/test-utils";
 
 import { MyTimetable } from "../my-timetable";
+
+// The page's toolbar reads the pathname for its breadcrumb.
+jest.mock("next/navigation", () => {
+  const testUtils = jest.requireActual<{ createNavigationMock: () => unknown }>("@/test-utils");
+  return testUtils.createNavigationMock();
+});
 
 jest.mock("@/services", () => ({
   Services: { timetableSlots: { fetchMyTimetable: jest.fn() } },
@@ -20,6 +26,7 @@ const mockFetchMyTimetable = Services.timetableSlots.fetchMyTimetable as jest.Mo
 describe("MyTimetable", () => {
   beforeEach(() => {
     mockFetchMyTimetable.mockReset();
+    setUrl("/timetable/my");
   });
 
   it("draws the viewer's week, in period order, with free periods marked", async () => {
