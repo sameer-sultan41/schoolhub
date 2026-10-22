@@ -276,3 +276,20 @@ unexercised. These causes are stacked:
   - the lesson renumbered to L17, because open PR #117 already has L16;
   - status docs that call the lane rebuilt, not proven, until a dispatched run gets past setup.
 
+## Amendment 2 (2026-10-22, after the first run past setup)
+
+- **What the run showed:** e2e-live on #125 (run 39767738357) came up, served both apps and ran
+  the live project for the first time. Nearly every spec then failed on rate limits:
+  - 76 failures were `live API login failed`, from the login limit of 10/min per IP;
+  - the rest were `Request was throttled`, from the per-user limit of 60/min, hit by the
+    shared live admin across two workers.
+- **User decision:** make the rates configurable.
+  - **API:** every DRF throttle rate (`tenant`, `user`, `anon`, `auth`, `public_form`) is read
+    from a `THROTTLE_RATE_*` env var, defaulting to today's values. `tests/test_throttle_rates.py`
+    pins the defaults and checks that no throttle class keeps its own `rate`.
+  - **Compose:** passes the rates through to the API, defaulting to the same values.
+  - **e2e-live:** sets them high in its job env.
+  - **Templates (both approved):** `apps/api/.env.example` lists the variables. The compose
+    template lists them commented out, since seed-dev sources it and an active line would
+    override the job's values.
+

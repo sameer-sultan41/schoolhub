@@ -72,6 +72,26 @@ class PeriodEndpointTests(TimetableAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
+    def test_a_tenant_wide_period_clashes_with_any_campus_one(self) -> None:
+        """The other direction: a tenant-wide period applies to every campus."""
+        self.allow("timetable.period.create")
+        with tenant_context(self.tenant.id):
+            PeriodFactory(
+                tenant=self.tenant,
+                campus=self.campus,
+                sequence=93,
+                start_time=datetime.time(19, 0),
+                end_time=datetime.time(19, 45),
+            )
+
+        response = self.client.post(
+            "/api/v1/periods",
+            self._payload(sequence=94, start_time="19:15", end_time="20:00"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
     def test_an_end_time_before_the_start_is_a_field_error(self) -> None:
         """Mirrors `periods_end_after_start` so the form gets a field, not a 409."""
         self.allow("timetable.period.create")
