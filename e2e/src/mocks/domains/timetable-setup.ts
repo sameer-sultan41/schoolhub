@@ -190,7 +190,10 @@ function overlapResponse(periods: Period[], candidate: Period) {
   const clash = periods.find(
     (row) =>
       row.id !== candidate.id &&
-      (row.campus_id === candidate.campus_id || row.campus_id === null) &&
+      // A tenant-wide period (null campus) applies to every campus, in either direction.
+      (candidate.campus_id === null ||
+        row.campus_id === null ||
+        row.campus_id === candidate.campus_id) &&
       row.start_time < candidate.end_time &&
       row.end_time > candidate.start_time,
   );

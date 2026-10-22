@@ -31,7 +31,10 @@ because the website renders on the server and browser interception cannot see it
 ## The auth throttle — and why every live browser spec logs in for itself
 
 `AuthEndpointThrottle` (`apps/api/core/api/throttling.py`) allows only 10 requests/minute
-per IP across login/refresh/logout combined. A real login per test blows through that the
+per IP across login/refresh/logout combined, and the user bucket 60 requests/minute. The
+`e2e-live` workflow lifts both for its throwaway stack (`THROTTLE_RATE_*` in its job env; the
+first run past setup was throttled almost everywhere), but a local `pnpm e2e:live` runs the
+real limits. A real login per test blows through that the
 moment `tests/live/` grows past a handful of specs, so don't do that either — but the
 "share one login" fix has a sharp edge, confirmed against the real API, not assumed:
 
