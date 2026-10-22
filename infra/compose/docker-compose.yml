@@ -27,6 +27,12 @@ x-api-env: &api-env
   # Migrations bypass the pooler and run as the schema-owning migrator role.
   MIGRATION_DATABASE_URL: postgres://${MIGRATION_DB_USER:-schoolhub_migrator}:${MIGRATION_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-schoolhub}
   REDIS_URL: redis://redis:6379/0
+  # api-architecture.md §2.5's limits. e2e-live raises them through its own job env.
+  THROTTLE_RATE_TENANT: ${THROTTLE_RATE_TENANT:-600/min}
+  THROTTLE_RATE_USER: ${THROTTLE_RATE_USER:-60/min}
+  THROTTLE_RATE_ANON: ${THROTTLE_RATE_ANON:-20/min}
+  THROTTLE_RATE_AUTH: ${THROTTLE_RATE_AUTH:-10/min}
+  THROTTLE_RATE_PUBLIC_FORM: ${THROTTLE_RATE_PUBLIC_FORM:-5/min}
   CELERY_BROKER_URL: redis://redis:6379/1
   CELERY_RESULT_BACKEND: redis://redis:6379/2
   EMAIL_HOST: mailpit
