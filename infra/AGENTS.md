@@ -37,7 +37,7 @@ components and says where each pin lives. Keep the two in step:
 | PostgreSQL | 16 | **18** (`postgres:18-alpine`) | `compose/docker-compose.yml`, `terraform/modules/database` |
 | Redis | 7 | **8** (`redis:8-alpine`) | `compose/docker-compose.yml`, `terraform/modules/cache` |
 | Python | 3.12 | **3.14** (`python:3.14-slim`) | `PYTHON_IMAGE` build arg |
-| Node | 20 | **24 LTS** (`node:24-alpine`) | `NODE_IMAGE` build arg |
+| Node | 20 | **24 LTS** (`node:24-slim` in the compose images and the production image; [ADR-0026](../docs/decisions/0026-live-lane-backend-in-compose-apps-on-the-runner.md)) | `NODE_IMAGE` build arg |
 | MinIO (local and CI only) | unspecified | `pgsty/minio` and `pgsty/mc`, tag and digest ([ADR-0025](../docs/decisions/0025-minio-images-from-the-pgsty-community-build.md)) | `compose/docker-compose.yml` |
 | PgBouncer | unspecified | latest stable, transaction mode | `postgres/pgbouncer/pgbouncer.ini` |
 | Terraform | unspecified | `>= 1.9`, AWS provider `~> 6.0` | `terraform/**` |
