@@ -27,12 +27,14 @@ def assert_period_does_not_overlap(
 ) -> None:
     """§11: periods must not overlap within a day template.
 
-    Compared against both the campus's own periods and the tenant-wide ones
-    (`campus_id IS NULL`), because a tenant-wide period applies to this campus
-    too — checking only the campus's own rows would let a campus period sit
-    inside the tenant's lunch break.
+    A campus period is compared with its campus's own periods and the tenant-wide ones
+    (`campus_id IS NULL`), because a tenant-wide period applies to that campus too.
+    A tenant-wide period applies to every campus, so it is compared with all of them;
+    filtering on `campus_id=None` would only ever find other tenant-wide rows.
     """
-    siblings = Period.objects.alive().filter(Q(campus_id=campus_id) | Q(campus_id__isnull=True))
+    siblings = Period.objects.alive()
+    if campus_id is not None:
+        siblings = siblings.filter(Q(campus_id=campus_id) | Q(campus_id__isnull=True))
     if exclude_pk is not None:
         siblings = siblings.exclude(pk=exclude_pk)
 
