@@ -93,6 +93,11 @@
 - **Mistake.** A full disk made shell calls fail mid-review, and the commit hooks write to disk too. A machine that sleeps also kills background agents.
 - **Check.** Run `df -h` before a long review wave or a commit. Have long-running agents write their report file early and keep it current.
 
+### L17. A Dockerfile change breaks the compose targets that name it; a never-green workflow hides every later step
+
+- **Mistake.** `f7511d7` created the frontend `Dockerfile`s with `deps`/`builder`/`runner`, while compose kept building `target: dev`; the API `Dockerfile`'s own comment records the same break once before. `e2e-live` then failed all 50 recorded runs, and its first fix (MinIO, ADR-0025) only uncovered the next break: no PgBouncer userlist, migrations as the app role, env names the apps don't read, and then a `0600` userlist that a Linux bind mount hides from PgBouncer's uid 70 (macOS's Docker Desktop never showed it). The first plan said "no other change needed for CI", from a workflow that had never got past building images.
+- **Check.** When a `Dockerfile`'s stages or build args change, check every compose `target:` and `args:` that names them (`infra-compose`'s `images` job now builds them all). Before claiming a never-green workflow needs only one fix, read every step after the first failure as untested.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

@@ -1,10 +1,12 @@
 # =============================================================================
 # Validate the local development stack and the database bootstrap.
 #
-# This workflow does NOT build the application images — they live in other
-# repos and would make this run take twenty minutes. What it does check is
-# everything infra actually owns:
+# What it checks:
 #
+#   0. every service image the compose file builds (api, celery, dashboard,
+#      website) still builds for its compose target, in its own job — a
+#      Dockerfile that drops a stage compose asks for fails here, not weeks
+#      later in the nightly live lane
 #   1. the compose file parses and the pinned image tags are what we think
 #   2. the PgBouncer config still says pool_mode = transaction
 #   3. .env.example documents every variable the compose file interpolates
@@ -25,6 +27,18 @@ on:
       - "infra/postgres/**"
       - "infra/scripts/**"
       - ".github/workflows/infra-compose.yml"
+      # What the service images build from (job `images`).
+      - "apps/api/Dockerfile"
+      - "apps/api/pyproject.toml"
+      - "apps/api/uv.lock"
+      - "apps/dashboard/Dockerfile"
+      - "apps/website/Dockerfile"
+      - "apps/*/package.json"
+      - "packages/*/package.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".npmrc"
   push:
     branches: [main]
   workflow_dispatch:
@@ -37,6 +51,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  images:
+    name: build service images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build every image compose builds, at its compose target
+        working-directory: infra/compose
+        run: |
+          cp .env.example .env
+          docker compose build api celery-worker celery-beat dashboard website
+
   config:
     name: compose config
     runs-on: ubuntu-latest
@@ -69,6 +95,9 @@ jobs:
           # dev, CI and production stop agreeing about planner and RLS behavior.
           check "postgres:18-alpine"
           check "redis:8-alpine"
+          # The base images the service images build from (their build args).
+          check "python:3.14-slim"
+          check "node:24-slim"
           # A community build, so both MinIO images keep their digest pin (ADR-0025).
           check "pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:"
           check "pgsty/mc:RELEASE.2026-10-18T00-00-00Z@sha256:"

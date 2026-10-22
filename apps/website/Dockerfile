@@ -5,13 +5,15 @@
 # https://github.com/vercel/next.js/tree/canary/examples/with-docker for a
 # pnpm workspace.
 #
-# Note: for day-to-day development on macOS, Next.js recommends running
-# `pnpm dev` natively rather than in Docker. These images are for
-# production-shaped builds.
+# Two targets: `runner` is the production image; `dev` is what
+# infra/compose/docker-compose.yml's FRONTEND_BUILD_TARGET=dev runs, with the
+# repo bind-mounted over /app and `next dev` hot-reloading it.
 
-ARG NODE_VERSION=24-slim
+# The base image, pinned in one place per image like apps/api's PYTHON_IMAGE
+# (infra/AGENTS.md's version table).
+ARG NODE_IMAGE=node:24-slim
 
-FROM node:${NODE_VERSION} AS deps
+FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -25,7 +27,14 @@ COPY packages/api-client/package.json packages/api-client/
 COPY packages/config/package.json packages/config/
 RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile
 
-FROM node:${NODE_VERSION} AS builder
+# ---- dev: the compose service's target. No build: the service bind-mounts the
+# source and starts `next dev`; `deps` already enabled pnpm and installed the
+# workspace, which seeds the service's node_modules volumes.
+FROM deps AS dev
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -38,7 +47,7 @@ COPY --from=deps /app/packages ./packages
 COPY . .
 RUN pnpm --filter @schoolhub/website build
 
-FROM node:${NODE_VERSION} AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

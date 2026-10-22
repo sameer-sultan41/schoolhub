@@ -55,25 +55,21 @@ Once that has run once, the ordinary compose commands work as expected:
 cd compose
 docker compose up -d postgres pgbouncer redis minio mailpit          # infrastructure only
 docker compose up -d                                                 # everything
+docker compose up -d --build                                         # after a Dockerfile change
 docker compose down                                                  # stop, keep data
 ```
 
 ```bash
 ./scripts/seed-dev.sh --check-only   # re-run the tenant-boundary assertions, change nothing
 ./scripts/seed-dev.sh --reset        # destroy volumes and start over (DELETES LOCAL DATA)
+./scripts/seed-dev.sh --backend-only # everything but the dashboard/website (e2e-live uses this)
 cp compose/docker-compose.override.yml.example compose/docker-compose.override.yml  # optional
 ```
 
-By default the application services build from sibling checkouts. Set `API_REPO_PATH` and
-`FRONTEND_REPO_PATH` in `.env` if your layout differs from:
-
-```
-~/Documents/
-├── docs/          # specification (this repo's source of truth)
-├── apps/api/       # Django 5 + DRF + Celery
-├── schoolhub-web/          # Next.js 15 dashboard + website renderer
-└── infra/     # you are here
-```
+The application services build from this monorepo: the API from `apps/api`, the
+dashboard and website from the workspace root (`API_REPO_PATH` and `FRONTEND_REPO_PATH` in
+`.env`). The frontends run `next dev` over the mounted source; each start runs a filtered
+`pnpm install` first, so a lockfile change needs a restart, not a rebuild.
 
 | Service | URL | Notes |
 | --- | --- | --- |

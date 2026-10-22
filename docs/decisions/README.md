@@ -54,6 +54,7 @@ fails when the decision is violated. If nothing does, write `review only` — an
 | [0023](0023-shared-bulk-import-parser.md) | Every bulk importer reads its file through one shared parser in `core/imports/` | Accepted | `apps/api/core/imports/tests/test_tabular.py`, mypy `core.imports.*` ratchet; reuse by a new importer is review only |
 | [0024](0024-list-state-in-the-url.md) | A directory's list state lives in the URL, written in place with `history.replaceState` | Accepted | `use-data-grid-url-state.test.tsx`, `use-url-params.test.tsx`, both directory tables' tests, `e2e/tests/dashboard/list-url-state.spec.ts`; adoption by a new list screen is review only |
 | [0025](0025-minio-images-from-the-pgsty-community-build.md) | Local and CI object storage runs pgsty's community MinIO build, pinned by digest | Accepted | `infra-compose.yml`'s pinned-image step (tag and `@sha256:` digest kept); `e2e-live` (an image that can't be pulled or started fails it) |
+| [0026](0026-live-lane-backend-in-compose-apps-on-the-runner.md) | The live lane runs the backend through `seed-dev.sh` and serves the apps on the runner | Accepted | `e2e-live.yml`; `infra-compose.yml`'s `images` job and base-image pin checks |
 
 "Planned" items land in the stacked PRs described in
 [`../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md`](../superpowers/specs/2026-09-26-engineering-standards-and-agent-workflow-design.md);
