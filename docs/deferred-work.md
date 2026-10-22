@@ -187,6 +187,15 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
+- **The live E2E lane has never come up on CI.** Every recorded `e2e-live` run has failed
+  (50 runs, the oldest 2026-09-05), so no live journey (timetable, academics, students) has
+  actually run against the real stack. MinIO's withdrawn images were one cause (ADR-0025). The
+  next is the frontend build: `infra/compose/docker-compose.yml` builds `dashboard` and
+  `website` with `target: ${FRONTEND_BUILD_TARGET:-dev}`, and `.env.example` sets `dev`, but
+  both `Dockerfile`s define only `deps`, `builder` and `runner`. Older runs also failed with
+  `Cannot find module '@playwright/test/package.json'`. Making the lane run needs a decision
+  (a `dev` stage, or run the production `runner` image in CI) and a run that actually gets to
+  the tests.
 - **`timetable`'s gaps are named, not hidden.** `POST
   /timetables/{section_id}:generate-draft` is **not built**: it is AI-TTB-01,
   Phase 3 work that has to go through the `core/ai` gateway (AGENTS.md hard
