@@ -29,6 +29,15 @@ jobs:
       # empty env var, which the seed command's `os.environ.get(key, default)` would
       # return as-is, and which e2e/src/env.ts's zod `min(1)` would reject outright.
       E2E_LIVE_ADMIN_PASSWORD: ${{ secrets.E2E_LIVE_ADMIN_PASSWORD || 'e2e-not-a-real-password' }}
+      # A throwaway stack hit by parallel workers from one IP and a handful of shared
+      # identities: the production limits (10 logins/min per IP, 60 requests/min per
+      # user) throttled nearly every spec on the first run past setup. compose passes
+      # these to the API; nothing outside this job sets them.
+      THROTTLE_RATE_TENANT: "100000/min"
+      THROTTLE_RATE_USER: "100000/min"
+      THROTTLE_RATE_ANON: "100000/min"
+      THROTTLE_RATE_AUTH: "100000/min"
+      THROTTLE_RATE_PUBLIC_FORM: "100000/min"
     steps:
       - uses: actions/checkout@v4
 
