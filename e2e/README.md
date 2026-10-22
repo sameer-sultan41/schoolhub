@@ -45,11 +45,16 @@ Never move a `live` assertion into a mocked project. A stub returns whatever it 
 ### Running the live lane
 
 ```bash
-./infra/scripts/seed-dev.sh          # brings up the stack AND seeds it (see below)
-E2E_NO_SERVER=1 \
+./infra/scripts/seed-dev.sh --backend-only   # the backend, seeded (see below)
+E2E_REAL_API=1 \
 E2E_API_BASE_URL=http://localhost:8000/api/v1 \
 pnpm e2e:live
 ```
+
+This is what the `e2e-live` workflow runs: compose holds the backend, and Playwright's
+`webServer` builds and serves the dashboard and website exactly as the PR lane does.
+`E2E_REAL_API=1` drops only its tenant-lookup stub, which would otherwise try to claim the
+real API's origin.
 
 `seed-dev.sh` now runs `manage.py seed_e2e_data` (alongside `seed_dev_data`) after
 migrations — it creates the `e2e-school`/`e2e-other-school` tenants and the
@@ -69,9 +74,9 @@ and one substitution left in `proposed` so an approval has something to act on. 
 `E2E_LIVE_ADMIN_PASSWORD` before running the script if you want a non-default password;
 it must then match what you export for `pnpm e2e:live` too.
 
-`E2E_NO_SERVER=1` is required here: without it, Playwright's own `webServer` array tries
-to (re)build and serve the dashboard/website on the same ports the compose stack already
-bound them to.
+To run against the compose stack's own `next dev` apps instead (`seed-dev.sh` without
+`--backend-only`), pass `E2E_NO_SERVER=1` in place of `E2E_REAL_API=1`: otherwise
+Playwright's `webServer` tries to serve the apps on the ports compose already bound.
 
 The `live` project splits into two Playwright projects: `live-setup` (see
 `tests/live/live.setup.ts`) and `live` (the actual specs, depending on it). `pnpm

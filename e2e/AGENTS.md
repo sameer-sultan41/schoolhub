@@ -82,5 +82,7 @@ behavioural spec, so drift fails a test. If you add one, add the spec too.
 - Do not run the suite locally to "check" a change — commit, push, read CI
   (root `AGENTS.md`).
 - Do not add a `live` spec to the PR gate. It needs the compose stack; the gate runs
-  `--project=dashboard --project=website` only.
+  `--project=dashboard --project=website` only. CI's live lane brings the backend up with
+  `infra/scripts/seed-dev.sh --backend-only` and lets Playwright serve the apps under
+  `E2E_REAL_API=1` (README, "Running the live lane").
 - Do not weaken a `live` assertion into a mocked one to make it pass.

@@ -116,5 +116,5 @@ and the constraint is recorded so nobody re-raises them and breaks the build.
 | TypeScript | 7.0 for `tsc`, 6.0 for tooling | **Split, per the TypeScript team's own guidance.** 7.0 is the native port and ships no stable programmatic API until 7.1, so compiler-API consumers need 6.x while `tsc` itself runs 7. Next additionally needs `experimental.useTypeScriptCli: false`. |
 | ESLint | 9.x | **Constrained.** ESLint 10 removed `context.getFilename()`, which `eslint-plugin-react` still calls and has no ESLint 10 release for. |
 | Tailwind CSS | 4.x | CSS-first config: `@import "tailwindcss"` plus `@theme` tokens, no `tailwind.config.ts`. |
-| Node | 24 LTS | |
+| Node | 24 LTS | The compose and production images use `node:24-slim` (the `NODE_IMAGE` build arg); CI's own steps run `setup-node` 24. |
 | Jest | 30 | Testing standard for this project; Vitest is not used. |

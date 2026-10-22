@@ -72,12 +72,17 @@ const nextConfig: NextConfig = {
    * fetch to the other, so session restore/rotation would silently fail on any page
    * reload past the 15-minute access-token lifetime. Routing through this same-origin
    * proxy sidesteps SameSite entirely — the browser only ever talks to its own origin.
+   *
+   * The proxy runs server-side, so it prefers `API_BASE_URL` (the compose service sets it to
+   * `http://api:8000/api/v1`, since `api.localhost` inside the container is the container itself).
+   * Read when the config loads, so a standalone build fixes it at `next build`.
    */
   rewrites() {
+    const apiBaseUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     return [
       {
         source: "/api/auth/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/:path*`,
+        destination: `${apiBaseUrl}/auth/:path*`,
       },
     ];
   },

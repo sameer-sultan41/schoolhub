@@ -22,6 +22,8 @@
 #   ./seed-dev.sh              # full setup
 #   ./seed-dev.sh --reset      # destroy volumes first (DELETES LOCAL DATA)
 #   ./seed-dev.sh --check-only # run the assertions, change nothing
+#   ./seed-dev.sh --backend-only # all of the above but the dashboard/website
+#                                # services (CI serves the apps itself)
 # =============================================================================
 
 set -euo pipefail
@@ -34,6 +36,7 @@ USERLIST="${REPO_ROOT}/postgres/pgbouncer/userlist.txt"
 
 RESET=0
 CHECK_ONLY=0
+BACKEND_ONLY=0
 
 log()  { printf '[seed] %s\n' "$*" >&2; }
 fail() { printf '[seed] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -47,6 +50,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --reset)      RESET=1; shift ;;
     --check-only) CHECK_ONLY=1; shift ;;
+    --backend-only) BACKEND_ONLY=1; shift ;;
     -h|--help)    usage 0 ;;
     *)            fail "unknown argument: $1 (try --help)" ;;
   esac
@@ -149,7 +153,12 @@ if [ "${CHECK_ONLY}" -eq 0 ]; then
 
   # The migrator is deliberately excluded: DDL cannot run through a
   # transaction-mode pooler, so migrations connect directly on 5432.
-  chmod 600 "${USERLIST}"
+  #
+  # World-readable on purpose: the pgbouncer image runs as uid 70, and a Linux
+  # bind mount keeps this file's owner and mode, so 600 locks PgBouncer out (Docker
+  # Desktop on macOS hides that). It holds SCRAM verifiers, not passwords; the
+  # plaintext ones stay in the 600 compose/.env, and both are git-ignored.
+  chmod 644 "${USERLIST}"
 
   entries="$(grep -c '^"' "${USERLIST}" || true)"
   [ "${entries}" -gt 0 ] || fail "no roles found in pg_authid. Did the init scripts run? docker compose logs postgres"
@@ -228,15 +237,28 @@ if [ "${seed_dev_data_ok}" -eq 0 ] || [ "${seed_e2e_data_ok}" -eq 0 ]; then
   fail "one or more seed commands failed -- see the ERROR line(s) above."
 fi
 
-log "starting the application services"
-dc up -d
+if [ "${BACKEND_ONLY}" -eq 1 ]; then
+  # Leaves 3000/3001 free for apps served outside compose (e2e-live's Playwright).
+  log "starting the backend application services"
+  dc up -d api celery-worker celery-beat
+else
+  log "starting the application services"
+  dc up -d
+fi
+
+if [ "${BACKEND_ONLY}" -eq 1 ]; then
+  apps_banner="  Dashboard and tenant site are not started (--backend-only): serve them
+  with \`pnpm dev\`, or let Playwright's webServer build and serve them."
+else
+  apps_banner="  Dashboard   http://localhost:${DASHBOARD_PORT:-3000}
+  Tenant site http://demo.localhost:${WEBSITE_PORT:-3001}"
+fi
 
 cat >&2 <<EOF
 
 [seed] ready.
 
-  Dashboard   http://localhost:${DASHBOARD_PORT:-3000}
-  Tenant site http://demo.localhost:${WEBSITE_PORT:-3001}
+${apps_banner}
   API         http://localhost:${API_PORT:-8000}/api/v1
   Mailpit     http://localhost:${MAILPIT_UI_PORT:-8025}
   MinIO       http://localhost:${MINIO_CONSOLE_PORT:-9001}
