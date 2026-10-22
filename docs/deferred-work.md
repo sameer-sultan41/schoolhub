@@ -187,15 +187,22 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
-- **The live E2E lane has never come up on CI.** Every recorded `e2e-live` run has failed
-  (50 runs, the oldest 2026-09-05), so no live journey (timetable, academics, students) has
-  actually run against the real stack. MinIO's withdrawn images were one cause (ADR-0025). The
-  next is the frontend build: `infra/compose/docker-compose.yml` builds `dashboard` and
-  `website` with `target: ${FRONTEND_BUILD_TARGET:-dev}`, and `.env.example` sets `dev`, but
-  both `Dockerfile`s define only `deps`, `builder` and `runner`. Older runs also failed with
-  `Cannot find module '@playwright/test/package.json'`. Making the lane run needs a decision
-  (a `dev` stage, or run the production `runner` image in CI) and a run that actually gets to
-  the tests.
+- **The live E2E lane has not yet run past setup on CI.** All 50 recorded `e2e-live` runs
+  failed before a test: MinIO's withdrawn images (ADR-0025), then the frontend build, the
+  PgBouncer userlist and migrations (ADR-0026). Until a dispatched run gets to the tests, no
+  live journey (timetable, academics, students) has run against the real stack.
+- **`frontend.yml`'s Playwright browser cache never hits the right key.** Its version step
+  runs `require('@playwright/test/package.json')` from the repo root, where the package (an
+  `e2e` dependency, not hoisted) can't be found, so the key is always `playwright-Linux-`.
+  `e2e-live` dropped its browser cache for this reason (ADR-0026). The PR gate's cache is left
+  as is, since removing it changes the gate's timing, a decision of its own. Either resolve
+  the version with `pnpm --filter @schoolhub/e2e exec node -p …` or drop the cache, as
+  Playwright's CI docs advise.
+- **The dashboard image's auth-proxy target is fixed at build time.** The `/api/auth/*`
+  rewrite reads `API_BASE_URL` (then `NEXT_PUBLIC_API_BASE_URL`) in `next.config.ts`, which a
+  standalone build serializes at `next build`. One image can't be pointed at a different API
+  per environment without a rebuild, which `infra/AGENTS.md` rule 5 (one image promoted
+  staging → production) will need before a real deploy.
 - **`timetable`'s gaps are named, not hidden.** `POST
   /timetables/{section_id}:generate-draft` is **not built**: it is AI-TTB-01,
   Phase 3 work that has to go through the `core/ai` gateway (AGENTS.md hard
