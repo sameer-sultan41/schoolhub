@@ -19,9 +19,9 @@ export class TimetableSubstitutionsPage extends BasePage {
   }
 
   rowAction(action: "Approve" | "Decline" | "Cancel", absentTeacher: string): Locator {
-    return this.page.getByRole("button", {
-      name: new RegExp(`^${action} cover for ${absentTeacher} on `),
-    });
+    // A name is literal text, not a pattern: escape it (a name may hold "." or "(").
+    const name = absentTeacher.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return this.page.getByRole("button", { name: new RegExp(`^${action} cover for ${name} on `) });
   }
 
   get proposeButton(): Locator {

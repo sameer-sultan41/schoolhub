@@ -168,6 +168,10 @@ export function timetableCoverModule(options: TimetableCoverOptions = {}): MockM
       const row = rows.find((candidate) => candidate.id === rowId);
       if (!row) return fail(404, "Not found.");
       if (action === "approve" || action === "reject") {
+        // The permission class's answer for a caller without `timetable.substitution.approve`.
+        if (!options.isApprover) {
+          return fail(403, "You do not have permission to perform this action.");
+        }
         if (row.status !== "proposed") {
           return fail(409, `This substitution is ${row.status} and cannot be decided again.`);
         }

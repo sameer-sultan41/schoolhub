@@ -61,7 +61,9 @@ def assert_substitution_valid(
     if not (session.start_date <= on_date <= session.end_date):
         raise DomainRuleViolation({"date": "This date is outside the academic session."})
 
-    _assert_substitute_is_free(slot=slot, on_date=on_date, substitute_staff=substitute_staff)
+    _assert_substitute_is_free(
+        slot=slot, on_date=on_date, absent_staff=absent_staff, substitute_staff=substitute_staff
+    )
 
 
 def _slot_weekday(slot: TimetableSlot) -> int:
@@ -123,33 +125,28 @@ def free_substitutes(*, slot: TimetableSlot, on_date: date, absent_staff: Staff)
 
 
 def _assert_substitute_is_free(
-    *, slot: TimetableSlot, on_date: date, substitute_staff: Staff
+    *, slot: TimetableSlot, on_date: date, absent_staff: Staff, substitute_staff: Staff
 ) -> None:
     """The substitute must be free at that (date, period) — §11 — and in school that day.
 
-    Built from `free_substitutes`' own predicates, one per message, so each refusal names
-    the reason. The covering half is also `subs_substitute_one_per_period`, which is what
-    holds when two proposals race; the teaching half spans two tables and is caught here
-    or nowhere.
+    `free_substitutes` decides, so the lookup, a hand-made proposal and the automatic one
+    can't disagree. Its own predicates then name the reason for a refusal. The covering
+    half is also `subs_substitute_one_per_period`, which holds when two proposals race.
     """
+    free = free_substitutes(slot=slot, on_date=on_date, absent_staff=absent_staff)
+    if free.filter(pk=substitute_staff.pk).exists():
+        return
     if substitute_staff.campus_id != slot.section.campus_id:
-        raise DomainRuleViolation({"substitute_staff_id": "This teacher works at another campus."})
-    if _teaching_in_cell(slot).filter(staff=substitute_staff).exists():
-        raise DomainRuleViolation(
-            {"substitute_staff_id": "This teacher already has a class in that period."}
-        )
-    if _covering_in_cell(slot, on_date).filter(substitute_staff=substitute_staff).exists():
-        raise DomainRuleViolation(
-            {
-                "substitute_staff_id": (
-                    "This teacher is already covering another class in that period."
-                )
-            }
-        )
-    if substitute_staff.pk in _staff_away_on(on_date):
-        raise DomainRuleViolation(
-            {"substitute_staff_id": "This teacher is on leave or marked absent that day."}
-        )
+        reason = "This teacher works at another campus."
+    elif _teaching_in_cell(slot).filter(staff=substitute_staff).exists():
+        reason = "This teacher already has a class in that period."
+    elif _covering_in_cell(slot, on_date).filter(substitute_staff=substitute_staff).exists():
+        reason = "This teacher is already covering another class in that period."
+    elif substitute_staff.pk in _staff_away_on(on_date):
+        reason = "This teacher is on leave or marked absent that day."
+    else:
+        reason = "This teacher can't cover that period."
+    raise DomainRuleViolation({"substitute_staff_id": reason})
 
 
 def _assert_room_is_free(*, slot: TimetableSlot, on_date: date, room: Room) -> None:
