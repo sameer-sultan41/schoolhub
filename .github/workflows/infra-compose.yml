@@ -69,6 +69,9 @@ jobs:
           # dev, CI and production stop agreeing about planner and RLS behavior.
           check "postgres:18-alpine"
           check "redis:8-alpine"
+          # A community build, so both MinIO images keep their digest pin (ADR-0025).
+          check "pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:"
+          check "pgsty/mc:RELEASE.2026-10-18T00-00-00Z@sha256:"
           exit "$fail"
 
       - name: Assert every expected service exists

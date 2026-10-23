@@ -110,6 +110,7 @@ and the constraint is recorded so nobody re-raises them and breaks the build.
 | Redis (server) | 8 | |
 | redis (Python client) | `>=5.0,<6.5` | **Constrained.** Celery's `kombu[redis]` extra caps the client below 6.5, so the 8.x client cannot be installed alongside Celery. Unrelated to the server version. |
 | Celery | 5.6 | |
+| MinIO (local and CI only) | `pgsty/minio` RELEASE.2026-08-04, `pgsty/mc` RELEASE.2026-10-18, by digest | **Community build.** Upstream withdrew its public images; see [ADR-0025](../decisions/0025-minio-images-from-the-pgsty-community-build.md). Production uses S3. |
 | Next.js | 16.3 | `middleware.ts` is now `proxy.ts` (Next 16 rename). |
 | React | 19.2 | |
 | TypeScript | 7.0 for `tsc`, 6.0 for tooling | **Split, per the TypeScript team's own guidance.** 7.0 is the native port and ships no stable programmatic API until 7.1, so compiler-API consumers need 6.x while `tsc` itself runs 7. Next additionally needs `experimental.useTypeScriptCli: false`. |
