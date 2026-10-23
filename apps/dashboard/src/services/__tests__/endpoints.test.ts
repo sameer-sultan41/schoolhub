@@ -34,6 +34,13 @@ describe("endpoints", () => {
     );
   });
 
+  it("builds the bell-schedule and room paths", () => {
+    expect(endpoints.periods.list).toBe("/periods");
+    expect(endpoints.periods.detail("period-1")).toBe("/periods/period-1");
+    expect(endpoints.rooms.list).toBe("/rooms");
+    expect(endpoints.rooms.detail("room-1")).toBe("/rooms/room-1");
+  });
+
   it("declares the student bulk-operation paths, ID cards as a colon-action", () => {
     expect(endpoints.students.imports).toBe("/student-imports");
     expect(endpoints.students.exports).toBe("/student-exports");

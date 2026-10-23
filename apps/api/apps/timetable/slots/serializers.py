@@ -187,7 +187,7 @@ class EffectiveSlotSerializer(serializers.ModelSerializer):
     def get_staff_name(self, obj: TimetableSlot) -> str | None:
         if obj.staff is None:
             return None
-        return f"{obj.staff.first_name} {obj.staff.last_name}"
+        return obj.staff.full_name
 
     @extend_schema_field(SlotSubstitutionSerializer(allow_null=True))
     def get_substitution(self, obj: TimetableSlot) -> dict | None:
@@ -200,9 +200,7 @@ class EffectiveSlotSerializer(serializers.ModelSerializer):
                 "date": override.date,
                 "absent_staff_id": override.absent_staff_id,
                 "substitute_staff_id": override.substitute_staff_id,
-                "substitute_staff_name": (
-                    f"{override.substitute_staff.first_name} {override.substitute_staff.last_name}"
-                ),
+                "substitute_staff_name": override.substitute_staff.full_name,
                 "room_id": override.room_id,
                 "room_name": override.room.name if override.room else None,
                 "reason": override.reason,

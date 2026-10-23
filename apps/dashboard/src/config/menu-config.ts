@@ -1,6 +1,7 @@
 import {
   Bolt,
   BookOpen,
+  CalendarClock,
   GraduationCap,
   IdCard,
   LayoutGrid,
@@ -16,7 +17,9 @@ import {
 
 import type { MenuConfig } from "@schoolhub/ui";
 
+import { sectionMenuItems } from "@/components/module-sections/module-sections";
 import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
+import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
 
 import { Paths } from "./paths";
 
@@ -53,11 +56,14 @@ export const MENU_SIDEBAR: MenuConfig = [
     icon: BookOpen,
     module: "academics",
     // Shared with the Academics tabs and landing; each child is gated on its own `.view` key.
-    children: ACADEMICS_SECTIONS.map((section) => ({
-      title: section.menuTitle,
-      path: section.href,
-      permission: section.permission,
-    })),
+    children: sectionMenuItems(ACADEMICS_SECTIONS),
+  },
+  {
+    title: "Timetable",
+    icon: CalendarClock,
+    module: "timetable",
+    // Shared with the Timetable tabs and landing, gated the same way.
+    children: sectionMenuItems(TIMETABLE_SECTIONS),
   },
   { heading: "User" },
   {

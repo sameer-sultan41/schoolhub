@@ -28,8 +28,8 @@ import { isOffsetPagination } from "@schoolhub/types";
 
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { LoadErrorCard } from "@/components/load-error-card";
-import { NoSessionCard } from "@/features/academics/no-session-card";
-import { useAcademicSession } from "@/features/academics/use-academic-session";
+import { NoSessionCard } from "@/components/academic-session/no-session-card";
+import { useAcademicSession } from "@/components/academic-session/use-academic-session";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { usePageClamp } from "@/hooks/use-page-clamp";
@@ -66,6 +66,7 @@ import { DeleteCurriculumDialog } from "./delete-curriculum-dialog";
 export function CurriculumTable() {
   const t = useTranslations("academics");
   const tErrors = useTranslations("errors");
+  const tSession = useTranslations("academicSession");
 
   const [editTarget, setEditTarget] = useState<CurriculumRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CurriculumRecord | null>(null);
@@ -228,7 +229,7 @@ export function CurriculumTable() {
     <>
       {isLocked && session && (
         <Alert variant="info" appearance="light" className="mb-5">
-          <AlertDescription>{t("common.lockedNotice", { session: session.name })}</AlertDescription>
+          <AlertDescription>{tSession("lockedNotice", { session: session.name })}</AlertDescription>
         </Alert>
       )}
       <DataGrid

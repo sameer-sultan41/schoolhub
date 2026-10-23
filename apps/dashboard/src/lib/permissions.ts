@@ -24,3 +24,12 @@ export function canAccessModule(user: AuthenticatedUser | undefined, module: str
 export function hasPermission(user: AuthenticatedUser | undefined, key: PermissionKey): boolean {
   return user?.permissions.includes(key) ?? false;
 }
+
+/** True when the user holds at least one of `keys` — for a screen two different roles reach
+ * through two different keys (a substitution proposer and its approver, say). */
+export function hasAnyPermission(
+  user: AuthenticatedUser | undefined,
+  keys: readonly PermissionKey[],
+): boolean {
+  return keys.some((key) => hasPermission(user, key));
+}

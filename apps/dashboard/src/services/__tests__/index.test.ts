@@ -37,7 +37,9 @@ describe("Services", () => {
       "files",
       "guardians",
       "jobs",
+      "periods",
       "promotions",
+      "rooms",
       "schoolOrganization",
       "staff",
       "studentTransfers",
@@ -105,6 +107,16 @@ describe("Services", () => {
     expect(typeof Services.teacherAllocations.reinstateAllocation).toBe("function");
     expect(typeof Services.teacherAllocations.deleteAllocation).toBe("function");
     expect(typeof Services.teacherAllocations.fetchLoadSummary).toBe("function");
+
+    expect(typeof Services.periods.fetchPeriodPage).toBe("function");
+    expect(typeof Services.periods.createPeriod).toBe("function");
+    expect(typeof Services.periods.updatePeriod).toBe("function");
+    expect(typeof Services.periods.deletePeriod).toBe("function");
+
+    expect(typeof Services.rooms.fetchRoomPage).toBe("function");
+    expect(typeof Services.rooms.createRoom).toBe("function");
+    expect(typeof Services.rooms.updateRoom).toBe("function");
+    expect(typeof Services.rooms.deleteRoom).toBe("function");
 
     expect(typeof Services.promotions.fetchPromotionBatches).toBe("function");
     expect(typeof Services.promotions.fetchPromotionBatch).toBe("function");

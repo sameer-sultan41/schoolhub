@@ -12,12 +12,26 @@ and a rule implemented twice is a rule that drifts.
 
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.school_organization.models import Campus
 from apps.timetable.models import Period
 from apps.timetable.periods import services
 from apps.timetable.serializers import READ_ONLY_FIELDS, _fk
+
+
+@extend_schema_field(
+    {
+        "type": "array",
+        "items": {"type": "integer", "minimum": 0, "maximum": 6},
+        "nullable": True,
+        "description": "Applicable weekdays as 0-6; null = the tenant's working days.",
+    }
+)
+class WeekdaysField(serializers.JSONField):
+    """The JSON column's real shape on the wire, so the generated client types it as a list of
+    day numbers rather than `unknown`. Validation stays in `validate_weekdays`."""
 
 
 class PeriodSerializer(serializers.ModelSerializer):
@@ -29,12 +43,17 @@ class PeriodSerializer(serializers.ModelSerializer):
     """
 
     campus_id = _fk(Campus, source="campus", required=False, allow_null=True)
+    # Null for a tenant-wide period. Read through the relation rather than the
+    # viewset's annotation, for the same reason as `RoomSerializer.campus_name`.
+    campus_name = serializers.CharField(source="campus.name", read_only=True, allow_null=True)
+    weekdays = WeekdaysField(required=False, allow_null=True)
 
     class Meta:
         model = Period
         fields = (
             "id",
             "campus_id",
+            "campus_name",
             "name",
             "sequence",
             "start_time",

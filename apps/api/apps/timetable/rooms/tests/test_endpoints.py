@@ -7,9 +7,13 @@ convention).
 
 from __future__ import annotations
 
+import datetime
+
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
-from apps.timetable.models import Room
+from apps.timetable.models import Room, SlotStatus
 from apps.timetable.tests.base import TimetableAPITestCase
 from apps.timetable.tests.factories import CampusFactory, RoomFactory
 from core.tenancy.context import tenant_context
@@ -187,3 +191,75 @@ class RoomOrderingTests(TimetableAPITestCase):
             self.ids("ordering=floor"),
             [str(self.lab.pk), str(self.classroom.pk), str(self.hall.pk)],
         )
+
+
+class RoomCampusNameTests(TimetableAPITestCase):
+    def test_each_room_names_its_campus(self) -> None:
+        self.allow("timetable.timetable.view")
+
+        rows = self.client.get("/api/v1/rooms").json()["data"]
+
+        self.assertEqual(rows[0]["campus_name"], self.campus.name)
+
+    def test_a_create_response_names_the_campus_too(self) -> None:
+        self.allow("timetable.room.create")
+
+        response = self.client.post(
+            "/api/v1/rooms",
+            {
+                "campus_id": str(self.campus.pk),
+                "name": "Lab 2",
+                "code": "LAB-2",
+                "room_type": "lab",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+        self.assertEqual(response.json()["data"]["campus_name"], self.campus.name)
+
+    def test_the_list_query_count_does_not_grow_with_the_rows(self) -> None:
+        self.allow("timetable.timetable.view")
+
+        def queries() -> int:
+            with CaptureQueriesContext(connection) as captured:
+                self.client.get("/api/v1/rooms?page_size=100")
+            return len(captured)
+
+        queries()  # warm any per-request caches (feature flag, permissions)
+        before = queries()
+        with tenant_context(self.tenant.id):
+            for _ in range(5):
+                RoomFactory(tenant=self.tenant, campus=CampusFactory(tenant=self.tenant))
+
+        self.assertEqual(queries(), before)
+
+
+class RoomDeleteGuardTests(TimetableAPITestCase):
+    """See `services.assert_room_not_in_use`: a soft delete never meets `PROTECT`."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("timetable.room.delete")
+
+    def test_a_room_a_current_cell_names_is_refused(self) -> None:
+        self.make_slot(room=self.room)
+
+        response = self.client.delete(f"/api/v1/rooms/{self.room.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("Take it out of service instead", response.json()["error"]["message"])
+        with tenant_context(self.tenant.id):
+            self.assertTrue(Room.objects.alive().filter(pk=self.room.pk).exists())
+
+    def test_a_room_only_superseded_cells_named_can_go(self) -> None:
+        self.make_slot(
+            room=self.room,
+            status=SlotStatus.PUBLISHED,
+            effective_from=datetime.date(2026, 4, 1),
+            effective_to=datetime.date(2026, 4, 2),
+        )
+
+        response = self.client.delete(f"/api/v1/rooms/{self.room.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
