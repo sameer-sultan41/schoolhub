@@ -15,7 +15,12 @@ from rest_framework import status
 
 from apps.timetable.models import Room, SlotStatus
 from apps.timetable.tests.base import TimetableAPITestCase
-from apps.timetable.tests.factories import CampusFactory, RoomFactory
+from apps.timetable.tests.factories import (
+    CampusFactory,
+    RoomFactory,
+    StaffFactory,
+    TeacherSubstitutionFactory,
+)
 from core.tenancy.context import tenant_context
 
 
@@ -263,3 +268,25 @@ class RoomDeleteGuardTests(TimetableAPITestCase):
         response = self.client.delete(f"/api/v1/rooms/{self.room.pk}")
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_a_room_an_upcoming_unroomed_cover_keeps_is_refused(self) -> None:
+        """Un-roomed cover keeps its slot's room, even once the slot is superseded."""
+        slot = self.make_slot(
+            room=self.room,
+            status=SlotStatus.PUBLISHED,
+            effective_from=datetime.date(2026, 4, 1),
+            effective_to=datetime.date(2026, 4, 2),
+        )
+        with tenant_context(self.tenant.id):
+            TeacherSubstitutionFactory(
+                tenant=self.tenant,
+                timetable_slot=slot,
+                date=datetime.date(2999, 1, 4),
+                absent_staff=self.teacher,
+                substitute_staff=StaffFactory(tenant=self.tenant, campus=self.campus),
+                room=None,
+            )
+
+        response = self.client.delete(f"/api/v1/rooms/{self.room.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
