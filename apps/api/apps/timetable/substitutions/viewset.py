@@ -32,7 +32,7 @@ from core.api.exceptions import DomainRuleViolation
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
-from core.rbac.permissions import has_permission_key, scope_queryset
+from core.rbac.permissions import AnyOf, has_permission_key, scope_queryset
 
 
 class TeacherSubstitutionViewSet(
@@ -92,10 +92,9 @@ class TeacherSubstitutionViewSet(
         "approve": "timetable.substitution.approve",
         "reject": "timetable.substitution.approve",
         "candidates": "timetable.substitution.create",
-        # Two keys can cancel (an approver any open cover, a proposer their own proposal),
-        # and the permission class takes one, so the route takes the view key and
-        # `cancel` checks the two real keys itself before touching the row.
-        "cancel": SCAFFOLDING_VIEW_KEY,
+        # An approver cancels any open cover, a proposer their own proposal: either key
+        # passes the class (ADR-0027), and `cancel` applies the row-level rule.
+        "cancel": AnyOf("timetable.substitution.approve", "timetable.substitution.create"),
     }
     http_method_names = ["get", "post", "head", "options"]
 
@@ -184,14 +183,9 @@ class TeacherSubstitutionViewSet(
     )
     def cancel(self, request: Request, pk) -> Response:
         substitution = get_object_or_404(self.get_queryset(), pk=pk)
-        if has_permission_key(request.user, "timetable.substitution.approve"):
-            own_proposal_only = False
-        elif (
-            has_permission_key(request.user, "timetable.substitution.create")
-            and substitution.created_by == request.user.pk
-        ):
-            own_proposal_only = True
-        else:
+        # The class has admitted an approver or a proposer; what is left is whose row.
+        own_proposal_only = not has_permission_key(request.user, "timetable.substitution.approve")
+        if own_proposal_only and substitution.created_by != request.user.pk:
             raise PermissionDenied("Only an approver, or whoever proposed it, can cancel cover.")
 
         before = self.get_serializer(substitution).data

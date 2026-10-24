@@ -246,6 +246,11 @@ either this file or `project-status.md`.
   Some read-only POSTs do map to `.view` on purpose (`preview`, `validate`, `download`); the
   check needs a named allowlist of them before it can flag the rest. `AnyOf` members are
   already checked (ADR-0027).
+- **Cover screen and service cleanup the #123 review left.** Redundant `_staff_away_on` queries
+  when one proposal runs several checks, three near-identical notification helpers
+  (`_notify_decision`, `_notify_cancelled` and the assignment one), duplicated table markup between
+  the queue and My timetable, `today` captured once in the substitutions table so it goes stale
+  past midnight, and the propose fields' repeated placeholder ternaries. None changes behaviour.
 - **The week grid's columns are Monday to Friday, with no way to start a Saturday.** A weekend
   column appears only once a cell already sits on it (`visibleWeekdays`,
   `DEFAULT_VISIBLE_WEEKDAYS`), so a six-day school can never place its first Saturday period
