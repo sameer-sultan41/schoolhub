@@ -229,6 +229,12 @@ either this file or `project-status.md`.
   `period_not_on_weekday` findings and block publish; the week grid still shows them, with
   Discard on a draft, but a *published* cell in that state can't be cleared (the entry below).
   A guard on the period edit, like the delete guard, is the fix.
+- **The week grid's columns are Monday to Friday, with no way to start a Saturday.** A weekend
+  column appears only once a cell already sits on it (`visibleWeekdays`,
+  `DEFAULT_VISIBLE_WEEKDAYS`), so a six-day school can never place its first Saturday period
+  from the grid, though the API accepts any weekday and a period's `weekdays` can name one.
+  Deriving the columns needs the tenant's working days, which the dashboard doesn't read yet
+  (the settings screen is not built); showing every day a period runs on is the interim.
 - **The grid shows no weekly-target indicator.** `weekly_periods` on the curriculum and on an
   allocation is not checked by the conflict engine, and the grid doesn't count placed periods
   against it either; a "Mathematics 4 of 5" strip is a client-side follow-up.
