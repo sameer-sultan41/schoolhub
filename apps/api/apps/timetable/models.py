@@ -38,27 +38,17 @@ class SlotStatus(models.TextChoices):
 
 
 class SubstitutionStatus(models.TextChoices):
-    """`completed` and `cancelled` are declared and **unreachable today.**
+    """`completed` is declared and **unreachable today**; `cancelled` is `:cancel`'s.
 
-    Both are in the locked entity map's enum, so dropping them would put the
-    column out of step with the spec for a column that costs nothing to keep
-    wide. But `decide_substitution` only ever produces `confirmed` or
-    `declined`, and §16 declares no endpoint that could produce either of these
-    — so they are reserved, not implemented, and this says so rather than
-    leaving a reader to infer a workflow from an enum.
+    `completed` needs a signal that the covered period actually ran, which is the
+    attendance module's to give (§7.2 has the absence feed arriving from there).
+    Nothing in this module knows a period happened, so it is reserved rather than
+    implemented.
 
-    What each is waiting on:
-
-    - `completed` needs a signal that the covered period actually ran, which is
-      the attendance module's to give (§7.2 has the absence feed arriving from
-      there). Nothing in this module knows a period happened.
-    - `cancelled` needs a `:cancel` action for the case §7.2's flowchart stops
-      short of — the absent teacher returns and confirmed cover must be
-      released. That is a real gap with a real cost: a confirmed substitution
-      holds `subs_substitute_one_per_period` for that (date, period), so the
-      substitute cannot be assigned elsewhere and nothing can let them go.
-      Building it means inventing an endpoint §16 does not list and a
-      notification §12 does not list, so it waits on the module doc.
+    `cancelled` releases cover that is no longer wanted (the absent teacher came
+    back), freeing the substitute's `subs_substitute_one_per_period` hold and the
+    slot's `substitutions_one_per_slot_per_date` hold so the period can be covered
+    again.
     """
 
     PROPOSED = "proposed", "Proposed"
@@ -66,6 +56,10 @@ class SubstitutionStatus(models.TextChoices):
     DECLINED = "declined", "Declined"
     COMPLETED = "completed", "Completed"
     CANCELLED = "cancelled", "Cancelled"
+
+
+#: Cover that holds its slot, teacher and room. A declined or cancelled one holds nothing.
+OPEN_SUBSTITUTION_STATUSES = (SubstitutionStatus.PROPOSED, SubstitutionStatus.CONFIRMED)
 
 
 class Room(TenantOwnedModel):
@@ -341,10 +335,12 @@ class TeacherSubstitution(TenantOwnedModel):
         db_table = "teacher_substitutions"
         ordering = ["-date"]
         constraints = [
+            # Open cover only: a declined or cancelled proposal must not stop the slot
+            # being covered again that day.
             models.UniqueConstraint(
                 fields=["tenant", "timetable_slot", "date"],
                 name="substitutions_one_per_slot_per_date",
-                condition=models.Q(deleted_at__isnull=True),
+                condition=models.Q(deleted_at__isnull=True, status__in=("proposed", "confirmed")),
             ),
             models.CheckConstraint(
                 condition=~models.Q(substitute_staff=models.F("absent_staff")),

@@ -1376,6 +1376,34 @@ REPORT_KINDS = (
 )
 
 
+def staff_away_on(*, on_date: datetime.date) -> set[uuid.UUID]:
+    """The staff who are not in school on `on_date`: on approved leave covering it, or
+    marked absent or on leave in the staff register.
+
+    Read-only, for another module that has to plan around them (timetable picks cover
+    from everyone else). Two queries, whatever the size of the school.
+    """
+    on_leave = (
+        LeaveRequest.objects.alive()
+        .filter(
+            requester_type=RequesterType.STAFF,
+            status=LeaveStatus.APPROVED,
+            start_date__lte=on_date,
+            end_date__gte=on_date,
+        )
+        .values_list("staff_id", flat=True)
+    )
+    marked_away = (
+        StaffAttendance.objects.alive()
+        .filter(
+            attendance_date=on_date,
+            status__in=(StaffAttendanceStatus.ABSENT, StaffAttendanceStatus.ON_LEAVE),
+        )
+        .values_list("staff_id", flat=True)
+    )
+    return {staff_id for staff_id in on_leave if staff_id} | set(marked_away)
+
+
 def assert_report_range(*, start_date: datetime.date, end_date: datetime.date) -> None:
     if end_date < start_date:
         raise DomainRuleViolation({"end_date": "The range ends before it starts."})

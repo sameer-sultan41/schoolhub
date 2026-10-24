@@ -162,6 +162,15 @@ export const TIMETABLE_GRID_PERMISSIONS: PermissionKey[] = [
   "staff.staff.view",
 ];
 
+/** The cover keys (timetable.md §4): proposing it and deciding on it. */
+export const TIMETABLE_COVER_PERMISSIONS: PermissionKey[] = [
+  "timetable.timetable.view",
+  "timetable.slot.view",
+  "timetable.substitution.create",
+  "timetable.substitution.approve",
+  "staff.staff.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

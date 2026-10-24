@@ -44,6 +44,8 @@ class TimetableSlotSerializer(serializers.ModelSerializer):
     # Names for the grid, read through the viewset's `select_related`: one query for the
     # whole list, and a cell never needs a reference list to label itself.
     section_name = serializers.CharField(source="section.name", read_only=True)
+    # The section's campus: whose periods and rooms the cell can use (a cover's room move too).
+    campus_id = serializers.UUIDField(source="section.campus_id", read_only=True)
     period_name = serializers.CharField(source="period.name", read_only=True)
     period_sequence = serializers.IntegerField(source="period.sequence", read_only=True)
     start_time = serializers.TimeField(source="period.start_time", read_only=True)
@@ -59,6 +61,7 @@ class TimetableSlotSerializer(serializers.ModelSerializer):
             "academic_session_id",
             "section_id",
             "section_name",
+            "campus_id",
             "day_of_week",
             "period_id",
             "period_name",

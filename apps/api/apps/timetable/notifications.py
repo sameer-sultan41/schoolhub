@@ -1,6 +1,7 @@
 """Notification triggers and platform default templates — timetable.md §12.
 
-Five rows in the module doc; three are wired. The two that are not:
+Five rows in the module doc; three are wired, plus `substitution-cancelled`, which tells a
+substitute their cover was released (added with `:cancel`). The two that are not:
 
 - `timetable.class-substitution` needs every student and guardian of a section as
   recipients, and resolving that fan-out belongs with the recipient-rule work in
@@ -21,10 +22,12 @@ from core.notifications.templates import registry as templates
 PUBLISHED = "timetable.published"
 SUBSTITUTION_ASSIGNED = "timetable.substitution-assigned"
 SUBSTITUTION_DECISION = "timetable.substitution-decision"
+SUBSTITUTION_CANCELLED = "timetable.substitution-cancelled"
 
 _PUBLISHED_VARS = {"section.name", "session.name"}
 _ASSIGNED_VARS = {"substitute.first_name", "section.name", "date", "period.name"}
 _DECISION_VARS = {"section.name", "date", "decision"}
+_CANCELLED_VARS = {"substitute.first_name", "section.name", "date", "period.name"}
 
 catalog.register(
     PUBLISHED,
@@ -76,3 +79,24 @@ templates.register(
     body="Your substitution for {{ section.name }} on {{ date }} was {{ decision }}.",
     variables=_DECISION_VARS,
 )
+
+catalog.register(
+    SUBSTITUTION_CANCELLED,
+    template_code=SUBSTITUTION_CANCELLED,
+    category=NotificationCategory.ACADEMIC,
+    priority=NotificationPriority.HIGH,
+    channels={NotificationChannel.EMAIL},
+    variables=_CANCELLED_VARS,
+    description="Cover a teacher was assigned to is no longer needed.",
+)
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
+    templates.register(
+        SUBSTITUTION_CANCELLED,
+        channel=_channel,
+        subject="Cover for {{ section.name }} on {{ date }} is cancelled",
+        body=(
+            "{{ substitute.first_name }}, you no longer need to cover {{ section.name }} "
+            "during {{ period.name }} on {{ date }}."
+        ),
+        variables=_CANCELLED_VARS,
+    )
