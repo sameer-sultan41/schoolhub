@@ -5336,7 +5336,7 @@ export interface paths {
         delete: operations["teacher_subject_allocations_destroy"];
         options?: never;
         head?: never;
-        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). Changing the teacher of a current primary allocation (a primary with no end date) is a reassignment: the patched allocation is end-dated and kept as history, and a NEW primary allocation is created for the new teacher and returned, so the `id` in the response can differ from the one patched. A teacher change sent together with an end date, a demotion or a move is refused (422 on `staff_id`): send them separately. */
         patch: operations["teacher_subject_allocations_partial_update"];
         trace?: never;
     };

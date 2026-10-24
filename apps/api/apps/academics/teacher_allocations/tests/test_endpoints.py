@@ -23,6 +23,7 @@ from apps.academics.tests.factories import (
 )
 from apps.school_organization.models import SessionStatus, Subject
 from apps.staff_management.models import EmploymentStatus, StaffType
+from core.audit.models import AuditLog
 from core.tenancy.context import tenant_context
 
 
@@ -71,6 +72,10 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
         return self.client.patch(
             f"/api/v1/teacher-subject-allocations/{allocation_id}", body, format="json"
         )
+
+    def _new_teacher(self):
+        with tenant_context(self.tenant.id):
+            return StaffFactory(tenant=self.tenant, campus=self.campus)
 
     def test_allocating_a_teacher_succeeds_and_reports_no_warnings(self) -> None:
         self.allow("academics.teacher-allocation.create", "academics.teacher-allocation.view")
@@ -455,12 +460,29 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
         self.assertEqual(response.json()["data"]["effective_from"], earlier)
         self.assertEqual(response.json()["data"]["effective_to"], future.isoformat())
 
-    def test_a_start_after_the_existing_end_is_refused_on_effective_to(self) -> None:
+    def test_a_start_after_the_existing_end_is_refused_on_effective_from(self) -> None:
+        """Only the start is being edited, so that is the field the form must show it under."""
         first, future = self._displaced_future_start_row()
         later = (future + datetime.timedelta(days=5)).isoformat()
         response = self._patch(first["id"], {"effective_from": later})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("effective_to", {d["field"] for d in response.json()["error"]["details"]})
+        fields = {d["field"] for d in response.json()["error"]["details"]}
+        self.assertEqual(fields, {"effective_from"})
+
+    def test_both_dates_out_of_order_in_one_patch_are_refused_on_effective_to(self) -> None:
+        """Negative control: the end date is among the fields sent, so it keeps the error."""
+        row = self._allocate()
+        today = timezone.localdate()
+        response = self._patch(
+            row["id"],
+            {
+                "effective_from": (today - datetime.timedelta(days=2)).isoformat(),
+                "effective_to": (today - datetime.timedelta(days=5)).isoformat(),
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        fields = {d["field"] for d in response.json()["error"]["details"]}
+        self.assertEqual(fields, {"effective_to"})
 
     def test_a_future_end_date_is_still_refused_on_a_displaced_future_start_row(self) -> None:
         first, future = self._displaced_future_start_row()
@@ -537,6 +559,298 @@ class TeacherAllocationEndpointTests(AcademicsAPITestCase):
             new_teacher = self._patch(row["id"], {"staff_id": str(replacement.pk)})
             self.assertEqual(new_teacher.status_code, status.HTTP_200_OK, new_teacher.json())
             notify.assert_called_once()
+
+    def test_changing_the_teacher_of_a_current_primary_end_dates_it_and_starts_a_new_row(
+        self,
+    ) -> None:
+        """§6: the old teacher's row stays as history and the new teacher gets their own."""
+        start = timezone.localdate() - datetime.timedelta(days=5)
+        row = self._allocate(weekly_periods=6, effective_from=start.isoformat())
+        replacement = self._new_teacher()
+
+        response = self._patch(row["id"], {"staff_id": str(replacement.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        body = response.json()["data"]
+        self.assertNotEqual(body["id"], row["id"], "the response is the new row")
+        self.assertEqual(body["staff_id"], str(replacement.pk))
+        self.assertTrue(body["is_primary"])
+        self.assertIsNone(body["effective_to"])
+        self.assertEqual(body["weekly_periods"], 6)
+        with tenant_context(self.tenant.id):
+            old = TeacherSubjectAllocation.objects.get(pk=row["id"])
+            self.assertEqual(TeacherSubjectAllocation.objects.alive().count(), 2)
+        self.assertEqual(old.staff_id, self.teacher.pk, "the old row keeps its teacher")
+        self.assertEqual(old.effective_to, timezone.localdate())
+        # No overlap in the history: the new teacher starts the day the old one ends.
+        self.assertEqual(body["effective_from"], old.effective_to.isoformat())
+
+    def test_the_patch_may_set_the_new_rows_periods(self) -> None:
+        row = self._allocate(weekly_periods=6)
+        replacement = self._new_teacher()
+
+        response = self._patch(row["id"], {"staff_id": str(replacement.pk), "weekly_periods": 3})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["weekly_periods"], 3)
+        with tenant_context(self.tenant.id):
+            old = TeacherSubjectAllocation.objects.get(pk=row["id"])
+        self.assertEqual(old.weekly_periods, 6, "the old row is history, not edited")
+
+    def test_a_reassignment_may_start_the_new_teacher_after_the_old_one_ends(self) -> None:
+        row = self._allocate()
+        replacement = self._new_teacher()
+        later = timezone.localdate() + datetime.timedelta(days=10)
+
+        response = self._patch(
+            row["id"], {"staff_id": str(replacement.pk), "effective_from": later.isoformat()}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["effective_from"], later.isoformat())
+        with tenant_context(self.tenant.id):
+            old = TeacherSubjectAllocation.objects.get(pk=row["id"])
+        self.assertEqual(old.effective_to, timezone.localdate())
+
+    def test_a_reassignment_cannot_start_the_new_teacher_before_the_old_one_ends(self) -> None:
+        today = timezone.localdate()
+        row = self._allocate(effective_from=(today - datetime.timedelta(days=5)).isoformat())
+        replacement = self._new_teacher()
+        yesterday = (today - datetime.timedelta(days=1)).isoformat()
+
+        response = self._patch(
+            row["id"], {"staff_id": str(replacement.pk), "effective_from": yesterday}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        error = response.json()["error"]
+        self.assertEqual({d["field"] for d in error["details"]}, {"effective_from"})
+        self.assertEqual(
+            error["message"],
+            "The new teacher cannot start before the previous teacher's allocation "
+            f"ends on {today.isoformat()}.",
+        )
+        with tenant_context(self.tenant.id):
+            self.assertEqual(TeacherSubjectAllocation.objects.alive().count(), 1)
+            self.assertIsNone(TeacherSubjectAllocation.objects.get(pk=row["id"]).effective_to)
+
+    def test_reassigning_a_primary_that_starts_later_starts_the_new_row_at_that_date(self) -> None:
+        """The old row is end-dated at its own start (never before it), and the new one follows."""
+        future = timezone.localdate() + datetime.timedelta(days=30)
+        row = self._allocate(effective_from=future.isoformat())
+        replacement = self._new_teacher()
+
+        response = self._patch(row["id"], {"staff_id": str(replacement.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["effective_from"], future.isoformat())
+        with tenant_context(self.tenant.id):
+            old = TeacherSubjectAllocation.objects.get(pk=row["id"])
+        self.assertEqual(old.effective_to, future)
+
+    def test_reassigning_to_a_teacher_with_an_ended_row_in_the_slot_is_a_conflict(self) -> None:
+        self._allocate()
+        replacement = self._new_teacher()
+        second = self._allocate(staff_id=str(replacement.pk))  # end-dates the first teacher's row
+
+        response = self._patch(second["id"], {"staff_id": str(self.teacher.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.json())
+        self.assertIn(
+            "Reinstate that allocation instead of reassigning this one.",
+            response.json()["error"]["message"],
+        )
+        with tenant_context(self.tenant.id):
+            current = TeacherSubjectAllocation.objects.get(pk=second["id"])
+            self.assertEqual(TeacherSubjectAllocation.objects.alive().count(), 2)
+        self.assertEqual(current.staff_id, replacement.pk)
+        self.assertIsNone(current.effective_to)
+
+    def test_reassigning_to_a_teacher_with_an_ended_co_teacher_row_is_a_conflict(self) -> None:
+        """The way out is Reinstate and then promote: an ended co-teacher is not a primary."""
+        primary = self._allocate()
+        co_teacher = self._new_teacher()
+        co_row = self._allocate(staff_id=str(co_teacher.pk), is_primary=False)
+        ended = self._patch(co_row["id"], {"effective_to": timezone.localdate().isoformat()})
+        self.assertEqual(ended.status_code, status.HTTP_200_OK, ended.json())
+
+        response = self._patch(primary["id"], {"staff_id": str(co_teacher.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.json())
+        self.assertIn(
+            "Reinstate that allocation and make it the primary instead of reassigning this one.",
+            response.json()["error"]["message"],
+        )
+
+    def test_reassigning_to_a_current_co_teacher_is_a_conflict_that_names_the_way_out(self) -> None:
+        """Reinstate does not apply to a row that is still current: promoting it does."""
+        primary = self._allocate()
+        co_teacher = self._new_teacher()
+        self._allocate(staff_id=str(co_teacher.pk), is_primary=False)
+
+        response = self._patch(primary["id"], {"staff_id": str(co_teacher.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.json())
+        self.assertIn("Make that allocation the primary", response.json()["error"]["message"])
+        with tenant_context(self.tenant.id):
+            self.assertIsNone(TeacherSubjectAllocation.objects.get(pk=primary["id"]).effective_to)
+
+    def test_changing_a_co_teachers_teacher_edits_the_row_in_place(self) -> None:
+        """Negative control: only a current primary is reassigned with history."""
+        primary = self._allocate()
+        co_teacher = self._new_teacher()
+        other = self._new_teacher()
+        co_row = self._allocate(staff_id=str(co_teacher.pk), is_primary=False)
+
+        response = self._patch(co_row["id"], {"staff_id": str(other.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        body = response.json()["data"]
+        self.assertEqual(body["id"], co_row["id"])
+        self.assertEqual(body["staff_id"], str(other.pk))
+        with tenant_context(self.tenant.id):
+            self.assertEqual(TeacherSubjectAllocation.objects.alive().count(), 2)
+            self.assertIsNone(TeacherSubjectAllocation.objects.get(pk=primary["id"]).effective_to)
+            self.assertIsNone(TeacherSubjectAllocation.objects.get(pk=co_row["id"]).effective_to)
+
+    def test_changing_the_teacher_of_an_ended_row_edits_the_row_in_place(self) -> None:
+        """Negative control: an ended row is already history, so there is nothing to preserve."""
+        row = self._allocate()
+        today = timezone.localdate().isoformat()
+        ended = self._patch(row["id"], {"effective_to": today})
+        self.assertEqual(ended.status_code, status.HTTP_200_OK, ended.json())
+        replacement = self._new_teacher()
+
+        response = self._patch(row["id"], {"staff_id": str(replacement.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        body = response.json()["data"]
+        self.assertEqual(body["id"], row["id"])
+        self.assertEqual(body["staff_id"], str(replacement.pk))
+        self.assertEqual(body["effective_to"], today)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(TeacherSubjectAllocation.objects.alive().count(), 1)
+
+    def _assert_teacher_change_refused(self, row: dict, *, extra: dict) -> None:
+        """422 on `staff_id`, and nothing written: the primary is still the only row."""
+        replacement = self._new_teacher()
+
+        response = self._patch(row["id"], {"staff_id": str(replacement.pk), **extra})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        error = response.json()["error"]
+        self.assertEqual({d["field"] for d in error["details"]}, {"staff_id"})
+        self.assertEqual(
+            error["message"],
+            "Change the teacher on its own, then end, demote or move the allocation.",
+        )
+        with tenant_context(self.tenant.id):
+            self.assertEqual(TeacherSubjectAllocation.objects.alive().count(), 1)
+            unchanged = TeacherSubjectAllocation.objects.get(pk=row["id"])
+        self.assertEqual(unchanged.staff_id, self.teacher.pk)
+        self.assertTrue(unchanged.is_primary)
+        self.assertIsNone(unchanged.effective_to)
+        self.assertEqual(unchanged.subject_id, self.subject.pk)
+
+    def test_changing_the_teacher_of_a_primary_while_demoting_it_is_refused(self) -> None:
+        self._assert_teacher_change_refused(self._allocate(), extra={"is_primary": False})
+
+    def test_changing_the_teacher_of_a_primary_while_ending_it_is_refused(self) -> None:
+        today = timezone.localdate().isoformat()
+        self._assert_teacher_change_refused(self._allocate(), extra={"effective_to": today})
+
+    def test_changing_the_teacher_of_a_primary_while_moving_it_is_refused(self) -> None:
+        other_subject = self._add_curriculum_subject()
+        self._assert_teacher_change_refused(
+            self._allocate(), extra={"subject_id": str(other_subject.pk)}
+        )
+
+    def test_a_teacher_change_that_restates_the_primary_and_open_end_still_reassigns(self) -> None:
+        """Negative control: `is_primary: true` and `effective_to: null` change nothing."""
+        row = self._allocate()
+        replacement = self._new_teacher()
+
+        response = self._patch(
+            row["id"],
+            {"staff_id": str(replacement.pk), "is_primary": True, "effective_to": None},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertNotEqual(response.json()["data"]["id"], row["id"])
+
+    def test_reassigning_a_primary_whose_subject_left_the_curriculum_is_refused(self) -> None:
+        row = self._allocate()
+        replacement = self._new_teacher()
+        with tenant_context(self.tenant.id):
+            self.curriculum.delete()
+
+        response = self._patch(row["id"], {"staff_id": str(replacement.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("subject_id", {d["field"] for d in response.json()["error"]["details"]})
+        with tenant_context(self.tenant.id):
+            self.assertEqual(TeacherSubjectAllocation.objects.alive().count(), 1)
+            old = TeacherSubjectAllocation.objects.get(pk=row["id"])
+        self.assertEqual(old.staff_id, self.teacher.pk)
+        self.assertIsNone(old.effective_to)
+
+    def test_a_reassignment_audits_the_old_row_as_an_update_and_the_new_row_as_a_create(
+        self,
+    ) -> None:
+        row = self._allocate()
+        replacement = self._new_teacher()
+
+        response = self._patch(row["id"], {"staff_id": str(replacement.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        new_id = response.json()["data"]["id"]
+        with tenant_context(self.tenant.id):
+            update = AuditLog.objects.get(action="update", resource_id=row["id"])
+            create = AuditLog.objects.get(action="create", resource_id=new_id)
+        self.assertIsNone(update.before["effective_to"])
+        self.assertIsNotNone(update.after["effective_to"])
+        self.assertEqual(create.after["staff_id"], str(replacement.pk))
+
+    def test_a_reassignment_notifies_the_new_teacher_about_the_new_row(self) -> None:
+        row = self._allocate()
+        replacement = self._new_teacher()
+
+        with mock.patch.object(services, "notify_allocation_changed") as notify:
+            response = self._patch(row["id"], {"staff_id": str(replacement.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        notify.assert_called_once()
+        notified = notify.call_args.kwargs["allocation"]
+        self.assertEqual(str(notified.pk), response.json()["data"]["id"])
+        self.assertEqual(notified.staff_id, replacement.pk)
+
+    def test_a_reassignment_reports_load_warnings_for_the_new_teacher(self) -> None:
+        row = self._allocate()
+        replacement = self._new_teacher()
+        with tenant_context(self.tenant.id):
+            for _ in range(4):
+                subject = SubjectFactory(tenant=self.tenant)
+                ClassSubjectFactory(
+                    tenant=self.tenant,
+                    academic_session=self.session,
+                    school_class=self.school_class,
+                    subject=subject,
+                    weekly_periods=10,
+                )
+                TeacherAllocationFactory(
+                    tenant=self.tenant,
+                    academic_session=self.session,
+                    section=self.section,
+                    subject=subject,
+                    staff=replacement,
+                )
+
+        response = self._patch(row["id"], {"staff_id": str(replacement.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        warnings = response.json()["meta"]["warnings"]
+        self.assertEqual([w["code"] for w in warnings], ["teacher_over_norm"])
+        self.assertEqual(warnings[0]["staff_id"], str(replacement.pk))
 
     def test_create_and_patch_responses_carry_names(self) -> None:
         """Those instances never pass through get_queryset's annotations."""

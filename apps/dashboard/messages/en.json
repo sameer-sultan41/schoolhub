@@ -783,7 +783,7 @@
         "targetSession": "Copy into",
         "confirm": "Clone",
         "submitting": "Cloning",
-        "result": "{created} mappings created, {skipped} already present."
+        "result": "{created} mappings created, {skipped} skipped (already in the target, or for an inactive class or subject)."
       },
       "delete": {
         "title": "Remove this subject",

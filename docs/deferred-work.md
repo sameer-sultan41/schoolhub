@@ -1257,10 +1257,10 @@ either this file or `project-status.md`.
   fields added to `search_fields`.
 
 - **The clone toast reads "1 mappings created".** `academics.curriculum.clone.result` is
-  `"{created} mappings created, {skipped} already present."` in both locales, with no plural
-  form, so a count of one is ungrammatical in English. It needs an ICU `plural` for each count
-  in `en.json` and `ur.json`, and the e2e assertion on "1 mappings created, 1 already present."
-  (`e2e/tests/dashboard/academics-curriculum.spec.ts`) updated with it.
+  `"{created} mappings created, {skipped} skipped (already in the target, or for an inactive class
+  or subject)."` in English, with no plural form, so a count of one is ungrammatical. It needs an
+  ICU `plural` for each count in `en.json` and `ur.json`, and the e2e assertion on "1 mappings
+  created, 1 skipped (…)." (`e2e/tests/dashboard/academics-curriculum.spec.ts`) updated with it.
 
 - **The clone endpoint's OpenAPI response lost its prose description.** When
   `POST /class-subjects:clone` gained a typed serializer for its `{created, skipped}` result
@@ -1395,6 +1395,21 @@ either this file or `project-status.md`.
   Reinstate. Fetching the outgoing rows and recording each through `record_audit` closes it, at the
   cost of a read before the write.
 
+- **A displaced primary teacher is never told.** When a new, reinstated, promoted or reassigned
+  primary end-dates the current one (`_end_date_current_primary`,
+  `teacher_allocations/services.py`), only the teacher on the row the request wrote is notified
+  (`notify_allocation_changed`); the teacher who just lost the slot gets nothing. It is not fixed
+  because `academics.allocation-changed`'s copy speaks to the assignee only: both templates read
+  "{{ teacher.first_name }}, you are now teaching {{ subject.name }} to {{ section.name }} for
+  {{ session.name }}." (subject "Your teaching allocation changed"), so sending it to the displaced
+  teacher would tell someone who just lost the slot that they are now teaching it. The catalog
+  description says "assigned to, or removed from", which the copy does not do yet. Closing it needs
+  wording for the removed teacher (a second template under the same trigger, which §12's "affected
+  teacher" covers) and `_end_date_current_primary` returning the rows it end-dates, which means
+  fetching them before the `.update()` as the audit entry above also wants; every caller (create,
+  Reinstate, promote, slot move, teacher reassignment) then notifies each displaced teacher through
+  `notify_allocation_changed`.
+
 - **A future-start replacement primary ends today's primary today.** Allocating, or reinstating, a
   primary that starts next term end-dates the current primary immediately, so nobody is in force
   between now and the start date. `tsa_one_primary_per_section_subject` only counts rows with
@@ -1494,7 +1509,8 @@ either this file or `project-status.md`.
   `academics.promotions.*` keys in `apps/dashboard/messages/ur.json` have been checked for parity
   and ICU syntax, not for wording; the transition confirmations, the report lines and the
   missing-section advisories (draft and approved) in particular need a review by a native
-  speaker.
+  speaker. The curriculum clone result (`academics.curriculum.clone.result`) was written the same
+  way.
 
 - **The job-poll "refused / stalled / active" logic is in three copies.** `isPollRefused` (a
   non-transient poll error) and the active/stalled derivation sit in `use-promotion-execution.ts`,

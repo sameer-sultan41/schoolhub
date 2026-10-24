@@ -98,8 +98,12 @@ class CurriculumSerializer(serializers.ModelSerializer):
         is_elective = attrs.get("is_elective")
         if is_elective is None:
             is_elective = getattr(self.instance, "is_elective", False)
-        group = attrs.get("elective_group") or getattr(self.instance, "elective_group", None)
-        if is_elective and not group:
+        # Presence, not truthiness: a PATCH of "" must not fall back to the stored group.
+        if "elective_group" in attrs:
+            group = attrs["elective_group"]
+        else:
+            group = getattr(self.instance, "elective_group", None)
+        if is_elective and not (group or "").strip():
             raise serializers.ValidationError(
                 {"elective_group": "Required for an elective mapping so options can be grouped."}
             )

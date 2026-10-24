@@ -89,6 +89,10 @@ def clone_curriculum(
     clone re-run after a partial failure, or after someone hand-added a subject,
     should converge rather than refuse. That makes this safe to retry, which is
     what the `202` + job contract implies.
+
+    A row whose class or subject is inactive is skipped too, not copied: create, and a PATCH
+    that moves a row onto one, refuse an inactive class or subject
+    (`assert_class_subject_mapping_valid`), so a clone must not be the way past that rule.
     """
     assert_curriculum_writable(target_session)
     if source_session.pk == target_session.pk:
@@ -104,9 +108,14 @@ def clone_curriculum(
 
     to_create = []
     skipped = 0
-    for row in ClassSubject.objects.alive().filter(academic_session=source_session):
+    source_rows = (
+        ClassSubject.objects.alive()
+        .filter(academic_session=source_session)
+        .select_related("school_class", "subject")
+    )
+    for row in source_rows:
         key = (row.school_class_id, row.subject_id, row.campus_id)
-        if key in existing:
+        if key in existing or not (row.school_class.is_active and row.subject.is_active):
             skipped += 1
             continue
         to_create.append(

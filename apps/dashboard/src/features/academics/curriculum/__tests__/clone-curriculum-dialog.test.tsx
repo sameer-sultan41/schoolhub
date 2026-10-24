@@ -33,6 +33,8 @@ const mockToastSuccess = toast.success as jest.MockedFunction<typeof toast.succe
 type User = ReturnType<typeof userEvent.setup>;
 
 const RESULT = { created: 12, skipped: 3 };
+const CLONE_RESULT_TOAST =
+  "12 mappings created, 3 skipped (already in the target, or for an inactive class or subject).";
 
 function renderClone(overrides: Partial<CloneCurriculumDialogProps> = {}) {
   const props: CloneCurriculumDialogProps = {
@@ -205,7 +207,7 @@ describe("CloneCurriculumDialog", () => {
     await submit(user);
 
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith("12 mappings created, 3 already present.");
+      expect(mockToastSuccess).toHaveBeenCalledWith(CLONE_RESULT_TOAST);
     });
     expect(mockCloneCurriculum).toHaveBeenCalledWith(
       CLOSED_SESSION_ID,
@@ -235,7 +237,7 @@ describe("CloneCurriculumDialog", () => {
       SESSION_ID,
       expect.any(String),
     );
-    expect(mockToastSuccess).toHaveBeenCalledWith("12 mappings created, 3 already present.");
+    expect(mockToastSuccess).toHaveBeenCalledWith(CLONE_RESULT_TOAST);
     expect(onSwitchSession).not.toHaveBeenCalled();
   });
 
