@@ -23,6 +23,7 @@ from apps.staff_management.models import EmploymentStatus
 from apps.timetable import notifications
 from apps.timetable.models import SubstitutionStatus, TeacherSubstitution
 from apps.timetable.substitutions import services
+from apps.timetable.substitutions.viewset import TeacherSubstitutionViewSet
 from apps.timetable.tests.base import TimetableAPITestCase
 from apps.timetable.tests.factories import (
     MONDAY,
@@ -35,6 +36,7 @@ from apps.timetable.tests.factories import (
 )
 from core.audit.models import AuditLog
 from core.notifications.models import Notification
+from core.rbac.permissions import declared_keys
 from core.tenancy.context import tenant_context
 
 
@@ -128,6 +130,25 @@ class CancelTests(CoverTestCase):
 
         self.assertEqual(self.cancel(cover).status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.status_of(cover), SubstitutionStatus.PROPOSED)
+
+    def test_the_permission_class_refuses_before_the_row_is_looked_up(self) -> None:
+        """A viewer with neither key gets 403 even for an id that doesn't exist (not 404)."""
+        self.allow("timetable.timetable.view")
+        unknown = "00000000-0000-4000-8000-000000000000"
+
+        response = self.client.post(
+            f"/api/v1/teacher-substitutions/{unknown}:cancel", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cancel_declares_the_two_keys_it_accepts(self) -> None:
+        declared = TeacherSubstitutionViewSet.required_permission_map["cancel"]
+
+        self.assertEqual(
+            declared_keys(declared),
+            ("timetable.substitution.approve", "timetable.substitution.create"),
+        )
 
     def test_past_cover_cannot_be_cancelled(self) -> None:
         self.allow("timetable.timetable.view", "timetable.substitution.approve")
